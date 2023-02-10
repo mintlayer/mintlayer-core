@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, fmt::Debug, time::Duration};
+use std::{fmt::Debug, time::Duration};
 
 use tokio::time::timeout;
 
 use chainstate::Locator;
 
 use crate::{
-    message::{HeaderListRequest, HeaderListResponse, SyncRequest, SyncResponse},
+    message::{HeaderListRequest, HeaderListResponse, SyncMessage},
     net::{
         default_backend::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
@@ -52,27 +52,22 @@ where
     let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
 
     mgr1.peer_sync_handle
-        .send_request(
+        .send_message(
             peer_info2.peer_id,
-            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .unwrap();
 
-    if let Ok(SyncingEvent::Request {
-        peer_id: _,
-        request_id,
-        request,
-    }) = mgr2.peer_sync_handle.poll_next().await
-    {
+    if let Ok(SyncingEvent::Message { peer, message }) = mgr2.peer_sync_handle.poll_next().await {
         assert_eq!(
-            request,
-            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
+            message,
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
         );
 
         mgr2.peer_sync_handle
-            .send_response(
-                request_id,
-                SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
+            .send_message(
+                peer,
+                SyncMessage::HeaderListResponse(HeaderListResponse::new(vec![])),
             )
             .unwrap();
     } else {
@@ -113,36 +108,34 @@ where
 
     // connect the two managers together so that they can exchange messages
     let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
-    let mut request_ids = HashSet::new();
+    let mut requests = 0;
 
-    let id = mgr1
-        .peer_sync_handle
-        .send_request(
+    mgr1.peer_sync_handle
+        .send_message(
             peer_info2.peer_id,
-            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .unwrap();
-    request_ids.insert(id);
+    requests += 1;
 
-    let id = mgr1
-        .peer_sync_handle
-        .send_request(
+    mgr1.peer_sync_handle
+        .send_message(
             peer_info2.peer_id,
-            SyncRequest::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .unwrap();
-    request_ids.insert(id);
+    requests += 1;
 
-    assert_eq!(request_ids.len(), 2);
+    assert_eq!(requests, 2);
 
     for i in 0..2 {
         match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
-                Ok(SyncingEvent::Request { request_id, .. }) => {
+                Ok(SyncingEvent::Message { peer, .. }) => {
                     mgr2.peer_sync_handle
-                        .send_response(
-                            request_id,
-                            SyncResponse::HeaderListResponse(HeaderListResponse::new(vec![])),
+                        .send_message(
+                            peer,
+                            SyncMessage::HeaderListResponse(HeaderListResponse::new(vec![])),
                         )
                         .unwrap();
                 }
@@ -155,8 +148,8 @@ where
     for i in 0..2 {
         match timeout(Duration::from_secs(15), mgr1.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
-                Ok(SyncingEvent::Response { request_id, .. }) => {
-                    request_ids.remove(&request_id);
+                Ok(SyncingEvent::Message { .. }) => {
+                    requests -= 1;
                 }
                 _ => panic!("invalid event: {event:?}"),
             },
@@ -164,7 +157,7 @@ where
         }
     }
 
-    assert!(request_ids.is_empty());
+    assert_eq!(0, requests);
 }
 
 #[tokio::test]

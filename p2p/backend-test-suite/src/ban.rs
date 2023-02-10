@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use p2p::{
     config::P2pConfig,
     event::PeerManagerEvent,
-    message::{Announcement, HeaderListResponse, SyncRequest, SyncResponse},
+    message::{Announcement, HeaderListResponse, SyncMessage},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
     testing_utils::{connect_services, TestTransportMaker},
@@ -85,18 +85,17 @@ where
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
-        let request_id = match sync2.poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(_),
-            } => request_id,
+        let peer = match sync2.poll_next().await.unwrap() {
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(_),
+            } => peer,
             e => panic!("Unexpected event type: {e:?}"),
         };
         sync2
-            .send_response(
-                request_id,
-                SyncResponse::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+            .send_message(
+                peer,
+                SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
             .unwrap();
 

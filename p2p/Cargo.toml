@@ -42,6 +42,7 @@ chainstate-storage = { path = "../chainstate/storage" }
 crypto = { path = "../crypto/" }
 p2p-test-utils = { path = "p2p-test-utils" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
+test-utils = { path = "../test-utils" }
 
 portpicker = "0.1"
 

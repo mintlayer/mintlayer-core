@@ -18,9 +18,6 @@ use std::{
     time::Duration,
 };
 
-use crate::testing_utils::{
-    P2pTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
-};
 use async_trait::async_trait;
 use futures::{future::BoxFuture, StreamExt};
 use tokio::{
@@ -28,8 +25,16 @@ use tokio::{
     time::timeout,
 };
 
+use crate::testing_utils::{
+    P2pTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
+};
+use common::{
+    chain::Block,
+    primitives::{Id, H256},
+};
+
 use crate::{
-    message::{BlockListRequest, Request},
+    message::BlockListRequest,
     net::default_backend::{
         transport::{
             impls::stream_adapter::wrapped_transport::wrapped_listener::MAX_CONCURRENT_HANDSHAKES,
@@ -37,7 +42,7 @@ use crate::{
             NoiseEncryptionAdapter, PeerStream, TcpTransportSocket, TransportListener,
             TransportSocket,
         },
-        types::{Message, RequestId},
+        types::Message,
     },
 };
 
@@ -210,41 +215,18 @@ async fn send_2_reqs() {
     let server_stream = server_res.unwrap().0;
     let peer_stream = peer_res.unwrap();
 
-    let id_1 = RequestId::new();
-    let request = Request::BlockListRequest(BlockListRequest::new(vec![]));
+    let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
+    let mut rng = test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
+    let id: Id<Block> = H256::random_using(&mut rng).into();
+    let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
     let mut peer_stream = BufferedTranscoder::new(peer_stream);
-    peer_stream
-        .send(Message::Request {
-            request_id: id_1,
-            request: request.clone(),
-        })
-        .await
-        .unwrap();
+    peer_stream.send(message_1.clone()).await.unwrap();
 
-    let id_2 = RequestId::new();
-    peer_stream
-        .send(Message::Request {
-            request_id: id_2,
-            request: request.clone(),
-        })
-        .await
-        .unwrap();
+    peer_stream.send(message_2.clone()).await.unwrap();
 
     let mut server_stream = BufferedTranscoder::new(server_stream);
-    assert_eq!(
-        server_stream.recv().await.unwrap(),
-        Message::Request {
-            request_id: id_1,
-            request: request.clone(),
-        }
-    );
-    assert_eq!(
-        server_stream.recv().await.unwrap(),
-        Message::Request {
-            request_id: id_2,
-            request,
-        }
-    );
+    assert_eq!(server_stream.recv().await.unwrap(), message_1);
+    assert_eq!(server_stream.recv().await.unwrap(), message_2);
 }
 
 #[tokio::test]

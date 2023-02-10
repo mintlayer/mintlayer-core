@@ -45,7 +45,6 @@ where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();

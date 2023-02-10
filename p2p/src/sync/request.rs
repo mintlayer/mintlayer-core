@@ -25,7 +25,7 @@ use utils::ensure;
 
 use crate::{
     error::{P2pError, PeerError},
-    message::{self, SyncRequest, SyncResponse},
+    message::{self, SyncMessage},
     sync::{peer::PeerSyncState, BlockSyncManager},
     NetworkingService, SyncingMessagingService,
 };
@@ -34,38 +34,37 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     /// Creates a blocks request message.
-    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> SyncRequest {
-        SyncRequest::BlockListRequest(message::BlockListRequest::new(block_ids))
+    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> SyncMessage {
+        SyncMessage::BlockListRequest(message::BlockListRequest::new(block_ids))
     }
 
     /// Creates a headers request message with the given locator.
-    pub fn make_header_request(&self, locator: Locator) -> SyncRequest {
-        SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator))
+    pub fn make_header_request(&self, locator: Locator) -> SyncMessage {
+        SyncMessage::HeaderListRequest(message::HeaderListRequest::new(locator))
     }
 
     /// Make header response
     ///
     /// # Arguments
     /// * `headers` - the headers that were requested
-    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> SyncResponse {
-        SyncResponse::HeaderListResponse(message::HeaderListResponse::new(headers))
+    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> SyncMessage {
+        SyncMessage::HeaderListResponse(message::HeaderListResponse::new(headers))
     }
 
     /// Make block response
     ///
     /// # Arguments
     /// * `blocks` - the blocks that were requested
-    pub fn make_block_response(&self, blocks: Vec<Block>) -> SyncResponse {
-        SyncResponse::BlockListResponse(message::BlockListResponse::new(blocks))
+    pub fn make_block_response(&self, blocks: Vec<Block>) -> SyncMessage {
+        SyncMessage::BlockListResponse(message::BlockListResponse::new(blocks))
     }
 
     /// Sends a request to the given peer.
-    pub fn send_request(&mut self, peer_id: T::PeerId, request: SyncRequest) -> crate::Result<()> {
-        self.peer_sync_handle.send_request(peer_id, request).map(|_| ())
+    pub fn send_request(&mut self, peer_id: T::PeerId, request: SyncMessage) -> crate::Result<()> {
+        self.peer_sync_handle.send_message(peer_id, request).map(|_| ())
     }
 
     /// Send block request to remote peer
@@ -142,14 +141,14 @@ where
     /// * `headers` - headers that the remote requested
     pub fn send_header_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        peer: T::PeerId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
-        log::trace!("send header response, request id {request_id:?}");
+        log::trace!("send header response");
 
         // TODO: save sent header IDs somewhere and validate future requests against those?
         let message = self.make_header_response(headers);
-        self.peer_sync_handle.send_response(request_id, message)
+        self.peer_sync_handle.send_message(peer, message)
     }
 
     /// Send header response to remote peer
@@ -162,13 +161,13 @@ where
     /// * `headers` - headers that the remote requested
     pub fn send_block_response(
         &mut self,
-        request_id: T::PeerRequestId,
+        peer: T::PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
-        log::trace!("send block response, request id {request_id:?}");
+        log::trace!("send block response");
 
         // TODO: save sent block IDs somewhere and validate future requests against those?
         let message = self.make_block_response(blocks);
-        self.peer_sync_handle.send_response(request_id, message)
+        self.peer_sync_handle.send_message(peer, message)
     }
 }

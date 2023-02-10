@@ -32,7 +32,7 @@ use p2p::{
     config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{BlockListRequest, BlockListResponse, HeaderListResponse, SyncRequest, SyncResponse},
+    message::{BlockListRequest, BlockListResponse, HeaderListResponse, SyncMessage},
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -148,10 +148,9 @@ where
 
     for _ in 0..9 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -159,16 +158,15 @@ where
                     .unwrap()
                     .unwrap();
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+                    .send_message(
+                        peer,
+                        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .unwrap()
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -179,16 +177,15 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .unwrap();
             }
-            SyncingEvent::Response {
-                peer_id: _,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(_response),
+            SyncingEvent::Message {
+                peer: _,
+                message: SyncMessage::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {msg:?}"),
         }
@@ -243,10 +240,9 @@ where
 
     loop {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -254,16 +250,15 @@ where
                     .unwrap()
                     .unwrap();
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+                    .send_message(
+                        peer,
+                        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .unwrap()
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::BlockListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -275,9 +270,9 @@ where
 
                 if let Some(header) = work.pop_front() {
                     mgr2.handle_mut()
-                        .send_request(
-                            peer_id,
-                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                        .send_message(
+                            peer,
+                            SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .unwrap();
                 } else {
@@ -285,10 +280,9 @@ where
                     break;
                 }
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListResponse(response),
             } => {
                 assert_eq!(response.headers().len(), 12);
                 let headers = mgr2_handle
@@ -299,9 +293,9 @@ where
                 work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
-                    .send_request(
-                        peer_id,
-                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .unwrap();
             }
@@ -365,10 +359,9 @@ where
 
     for _ in 0..24 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -376,16 +369,15 @@ where
                     .unwrap()
                     .unwrap();
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+                    .send_message(
+                        peer,
+                        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .unwrap()
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -396,16 +388,15 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .unwrap();
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::BlockListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -417,17 +408,16 @@ where
 
                 if let Some(header) = work.pop_front() {
                     mgr2.handle_mut()
-                        .send_request(
-                            peer_id,
-                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                        .send_message(
+                            peer,
+                            SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .unwrap();
                 }
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListResponse(response),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
@@ -437,9 +427,9 @@ where
                 work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
-                    .send_request(
-                        peer_id,
-                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .unwrap();
             }
@@ -505,10 +495,9 @@ where
 
     for _ in 0..20 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -516,16 +505,15 @@ where
                     .unwrap()
                     .unwrap();
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+                    .send_message(
+                        peer,
+                        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .unwrap()
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -536,16 +524,15 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .unwrap();
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::BlockListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -557,17 +544,16 @@ where
 
                 if let Some(header) = work.pop_front() {
                     mgr2.handle_mut()
-                        .send_request(
-                            peer_id,
-                            SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                        .send_message(
+                            peer,
+                            SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                         )
                         .unwrap();
                 }
             }
-            SyncingEvent::Response {
-                peer_id,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(response),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListResponse(response),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
@@ -577,9 +563,9 @@ where
                 work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
-                    .send_request(
-                        peer_id,
-                        SyncRequest::BlockListRequest(BlockListRequest::new(vec![header])),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListRequest(BlockListRequest::new(vec![header])),
                     )
                     .unwrap();
             }
@@ -662,32 +648,30 @@ where
         };
 
         match event {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncMessage::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr2.handle_mut().send_message(peer, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr3.handle_mut().send_message(peer, msg).unwrap()
                 }
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -695,15 +679,14 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr2.handle_mut().send_message(peer, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr3.handle_mut().send_message(peer, msg).unwrap();
                 }
             }
-            SyncingEvent::Response {
-                peer_id: _,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(_response),
+            SyncingEvent::Message {
+                peer: _,
+                message: SyncMessage::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {msg:?}"),
         }
@@ -801,32 +784,30 @@ where
         };
 
         match event {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncMessage::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr2.handle_mut().send_message(peer, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr3.handle_mut().send_message(peer, msg).unwrap()
                 }
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -834,15 +815,14 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr2.handle_mut().send_message(peer, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr3.handle_mut().send_message(peer, msg).unwrap();
                 }
             }
-            SyncingEvent::Response {
-                peer_id: _,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(_response),
+            SyncingEvent::Message {
+                peer: _,
+                message: SyncMessage::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {msg:?}"),
         }
@@ -938,22 +918,21 @@ where
         };
 
         match event {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr_handle
                     .call(move |this| this.get_headers(request.into_locator()))
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = SyncResponse::HeaderListResponse(HeaderListResponse::new(headers));
+                let msg = SyncMessage::HeaderListResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr2.handle_mut().send_message(peer, msg).unwrap()
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap()
+                    mgr3.handle_mut().send_message(peer, msg).unwrap()
                 }
 
                 if gethdr_received.insert(dest_peer_id) {
@@ -966,14 +945,13 @@ where
                     }
                 }
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncResponse::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -981,15 +959,14 @@ where
                     .unwrap()]));
 
                 if dest_peer_id == peer_info21.peer_id {
-                    mgr2.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr2.handle_mut().send_message(peer, msg).unwrap();
                 } else {
-                    mgr3.handle_mut().send_response(request_id, msg).unwrap();
+                    mgr3.handle_mut().send_message(peer, msg).unwrap();
                 }
             }
-            SyncingEvent::Response {
-                peer_id: _,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(_response),
+            SyncingEvent::Message {
+                peer: _,
+                message: SyncMessage::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {msg:?}"),
         }
@@ -1075,10 +1052,9 @@ where
 
     for _ in 0..9 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::HeaderListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(request),
             } => {
                 let headers = mgr2_handle
                     .call(move |this| this.get_headers(request.into_locator()))
@@ -1086,16 +1062,15 @@ where
                     .unwrap()
                     .unwrap();
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+                    .send_message(
+                        peer,
+                        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
                     )
                     .unwrap()
             }
-            SyncingEvent::Request {
-                peer_id: _,
-                request_id,
-                request: SyncRequest::BlockListRequest(request),
+            SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
@@ -1106,16 +1081,15 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_response(
-                        request_id,
-                        SyncResponse::BlockListResponse(BlockListResponse::new(blocks)),
+                    .send_message(
+                        peer,
+                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
                     )
                     .unwrap();
             }
-            SyncingEvent::Response {
-                peer_id: _,
-                request_id: _,
-                response: SyncResponse::HeaderListResponse(_response),
+            SyncingEvent::Message {
+                peer: _,
+                message: SyncMessage::HeaderListResponse(_response),
             } => {}
             msg => panic!("invalid message received: {msg:?}"),
         }
@@ -1142,7 +1116,6 @@ where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
@@ -1238,23 +1211,21 @@ async fn process_header_request<T>(
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
-        SyncingEvent::Request {
-            peer_id: _,
-            request_id,
-            request: SyncRequest::HeaderListRequest(request),
+        SyncingEvent::Message {
+            peer,
+            message: SyncMessage::HeaderListRequest(request),
         } => {
             let headers = handle
                 .call(move |this| this.get_headers(request.into_locator()))
                 .await
                 .unwrap()
                 .unwrap();
-            mgr.handle_mut().send_response(
-                request_id,
-                SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+            mgr.handle_mut().send_message(
+                peer,
+                SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
             )
         }
         _ => panic!("invalid message"),
@@ -1265,32 +1236,21 @@ async fn advance_mgr_state<T>(mgr: &mut BlockSyncManager<T>) -> Result<(), P2pEr
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
-        SyncingEvent::Request {
-            peer_id,
-            request_id,
-            request,
-        } => match request {
-            SyncRequest::HeaderListRequest(request) => {
-                mgr.process_header_request(peer_id, request_id, request.into_locator()).await?;
+        SyncingEvent::Message { peer, message } => match message {
+            SyncMessage::HeaderListRequest(request) => {
+                mgr.process_header_request(peer, request.into_locator()).await?;
             }
-            SyncRequest::BlockListRequest(request) => {
-                mgr.process_block_request(peer_id, request_id, request.into_block_ids()).await?;
+            SyncMessage::BlockListRequest(request) => {
+                mgr.process_block_request(peer, request.into_block_ids()).await?;
             }
-        },
-        SyncingEvent::Response {
-            peer_id,
-            request_id: _,
-            response,
-        } => match response {
-            SyncResponse::HeaderListResponse(response) => {
-                mgr.process_header_response(peer_id, response.into_headers()).await?;
+            SyncMessage::HeaderListResponse(response) => {
+                mgr.process_header_response(peer, response.into_headers()).await?;
             }
-            SyncResponse::BlockListResponse(response) => {
-                mgr.process_block_response(peer_id, response.into_blocks()).await?;
+            SyncMessage::BlockListResponse(response) => {
+                mgr.process_block_response(peer, response.into_blocks()).await?;
             }
         },
         SyncingEvent::Announcement {

@@ -204,11 +204,8 @@ impl AsBannableAddress for Address {
 mod tests {
     use super::*;
     use crate::{
-        message::{BlockListRequest, SyncRequest},
-        net::default_backend::{
-            transport::BufferedTranscoder,
-            types::{Message, RequestId},
-        },
+        message::BlockListRequest,
+        net::default_backend::{transport::BufferedTranscoder, types::Message},
     };
 
     #[tokio::test]
@@ -222,24 +219,11 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = RequestId::new();
-        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
+        let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
-        peer_stream
-            .send(Message::Request {
-                request_id,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        peer_stream.send(message.clone()).await.unwrap();
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id,
-                request: request.into(),
-            }
-        );
+        assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 }
