@@ -40,7 +40,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{self, Announcement, SyncRequest},
+    message::{self, Announcement, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     utils::oneshot_nofail,
 };
@@ -87,7 +87,6 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     pub fn new(
@@ -128,7 +127,7 @@ where
 
         self.send_request(
             peer_id,
-            SyncRequest::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
+            SyncMessage::HeaderListRequest(message::HeaderListRequest::new(locator.clone())),
         )
         .map(|_| {
             self.peers.insert(
@@ -147,21 +146,19 @@ where
     pub async fn process_header_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
-        log::debug!("send header response to peer {peer_id}, request_id: {request_id:?}");
+        log::debug!("send header response to peer {peer_id}");
 
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
-        self.send_header_response(request_id, headers)
+        self.send_header_response(peer_id, headers)
     }
 
     /// Process block request
     pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
         ensure!(
@@ -181,7 +178,7 @@ where
             self.chainstate_handle.call(move |this| this.get_block(block_id)).await?;
 
         match block_result {
-            Ok(Some(block)) => self.send_block_response(request_id, vec![block]),
+            Ok(Some(block)) => self.send_block_response(peer_id, vec![block]),
             Ok(None) => {
                 // TODO: check if remote has already asked for these headers?
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
@@ -325,34 +322,26 @@ where
         }
     }
 
-    pub async fn process_response(
+    pub async fn process_message(
         &mut self,
-        peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
-        response: message::SyncResponse,
+        peer: T::PeerId,
+        message: SyncMessage,
     ) -> crate::Result<()> {
-        match response {
-            message::SyncResponse::HeaderListResponse(response) => {
-                log::debug!("process header response (id {request_id:?}) from peer {peer_id}");
-                log::trace!("received headers: {:#?}", response.headers());
-
-                let result = self.process_header_response(peer_id, response.into_headers()).await;
-                self.handle_error(peer_id, result).await?;
+        let res = match message {
+            SyncMessage::HeaderListRequest(r) => {
+                self.process_header_request(peer, r.into_locator()).await
             }
-            message::SyncResponse::BlockListResponse(response) => {
-                log::debug!("process block response (id {request_id:?}) from peer {peer_id}");
-                log::trace!(
-                    "# of received blocks: {}, block ids: {:#?}",
-                    response.blocks().len(),
-                    response.blocks().iter().map(|block| block.get_id()).collect::<Vec<_>>(),
-                );
-
-                let result = self.process_block_response(peer_id, response.into_blocks()).await;
-                self.handle_error(peer_id, result).await?;
+            SyncMessage::BlockListRequest(r) => {
+                self.process_block_request(peer, r.into_block_ids()).await
             }
-        }
-
-        Ok(())
+            SyncMessage::HeaderListResponse(r) => {
+                self.process_header_response(peer, r.into_headers()).await
+            }
+            SyncMessage::BlockListResponse(r) => {
+                self.process_block_response(peer, r.into_blocks()).await
+            }
+        };
+        self.handle_error(peer, res).await
     }
 
     pub async fn process_announcement(
@@ -445,40 +434,8 @@ where
         loop {
             tokio::select! {
                 event = self.peer_sync_handle.poll_next() => match event? {
-                    SyncingEvent::Request {
-                        peer_id,
-                        request_id,
-                        request,
-                    } => match request {
-                        message::SyncRequest::HeaderListRequest(request) => {
-                            log::debug!("process header request (id {request_id:?}) from peer {peer_id}");
-                            log::trace!("locator: {:#?}", request.locator());
-
-                            let result = self.process_header_request(
-                                peer_id,
-                                request_id,
-                                request.into_locator(),
-                            ).await;
-                            self.handle_error(peer_id, result).await?;
-                        }
-                        message::SyncRequest::BlockListRequest(request) => {
-                            log::debug!("process block request (id {request_id:?}) from peer {peer_id}");
-                            log::trace!("requested block ids: {:#?}", request.block_ids());
-
-                            let result = self.process_block_request(
-                                peer_id,
-                                request_id,
-                                request.into_block_ids(),
-                            ).await;
-                            self.handle_error(peer_id, result).await?;
-                        }
-                    },
-                    SyncingEvent::Response {
-                        peer_id,
-                        request_id,
-                        response,
-                    } => {
-                        self.process_response(peer_id, request_id, response).await?;
+                    SyncingEvent::Message { peer, message } => {
+                        self.process_message(peer, message).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, announcement } => {
                         self.process_announcement(peer_id, announcement).await?;

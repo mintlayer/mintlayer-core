@@ -16,7 +16,6 @@
 pub mod backend;
 pub mod constants;
 pub mod peer;
-pub mod request_manager;
 pub mod transport;
 pub mod types;
 
@@ -31,12 +30,12 @@ use serialization::Encode;
 use crate::{
     config,
     error::{P2pError, PublishError},
-    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
+    message::{Announcement, PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
-            types::{PeerId, RequestId},
+            types::PeerId,
         },
         types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -110,7 +109,6 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
     type PeerId = PeerId;
-    type PeerRequestId = RequestId;
     type ConnectivityHandle = ConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = SyncingMessagingHandle<Self, T>;
 
@@ -156,7 +154,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for ConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = PeerId, PeerRequestId = RequestId> + Send,
+    S: NetworkingService<Address = T::Address, PeerId = PeerId> + Send,
     T: TransportSocket,
 {
     fn connect(&mut self, address: S::Address) -> crate::Result<()> {
@@ -174,33 +172,13 @@ where
         self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
     }
 
-    fn send_request(
-        &mut self,
-        peer_id: S::PeerId,
-        request: PeerManagerRequest,
-    ) -> crate::Result<S::PeerRequestId> {
-        let request_id = RequestId::new();
-
-        self.cmd_tx.send(types::Command::SendRequest {
-            peer_id,
-            request_id,
-            message: request.into(),
-        })?;
-
-        Ok(request_id)
-    }
-
-    fn send_response(
-        &mut self,
-        request_id: S::PeerRequestId,
-        response: PeerManagerResponse,
-    ) -> crate::Result<()> {
+    fn send_message(&mut self, peer: S::PeerId, message: PeerManagerMessage) -> crate::Result<()> {
         self.cmd_tx
-            .send(types::Command::SendResponse {
-                request_id,
-                message: response.into(),
+            .send(types::Command::SendMessage {
+                peer,
+                message: message.into(),
             })
-            .map_err(P2pError::from)
+            .map_err(Into::into)
     }
 
     fn local_addresses(&self) -> &[S::Address] {
@@ -209,24 +187,9 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            } => Ok(ConnectivityEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            }),
-            types::ConnectivityEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            } => Ok(ConnectivityEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            }),
+            types::ConnectivityEvent::Message { peer, message } => {
+                Ok(ConnectivityEvent::Message { peer, message })
+            }
             types::ConnectivityEvent::InboundAccepted {
                 address,
                 peer_info,
@@ -261,38 +224,19 @@ where
 #[async_trait]
 impl<S, T> SyncingMessagingService<S> for SyncingMessagingHandle<S, T>
 where
-    S: NetworkingService<PeerId = PeerId, PeerRequestId = RequestId> + Send,
+    S: NetworkingService<PeerId = PeerId> + Send,
     T: TransportSocket,
 {
-    fn send_request(
-        &mut self,
-        peer_id: S::PeerId,
-        request: SyncRequest,
-    ) -> crate::Result<S::PeerRequestId> {
-        let request_id = RequestId::new();
-
-        self.cmd_tx.send(types::Command::SendRequest {
-            peer_id,
-            request_id,
-            message: request.into(),
-        })?;
-
-        Ok(request_id)
+    fn send_message(&mut self, peer: S::PeerId, message: SyncMessage) -> crate::Result<()> {
+        self.cmd_tx
+            .send(types::Command::SendMessage {
+                peer,
+                message: message.into(),
+            })
+            .map_err(Into::into)
     }
 
-    fn send_response(
-        &mut self,
-        request_id: S::PeerRequestId,
-        response: SyncResponse,
-    ) -> crate::Result<()> {
-        self.cmd_tx.send(types::Command::SendResponse {
-            request_id,
-            message: response.into(),
-        })?;
-        Ok(())
-    }
-
-    fn make_announcement(&mut self, announcement: message::Announcement) -> crate::Result<()> {
+    fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()> {
         let message = announcement.encode();
         if message.len() > ANNOUNCEMENT_MAX_SIZE {
             return Err(P2pError::PublishError(PublishError::MessageTooLarge(
@@ -302,7 +246,7 @@ where
         }
 
         let topic = match &announcement {
-            message::Announcement::Block(_) => PubSubTopic::Blocks,
+            Announcement::Block(_) => PubSubTopic::Blocks,
         };
 
         self.cmd_tx
@@ -312,24 +256,9 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            } => Ok(SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request,
-            }),
-            types::SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            } => Ok(SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response,
-            }),
+            types::SyncingEvent::Message { peer, message } => {
+                Ok(SyncingEvent::Message { peer, message })
+            }
             types::SyncingEvent::Announcement {
                 peer_id,
                 announcement,

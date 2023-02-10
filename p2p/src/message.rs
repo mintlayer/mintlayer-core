@@ -22,6 +22,24 @@ use serialization::{Decode, Encode};
 
 use crate::types::peer_address::PeerAddress;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncMessage {
+    HeaderListRequest(HeaderListRequest),
+    BlockListRequest(BlockListRequest),
+    HeaderListResponse(HeaderListResponse),
+    BlockListResponse(BlockListResponse),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PeerManagerMessage {
+    AddrListRequest(AddrListRequest),
+    AnnounceAddrRequest(AnnounceAddrRequest),
+    PingRequest(PingRequest),
+    AddrListResponse(AddrListResponse),
+    AnnounceAddrResponse(AnnounceAddrResponse),
+    PingResponse(PingResponse),
+}
+
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderListRequest {
     locator: Locator,
@@ -71,33 +89,6 @@ pub struct AnnounceAddrRequest {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct PingRequest {
     pub nonce: u64,
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum Request {
-    #[codec(index = 0)]
-    HeaderListRequest(HeaderListRequest),
-    #[codec(index = 1)]
-    BlockListRequest(BlockListRequest),
-    #[codec(index = 2)]
-    AddrListRequest(AddrListRequest),
-    #[codec(index = 3)]
-    AnnounceAddrRequest(AnnounceAddrRequest),
-    #[codec(index = 4)]
-    PingRequest(PingRequest),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SyncRequest {
-    HeaderListRequest(HeaderListRequest),
-    BlockListRequest(BlockListRequest),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PeerManagerRequest {
-    AddrListRequest(AddrListRequest),
-    AnnounceAddrRequest(AnnounceAddrRequest),
-    PingRequest(PingRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -152,76 +143,7 @@ pub struct PingResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum Response {
-    #[codec(index = 0)]
-    HeaderListResponse(HeaderListResponse),
-    #[codec(index = 1)]
-    BlockListResponse(BlockListResponse),
-    #[codec(index = 2)]
-    AddrListResponse(AddrListResponse),
-    #[codec(index = 3)]
-    AnnounceAddrResponse(AnnounceAddrResponse),
-    #[codec(index = 4)]
-    PingResponse(PingResponse),
-}
-
-#[derive(Debug, Clone)]
-pub enum SyncResponse {
-    HeaderListResponse(HeaderListResponse),
-    BlockListResponse(BlockListResponse),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PeerManagerResponse {
-    AddrListResponse(AddrListResponse),
-    AnnounceAddrResponse(AnnounceAddrResponse),
-    PingResponse(PingResponse),
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]
     Block(Block),
-}
-
-impl From<PeerManagerRequest> for Request {
-    fn from(request: PeerManagerRequest) -> Self {
-        match request {
-            PeerManagerRequest::AddrListRequest(request) => Request::AddrListRequest(request),
-            PeerManagerRequest::AnnounceAddrRequest(request) => {
-                Request::AnnounceAddrRequest(request)
-            }
-            PeerManagerRequest::PingRequest(request) => Request::PingRequest(request),
-        }
-    }
-}
-
-impl From<PeerManagerResponse> for Response {
-    fn from(response: PeerManagerResponse) -> Self {
-        match response {
-            PeerManagerResponse::AddrListResponse(response) => Response::AddrListResponse(response),
-            PeerManagerResponse::AnnounceAddrResponse(response) => {
-                Response::AnnounceAddrResponse(response)
-            }
-            PeerManagerResponse::PingResponse(response) => Response::PingResponse(response),
-        }
-    }
-}
-
-impl From<SyncRequest> for Request {
-    fn from(request: SyncRequest) -> Self {
-        match request {
-            SyncRequest::HeaderListRequest(request) => Request::HeaderListRequest(request),
-            SyncRequest::BlockListRequest(request) => Request::BlockListRequest(request),
-        }
-    }
-}
-
-impl From<SyncResponse> for Response {
-    fn from(response: SyncResponse) -> Self {
-        match response {
-            SyncResponse::HeaderListResponse(response) => Response::HeaderListResponse(response),
-            SyncResponse::BlockListResponse(response) => Response::BlockListResponse(response),
-        }
-    }
 }

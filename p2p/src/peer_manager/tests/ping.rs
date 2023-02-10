@@ -20,11 +20,11 @@ use common::chain::config;
 use crate::{
     config::P2pConfig,
     event::PeerManagerEvent,
-    message::{PeerManagerResponse, PingRequest, PingResponse, Request},
+    message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{
             transport::TcpTransportSocket,
-            types::{Command, ConnectivityEvent, PeerId},
+            types::{Command, ConnectivityEvent, Message, PeerId},
             ConnectivityHandle, DefaultNetworkingService,
         },
         types::PeerInfo,
@@ -90,16 +90,14 @@ async fn ping_timeout() {
 
         let event = cmd_rx.recv().await.unwrap();
         match event {
-            Command::SendRequest {
-                peer_id,
-                request_id,
-                message: Request::PingRequest(PingRequest { nonce }),
+            Command::SendMessage {
+                peer,
+                message: Message::PingRequest(PingRequest { nonce }),
             } => {
                 conn_tx
-                    .send(ConnectivityEvent::Response {
-                        peer_id,
-                        request_id,
-                        response: PeerManagerResponse::PingResponse(PingResponse { nonce }),
+                    .send(ConnectivityEvent::Message {
+                        peer,
+                        message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
                     })
                     .unwrap();
             }
@@ -111,10 +109,9 @@ async fn ping_timeout() {
     time_getter.advance_time(ping_check_period).await;
     let event = cmd_rx.recv().await.unwrap();
     match event {
-        Command::SendRequest {
-            peer_id: _,
-            request_id: _,
-            message: Request::PingRequest(PingRequest { nonce: _ }),
+        Command::SendMessage {
+            peer: _,
+            message: Message::PingRequest(PingRequest { nonce: _ }),
         } => {}
         _ => panic!("unexpected event: {event:?}"),
     }

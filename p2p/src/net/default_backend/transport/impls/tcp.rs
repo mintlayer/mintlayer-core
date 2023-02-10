@@ -158,16 +158,18 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
+    use common::{
+        chain::block::Block,
+        primitives::{Id, H256},
+    };
+
     use crate::{
-        message::{BlockListRequest, SyncRequest},
+        message::BlockListRequest,
         testing_utils::{TestTransportMaker, TestTransportTcp},
     };
 
     use super::*;
-    use crate::net::default_backend::{
-        transport::BufferedTranscoder,
-        types::{Message, RequestId},
-    };
+    use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
     #[tokio::test]
     async fn send_recv() {
@@ -179,25 +181,12 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = RequestId::new();
-        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
+        let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
-        peer_stream
-            .send(Message::Request {
-                request_id,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        peer_stream.send(message.clone()).await.unwrap();
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id,
-                request: request.into(),
-            }
-        );
+        assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 
     #[tokio::test]
@@ -210,40 +199,18 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let id_1 = RequestId::new();
-        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream);
-        peer_stream
-            .send(Message::Request {
-                request_id: id_1,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
+        let mut rng =
+            test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let id: Id<Block> = H256::random_using(&mut rng).into();
+        let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
 
-        let id_2 = RequestId::new();
-        peer_stream
-            .send(Message::Request {
-                request_id: id_2,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
+        peer_stream.send(message_1.clone()).await.unwrap();
+        peer_stream.send(message_2.clone()).await.unwrap();
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id: id_1,
-                request: request.clone().into(),
-            }
-        );
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id: id_2,
-                request: request.into(),
-            }
-        );
+        assert_eq!(server_stream.recv().await.unwrap(), message_1);
+        assert_eq!(server_stream.recv().await.unwrap(), message_2);
     }
 }
