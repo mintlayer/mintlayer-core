@@ -66,7 +66,7 @@ impl OrphansProxy {
             .tx
             .send(Some(Box::new(move |subsys| {
                 let result = f(subsys);
-                tx.send(result).expect("Orphan proxy receiver closed");
+                tx.send(result).unwrap();
             })))
             .log_err_pfx("Orphans call");
         rx
