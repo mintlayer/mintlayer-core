@@ -250,7 +250,6 @@ impl Sqlite {
         }
     }
 
-    // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
     fn open_db(self, desc: DbDesc) -> rusqlite::Result<Connection> {
         let flags = OpenFlags::from_iter([
             OpenFlags::SQLITE_OPEN_FULL_MUTEX,
