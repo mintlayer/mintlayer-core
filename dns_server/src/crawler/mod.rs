@@ -239,10 +239,10 @@ where
             .addresses
             .get_mut(&address)
             .expect("address in the Connecting state must be known");
-        let valid = peer_info.network == self.config.network;
+        let is_compatible = peer_info.is_compatible(self.config.network);
 
-        if !valid {
-            log::debug!("invalid peer detected at {}", address.to_string());
+        if !is_compatible {
+            log::info!("incompatible peer detected at {}", address.to_string());
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
             Self::change_address_state(
                 &self.config,

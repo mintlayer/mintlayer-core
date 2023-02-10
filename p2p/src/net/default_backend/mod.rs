@@ -389,7 +389,7 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses()[0]);
-            assert_eq!(&peer_info.network, config.magic_bytes());
+            assert_eq!(peer_info.network, *config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(
@@ -592,7 +592,7 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses()[0]);
-            assert_eq!(&peer_info.network, config.magic_bytes());
+            assert_eq!(peer_info.network, *config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(

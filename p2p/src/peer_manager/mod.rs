@@ -252,7 +252,7 @@ where
         let peer_id = info.peer_id;
 
         ensure!(
-            info.network == *self.chain_config.magic_bytes(),
+            info.is_compatible(*self.chain_config.magic_bytes()),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                 *self.chain_config.magic_bytes(),
                 info.network,

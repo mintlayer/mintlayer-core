@@ -56,6 +56,12 @@ pub struct PeerInfo<P> {
     pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
+impl<P> PeerInfo<P> {
+    pub fn is_compatible(&self, network: [u8; 4]) -> bool {
+        self.network == network
+    }
+}
+
 impl<P: Debug> Display for PeerInfo<P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
