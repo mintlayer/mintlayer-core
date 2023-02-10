@@ -310,11 +310,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             ))
         } else {
             // TODO: test reattempts using mocks of the database that emulate failure
-            self.attempt_to_process_block(block, block_source, attempt_number + 1)
+            self.process_block_and_related_orphans(block, block_source, attempt_number + 1)
         }
     }
 
-    pub fn attempt_to_process_block(
+    fn attempt_to_process_one_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
@@ -348,7 +348,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             }
         }
 
-        let new_block_index_after_orphans = self.process_orphans(&block.get_id());
+        Ok(result)
+    }
+
+    fn process_block_and_related_orphans(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+        attempt_number: usize,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let block_id = block.get_id();
+
+        let result = self.attempt_to_process_one_block(block, block_source, attempt_number)?;
+
+        let new_block_index_after_orphans = self.process_orphans(&block_id);
         let result = match new_block_index_after_orphans {
             Some(result_from_orphan) => Some(result_from_orphan),
             None => result,
@@ -375,7 +388,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        self.attempt_to_process_block(block, block_source, 0)
+        self.process_block_and_related_orphans(block, block_source, 0)
     }
 
     /// Initialize chainstate with genesis block
