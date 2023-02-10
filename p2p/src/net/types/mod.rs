@@ -186,4 +186,7 @@ pub enum PubSubTopic {
 
     /// Blocks
     Blocks,
+
+    /// Peer address announcements from new nodes joining the network
+    PeerAddresses,
 }

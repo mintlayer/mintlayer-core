@@ -18,7 +18,10 @@ use std::sync::Arc;
 use clap::Parser;
 use config::DnsServerConfig;
 use crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig};
-use p2p::{config::P2pConfig, net::NetworkingService};
+use p2p::{
+    config::{NodeType, P2pConfig},
+    net::NetworkingService,
+};
 use tokio::sync::mpsc;
 
 mod config;
@@ -42,7 +45,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         outbound_connection_timeout: Default::default(),
         ping_check_period: Default::default(),
         ping_timeout: Default::default(),
-        node_type: Default::default(),
+        node_type: NodeType::DnsServer.into(),
         allow_discover_private_ips: Default::default(),
     });
 

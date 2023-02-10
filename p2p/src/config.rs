@@ -22,11 +22,6 @@ use crate::net::types::PubSubTopic;
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
-make_config_setting!(
-    AnnouncementSubscriptions,
-    BTreeSet<PubSubTopic>,
-    [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
-);
 make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
@@ -39,6 +34,8 @@ pub enum NodeType {
     Full,
     /// A node that only download blocks, but ignores transactions.
     BlocksOnly,
+    /// A node that only is interested in network address announcements
+    DnsServer,
     /// A node that doesn't subscribe to any events.
     ///
     /// This node type isn't useful outside of the tests.
@@ -49,9 +46,12 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
     fn from(t: NodeType) -> Self {
         match t {
             NodeType::Full => {
-                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
+                    .into_iter()
+                    .collect()
             }
             NodeType::BlocksOnly => [PubSubTopic::Blocks].into_iter().collect(),
+            NodeType::DnsServer => [PubSubTopic::PeerAddresses].into_iter().collect(),
             NodeType::Inactive => BTreeSet::new(),
         }
     }

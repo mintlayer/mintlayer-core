@@ -394,7 +394,9 @@ mod tests {
             assert_eq!(peer_info.agent, None);
             assert_eq!(
                 peer_info.subscriptions,
-                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
+                    .into_iter()
+                    .collect()
             );
         } else {
             panic!("invalid event received");
@@ -595,7 +597,9 @@ mod tests {
             assert_eq!(peer_info.agent, None);
             assert_eq!(
                 peer_info.subscriptions,
-                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
+                    .into_iter()
+                    .collect()
             );
         } else {
             panic!("invalid event received");
