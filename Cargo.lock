@@ -3521,6 +3521,8 @@ dependencies = [
  "cfg-if",
  "futures",
  "logging",
+ "oneshot",
+ "static_assertions",
  "testing_logger",
  "thiserror",
  "tokio",

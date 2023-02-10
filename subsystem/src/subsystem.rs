@@ -60,6 +60,12 @@ impl<T: 'static + ?Sized> CallRequest<T> {
 /// Call response that can be polled for result
 pub struct CallResponse<T>(oneshot::Receiver<T>);
 
+impl<T> CallResponse<T> {
+    fn blocking_recv(self) -> Result<T, CallError> {
+        self.0.blocking_recv().map_err(|_| CallError::ResultFetchFailed)
+    }
+}
+
 impl<T> std::future::Future for CallResponse<T> {
     type Output = Result<T, CallError>;
 
@@ -125,6 +131,13 @@ impl<T> CallResult<T> {
     /// Get the corresponding [`CallResponse`], with the opportunity to handle errors at send time.
     pub fn response(self) -> Result<CallResponse<T>, CallError> {
         self.0
+    }
+
+    /// Get the result, wait for it by blocking the thread.
+    ///
+    /// Panics if called from async context
+    pub(crate) fn blocking_get(self) -> Result<T, CallError> {
+        self.0.and_then(|resp| resp.blocking_recv())
     }
 }
 
