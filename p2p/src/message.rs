@@ -27,7 +27,7 @@ pub enum SyncMessage {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
     HeaderListResponse(HeaderListResponse),
-    BlockListResponse(BlockListResponse),
+    BlockResponse(BlockResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,9 +143,6 @@ pub struct PingResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-    /// This message is sent as a response to `HeaderListRequest`.
-    /// to BlockListRequest.
-    BlockResponse(BlockResponse),
 pub enum Announcement {
     #[codec(index = 0)]
     Block(BlockHeader),

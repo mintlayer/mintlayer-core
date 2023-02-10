@@ -44,7 +44,7 @@ use crate::{
     event::{PeerManagerEvent, SyncControlEvent},
     message::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
-        SyncRequest, SyncResponse,
+        SyncMessage,
     },
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     sync::peer_context::PeerContext,
@@ -87,7 +87,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// The block identifiers are added to the queue as a result of BlockListRequest processing
     /// and removed either after sending a response or when the peer is disconnected. A number of
     /// blocks is limited by `P2pConfig::requested_blocks_limit` per peer.
-    blocks_queue: VecDeque<(T::PeerId, T::PeerRequestId, Id<Block>)>,
+    blocks_queue: VecDeque<(T::PeerId, Id<Block>)>,
 }
 
 /// Syncing manager
@@ -123,28 +123,15 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
-
         loop {
             tokio::select! {
                 event = self.messaging_handle.poll_next() => match event? {
-                    SyncingEvent::Request {
-                        peer_id,
-                        request_id,
-                        request,
-                    } => {
-                        let res = self.handle_request(peer_id, request_id, request).await;
-                        self.handle_result(peer_id, res).await?;
+                    SyncingEvent::Message { peer, message } => {
+                        let res = self.handle_message(peer, message).await;
+                        self.handle_result(peer, res).await?;
                     },
-                    SyncingEvent::Response {
-                        peer_id,
-                        request_id,
-                        response,
-                    } => {
-                        let res = self.handle_response(peer_id, request_id, response).await;
-                        self.handle_result(peer_id, res).await?;
-                    },
-                    SyncingEvent::Announcement{ peer_id, announcement } => {
-                        self.handle_announcement(peer_id, announcement).await?;
+                    SyncingEvent::Announcement{ peer, announcement } => {
+                        self.handle_announcement(peer, announcement).await?;
                     }
                 },
                 event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
@@ -155,9 +142,10 @@ where
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
-                }
-                _ = async {}, if !self.blocks_queue.is_empty() => {
-                    self.handle_block_queue().await?
+                },
+                (peer, block) = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
+                    let res = self.send_block(peer, block).await;
+                    self.handle_result(peer, res).await?;
                 }
             }
         }
@@ -193,29 +181,25 @@ where
         &mut self.messaging_handle
     }
 
-    async fn handle_request(
-        &mut self,
-        peer_id: T::PeerId,
-        request: SyncRequest,
-    ) -> Result<()> {
-        match request {
-            SyncRequest::HeaderListRequest(request) => {
-                self.handle_header_request(peer_id, request_id, request.into_locator()).await
+    async fn handle_message(&mut self, peer: T::PeerId, message: SyncMessage) -> Result<()> {
+        match message {
+            SyncMessage::HeaderListRequest(r) => {
+                self.handle_header_request(peer, r.into_locator()).await
             }
-            SyncRequest::BlockListRequest(request) => {
-                self.handle_block_request(peer_id, request_id, request.into_block_ids()).await
+            SyncMessage::BlockListRequest(r) => {
+                self.handle_block_request(peer, r.into_block_ids()).await
             }
+            SyncMessage::HeaderListResponse(r) => {
+                self.handle_header_response(peer, r.into_headers()).await
+            }
+            SyncMessage::BlockResponse(r) => self.handle_block_response(peer, r.into_block()).await,
         }
     }
 
     // TODO: This shouldn't be public.
     /// Processes a header request by sending requested data to the peer.
-    pub async fn handle_header_request(
-        &mut self,
-        peer: T::PeerId,
-        locator: Locator,
-    ) -> Result<()> {
-        log::debug!("process header request (id {request_id:?}) from peer {peer}");
+    pub async fn handle_header_request(&mut self, peer: T::PeerId, locator: Locator) -> Result<()> {
+        log::debug!("Headers request from peer {peer}");
 
         // Check that the peer is connected.
         self.peers.get(&peer).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
@@ -235,9 +219,10 @@ where
         }
 
         let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
-        self.messaging_handle.send_response(
-            request_id,
-            SyncResponse::HeaderListResponse(HeaderListResponse::new(headers)),
+        debug_assert!(headers.len() <= self.p2p_config.header_limit.clone().into());
+        self.messaging_handle.send_message(
+            peer,
+            SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
         )?;
 
         Ok(())
@@ -248,10 +233,9 @@ where
     pub async fn handle_block_request(
         &mut self,
         peer: T::PeerId,
-        request_id: T::PeerRequestId,
         mut block_ids: Vec<Id<Block>>,
     ) -> Result<()> {
-        log::debug!("process block request (id {request_id:?}) from peer {peer}");
+        log::debug!("Blocks request from peer {peer}");
 
         let peer_state = self
             .peers
@@ -281,36 +265,18 @@ where
         block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
         peer_state.num_blocks_to_send += block_ids.len();
         debug_assert!(peer_state.num_blocks_to_send <= requested_blocks_limit);
-        self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, request_id, id)));
+        self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, id)));
 
         Ok(())
-    }
-
-    // TODO: This shouldn't be public.
-    pub async fn handle_response(
-        &mut self,
-        peer: T::PeerId,
-        request_id: T::PeerRequestId,
-        response: SyncResponse,
-    ) -> Result<()> {
-        match response {
-            SyncResponse::HeaderListResponse(response) => {
-                self.handle_header_response(peer, request_id, response.into_headers()).await
-            }
-            SyncResponse::BlockResponse(response) => {
-                self.handle_block_response(peer, request_id, response.into_block()).await
-            }
-        }
     }
 
     // TODO: This shouldn't be public.
     pub async fn handle_header_response(
         &mut self,
         peer: T::PeerId,
-        request_id: T::PeerRequestId,
         headers: Vec<BlockHeader>,
     ) -> Result<()> {
-        log::debug!("process header response (id {request_id:?}) from peer {peer}");
+        log::debug!("Headers response from peer {peer}");
 
         let peer_state = self
             .peers
@@ -330,7 +296,7 @@ where
                 ),
             ));
         }
-        log::trace!("received headers: {headers:#?}");
+        log::trace!("Received headers: {headers:#?}");
 
         // We are in sync with this peer.
         if headers.is_empty() {
@@ -387,23 +353,19 @@ where
     }
 
     // TODO: This shouldn't be public.
-    pub async fn handle_block_response(
-        &mut self,
-        peer: T::PeerId,
-        message: SyncMessage,
-        block: Block,
-    ) -> Result<()> {
-        log::debug!("process block response (id {request_id:?}) from peer {peer}");
+    pub async fn handle_block_response(&mut self, peer: T::PeerId, block: Block) -> Result<()> {
+        log::debug!("Block ({}) from peer {peer}", block.get_id());
+
         let peer_state = self
             .peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
         if peer_state.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "block response",
             )));
         }
+
         match self
             .chainstate_handle
             .call_mut(|c| {
@@ -427,14 +389,9 @@ where
                 mem::swap(&mut headers, &mut peer_state.known_headers);
                 self.request_blocks(peer, headers)?;
             }
-            SyncMessage::HeaderListResponse(r) => {
-                self.process_header_response(peer, r.into_headers()).await
-            }
-            SyncMessage::BlockListResponse(r) => {
-                self.process_block_response(peer, r.into_blocks()).await
-            }
-        };
-        self.handle_error(peer, res).await
+        }
+
+        Ok(())
     }
 
     // TODO: This shouldn't be public.
@@ -453,7 +410,7 @@ where
         peer: T::PeerId,
         header: BlockHeader,
     ) -> Result<()> {
-        log::debug!("block announcement from {peer} peer: {header:?}");
+        log::debug!("Block announcement from {peer} peer: {header:?}");
 
         let peer_state = self
             .peers
@@ -501,10 +458,11 @@ where
         log::debug!("unregister peer {peer} from sync manager");
 
         // Remove the queued block responses associated with the disconnected peer.
-        self.blocks_queue.retain(|(p, _, _)| p != &peer);
+        self.blocks_queue.retain(|(p, _)| p != &peer);
 
         self.peers.remove(&peer);
     }
+
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
         let header = self
@@ -517,29 +475,22 @@ where
             .clone();
         self.messaging_handle.make_announcement(Announcement::Block(header))
     }
-    async fn handle_block_queue(&mut self) -> Result<()> {
-        debug_assert!(!self.blocks_queue.is_empty());
 
-        let (peer, request_id, block_id) = self
-            .blocks_queue
-            .pop_front()
-            // This function is only called when the queue isn't empty.
-            .expect("The block queue is empty");
-        match self.peers.get_mut(&peer) {
-            Some(state) => state.num_blocks_to_send -= 1,
-            None => return Ok(()),
-        }
+    /// Sends a block to the peer.
+    async fn send_block(&mut self, peer: T::PeerId, block: Id<Block>) -> Result<()> {
+        self.peers
+            .get_mut(&peer)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
+            .num_blocks_to_send -= 1;
 
-        let block = self.chainstate_handle.call(move |c| c.get_block(block_id)).await??.ok_or(
+        let block = self.chainstate_handle.call(move |c| c.get_block(block)).await??.ok_or(
             P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
         )?;
-        self.messaging_handle.send_response(
-            request_id,
-            SyncResponse::BlockResponse(BlockResponse::new(block)),
-        )
+        self.messaging_handle
+            .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
-    /// Handles a result of request/response processing.
+    /// Handles a result of message processing.
     ///
     /// There are three possible types of errors:
     /// - Fatal errors will be propagated by this function effectively stopping the sync manager
@@ -593,34 +544,39 @@ where
         }
     }
 
+    /// Sends a header list request to the given peer.
     async fn request_headers(&mut self, peer: T::PeerId) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= self.p2p_config.max_locator_size.clone().into());
 
         self.messaging_handle
-            .send_request(
+            .send_message(
                 peer,
-                SyncRequest::HeaderListRequest(HeaderListRequest::new(locator)),
+                SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
             )
             .map(|_| ())
     }
 
+    /// Sends a block list request to the given peer.
+    ///
+    /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
+    /// headers are stored in the peer context.
     fn request_blocks(&mut self, peer: T::PeerId, mut headers: Vec<BlockHeader>) -> Result<()> {
         let peer_state = self
             .peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        debug_assert!(peer_state.known_headers.is_empty());
 
+        debug_assert!(peer_state.known_headers.is_empty());
         if headers.len() > self.p2p_config.requested_blocks_limit.clone().into() {
             peer_state.known_headers =
                 headers.split_off(self.p2p_config.requested_blocks_limit.clone().into());
         }
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
-        self.messaging_handle.send_request(
+        self.messaging_handle.send_message(
             peer,
-            SyncRequest::BlockListRequest(BlockListRequest::new(block_ids.clone())),
+            SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
         )?;
         peer_state.requested_blocks.extend(block_ids);
 

@@ -259,13 +259,12 @@ where
             types::SyncingEvent::Message { peer, message } => {
                 Ok(SyncingEvent::Message { peer, message })
             }
-            types::SyncingEvent::Announcement {
-                peer_id,
-                announcement,
-            } => Ok(SyncingEvent::Announcement {
-                peer_id,
-                announcement: *announcement,
-            }),
+            types::SyncingEvent::Announcement { peer, announcement } => {
+                Ok(SyncingEvent::Announcement {
+                    peer,
+                    announcement: *announcement,
+                })
+            }
         }
     }
 }

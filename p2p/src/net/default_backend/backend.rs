@@ -32,7 +32,7 @@ use serialization::{Decode, Encode};
 
 use crate::{
     config::P2pConfig,
-    error::{DialError, P2pError, PeerError, ProtocolError, PublishError},
+    error::{DialError, P2pError, PeerError, PublishError},
     message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
@@ -232,7 +232,7 @@ where
 
         self.sync_tx
             .send(SyncingEvent::Announcement {
-                peer_id,
+                peer: peer_id,
                 announcement: Box::new(announcement),
             })
             .map_err(P2pError::from)
@@ -470,9 +470,9 @@ where
                 peer,
                 message: SyncMessage::HeaderListResponse(r),
             })?,
-            Message::BlockListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
+            Message::BlockResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockListResponse(r),
+                message: SyncMessage::BlockResponse(r),
             })?,
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
