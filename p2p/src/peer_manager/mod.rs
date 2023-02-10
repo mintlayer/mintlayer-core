@@ -562,7 +562,6 @@ where
                 self.handle_announce_addr_request(peer, r.address)
             }
             PeerManagerMessage::PingRequest(r) => self.handle_ping_request(peer, r.nonce),
-            // TODO: Check that unsolicited responses are not allowed
             PeerManagerMessage::AddrListResponse(r) => self.handle_add_list_response(r.addresses),
             PeerManagerMessage::AnnounceAddrResponse(_) => Ok(()),
             PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
