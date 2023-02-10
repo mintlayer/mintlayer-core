@@ -59,10 +59,10 @@ use crate::{
 use self::storage::{DnsServerStorage, DnsServerStorageRead, DnsServerTransactionRo};
 
 /// How often the server performs maintenance (tries to connect to new nodes)
-const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(60);
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 
 /// How many outbound connection attempts can be made per heartbeat
-const MAX_CONNECTS_PER_HEARTBEAT: usize = 10;
+const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
 
 /// When the server drops the unreachable node address. Used for negative caching.
 const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
