@@ -58,6 +58,7 @@ pub struct PeerInfo<P> {
 
 impl<P> PeerInfo<P> {
     pub fn is_compatible(&self, network: [u8; 4]) -> bool {
+        // TODO: Check version here
         self.network == network
     }
 }
