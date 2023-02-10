@@ -22,17 +22,17 @@ use proptest::prelude::Strategy;
 mod gen {
     use super::WriteAction;
     pub use proptest::prelude::*;
-    use storage_core::{Data, DbIndex};
+    use storage_core::{Data, DbMapId};
 
-    pub fn idx(num_dbs: usize) -> impl Strategy<Value = DbIndex> {
-        (0..num_dbs).prop_map(DbIndex::new)
+    pub fn map_id(num_dbs: usize) -> impl Strategy<Value = DbMapId> {
+        (0..num_dbs).prop_map(DbMapId::new)
     }
 
     pub fn entries(
         num_dbs: usize,
         num_entries: impl Into<proptest::collection::SizeRange>,
-    ) -> impl Strategy<Value = std::collections::BTreeMap<(DbIndex, Data), Data>> {
-        proptest::collection::btree_map((idx(num_dbs), big_key()), any::<Data>(), num_entries)
+    ) -> impl Strategy<Value = std::collections::BTreeMap<(DbMapId, Data), Data>> {
+        proptest::collection::btree_map((map_id(num_dbs), big_key()), any::<Data>(), num_entries)
     }
 
     // Generate key from a set of keys with given cardinality. Lower cardinality encourages
@@ -72,44 +72,44 @@ fn overwrite_and_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Check the store returns None for given key initially
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.get(IDX.0, key.as_ref()), Ok(None));
+            assert_eq!(dbtx.get(MAPID.0, key.as_ref()), Ok(None));
             drop(dbtx);
 
             // Create a transaction, put the value in the storage and commit
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, key.clone(), val0.clone()).unwrap();
+            dbtx.put(MAPID.0, key.clone(), val0.clone()).unwrap();
             dbtx.commit().expect("commit to succeed");
 
             // Check the values are in place
             let dbtx = store.transaction_ro().unwrap();
             assert_eq!(
-                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                dbtx.get(MAPID.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
                 val0.as_ref() as &[u8]
             );
             drop(dbtx);
 
             // Create a transaction, modify storage and abort
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, key.clone(), val1.clone()).unwrap();
+            dbtx.put(MAPID.0, key.clone(), val1.clone()).unwrap();
             drop(dbtx);
 
             // Check the store still contains the original value
             let dbtx = store.transaction_ro().unwrap();
             assert_eq!(
-                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                dbtx.get(MAPID.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
                 val0.as_ref() as &[u8]
             );
             drop(dbtx);
 
             // Create a transaction, overwrite the value and commit
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.put(IDX.0, key.clone(), val1.clone()).unwrap();
+            dbtx.put(MAPID.0, key.clone(), val1.clone()).unwrap();
             dbtx.commit().expect("commit to succeed");
 
             // Check the key now stores the new value
             let dbtx = store.transaction_ro().unwrap();
             assert_eq!(
-                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
+                dbtx.get(MAPID.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()).unwrap(),
                 val1.as_ref() as &[u8]
             );
             drop(dbtx);
@@ -175,13 +175,13 @@ fn last_write_wins<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // Add all entries to the database
             let mut dbtx = store.transaction_rw(None).unwrap();
             for val in vals.into_iter() {
-                dbtx.put(IDX.0, key.clone(), val).unwrap();
+                dbtx.put(MAPID.0, key.clone(), val).unwrap();
             }
             dbtx.commit().unwrap();
 
             let dbtx = store.transaction_ro().unwrap();
             assert_eq!(
-                dbtx.get(IDX.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()),
+                dbtx.get(MAPID.0, key.as_ref()).unwrap().as_ref().map(|v| v.as_ref()),
                 last.as_deref()
             );
         },
@@ -196,7 +196,7 @@ fn add_and_delete_some<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
         (
             gen::entries(NUM_DBS, 0usize..20),
             gen::entries(NUM_DBS, 0usize..20),
-            proptest::collection::vec((gen::idx(NUM_DBS), gen::big_key()), 0usize..10),
+            proptest::collection::vec((gen::map_id(NUM_DBS), gen::big_key()), 0usize..10),
         ),
         |backend, (entries1, entries2, extra_keys)| {
             let store = backend.open(desc(NUM_DBS)).expect("db open to succeed");
@@ -259,9 +259,9 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
 
             // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, to_prepopulate.into_iter());
+            dbtx.apply_actions(MAPID.0, to_prepopulate.into_iter());
             dbtx.commit().unwrap();
-            assert_eq!(model, Model::from_db(&store, IDX.0));
+            assert_eq!(model, Model::from_db(&store, MAPID.0));
 
             // Apply another set of changes but abort the transaction
             let tx_model = {
@@ -270,10 +270,10 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
                 tx_model
             };
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, to_abort.into_iter());
-            assert_eq!(tx_model, Model::from_tx(&dbtx, IDX.0));
+            dbtx.apply_actions(MAPID.0, to_abort.into_iter());
+            assert_eq!(tx_model, Model::from_tx(&dbtx, MAPID.0));
             drop(dbtx);
-            assert_eq!(model, Model::from_db(&store, IDX.0));
+            assert_eq!(model, Model::from_db(&store, MAPID.0));
 
             // Apply a different set of operations, commit, check they have been performed
             let model = {
@@ -282,9 +282,9 @@ fn add_modify_abort_modify_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
                 model
             };
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, to_commit.into_iter());
+            dbtx.apply_actions(MAPID.0, to_commit.into_iter());
             dbtx.commit().unwrap();
-            assert_eq!(model, Model::from_db(&store, IDX.0));
+            assert_eq!(model, Model::from_db(&store, MAPID.0));
         },
     )
 }
@@ -299,23 +299,23 @@ fn add_modify_abort_replay_commit<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F
 
             // Pre-populate the db with initial data, check the contents against the model
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, initial.into_iter());
+            dbtx.apply_actions(MAPID.0, initial.into_iter());
             dbtx.commit().unwrap();
 
-            let initial_model = Model::from_db(&store, IDX.0);
+            let initial_model = Model::from_db(&store, MAPID.0);
 
             // Apply another set of changes but abort the transaction, check nothing changed
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions.clone().into_iter());
-            let modified_model = Model::from_tx(&dbtx, IDX.0);
+            dbtx.apply_actions(MAPID.0, actions.clone().into_iter());
+            let modified_model = Model::from_tx(&dbtx, MAPID.0);
             drop(dbtx);
-            assert_eq!(Model::from_db(&store, IDX.0), initial_model);
+            assert_eq!(Model::from_db(&store, MAPID.0), initial_model);
 
             // Apply the same changes again, and check that we get to the same state after commit
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions.into_iter());
+            dbtx.apply_actions(MAPID.0, actions.into_iter());
             dbtx.commit().unwrap();
-            assert_eq!(modified_model, Model::from_db(&store, IDX.0));
+            assert_eq!(modified_model, Model::from_db(&store, MAPID.0));
         },
     )
 }
@@ -330,17 +330,17 @@ fn db_writes_do_not_interfere<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Apply one set of operations to key-value map 0
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions0.into_iter());
+            dbtx.apply_actions(MAPID.0, actions0.into_iter());
             dbtx.commit().unwrap();
-            let model = Model::from_db(&store, IDX.0);
+            let model = Model::from_db(&store, MAPID.0);
 
             // Apply another set of operations to key-value map 1
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.1, actions1.into_iter());
+            dbtx.apply_actions(MAPID.1, actions1.into_iter());
             dbtx.commit().unwrap();
 
             // The values in key-value map 0 should remain untouched by the second set of changes
-            assert_eq!(model, Model::from_db(&store, IDX.0));
+            assert_eq!(model, Model::from_db(&store, MAPID.0));
         },
     )
 }
@@ -359,10 +359,10 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             // Apply one set of operations to key-value map 0
             let model = Model::from_actions(actions.clone());
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions.into_iter());
+            dbtx.apply_actions(MAPID.0, actions.into_iter());
             for key in &keys {
                 assert_eq!(
-                    dbtx.get(IDX.0, key).unwrap().as_ref().map(|v| v.as_ref()),
+                    dbtx.get(MAPID.0, key).unwrap().as_ref().map(|v| v.as_ref()),
                     model.get(key)
                 );
             }
@@ -370,7 +370,7 @@ fn empty_after_abort<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             let dbtx = store.transaction_ro().unwrap();
             for key in &keys {
-                assert_eq!(dbtx.get(IDX.0, key), Ok(None));
+                assert_eq!(dbtx.get(MAPID.0, key), Ok(None));
             }
         },
     )
@@ -397,40 +397,40 @@ fn prefix_iteration<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
 
             // Populate the database
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions_a.iter().chain(actions_b.iter()).cloned());
+            dbtx.apply_actions(MAPID.0, actions_a.iter().chain(actions_b.iter()).cloned());
             dbtx.commit().unwrap();
 
             // Check iteration over keys prefixed "a"
             let model_a = Model::from_actions(actions_a);
             let dbtx = store.transaction_ro().unwrap();
-            let iter_a = dbtx.prefix_iter(IDX.0, vec![b'a']).unwrap();
+            let iter_a = dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap();
             assert!(model_a.into_iter().eq(iter_a));
             drop(dbtx);
 
             // Check iteration over keys prefixed "b"
             let model_b = Model::from_actions(actions_b);
             let dbtx = store.transaction_ro().unwrap();
-            let iter_b = dbtx.prefix_iter(IDX.0, vec![b'b']).unwrap();
+            let iter_b = dbtx.prefix_iter(MAPID.0, vec![b'b']).unwrap();
             assert!(model_b.into_iter().eq(iter_b));
             drop(dbtx);
 
             // Check there are no entries prefixed "c"
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.prefix_iter(IDX.0, vec![b'c']).unwrap().next(), None);
+            assert_eq!(dbtx.prefix_iter(MAPID.0, vec![b'c']).unwrap().next(), None);
             drop(dbtx);
 
             // Take all entries prefixed "a" and remove them
             let mut dbtx = store.transaction_rw(None).unwrap();
             let keys_a: Vec<_> =
-                dbtx.prefix_iter(IDX.0, vec![b'a']).unwrap().map(|(k, _)| k).collect();
+                dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap().map(|(k, _)| k).collect();
             for key in keys_a {
-                dbtx.del(IDX.0, &key).unwrap();
+                dbtx.del(MAPID.0, &key).unwrap();
             }
             dbtx.commit().unwrap();
 
             // Check there are no entries prefixed "a"
             let dbtx = store.transaction_ro().unwrap();
-            assert_eq!(dbtx.prefix_iter(IDX.0, vec![b'a']).unwrap().next(), None);
+            assert_eq!(dbtx.prefix_iter(MAPID.0, vec![b'a']).unwrap().next(), None);
             drop(dbtx);
         },
     )
@@ -446,13 +446,13 @@ fn post_commit_consistency<B: Backend, F: BackendFn<B>>(backend_fn: Arc<F>) {
             let store = backend.open(desc(1)).expect("db open to succeed");
 
             let mut dbtx = store.transaction_rw(None).unwrap();
-            dbtx.apply_actions(IDX.0, actions.into_iter());
-            let model = Model::from_tx(&dbtx, IDX.0);
+            dbtx.apply_actions(MAPID.0, actions.into_iter());
+            let model = Model::from_tx(&dbtx, MAPID.0);
             dbtx.commit().unwrap();
 
             // The state from the transaction just before committing should de the same as the
             // state of the database after the commit.
-            assert_eq!(Model::from_db(&store, IDX.0), model);
+            assert_eq!(Model::from_db(&store, MAPID.0), model);
         },
     )
 }

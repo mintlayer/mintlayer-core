@@ -23,15 +23,19 @@ pub mod schema;
 
 use std::collections::BTreeMap;
 
-pub use internal::{utxo_db, Store};
+pub use internal::Store;
 
 use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
+use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
-use pos_accounting::{AccountingBlockUndo, PoSAccountingStorageRead, PoSAccountingStorageWrite};
+use pos_accounting::{
+    AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
+    PoSAccountingStorageWrite,
+};
 use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 /// Possibly failing result of blockchain storage query
@@ -42,8 +46,18 @@ pub mod inmemory {
     pub type Store = super::Store<storage::inmemory::InMemory>;
 }
 
+pub struct TipStorageTag;
+impl pos_accounting::StorageTag for TipStorageTag {}
+
+pub struct SealedStorageTag;
+impl pos_accounting::StorageTag for SealedStorageTag {}
+
 /// Queries on persistent blockchain data
-pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
+pub trait BlockchainStorageRead:
+    UtxosStorageRead
+    + PoSAccountingStorageRead<SealedStorageTag>
+    + PoSAccountingStorageRead<TipStorageTag>
+{
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
@@ -85,11 +99,26 @@ pub trait BlockchainStorageRead: UtxosStorageRead + PoSAccountingStorageRead {
 
     /// Get accounting undo for specific block
     fn get_accounting_undo(&self, id: Id<Block>) -> crate::Result<Option<AccountingBlockUndo>>;
+
+    /// Get accounting delta for specific epoch
+    fn get_accounting_epoch_delta(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> crate::Result<Option<PoSAccountingDeltaData>>;
+
+    /// Get accounting undo delta for specific epoch
+    fn get_accounting_epoch_undo_delta(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> crate::Result<Option<DeltaMergeUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
 pub trait BlockchainStorageWrite:
-    BlockchainStorageRead + UtxosStorageWrite + PoSAccountingStorageWrite
+    BlockchainStorageRead
+    + UtxosStorageWrite
+    + PoSAccountingStorageWrite<SealedStorageTag>
+    + PoSAccountingStorageWrite<TipStorageTag>
 {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
@@ -158,6 +187,26 @@ pub trait BlockchainStorageWrite:
 
     // Remove accounting block undo data for specific block
     fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+    // Set accounting delta for specific block
+    fn set_accounting_epoch_delta(
+        &mut self,
+        epoch_index: EpochIndex,
+        delta: &PoSAccountingDeltaData,
+    ) -> crate::Result<()>;
+
+    // Remove accounting delta for specific block
+    fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+
+    // Set accounting undo for specific epoch
+    fn set_accounting_epoch_undo_delta(
+        &mut self,
+        epoch_index: EpochIndex,
+        undo: &DeltaMergeUndo,
+    ) -> crate::Result<()>;
+
+    // Remove accounting block undo data for specific block
+    fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

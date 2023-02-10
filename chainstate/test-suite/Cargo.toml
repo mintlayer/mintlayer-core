@@ -7,6 +7,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+accounting = {path = '../../accounting'}
 chainstate-test-framework = { path = '../test-framework' }
 chainstate = { path = '../' }
 chainstate-storage = { path = '../storage' }

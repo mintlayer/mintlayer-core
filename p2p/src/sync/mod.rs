@@ -95,7 +95,6 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerRequestId: 'static,
     T::PeerId: 'static,
 {
     /// Creates a new sync manager instance.
@@ -197,7 +196,6 @@ where
     async fn handle_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::PeerRequestId,
         request: SyncRequest,
     ) -> Result<()> {
         match request {
@@ -215,7 +213,6 @@ where
     pub async fn handle_header_request(
         &mut self,
         peer: T::PeerId,
-        request_id: T::PeerRequestId,
         locator: Locator,
     ) -> Result<()> {
         log::debug!("process header request (id {request_id:?}) from peer {peer}");
@@ -393,11 +390,10 @@ where
     pub async fn handle_block_response(
         &mut self,
         peer: T::PeerId,
-        request_id: T::PeerRequestId,
+        message: SyncMessage,
         block: Block,
     ) -> Result<()> {
         log::debug!("process block response (id {request_id:?}) from peer {peer}");
-
         let peer_state = self
             .peers
             .get_mut(&peer)
@@ -408,7 +404,6 @@ where
                 "block response",
             )));
         }
-
         match self
             .chainstate_handle
             .call_mut(|c| {
@@ -432,9 +427,14 @@ where
                 mem::swap(&mut headers, &mut peer_state.known_headers);
                 self.request_blocks(peer, headers)?;
             }
-        }
-
-        Ok(())
+            SyncMessage::HeaderListResponse(r) => {
+                self.process_header_response(peer, r.into_headers()).await
+            }
+            SyncMessage::BlockListResponse(r) => {
+                self.process_block_response(peer, r.into_blocks()).await
+            }
+        };
+        self.handle_error(peer, res).await
     }
 
     // TODO: This shouldn't be public.
@@ -505,7 +505,6 @@ where
 
         self.peers.remove(&peer);
     }
-
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
         let header = self
@@ -518,7 +517,6 @@ where
             .clone();
         self.messaging_handle.make_announcement(Announcement::Block(header))
     }
-
     async fn handle_block_queue(&mut self) -> Result<()> {
         debug_assert!(!self.blocks_queue.is_empty());
 

@@ -44,4 +44,13 @@ impl PoSAccountingData {
             delegation_data: BTreeMap::new(),
         }
     }
+
+    // TODO: avoid manual implementation (mintlayer/mintlayer-core#669)
+    pub fn is_empty(&self) -> bool {
+        self.pool_data.is_empty()
+            && self.pool_balances.is_empty()
+            && self.pool_delegation_shares.is_empty()
+            && self.delegation_balances.is_empty()
+            && self.delegation_data.is_empty()
+    }
 }

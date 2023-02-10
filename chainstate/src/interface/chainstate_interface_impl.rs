@@ -19,6 +19,7 @@ use crate::detail::bootstrap::export_bootstrap_stream;
 use crate::detail::bootstrap::import_bootstrap_stream;
 use crate::detail::calculate_median_time_past;
 use crate::detail::tx_verification_strategy::TransactionVerificationStrategy;
+use crate::detail::OrphanBlocksRef;
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::block::BlockReward;

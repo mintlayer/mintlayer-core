@@ -82,7 +82,8 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             MapResizeCallback::new(resize_callback),
         );
 
-        let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();
+        let desc = storage_core::types::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
+        let lmdb_impl = lmdb.open(desc).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(
@@ -97,7 +98,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         // write many key/val values, and while they're being written, expect that database map will grow
         for (key, val) in &data {
             let mut rw_tx = lmdb_impl.transaction_rw(None).unwrap();
-            rw_tx.put(DbIndex::new(0), key.clone(), val.clone()).unwrap();
+            rw_tx.put(DbMapId::new(0), key.clone(), val.clone()).unwrap();
             match rw_tx.commit() {
                 Ok(_) => resizes_via_commit_count += 1,
                 Err(e) => panic!("Failed to commit: {e:?}"),
@@ -115,7 +116,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
         // ensure data is successfully written
         let ro_tx = lmdb_impl.transaction_ro().unwrap();
         for (key, val) in data {
-            assert_eq!(ro_tx.get(DbIndex::new(0), &key).unwrap().unwrap(), val);
+            assert_eq!(ro_tx.get(DbMapId::new(0), &key).unwrap().unwrap(), val);
         }
 
         assert!(resizes_via_commit_count > 0, "Not a single resize was scheduled after a transaction... this is very unlikely based on the test structure");
@@ -152,7 +153,8 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             MapResizeCallback::new(resize_callback),
         );
 
-        let lmdb_impl = lmdb.open(DbDesc::from_iter(vec![MapDesc::new("SomeDb")])).unwrap();
+        let desc = storage_core::types::construct::db_desc([DbMapDesc::new("SomeDb")].into_iter());
+        let lmdb_impl = lmdb.open(desc).unwrap();
 
         // generate random values with a predefined target size that surpasses the current map size
         let data = create_random_data_map_with_target_byte_size(
@@ -176,7 +178,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             let mut data_written_in_this_cycle = Vec::new();
             while !data_stack.is_empty() {
                 let (key, val) = data_stack.last().unwrap();
-                match rw_tx.put(DbIndex::new(0), key.clone(), val.clone()) {
+                match rw_tx.put(DbMapId::new(0), key.clone(), val.clone()) {
                     Ok(_) => {
                         // on success, we continue writing and take record of that
                         data_written_in_this_cycle.push(data_stack.pop().unwrap());
@@ -209,7 +211,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
         // ensure data is successfully written
         let ro_tx = lmdb_impl.transaction_ro().unwrap();
         for (key, val) in data {
-            assert_eq!(ro_tx.get(DbIndex::new(0), &key).unwrap().unwrap(), val);
+            assert_eq!(ro_tx.get(DbMapId::new(0), &key).unwrap().unwrap(), val);
         }
 
         assert!(

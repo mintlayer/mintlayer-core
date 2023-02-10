@@ -1,0 +1,53 @@
+[sources.allow-org]
+github = [
+    "mintlayer", #allow any code from mintlayer's github
+]
+
+[licenses]
+#we reject code without a license
+unlicensed = "deny"
+confidence-threshold = 0.92
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "LicenseRef-ring",
+    "LicenseRef-webpki",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-DFS-2016",
+    "Unlicense", #this is a specific license rather than no license at all
+    "Zlib",
+] #deny a license not in this set of licenses
+
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "LicenseRef-webpki"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
+
+[advisories]
+db-path = "~/.cargo/advisory-dbs"
+db-urls = [ "https://github.com/RustSec/advisory-db" ]
+vulnerability = "deny"
+unmaintained = "warn"
+unsound = "warn"
+yanked = "warn"
+notice = "warn"
+severity-threshold = "medium"
+ignore = [
+    # time/chrono problems, have not been a problem in practice
+    "RUSTSEC-2020-0159",
+    "RUSTSEC-2020-0071",
+]

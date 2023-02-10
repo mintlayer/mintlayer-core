@@ -42,5 +42,5 @@ pub use crate::{
         storage::PoSAccountingDB,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
+    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite, StorageTag},
 };

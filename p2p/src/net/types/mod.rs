@@ -21,7 +21,11 @@ use std::{
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
-use crate::{message, types::peer_address::PeerAddress, NetworkingService, P2pError};
+use crate::{
+    message::{Announcement, PeerManagerMessage, SyncMessage},
+    types::peer_address::PeerAddress,
+    NetworkingService, P2pError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -75,27 +79,9 @@ impl<P: Debug> Display for PeerInfo<P> {
 /// Connectivity-related events received from the network
 #[derive(Debug)]
 pub enum ConnectivityEvent<T: NetworkingService> {
-    /// An incoming request.
-    Request {
-        /// Unique ID of the sender
-        peer_id: T::PeerId,
-
-        /// Unique ID of the request
-        request_id: T::PeerRequestId,
-
-        /// Received request
-        request: message::PeerManagerRequest,
-    },
-    /// An incoming response.
-    Response {
-        /// Unique ID of the sender
-        peer_id: T::PeerId,
-
-        /// Unique ID of the request this message is a response to
-        request_id: T::PeerRequestId,
-
-        /// Received response
-        response: message::PeerManagerResponse,
+    Message {
+        peer: T::PeerId,
+        message: PeerManagerMessage,
     },
     /// Outbound connection accepted
     OutboundAccepted {
@@ -149,32 +135,14 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 /// Syncing-related events
 #[derive(Debug)]
 pub enum SyncingEvent<T: NetworkingService> {
-    /// An incoming request.
-    Request {
-        /// Unique ID of the sender
-        peer_id: T::PeerId,
-
-        /// Unique ID of the request
-        request_id: T::PeerRequestId,
-
-        /// Received request
-        request: message::SyncRequest,
-    },
-    /// An incoming response.
-    Response {
-        /// Unique ID of the sender
-        peer_id: T::PeerId,
-
-        /// Unique ID of the request this message is a response to
-        request_id: T::PeerRequestId,
-
-        /// Received response
-        response: message::SyncResponse,
+    Message {
+        peer: T::PeerId,
+        message: SyncMessage,
     },
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
-        announcement: message::Announcement,
+        announcement: Announcement,
     },
 }
 

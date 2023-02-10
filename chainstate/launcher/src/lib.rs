@@ -26,6 +26,7 @@ pub use chainstate::{
 };
 pub use common::chain::ChainConfig;
 pub use config::{ChainstateLauncherConfig, StorageBackendConfig};
+use storage_lmdb::resize_callback::MapResizeCallback;
 
 /// Subdirectory under `datadir` where LMDB chainstate database is placed
 pub const SUBDIRECTORY_LMDB: &str = "chainstate-lmdb";
@@ -59,6 +60,10 @@ pub fn make_chainstate(
         chainstate_config,
     } = config;
 
+    let lmdb_resize_callback = MapResizeCallback::new(Box::new(|resize_info| {
+        logging::log::info!("Lmdb resize happened: {:?}", resize_info)
+    }));
+
     // There is some code duplication because `make_chainstate_and_storage_impl` is called with
     // a different set of generic parameters in each case.
     match storage_backend {
@@ -67,7 +72,7 @@ pub fn make_chainstate(
                 datadir.join(SUBDIRECTORY_LMDB),
                 Default::default(),
                 Default::default(),
-                Default::default(),
+                lmdb_resize_callback,
             );
             make_chainstate_and_storage_impl(storage, chain_config, chainstate_config)
         }

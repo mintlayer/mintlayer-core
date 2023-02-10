@@ -45,13 +45,14 @@ use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
     median_time::calculate_median_time_past,
-    orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
+    orphan_blocks::{OrphanBlocksMut, OrphanBlocksRef},
     tokens::check_tokens_data,
     transaction_verifier::{error::TokensError, flush::flush_to_storage},
     tx_verification_strategy::TransactionVerificationStrategy,
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
 
+mod epoch_seal;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, O, V> {
@@ -63,7 +64,7 @@ pub struct ChainstateRef<'a, S, O, V> {
     time_getter: &'a TimeGetterFn,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     BlockIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_block_index(
@@ -97,7 +98,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     TransactionIndexHandle for ChainstateRef<'a, S, O, V>
 {
     fn get_mainchain_tx_index(
@@ -121,7 +122,7 @@ impl<'a, S: TransactionRw, O, V> ChainstateRef<'a, S, O, V> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     ChainstateRef<'a, S, O, V>
 {
     pub fn new_rw(
@@ -723,6 +724,13 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                 GenBlockIndex::Block(block_index) => block_index,
             };
             to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
+
+            // check if we need to rollback the epoch seal
+            epoch_seal::update_epoch_seal(
+                &mut self.db_tx,
+                self.chain_config,
+                epoch_seal::BlockStateEvent::Disconnect(to_disconnect.block_height()),
+            )?;
         }
         Ok(())
     }
@@ -745,8 +753,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         let common_ancestor_id = {
             let err = "This vector cannot be empty since there is at least one block to connect";
-            let first_block = &new_chain.first().expect(err);
-            &first_block.prev_block_id()
+            let first_block = new_chain.first().expect(err);
+            first_block.prev_block_id()
         };
 
         // Disconnect the current chain if it is not a genesis
@@ -764,6 +772,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index).log_err()?;
+            epoch_seal::update_epoch_seal(
+                &mut self.db_tx,
+                self.chain_config,
+                epoch_seal::BlockStateEvent::Connect(block_index.block_height()),
+            )?;
         }
 
         Ok(())

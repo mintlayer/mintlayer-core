@@ -28,7 +28,7 @@ use common::{
 };
 
 use super::{
-    chainstateref, orphan_blocks::OrphanBlocks,
+    chainstateref, orphan_blocks::OrphanBlocksRef,
     tx_verification_strategy::TransactionVerificationStrategy, HEADER_LIMIT,
 };
 
@@ -40,7 +40,7 @@ pub struct ChainstateQuery<'a, S, O, V> {
     chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocksRef, V: TransactionVerificationStrategy>
     ChainstateQuery<'a, S, O, V>
 {
     pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>) -> Self {

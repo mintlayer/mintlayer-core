@@ -16,11 +16,12 @@
 use super::*;
 use common::chain::tokens::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
-use common::chain::{Destination, OutputPurpose, TxOutput};
-use common::primitives::{Amount, H256};
+use common::chain::{Block, Destination, OutputPurpose, TxOutput};
+use common::primitives::{Amount, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
+use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{UtxosBlockRewardUndo, UtxosBlockUndo, UtxosTxUndoWithSources};
 
@@ -247,7 +248,7 @@ fn test_storage_transactions_with_result_check() {
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
-fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> Utxo {
+fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.gen_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
@@ -258,7 +259,13 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> Utxo
     let is_block_reward = random_value % 3 == 0;
 
     // generate utxo
-    Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(block_height))
+    let utxo = Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(block_height));
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
+        0,
+    );
+
+    (utxo, outpoint)
 }
 
 /// returns a block undo with random utxos and TxUndos.
@@ -275,7 +282,7 @@ pub fn create_rand_block_undo(
     let reward_utxos = (0..utxo_rng)
         .into_iter()
         .enumerate()
-        .map(|(i, _)| create_rand_utxo(rng, i as u64))
+        .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
         .collect();
     let reward_undo = UtxosBlockRewardUndo::new(reward_utxos);
 
@@ -286,7 +293,7 @@ pub fn create_rand_block_undo(
         let tx_utxos = (0..utxo_rng)
             .into_iter()
             .enumerate()
-            .map(|(i, _)| create_rand_utxo(rng, i as u64))
+            .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
             .collect();
 
         tx_undo.push(UtxosTxUndoWithSources::new(tx_utxos, vec![]));
@@ -343,4 +350,44 @@ fn undo_test(#[case] seed: Seed) {
     );
     assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));
     assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
+}
+
+#[cfg(not(loom))]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn utxo_db_impl_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut store = crate::inmemory::Store::new_empty().expect("should create a store");
+    store
+        .set_best_block_for_utxos(&H256::random_using(&mut rng).into())
+        .expect("Setting best block cannot fail");
+    let mut db_interface = utxo::UtxosDB::new(&mut store);
+
+    // utxo checking
+    let (utxo, outpoint) = create_rand_utxo(&mut rng, 1);
+    assert!(db_interface.set_utxo(&outpoint, utxo.clone()).is_ok());
+    assert_eq!(db_interface.get_utxo(&outpoint), Ok(Some(utxo)));
+    assert!(db_interface.del_utxo(&outpoint).is_ok());
+    assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
+
+    // test block id
+    let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
+    assert!(db_interface.set_best_block_for_utxos(&block_id.into()).is_ok());
+
+    let block_id = Id::new(
+        db_interface
+            .get_best_block_for_utxos()
+            .expect("query should not fail")
+            .expect("should return the block id")
+            .get(),
+    );
+
+    // undo checking
+    let undo = create_rand_block_undo(&mut rng, 10, 10);
+
+    assert!(db_interface.set_undo_data(block_id, &undo).is_ok());
+    assert_eq!(db_interface.get_undo_data(block_id), Ok(Some(undo)));
+    assert!(db_interface.del_undo_data(block_id).is_ok());
+    assert_eq!(db_interface.get_undo_data(block_id), Ok(None));
 }

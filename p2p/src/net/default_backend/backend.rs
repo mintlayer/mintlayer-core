@@ -33,16 +33,13 @@ use serialization::{Decode, Encode};
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError, PeerError, ProtocolError, PublishError},
-    message::{self, PeerManagerRequest, PeerManagerResponse, SyncRequest, SyncResponse},
+    message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
-            peer, request_manager,
+            peer,
             transport::{TransportListener, TransportSocket},
-            types::{
-                Command, ConnectivityEvent, Event, Message, PeerEvent, PeerId, RequestId,
-                SyncingEvent,
-            },
+            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, PeerId, SyncingEvent},
         },
         types::{PeerInfo, PubSubTopic},
         Announcement,
@@ -106,9 +103,6 @@ pub struct Backend<T: TransportSocket> {
     /// TX channel for sending syncing events
     sync_tx: mpsc::UnboundedSender<SyncingEvent>,
 
-    /// Request manager for managing inbound/outbound requests and responses
-    request_mgr: request_manager::RequestManager,
-
     /// List of incoming commands to the backend; we put them in a queue
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
@@ -139,7 +133,6 @@ where
             peers: HashMap::new(),
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
-            request_mgr: request_manager::RequestManager::new(),
             command_queue: FuturesUnordered::new(),
         }
     }
@@ -176,8 +169,6 @@ where
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        self.request_mgr.unregister_peer(peer_id);
-
         let peer = self
             .peers
             .remove(peer_id)
@@ -186,48 +177,20 @@ where
         peer.tx.send(Event::Disconnect).map_err(P2pError::from)
     }
 
-    /// Sends a request to the remote peer. Might fail if the peer is already disconnected.
-    fn send_request(
-        &mut self,
-        request_id: RequestId,
-        peer_id: PeerId,
-        request: message::Request,
-    ) -> crate::Result<()> {
+    /// Sends a message the remote peer. Might fail if the peer is already disconnected.
+    fn send_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
         let peer = self
             .peers
-            .get_mut(&peer_id)
+            .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        let request = self.request_mgr.make_request(request_id, request);
-        peer.tx.send(Event::SendMessage(request)).map_err(P2pError::from)
-    }
-
-    /// Send response to a request. Might fail if the peer is already disconnected.
-    fn send_response(
-        &mut self,
-        request_id: RequestId,
-        response: message::Response,
-    ) -> crate::Result<()> {
-        log::trace!("try to send response to request, request id {request_id}");
-
-        let (peer_id, response) = self
-            .request_mgr
-            .make_response(&request_id, response)
-            .ok_or(P2pError::ProtocolError(ProtocolError::UnknownRequestId))?;
-
-        self.peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .tx
-            .send(Event::SendMessage(response))
-            .map_err(P2pError::from)
+        peer.tx.send(Event::SendMessage(Box::new(message))).map_err(P2pError::from)
     }
 
     /// Sends the announcement to all peers.
     ///
     /// It is not an error if there are no peers that subscribed to the related topic.
     fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
-        let announcement = message::Announcement::decode(&mut &message[..])?;
+        let announcement = Announcement::decode(&mut &message[..])?;
 
         // Send the message to peers in pseudorandom order.
         let mut peers: Vec<_> = self
@@ -238,123 +201,15 @@ where
         peers.shuffle(&mut make_pseudo_rng());
 
         for (peer_id, peer) in peers {
-            let res = peer.tx.send(Event::SendMessage(Box::new(Message::Announcement {
-                announcement: announcement.clone(),
-            })));
+            let res = peer.tx.send(Event::SendMessage(Box::new(Message::Announcement(
+                announcement.clone(),
+            ))));
             if let Err(e) = res {
                 log::error!("Failed to send announcement to peer {peer_id}: {e:?}")
             }
         }
 
         Ok(())
-    }
-
-    /// Handle incoming request
-    fn handle_incoming_request(
-        &mut self,
-        peer_id: PeerId,
-        request_id: RequestId,
-        request: message::Request,
-    ) -> crate::Result<()> {
-        log::trace!("request received from peer {peer_id}, request id {request_id}");
-
-        let request_id = self.request_mgr.register_request(&peer_id, &request_id)?;
-
-        match request {
-            message::Request::HeaderListRequest(request) => self
-                .sync_tx
-                .send(SyncingEvent::Request {
-                    peer_id,
-                    request_id,
-                    request: SyncRequest::HeaderListRequest(request),
-                })
-                .map_err(P2pError::from),
-            message::Request::BlockListRequest(request) => self
-                .sync_tx
-                .send(SyncingEvent::Request {
-                    peer_id,
-                    request_id,
-                    request: SyncRequest::BlockListRequest(request),
-                })
-                .map_err(P2pError::from),
-            message::Request::AddrListRequest(request) => self
-                .conn_tx
-                .send(ConnectivityEvent::Request {
-                    peer_id,
-                    request_id,
-                    request: PeerManagerRequest::AddrListRequest(request),
-                })
-                .map_err(P2pError::from),
-            message::Request::AnnounceAddrRequest(request) => self
-                .conn_tx
-                .send(ConnectivityEvent::Request {
-                    peer_id,
-                    request_id,
-                    request: PeerManagerRequest::AnnounceAddrRequest(request),
-                })
-                .map_err(P2pError::from),
-            message::Request::PingRequest(request) => self
-                .conn_tx
-                .send(ConnectivityEvent::Request {
-                    peer_id,
-                    request_id,
-                    request: PeerManagerRequest::PingRequest(request),
-                })
-                .map_err(P2pError::from),
-        }
-    }
-
-    /// Handle incoming response
-    fn handle_incoming_response(
-        &mut self,
-        peer_id: PeerId,
-        request_id: RequestId,
-        response: message::Response,
-    ) -> crate::Result<()> {
-        log::trace!("response received from peer {peer_id}, request id {request_id}");
-
-        match response {
-            message::Response::HeaderListResponse(response) => self
-                .sync_tx
-                .send(SyncingEvent::Response {
-                    peer_id,
-                    request_id,
-                    response: SyncResponse::HeaderListResponse(response),
-                })
-                .map_err(P2pError::from),
-            message::Response::BlockResponse(response) => self
-                .sync_tx
-                .send(SyncingEvent::Response {
-                    peer_id,
-                    request_id,
-                    response: SyncResponse::BlockResponse(response),
-                })
-                .map_err(P2pError::from),
-            message::Response::AddrListResponse(response) => self
-                .conn_tx
-                .send(ConnectivityEvent::Response {
-                    peer_id,
-                    request_id,
-                    response: PeerManagerResponse::AddrListResponse(response),
-                })
-                .map_err(P2pError::from),
-            message::Response::AnnounceAddrResponse(response) => self
-                .conn_tx
-                .send(ConnectivityEvent::Response {
-                    peer_id,
-                    request_id,
-                    response: PeerManagerResponse::AnnounceAddrResponse(response),
-                })
-                .map_err(P2pError::from),
-            message::Response::PingResponse(response) => self
-                .conn_tx
-                .send(ConnectivityEvent::Response {
-                    peer_id,
-                    request_id,
-                    response: PeerManagerResponse::PingResponse(response),
-                })
-                .map_err(P2pError::from),
-        }
     }
 
     fn handle_announcement(
@@ -567,7 +422,6 @@ where
                 }
 
                 self.peers.insert(peer_id, PeerContext { subscriptions, tx });
-                let _ = self.request_mgr.register_peer(peer_id);
             }
             PeerEvent::MessageReceived { message } => {
                 self.handle_message(peer_id, message)?;
@@ -575,7 +429,6 @@ where
             PeerEvent::ConnectionClosed => {
                 self.pending.remove(&peer_id);
                 self.peers.remove(&peer_id);
-                self.request_mgr.unregister_peer(&peer_id);
 
                 // Probably ConnectionClosed should be only sent if InboundAccepted or OutboundAccepted was sent before.
                 // This can be done by checking self.peers first.
@@ -588,26 +441,52 @@ where
         Ok(())
     }
 
-    fn handle_message(&mut self, peer_id: PeerId, message: Message) -> crate::Result<()> {
+    fn handle_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
         match message {
             Message::Handshake(_) => {
-                log::error!("peer {peer_id} sent handshaking message");
+                log::error!("peer {peer} sent handshaking message");
             }
-            Message::Request {
-                request_id,
-                request,
-            } => {
-                self.handle_incoming_request(peer_id, request_id, request)?;
-            }
-            Message::Response {
-                request_id,
-                response,
-            } => {
-                self.handle_incoming_response(peer_id, request_id, response)?;
-            }
-            Message::Announcement { announcement } => {
-                self.handle_announcement(peer_id, announcement)?;
-            }
+            Message::HeaderListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListRequest(r),
+            })?,
+            Message::BlockListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListRequest(r),
+            })?,
+            Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::AddrListRequest(r),
+            })?,
+            Message::AnnounceAddrRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::AnnounceAddrRequest(r),
+            })?,
+            Message::PingRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::PingRequest(r),
+            })?,
+            Message::HeaderListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
+                peer,
+                message: SyncMessage::HeaderListResponse(r),
+            })?,
+            Message::BlockListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
+                peer,
+                message: SyncMessage::BlockListResponse(r),
+            })?,
+            Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::AddrListResponse(r),
+            })?,
+            Message::AnnounceAddrResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::AnnounceAddrResponse(r),
+            })?,
+            Message::PingResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
+                peer,
+                message: PeerManagerMessage::PingResponse(r),
+            })?,
+            Message::Announcement(announcement) => self.handle_announcement(peer, announcement)?,
         }
         Ok(())
     }
@@ -644,28 +523,11 @@ where
                 })
             }
             .boxed(),
-            Command::SendRequest {
-                peer_id,
-                request_id,
-                message,
-            } => async move {
+            Command::SendMessage { peer, message } => async move {
                 boxed_cb(move |this| {
-                    let res = this.send_request(request_id, peer_id, message);
+                    let res = this.send_message(peer, message);
                     if let Err(e) = res {
-                        log::debug!("Failed to send request to peer {peer_id}: {e}")
-                    }
-                    Ok(())
-                })
-            }
-            .boxed(),
-            Command::SendResponse {
-                request_id,
-                message,
-            } => async move {
-                boxed_cb(move |this| {
-                    let res = this.send_response(request_id, message);
-                    if let Err(e) = res {
-                        log::debug!("Failed to send response to peer: {e}")
+                        log::debug!("Failed to send request to peer {peer}: {e}")
                     }
                     Ok(())
                 })

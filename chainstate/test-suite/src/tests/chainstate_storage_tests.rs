@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use super::*;
 use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
@@ -22,7 +20,6 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
-        stakelock::StakePoolData,
         tokens::{
             token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer,
         },
@@ -30,11 +27,6 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
-use pos_accounting::PoolData;
 use utxo::UtxosStorageRead;
 
 // Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
@@ -713,78 +705,5 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 )
             );
         }
-    });
-}
-
-// Process a tx with a stake pool. Check that new pool balance and data are stored
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn store_pool_data_and_balance(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let storage = Store::new_empty().unwrap();
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
-
-        let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-        let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
-        let tx_output = TxOutput::new(
-            OutputValue::Coin(amount_to_stake),
-            OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                anyonecanspend_address(),
-                None,
-                vrf_pub_key,
-                pub_key.clone(),
-                0,
-                Amount::ZERO,
-            ))),
-        );
-
-        // stake pool
-        let input0_outpoint = OutPoint::new(
-            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-            0,
-        );
-        let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(input0_outpoint.tx_id(), input0_outpoint.output_index()),
-                empty_witness(&mut rng),
-            )
-            .add_output(tx_output.clone())
-            .build();
-        let tx_id = tx.transaction().get_id();
-        let tx_utxo_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
-
-        let block = tf.make_block_builder().add_transaction(tx).build();
-        let block_id = block.get_id();
-        tf.process_block(block, BlockSource::Local).unwrap();
-
-        // check that result is stored
-        let db_tx = storage.transaction_ro().unwrap();
-
-        // utxo is stored
-        assert_eq!(
-            db_tx.get_utxo(&tx_utxo_outpoint).expect("ok").expect("some").output(),
-            &tx_output
-        );
-        assert_eq!(
-            db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos().len(),
-            1
-        );
-
-        let expected_storage_data = pos_accounting::PoSAccountingData {
-            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, amount_to_stake))]),
-            pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
-            delegation_balances: Default::default(),
-            delegation_data: Default::default(),
-            pool_delegation_shares: Default::default(),
-        };
-
-        assert_eq!(
-            storage.read_accounting_data().unwrap(),
-            expected_storage_data
-        );
     });
 }
