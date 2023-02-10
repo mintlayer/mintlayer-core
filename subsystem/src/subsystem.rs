@@ -40,7 +40,7 @@ impl SubsystemConfig {
 }
 
 // Internal action type sent in the channel.
-type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>>;
+type Action<T, R> = Box<dyn Send + FnOnce(&mut T) -> BoxFuture<R>>;
 
 /// Call request
 pub struct CallRequest<T: ?Sized>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
@@ -148,7 +148,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call an async procedure to the subsystem. Result has to be await-ed explicitly
     pub fn call_async_mut<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
+        func: impl FnOnce(&mut T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
         let (rtx, rrx) = oneshot::channel::<R>();
 
@@ -170,7 +170,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call an async procedure to the subsystem (immutable).
     pub fn call_async<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
+        func: impl FnOnce(&T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
         self.call_async_mut(|this| func(this))
     }
@@ -178,7 +178,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call a procedure to the subsystem.
     pub fn call_mut<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
+        func: impl FnOnce(&mut T) -> R + Send + 'static,
     ) -> CallResult<R> {
         self.call_async_mut(|this| Box::pin(core::future::ready(func(this))))
     }
@@ -186,7 +186,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call a procedure to the subsystem (immutable).
     pub fn call<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
+        func: impl FnOnce(&T) -> R + Send + 'static,
     ) -> CallResult<R> {
         self.call_mut(|this| func(this))
     }
