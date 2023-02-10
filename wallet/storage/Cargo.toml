@@ -11,7 +11,6 @@ common = { path = '../../common' }
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 storage-sqlite = { path = "../../storage/sqlite" }
-
 utxo = { path = '../../utxo' }
 
 rstest = "0.16"
