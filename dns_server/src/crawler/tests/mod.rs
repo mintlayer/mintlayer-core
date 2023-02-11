@@ -17,82 +17,13 @@ mod mock;
 
 use std::{net::SocketAddr, time::Duration};
 
-use p2p::testing_utils::P2pTestTimeGetter;
-use tokio::sync::mpsc;
-
 use crate::{
     crawler::{
         storage::{DnsServerStorageRead, DnsServerTransactional},
-        Crawler, CrawlerConfig,
+        tests::mock::{advance_time, test_crawler},
     },
     dns_server::ServerCommands,
 };
-
-use self::mock::{
-    MockConnectivityHandle, MockNetworkingService, MockStateRef, MockSyncingMessagingHandle,
-};
-
-use super::storage_impl::DnsServerStorageImpl;
-
-fn test_crawler(
-    add_node: Vec<SocketAddr>,
-) -> (
-    Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
-    MockStateRef,
-    mpsc::UnboundedReceiver<ServerCommands>,
-    P2pTestTimeGetter,
-) {
-    let (conn_tx, conn_rx) = mpsc::unbounded_channel();
-    let add_node = add_node.iter().map(ToString::to_string).collect();
-    let crawler_config = CrawlerConfig {
-        add_node,
-        network: [1, 2, 3, 4],
-        p2p_port: 3031,
-    };
-
-    let state = MockStateRef {
-        crawler_config: crawler_config.clone(),
-        online: Default::default(),
-        connected: Default::default(),
-        connection_attempts: Default::default(),
-        conn_tx,
-    };
-
-    let conn = MockConnectivityHandle {
-        state: state.clone(),
-        conn_rx,
-    };
-    let sync = MockSyncingMessagingHandle {};
-
-    let storage = storage::inmemory::InMemory::new();
-    let store = DnsServerStorageImpl::new(storage).unwrap();
-
-    let (command_tx, command_rx) = mpsc::unbounded_channel();
-
-    let crawler =
-        Crawler::<MockNetworkingService, _>::new(crawler_config, conn, sync, store, command_tx)
-            .unwrap();
-
-    let time_getter = P2pTestTimeGetter::new();
-
-    (crawler, state, command_rx, time_getter)
-}
-
-async fn advance_time(
-    crawler: &mut Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
-    time_getter: &P2pTestTimeGetter,
-    step: Duration,
-    count: u32,
-) {
-    for _ in 0..count {
-        tokio::select! {
-            _ = crawler.run() => {
-                unreachable!("run should not return")
-            }
-            _ = time_getter.advance_time(step) => {}
-        }
-    }
-}
 
 #[tokio::test]
 async fn dns_crawler_basic() {
@@ -125,8 +56,8 @@ async fn dns_crawler_long_offline() {
     advance_time(
         &mut crawler,
         &time_getter,
-        Duration::from_secs(60),
-        14 * 24 * 60,
+        Duration::from_secs(3600),
+        14 * 24,
     )
     .await;
 

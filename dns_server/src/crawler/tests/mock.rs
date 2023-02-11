@@ -13,10 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Mock NetworkingService implementation for DNS server tests
+//!
+//! The mock simulates a network where peers go online and offline.
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     net::{IpAddr, SocketAddr},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -30,10 +35,14 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    testing_utils::P2pTestTimeGetter,
 };
 use tokio::sync::mpsc;
 
-use crate::crawler::CrawlerConfig;
+use crate::{
+    crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig},
+    dns_server::ServerCommands,
+};
 
 #[derive(Clone)]
 pub struct MockStateRef {
@@ -164,5 +173,68 @@ impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHand
 
     async fn poll_next(&mut self) -> p2p::Result<SyncingEvent<MockNetworkingService>> {
         std::future::pending().await
+    }
+}
+
+pub fn test_crawler(
+    add_node: Vec<SocketAddr>,
+) -> (
+    Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
+    MockStateRef,
+    mpsc::UnboundedReceiver<ServerCommands>,
+    P2pTestTimeGetter,
+) {
+    let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let add_node = add_node.iter().map(ToString::to_string).collect();
+    let crawler_config = CrawlerConfig {
+        add_node,
+        network: [1, 2, 3, 4],
+        p2p_port: 3031,
+    };
+
+    let state = MockStateRef {
+        crawler_config: crawler_config.clone(),
+        online: Default::default(),
+        connected: Default::default(),
+        connection_attempts: Default::default(),
+        conn_tx,
+    };
+
+    let conn = MockConnectivityHandle {
+        state: state.clone(),
+        conn_rx,
+    };
+    let sync = MockSyncingMessagingHandle {};
+
+    let storage = storage::inmemory::InMemory::new();
+    let store = DnsServerStorageImpl::new(storage).unwrap();
+
+    let (command_tx, command_rx) = mpsc::unbounded_channel();
+
+    let crawler =
+        Crawler::<MockNetworkingService, _>::new(crawler_config, conn, sync, store, command_tx)
+            .unwrap();
+
+    let time_getter = P2pTestTimeGetter::new();
+
+    (crawler, state, command_rx, time_getter)
+}
+
+/// Move tokio time multiple times in specified steps, polling the crawler at the same time
+/// Used to simulate elapsed time more accurately.
+pub async fn advance_time(
+    crawler: &mut Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
+    time_getter: &P2pTestTimeGetter,
+    step: Duration,
+    count: u32,
+) {
+    for _ in 0..count {
+        tokio::select! {
+            biased;
+            _ = crawler.run() => {
+                unreachable!("run should not return")
+            }
+            _ = time_getter.advance_time(step) => {}
+        }
     }
 }

@@ -239,10 +239,23 @@ where
         let address_data = self
             .addresses
             .get_mut(&address)
-            .expect("address in the Connecting state must be known");
+            .expect("address must be known (handle_outbound_accepted)");
         let is_compatible = peer_info.is_compatible(self.config.network);
 
-        if !is_compatible {
+        if is_compatible {
+            log::info!("successfully connected to {}", address.to_string());
+
+            self.peers.insert(peer_info.peer_id, address.clone());
+
+            Self::change_address_state(
+                &self.config,
+                &address,
+                address_data,
+                AddressState::Connected,
+                &mut self.storage,
+                &self.command_tx,
+            );
+        } else {
             log::info!("incompatible peer detected at {}", address.to_string());
 
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
@@ -255,19 +268,7 @@ where
                 &mut self.storage,
                 &self.command_tx,
             );
-            return;
         }
-
-        Self::change_address_state(
-            &self.config,
-            &address,
-            address_data,
-            AddressState::Connected,
-            &mut self.storage,
-            &self.command_tx,
-        );
-
-        self.peers.insert(peer_info.peer_id, address);
     }
 
     fn handle_inbound_accepted(
@@ -284,7 +285,7 @@ where
         let address_data = self
             .addresses
             .get_mut(&address)
-            .expect("address in the Connecting state must be known");
+            .expect("address must be known (handle_connection_error)");
         Self::change_address_state(
             &self.config,
             &address,
@@ -301,7 +302,8 @@ where
             let address_data = self
                 .addresses
                 .get_mut(&address)
-                .expect("address in the Connected state must be known");
+                .expect("address must be known (handle_connection_closed)");
+
             Self::change_address_state(
                 &self.config,
                 &address,
