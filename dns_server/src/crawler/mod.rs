@@ -142,7 +142,31 @@ where
         storage: S,
         command_tx: mpsc::UnboundedSender<ServerCommands>,
     ) -> Result<Self, DnsServerError> {
-        let addresses = Self::load_addresses(&storage, &config)?;
+        // Addresses that are stored in the DB as reachable
+        let loaded_addresses: Vec<N::Address> = Self::load_storage(&storage)?;
+
+        // Addresses listed as reachable from the command line
+        let added_addresses: Vec<N::Address> = config
+            .add_node
+            .iter()
+            .map(|addr| addr.parse())
+            .collect::<Result<Vec<N::Address>, _>>()?;
+
+        let addresses = loaded_addresses
+            .into_iter()
+            .chain(added_addresses.into_iter())
+            .map(|addr| {
+                (
+                    addr,
+                    AddressData {
+                        state: AddressState::Disconnected,
+                        state_updated_at: tokio::time::Instant::now(),
+                        fail_count: 0,
+                        was_reachable: true,
+                    },
+                )
+            })
+            .collect();
 
         Ok(Self {
             config,
@@ -155,39 +179,29 @@ where
         })
     }
 
-    fn load_addresses(
-        storage: &S,
-        config: &CrawlerConfig,
-    ) -> Result<BTreeMap<N::Address, AddressData>, DnsServerError> {
+    fn load_storage(storage: &S) -> Result<Vec<N::Address>, DnsServerError> {
         let tx = storage.transaction_ro()?;
-
-        let storage_version = tx.get_version()?;
-        match storage_version {
-            Some(STORAGE_VERSION) | None => {}
-            Some(_version) => {
-                return Err(DnsServerError::Other("Unexpected storage version"));
-            }
-        }
-
-        let mut addresses = BTreeMap::new();
-        // Load all persistent addresses
-        for address in tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()) {
-            Self::new_address(&mut addresses, address, true);
-        }
+        let version = tx.get_version()?;
         tx.close();
 
-        if storage_version.is_none() {
-            let mut tx = storage.transaction_rw()?;
-            tx.set_version(STORAGE_VERSION)?;
-            tx.commit()?;
+        match version {
+            None => Self::init_storage(storage),
+            Some(STORAGE_VERSION) => Self::load_storage_v1(storage),
+            Some(_version) => Err(DnsServerError::Other("Unexpected storage version")),
         }
+    }
 
-        // Add addresses that were specified from the command line as reachable
-        for address in config.add_node.iter() {
-            let address = address.parse()?;
-            Self::new_address(&mut addresses, address, true);
-        }
+    fn init_storage(storage: &S) -> Result<Vec<N::Address>, DnsServerError> {
+        let mut tx = storage.transaction_rw()?;
+        tx.set_version(STORAGE_VERSION)?;
+        tx.commit()?;
+        Ok(Vec::new())
+    }
 
+    fn load_storage_v1(storage: &S) -> Result<Vec<N::Address>, DnsServerError> {
+        let tx = storage.transaction_ro()?;
+        let addresses =
+            tx.get_addresses()?.iter().filter_map(|address| address.parse().ok()).collect();
         Ok(addresses)
     }
 
@@ -201,7 +215,7 @@ where
                 // when too many invalid addresses are announced, preventing the server from discovering new addresses.
                 // For example, Bitcoin Core allows 0.1 address/sec.
                 if let Some(address) = TransportAddress::from_peer_address(&address) {
-                    Self::new_address(&mut self.addresses, address, false);
+                    Self::new_address(&mut self.addresses, address);
                 }
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {
@@ -230,7 +244,9 @@ where
 
         if !is_compatible {
             log::info!("incompatible peer detected at {}", address.to_string());
+
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
+
             Self::change_address_state(
                 &self.config,
                 &address,
@@ -250,6 +266,7 @@ where
             &mut self.storage,
             &self.command_tx,
         );
+
         self.peers.insert(peer_info.peer_id, address);
     }
 
@@ -335,18 +352,14 @@ where
         // Ignore all sync events
     }
 
-    fn new_address(
-        addresses: &mut BTreeMap<N::Address, AddressData>,
-        address: N::Address,
-        was_reachable: bool,
-    ) {
+    fn new_address(addresses: &mut BTreeMap<N::Address, AddressData>, address: N::Address) {
         if let Entry::Vacant(vacant) = addresses.entry(address.clone()) {
             log::debug!("new address {} added", address.to_string());
             vacant.insert(AddressData {
                 state: AddressState::Disconnected,
                 state_updated_at: tokio::time::Instant::now(),
                 fail_count: 0,
-                was_reachable,
+                was_reachable: false,
             });
         }
     }
