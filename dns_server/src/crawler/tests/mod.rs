@@ -184,3 +184,15 @@ async fn dns_private_ip_non_default_port() {
     addresses_expected.sort();
     assert_eq!(addresses, addresses_expected);
 }
+
+#[tokio::test]
+async fn dns_crawler_incompatible_node() {
+    let node1: SocketAddr = "1.0.0.1:3031".parse().unwrap();
+    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
+
+    // Incompatible node goes online, connection closed
+    state.node_online_incompatible(node1);
+    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
+    assert!(command_rx.try_recv().is_err());
+    assert_eq!(crawler.peers.len(), 0);
+}

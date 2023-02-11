@@ -44,10 +44,14 @@ use crate::{
     dns_server::ServerCommands,
 };
 
+pub struct TestNode {
+    pub network: [u8; 4],
+}
+
 #[derive(Clone)]
 pub struct MockStateRef {
     pub crawler_config: CrawlerConfig,
-    pub online: Arc<Mutex<BTreeSet<SocketAddr>>>,
+    pub online: Arc<Mutex<BTreeMap<SocketAddr, TestNode>>>,
     pub connected: Arc<Mutex<BTreeMap<SocketAddr, PeerId>>>,
     pub connection_attempts: Arc<Mutex<Vec<SocketAddr>>>,
     pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent<MockNetworkingService>>,
@@ -55,13 +59,28 @@ pub struct MockStateRef {
 
 impl MockStateRef {
     pub fn node_online(&self, ip: SocketAddr) {
-        let added = self.online.lock().unwrap().insert(ip);
-        assert!(added);
+        let old = self.online.lock().unwrap().insert(
+            ip,
+            TestNode {
+                network: self.crawler_config.network,
+            },
+        );
+        assert!(old.is_none());
+    }
+
+    pub fn node_online_incompatible(&self, ip: SocketAddr) {
+        let old = self.online.lock().unwrap().insert(
+            ip,
+            TestNode {
+                network: [255, 255, 255, 255],
+            },
+        );
+        assert!(old.is_none());
     }
 
     pub fn node_offline(&self, ip: SocketAddr) {
-        let removed = self.online.lock().unwrap().remove(&ip);
-        assert!(removed);
+        let old = self.online.lock().unwrap().remove(&ip);
+        assert!(old.is_some());
         if let Some(peer_id) = self.connected.lock().unwrap().remove(&ip) {
             self.conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();
         }
@@ -113,11 +132,11 @@ impl NetworkingService for MockNetworkingService {
 impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
     fn connect(&mut self, address: SocketAddr) -> p2p::Result<()> {
         self.state.connection_attempts.lock().unwrap().push(address);
-        if self.state.online.lock().unwrap().contains(&address) {
+        if let Some(node) = self.state.online.lock().unwrap().get(&address) {
             let peer_id = PeerId::new();
             let peer_info = PeerInfo {
                 peer_id,
-                network: self.state.crawler_config.network,
+                network: node.network,
                 version: SemVer::new(1, 2, 3),
                 agent: None,
                 subscriptions: BTreeSet::new(),
@@ -144,8 +163,18 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         Ok(())
     }
 
-    fn disconnect(&mut self, _peer_id: PeerId) -> p2p::Result<()> {
-        unreachable!()
+    fn disconnect(&mut self, peer_id: PeerId) -> p2p::Result<()> {
+        let address = *self
+            .state
+            .connected
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(_addr, id)| **id == peer_id)
+            .unwrap()
+            .0;
+        self.state.connected.lock().unwrap().remove(&address).unwrap();
+        Ok(())
     }
 
     fn send_message(&mut self, _peer_id: PeerId, _request: PeerManagerMessage) -> p2p::Result<()> {
