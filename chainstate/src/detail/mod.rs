@@ -39,7 +39,7 @@ pub use transaction_verifier::{
 };
 use tx_verifier::transaction_verifier;
 
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 
@@ -277,91 +277,91 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    /// returns the new block index, which is the new tip, if any
-    fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans =
-            (&mut self.orphan_blocks).take_all_children_of(&(*last_processed_block).into());
-        let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
-            .into_iter()
-            .map(|blk| self.process_block(blk, BlockSource::Local))
-            .partition_result();
-
-        block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
-            Some(handler) => handler(&e),
-            None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
-        });
-
-        // since we processed the blocks in order, the last one is the best tip
-        block_indexes.into_iter().flatten().rev().next()
-    }
-
-    fn process_db_commit_error(
-        &mut self,
-        db_error: chainstate_storage::Error,
-        block: WithId<Block>,
-        block_source: BlockSource,
-        attempt_number: usize,
-    ) -> Result<Option<BlockIndex>, BlockError> {
-        if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
-            Err(BlockError::DatabaseCommitError(
-                block.get_id(),
-                *self.chainstate_config.max_db_commit_attempts,
-                db_error,
-            ))
-        } else {
-            // TODO: test reattempts using mocks of the database that emulate failure
-            self.process_block_and_related_orphans(block, block_source, attempt_number + 1)
-        }
-    }
-
-    fn attempt_to_process_one_block(
+    fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
-        attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        log::info!("Processing block: {}", block.get_id());
+        let block_id = block.get_id();
+        let mut attempt_number = 0;
+        loop {
+            log::info!("Processing block: {}", block_id);
 
-        let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
+            let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
 
-        let block = chainstate_ref.check_legitimate_orphan(block_source, block).log_err()?;
+            // TODO(PR): get rid of clone()
+            let block =
+                chainstate_ref.check_legitimate_orphan(block_source, block.clone()).log_err()?;
 
-        let best_block_id = chainstate_ref
-            .get_best_block_id()
-            .map_err(BlockError::BestBlockLoadError)
-            .log_err()?;
+            let best_block_id = chainstate_ref
+                .get_best_block_id()
+                .map_err(BlockError::BestBlockLoadError)
+                .log_err()?;
 
-        chainstate_ref
-            .check_block(&block)
-            .map_err(BlockError::CheckBlockFailed)
-            .log_err()?;
+            chainstate_ref
+                .check_block(&block)
+                .map_err(BlockError::CheckBlockFailed)
+                .log_err()?;
 
-        let block_index = chainstate_ref.accept_block(&block).log_err()?;
-        let result = chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
-        let db_commit_result = chainstate_ref.commit_db_tx().log_err();
-        match db_commit_result {
-            Ok(_) => {}
-            Err(err) => {
-                return self
-                    .process_db_commit_error(err, block, block_source, attempt_number)
-                    .log_err()
+            let block_index = chainstate_ref.accept_block(&block).log_err()?;
+            let result =
+                chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
+            let db_commit_result = chainstate_ref.commit_db_tx().log_err();
+            match db_commit_result {
+                Ok(_) => {}
+                Err(err) => {
+                    if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
+                        return Err(BlockError::DatabaseCommitError(
+                            block.get_id(),
+                            *self.chainstate_config.max_db_commit_attempts,
+                            err,
+                        ));
+                    } else {
+                        attempt_number += 1;
+                        continue;
+                    }
+                }
             }
-        }
 
-        Ok(result)
+            return Ok(result);
+        }
     }
 
     fn process_block_and_related_orphans(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
-        attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let block_id = block.get_id();
 
-        let result = self.attempt_to_process_one_block(block, block_source, attempt_number)?;
+        let mut block_indexes = Vec::new();
 
-        let new_block_index_after_orphans = self.process_orphans(&block_id);
+        // process the current block
+        let result = self.attempt_to_process_block(block, block_source)?;
+
+        // process orphan blocks recursively, where we process a block, and keep checking whether there are more orphans after the newest block
+        let mut orphan_process_queue: VecDeque<_> = vec![block_id].into();
+        while let Some(block_id) = orphan_process_queue.pop_front() {
+            let orphans = (&mut self.orphan_blocks).take_all_children_of(&block_id.into());
+            // whatever was pulled from orphans should be processed next in the queue
+            orphan_process_queue.extend(orphans.iter().map(|b| b.get_id()));
+            let (orphan_block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) =
+                orphans
+                    .into_iter()
+                    .map(|blk| self.attempt_to_process_block(blk, BlockSource::Local))
+                    .partition_result();
+
+            block_indexes.extend(orphan_block_indexes.into_iter());
+
+            block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
+                Some(handler) => handler(&e),
+                None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+            });
+        }
+
+        // since we processed blocks in order, the last one is the tip
+        let new_block_index_after_orphans = block_indexes.into_iter().flatten().rev().next();
+
         let result = match new_block_index_after_orphans {
             Some(result_from_orphan) => Some(result_from_orphan),
             None => result,
@@ -388,7 +388,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        self.process_block_and_related_orphans(block, block_source, 0)
+        self.process_block_and_related_orphans(block, block_source)
     }
 
     /// Initialize chainstate with genesis block
