@@ -95,7 +95,10 @@ fn basic_spending() {
     };
 
     // check that all are unspent
-    assert_eq!(p.block_id, H256::from_low_u64_be(123).into());
+    assert_eq!(
+        p.block_id,
+        Into::<Id<Block>>::into(H256::from_low_u64_be(123))
+    );
     for output in &tx_index.spent {
         assert_eq!(*output, OutputSpentState::Unspent);
     }

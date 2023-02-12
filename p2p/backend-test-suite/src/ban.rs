@@ -99,7 +99,9 @@ where
             )
             .unwrap();
 
-        sync2.make_announcement(Announcement::Block(blocks[2].clone())).unwrap();
+        sync2
+            .make_announcement(Announcement::Block(blocks[2].header().clone()))
+            .unwrap();
     });
 
     match rx_peer_manager.recv().await {

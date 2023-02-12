@@ -90,7 +90,7 @@ where
     // Poll an event from the network for server2.
     let block = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement: Announcement::Block(block),
         } => block,
         _ => panic!("Unexpected event"),
@@ -111,7 +111,7 @@ where
 
     let block = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement: Announcement::Block(block),
         } => block,
         _ => panic!("Unexpected event"),
@@ -137,6 +137,9 @@ where
         ping_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
@@ -157,18 +160,15 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    sync1
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x01; 32])),
-                BlockTimestamp::from_int_seconds(1337u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x01; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 }
 
 async fn block_announcement_too_big_message<T, N, A>()

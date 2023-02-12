@@ -32,7 +32,7 @@ use p2p::{
     config::P2pConfig,
     error::P2pError,
     event::{PeerManagerEvent, SyncControlEvent},
-    message::{BlockListRequest, BlockListResponse, HeaderListResponse, SyncMessage},
+    message::{BlockListRequest, BlockResponse, HeaderListResponse, SyncMessage},
     net::{
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
@@ -177,10 +177,7 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_message(
-                        peer,
-                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
-                    )
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
                     .unwrap();
             }
             SyncingEvent::Message {
@@ -258,7 +255,7 @@ where
             }
             SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockListResponse(response),
+                message: SyncMessage::BlockResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -388,15 +385,12 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_message(
-                        peer,
-                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
-                    )
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
                     .unwrap();
             }
             SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockListResponse(response),
+                message: SyncMessage::BlockResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -524,15 +518,12 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_message(
-                        peer,
-                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
-                    )
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
                     .unwrap();
             }
             SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockListResponse(response),
+                message: SyncMessage::BlockResponse(response),
             } => {
                 assert_eq!(response.blocks().len(), 1);
                 let block = response.blocks()[0].clone();
@@ -671,7 +662,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -807,7 +798,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -951,7 +942,7 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockListResponse(BlockListResponse::new(vec![mgr_handle
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -1081,10 +1072,7 @@ where
                     .unwrap()
                     .unwrap()];
                 mgr2.handle_mut()
-                    .send_message(
-                        peer,
-                        SyncMessage::BlockListResponse(BlockListResponse::new(blocks)),
-                    )
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
                     .unwrap();
             }
             SyncingEvent::Message {
@@ -1253,11 +1241,8 @@ where
                 mgr.process_block_response(peer, response.into_blocks()).await?;
             }
         },
-        SyncingEvent::Announcement {
-            peer_id,
-            announcement,
-        } => {
-            mgr.process_announcement(peer_id, announcement).await?;
+        SyncingEvent::Announcement { peer, announcement } => {
+            mgr.process_announcement(peer, announcement).await?;
         }
     }
 
