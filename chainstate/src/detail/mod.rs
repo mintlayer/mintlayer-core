@@ -106,37 +106,31 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn make_db_tx(
         &mut self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, &mut OrphansProxy, V>>
-    {
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, V>> {
         let db_tx = self.chainstate_storage.transaction_rw(None)?;
         Ok(chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            &mut self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, &OrphansProxy, V>>
-    {
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, V>> {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            &self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
-    pub fn query(
-        &self,
-    ) -> Result<ChainstateQuery<TxRo<'_, S>, &OrphansProxy, V>, PropertyQueryError> {
+    pub fn query(&self) -> Result<ChainstateQuery<TxRo<'_, S>, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
@@ -282,16 +276,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        let block = self.check_legitimate_orphan(block_source, block).log_err()?;
+
         let block_id = block.get_id();
         let mut attempt_number = 0;
         loop {
             log::info!("Processing block: {}", block_id);
 
             let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
-
-            // TODO(PR): get rid of clone()
-            let block =
-                chainstate_ref.check_legitimate_orphan(block_source, block.clone()).log_err()?;
 
             let best_block_id = chainstate_ref
                 .get_best_block_id()
@@ -339,7 +331,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // process the current block
         let result = self.attempt_to_process_block(block, block_source)?;
 
-        // process orphan blocks recursively, where we process a block, and keep checking whether there are more orphans after the newest block
+        // process orphan blocks that depend on this block, recursively
         let mut orphan_process_queue: VecDeque<_> = vec![block_id].into();
         while let Some(block_id) = orphan_process_queue.pop_front() {
             let orphans = (&mut self.orphan_blocks).take_all_children_of(&block_id.into());
@@ -482,6 +474,38 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
         let now = self.time_getter.get_time();
         time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
+    }
+
+    fn check_legitimate_orphan(
+        &mut self,
+        block_source: BlockSource,
+        block: WithId<Block>,
+    ) -> Result<WithId<Block>, OrphanCheckError> {
+        let chainstate_ref = self.make_db_tx_ro().map_err(OrphanCheckError::from)?;
+
+        let prev_block_id = block.prev_block_id();
+
+        let block_index_found = chainstate_ref
+            .get_gen_block_index(&prev_block_id)
+            .map_err(OrphanCheckError::PrevBlockIndexNotFound)
+            .log_err()?
+            .is_some();
+
+        drop(chainstate_ref);
+
+        if block_source == BlockSource::Local && !block_index_found {
+            self.new_orphan_block(block).log_err()?;
+            return Err(OrphanCheckError::LocalOrphan);
+        }
+        Ok(block)
+    }
+
+    /// Mark new block as an orphan
+    fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
+        match (&mut self.orphan_blocks).add_block(block) {
+            Ok(_) => Ok(()),
+            Err(err) => (*err).into(),
+        }
     }
 }
 
