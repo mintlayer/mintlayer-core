@@ -319,19 +319,13 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    fn process_block_and_related_orphans(
+    /// process orphan blocks that depend on the given block, recursively
+    fn process_orphans_of(
         &mut self,
-        block: WithId<Block>,
-        block_source: BlockSource,
+        block_id: Id<Block>,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let block_id = block.get_id();
-
         let mut block_indexes = Vec::new();
 
-        // process the current block
-        let result = self.attempt_to_process_block(block, block_source)?;
-
-        // process orphan blocks that depend on this block, recursively
         let mut orphan_process_queue: VecDeque<_> = vec![block_id].into();
         while let Some(block_id) = orphan_process_queue.pop_front() {
             let orphans = (&mut self.orphan_blocks).take_all_children_of(&block_id.into());
@@ -353,6 +347,20 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         // since we processed blocks in order, the last one is the tip
         let new_block_index_after_orphans = block_indexes.into_iter().flatten().rev().next();
+
+        Ok(new_block_index_after_orphans)
+    }
+
+    fn process_block_and_related_orphans(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let block_id = block.get_id();
+
+        let result = self.attempt_to_process_block(block, block_source)?;
+
+        let new_block_index_after_orphans = self.process_orphans_of(block_id)?;
 
         let result = match new_block_index_after_orphans {
             Some(result_from_orphan) => Some(result_from_orphan),
