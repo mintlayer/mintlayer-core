@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -26,6 +26,7 @@ use crate::{
         },
         AsBannableAddress,
     },
+    peer_manager::global_ip::IsGlobalIp,
     types::peer_address::PeerAddress,
     Result,
 };
@@ -35,8 +36,22 @@ impl TransportAddress for SocketAddr {
         (*self).into()
     }
 
-    fn from_peer_address(address: &PeerAddress) -> Option<Self> {
-        Some(address.into())
+    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self> {
+        match &address {
+            PeerAddress::Ip4(socket)
+                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            PeerAddress::Ip6(socket)
+                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            _ => None,
+        }
     }
 }
 

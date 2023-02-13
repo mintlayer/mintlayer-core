@@ -58,7 +58,6 @@ use crate::{
 };
 
 use self::{
-    global_ip::IsGlobalIp,
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
 };
@@ -160,17 +159,11 @@ where
     }
 
     fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
-        // The IP must be globally routable
-        match &address {
-            PeerAddress::Ip4(socket) => {
-                std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.allow_discover_private_ips
-            }
-            PeerAddress::Ip6(socket) => {
-                std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.allow_discover_private_ips
-            }
-        }
+        <T::Address as TransportAddress>::from_peer_address(
+            address,
+            *self.p2p_config.allow_discover_private_ips,
+        )
+        .is_some()
     }
 
     /// Discover public addresses for this node after a new outbound connection is made
@@ -183,9 +176,7 @@ where
         peer_id: T::PeerId,
         receiver_address: PeerAddress,
     ) -> crate::Result<()> {
-        if !self.is_peer_address_valid(&receiver_address)
-            || !self.subscribed_to_peer_addresses.contains(&peer_id)
-        {
+        if !self.subscribed_to_peer_addresses.contains(&peer_id) {
             return Ok(());
         }
 
@@ -212,7 +203,12 @@ where
                     _ => None,
                 },
             )
-            .filter_map(|address| TransportAddress::from_peer_address(&address))
+            .filter_map(|address| {
+                TransportAddress::from_peer_address(
+                    &address,
+                    *self.p2p_config.allow_discover_private_ips,
+                )
+            })
             .collect::<Vec<_>>();
 
         for address in discovered_own_addresses {
@@ -592,10 +588,9 @@ where
     ) -> crate::Result<()> {
         // TODO: Rate limit announce address requests to prevent DoS attacks.
         // For example it's 0.1 req/sec in Bitcoin Core.
-        let is_address_valid = self.is_peer_address_valid(&address);
-        if let (true, Some(address)) = (
-            is_address_valid,
-            TransportAddress::from_peer_address(&address),
+        if let Some(address) = TransportAddress::from_peer_address(
+            &address,
+            *self.p2p_config.allow_discover_private_ips,
         ) {
             self.peerdb.peer_discovered(&address)?;
 
@@ -626,9 +621,9 @@ where
 
     fn handle_add_list_response(&mut self, addresses: Vec<PeerAddress>) -> crate::Result<()> {
         for address in addresses {
-            if let (true, Some(address)) = (
-                self.is_peer_address_valid(&address),
-                TransportAddress::from_peer_address(&address),
+            if let Some(address) = TransportAddress::from_peer_address(
+                &address,
+                *self.p2p_config.allow_discover_private_ips,
             ) {
                 self.peerdb.peer_discovered(&address)?;
             }
