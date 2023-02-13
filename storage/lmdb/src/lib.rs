@@ -28,6 +28,7 @@ use storage_core::{
     backend::{self, TransactionalRo, TransactionalRw},
     Data, DbDesc, DbMapDesc, DbMapId, DbMapsData,
 };
+use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
 pub use lmdb::{DatabaseResizeInfo, DatabaseResizeSettings};
@@ -127,7 +128,7 @@ pub struct LmdbImpl {
     env: Arc<lmdb::Environment>,
 
     /// List of open databases
-    dbs: DbMapsData<lmdb::Database>,
+    dbs: ConstValue<DbMapsData<lmdb::Database>>,
 
     /// Schedule a database resize of the database map
     map_resize_scheduled: Arc<AtomicBool>,
@@ -206,7 +207,15 @@ impl<'tx> TransactionalRw<'tx> for LmdbImpl {
     }
 }
 
-impl utils::shallow_clone::ShallowClone for LmdbImpl {}
+impl utils::shallow_clone::ShallowClone for LmdbImpl {
+    fn shallow_clone(&self) -> Self {
+        Self {
+            env: self.env.shallow_clone(),
+            dbs: self.dbs.shallow_clone(),
+            map_resize_scheduled: self.map_resize_scheduled.shallow_clone(),
+        }
+    }
+}
 impl backend::BackendImpl for LmdbImpl {}
 
 pub struct Lmdb {
@@ -279,6 +288,7 @@ impl backend::Backend for Lmdb {
 
         // Set up all the databases
         let dbs = desc.db_maps().try_transform(|desc| Self::open_db(&environment, desc))?;
+        let dbs = dbs.into();
 
         Ok(LmdbImpl {
             env: Arc::new(environment),
