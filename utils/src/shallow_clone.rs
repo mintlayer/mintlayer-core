@@ -17,6 +17,12 @@
 
 use std::marker::PhantomData;
 
+#[cfg(not(loom))]
+use std::sync::Arc;
+
+#[cfg(loom)]
+use loom::sync::Arc;
+
 use crate::const_value::ConstValue;
 
 /// Shallow cloning
@@ -53,7 +59,7 @@ impl<T> ShallowClone for std::rc::Rc<T> {
         self.clone()
     }
 }
-impl<T> ShallowClone for std::sync::Arc<T> {
+impl<T> ShallowClone for Arc<T> {
     fn shallow_clone(&self) -> Self {
         self.clone()
     }
