@@ -221,7 +221,11 @@ impl<'tx> TransactionalRw<'tx> for SqliteImpl {
     }
 }
 
-impl ShallowClone for SqliteImpl {}
+impl ShallowClone for SqliteImpl {
+    fn shallow_clone(&self) -> Self {
+        Self(self.0.shallow_clone())
+    }
+}
 
 impl backend::BackendImpl for SqliteImpl {}
 
