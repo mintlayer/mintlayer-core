@@ -123,7 +123,7 @@ pub struct Crawler<N: NetworkingService, S> {
     addresses: BTreeMap<N::Address, AddressData>,
 
     /// Map of all currently connected peers
-    peers: BTreeMap<N::PeerId, N::Address>,
+    outbound_peers: BTreeMap<N::PeerId, N::Address>,
 
     /// Storage implementation
     storage: S,
@@ -189,7 +189,7 @@ where
             conn,
             sync,
             addresses,
-            peers: BTreeMap::new(),
+            outbound_peers: BTreeMap::new(),
             storage,
             command_tx,
         })
@@ -261,7 +261,7 @@ where
         if is_compatible {
             log::info!("successfully connected to {}", address.to_string());
 
-            self.peers.insert(peer_info.peer_id, address.clone());
+            self.outbound_peers.insert(peer_info.peer_id, address.clone());
 
             Self::change_address_state(
                 &self.config,
@@ -314,7 +314,7 @@ where
 
     fn handle_connection_closed(&mut self, peer_id: N::PeerId) {
         log::debug!("connection from peer {} closed", peer_id);
-        if let Some(address) = self.peers.remove(&peer_id) {
+        if let Some(address) = self.outbound_peers.remove(&peer_id) {
             let address_data = self
                 .addresses
                 .get_mut(&address)

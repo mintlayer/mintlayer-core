@@ -198,5 +198,5 @@ async fn dns_crawler_incompatible_node() {
     state.node_online_incompatible(node1);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert!(command_rx.try_recv().is_err());
-    assert_eq!(crawler.peers.len(), 0);
+    assert_eq!(crawler.outbound_peers.len(), 0);
 }
