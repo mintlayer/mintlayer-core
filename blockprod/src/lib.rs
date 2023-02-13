@@ -134,7 +134,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_makeblockproduction() {
+    async fn test_make_blockproduction() {
         let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let blockprod = make_blockproduction(
