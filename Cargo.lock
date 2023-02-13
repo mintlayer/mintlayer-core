@@ -4166,8 +4166,13 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 name = "wallet"
 version = "0.1.0"
 dependencies = [
+ "common",
  "logging",
+ "serialization",
+ "thiserror",
+ "utxo",
  "wallet-storage",
+ "wallet-types",
 ]
 
 [[package]]
@@ -4183,6 +4188,17 @@ dependencies = [
  "test-utils",
  "utils",
  "utxo",
+ "wallet-types",
+]
+
+[[package]]
+name = "wallet-types"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "parity-scale-codec",
+ "serialization",
+ "thiserror",
 ]
 
 [[package]]

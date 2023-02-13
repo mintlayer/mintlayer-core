@@ -13,24 +13,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Wallet database schema
-
-use wallet_types::wallet_tx::WalletTx;
-
-use common::{
-    chain::{OutPoint, Transaction},
-    primitives::Id,
-};
-use utxo::Utxo;
-
-storage::decl_schema! {
-    /// Database schema for wallet storage
-    pub Schema {
-        /// Storage for individual values.
-        pub DBValue: Map<Vec<u8>, Vec<u8>>,
-        /// Store for Utxo Entries
-        pub DBUtxo: Map<OutPoint, Utxo>,
-        /// Store for Transaction entries
-        pub DBTxs: Map<Id<Transaction>, WalletTx>,
-    }
-}
+pub mod wallet_tx;

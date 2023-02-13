@@ -19,10 +19,14 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
-use common::chain::OutPoint;
+use common::chain::{OutPoint, Transaction};
+use common::primitives::Id;
 pub use internal::Store;
+use std::path::PathBuf;
 
+use crate::internal::StoreTxRw;
 use utxo::Utxo;
+use wallet_types::wallet_tx::WalletTx;
 
 /// Possibly failing result of wallet storage query
 pub type Result<T> = storage::Result<T>;
@@ -31,16 +35,18 @@ pub type Error = storage::Error;
 /// Queries on persistent wallet data
 pub trait WalletStorageRead {
     /// Get storage version
-    fn get_storage_version(&self) -> crate::Result<u32>;
+    fn get_storage_version(&self) -> Result<u32>;
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>>;
+    fn get_transaction(&self, id: &Id<Transaction>) -> Result<Option<WalletTx>>;
 }
 
 /// Modifying operations on persistent wallet data
 pub trait WalletStorageWrite: WalletStorageRead {
     /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+    fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<()>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<()>;
+    fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction
@@ -77,3 +83,17 @@ pub trait Transactional<'t> {
 }
 
 pub trait WalletStorage: WalletStorageWrite + for<'tx> Transactional<'tx> + Send {}
+
+impl Store<storage_sqlite::Sqlite> {
+    /// Create a default storage (mostly for testing, may want to remove this later)
+    pub fn new_in_memory() -> crate::Result<Self> {
+        Self::new(storage_sqlite::Sqlite::new_in_memory())
+    }
+
+    pub fn new_from_path(path: PathBuf) -> crate::Result<Self> {
+        Self::new(storage_sqlite::Sqlite::new(path))
+    }
+}
+
+pub type WalletStorageImpl = Store<storage_sqlite::Sqlite>;
+pub type WalletStorageTxRwImpl<'st> = StoreTxRw<'st, storage_sqlite::Sqlite>;

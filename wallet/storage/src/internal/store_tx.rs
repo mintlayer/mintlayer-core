@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::OutPoint;
+use common::chain::{OutPoint, Transaction};
+use common::primitives::Id;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
+use wallet_types::wallet_tx::WalletTx;
 
 use crate::{
     schema::{self as db, Schema},
@@ -64,6 +66,10 @@ macro_rules! impl_read_ops {
             fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
+
+            fn get_transaction(&self, id: &Id<Transaction>) -> crate::Result<Option<WalletTx>> {
+                self.read::<db::DBTxs, _, _>(id)
+            }
         }
 
         impl<'st, B: storage::Backend> $TxType<'st, B> {
@@ -105,6 +111,10 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
 
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
         self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
+    }
+
+    fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> crate::Result<()> {
+        self.write::<db::DBTxs, _, _, _>(id, tx)
     }
 }
 
