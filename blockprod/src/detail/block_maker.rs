@@ -34,8 +34,8 @@ use utils::tap_error_log::LogError;
 use crate::BlockProductionError;
 
 pub enum BlockMakerControlCommand {
-    StopBecauseNewTip(Id<Block>, BlockHeight),
-    JustStop,
+    NewTip(Id<Block>, BlockHeight),
+    Stop,
 }
 
 /// Slave to the [PerpetualBlockBuilder]. Every new block tip gets one BlockMaker, and keeps running
@@ -173,13 +173,13 @@ impl BlockMaker {
             };
 
             match new_info {
-                BlockMakerControlCommand::StopBecauseNewTip(block_id, _) => {
+                BlockMakerControlCommand::NewTip(block_id, _) => {
                     // if there is a new tip, no point in continuing to mine this block
                     if block_id != self.current_tip_id {
                         break;
                     }
                 }
-                BlockMakerControlCommand::JustStop => break,
+                BlockMakerControlCommand::Stop => break,
             }
         }
         Ok(())
