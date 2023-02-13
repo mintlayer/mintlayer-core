@@ -92,9 +92,12 @@ struct AddressData {
     /// Resets to 0 when an outbound connection to the address is successful.
     fail_count: u32,
 
-    /// Whether this address was reachable at least once.
+    /// Whether the address was reachable at least once.
     /// Addresses that were once reachable are stored in the DB.
     was_reachable: bool,
+
+    /// Whether the address was added from the command line
+    user_added: bool,
 }
 
 #[derive(Clone)]
@@ -152,9 +155,9 @@ where
             .map(|addr| addr.parse())
             .collect::<Result<Vec<N::Address>, _>>()?;
 
+        // Added addresses must come after loaded addresses to not lose the `user_added` flag!
         let addresses = loaded_addresses
             .into_iter()
-            .chain(added_addresses.into_iter())
             .map(|addr| {
                 (
                     addr,
@@ -163,9 +166,22 @@ where
                         state_updated_at: tokio::time::Instant::now(),
                         fail_count: 0,
                         was_reachable: true,
+                        user_added: false,
                     },
                 )
             })
+            .chain(added_addresses.into_iter().map(|addr| {
+                (
+                    addr,
+                    AddressData {
+                        state: AddressState::Disconnected,
+                        state_updated_at: tokio::time::Instant::now(),
+                        fail_count: 0,
+                        was_reachable: false,
+                        user_added: true,
+                    },
+                )
+            }))
             .collect();
 
         Ok(Self {
@@ -362,6 +378,7 @@ where
                 state_updated_at: tokio::time::Instant::now(),
                 fail_count: 0,
                 was_reachable: false,
+                user_added: false,
             });
         }
     }
@@ -427,17 +444,20 @@ where
                 // Do nothing
             }
             AddressState::Connected => {
-                // New reachable address discovered
-                let mut tx = storage.transaction_rw().expect("tx must succeed");
-                tx.add_address(&address.to_string()).expect("adding address must succeed");
-                tx.commit().expect("tx commit must succeed");
-
                 if let Some(ip) = dns_ip {
                     command_tx.send(ServerCommands::AddAddress(ip)).expect("sending must succeed");
                 }
 
                 address_data.fail_count = 0;
-                address_data.was_reachable = true;
+
+                if !address_data.was_reachable {
+                    address_data.was_reachable = true;
+
+                    // New reachable address discovered
+                    let mut tx = storage.transaction_rw().expect("tx must succeed");
+                    tx.add_address(&address.to_string()).expect("adding address must succeed");
+                    tx.commit().expect("tx commit must succeed");
+                }
             }
             AddressState::Disconnected => {
                 address_data.fail_count += 1;
@@ -447,11 +467,20 @@ where
 
     /// Returns true when it is time to attempt a new outbound connection
     fn connect_now(now: tokio::time::Instant, address_data: &AddressData) -> bool {
+        let age = now.duration_since(address_data.state_updated_at);
+
         match address_data.state {
             AddressState::Connected | AddressState::Connecting => false,
+            AddressState::Disconnected if address_data.user_added => {
+                // Try to connect to the user added nodes more often
+                match address_data.fail_count {
+                    0 => true,
+                    1 => age > Duration::from_secs(60),
+                    2 => age > Duration::from_secs(360),
+                    _ => age > Duration::from_secs(3600),
+                }
+            }
             AddressState::Disconnected if address_data.was_reachable => {
-                let age = now.duration_since(address_data.state_updated_at);
-
                 match address_data.fail_count {
                     0 => true,
                     1 => age > Duration::from_secs(60),
@@ -477,10 +506,11 @@ where
         address_data: &mut AddressData,
         storage: &mut S,
     ) -> bool {
-        if address_data.state == AddressState::Disconnected
-            && address_data.was_reachable
-            && address_data.fail_count >= PURGE_REACHABLE_FAIL_COUNT
-        {
+        if address_data.user_added || address_data.state != AddressState::Disconnected {
+            return true;
+        }
+
+        if address_data.was_reachable && address_data.fail_count >= PURGE_REACHABLE_FAIL_COUNT {
             log::debug!("purge old (once reachable) address {}", address.to_string());
 
             let mut tx = storage.transaction_rw().expect("tx must succeed");
@@ -490,8 +520,7 @@ where
             return false;
         }
 
-        if address_data.state == AddressState::Disconnected
-            && !address_data.was_reachable
+        if !address_data.was_reachable
             && address_data.fail_count > 0
             && now.duration_since(address_data.state_updated_at) >= PURGE_UNREACHABLE_TIME
         {

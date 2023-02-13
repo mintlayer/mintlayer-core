@@ -106,6 +106,10 @@ async fn dns_crawler_announced_online() {
         addresses,
         vec![node1.to_string(), node2.to_string(), node3.to_string()]
     );
+
+    assert!(crawler.addresses.get(&node1).unwrap().user_added);
+    assert!(!crawler.addresses.get(&node2).unwrap().user_added);
+    assert!(!crawler.addresses.get(&node3).unwrap().user_added);
 }
 
 #[tokio::test]
