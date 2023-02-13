@@ -92,6 +92,7 @@ pub async fn make_blockproduction(
     Ok(Box::new(result))
 }
 
+#[allow(clippy::unused_async)]
 pub async fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle)
 {
     let mut manager = Manager::new("blockprod-unit-test");
