@@ -104,7 +104,7 @@ mod tests {
         tokio::select! {
             msg = recv => match msg.expect("Builder timed out").expect("Error reading from Builder") {
                 BlockBuilderControlCommand::Stop => {},
-                _ => panic!("Invalid message recevied from Builder"),
+                _ => panic!("Invalid message received from Builder"),
             }
         }
     }
