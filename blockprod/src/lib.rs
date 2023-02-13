@@ -103,7 +103,7 @@ pub async fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHan
     let chainstate = chainstate::make_chainstate(
         Arc::clone(&chain_config),
         ChainstateConfig::new(),
-        Store::new_empty().unwrap(),
+        Store::new_empty().expect("Error initializing empty store"),
         DefaultTransactionVerificationStrategy::new(),
         None,
         Default::default(),
