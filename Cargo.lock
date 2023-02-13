@@ -308,6 +308,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chainstate",
+ "chainstate-storage",
  "common",
  "crossbeam-channel",
  "futures",
