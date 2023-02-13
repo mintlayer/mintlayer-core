@@ -74,3 +74,84 @@ impl BlockProductionInterface for BlockProduction {
         !self.builder_tx.is_closed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::*;
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn test_stop() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+
+        let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
+
+        let block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            builder_tx,
+        )
+        .expect("Error initializing Builder");
+
+        block_production.stop().expect("Error stopping Builder");
+
+        let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
+
+        tokio::select! {
+            msg = recv => match msg.expect("Builder timed out").expect("Error reading from Builder") {
+                BlockBuilderControlCommand::Stop => {},
+                _ => panic!("Invalid message recevied from Builder"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+
+        let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
+
+        let block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            builder_tx,
+        )
+        .expect("Error initializing Builder");
+
+        block_production.start().expect("Error starting Builder");
+
+        let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
+
+        tokio::select! {
+            msg = recv => match msg.expect("Builder timed out").expect("Error reading from Builder") {
+                BlockBuilderControlCommand::Start => {},
+                _ => panic!("Invalid message received from Builder"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_is_connected() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+
+        let (builder_tx, _builder_rx) = mpsc::unbounded_channel();
+
+        let block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            builder_tx,
+        )
+        .expect("Error initializing Builder");
+
+        if !block_production.is_connected() {
+            panic!("Builder is not connected");
+        }
+    }
+}
