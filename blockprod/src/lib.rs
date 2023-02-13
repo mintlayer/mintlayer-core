@@ -100,9 +100,7 @@ mod tests {
 
     use super::*;
 
-    #[allow(clippy::unused_async)]
-    pub async fn setup_blockprod_test(
-    ) -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
+    pub fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
         let mut manager = Manager::new("blockprod-unit-test");
         manager.install_signal_handlers();
 
@@ -137,7 +135,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_makeblockproduction() {
-        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),

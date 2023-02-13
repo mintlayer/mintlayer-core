@@ -84,7 +84,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stop() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
 
@@ -111,7 +111,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_start() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
 
@@ -138,7 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_connected() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test().await;
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, _builder_rx) = mpsc::unbounded_channel();
 
