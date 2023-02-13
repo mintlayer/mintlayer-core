@@ -17,17 +17,15 @@ pub mod rpc;
 
 use std::sync::Arc;
 
-use chainstate::{ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy};
-use chainstate_storage::inmemory::Store;
+use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, config::create_unit_test_config, ChainConfig},
+    chain::{block::BlockCreationError, ChainConfig},
     time_getter::TimeGetter,
 };
 use detail::{builder::PerpetualBlockBuilder, BlockProduction};
 use interface::BlockProductionInterface;
-use mempool::{MempoolHandle, MempoolSubsystemInterface};
+use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
-use subsystem::Manager;
 use tokio::sync::mpsc;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -92,42 +90,50 @@ pub async fn make_blockproduction(
     Ok(Box::new(result))
 }
 
-#[allow(clippy::unused_async, dead_code)]
-async fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
-    let mut manager = Manager::new("blockprod-unit-test");
-    manager.install_signal_handlers();
-
-    let chain_config = Arc::new(create_unit_test_config());
-
-    let chainstate = chainstate::make_chainstate(
-        Arc::clone(&chain_config),
-        ChainstateConfig::new(),
-        Store::new_empty().expect("Error initializing empty store"),
-        DefaultTransactionVerificationStrategy::new(),
-        None,
-        Default::default(),
-    )
-    .expect("Error initializing chainstate");
-
-    let chainstate = manager.add_subsystem("chainstate", chainstate);
-
-    let mempool = mempool::make_mempool(
-        Arc::clone(&chain_config),
-        chainstate.clone(),
-        Default::default(),
-        mempool::SystemUsageEstimator {},
-    );
-
-    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
-        mempool.run(call, shutdn)
-    });
-
-    (manager, chain_config, chainstate, mempool)
-}
-
 #[cfg(test)]
 mod tests {
+    use chainstate::{ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy};
+    use chainstate_storage::inmemory::Store;
+    use common::chain::{config::create_unit_test_config, ChainConfig};
+    use mempool::{MempoolHandle, MempoolSubsystemInterface};
+    use subsystem::Manager;
+
     use super::*;
+
+    #[allow(clippy::unused_async)]
+    pub async fn setup_blockprod_test(
+    ) -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
+        let mut manager = Manager::new("blockprod-unit-test");
+        manager.install_signal_handlers();
+
+        let chain_config = Arc::new(create_unit_test_config());
+
+        let chainstate = chainstate::make_chainstate(
+            Arc::clone(&chain_config),
+            ChainstateConfig::new(),
+            Store::new_empty().expect("Error initializing empty store"),
+            DefaultTransactionVerificationStrategy::new(),
+            None,
+            Default::default(),
+        )
+        .expect("Error initializing chainstate");
+
+        let chainstate = manager.add_subsystem("chainstate", chainstate);
+
+        let mempool = mempool::make_mempool(
+            Arc::clone(&chain_config),
+            chainstate.clone(),
+            Default::default(),
+            mempool::SystemUsageEstimator {},
+        );
+
+        let mempool = manager
+            .add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
+                mempool.run(call, shutdn)
+            });
+
+        (manager, chain_config, chainstate, mempool)
+    }
 
     #[tokio::test]
     async fn test_makeblockproduction() {

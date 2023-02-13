@@ -77,9 +77,10 @@ impl BlockProductionInterface for BlockProduction {
 
 #[cfg(test)]
 mod tests {
-    use super::super::*;
-    use super::*;
     use tokio::time::{timeout, Duration};
+
+    use super::*;
+    use crate::tests::setup_blockprod_test;
 
     #[tokio::test]
     async fn test_stop() {
