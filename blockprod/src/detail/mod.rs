@@ -69,4 +69,8 @@ impl BlockProductionInterface for BlockProduction {
             .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
         Ok(())
     }
+
+    fn is_connected(&self) -> bool {
+        !self.builder_tx.is_closed()
+    }
 }
