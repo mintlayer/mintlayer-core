@@ -14,12 +14,13 @@
 // limitations under the License.
 
 use std::{
+    borrow::Borrow,
     fmt::{Debug, Display},
     hash::{Hash, Hasher},
     ops::Deref,
 };
 
-/// A wrapper for a type that is not supposed to be modified, no matter one
+/// A wrapper for a type that is not supposed to be modified, no matter what
 /// This particularly solves the problem of not being able to mark member variables as const in Rust
 pub struct ConstValue<T> {
     value: T,
@@ -28,6 +29,10 @@ pub struct ConstValue<T> {
 impl<T> ConstValue<T> {
     pub fn new(value: T) -> Self {
         Self { value }
+    }
+
+    pub fn take(self) -> T {
+        self.value
     }
 }
 
@@ -95,6 +100,12 @@ impl<T: Hash> Hash for ConstValue<T> {
 
 impl<T> AsRef<T> for ConstValue<T> {
     fn as_ref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> Borrow<T> for ConstValue<T> {
+    fn borrow(&self) -> &T {
         &self.value
     }
 }

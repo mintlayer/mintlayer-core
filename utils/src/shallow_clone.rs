@@ -17,13 +17,8 @@
 
 use std::marker::PhantomData;
 
-#[cfg(not(loom))]
-use std::sync::Arc;
-
-#[cfg(loom)]
-use loom::sync::Arc;
-
 use crate::const_value::ConstValue;
+use crate::sync::Arc;
 
 /// Shallow cloning
 ///
@@ -71,6 +66,8 @@ impl<T> ShallowClone for PhantomData<T> {
     }
 }
 
+/// ShallowClone for `ConstValue` is OK because it doesn't break the contract of ShallowClone,
+/// where a new state isn't created when it gets cloned
 impl<T: Clone> ShallowClone for ConstValue<T> {
     fn shallow_clone(&self) -> Self {
         self.clone()
