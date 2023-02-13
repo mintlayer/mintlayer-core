@@ -75,7 +75,7 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
         let mut mined_block =
             tf.make_block_builder().add_test_transaction_from_best_block(&mut rng).build();
         let bits = difficulty.into();
-        assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
+        assert!(consensus::mine(&mut mined_block, u128::MAX, bits)
             .expect("Unexpected conversion error"));
         println!("{}", hex::encode(mined_block.encode()));
         tf.process_block(mined_block, BlockSource::Local).unwrap();

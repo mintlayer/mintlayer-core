@@ -17,24 +17,21 @@ pub mod error;
 pub mod kernel;
 
 use chainstate_types::{
-    vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle, GenBlockIndex,
-    PoSAccountingSealedHandle, TransactionIndexHandle,
+    vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle, PoSAccountingSealedHandle,
 };
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
         config::EpochIndex,
-        ChainConfig, OutputPurpose, OutputSpentState, TxOutput,
+        ChainConfig, OutputPurpose, TxOutput,
     },
     primitives::{Idable, H256},
     Uint256,
 };
 use utils::ensure;
+use utxo::UtxosView;
 
-use crate::pos::{
-    error::ConsensusPoSError,
-    kernel::{get_kernel_block_index, get_kernel_output},
-};
+use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
 fn check_stake_kernel_hash<P: PoSAccountingSealedHandle>(
     epoch_index: EpochIndex,
@@ -87,28 +84,6 @@ fn check_stake_kernel_hash<P: PoSAccountingSealedHandle>(
     Ok(hash_pos)
 }
 
-/// Ensures that the kernel_block_index is an ancestor of header
-fn ensure_correct_ancestry<B: BlockIndexHandle>(
-    header: &BlockHeader,
-    prev_block_index: &GenBlockIndex,
-    kernel_block_index: &GenBlockIndex,
-    block_index_handle: &B,
-) -> Result<(), ConsensusPoSError> {
-    let prev_block_index = match prev_block_index {
-        GenBlockIndex::Block(bi) => bi,
-        GenBlockIndex::Genesis(_) => return Ok(()),
-    };
-    let kernel_block_header_as_ancestor = block_index_handle
-        .get_ancestor(prev_block_index, kernel_block_index.block_height())
-        .map_err(|_| ConsensusPoSError::KernelAncestryCheckFailed(header.get_id()))?;
-
-    ensure!(
-        kernel_block_header_as_ancestor.block_id() == kernel_block_index.block_id(),
-        ConsensusPoSError::KernelAncestryCheckFailed(header.block_id()),
-    );
-    Ok(())
-}
-
 fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
     chain_config: &ChainConfig,
     current_epoch_index: EpochIndex,
@@ -129,63 +104,31 @@ fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
     Ok(random_seed)
 }
 
-pub fn check_proof_of_stake<B, T, P>(
+pub fn check_proof_of_stake<B, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pos_data: &PoSData,
     block_index_handle: &B,
-    tx_index_retriever: &T,
+    utxos_view: &U,
     pos_accounting_handle: &P,
 ) -> Result<(), ConsensusPoSError>
 where
     B: BlockIndexHandle,
-    T: TransactionIndexHandle,
+    U: UtxosView,
     P: PoSAccountingSealedHandle,
 {
-    let kernel_block_index =
-        get_kernel_block_index(pos_data, block_index_handle, tx_index_retriever)?;
-
     let prev_block_index = block_index_handle
         .get_gen_block_index(header.prev_block_id())?
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+
+    let kernel_output = get_kernel_output(pos_data, utxos_view)?;
 
     let epoch_index =
         chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
 
     let random_seed = randomness_of_sealed_epoch(chain_config, epoch_index, block_index_handle)?;
 
-    let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)?;
-
-    ensure_correct_ancestry(
-        header,
-        &prev_block_index,
-        &kernel_block_index,
-        block_index_handle,
-    )?;
-
-    let kernel_outpoint =
-        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
-    let kernel_tx_index = tx_index_retriever
-        .get_mainchain_tx_index(&kernel_outpoint.tx_id())?
-        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
-    let is_input_already_spent = kernel_tx_index
-        .get_spent_state(kernel_outpoint.output_index())
-        .map_err(|_| ConsensusPoSError::InIndexOutpointAccessError)?;
-
-    ensure!(
-        is_input_already_spent == OutputSpentState::Unspent,
-        ConsensusPoSError::KernelOutputAlreadySpent,
-    );
-
-    ensure!(
-        header.timestamp() < kernel_block_index.block_timestamp(),
-        ConsensusPoSError::TimestampViolation(
-            kernel_block_index.block_timestamp(),
-            header.timestamp()
-        ),
-    );
-
-    let _hash_pos = check_stake_kernel_hash(
+    check_stake_kernel_hash(
         epoch_index,
         &random_seed,
         pos_data,

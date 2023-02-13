@@ -17,7 +17,7 @@ pub use self::error::ExtraConsensusDataError;
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
-    PoSAccountingSealedHandle, TransactionIndexHandle,
+    PoSAccountingSealedHandle,
 };
 use common::{
     chain::{
@@ -27,6 +27,7 @@ use common::{
     },
     primitives::Idable,
 };
+use utxo::UtxosView;
 
 pub mod error;
 
@@ -37,16 +38,16 @@ use crate::{
 };
 
 /// Checks if the given block identified by the header contains the correct consensus data.  
-pub fn validate_consensus<B, T, P>(
+pub fn validate_consensus<B, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     block_index_handle: &B,
-    transaction_index_handle: &T,
+    utxos_view: &U,
     pos_accounting_handle: &P,
 ) -> Result<(), ConsensusVerificationError>
 where
     B: BlockIndexHandle,
-    T: TransactionIndexHandle,
+    U: UtxosView,
     P: PoSAccountingSealedHandle,
 {
     let prev_block_id = *header.prev_block_id();
@@ -71,7 +72,7 @@ where
         RequiredConsensus::PoS => validate_pos_consensus(
             chain_config,
             block_index_handle,
-            transaction_index_handle,
+            utxos_view,
             pos_accounting_handle,
             header,
         ),
@@ -79,16 +80,15 @@ where
     }
 }
 
-fn compute_current_randomness<H: BlockIndexHandle, T: TransactionIndexHandle>(
+fn compute_current_randomness<U: UtxosView>(
     chain_config: &ChainConfig,
     pos_data: &PoSData,
     prev_block_index: &BlockIndex,
     header: &BlockHeader,
-    block_index_handle: &H,
-    tx_index_retriever: &T,
+    utxos_view: &U,
 ) -> Result<PoSRandomness, ExtraConsensusDataError> {
     let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
-    let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
+    let kernel_output = get_kernel_output(pos_data, utxos_view)
         .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
     let current_randomness = PoSRandomness::from_block(
         chain_config,
@@ -101,12 +101,11 @@ fn compute_current_randomness<H: BlockIndexHandle, T: TransactionIndexHandle>(
     Ok(current_randomness)
 }
 
-pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHandle>(
+pub fn compute_extra_consensus_data<U: UtxosView>(
     chain_config: &ChainConfig,
     prev_block_index: &BlockIndex,
     header: &BlockHeader,
-    block_index_handle: &H,
-    tx_index_retriever: &T,
+    utxos_view: &U,
 ) -> Result<ConsensusExtraData, ExtraConsensusDataError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(ConsensusExtraData::None),
@@ -117,8 +116,7 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
                 pos_data,
                 prev_block_index,
                 header,
-                block_index_handle,
-                tx_index_retriever,
+                utxos_view,
             )?;
             Ok(ConsensusExtraData::PoS(current_randomness))
         }
@@ -153,16 +151,16 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus<B, T, P>(
+fn validate_pos_consensus<B, U, P>(
     chain_config: &ChainConfig,
     block_index_handle: &B,
-    transaction_index_handle: &T,
+    utxos_view: &U,
     pos_accounting_handle: &P,
     header: &BlockHeader,
 ) -> Result<(), ConsensusVerificationError>
 where
     B: BlockIndexHandle,
-    T: TransactionIndexHandle,
+    U: UtxosView,
     P: PoSAccountingSealedHandle,
 {
     match header.consensus_data() {
@@ -174,7 +172,7 @@ where
             header,
             pos_data,
             block_index_handle,
-            transaction_index_handle,
+            utxos_view,
             pos_accounting_handle,
         )
         .map_err(Into::into),

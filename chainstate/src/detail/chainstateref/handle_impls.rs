@@ -16,10 +16,10 @@
 use chainstate_storage::{BlockchainStorageRead, SealedStorageTag};
 use chainstate_types::{
     BlockIndex, BlockIndexHandle, EpochData, GenBlockIndex, PoSAccountingSealedHandle,
-    PropertyQueryError, TransactionIndexHandle,
+    PropertyQueryError,
 };
 use common::{
-    chain::{block::BlockReward, Block, GenBlock, OutPointSourceId, PoolId},
+    chain::{block::BlockReward, Block, GenBlock, PoolId},
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::PoSAccountingStorageRead;
@@ -63,24 +63,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
 
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
         self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
-    }
-}
-
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    TransactionIndexHandle for ChainstateRef<'a, S, O, V>
-{
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
-        self.get_mainchain_tx_index(tx_id)
-    }
-
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &common::chain::TxMainChainPosition,
-    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
-        self.get_mainchain_tx_by_position(tx_index)
     }
 }
 

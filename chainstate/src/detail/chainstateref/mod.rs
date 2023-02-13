@@ -154,16 +154,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
     }
 
-    pub fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &common::chain::TxMainChainPosition,
-    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
-        log::trace!("Loading transaction by pos: {:?}", tx_index);
-        self.db_tx
-            .get_mainchain_tx_by_position(tx_index)
-            .map_err(PropertyQueryError::from)
-    }
-
     pub fn get_block_id_by_height(
         &self,
         height: &BlockHeight,
@@ -343,7 +333,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
-        consensus::validate_consensus(self.chain_config, header, self, self, self)
+        let utxos_db = UtxosDB::new(&self.db_tx);
+        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -878,14 +869,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
+        let utxos_db = UtxosDB::new(&self.db_tx);
         let consensus_extra = match &prev_block_index {
-            GenBlockIndex::Block(prev_bi) => compute_extra_consensus_data(
-                self.chain_config,
-                prev_bi,
-                block.header(),
-                self,
-                self,
-            )?,
+            GenBlockIndex::Block(prev_bi) => {
+                compute_extra_consensus_data(self.chain_config, prev_bi, block.header(), &utxos_db)?
+            }
             GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
         };
 
@@ -931,7 +919,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         epoch_seal::update_epoch_data(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEventWithIndex::Connect(tip_index.block_height(), &tip_index),
+            epoch_seal::BlockStateEventWithIndex::Connect(tip_index.block_height(), tip_index),
         )
     }
 

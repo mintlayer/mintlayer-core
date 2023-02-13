@@ -8,7 +8,7 @@ version = "0.1.0"
 common = {path = '../common'}
 utils = {path = "../utils"}
 chainstate-types = {path = '../chainstate/types'}
-chainstate-storage = {path = '../chainstate/storage'}
+utxo = {path = '../utxo'}
 
 thiserror.workspace = true
 num = "0.4.0"

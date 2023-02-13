@@ -637,13 +637,13 @@ dependencies = [
 name = "consensus"
 version = "0.1.0"
 dependencies = [
- "chainstate-storage",
  "chainstate-types",
  "common",
  "num",
  "rstest",
  "thiserror",
  "utils",
+ "utxo",
 ]
 
 [[package]]

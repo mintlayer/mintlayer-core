@@ -23,8 +23,6 @@ use common::{
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
-    #[error("Block storage error: `{0}`")]
-    StorageError(#[from] chainstate_storage::Error),
     #[error("Property query error: `{0}`")]
     PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Stake kernel hash failed to meet the target requirement")]

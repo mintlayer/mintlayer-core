@@ -235,7 +235,6 @@ impl BanScore for CheckBlockTransactionsError {
 impl BanScore for ConsensusVerificationError {
     fn ban_score(&self) -> u32 {
         match self {
-            ConsensusVerificationError::StorageError(_) => 0,
             ConsensusVerificationError::PrevBlockLoadError(_, _, _) => 0,
             ConsensusVerificationError::PrevBlockNotFound(_, _) => 100,
             ConsensusVerificationError::ConsensusTypeMismatch(_) => 100,
@@ -273,7 +272,6 @@ impl BanScore for BlockSizeError {
 impl BanScore for ConsensusPoSError {
     fn ban_score(&self) -> u32 {
         match self {
-            ConsensusPoSError::StorageError(_) => 0,
             ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,

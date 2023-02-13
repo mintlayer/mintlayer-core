@@ -30,7 +30,6 @@ pub use crate::{
     locator::Locator,
     pos_accounting_handle::PoSAccountingSealedHandle,
     preconnect_data::{BlockPreconnectData, ConsensusExtraData},
-    transaction_index_handle::TransactionIndexHandle,
 };
 
 mod ancestor;
@@ -43,4 +42,3 @@ mod height_skip;
 mod locator;
 mod pos_accounting_handle;
 mod preconnect_data;
-mod transaction_index_handle;

@@ -15,13 +15,13 @@
 
 //! A consensus related logic.
 
-pub mod pos;
-pub mod pow;
+mod pos;
+mod pow;
 
 pub use crate::{
     error::ConsensusVerificationError,
     pos::error::ConsensusPoSError,
-    pow::ConsensusPoWError,
+    pow::{check_proof_of_work, mine, ConsensusPoWError},
     validator::{compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError},
 };
 
