@@ -8,7 +8,6 @@ license = "MIT"
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
-chainstate-storage = { path = "../chainstate/storage/" }
 common = { path = "../common/" }
 mempool = { path = "../mempool/" }
 subsystem = { path = "../subsystem/" }
@@ -23,3 +22,6 @@ void = "1.0"
 crossbeam-channel = "0.5"
 jsonrpsee = { workspace = true, features = ["macros"] }
 async-trait.workspace = true
+
+[dev-dependencies]
+chainstate-storage = { path = "../chainstate/storage/" }
