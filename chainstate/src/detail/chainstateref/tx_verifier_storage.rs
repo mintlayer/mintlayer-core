@@ -269,7 +269,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksRef, V: TransactionVerificati
                     .db_tx
                     .get_block_index(&id)
                     .map_err(TransactionVerifierStorageError::from)?
-                    .ok_or_else(|| TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(id.into()))?;
+                    .ok_or_else(|| {
+                        TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(id.into())
+                    })?;
                 let current_epoch_index =
                     self.chain_config().epoch_index_from_height(&block_index.block_height());
                 let mut current_epoch_delta = self
