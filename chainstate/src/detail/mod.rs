@@ -328,7 +328,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         let mut orphan_process_queue: VecDeque<_> = vec![block_id].into();
         while let Some(block_id) = orphan_process_queue.pop_front() {
-            let orphans = (&mut self.orphan_blocks).take_all_children_of(&block_id.into());
+            let orphans = self.orphan_blocks.take_all_children_of(&block_id.into());
             // whatever was pulled from orphans should be processed next in the queue
             orphan_process_queue.extend(orphans.iter().map(|b| b.get_id()));
             let (orphan_block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) =
@@ -510,7 +510,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     /// Mark new block as an orphan
     fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
-        match (&mut self.orphan_blocks).add_block(block) {
+        match self.orphan_blocks.add_block(block) {
             Ok(_) => Ok(()),
             Err(err) => (*err).into(),
         }
