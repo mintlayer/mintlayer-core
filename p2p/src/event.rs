@@ -46,7 +46,6 @@ pub enum SyncEvent {
     PublishBlock(Block),
 }
 
-// TODO: FIXME: Rename to `SyncPeerEvent`?
 #[derive(Debug)]
 pub enum SyncControlEvent<T: NetworkingService> {
     /// Peer connected

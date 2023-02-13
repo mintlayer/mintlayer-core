@@ -20,7 +20,6 @@ use common::{
     primitives::Id,
 };
 
-// TODO: FIXME: Private fields.
 // TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
 pub struct PeerContext {
     /// A number of blocks that a peer has requested. This shouldn't be bigger than the

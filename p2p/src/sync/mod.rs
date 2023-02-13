@@ -253,7 +253,7 @@ where
                 ProtocolError::BlocksRequestLimitExceeded(block_ids.len(), requested_blocks_limit),
             ));
         }
-        log::trace!("requested block ids: {block_ids:#?}");
+        log::trace!("Requested block ids: {block_ids:#?}");
 
         // Check that all blocks are known.
         for id in block_ids.clone() {
@@ -341,6 +341,7 @@ where
             return Ok(());
         }
 
+        // Only the first header can be checked with the `preliminary_header_check` function.
         let first_header = headers
             .first()
             // This is OK because of the `headers.is_empty()` check above.
@@ -349,6 +350,7 @@ where
         self.chainstate_handle
             .call(|c| c.preliminary_header_check(first_header))
             .await??;
+
         self.request_blocks(peer, headers)
     }
 

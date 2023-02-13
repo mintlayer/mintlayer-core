@@ -25,7 +25,8 @@ pub enum ProtocolError {
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
     InvalidVersion(SemVer, SemVer),
-    // TODO: FIXME: Replace this error by more specific ones?
+    // TODO: This error is very generic and probably should be replaced with several different ones,
+    // because it has a ban score of 100 and in many cases it is too harsh.
     #[error("Peer sent an invalid message")]
     InvalidMessage,
     #[error("Peer is unresponsive")]
