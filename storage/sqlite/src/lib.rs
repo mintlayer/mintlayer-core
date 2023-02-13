@@ -226,27 +226,27 @@ impl ShallowClone for SqliteImpl {}
 impl backend::BackendImpl for SqliteImpl {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
-enum SqliteBackend {
+enum SqliteStorageMode {
     InMemory,
     File(PathBuf),
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
-    backend: SqliteBackend,
+    backend: SqliteStorageMode,
 }
 
 impl Sqlite {
     pub fn new_in_memory() -> Self {
         Self {
-            backend: SqliteBackend::InMemory,
+            backend: SqliteStorageMode::InMemory,
         }
     }
 
     /// New Sqlite database backend
     pub fn new(path: PathBuf) -> Self {
         Self {
-            backend: SqliteBackend::File(path),
+            backend: SqliteStorageMode::File(path),
         }
     }
 
@@ -258,8 +258,8 @@ impl Sqlite {
         ]);
 
         let connection = match self.backend {
-            SqliteBackend::InMemory => Connection::open_in_memory_with_flags(flags)?,
-            SqliteBackend::File(path) => Connection::open_with_flags(path, flags)?,
+            SqliteStorageMode::InMemory => Connection::open_in_memory_with_flags(flags)?,
+            SqliteStorageMode::File(path) => Connection::open_with_flags(path, flags)?,
         };
 
         // Set the locking mode to exclusive
@@ -305,7 +305,7 @@ impl backend::Backend for Sqlite {
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
         // Attempt to create the parent storage directory if using a file
 
-        if let SqliteBackend::File(ref path) = self.backend {
+        if let SqliteStorageMode::File(ref path) = self.backend {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
             } else {

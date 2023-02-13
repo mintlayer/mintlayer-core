@@ -46,10 +46,7 @@ impl<B: storage::Backend> Store<B> {
     #[allow(clippy::let_and_return)]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db_tx = self.transaction_ro()?;
-        let map = db_tx.0.get::<db::DBUtxo, _>();
-        let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
-
-        Ok(res)
+        db_tx.0.get::<db::DBUtxo, _>().prefix_iter_decoded(&()).map(Iterator::collect)
     }
 }
 
