@@ -150,8 +150,6 @@ mod tests {
         )
         .expect("Error initializing Builder");
 
-        if !block_production.is_connected() {
-            panic!("Builder is not connected");
-        }
+        assert!(block_production.is_connected(), "Builder is not connected");
     }
 }

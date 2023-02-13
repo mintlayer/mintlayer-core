@@ -149,10 +149,7 @@ mod tests {
         tokio::spawn(async move {
             blockprod
                 .call(move |this| {
-                    if !this.is_connected() {
-                        panic!("Builder is not connected");
-                    }
-
+                    assert!(this.is_connected(), "Builder is not connected");
                     shutdown.initiate();
                 })
                 .await
