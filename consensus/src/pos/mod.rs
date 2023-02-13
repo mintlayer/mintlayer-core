@@ -109,15 +109,19 @@ fn ensure_correct_ancestry<B: BlockIndexHandle>(
     Ok(())
 }
 
-pub fn randomness_of_epoch<B: BlockIndexHandle>(
+fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
     chain_config: &ChainConfig,
-    epoch_index: EpochIndex,
+    current_epoch_index: EpochIndex,
     block_index_handle: &B,
 ) -> Result<H256, ConsensusPoSError> {
-    let random_seed = if epoch_index >= chain_config.sealed_epoch_distance_from_tip() as u64 {
-        *block_index_handle
-            .get_epoch_data(epoch_index)?
-            .ok_or(ConsensusPoSError::EpochDataNotFound(epoch_index))?
+    let sealed_epoch_distance_from_tip = chain_config.sealed_epoch_distance_from_tip() as u64;
+    let random_seed = if current_epoch_index >= sealed_epoch_distance_from_tip {
+        let sealed_epoch_index = current_epoch_index
+            .checked_sub(sealed_epoch_distance_from_tip)
+            .expect("must've been already checked for underflow");
+        block_index_handle
+            .get_epoch_data(sealed_epoch_index)?
+            .ok_or(ConsensusPoSError::EpochDataNotFound(sealed_epoch_index))?
             .randomness()
     } else {
         *chain_config.initial_randomness()
@@ -148,7 +152,7 @@ where
     let epoch_index =
         chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
 
-    let random_seed = randomness_of_epoch(chain_config, epoch_index, block_index_handle)?;
+    let random_seed = randomness_of_sealed_epoch(chain_config, epoch_index, block_index_handle)?;
 
     let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)?;
 

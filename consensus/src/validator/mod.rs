@@ -169,6 +169,14 @@ where
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config, header, pos_data, block_index_handle, transaction_index_handle, pos_accounting_handle).map_err(Into::into),
+        ConsensusData::PoS(pos_data) => check_proof_of_stake(
+            chain_config,
+            header,
+            pos_data,
+            block_index_handle,
+            transaction_index_handle,
+            pos_accounting_handle,
+        )
+        .map_err(Into::into),
     }
 }

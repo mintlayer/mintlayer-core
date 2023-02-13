@@ -193,13 +193,16 @@ impl ChainConfig {
         height / self.epoch_length
     }
 
+    pub fn is_last_block_in_epoch(&self, height: &BlockHeight) -> bool {
+        let next_height: u64 = height.next_height().into();
+        next_height % self.epoch_length() == 0
+    }
+
     pub fn is_due_for_epoch_seal(&self, height: &BlockHeight) -> bool {
         let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
         let current_epoch_index = self.epoch_index_from_height(height);
-        let next_height: u64 = height.next_height().into();
 
-        (next_height % self.epoch_length() == 0)
-            && current_epoch_index >= sealed_epoch_distance_from_tip
+        self.is_last_block_in_epoch(height) && current_epoch_index >= sealed_epoch_distance_from_tip
     }
 
     pub fn token_min_issuance_fee(&self) -> Amount {

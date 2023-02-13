@@ -62,7 +62,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
-        self.get_epoch_data(epoch_index)
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 }
 

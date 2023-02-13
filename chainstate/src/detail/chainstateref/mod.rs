@@ -18,7 +18,7 @@ use std::{collections::BTreeSet, convert::TryInto};
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockPreconnectData,
-    ConsensusExtraData, EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    ConsensusExtraData, GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -162,10 +162,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
         self.db_tx
             .get_mainchain_tx_by_position(tx_index)
             .map_err(PropertyQueryError::from)
-    }
-
-    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
-        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_id_by_height(
@@ -677,13 +673,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
                 GenBlockIndex::Block(block_index) => block_index,
             };
             to_disconnect = self.disconnect_tip(Some(to_disconnect_block.block_id())).log_err()?;
-
-            // check if we need to rollback the epoch seal
-            epoch_seal::update_epoch_seal(
-                &mut self.db_tx,
-                self.chain_config,
-                epoch_seal::BlockStateEvent::Disconnect(to_disconnect.block_height()),
-            )?;
+            self.post_disconnect_tip(to_disconnect.block_height()).log_err()?;
         }
         Ok(())
     }
@@ -725,11 +715,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index).log_err()?;
-            epoch_seal::update_epoch_seal(
-                &mut self.db_tx,
-                self.chain_config,
-                epoch_seal::BlockStateEvent::Connect(block_index.block_height()),
-            )?;
+            self.post_connect_tip(&block_index).log_err()?;
         }
 
         Ok(())
@@ -842,15 +828,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
         Ok(prev_block_index)
     }
 
-    fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
-        if self.chain_config.is_due_for_epoch_seal(&height) {
-            // TODO: calculate the data that has to go to the EpochData type and store it to database
-        }
-        // TODO
-
-        Ok(())
-    }
-
     pub fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
@@ -865,7 +842,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             self.reorganize(&best_block_id, &new_block_index).log_err()?;
-            self.prepare_epoch_data(new_block_index.block_height())?;
             return Ok(Some(new_block_index));
         }
 
@@ -944,5 +920,32 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut, V: TransactionVerificati
             Ok(_) => Ok(()),
             Err(err) => (*err).into(),
         }
+    }
+
+    fn post_connect_tip(&mut self, tip_index: &BlockIndex) -> Result<(), BlockError> {
+        epoch_seal::update_epoch_seal(
+            &mut self.db_tx,
+            self.chain_config,
+            epoch_seal::BlockStateEvent::Connect(tip_index.block_height()),
+        )?;
+        epoch_seal::update_epoch_data(
+            &mut self.db_tx,
+            self.chain_config,
+            epoch_seal::BlockStateEventWithIndex::Connect(tip_index.block_height(), &tip_index),
+        )
+    }
+
+    fn post_disconnect_tip(&mut self, tip_height: BlockHeight) -> Result<(), BlockError> {
+        // check if we need to rollback the epoch seal
+        epoch_seal::update_epoch_seal(
+            &mut self.db_tx,
+            self.chain_config,
+            epoch_seal::BlockStateEvent::Disconnect(tip_height),
+        )?;
+        epoch_seal::update_epoch_data(
+            &mut self.db_tx,
+            self.chain_config,
+            epoch_seal::BlockStateEventWithIndex::Disconnect(tip_height),
+        )
     }
 }

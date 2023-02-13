@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate_storage::{BlockchainStorageWrite, SealedStorageTag};
+use chainstate_types::{BlockIndex, EpochData};
 use common::{chain::ChainConfig, primitives::BlockHeight};
 use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB};
 use utils::tap_error_log::LogError;
@@ -107,6 +108,47 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
 
         db_tx.del_accounting_epoch_undo_delta(epoch_index_to_unseal)?;
     }
+
+    Ok(())
+}
+
+/// Indicates whether a block was connected or disconnected.
+/// Stores current tip height and index if necessary.
+pub enum BlockStateEventWithIndex<'a> {
+    Connect(BlockHeight, &'a BlockIndex),
+    Disconnect(BlockHeight),
+}
+
+/// Every epoch has data associated with it.
+/// On every block change check whether this data should be updated.
+pub fn update_epoch_data<S: BlockchainStorageWrite>(
+    db_tx: &mut S,
+    chain_config: &ChainConfig,
+    block_op: BlockStateEventWithIndex<'_>,
+) -> Result<(), BlockError> {
+    match block_op {
+        BlockStateEventWithIndex::Connect(tip_height, block_index) => {
+            if chain_config.is_last_block_in_epoch(&tip_height) {
+                // Consider the randomness of the last block to be the randomness of the epoch
+                if let Some(epoch_randomness) = block_index.preconnect_data().pos_randomness() {
+                    db_tx
+                        .set_epoch_data(
+                            chain_config.epoch_index_from_height(&tip_height),
+                            &EpochData::new(epoch_randomness.clone()),
+                        )
+                        .log_err()?;
+                }
+            }
+        }
+        BlockStateEventWithIndex::Disconnect(tip_height) => {
+            let disconnected_tip = tip_height.next_height();
+            if chain_config.is_last_block_in_epoch(&disconnected_tip) {
+                db_tx
+                    .del_epoch_data(chain_config.epoch_index_from_height(&disconnected_tip))
+                    .log_err()?;
+            }
+        }
+    };
 
     Ok(())
 }

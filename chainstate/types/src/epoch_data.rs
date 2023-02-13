@@ -16,13 +16,19 @@
 use common::primitives::H256;
 use serialization::{Decode, Encode};
 
+use crate::pos_randomness::PoSRandomness;
+
 #[derive(Debug, Encode, Decode, Clone)]
 pub struct EpochData {
-    randomness: H256,
+    randomness: PoSRandomness,
 }
 
 impl EpochData {
-    pub fn randomness(&self) -> &H256 {
-        &self.randomness
+    pub fn new(randomness: PoSRandomness) -> Self {
+        Self { randomness }
+    }
+
+    pub fn randomness(&self) -> H256 {
+        self.randomness.value()
     }
 }

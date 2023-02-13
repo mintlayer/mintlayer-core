@@ -22,14 +22,13 @@ use chainstate_storage::{inmemory::Store, BlockchainStorageRead, TipStorageTag};
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
-        tokens::{TokenAuxiliaryData, TokenId}, PoolId, DelegationId,
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxMainChainIndex,
+        tokens::{TokenAuxiliaryData, TokenId},
+        Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{
-    DelegationData, PoSAccountingStorageRead, PoSAccountingView, PoolData, 
-};
+use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoSAccountingView, PoolData};
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
