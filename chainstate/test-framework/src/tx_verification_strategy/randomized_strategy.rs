@@ -86,10 +86,8 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
             calculate_median_time_past(block_index_handle, &block.prev_block_id());
-        let block_subsidy =
-            chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
 
-        let (mut tx_verifier, total_fees) = self
+        let mut tx_verifier = self
             .connect_with_base(
                 tx_verifier_maker,
                 storage_backend,
@@ -99,10 +97,6 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
                 block,
                 &median_time_past,
             )
-            .log_err()?;
-
-        tx_verifier
-            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
         tx_verifier.set_best_block(block.get_id().into());
@@ -150,26 +144,19 @@ impl RandomizedTransactionVerificationStrategy {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: &BlockTimestamp,
-    ) -> Result<(TransactionVerifier<C, S, U, A>, Amount), ConnectTransactionError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
     {
+        let block_subsidy =
+            chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
         let mut tx_indices = construct_tx_indices(&verifier_config, block)?;
         let block_reward_tx_index = construct_reward_tx_indices(&verifier_config, block)?;
 
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
-
-        let reward_fees = tx_verifier
-            .connect_transactable(
-                block_index,
-                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
-                median_time_past,
-            )
-            .log_err()?;
-        debug_assert!(reward_fees.is_none());
 
         let mut total_fee = Amount::ZERO;
         let mut tx_num = 0usize;
@@ -206,7 +193,20 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_num += 1;
             }
         }
-        Ok((tx_verifier, total_fee))
+
+        tx_verifier
+            .check_block_reward(block, Fee(total_fee), Subsidy(block_subsidy))
+            .log_err()?;
+
+        let reward_fees = tx_verifier
+            .connect_transactable(
+                block_index,
+                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
+                median_time_past,
+            )
+            .log_err()?;
+        debug_assert!(reward_fees.is_none());
+        Ok(tx_verifier)
     }
 
     fn connect_with_derived<C, S, U, A>(

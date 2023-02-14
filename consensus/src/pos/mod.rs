@@ -94,12 +94,17 @@ fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
         let sealed_epoch_index = current_epoch_index
             .checked_sub(sealed_epoch_distance_from_tip)
             .expect("must've been already checked for underflow");
-        block_index_handle
-            .get_epoch_data(sealed_epoch_index)?
-            .ok_or(ConsensusPoSError::EpochDataNotFound(sealed_epoch_index))?
-            .randomness()
+        let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
+        match epoch_data {
+            Some(d) => d.randomness(),
+            None => {
+                // TODO: no epoch_data means either that no epoch was created yet or
+                // that the data is actually missing
+                chain_config.initial_randomness()
+            }
+        }
     } else {
-        *chain_config.initial_randomness()
+        chain_config.initial_randomness()
     };
     Ok(random_seed)
 }

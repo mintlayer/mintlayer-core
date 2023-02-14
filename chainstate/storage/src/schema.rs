@@ -48,7 +48,7 @@ storage::decl_schema! {
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for EpochData
-        pub DBEpochData: Map<u64, EpochData>,
+        pub DBEpochData: Map<EpochIndex, EpochData>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id

@@ -183,8 +183,8 @@ impl ChainConfig {
         self.max_block_size_with_smart_contracts
     }
 
-    pub fn initial_randomness(&self) -> &H256 {
-        &self.initial_randomness
+    pub fn initial_randomness(&self) -> H256 {
+        self.initial_randomness
     }
 
     #[must_use]

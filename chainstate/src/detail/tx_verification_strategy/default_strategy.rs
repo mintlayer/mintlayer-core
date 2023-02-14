@@ -80,15 +80,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
 
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
-        let reward_fees = tx_verifier
-            .connect_transactable(
-                block_index,
-                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
-                &median_time_past,
-            )
-            .log_err()?;
-        debug_assert!(reward_fees.is_none());
-
         let total_fees = block
             .transactions()
             .iter()
@@ -114,6 +105,15 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
+
+        let reward_fees = tx_verifier
+            .connect_transactable(
+                block_index,
+                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
+                &median_time_past,
+            )
+            .log_err()?;
+        debug_assert!(reward_fees.is_none());
 
         tx_verifier.set_best_block(block.get_id().into());
 

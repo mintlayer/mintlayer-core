@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::BlockHeader, config::EpochIndex},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockHeader},
+        config::EpochIndex,
+    },
     primitives::H256,
 };
 use crypto::vrf::{
@@ -29,10 +32,10 @@ pub enum ProofOfStakeVRFError {
     VRFDataVerificationFailed(VRFError),
 }
 
-fn construct_transcript(
+pub fn construct_transcript(
     epoch_index: EpochIndex,
     random_seed: &H256,
-    spender_block_header: &BlockHeader,
+    block_timestamp: BlockTimestamp,
 ) -> WrappedTranscript {
     TranscriptAssembler::new(b"MintlayerStakeVRF")
         .attach(
@@ -41,7 +44,7 @@ fn construct_transcript(
         )
         .attach(
             b"Slot",
-            TranscriptComponent::U64(spender_block_header.timestamp().as_int_seconds()),
+            TranscriptComponent::U64(block_timestamp.as_int_seconds()),
         )
         .attach(b"EpochIndex", TranscriptComponent::U64(epoch_index))
         .finalize()
@@ -70,7 +73,8 @@ pub fn verify_vrf_and_get_vrf_output(
     vrf_public_key: &VRFPublicKey,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ProofOfStakeVRFError> {
-    let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
+    let transcript =
+        construct_transcript(epoch_index, random_seed, spender_block_header.timestamp());
 
     vrf_public_key
         .verify_vrf_data(transcript.clone().into(), vrf_data)
