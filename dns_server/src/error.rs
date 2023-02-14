@@ -13,17 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::types::peer_address::PeerAddress;
+use std::net::AddrParseError;
 
-/// Allow working with abstract socket address types.
-/// For example change socket port or encode for sending on wire.
-/// It's might better to completely replace abstract socket types with PeerAddress.
-pub trait TransportAddress: Sized {
-    /// Convert abstract socket address to concrete type (PeerAddress)
-    fn as_peer_address(&self) -> PeerAddress;
+use p2p::error::P2pError;
+use thiserror::Error;
+use trust_dns_client::proto::error::ProtoError;
 
-    /// Try get address back from PeerAddress.
-    ///
-    /// This may fail if the address is invalid or from another transport.
-    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self>;
+#[derive(Error, Debug)]
+pub enum DnsServerError {
+    #[error("Proto error: {0}")]
+    ProtoError(#[from] ProtoError),
+    #[error("Parse error: {0}")]
+    AddrParseError(#[from] AddrParseError),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("P2P error: {0}")]
+    P2pError(#[from] P2pError),
+    #[error("Storage error: {0}")]
+    StorageError(#[from] storage::Error),
+    #[error("Other: `{0}`")]
+    Other(&'static str),
 }

@@ -318,12 +318,14 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses()[0]);
-            assert_eq!(&peer_info.network, config.magic_bytes());
+            assert_eq!(peer_info.network, *config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(
                 peer_info.subscriptions,
-                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
+                    .into_iter()
+                    .collect()
             );
         } else {
             panic!("invalid event received");
@@ -519,12 +521,14 @@ mod tests {
         }) = conn1.poll_next().await
         {
             assert_eq!(address, conn2.local_addresses()[0]);
-            assert_eq!(&peer_info.network, config.magic_bytes());
+            assert_eq!(peer_info.network, *config.magic_bytes());
             assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
             assert_eq!(peer_info.agent, None);
             assert_eq!(
                 peer_info.subscriptions,
-                [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect()
+                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
+                    .into_iter()
+                    .collect()
             );
         } else {
             panic!("invalid event received");

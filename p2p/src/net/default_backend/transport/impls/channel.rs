@@ -56,7 +56,7 @@ impl TransportAddress for Address {
         })
     }
 
-    fn from_peer_address(address: &PeerAddress) -> Option<Self> {
+    fn from_peer_address(address: &PeerAddress, _allow_private_ips: bool) -> Option<Self> {
         match address {
             PeerAddress::Ip4(socket) => Some(std::net::Ipv4Addr::from(socket.ip).into()),
             PeerAddress::Ip6(_) => None,

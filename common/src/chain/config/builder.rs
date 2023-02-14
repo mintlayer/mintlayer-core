@@ -89,6 +89,7 @@ pub struct Builder {
     chain_type: ChainType,
     address_prefix: String,
     magic_bytes: [u8; 4],
+    p2p_port: u16,
     max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
@@ -120,6 +121,7 @@ impl Builder {
             address_prefix: chain_type.default_address_prefix().to_string(),
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
+            p2p_port: chain_type.default_p2p_port(),
             version: SemVer::new(0, 1, 0),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
@@ -157,6 +159,7 @@ impl Builder {
             address_prefix,
             coin_decimals,
             magic_bytes,
+            p2p_port,
             version,
             max_block_header_size,
             max_block_size_with_standard_txs,
@@ -201,6 +204,7 @@ impl Builder {
             address_prefix,
             coin_decimals,
             magic_bytes,
+            p2p_port,
             version,
             max_block_header_size,
             max_block_size_with_standard_txs,
@@ -241,6 +245,7 @@ impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(address_prefix: String);
     builder_method!(magic_bytes: [u8; 4]);
+    builder_method!(p2p_port: u16);
     builder_method!(max_future_block_time_offset: Duration);
     builder_method!(version: SemVer);
     builder_method!(target_block_spacing: Duration);
