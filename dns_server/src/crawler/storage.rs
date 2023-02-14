@@ -13,20 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::error::DnsServerError;
-
 pub trait DnsServerStorageRead {
-    fn get_version(&self) -> Result<Option<u32>, DnsServerError>;
+    fn get_version(&self) -> Result<Option<u32>, storage::Error>;
 
-    fn get_addresses(&self) -> Result<Vec<String>, DnsServerError>;
+    fn get_addresses(&self) -> Result<Vec<String>, storage::Error>;
 }
 
 pub trait DnsServerStorageWrite {
-    fn set_version(&mut self, version: u32) -> Result<(), DnsServerError>;
+    fn set_version(&mut self, version: u32) -> Result<(), storage::Error>;
 
-    fn add_address(&mut self, address: &str) -> Result<(), DnsServerError>;
+    fn add_address(&mut self, address: &str) -> Result<(), storage::Error>;
 
-    fn del_address(&mut self, address: &str) -> Result<(), DnsServerError>;
+    fn del_address(&mut self, address: &str) -> Result<(), storage::Error>;
 }
 
 pub trait DnsServerTransactionRo: DnsServerStorageRead {
@@ -36,7 +34,7 @@ pub trait DnsServerTransactionRo: DnsServerStorageRead {
 pub trait DnsServerTransactionRw: DnsServerStorageWrite {
     fn abort(self);
 
-    fn commit(self) -> Result<(), DnsServerError>;
+    fn commit(self) -> Result<(), storage::Error>;
 }
 
 /// Support for transactions over blockchain storage
@@ -48,10 +46,10 @@ pub trait DnsServerTransactional<'t> {
     type TransactionRw: DnsServerTransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, DnsServerError>;
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo, storage::Error>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, DnsServerError>;
+    fn transaction_rw<'s: 't>(&'s self) -> Result<Self::TransactionRw, storage::Error>;
 }
 
 pub trait DnsServerStorage: for<'tx> DnsServerTransactional<'tx> + Send {}
