@@ -230,17 +230,30 @@ impl ShallowClone for SqliteImpl {
 impl backend::BackendImpl for SqliteImpl {}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
+enum SqliteStorageMode {
+    InMemory,
+    File(PathBuf),
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
-    path: PathBuf,
+    backend: SqliteStorageMode,
 }
 
 impl Sqlite {
-    /// New Sqlite database backend
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new_in_memory() -> Self {
+        Self {
+            backend: SqliteStorageMode::InMemory,
+        }
     }
 
-    // fn open_db(self, desc: &MapDesc) -> storage_core::Result<Connection> {
+    /// New Sqlite database backend
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            backend: SqliteStorageMode::File(path),
+        }
+    }
+
     fn open_db(self, desc: DbDesc) -> rusqlite::Result<Connection> {
         let flags = OpenFlags::from_iter([
             OpenFlags::SQLITE_OPEN_FULL_MUTEX,
@@ -248,7 +261,10 @@ impl Sqlite {
             OpenFlags::SQLITE_OPEN_CREATE,
         ]);
 
-        let connection = Connection::open_with_flags(self.path, flags)?;
+        let connection = match self.backend {
+            SqliteStorageMode::InMemory => Connection::open_in_memory_with_flags(flags)?,
+            SqliteStorageMode::File(path) => Connection::open_with_flags(path, flags)?,
+        };
 
         // Set the locking mode to exclusive
         connection.pragma_update(None, "locking_mode", "exclusive")?;
@@ -291,15 +307,18 @@ impl backend::Backend for Sqlite {
     type Impl = SqliteImpl;
 
     fn open(self, desc: DbDesc) -> storage_core::Result<Self::Impl> {
-        // Attempt to create the parent storage directory
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
-        } else {
-            return Err(storage_core::error::Recoverable::Io(
-                std::io::ErrorKind::NotFound,
-                "Cannot find the parent directory".to_string(),
-            )
-            .into());
+        // Attempt to create the parent storage directory if using a file
+
+        if let SqliteStorageMode::File(ref path) = self.backend {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(error::process_io_error)?;
+            } else {
+                return Err(storage_core::error::Fatal::Io(
+                    std::io::ErrorKind::NotFound,
+                    "Cannot find the parent directory".to_string(),
+                )
+                .into());
+            }
         }
 
         let queries = desc.db_maps().transform(queries::SqliteQuery::from_desc);

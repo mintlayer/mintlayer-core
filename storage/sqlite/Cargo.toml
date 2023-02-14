@@ -14,6 +14,7 @@ rusqlite = { version = "0.28", features = ["bundled"] }
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }
 test-utils = { path = "../../test-utils" }
+utils = { path = '../../utils' }
 
 [[test]]
 name = "backend"
