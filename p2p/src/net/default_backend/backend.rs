@@ -448,11 +448,11 @@ where
             }
             Message::HeaderListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: SyncMessage::HeaderListRequest(r),
+                message: Box::new(SyncMessage::HeaderListRequest(r)),
             })?,
             Message::BlockListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockListRequest(r),
+                message: Box::new(SyncMessage::BlockListRequest(r)),
             })?,
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -468,11 +468,11 @@ where
             })?,
             Message::HeaderListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: SyncMessage::HeaderListResponse(r),
+                message: Box::new(SyncMessage::HeaderListResponse(r)),
             })?,
             Message::BlockResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: SyncMessage::BlockResponse(r),
+                message: Box::new(SyncMessage::BlockResponse(r)),
             })?,
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,

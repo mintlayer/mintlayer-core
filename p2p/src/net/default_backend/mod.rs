@@ -256,9 +256,10 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::Message { peer, message } => {
-                Ok(SyncingEvent::Message { peer, message })
-            }
+            types::SyncingEvent::Message { peer, message } => Ok(SyncingEvent::Message {
+                peer,
+                message: *message,
+            }),
             types::SyncingEvent::Announcement { peer, announcement } => {
                 Ok(SyncingEvent::Announcement {
                     peer,

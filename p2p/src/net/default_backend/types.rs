@@ -58,7 +58,7 @@ pub enum Command<T: TransportSocket> {
 pub enum SyncingEvent {
     Message {
         peer: PeerId,
-        message: SyncMessage,
+        message: Box<SyncMessage>,
     },
     Announcement {
         peer: PeerId,
