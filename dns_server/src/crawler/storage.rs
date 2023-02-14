@@ -53,3 +53,32 @@ pub trait DnsServerTransactional<'t> {
 }
 
 pub trait DnsServerStorage: for<'tx> DnsServerTransactional<'tx> + Send {}
+
+const MAX_RECOVERABLE_ERROR_RETRY_COUNT: u32 = 3;
+
+/// Try update storage, gracefully handle recoverable errors
+pub fn update_db<S, F>(storage: &S, f: F) -> Result<(), storage::Error>
+where
+    S: DnsServerStorage,
+    F: Fn(&mut <S as DnsServerTransactional<'_>>::TransactionRw) -> Result<(), storage::Error>,
+{
+    let mut recoverable_errors = 0;
+    loop {
+        let res = || -> Result<(), storage::Error> {
+            let mut tx = storage.transaction_rw()?;
+            f(&mut tx)?;
+            tx.commit()
+        }();
+
+        match res {
+            Ok(()) => return Ok(()),
+            Err(storage::Error::Recoverable(e)) => {
+                recoverable_errors += 1;
+                if recoverable_errors >= MAX_RECOVERABLE_ERROR_RETRY_COUNT {
+                    return Err(storage::Error::Recoverable(e));
+                }
+            }
+            Err(storage::Error::Fatal(e)) => return Err(storage::Error::Fatal(e)),
+        }
+    }
+}

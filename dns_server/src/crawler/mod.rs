@@ -441,9 +441,8 @@ where
                     address_data.was_reachable = true;
 
                     // New reachable address discovered
-                    let mut tx = storage.transaction_rw().expect("tx must succeed");
-                    tx.add_address(&address.to_string()).expect("adding address must succeed");
-                    tx.commit().expect("tx commit must succeed");
+                    storage::update_db(storage, |tx| tx.add_address(&address.to_string()))
+                        .expect("update_db must succeed (add_address)");
                 }
             }
             AddressState::Disconnected => {
@@ -500,9 +499,8 @@ where
         if address_data.was_reachable && address_data.fail_count >= PURGE_REACHABLE_FAIL_COUNT {
             log::debug!("purge old (once reachable) address {}", address.to_string());
 
-            let mut tx = storage.transaction_rw().expect("tx must succeed");
-            tx.del_address(&address.to_string()).expect("adding address must succeed");
-            tx.commit().expect("tx commit must succeed");
+            storage::update_db(storage, |tx| tx.del_address(&address.to_string()))
+                .expect("update_db must succeed (retain_address)");
 
             return false;
         }
