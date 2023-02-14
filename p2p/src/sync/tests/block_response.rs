@@ -30,10 +30,7 @@ use crate::{
         types::PeerId,
         DefaultNetworkingService,
     },
-    sync::{
-        peer,
-        tests::{make_sync_manager, register_peer, MakeTestPeerId},
-    },
+    sync::tests::{make_sync_manager, register_peer, MakeTestPeerId},
     ConnectivityService, NetworkingService, SyncingMessagingService,
 };
 

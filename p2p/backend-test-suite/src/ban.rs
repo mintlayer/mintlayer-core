@@ -165,8 +165,8 @@ where
 
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();
-        let res = sync1.process_block_response(remote_id, vec![blocks[2].clone()]).await;
-        sync1.handle_error(remote_id, res).await.unwrap();
+        let res = sync1.handle_block_response(remote_id, blocks[2].clone()).await;
+        sync1.handle_result(remote_id, res).await.unwrap();
     });
 
     if let Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) = rx_peer_manager.recv().await

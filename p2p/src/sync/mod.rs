@@ -492,6 +492,7 @@ where
             .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
     }
 
+    // TODO: This shouldn't be public.
     /// Handles a result of message processing.
     ///
     /// There are three possible types of errors:
@@ -500,7 +501,7 @@ where
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
-    async fn handle_result(&mut self, peer: T::PeerId, result: Result<()>) -> Result<()> {
+    pub async fn handle_result(&mut self, peer: T::PeerId, result: Result<()>) -> Result<()> {
         let error = match result {
             Ok(()) => return Ok(()),
             Err(e) => e,

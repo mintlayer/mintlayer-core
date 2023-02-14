@@ -74,42 +74,38 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    sync1
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x01; 32])),
-                BlockTimestamp::from_int_seconds(1337u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x01; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 
     // Poll an event from the network for server2.
-    let block = match sync2.poll_next().await.unwrap() {
+    let header = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer: _,
             announcement: Announcement::Block(block),
         } => block,
         _ => panic!("Unexpected event"),
     };
-    assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
-    sync2
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x02; 32])),
-                BlockTimestamp::from_int_seconds(1338u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    assert_eq!(header.timestamp().as_int_seconds(), 1337u64);
+    assert_eq!(&header, block.header());
 
-    let block = match sync1.poll_next().await.unwrap() {
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x02; 32])),
+        BlockTimestamp::from_int_seconds(1338u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+
+    let header = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer: _,
             announcement: Announcement::Block(block),
@@ -117,6 +113,7 @@ where
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
+    assert_eq!(&header, block.header());
 }
 
 async fn block_announcement_no_subscription<T, N, A>()
@@ -211,16 +208,15 @@ where
     )
     .expect("invalid witness count")];
 
-    let message = Announcement::Block(
-        Block::new(
-            txs,
-            Id::new(H256([0x04; 32])),
-            BlockTimestamp::from_int_seconds(1337u64),
-            ConsensusData::None,
-            BlockReward::new(Vec::new()),
-        )
-        .unwrap(),
-    );
+    let block = Block::new(
+        txs,
+        Id::new(H256([0x04; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    let message = Announcement::Block(block.header().clone());
     let encoded_size = message.encode().len();
 
     assert_eq!(

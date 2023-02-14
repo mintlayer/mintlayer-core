@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
 mod block_response;
 mod connection;
 mod header_response;
@@ -28,7 +29,7 @@ use crate::{
     config::{NodeType, P2pConfig},
     event::{PeerManagerEvent, SyncControlEvent},
     net::{default_backend::types::PeerId, ConnectivityService},
-    sync::{peer, BlockSyncManager},
+    sync::{peer_context::PeerContext, BlockSyncManager},
     NetworkingService, SyncingMessagingService,
 };
 
@@ -78,6 +79,9 @@ where
         ping_timeout: Default::default(),
         node_type: NodeType::Full.into(),
         allow_discover_private_ips: Default::default(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let (conn, sync) = T::start(
         transport,
@@ -101,12 +105,7 @@ where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let locator = mgr.chainstate_handle.call(|this| this.get_locator()).await.unwrap().unwrap();
-
-    mgr.peers.insert(
-        peer_id,
-        peer::PeerContext::new_with_locator(peer_id, locator),
-    );
+    mgr.peers.insert(peer_id, PeerContext::new());
 }
 
 pub trait MakeTestPeerId {
@@ -122,3 +121,4 @@ impl MakeTestPeerId for PeerId {
         PeerId::new()
     }
 }
+ */

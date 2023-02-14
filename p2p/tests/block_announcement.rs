@@ -90,7 +90,9 @@ where
                 ConsensusData::None,
                 BlockReward::new(Vec::new()),
             )
-            .unwrap(),
+            .unwrap()
+            .header()
+            .clone(),
         ))
         .unwrap();
 
@@ -99,7 +101,7 @@ where
     assert!(matches!(
         event,
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement: _
         }
     ));
@@ -125,7 +127,7 @@ where
     assert!(matches!(
         event,
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement: _
         }
     ));

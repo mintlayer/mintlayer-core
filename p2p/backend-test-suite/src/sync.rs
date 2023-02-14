@@ -170,14 +170,14 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let blocks = vec![mgr2_handle
+                let block = mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
                     .unwrap()
-                    .unwrap()];
+                    .unwrap();
                 mgr2.handle_mut()
-                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
                     .unwrap();
             }
             SyncingEvent::Message {
@@ -257,8 +257,7 @@ where
                 peer,
                 message: SyncMessage::BlockResponse(response),
             } => {
-                assert_eq!(response.blocks().len(), 1);
-                let block = response.blocks()[0].clone();
+                let block = response.into_block();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -378,22 +377,21 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let blocks = vec![mgr2_handle
+                let block = mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
                     .unwrap()
-                    .unwrap()];
+                    .unwrap();
                 mgr2.handle_mut()
-                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
                     .unwrap();
             }
             SyncingEvent::Message {
                 peer,
                 message: SyncMessage::BlockResponse(response),
             } => {
-                assert_eq!(response.blocks().len(), 1);
-                let block = response.blocks()[0].clone();
+                let block = response.into_block();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -511,22 +509,21 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let blocks = vec![mgr2_handle
+                let block = mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
                     .unwrap()
-                    .unwrap()];
+                    .unwrap();
                 mgr2.handle_mut()
-                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
                     .unwrap();
             }
             SyncingEvent::Message {
                 peer,
                 message: SyncMessage::BlockResponse(response),
             } => {
-                assert_eq!(response.blocks().len(), 1);
-                let block = response.blocks()[0].clone();
+                let block = response.into_block();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -662,12 +659,14 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
-                    .call(move |this| this.get_block(id))
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .unwrap()]));
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(
+                    mgr_handle
+                        .call(move |this| this.get_block(id))
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap(),
+                ));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_message(peer, msg).unwrap();
@@ -798,12 +797,14 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
-                    .call(move |this| this.get_block(id))
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .unwrap()]));
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(
+                    mgr_handle
+                        .call(move |this| this.get_block(id))
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap(),
+                ));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_message(peer, msg).unwrap();
@@ -942,12 +943,14 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = SyncMessage::BlockResponse(BlockResponse::new(vec![mgr_handle
-                    .call(move |this| this.get_block(id))
-                    .await
-                    .unwrap()
-                    .unwrap()
-                    .unwrap()]));
+                let msg = SyncMessage::BlockResponse(BlockResponse::new(
+                    mgr_handle
+                        .call(move |this| this.get_block(id))
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .unwrap(),
+                ));
 
                 if dest_peer_id == peer_info21.peer_id {
                     mgr2.handle_mut().send_message(peer, msg).unwrap();
@@ -1065,14 +1068,14 @@ where
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let blocks = vec![mgr2_handle
+                let block = mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
                     .unwrap()
-                    .unwrap()];
+                    .unwrap();
                 mgr2.handle_mut()
-                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(blocks)))
+                    .send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)))
                     .unwrap();
             }
             SyncingEvent::Message {
@@ -1229,20 +1232,20 @@ where
     match mgr.handle_mut().poll_next().await.unwrap() {
         SyncingEvent::Message { peer, message } => match message {
             SyncMessage::HeaderListRequest(request) => {
-                mgr.process_header_request(peer, request.into_locator()).await?;
+                mgr.handle_header_request(peer, request.into_locator()).await?;
             }
             SyncMessage::BlockListRequest(request) => {
-                mgr.process_block_request(peer, request.into_block_ids()).await?;
+                mgr.handle_block_request(peer, request.into_block_ids()).await?;
             }
             SyncMessage::HeaderListResponse(response) => {
-                mgr.process_header_response(peer, response.into_headers()).await?;
+                mgr.handle_header_response(peer, response.into_headers()).await?;
             }
-            SyncMessage::BlockListResponse(response) => {
-                mgr.process_block_response(peer, response.into_blocks()).await?;
+            SyncMessage::BlockResponse(response) => {
+                mgr.handle_block_response(peer, response.into_block()).await?;
             }
         },
         SyncingEvent::Announcement { peer, announcement } => {
-            mgr.process_announcement(peer, announcement).await?;
+            mgr.handle_announcement(peer, announcement).await?;
         }
     }
 

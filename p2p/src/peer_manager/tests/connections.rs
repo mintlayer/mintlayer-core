@@ -687,6 +687,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -714,6 +717,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -781,6 +787,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -809,6 +818,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
@@ -830,6 +842,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
+        header_limit: Default::default(),
+        max_locator_size: Default::default(),
+        requested_blocks_limit: Default::default(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),

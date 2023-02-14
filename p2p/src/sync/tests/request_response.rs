@@ -51,20 +51,20 @@ where
     // connect the two managers together so that they can exchange messages
     let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
 
-    mgr1.peer_sync_handle
+    mgr1.messaging_handle
         .send_message(
             peer_info2.peer_id,
             SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .unwrap();
 
-    if let Ok(SyncingEvent::Message { peer, message }) = mgr2.peer_sync_handle.poll_next().await {
+    if let Ok(SyncingEvent::Message { peer, message }) = mgr2.messaging_handle.poll_next().await {
         assert_eq!(
             message,
             SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
         );
 
-        mgr2.peer_sync_handle
+        mgr2.messaging_handle
             .send_message(
                 peer,
                 SyncMessage::HeaderListResponse(HeaderListResponse::new(vec![])),
@@ -110,7 +110,7 @@ where
     let (_address, _peer_info1, peer_info2) = connect_services::<T>(&mut conn1, &mut conn2).await;
     let mut requests = 0;
 
-    mgr1.peer_sync_handle
+    mgr1.messaging_handle
         .send_message(
             peer_info2.peer_id,
             SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
@@ -118,7 +118,7 @@ where
         .unwrap();
     requests += 1;
 
-    mgr1.peer_sync_handle
+    mgr1.messaging_handle
         .send_message(
             peer_info2.peer_id,
             SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
@@ -129,10 +129,10 @@ where
     assert_eq!(requests, 2);
 
     for i in 0..2 {
-        match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
+        match timeout(Duration::from_secs(15), mgr2.messaging_handle.poll_next()).await {
             Ok(event) => match event {
                 Ok(SyncingEvent::Message { peer, .. }) => {
-                    mgr2.peer_sync_handle
+                    mgr2.messaging_handle
                         .send_message(
                             peer,
                             SyncMessage::HeaderListResponse(HeaderListResponse::new(vec![])),
@@ -146,7 +146,7 @@ where
     }
 
     for i in 0..2 {
-        match timeout(Duration::from_secs(15), mgr1.peer_sync_handle.poll_next()).await {
+        match timeout(Duration::from_secs(15), mgr1.messaging_handle.poll_next()).await {
             Ok(event) => match event {
                 Ok(SyncingEvent::Message { .. }) => {
                     requests -= 1;
