@@ -159,14 +159,22 @@ pub fn make_p2p_transport() -> NoiseTcpTransport {
     NoiseTcpTransport::new(stream_adapter, base_transport)
 }
 
-fn get_p2p_bind_addresses(bind_addresses: &[String], p2p_port: u16) -> Result<Vec<SocketAddr>> {
+fn get_p2p_bind_addresses<S: AsRef<str>>(
+    bind_addresses: &[S],
+    p2p_port: u16,
+) -> Result<Vec<SocketAddr>> {
     if !bind_addresses.is_empty() {
         bind_addresses
             .iter()
             .map(|address| {
-                address.parse::<<P2pNetworkingService as NetworkingService>::Address>().map_err(
-                    |_| P2pError::ConversionError(ConversionError::InvalidAddress(address.clone())),
-                )
+                address
+                    .as_ref()
+                    .parse::<<P2pNetworkingService as NetworkingService>::Address>()
+                    .map_err(|_| {
+                        P2pError::ConversionError(ConversionError::InvalidAddress(
+                            address.as_ref().to_owned(),
+                        ))
+                    })
             })
             .collect::<Result<Vec<_>>>()
     } else {
