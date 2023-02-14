@@ -266,21 +266,7 @@ where
         } else {
             log::info!("incompatible peer detected at {}", address.to_string());
 
-            self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
-
-            let address_data = self
-                .addresses
-                .get_mut(&address)
-                .expect("address must be known (handle_outbound_accepted)");
-
-            Self::change_address_state(
-                &self.config,
-                &address,
-                address_data,
-                AddressState::Disconnected,
-                &mut self.storage,
-                &self.command_tx,
-            );
+            self.disconnect_invalid_peer(peer_info.peer_id, address);
         }
     }
 
@@ -542,7 +528,7 @@ where
 
     /// Remove existing outbound peer
     fn remove_outbound_peer(&mut self, peer_id: N::PeerId) {
-        log::debug!("outbound peer removed, peer_id: {}", peer_id,);
+        log::debug!("outbound peer removed, peer_id: {}", peer_id);
 
         let address = self
             .outbound_peers
@@ -553,6 +539,27 @@ where
             .addresses
             .get_mut(&address)
             .expect("address must be known (remove_outbound_peer)");
+
+        Self::change_address_state(
+            &self.config,
+            &address,
+            address_data,
+            AddressState::Disconnected,
+            &mut self.storage,
+            &self.command_tx,
+        );
+    }
+
+    /// Invalid peer connected and should be disconnected
+    fn disconnect_invalid_peer(&mut self, peer_id: N::PeerId, address: N::Address) {
+        log::debug!("disconnect invalid peer, peer_id: {}", peer_id);
+
+        self.conn.disconnect(peer_id).expect("disconnect must succeed");
+
+        let address_data = self
+            .addresses
+            .get_mut(&address)
+            .expect("address must be known (handle_outbound_accepted)");
 
         Self::change_address_state(
             &self.config,
