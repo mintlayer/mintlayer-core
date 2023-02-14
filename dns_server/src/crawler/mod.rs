@@ -559,7 +559,7 @@ where
         let address_data = self
             .addresses
             .get_mut(&address)
-            .expect("address must be known (handle_outbound_accepted)");
+            .expect("address must be known (disconnect_invalid_peer)");
 
         Self::change_address_state(
             &self.config,
