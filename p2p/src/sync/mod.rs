@@ -445,7 +445,7 @@ where
     ///
     /// The `HeaderListRequest` message is sent to newly connected peers.
     pub async fn register_peer(&mut self, peer: T::PeerId) -> Result<()> {
-        log::debug!("register peer {peer} to sync manager");
+        log::debug!("Register peer {peer} to sync manager");
 
         self.request_headers(peer).await?;
         match self.peers.insert(peer, PeerContext::new()) {
@@ -458,12 +458,14 @@ where
     // TODO: This shouldn't be public.
     /// Removes the state (`PeerContext`) of the given peer.
     pub fn unregister_peer(&mut self, peer: T::PeerId) {
-        log::debug!("unregister peer {peer} from sync manager");
+        log::debug!("Unregister peer {peer} from sync manager");
 
         // Remove the queued block responses associated with the disconnected peer.
         self.blocks_queue.retain(|(p, _)| p != &peer);
 
-        self.peers.remove(&peer);
+        if self.peers.remove(&peer).is_some() {
+            log::warn!("Unregistering unknown peer: {peer}");
+        }
     }
 
     /// Announces the header of a new block to peers.

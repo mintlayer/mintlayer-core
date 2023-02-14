@@ -13,13 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod peer_events;
+
 use std::{
     net::{IpAddr, SocketAddr},
     sync::Arc,
+    time::Duration,
 };
 
 use async_trait::async_trait;
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::{
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    time,
+};
 
 use common::chain::{config::create_mainnet, ChainConfig};
 use p2p_test_utils::start_chainstate;
@@ -32,10 +38,6 @@ use crate::{
 
 // TODO: FIXME:
 /*
-   - connect/disconnect peer:
-       - connect twice
-       - disconnect non-existing?..
-
    - handle announcement:
        - valid header
        - invalid header (many cases)
@@ -46,6 +48,9 @@ use crate::{
        - header list response???
        - block response
 */
+
+/// A timeout for blocking calls.
+const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A networking service mock.
 ///
@@ -96,7 +101,10 @@ impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMo
     }
 
     async fn poll_next(&mut self) -> Result<SyncingEvent<NetworkingServiceStub>> {
-        Ok(self.events_receiver.recv().await.unwrap())
+        Ok(time::timeout(TIMEOUT, self.events_receiver.recv())
+            .await
+            .expect("Failed to receive event in time")
+            .unwrap())
     }
 }
 
@@ -112,15 +120,41 @@ struct SyncManagerHandle {
 }
 
 impl SyncManagerHandle {
-    fn connect_peer(&mut self, peer: PeerId) {
+    /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
+    fn try_connect_peer(&mut self, peer: PeerId) {
         self.peer_event_sender.send(SyncControlEvent::Connected(peer)).unwrap();
     }
 
+    /// Connects a peer and checks that the header list request is sent to that peer.
+    async fn connect_peer(&mut self, peer: PeerId) {
+        self.try_connect_peer(peer);
+
+        let (sent_to, message) = self.message().await;
+        assert_eq!(peer, sent_to);
+        assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+    }
+
+    /// Sends the `SyncControlEvent::Disconnected` event.
+    fn disconnect_peer(&mut self, peer: PeerId) {
+        self.peer_event_sender.send(SyncControlEvent::Disconnected(peer)).unwrap();
+    }
+
     async fn message(&mut self) -> (PeerId, SyncMessage) {
-        match self.sync_event_receiver.recv().await.unwrap() {
+        match time::timeout(TIMEOUT, self.sync_event_receiver.recv())
+            .await
+            .expect("Failed to receive message in time")
+            .unwrap()
+        {
             SyncingEvent::Message { peer, message } => (peer, message),
             e => panic!("Unexpected event: {e:?}"),
         }
+    }
+
+    async fn error(&mut self) -> P2pError {
+        time::timeout(TIMEOUT, self.error_receiver.recv())
+            .await
+            .expect("Failed to receive error in time")
+            .unwrap()
     }
 }
 
@@ -162,18 +196,6 @@ async fn start_sync_manager() -> SyncManagerHandle {
         sync_event_receiver: handle_receiver,
         error_receiver,
     }
-}
-
-#[tokio::test]
-async fn connect_peer() {
-    let mut handle = start_sync_manager().await;
-
-    let peer = PeerId::new();
-    handle.connect_peer(peer);
-
-    let (sent_to, message) = handle.message().await;
-    assert_eq!(peer, sent_to);
-    assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
 }
 
 // fn make_syncing_messaging_mock<N: NetworkingService>() -> (
