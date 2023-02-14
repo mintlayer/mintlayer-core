@@ -687,9 +687,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -717,9 +717,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -787,9 +787,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -818,9 +818,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
@@ -842,9 +842,9 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),
@@ -885,7 +885,7 @@ where
 #[tokio::test]
 async fn discovered_node_tcp() {
     // With TCP all listening addresses are discovered and multiple connections are made:
-    // For example A mades outbound connections to B and C and accepts connections from B and C.
+    // For example, A makes outbound connections to B and C and accepts connections from B and C.
     // There will be 4 connections reported for A.
     discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(4).await;
 }

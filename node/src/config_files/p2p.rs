@@ -85,9 +85,9 @@ impl From<P2pConfigFile> for P2pConfig {
             ping_timeout: c.ping_timeout.map(Duration::from_secs).into(),
             node_type: c.node_type.map(Into::into).into(),
             allow_discover_private_ips: Default::default(),
-            header_limit: Default::default(),
-            max_locator_size: Default::default(),
-            requested_blocks_limit: Default::default(),
+            header_count_limit: Default::default(),
+            max_locator_count: Default::default(),
+            max_request_blocks_count: Default::default(),
         }
     }
 }

@@ -168,7 +168,7 @@ impl BanScore for P2pError {
             P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
             P2pError::SubsystemFailure => 0,
-            P2pError::ChainstateError(_) => 0,
+            P2pError::ChainstateError(_) => 20,
             P2pError::StorageFailure(_) => 0,
             P2pError::ConversionError(err) => err.ban_score(),
             // Could be a noise protocol violation but also a network error, do not ban peer

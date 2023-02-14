@@ -131,7 +131,8 @@ where
                         self.handle_result(peer, res).await?;
                     },
                     SyncingEvent::Announcement{ peer, announcement } => {
-                        self.handle_announcement(peer, announcement).await?;
+                        let res = self.handle_announcement(peer, announcement).await;
+                        self.handle_result(peer, res).await?;
                     }
                 },
                 event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
@@ -204,10 +205,10 @@ where
         // Check that the peer is connected.
         self.peers.get(&peer).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if locator.len() > self.p2p_config.max_locator_size.clone().into() {
+        if locator.len() > self.p2p_config.max_locator_count.clone().into() {
             return Err(P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(
                 locator.len(),
-                self.p2p_config.max_locator_size.clone().into(),
+                self.p2p_config.max_locator_count.clone().into(),
             )));
         }
         log::trace!("locator: {locator:#?}");
@@ -219,7 +220,7 @@ where
         }
 
         let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
-        debug_assert!(headers.len() <= self.p2p_config.header_limit.clone().into());
+        debug_assert!(headers.len() <= self.p2p_config.header_count_limit.clone().into());
         self.messaging_handle.send_message(
             peer,
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
@@ -247,7 +248,7 @@ where
             return Ok(());
         }
 
-        let requested_blocks_limit = self.p2p_config.requested_blocks_limit.clone().into();
+        let requested_blocks_limit = self.p2p_config.max_request_blocks_count.clone().into();
         if block_ids.len() > requested_blocks_limit {
             return Err(P2pError::ProtocolError(
                 ProtocolError::BlocksRequestLimitExceeded(block_ids.len(), requested_blocks_limit),
@@ -288,11 +289,11 @@ where
             )));
         }
 
-        if headers.len() > self.p2p_config.header_limit.clone().into() {
+        if headers.len() > self.p2p_config.header_count_limit.clone().into() {
             return Err(P2pError::ProtocolError(
                 ProtocolError::HeadersLimitExceeded(
                     headers.len(),
-                    self.p2p_config.header_limit.clone().into(),
+                    self.p2p_config.header_count_limit.clone().into(),
                 ),
             ));
         }
@@ -328,7 +329,7 @@ where
         }
 
         let is_max_headers =
-            headers.len() == Into::<usize>::into(self.p2p_config.header_limit.clone());
+            headers.len() == Into::<usize>::into(self.p2p_config.header_count_limit.clone());
         let headers = self
             .chainstate_handle
             .call(|c| c.filter_already_existing_blocks(headers))
@@ -412,7 +413,7 @@ where
         peer: T::PeerId,
         header: BlockHeader,
     ) -> Result<()> {
-        log::debug!("Block announcement from {peer} peer: {header:?}");
+        log::debug!("Block announcement from peer {peer}: {header:?}");
 
         let peer_state = self
             .peers
@@ -509,7 +510,10 @@ where
 
         match error {
             // A protocol error - increase the ban score of a peer.
-            P2pError::ProtocolError(e) => {
+            e @ (P2pError::ProtocolError(_)
+            | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
+                BlockError::CheckBlockFailed(_),
+            ))) => {
                 log::debug!(
                     "Adjusting the '{peer}' peer score by {}: {:?}",
                     e.ban_score(),
@@ -550,7 +554,7 @@ where
     /// Sends a header list request to the given peer.
     async fn request_headers(&mut self, peer: T::PeerId) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        debug_assert!(locator.len() <= self.p2p_config.max_locator_size.clone().into());
+        debug_assert!(locator.len() <= self.p2p_config.max_locator_count.clone().into());
 
         self.messaging_handle
             .send_message(
@@ -571,9 +575,9 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         debug_assert!(peer_state.known_headers.is_empty());
-        if headers.len() > self.p2p_config.requested_blocks_limit.clone().into() {
+        if headers.len() > self.p2p_config.max_request_blocks_count.clone().into() {
             peer_state.known_headers =
-                headers.split_off(self.p2p_config.requested_blocks_limit.clone().into());
+                headers.split_off(self.p2p_config.max_request_blocks_count.clone().into());
         }
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();

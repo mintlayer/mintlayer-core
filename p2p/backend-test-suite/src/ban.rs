@@ -17,6 +17,11 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
+use common::{
+    chain::block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
+    primitives::Idable,
+};
+
 use p2p::{
     config::P2pConfig,
     event::PeerManagerEvent,
@@ -74,9 +79,15 @@ where
 
     let (_address, _peer_info1, peer_info2) = connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    // create few blocks so `sync2` has something to send to `sync1`
-    let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
-    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&chain_config), best_block, 3);
+    // Create a block with an invalid timestamp.
+    let block = Block::new(
+        Vec::new(),
+        chain_config.genesis_block().get_id().into(),
+        BlockTimestamp::from_int_seconds(1),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
 
     tokio::spawn(async move {
         sync1.register_peer(peer_info2.peer_id).await.unwrap();
@@ -99,15 +110,13 @@ where
             )
             .unwrap();
 
-        sync2
-            .make_announcement(Announcement::Block(blocks[2].header().clone()))
-            .unwrap();
+        sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
     });
 
     match rx_peer_manager.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
             assert_eq!(peer_id, peer_info2.peer_id);
-            assert_eq!(score, 100);
+            assert_eq!(score, 20);
         }
         e => panic!("invalid event received: {e:?}"),
     }
@@ -172,6 +181,6 @@ where
     if let Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) = rx_peer_manager.recv().await
     {
         assert_eq!(remote_id, peer_id);
-        assert_eq!(score, 100);
+        assert_eq!(score, 20);
     }
 }

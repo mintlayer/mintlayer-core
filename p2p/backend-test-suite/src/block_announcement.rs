@@ -17,7 +17,11 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::{
     chain::{
-        block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
+        block::{
+            consensus_data::{ConsensusData, PoSData},
+            timestamp::BlockTimestamp,
+            Block, BlockReward,
+        },
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype,
@@ -26,7 +30,8 @@ use common::{
         transaction::Transaction,
         TxInput,
     },
-    primitives::{Id, H256},
+    primitives::{Compact, Id, H256},
+    Uint256,
 };
 use serialization::Encode;
 
@@ -134,9 +139,9 @@ where
         ping_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
-        header_limit: Default::default(),
-        max_locator_size: Default::default(),
-        requested_blocks_limit: Default::default(),
+        header_count_limit: Default::default(),
+        max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
@@ -196,23 +201,17 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    let input = TxInput::new(config.genesis_block_id().into(), 0);
     let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
     ))];
-    let txs = vec![SignedTransaction::new(
-        Transaction::new(0, vec![input], vec![], 0).unwrap(),
-        signatures,
-    )
-    .expect("invalid witness count")];
-
+    let pos = PoSData::new(Vec::new(), signatures, Compact::from(Uint256::from_u64(0)));
     let block = Block::new(
-        txs,
+        Vec::new(),
         Id::new(H256([0x04; 32])),
         BlockTimestamp::from_int_seconds(1337u64),
-        ConsensusData::None,
+        ConsensusData::PoS(pos),
         BlockReward::new(Vec::new()),
     )
     .unwrap();
