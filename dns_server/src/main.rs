@@ -68,12 +68,12 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
     let crawler_config = CrawlerConfig {
         add_node: config.add_node.clone(),
-        network: *chain_config.magic_bytes(),
         p2p_port: chain_config.p2p_port(),
     };
 
     let mut crawler = Crawler::<p2p::P2pNetworkingService, _>::new(
         crawler_config,
+        chain_config,
         conn,
         sync,
         storage,

@@ -30,9 +30,11 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 
+use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 use p2p::{
@@ -104,14 +106,15 @@ struct AddressData {
 pub struct CrawlerConfig {
     pub add_node: Vec<String>,
 
-    pub network: [u8; 4],
-
     pub p2p_port: u16,
 }
 
 pub struct Crawler<N: NetworkingService, S> {
     /// Crawler config
     config: CrawlerConfig,
+
+    /// Chain config
+    chain_config: Arc<ChainConfig>,
 
     /// Backend's ConnectivityHandle
     conn: N::ConnectivityHandle,
@@ -140,6 +143,7 @@ where
 {
     pub fn new(
         config: CrawlerConfig,
+        chain_config: Arc<ChainConfig>,
         conn: N::ConnectivityHandle,
         sync: N::SyncingMessagingHandle,
         storage: S,
@@ -186,6 +190,7 @@ where
 
         Ok(Self {
             config,
+            chain_config,
             conn,
             sync,
             addresses,
@@ -252,7 +257,7 @@ where
         peer_info: PeerInfo<N::PeerId>,
         _receiver_address: Option<PeerAddress>,
     ) {
-        let is_compatible = peer_info.is_compatible(self.config.network);
+        let is_compatible = peer_info.is_compatible(&self.chain_config);
 
         if is_compatible {
             log::info!("successfully connected to {}", address.to_string());
@@ -313,6 +318,8 @@ where
 
     fn handle_misbehaved(&mut self, _peer_id: N::PeerId, _error: P2pError) {
         // Ignore all misbehave reports
+
+        // TODO: Should we ban peers when they send unexpected messages?
     }
 
     fn handle_conn_event(&mut self, event: ConnectivityEvent<N>) {

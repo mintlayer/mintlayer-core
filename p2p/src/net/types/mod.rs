@@ -18,7 +18,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use common::primitives::semver::SemVer;
+use common::{chain::ChainConfig, primitives::semver::SemVer};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -61,9 +61,9 @@ pub struct PeerInfo<P> {
 }
 
 impl<P> PeerInfo<P> {
-    pub fn is_compatible(&self, network: [u8; 4]) -> bool {
+    pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
         // TODO: Check version here
-        self.network == network
+        self.network == *chain_config.magic_bytes()
     }
 }
 

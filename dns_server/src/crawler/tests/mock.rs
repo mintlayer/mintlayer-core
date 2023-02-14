@@ -25,7 +25,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::primitives::semver::SemVer;
+use common::{chain::ChainConfig, primitives::semver::SemVer};
 use p2p::{
     config::P2pConfig,
     error::{DialError, P2pError},
@@ -45,7 +45,7 @@ use crate::{
 };
 
 pub struct TestNode {
-    pub network: [u8; 4],
+    pub chain_config: Arc<ChainConfig>,
 }
 
 #[derive(Clone)]
@@ -62,7 +62,7 @@ impl MockStateRef {
         let old = self.online.lock().unwrap().insert(
             ip,
             TestNode {
-                network: self.crawler_config.network,
+                chain_config: Arc::new(common::chain::config::create_mainnet()),
             },
         );
         assert!(old.is_none());
@@ -72,7 +72,7 @@ impl MockStateRef {
         let old = self.online.lock().unwrap().insert(
             ip,
             TestNode {
-                network: [255, 255, 255, 255],
+                chain_config: Arc::new(common::chain::config::create_regtest()),
             },
         );
         assert!(old.is_none());
@@ -136,7 +136,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
             let peer_id = PeerId::new();
             let peer_info = PeerInfo {
                 peer_id,
-                network: node.network,
+                network: *node.chain_config.magic_bytes(),
                 version: SemVer::new(1, 2, 3),
                 agent: None,
                 subscriptions: BTreeSet::new(),
@@ -217,7 +217,6 @@ pub fn test_crawler(
     let add_node = add_node.iter().map(ToString::to_string).collect();
     let crawler_config = CrawlerConfig {
         add_node,
-        network: [1, 2, 3, 4],
         p2p_port: 3031,
     };
 
@@ -239,10 +238,17 @@ pub fn test_crawler(
     let store = DnsServerStorageImpl::new(storage).unwrap();
 
     let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
 
-    let crawler =
-        Crawler::<MockNetworkingService, _>::new(crawler_config, conn, sync, store, command_tx)
-            .unwrap();
+    let crawler = Crawler::<MockNetworkingService, _>::new(
+        crawler_config,
+        chain_config,
+        conn,
+        sync,
+        store,
+        command_tx,
+    )
+    .unwrap();
 
     let time_getter = P2pTestTimeGetter::new();
 
