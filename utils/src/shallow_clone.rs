@@ -15,20 +15,64 @@
 
 //! Marker trait for shallow clones
 
+use std::marker::PhantomData;
+
+use crate::const_value::ConstValue;
+use crate::sync::Arc;
+
 /// Shallow cloning
 ///
-/// This is a marker trait that signifies that the `clone` method performs a shallow clone. I.e.
-/// `Self` is some sort of reference, smart pointer or handle and cloning it just duplicates the
-/// handle without cloning the contents.
-pub trait ShallowClone: Clone {}
+/// This is a trait that is implemented for types that can be cloned without duplicating a state;
+/// this applies to references, pointers, and smart pointers, and constants
+pub trait ShallowClone: Clone {
+    fn shallow_clone(&self) -> Self;
+}
 
 // Some impls for types from the standard library
-impl<T> ShallowClone for &T {}
-impl<T> ShallowClone for &[T] {}
-impl<T> ShallowClone for *const T {}
-impl<T> ShallowClone for *mut T {}
-impl<T> ShallowClone for std::rc::Rc<T> {}
-impl<T> ShallowClone for std::sync::Arc<T> {}
+impl<T> ShallowClone for &T {
+    fn shallow_clone(&self) -> Self {
+        self
+    }
+}
+impl<T> ShallowClone for &[T] {
+    fn shallow_clone(&self) -> Self {
+        self
+    }
+}
+impl<T> ShallowClone for *const T {
+    fn shallow_clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> ShallowClone for *mut T {
+    fn shallow_clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> ShallowClone for std::rc::Rc<T> {
+    fn shallow_clone(&self) -> Self {
+        self.clone()
+    }
+}
+impl<T> ShallowClone for Arc<T> {
+    fn shallow_clone(&self) -> Self {
+        self.clone()
+    }
+}
+
+impl<T> ShallowClone for PhantomData<T> {
+    fn shallow_clone(&self) -> Self {
+        *self
+    }
+}
+
+/// ShallowClone for `ConstValue` is OK because it doesn't break the contract of ShallowClone,
+/// where a new state isn't created when it gets cloned
+impl<T: Clone> ShallowClone for ConstValue<T> {
+    fn shallow_clone(&self) -> Self {
+        self.clone()
+    }
+}
 
 #[cfg(test)]
 mod impl_checks {
