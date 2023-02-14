@@ -122,7 +122,7 @@ pub struct Crawler<N: NetworkingService, S> {
     /// Map of all known addresses (including currently unreachable)
     addresses: BTreeMap<N::Address, AddressData>,
 
-    /// Map of all currently connected peers
+    /// Map of all currently connected outbound peers
     outbound_peers: BTreeMap<N::PeerId, N::Address>,
 
     /// Storage implementation
@@ -252,29 +252,21 @@ where
         peer_info: PeerInfo<N::PeerId>,
         _receiver_address: Option<PeerAddress>,
     ) {
-        let address_data = self
-            .addresses
-            .get_mut(&address)
-            .expect("address must be known (handle_outbound_accepted)");
         let is_compatible = peer_info.is_compatible(self.config.network);
 
         if is_compatible {
             log::info!("successfully connected to {}", address.to_string());
 
-            self.outbound_peers.insert(peer_info.peer_id, address.clone());
-
-            Self::change_address_state(
-                &self.config,
-                &address,
-                address_data,
-                AddressState::Connected,
-                &mut self.storage,
-                &self.command_tx,
-            );
+            self.create_outbound_peer(peer_info.peer_id, address);
         } else {
             log::info!("incompatible peer detected at {}", address.to_string());
 
             self.conn.disconnect(peer_info.peer_id).expect("disconnect must succeed");
+
+            let address_data = self
+                .addresses
+                .get_mut(&address)
+                .expect("address must be known (handle_outbound_accepted)");
 
             Self::change_address_state(
                 &self.config,
@@ -314,20 +306,8 @@ where
 
     fn handle_connection_closed(&mut self, peer_id: N::PeerId) {
         log::debug!("connection from peer {} closed", peer_id);
-        if let Some(address) = self.outbound_peers.remove(&peer_id) {
-            let address_data = self
-                .addresses
-                .get_mut(&address)
-                .expect("address must be known (handle_connection_closed)");
-
-            Self::change_address_state(
-                &self.config,
-                &address,
-                address_data,
-                AddressState::Disconnected,
-                &mut self.storage,
-                &self.command_tx,
-            );
+        if self.outbound_peers.get(&peer_id).is_some() {
+            self.remove_outbound_peer(peer_id);
         }
     }
 
@@ -530,6 +510,53 @@ where
         }
 
         true
+    }
+
+    /// Create new outbound peer
+    fn create_outbound_peer(&mut self, peer_id: N::PeerId, address: N::Address) {
+        log::debug!(
+            "outbound peer created, peer_id: {}, address: {}",
+            peer_id,
+            address.to_string()
+        );
+
+        let address_data =
+            self.addresses.get_mut(&address).expect("address must be known (create_peer)");
+
+        self.outbound_peers.insert(peer_id, address.clone());
+
+        Self::change_address_state(
+            &self.config,
+            &address,
+            address_data,
+            AddressState::Connected,
+            &mut self.storage,
+            &self.command_tx,
+        );
+    }
+
+    /// Remove existing outbound peer
+    fn remove_outbound_peer(&mut self, peer_id: N::PeerId) {
+        log::debug!("outbound peer removed, peer_id: {}", peer_id,);
+
+        let address = self
+            .outbound_peers
+            .remove(&peer_id)
+            .expect("peer must be known (remove_outbound_peer)");
+
+        let address_data = self
+            .addresses
+            .get_mut(&address)
+            .expect("address must be known (remove_outbound_peer)");
+
+        Self::change_address_state(
+            &self.config,
+            &address,
+            address_data,
+            AddressState::Disconnected,
+            &mut self.storage,
+            &self.command_tx,
+        );
     }
 
     /// Peer and address list maintenance.
