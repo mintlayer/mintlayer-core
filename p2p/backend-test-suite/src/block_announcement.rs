@@ -91,8 +91,10 @@ where
     let block = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer_id: _,
-            announcement: Announcement::Block(block),
-        } => block,
+            announcement,
+        } => match *announcement {
+            Announcement::Block(block) => block,
+        },
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
@@ -112,8 +114,10 @@ where
     let block = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer_id: _,
-            announcement: Announcement::Block(block),
-        } => block,
+            announcement,
+        } => match *announcement {
+            Announcement::Block(block) => block,
+        },
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));

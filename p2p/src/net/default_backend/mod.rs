@@ -264,7 +264,7 @@ where
                 announcement,
             } => Ok(SyncingEvent::Announcement {
                 peer_id,
-                announcement: *announcement,
+                announcement,
             }),
         }
     }

@@ -54,15 +54,14 @@ fn extract_vrf_output(
     vrf_data: &VRFReturn,
     vrf_public_key: VRFPublicKey,
     transcript: WrappedTranscript,
-) -> [u8; 32] {
+) -> Result<[u8; 32], VRFError> {
     match &vrf_data {
         VRFReturn::Schnorrkel(d) => d
             .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                 vrf_public_key,
                 transcript.into(),
             )
-            .unwrap()
-            .into(),
+            .map(|a| a.into()),
     }
 }
 
@@ -80,7 +79,8 @@ pub fn verify_vrf_and_get_vrf_output(
         .verify_vrf_data(transcript.clone().into(), vrf_data)
         .map_err(ProofOfStakeVRFError::VRFDataVerificationFailed)?;
 
-    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript);
+    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript)
+        .map_err(ProofOfStakeVRFError::VRFDataVerificationFailed)?;
 
     Ok(vrf_raw_output.into())
 }

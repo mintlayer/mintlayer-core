@@ -149,7 +149,7 @@ pub enum SyncingEvent<T: NetworkingService> {
     /// An announcement that is broadcast to all peers.
     Announcement {
         peer_id: T::PeerId,
-        announcement: Announcement,
+        announcement: Box<Announcement>,
     },
 }
 

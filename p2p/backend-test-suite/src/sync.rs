@@ -1257,7 +1257,7 @@ where
             peer_id,
             announcement,
         } => {
-            mgr.process_announcement(peer_id, announcement).await?;
+            mgr.process_announcement(peer_id, *announcement).await?;
         }
     }
 
