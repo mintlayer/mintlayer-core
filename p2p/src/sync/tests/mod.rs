@@ -14,15 +14,9 @@
 // limitations under the License.
 
 mod block_announcement;
+mod block_list_request;
+mod block_response;
 mod header_list_request;
 mod header_list_response;
 mod helpers;
 mod peer_events;
-
-// TODO: FIXME:
-/*
-
-   - handle messages:
-       - block list request
-       - block response
-*/

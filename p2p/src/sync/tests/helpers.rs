@@ -141,9 +141,12 @@ impl SyncManagerHandle {
     }
 
     /// Receives an announcement from the sync manager.
-    pub async fn announcement(&mut self) -> (PeerId, Announcement) {
+    pub async fn announcement(&mut self) -> Announcement {
         match self.event().await {
-            SyncingEvent::Announcement { peer, announcement } => (peer, announcement),
+            SyncingEvent::Announcement {
+                peer: _,
+                announcement,
+            } => announcement,
             e => panic!("Unexpected event: {e:?}"),
         }
     }
