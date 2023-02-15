@@ -1277,8 +1277,8 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_b_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
-    let tx_a_fee: Fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap().into();
-    let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap().into();
+    let tx_a_fee: Fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
+    let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
         TxInput::new(outpoint_source_id.clone(), 0),
