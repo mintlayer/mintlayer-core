@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use chainstate_types::vrf_tools::ProofOfStakeVRFError;
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId},
+    chain::{block::timestamp::BlockTimestamp, Block, PoolId},
     primitives::{Compact, Id},
 };
 
@@ -35,34 +35,14 @@ pub enum ConsensusPoSError {
     NoKernel,
     #[error("Only one kernel allowed")]
     MultipleKernels,
-    #[error("Could not find the transaction pointed to by an outpoint")]
-    OutpointTransactionNotFound,
-    #[error("Outpoint access error. Possibly invalid")]
-    InIndexOutpointAccessError,
-    #[error("Output already spent")]
-    KernelOutputAlreadySpent,
-    #[error("Kernel block index not found with block id: {0}")]
-    KernelBlockIndexNotFound(Id<GenBlock>),
-    #[error("Kernel output index out of range: {0}")]
-    KernelOutputIndexOutOfRange(u32),
-    #[error("Kernel input transaction not found")]
-    KernelTransactionNotFound,
-    #[error("Kernel header output load error")]
-    KernelHeaderOutputDoesNotExist(Id<GenBlock>),
-    #[error("Kernel header index out of range. Block id: {0} and index {1}")]
-    KernelHeaderOutputIndexOutOfRange(Id<GenBlock>, u32),
     #[error("Bits to target conversion failed {0:?}")]
     BitsToTargetConversionFailed(Compact),
     #[error("Could not find the previous block index of block: {0}")]
     PrevBlockIndexNotFound(Id<Block>),
-    #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]
-    KernelAncestryCheckFailed(Id<Block>),
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
     VRFDataVerificationFailed(ProofOfStakeVRFError),
-    #[error("Epoch data not found for index: {0}")]
-    EpochDataNotFound(u64),
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
     #[error("PoS accounting error: `{0}`")]
