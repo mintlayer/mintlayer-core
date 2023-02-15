@@ -13,21 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::Id;
-use typename::TypeName;
-
 mod data;
 mod error;
 mod pool;
 mod storage;
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
-pub struct Pool;
-pub type PoolId = Id<Pool>;
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
-pub struct Delegation;
-pub type DelegationId = Id<Delegation>;
 
 pub use crate::{
     data::PoSAccountingData,

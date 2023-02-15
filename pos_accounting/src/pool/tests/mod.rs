@@ -15,15 +15,16 @@
 
 use std::collections::BTreeMap;
 
-use common::primitives::{Amount, H256};
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::{Amount, H256},
+};
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     random::{CryptoRng, Rng},
 };
 
-use crate::{
-    storage::in_memory::InMemoryPoSAccounting, DelegationData, DelegationId, PoolData, PoolId,
-};
+use crate::{storage::in_memory::InMemoryPoSAccounting, DelegationData, PoolData};
 
 mod delta_tests;
 mod operations_tests;

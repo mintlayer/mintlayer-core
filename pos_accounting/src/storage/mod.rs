@@ -18,12 +18,12 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use common::primitives::Amount;
-
-use crate::{
-    pool::{delegation::DelegationData, pool_data::PoolData},
-    DelegationId, PoolId,
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
 };
+
+use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
 use chainstate_types::storage_result;
 

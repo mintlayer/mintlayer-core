@@ -25,7 +25,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
     primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
 };
@@ -33,7 +33,7 @@ use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::{PoolData, PoolId};
+use pos_accounting::PoolData;
 use utxo::UtxosStorageRead;
 
 fn make_tx_with_stake_pool_from_genesis(

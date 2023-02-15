@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use accounting::DataDelta;
-use common::{chain::OutPoint, primitives::Amount};
+use common::{
+    chain::{DelegationId, OutPoint, PoolId},
+    primitives::Amount,
+};
 use crypto::key::PublicKey;
 
 use crate::{
@@ -30,7 +33,6 @@ use crate::{
         pool_data::PoolData,
         view::PoSAccountingView,
     },
-    DelegationId, PoolId,
 };
 
 use super::PoSAccountingDelta;
