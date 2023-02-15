@@ -16,9 +16,7 @@
 pub mod error;
 pub mod kernel;
 
-use chainstate_types::{
-    vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle, PoSAccountingSealedHandle,
-};
+use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
@@ -28,18 +26,19 @@ use common::{
     primitives::{Idable, H256},
     Uint256,
 };
+use pos_accounting::PoSAccountingView;
 use utils::ensure;
 use utxo::UtxosView;
 
 use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
-fn check_stake_kernel_hash<P: PoSAccountingSealedHandle>(
+fn check_stake_kernel_hash<P: PoSAccountingView>(
     epoch_index: EpochIndex,
     random_seed: &H256,
     pos_data: &PoSData,
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
-    pos_accounting_handle: &P,
+    pos_accounting_view: &P,
 ) -> Result<H256, ConsensusPoSError> {
     let target: Uint256 = (*pos_data.bits())
         .try_into()
@@ -70,7 +69,7 @@ fn check_stake_kernel_hash<P: PoSAccountingSealedHandle>(
     let hash_pos_arith: Uint256 = hash_pos.into();
 
     let stake_pool_id = *pos_data.stake_pool_id();
-    let pool_balance = pos_accounting_handle
+    let pool_balance = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?
         .into_atoms();
@@ -84,10 +83,10 @@ fn check_stake_kernel_hash<P: PoSAccountingSealedHandle>(
     Ok(hash_pos)
 }
 
-fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
+fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     current_epoch_index: EpochIndex,
-    block_index_handle: &B,
+    block_index_handle: &H,
 ) -> Result<H256, ConsensusPoSError> {
     let sealed_epoch_distance_from_tip = chain_config.sealed_epoch_distance_from_tip() as u64;
     let random_seed = if current_epoch_index >= sealed_epoch_distance_from_tip {
@@ -109,18 +108,18 @@ fn randomness_of_sealed_epoch<B: BlockIndexHandle>(
     Ok(random_seed)
 }
 
-pub fn check_proof_of_stake<B, U, P>(
+pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pos_data: &PoSData,
-    block_index_handle: &B,
+    block_index_handle: &H,
     utxos_view: &U,
-    pos_accounting_handle: &P,
+    pos_accounting_view: &P,
 ) -> Result<(), ConsensusPoSError>
 where
-    B: BlockIndexHandle,
+    H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingSealedHandle,
+    P: PoSAccountingView,
 {
     let prev_block_index = block_index_handle
         .get_gen_block_index(header.prev_block_id())?
@@ -139,7 +138,7 @@ where
         pos_data,
         &kernel_output,
         header,
-        pos_accounting_handle,
+        pos_accounting_view,
     )?;
     Ok(())
 }

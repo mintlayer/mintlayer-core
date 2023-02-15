@@ -17,7 +17,6 @@ pub use self::error::ExtraConsensusDataError;
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
-    PoSAccountingSealedHandle,
 };
 use common::{
     chain::{
@@ -27,6 +26,7 @@ use common::{
     },
     primitives::Idable,
 };
+use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
 
 pub mod error;
@@ -38,17 +38,17 @@ use crate::{
 };
 
 /// Checks if the given block identified by the header contains the correct consensus data.  
-pub fn validate_consensus<B, U, P>(
+pub fn validate_consensus<H, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
-    block_index_handle: &B,
+    block_index_handle: &H,
     utxos_view: &U,
-    pos_accounting_handle: &P,
+    pos_accounting_view: &P,
 ) -> Result<(), ConsensusVerificationError>
 where
-    B: BlockIndexHandle,
+    H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingSealedHandle,
+    P: PoSAccountingView,
 {
     let prev_block_id = *header.prev_block_id();
 
@@ -73,7 +73,7 @@ where
             chain_config,
             block_index_handle,
             utxos_view,
-            pos_accounting_handle,
+            pos_accounting_view,
             header,
         ),
         RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
@@ -151,17 +151,17 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus<B, U, P>(
+fn validate_pos_consensus<H, U, P>(
     chain_config: &ChainConfig,
-    block_index_handle: &B,
+    block_index_handle: &H,
     utxos_view: &U,
-    pos_accounting_handle: &P,
+    pos_accounting_view: &P,
     header: &BlockHeader,
 ) -> Result<(), ConsensusVerificationError>
 where
-    B: BlockIndexHandle,
+    H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingSealedHandle,
+    P: PoSAccountingView,
 {
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
@@ -173,7 +173,7 @@ where
             pos_data,
             block_index_handle,
             utxos_view,
-            pos_accounting_handle,
+            pos_accounting_view,
         )
         .map_err(Into::into),
     }

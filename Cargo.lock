@@ -642,6 +642,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "num",
+ "pos_accounting",
  "rstest",
  "thiserror",
  "utils",

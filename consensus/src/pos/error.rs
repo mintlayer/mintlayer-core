@@ -65,4 +65,6 @@ pub enum ConsensusPoSError {
     EpochDataNotFound(u64),
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
+    #[error("PoS accounting error: `{0}`")]
+    PoSAccountingError(#[from] pos_accounting::Error),
 }

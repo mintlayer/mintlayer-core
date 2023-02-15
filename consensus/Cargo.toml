@@ -8,6 +8,7 @@ version = "0.1.0"
 common = {path = '../common'}
 utils = {path = "../utils"}
 chainstate-types = {path = '../chainstate/types'}
+pos_accounting = {path = '../pos_accounting'}
 utxo = {path = '../utxo'}
 
 thiserror.workspace = true

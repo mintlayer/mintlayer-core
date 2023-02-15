@@ -292,6 +292,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
             ConsensusPoSError::EpochDataNotFound(_) => 0,
             ConsensusPoSError::PoolBalanceNotFound(_) => 0,
+            ConsensusPoSError::PoSAccountingError(err) => err.ban_score(),
         }
     }
 }

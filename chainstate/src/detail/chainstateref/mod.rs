@@ -15,10 +15,13 @@
 
 use std::{collections::BTreeSet, convert::TryInto};
 
-use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
+use chainstate_storage::{
+    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
+};
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockPreconnectData,
-    ConsensusExtraData, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
+    BlockPreconnectData, ConsensusExtraData, EpochData, GenBlockIndex, GetAncestorError,
+    PropertyQueryError,
 };
 use common::{
     chain::{
@@ -35,6 +38,7 @@ use common::{
 };
 use consensus::compute_extra_consensus_data;
 use logging::log;
+use pos_accounting::PoSAccountingDB;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
@@ -52,7 +56,6 @@ use super::{
 };
 
 mod epoch_seal;
-mod handle_impls;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, V> {
@@ -61,6 +64,44 @@ pub struct ChainstateRef<'a, S, V> {
     tx_verification_strategy: &'a V,
     db_tx: S,
     time_getter: &'a TimeGetterFn,
+}
+
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockIndexHandle
+    for ChainstateRef<'a, S, V>
+{
+    fn get_block_index(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        self.get_block_index(block_id)
+    }
+
+    fn get_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
+        self.get_gen_block_index(block_id)
+    }
+
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
+        self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
+            .map_err(PropertyQueryError::from)
+    }
+
+    fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        self.get_block_reward(block_index)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
+    }
 }
 
 impl<'a, S: TransactionRw, V> ChainstateRef<'a, S, V> {
@@ -326,7 +367,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.check_header_size(header).log_err()?;
 
         let utxos_db = UtxosDB::new(&self.db_tx);
-        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, self)
+        let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
+        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -886,7 +928,6 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     fn post_disconnect_tip(&mut self, tip_height: BlockHeight) -> Result<(), BlockError> {
-        // check if we need to rollback the epoch seal
         epoch_seal::update_epoch_seal(
             &mut self.db_tx,
             self.chain_config,
