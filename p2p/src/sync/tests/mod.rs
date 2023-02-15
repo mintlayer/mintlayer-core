@@ -15,6 +15,7 @@
 
 mod block_announcement;
 mod header_list_request;
+mod header_list_response;
 mod helpers;
 mod peer_events;
 
@@ -23,6 +24,5 @@ mod peer_events;
 
    - handle messages:
        - block list request
-       - header list response???
        - block response
 */

@@ -16,31 +16,18 @@
 use std::{iter, sync::Arc};
 
 use chainstate::Locator;
-use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{create_mainnet, create_unit_test_config},
-        Block,
-    },
-    primitives::Idable,
-};
-use p2p_test_utils::{
-    create_block, create_n_blocks, import_blocks, start_chainstate, TestBlockInfo,
-};
+use common::{chain::config::create_unit_test_config, primitives::Idable};
+use p2p_test_utils::{create_block, import_blocks, start_chainstate, TestBlockInfo};
 
 use crate::{
     net::default_backend::types::PeerId,
-    sync::{
-        tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, HeaderListRequest,
-        SyncMessage,
-    },
+    sync::{tests::helpers::SyncManagerHandle, HeaderListRequest, SyncMessage},
 };
 
-// Announcements from unknown peers are ignored.
+// Messages from unknown peers are ignored.
 #[tokio::test]
 async fn nonexistent_peer() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.send_message(
