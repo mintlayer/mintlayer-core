@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use crate::{
-    error::PeerError, net::default_backend::types::PeerId, sync::tests::start_sync_manager,
+    error::PeerError, net::default_backend::types::PeerId, sync::tests::helpers::SyncManagerHandle,
     P2pError,
 };
 
 // Check that the header list request is sent to a newly connected peer.
 #[tokio::test]
 async fn connect_peer() {
-    let mut handle = start_sync_manager().await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -30,7 +30,7 @@ async fn connect_peer() {
 // Check that the attempt to connect the peer twice results in an error.
 #[tokio::test]
 async fn connect_peer_twice() {
-    let mut handle = start_sync_manager().await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -45,7 +45,7 @@ async fn connect_peer_twice() {
 // Disconnecting an unknown or nonexistent peer isn't an error.
 #[tokio::test]
 async fn disconnect_nonexistent_peer() {
-    let mut handle = start_sync_manager().await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.disconnect_peer(peer);
@@ -53,7 +53,7 @@ async fn disconnect_nonexistent_peer() {
 
 #[tokio::test]
 async fn disconnect_peer() {
-    let mut handle = start_sync_manager().await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
