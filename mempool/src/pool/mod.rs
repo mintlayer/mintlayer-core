@@ -41,6 +41,9 @@ use tx_with_fee::TxWithFee;
 
 use crate::config::*;
 
+use self::fee::Fee;
+
+pub mod fee;
 mod feerate;
 mod rolling_fee_rate;
 mod spends_unconfirmed;
@@ -48,9 +51,10 @@ mod store;
 mod try_get_fee;
 mod tx_with_fee;
 
-fn get_relay_fee(tx: &SignedTransaction) -> Amount {
+fn get_relay_fee(tx: &SignedTransaction) -> Fee {
     // TODO we should never reach the expect, but should this be an error anyway?
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
+        .into()
 }
 
 pub struct Mempool<M> {
@@ -343,7 +347,7 @@ where
     fn get_update_minimum_mempool_fee(
         &self,
         tx: &SignedTransaction,
-    ) -> Result<Amount, TxValidationError> {
+    ) -> Result<Fee, TxValidationError> {
         let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
         let res = minimum_fee_rate.compute_fee(tx.encoded_size());
@@ -420,7 +424,7 @@ where
     fn pays_for_bandwidth(
         &self,
         tx: &TxWithFee,
-        total_conflict_fees: Amount,
+        total_conflict_fees: Fee,
     ) -> Result<(), TxValidationError> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee(),);
         let additional_fees =
@@ -443,14 +447,14 @@ where
         &self,
         tx: &TxWithFee,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
-    ) -> Result<Amount, TxValidationError> {
+    ) -> Result<Fee, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
             self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
         });
 
         let total_conflict_fees = conflicts_with_descendants
             .map(|conflict| conflict.fee())
-            .sum::<Option<Amount>>()
+            .sum::<Option<Fee>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
         let replacement_fee = tx.fee();
