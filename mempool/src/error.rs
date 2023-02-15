@@ -19,9 +19,10 @@ use thiserror::Error;
 
 use common::chain::transaction::Transaction;
 use common::chain::OutPoint;
-use common::primitives::amount::Amount;
 use common::primitives::Id;
 use common::primitives::H256;
+
+use crate::pool::fee::Fee;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -65,9 +66,9 @@ pub enum TxValidationError {
     #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
-        replacement_fee: Amount,
+        replacement_fee: Fee,
         original_tx: H256,
-        original_fee: Amount,
+        original_fee: Fee,
     },
     #[error("Transaction would require too many replacements.")]
     TooManyPotentialReplacements,
@@ -80,11 +81,11 @@ pub enum TxValidationError {
     #[error("Underflow in computing transaction's additional fees.")]
     AdditionalFeesUnderflow,
     #[error("Transaction does not pay sufficient fees to be relayed.")]
-    InsufficientFeesToRelay { tx_fee: Amount, relay_fee: Amount },
+    InsufficientFeesToRelay { tx_fee: Fee, relay_fee: Fee },
     #[error("Replacement transaction does not pay enough for its bandwidth.")]
     InsufficientFeesToRelayRBF,
     #[error("Rolling fee threshold not met.")]
-    RollingFeeThresholdNotMet { minimum_fee: Amount, tx_fee: Amount },
+    RollingFeeThresholdNotMet { minimum_fee: Fee, tx_fee: Fee },
     #[error("Overflow encountered while computing fee with ancestors")]
     AncestorFeeOverflow,
     #[error("Overflow encountered while updating ancestor fee.")]

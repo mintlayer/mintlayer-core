@@ -16,10 +16,12 @@
 use common::{chain::SignedTransaction, primitives::Amount};
 use serialization::Encode;
 
+use crate::pool::fee::Fee;
+
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum TxAccumulatorError {
     #[error("Fee overflow: {0:?} + {1:?} failed")]
-    FeeAccumulationError(Amount, Amount),
+    FeeAccumulationError(Fee, Fee),
 }
 
 pub trait TransactionAccumulator: Send {
@@ -27,10 +29,10 @@ pub trait TransactionAccumulator: Send {
     /// This method should not mutate self unless it's successful
     /// Meaning: If this call returns an error, the callee should guarantee that &self never changed
     // TODO: Add a test for this property, at least for DefaultTxAccumulator
-    fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError>;
+    fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Fee) -> Result<(), TxAccumulatorError>;
     fn done(&self) -> bool;
     fn transactions(&self) -> &Vec<SignedTransaction>;
-    fn total_fees(&self) -> Amount;
+    fn total_fees(&self) -> Fee;
 }
 
 pub struct DefaultTxAccumulator {
@@ -38,7 +40,7 @@ pub struct DefaultTxAccumulator {
     total_size: usize,
     target_size: usize,
     done: bool,
-    total_fees: Amount,
+    total_fees: Fee,
 }
 
 impl DefaultTxAccumulator {
@@ -48,13 +50,13 @@ impl DefaultTxAccumulator {
             total_size: 0,
             target_size,
             done: false,
-            total_fees: Amount::ZERO,
+            total_fees: Amount::ZERO.into(),
         }
     }
 }
 
 impl TransactionAccumulator for DefaultTxAccumulator {
-    fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Amount) -> Result<(), TxAccumulatorError> {
+    fn add_tx(&mut self, tx: SignedTransaction, tx_fee: Fee) -> Result<(), TxAccumulatorError> {
         if self.total_size + tx.encoded_size() <= self.target_size {
             self.total_size += tx.encoded_size();
             self.total_fees = (self.total_fees + tx_fee).ok_or(
@@ -75,7 +77,7 @@ impl TransactionAccumulator for DefaultTxAccumulator {
         &self.txs
     }
 
-    fn total_fees(&self) -> Amount {
+    fn total_fees(&self) -> Fee {
         self.total_fees
     }
 }

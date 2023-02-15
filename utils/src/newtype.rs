@@ -19,6 +19,13 @@ macro_rules! newtype {
         $(#[$meta])*
         $vis struct $name($wrapped);
 
+        impl $name {
+            #[allow(dead_code)]
+            pub fn new(inner: $wrapped) -> Self {
+                Self(inner)
+            }
+        }
+
         impl From<$name> for $wrapped {
             fn from(newtype_instance: $name) -> Self {
                 newtype_instance.0

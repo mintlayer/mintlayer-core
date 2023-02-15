@@ -26,7 +26,7 @@ use logging::log;
 use serialization::Encode;
 use utils::newtype;
 
-use super::Time;
+use super::{fee::Fee, Time};
 use crate::error::{Error, TxValidationError};
 
 newtype! {
@@ -52,12 +52,12 @@ newtype! {
 
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
-    pub struct DescendantScore(Amount);
+    pub struct DescendantScore(Fee);
 }
 
 newtype! {
     #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
-    pub struct AncestorScore(Amount);
+    pub struct AncestorScore(Fee);
 }
 
 #[derive(Debug)]
@@ -439,13 +439,13 @@ impl MempoolStore {
 #[derive(Debug, Eq, Clone)]
 pub struct TxMempoolEntry {
     tx: SignedTransaction,
-    fee: Amount,
+    fee: Fee,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
     count_with_ancestors: usize,
-    fees_with_descendants: Amount,
-    fees_with_ancestors: Amount,
+    fees_with_descendants: Fee,
+    fees_with_ancestors: Fee,
     size_with_descendants: usize,
     size_with_ancestors: usize,
     creation_time: Time,
@@ -454,7 +454,7 @@ pub struct TxMempoolEntry {
 impl TxMempoolEntry {
     pub fn new(
         tx: SignedTransaction,
-        fee: Amount,
+        fee: Fee,
         parents: BTreeSet<Id<Transaction>>,
         ancestors: BTreeSet<TxMempoolEntry>,
         creation_time: Time,
@@ -488,7 +488,7 @@ impl TxMempoolEntry {
         &self.tx
     }
 
-    pub fn fee(&self) -> Amount {
+    pub fn fee(&self) -> Fee {
         self.fee
     }
 
@@ -497,24 +497,24 @@ impl TxMempoolEntry {
     }
 
     #[cfg(test)]
-    pub fn fees_with_descendants(&self) -> Amount {
+    pub fn fees_with_descendants(&self) -> Fee {
         self.fees_with_descendants
     }
 
     #[cfg(test)]
-    pub fn fees_with_ancestors(&self) -> Amount {
+    pub fn fees_with_ancestors(&self) -> Fee {
         self.fees_with_ancestors
     }
 
     pub fn descendant_score(&self) -> DescendantScore {
-        std::cmp::max(
-            (self.fees_with_descendants
-                / u128::try_from(self.size_with_descendants).expect("conversion"))
-            .expect("nonzero tx_size"),
-            (self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
-                .expect("nonzero tx size"),
-        )
-        .into()
+        let a: Fee = (*self.fees_with_descendants
+            / u128::try_from(self.size_with_descendants).expect("conversion"))
+        .expect("nonzero tx_size")
+        .into();
+        let b: Fee = (*self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+            .expect("nonzero tx size")
+            .into();
+        std::cmp::max(a, b).into()
     }
 
     pub fn ancestor_score(&self) -> AncestorScore {
@@ -526,14 +526,14 @@ impl TxMempoolEntry {
             self.fee,
             self.tx.encoded_size()
         );
-        std::cmp::min(
-            (self.fees_with_ancestors
-                / u128::try_from(self.size_with_ancestors).expect("conversion"))
-            .expect("nonzero tx_size"),
-            (self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
-                .expect("nonzero tx size"),
-        )
-        .into()
+        let a: Fee = (*self.fees_with_ancestors
+            / u128::try_from(self.size_with_ancestors).expect("conversion"))
+        .expect("nonzero tx_size")
+        .into();
+        let b: Fee = (*self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+            .expect("nonzero tx size")
+            .into();
+        std::cmp::min(a, b).into()
     }
 
     pub fn tx_id(&self) -> Id<Transaction> {

@@ -262,7 +262,7 @@ impl Sum<Amount> for Option<Amount> {
     where
         I: Iterator<Item = Amount>,
     {
-        iter.try_fold(Amount::from_atoms(0), std::ops::Add::add)
+        iter.try_fold(Amount::ZERO, std::ops::Add::add)
     }
 }
 
