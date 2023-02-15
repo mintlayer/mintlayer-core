@@ -173,15 +173,6 @@ where
         Ok(receiver)
     }
 
-    // TODO: Remove.
-    /// Get mutable reference to the handle
-    pub fn handle_mut(&mut self) -> &mut T::SyncingMessagingHandle {
-        // TODO: get rid of this function as it's used only in tests; perhaps a better way to do this is by
-        // creating p2p objects and make them communicate together instead of having access to internal
-        // private parts of the sync manager
-        &mut self.messaging_handle
-    }
-
     async fn handle_message(&mut self, peer: T::PeerId, message: SyncMessage) -> Result<()> {
         match message {
             SyncMessage::HeaderListRequest(r) => {
@@ -197,9 +188,8 @@ where
         }
     }
 
-    // TODO: This shouldn't be public.
     /// Processes a header request by sending requested data to the peer.
-    pub async fn handle_header_request(&mut self, peer: T::PeerId, locator: Locator) -> Result<()> {
+    async fn handle_header_request(&mut self, peer: T::PeerId, locator: Locator) -> Result<()> {
         log::debug!("Headers request from peer {peer}");
 
         // Check that the peer is connected.
@@ -229,9 +219,8 @@ where
         Ok(())
     }
 
-    // TODO: This shouldn't be public.
     /// Processes the blocks request.
-    pub async fn handle_block_request(
+    async fn handle_block_request(
         &mut self,
         peer: T::PeerId,
         mut block_ids: Vec<Id<Block>>,
@@ -271,8 +260,7 @@ where
         Ok(())
     }
 
-    // TODO: This shouldn't be public.
-    pub async fn handle_header_response(
+    async fn handle_header_response(
         &mut self,
         peer: T::PeerId,
         headers: Vec<BlockHeader>,
@@ -397,8 +385,7 @@ where
         Ok(())
     }
 
-    // TODO: This shouldn't be public.
-    pub async fn handle_announcement(
+    async fn handle_announcement(
         &mut self,
         peer: T::PeerId,
         announcement: Announcement,
@@ -455,9 +442,8 @@ where
         }
     }
 
-    // TODO: This shouldn't be public.
     /// Removes the state (`PeerContext`) of the given peer.
-    pub fn unregister_peer(&mut self, peer: T::PeerId) {
+    fn unregister_peer(&mut self, peer: T::PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
 
         // Remove the queued block responses associated with the disconnected peer.
