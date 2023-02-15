@@ -18,6 +18,7 @@ members = [
   "common",                       # Everything else, until it's moved to another crate.
   "consensus",                    # Consensus related logic.
   "crypto",                       # Cryptographic primitives and their interfaces.
+  "dns_server",                   # DNS-server.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
   "node",                         # Node executable.
@@ -90,7 +91,11 @@ static_assertions = "1.1"
 thiserror = "1.0"
 tokio = "1.0"
 
+[profile.dev]
+panic = "abort" # prevent panic catching (mostly for the tokio runtime)
+
 [profile.release]
+panic = "abort" # prevent panic catching (mostly for the tokio runtime)
 debug-assertions = true
 overflow-checks = true
 

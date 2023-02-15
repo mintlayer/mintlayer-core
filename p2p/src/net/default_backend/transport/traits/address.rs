@@ -24,6 +24,6 @@ pub trait TransportAddress: Sized {
 
     /// Try get address back from PeerAddress.
     ///
-    /// This might fail if an address is from some other transport.
-    fn from_peer_address(address: &PeerAddress) -> Option<Self>;
+    /// This may fail if the address is invalid or from another transport.
+    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self>;
 }

@@ -15,6 +15,7 @@
 
 pub mod blockuntilzero;
 pub mod config_setting;
+pub mod const_value;
 pub mod counttracker;
 pub mod ensure;
 pub mod eventhandler;

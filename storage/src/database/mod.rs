@@ -21,6 +21,7 @@ pub mod raw;
 use std::borrow::Cow;
 
 use internal::{EntryIterator, TxImpl};
+use utils::shallow_clone::ShallowClone;
 
 use crate::schema::{self, Schema};
 use serialization::{encoded::Encoded, Encode, EncodeLike};
@@ -34,7 +35,7 @@ pub struct Storage<B: Backend, Sch> {
 
 impl<B: Backend, Sch> Clone for Storage<B, Sch>
 where
-    B::Impl: Clone,
+    B::Impl: ShallowClone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -44,9 +45,16 @@ where
     }
 }
 
-impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch> where
-    B::Impl: utils::shallow_clone::ShallowClone
+impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch>
+where
+    B::Impl: utils::shallow_clone::ShallowClone,
 {
+    fn shallow_clone(&self) -> Self {
+        Self {
+            backend: self.backend.shallow_clone(),
+            _schema: self._schema.shallow_clone(),
+        }
+    }
 }
 
 impl<B: Backend, Sch: Schema> Storage<B, Sch> {

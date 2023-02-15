@@ -13,20 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    config::DEFAULT_BIND_PORT,
     net::{
         default_backend::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
         },
         AsBannableAddress,
     },
+    peer_manager::global_ip::IsGlobalIp,
     types::peer_address::PeerAddress,
     Result,
 };
@@ -36,8 +36,22 @@ impl TransportAddress for SocketAddr {
         (*self).into()
     }
 
-    fn from_peer_address(address: &PeerAddress) -> Option<Self> {
-        Some(address.into())
+    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self> {
+        match &address {
+            PeerAddress::Ip4(socket)
+                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            PeerAddress::Ip6(socket)
+                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            _ => None,
+        }
     }
 }
 
@@ -75,15 +89,6 @@ pub struct TcpTransportListener {
 
 impl TcpTransportListener {
     fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
-        let addresses = if addresses.is_empty() {
-            vec![
-                SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-                SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-            ]
-        } else {
-            addresses
-        };
-
         let listeners = addresses
             .into_iter()
             .map(|address| -> Result<TcpListener> {
@@ -128,6 +133,10 @@ impl TcpTransportListener {
 #[async_trait]
 impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
     async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
+        // select_next_some will panic if polled while empty
+        if self.listeners.is_empty() {
+            return std::future::pending().await;
+        }
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;

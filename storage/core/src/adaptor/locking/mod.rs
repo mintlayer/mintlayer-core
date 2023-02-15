@@ -25,7 +25,7 @@ use crate::{
 };
 
 use std::{borrow::Cow, collections::BTreeMap};
-use utils::sync;
+use utils::{const_value::ConstValue, sync};
 
 // Read-only transaction just holds a read lock to the database
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
@@ -113,7 +113,7 @@ impl<'tx, T: ReadOps + WriteOps> backend::TxRw for TxRw<'tx, T> {
 
 pub struct TransactionLockImpl<T> {
     db: sync::Arc<sync::RwLock<T>>,
-    num_maps: DbMapCount,
+    num_maps: ConstValue<DbMapCount>,
 }
 
 impl<T> Clone for TransactionLockImpl<T> {
@@ -125,7 +125,14 @@ impl<T> Clone for TransactionLockImpl<T> {
     }
 }
 
-impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {}
+impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {
+    fn shallow_clone(&self) -> Self {
+        Self {
+            db: self.db.shallow_clone(),
+            num_maps: self.num_maps.shallow_clone(),
+        }
+    }
+}
 
 impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImpl<T> {
     type TxRo = TxRo<'tx, T>;
@@ -141,7 +148,7 @@ impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for Transac
     fn transaction_rw<'st: 'tx>(&'st self, _: Option<usize>) -> crate::Result<Self::TxRw> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
-            deltas: DbMapsData::new(self.num_maps, |_| BTreeMap::new()),
+            deltas: DbMapsData::new(*self.num_maps, |_| BTreeMap::new()),
         })
     }
 }
@@ -171,7 +178,7 @@ where
     type Impl = TransactionLockImpl<T>;
 
     fn open(self, desc: DbDesc) -> crate::Result<Self::Impl> {
-        let num_maps = desc.db_map_count();
+        let num_maps = desc.db_map_count().into();
         let db = sync::Arc::new(sync::RwLock::new(T::construct(self.0, desc)?));
         Ok(TransactionLockImpl { db, num_maps })
     }

@@ -18,7 +18,7 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use common::primitives::semver::SemVer;
+use common::{chain::ChainConfig, primitives::semver::SemVer};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -58,6 +58,13 @@ pub struct PeerInfo<P> {
 
     /// The announcements list that a peer interested is.
     pub subscriptions: BTreeSet<PubSubTopic>,
+}
+
+impl<P> PeerInfo<P> {
+    pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
+        // TODO: Check version here
+        self.network == *chain_config.magic_bytes()
+    }
 }
 
 impl<P: Debug> Display for PeerInfo<P> {
@@ -153,4 +160,7 @@ pub enum PubSubTopic {
     Transactions,
     /// Blocks
     Blocks,
+
+    /// Peer address announcements from new nodes joining the network
+    PeerAddresses,
 }

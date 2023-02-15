@@ -161,7 +161,7 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
     // TODO: Disabled by default because it causes port bind issues in functional tests; to be fixed after #446 is resolved
     const DEFAULT_WS_RPC_ENABLED: bool = false;
     let default_http_rpc_addr = SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
-    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3031").expect("Can't fail");
+    let default_ws_rpc_addr = SocketAddr::from_str("127.0.0.1:3032").expect("Can't fail");
 
     let RpcConfigFile {
         http_bind_address,

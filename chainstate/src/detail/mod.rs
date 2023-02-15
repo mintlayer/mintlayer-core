@@ -39,7 +39,7 @@ pub use transaction_verifier::{
 };
 use tx_verifier::transaction_verifier;
 
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use itertools::Itertools;
 
@@ -106,37 +106,31 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
     fn make_db_tx(
         &mut self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, &mut OrphansProxy, V>>
-    {
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRw<'_, S>, V>> {
         let db_tx = self.chainstate_storage.transaction_rw(None)?;
         Ok(chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            &mut self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
     pub(crate) fn make_db_tx_ro(
         &self,
-    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, &OrphansProxy, V>>
-    {
+    ) -> chainstate_storage::Result<chainstateref::ChainstateRef<TxRo<'_, S>, V>> {
         let db_tx = self.chainstate_storage.transaction_ro()?;
         Ok(chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            &self.orphan_blocks,
             self.time_getter.getter(),
         ))
     }
 
-    pub fn query(
-        &self,
-    ) -> Result<ChainstateQuery<TxRo<'_, S>, &OrphansProxy, V>, PropertyQueryError> {
+    pub fn query(&self) -> Result<ChainstateQuery<TxRo<'_, S>, V>, PropertyQueryError> {
         self.make_db_tx_ro().map(ChainstateQuery::new).map_err(PropertyQueryError::from)
     }
 
@@ -277,78 +271,97 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
     }
 
-    /// returns the new block index, which is the new tip, if any
-    fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans =
-            (&mut self.orphan_blocks).take_all_children_of(&(*last_processed_block).into());
-        let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
-            .into_iter()
-            .map(|blk| self.process_block(blk, BlockSource::Local))
-            .partition_result();
-
-        block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
-            Some(handler) => handler(&e),
-            None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
-        });
-
-        // since we processed the blocks in order, the last one is the best tip
-        block_indexes.into_iter().flatten().rev().next()
-    }
-
-    fn process_db_commit_error(
-        &mut self,
-        db_error: chainstate_storage::Error,
-        block: WithId<Block>,
-        block_source: BlockSource,
-        attempt_number: usize,
-    ) -> Result<Option<BlockIndex>, BlockError> {
-        if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
-            Err(BlockError::DatabaseCommitError(
-                block.get_id(),
-                *self.chainstate_config.max_db_commit_attempts,
-                db_error,
-            ))
-        } else {
-            // TODO: test reattempts using mocks of the database that emulate failure
-            self.attempt_to_process_block(block, block_source, attempt_number + 1)
-        }
-    }
-
-    pub fn attempt_to_process_block(
+    fn attempt_to_process_block(
         &mut self,
         block: WithId<Block>,
         block_source: BlockSource,
-        attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        log::info!("Processing block: {}", block.get_id());
+        let block = self.check_legitimate_orphan(block_source, block).log_err()?;
 
-        let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
+        let block_id = block.get_id();
+        let mut attempt_number = 0;
+        loop {
+            log::info!("Processing block: {}", block_id);
 
-        let block = chainstate_ref.check_legitimate_orphan(block_source, block).log_err()?;
+            let mut chainstate_ref = self.make_db_tx().map_err(BlockError::from).log_err()?;
 
-        let best_block_id = chainstate_ref
-            .get_best_block_id()
-            .map_err(BlockError::BestBlockLoadError)
-            .log_err()?;
+            let best_block_id = chainstate_ref
+                .get_best_block_id()
+                .map_err(BlockError::BestBlockLoadError)
+                .log_err()?;
 
-        chainstate_ref
-            .check_block(&block)
-            .map_err(BlockError::CheckBlockFailed)
-            .log_err()?;
+            chainstate_ref
+                .check_block(&block)
+                .map_err(BlockError::CheckBlockFailed)
+                .log_err()?;
 
-        let block_index = chainstate_ref.accept_block(&block).log_err()?;
-        let result = chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
-        let db_commit_result = chainstate_ref.commit_db_tx().log_err();
-        match db_commit_result {
-            Ok(_) => {}
-            Err(err) => {
-                return self
-                    .process_db_commit_error(err, block, block_source, attempt_number)
-                    .log_err()
+            let block_index = chainstate_ref.accept_block(&block).log_err()?;
+            let result =
+                chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
+            let db_commit_result = chainstate_ref.commit_db_tx().log_err();
+            match db_commit_result {
+                Ok(_) => {}
+                Err(err) => {
+                    if attempt_number >= *self.chainstate_config.max_db_commit_attempts {
+                        return Err(BlockError::DatabaseCommitError(
+                            block.get_id(),
+                            *self.chainstate_config.max_db_commit_attempts,
+                            err,
+                        ));
+                    } else {
+                        attempt_number += 1;
+                        continue;
+                    }
+                }
             }
+
+            return Ok(result);
+        }
+    }
+
+    /// process orphan blocks that depend on the given block, recursively
+    fn process_orphans_of(
+        &mut self,
+        block_id: Id<Block>,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let mut block_indexes = Vec::new();
+
+        let mut orphan_process_queue: VecDeque<_> = vec![block_id].into();
+        while let Some(block_id) = orphan_process_queue.pop_front() {
+            let orphans = self.orphan_blocks.take_all_children_of(&block_id.into());
+            // whatever was pulled from orphans should be processed next in the queue
+            orphan_process_queue.extend(orphans.iter().map(|b| b.get_id()));
+            let (orphan_block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) =
+                orphans
+                    .into_iter()
+                    .map(|blk| self.attempt_to_process_block(blk, BlockSource::Local))
+                    .partition_result();
+
+            block_indexes.extend(orphan_block_indexes.into_iter());
+
+            block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
+                Some(handler) => handler(&e),
+                None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+            });
         }
 
-        let new_block_index_after_orphans = self.process_orphans(&block.get_id());
+        // since we processed blocks in order, the last one is the tip
+        let new_block_index_after_orphans = block_indexes.into_iter().flatten().rev().next();
+
+        Ok(new_block_index_after_orphans)
+    }
+
+    fn process_block_and_related_orphans(
+        &mut self,
+        block: WithId<Block>,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        let block_id = block.get_id();
+
+        let result = self.attempt_to_process_block(block, block_source)?;
+
+        let new_block_index_after_orphans = self.process_orphans_of(block_id)?;
+
         let result = match new_block_index_after_orphans {
             Some(result_from_orphan) => Some(result_from_orphan),
             None => result,
@@ -375,7 +388,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         block: WithId<Block>,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        self.attempt_to_process_block(block, block_source, 0)
+        self.process_block_and_related_orphans(block, block_source)
     }
 
     /// Initialize chainstate with genesis block
@@ -469,6 +482,38 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     fn is_fresh_block(&self, time: &BlockTimestamp) -> bool {
         let now = self.time_getter.get_time();
         time.as_duration_since_epoch() + self.chainstate_config.max_tip_age.clone().into() > now
+    }
+
+    fn check_legitimate_orphan(
+        &mut self,
+        block_source: BlockSource,
+        block: WithId<Block>,
+    ) -> Result<WithId<Block>, OrphanCheckError> {
+        let chainstate_ref = self.make_db_tx_ro().map_err(OrphanCheckError::from)?;
+
+        let prev_block_id = block.prev_block_id();
+
+        let block_index_found = chainstate_ref
+            .get_gen_block_index(&prev_block_id)
+            .map_err(OrphanCheckError::PrevBlockIndexNotFound)
+            .log_err()?
+            .is_some();
+
+        drop(chainstate_ref);
+
+        if block_source == BlockSource::Local && !block_index_found {
+            self.new_orphan_block(block).log_err()?;
+            return Err(OrphanCheckError::LocalOrphan);
+        }
+        Ok(block)
+    }
+
+    /// Mark new block as an orphan
+    fn new_orphan_block(&mut self, block: WithId<Block>) -> Result<(), OrphanCheckError> {
+        match self.orphan_blocks.add_block(block) {
+            Ok(_) => Ok(()),
+            Err(err) => (*err).into(),
+        }
     }
 }
 

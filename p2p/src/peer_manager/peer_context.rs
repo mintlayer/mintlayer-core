@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use tokio::time::Instant;
 
 use crate::{
@@ -45,6 +47,11 @@ pub struct PeerContext<T: NetworkingService> {
 
     /// Sent ping details
     pub sent_ping: Option<SentPing>,
+
+    /// All addresses that were announced to or from some peer.
+    /// Used to prevent infinity loops while broadcasting addresses.
+    // TODO: Use bloom filter (like it's done in Bitcoin Core).
+    pub announced_addresses: HashSet<T::Address>,
 }
 
 impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {

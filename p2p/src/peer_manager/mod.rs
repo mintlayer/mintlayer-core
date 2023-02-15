@@ -19,17 +19,17 @@
 //!
 //!
 
-mod global_ip;
+pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
 
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
     time::Duration,
 };
 
-use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use tokio::{sync::mpsc, time::Instant};
 
 use chainstate::ban_score::BanScore;
@@ -49,8 +49,8 @@ use crate::{
     net::{
         self,
         default_backend::transport::TransportAddress,
-        types::PeerInfo,
         types::{ConnectivityEvent, Role},
+        types::{PeerInfo, PubSubTopic},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
@@ -58,7 +58,6 @@ use crate::{
 };
 
 use self::{
-    global_ip::IsGlobalIp,
     peer_context::{PeerContext, SentPing},
     peerdb::storage::PeerDbStorage,
 };
@@ -74,8 +73,8 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
 
-/// To how many peers re-send received announced address
-const ANNOUNCED_RESEND_COUNT: usize = 2;
+/// To how many peers resend received address
+const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 
 pub struct PeerManager<T, S>
 where
@@ -111,10 +110,8 @@ where
     /// Last time when heartbeat was called
     last_heartbeat: Instant,
 
-    /// All addresses that were announced to or from some peer.
-    /// Used to prevent infinity loops while broadcasting addresses.
-    // TODO: Use bloom filter (like it's done in Bitcoin Core).
-    announced_addresses: HashMap<T::PeerId, HashSet<T::Address>>,
+    /// List of connected peers that subscribed to PeerAddresses topic
+    subscribed_to_peer_addresses: BTreeSet<T::PeerId>,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -149,7 +146,7 @@ where
             chain_config,
             p2p_config,
             last_heartbeat: now,
-            announced_addresses: HashMap::new(),
+            subscribed_to_peer_addresses: BTreeSet::new(),
         })
     }
 
@@ -162,17 +159,11 @@ where
     }
 
     fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
-        // The IP must be globally routable
-        match &address {
-            PeerAddress::Ip4(socket) => {
-                std::net::Ipv4Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.allow_discover_private_ips
-            }
-            PeerAddress::Ip6(socket) => {
-                std::net::Ipv6Addr::from(socket.ip).is_global_unicast_ip()
-                    || *self.p2p_config.allow_discover_private_ips
-            }
-        }
+        <T::Address as TransportAddress>::from_peer_address(
+            address,
+            *self.p2p_config.allow_discover_private_ips,
+        )
+        .is_some()
     }
 
     /// Discover public addresses for this node after a new outbound connection is made
@@ -185,7 +176,7 @@ where
         peer_id: T::PeerId,
         receiver_address: PeerAddress,
     ) -> crate::Result<()> {
-        if !self.is_peer_address_valid(&receiver_address) {
+        if !self.subscribed_to_peer_addresses.contains(&peer_id) {
             return Ok(());
         }
 
@@ -212,30 +203,32 @@ where
                     _ => None,
                 },
             )
-            .filter_map(|address| TransportAddress::from_peer_address(&address))
+            .filter_map(|address| {
+                TransportAddress::from_peer_address(
+                    &address,
+                    *self.p2p_config.allow_discover_private_ips,
+                )
+            })
             .collect::<Vec<_>>();
 
         for address in discovered_own_addresses {
-            self.send_announced_address(peer_id, address)?;
+            self.announce_address(peer_id, address)?;
         }
 
         Ok(())
     }
 
-    fn send_announced_address(
-        &mut self,
-        peer_id: T::PeerId,
-        address: T::Address,
-    ) -> crate::Result<()> {
-        let peer_addresses = self.announced_addresses.entry(peer_id).or_default();
-        if !peer_addresses.contains(&address) {
+    /// Send address announcement to the selected peer (if the address is new)
+    fn announce_address(&mut self, peer_id: T::PeerId, address: T::Address) -> crate::Result<()> {
+        let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
+        if !peer.announced_addresses.contains(&address) {
             self.peer_connectivity_handle.send_message(
                 peer_id,
                 PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
                     address: address.as_peer_address(),
                 }),
             )?;
-            peer_addresses.insert(address);
+            peer.announced_addresses.insert(address);
         }
         Ok(())
     }
@@ -255,7 +248,7 @@ where
         let peer_id = info.peer_id;
 
         ensure!(
-            info.network == *self.chain_config.magic_bytes(),
+            info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                 *self.chain_config.magic_bytes(),
                 info.network,
@@ -277,10 +270,6 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
-        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
-            self.handle_outbound_receiver_address(peer_id, receiver_address)?;
-        }
-
         if role == Role::Outbound {
             self.peer_connectivity_handle.send_message(
                 peer_id,
@@ -294,6 +283,10 @@ where
             role
         );
 
+        if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
+            self.subscribed_to_peer_addresses.insert(peer_id);
+        }
+
         let old_value = self.peers.insert(
             info.peer_id,
             PeerContext {
@@ -302,11 +295,16 @@ where
                 role,
                 score: 0,
                 sent_ping: None,
+                announced_addresses: HashSet::new(),
             },
         );
         assert!(old_value.is_none());
 
         self.peerdb.peer_connected(address);
+
+        if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
+            self.handle_outbound_receiver_address(peer_id, receiver_address)?;
+        }
 
         self.tx_sync.send(SyncControlEvent::Connected(peer_id)).map_err(P2pError::from)
     }
@@ -369,9 +367,9 @@ where
                 response.send(Ok(()));
             }
 
-            self.peerdb.peer_disconnected(peer.address);
+            self.subscribed_to_peer_addresses.remove(&peer_id);
 
-            self.announced_addresses.remove(&peer_id);
+            self.peerdb.peer_disconnected(peer.address);
         }
 
         Ok(())
@@ -590,18 +588,25 @@ where
     ) -> crate::Result<()> {
         // TODO: Rate limit announce address requests to prevent DoS attacks.
         // For example it's 0.1 req/sec in Bitcoin Core.
-        let is_address_valid = self.is_peer_address_valid(&address);
-        if let (true, Some(address)) = (
-            is_address_valid,
-            TransportAddress::from_peer_address(&address),
+        if let Some(address) = TransportAddress::from_peer_address(
+            &address,
+            *self.p2p_config.allow_discover_private_ips,
         ) {
             self.peerdb.peer_discovered(&address)?;
 
-            self.announced_addresses.entry(peer).or_default().insert(address.clone());
+            self.peers
+                .get_mut(&peer)
+                .expect("peer sending AnnounceAddrRequest must be known")
+                .announced_addresses
+                .insert(address.clone());
 
-            let peer_ids = self.random_peer_ids(ANNOUNCED_RESEND_COUNT);
+            let peer_ids = self
+                .subscribed_to_peer_addresses
+                .iter()
+                .cloned()
+                .choose_multiple(&mut make_pseudo_rng(), PEER_ADDRESS_RESEND_COUNT);
             for new_peer_id in peer_ids {
-                self.send_announced_address(new_peer_id, address.clone())?;
+                self.announce_address(new_peer_id, address.clone())?;
             }
         }
         Ok(())
@@ -616,9 +621,9 @@ where
 
     fn handle_add_list_response(&mut self, addresses: Vec<PeerAddress>) -> crate::Result<()> {
         for address in addresses {
-            if let (true, Some(address)) = (
-                self.is_peer_address_valid(&address),
-                TransportAddress::from_peer_address(&address),
+            if let Some(address) = TransportAddress::from_peer_address(
+                &address,
+                *self.p2p_config.allow_discover_private_ips,
             ) {
                 self.peerdb.peer_discovered(&address)?;
             }
@@ -794,19 +799,6 @@ where
     /// Returns short info about all connected peers
     pub fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
         self.peers.values().map(Into::into).collect()
-    }
-
-    /// Selects requested count of connected peer ids randomly.
-    ///
-    /// It can be used to distribute data in the gossip protocol
-    /// (for example, to relay announced addresses to a small group of peers).
-    pub fn random_peer_ids(&self, count: usize) -> Vec<T::PeerId> {
-        // TODO: Optimize this
-        let all_peer_ids = self.peers.keys().cloned().collect::<Vec<_>>();
-        all_peer_ids
-            .choose_multiple(&mut make_pseudo_rng(), count)
-            .cloned()
-            .collect::<Vec<_>>()
     }
 
     /// Checks if the peer is in active state

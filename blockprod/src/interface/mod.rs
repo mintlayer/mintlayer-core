@@ -23,4 +23,7 @@ pub trait BlockProductionInterface: Send {
     /// and won't attempt to do it again for new tips in chainstate or mempool
     /// Call start() to enable again
     fn stop(&self) -> Result<(), BlockProductionError>;
+
+    /// Check if the block builder is currently connected
+    fn is_connected(&self) -> bool;
 }

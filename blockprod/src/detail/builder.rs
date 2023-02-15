@@ -71,12 +71,12 @@ impl PerpetualBlockBuilder {
         }
     }
 
-    pub fn stop_building(
+    pub fn new_tip(
         &mut self,
         new_tip_id: Id<Block>,
         new_tip_height: BlockHeight,
     ) -> Result<(), BlockProductionError> {
-        self.block_makers_tx.send(BlockMakerControlCommand::StopBecauseNewTip(
+        self.block_makers_tx.send(BlockMakerControlCommand::NewTip(
             new_tip_id,
             new_tip_height,
         )).expect("The channel can never be disconnected since there's a receiver always alive in self");
@@ -84,7 +84,7 @@ impl PerpetualBlockBuilder {
     }
 
     pub fn stop_all_block_makers(&self) -> Result<(), BlockProductionError> {
-        self.block_makers_tx.send(BlockMakerControlCommand::JustStop).expect(
+        self.block_makers_tx.send(BlockMakerControlCommand::Stop).expect(
             "The channel can never be disconnected since there's a receiver always alive in self",
         );
         Ok(())
@@ -130,7 +130,7 @@ impl PerpetualBlockBuilder {
                 // and expect the mempool to soon send a trigger for a new command
                 block_info = chainstate_rx.recv() => {
                     let (block_id, block_height) = block_info.ok_or(BlockProductionError::ChainstateChannelClosed)?;
-                    self.stop_building(block_id, block_height)?;
+                    self.new_tip(block_id, block_height)?;
                 }
                 block_info = mempool_rx.recv() => {
                     let (block_id, block_height) = block_info.ok_or(BlockProductionError::MempoolChannelClosed)?;
@@ -208,7 +208,7 @@ struct BlockMakersDestroyer(crossbeam_channel::Sender<BlockMakerControlCommand>)
 
 impl Drop for BlockMakersDestroyer {
     fn drop(&mut self) {
-        match self.0.send(BlockMakerControlCommand::JustStop) {
+        match self.0.send(BlockMakerControlCommand::Stop) {
             Ok(_) => (),
             Err(err) => log::error!("Failed to stop all block makers: {}", err),
         }

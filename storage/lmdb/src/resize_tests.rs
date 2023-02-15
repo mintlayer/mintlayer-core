@@ -76,7 +76,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
 
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
-            data_dir.into_path(),
+            data_dir.path().to_owned(),
             MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
             MapResizeCallback::new(resize_callback),
@@ -147,7 +147,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
 
         let data_dir = TempDir::new("lmdb_resize").unwrap();
         let lmdb = Lmdb::new(
-            data_dir.into_path(),
+            data_dir.path().to_owned(),
             MemSize::from_bytes(initial_map_size).into(),
             resize_settings.clone(),
             MapResizeCallback::new(resize_callback),
