@@ -82,9 +82,9 @@ pub struct P2pConfig {
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.
     pub allow_discover_private_ips: AllowDiscoverPrivateIps,
     /// A maximum allowed number of headers in one message.
-    pub header_count_limit: HeaderLimit,
+    pub msg_header_count_limit: HeaderLimit,
     /// A maximum number of the elements in the locator.
-    pub max_locator_count: MaxLocatorSize,
+    pub msg_max_locator_count: MaxLocatorSize,
     /// A maximum number of blocks that can be requested from a single peer.
     pub max_request_blocks_count: RequestedBlocksLimit,
 }

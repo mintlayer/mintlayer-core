@@ -687,8 +687,8 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
@@ -717,8 +717,8 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: Default::default(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
@@ -787,8 +787,8 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
@@ -818,8 +818,8 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let tx2 = run_peer_manager::<T>(
@@ -842,8 +842,8 @@ where
         ping_timeout: Default::default(),
         node_type: Default::default(),
         allow_discover_private_ips: true.into(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let tx3 = run_peer_manager::<T>(

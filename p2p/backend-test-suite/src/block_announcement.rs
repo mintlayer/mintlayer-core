@@ -136,8 +136,8 @@ where
         ping_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
-        header_count_limit: Default::default(),
-        max_locator_count: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
     let (mut conn1, mut sync1) = N::start(

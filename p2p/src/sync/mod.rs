@@ -195,10 +195,10 @@ where
         // Check that the peer is connected.
         self.peers.get(&peer).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if locator.len() > self.p2p_config.max_locator_count.clone().into() {
+        if locator.len() > self.p2p_config.msg_max_locator_count.clone().into() {
             return Err(P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(
                 locator.len(),
-                self.p2p_config.max_locator_count.clone().into(),
+                self.p2p_config.msg_max_locator_count.clone().into(),
             )));
         }
         log::trace!("locator: {locator:#?}");
@@ -210,7 +210,7 @@ where
         }
 
         let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
-        debug_assert!(headers.len() <= self.p2p_config.header_count_limit.clone().into());
+        debug_assert!(headers.len() <= self.p2p_config.msg_header_count_limit.clone().into());
         self.messaging_handle.send_message(
             peer,
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
@@ -277,11 +277,11 @@ where
             )));
         }
 
-        if headers.len() > self.p2p_config.header_count_limit.clone().into() {
+        if headers.len() > self.p2p_config.msg_header_count_limit.clone().into() {
             return Err(P2pError::ProtocolError(
                 ProtocolError::HeadersLimitExceeded(
                     headers.len(),
-                    self.p2p_config.header_count_limit.clone().into(),
+                    self.p2p_config.msg_header_count_limit.clone().into(),
                 ),
             ));
         }
@@ -317,7 +317,7 @@ where
         }
 
         let is_max_headers =
-            headers.len() == Into::<usize>::into(self.p2p_config.header_count_limit.clone());
+            headers.len() == Into::<usize>::into(self.p2p_config.msg_header_count_limit.clone());
         let headers = self
             .chainstate_handle
             .call(|c| c.filter_already_existing_blocks(headers))
@@ -542,7 +542,7 @@ where
     /// Sends a header list request to the given peer.
     async fn request_headers(&mut self, peer: T::PeerId) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-        debug_assert!(locator.len() <= self.p2p_config.max_locator_count.clone().into());
+        debug_assert!(locator.len() <= self.p2p_config.msg_max_locator_count.clone().into());
 
         self.messaging_handle
             .send_message(
