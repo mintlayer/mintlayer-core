@@ -22,13 +22,13 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, GenBlock, OutPoint, OutPointSourceId,
+        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData,
+    PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 

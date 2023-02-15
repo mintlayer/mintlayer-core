@@ -17,10 +17,12 @@
 
 use std::collections::BTreeMap;
 
-use common::primitives::Amount;
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
+};
 use pos_accounting::{
-    DelegationData, DelegationId, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
-    PoolId,
+    DelegationData, PoSAccountingStorageRead, PoSAccountingStorageWrite, PoolData,
 };
 
 use super::{MockStore, MockStoreTxRo, MockStoreTxRw};

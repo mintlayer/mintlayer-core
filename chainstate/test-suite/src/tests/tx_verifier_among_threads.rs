@@ -16,7 +16,7 @@
 use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
 use common::{
-    chain::OutPoint,
+    chain::{DelegationId, OutPoint, PoolId},
     primitives::{Id, H256},
 };
 use pos_accounting::PoSAccountingView;
@@ -50,31 +50,29 @@ impl UtxosView for EmptyUtxosView {
 pub struct EmptyAccountingView;
 
 impl PoSAccountingView for EmptyAccountingView {
-    fn pool_exists(&self, _pool_id: pos_accounting::PoolId) -> Result<bool, pos_accounting::Error> {
+    fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         Ok(false)
     }
 
     fn get_pool_balance(
         &self,
-        _pool_id: pos_accounting::PoolId,
+        _pool_id: PoolId,
     ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
         Ok(None)
     }
 
     fn get_pool_data(
         &self,
-        _pool_id: pos_accounting::PoolId,
+        _pool_id: PoolId,
     ) -> Result<Option<pos_accounting::PoolData>, pos_accounting::Error> {
         Ok(None)
     }
 
     fn get_pool_delegations_shares(
         &self,
-        _pool_id: pos_accounting::PoolId,
+        _pool_id: PoolId,
     ) -> Result<
-        Option<
-            std::collections::BTreeMap<pos_accounting::DelegationId, common::primitives::Amount>,
-        >,
+        Option<std::collections::BTreeMap<DelegationId, common::primitives::Amount>>,
         pos_accounting::Error,
     > {
         Ok(None)
@@ -82,22 +80,22 @@ impl PoSAccountingView for EmptyAccountingView {
 
     fn get_delegation_balance(
         &self,
-        _delegation_id: pos_accounting::DelegationId,
+        _delegation_id: DelegationId,
     ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
         Ok(None)
     }
 
     fn get_delegation_data(
         &self,
-        _delegation_id: pos_accounting::DelegationId,
+        _delegation_id: DelegationId,
     ) -> Result<Option<pos_accounting::DelegationData>, pos_accounting::Error> {
         Ok(None)
     }
 
     fn get_pool_delegation_share(
         &self,
-        _pool_id: pos_accounting::PoolId,
-        _delegation_id: pos_accounting::DelegationId,
+        _pool_id: PoolId,
+        _delegation_id: DelegationId,
     ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
         Ok(None)
     }

@@ -20,11 +20,14 @@ use accounting::{
     DeltaDataUndoCollection,
 };
 use chainstate_types::storage_result;
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::{signed_amount::SignedAmount, Amount},
+};
 
 use crate::{
     error::Error, pool::delta::data::PoSAccountingDeltaData, storage::PoSAccountingStorageWrite,
-    DelegationId, DeltaMergeUndo, PoolId, StorageTag,
+    DeltaMergeUndo, StorageTag,
 };
 
 pub mod operator_impls;

@@ -28,13 +28,14 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
+        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, FlushablePoSAccountingView,
-    PoSAccountingDeltaData, PoSAccountingView, PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, FlushablePoSAccountingView,
+    PoSAccountingDeltaData, PoSAccountingView, PoolData,
 };
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 

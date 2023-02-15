@@ -14,11 +14,14 @@
 // limitations under the License.
 
 use accounting::DataDeltaUndo;
-use common::{chain::OutPoint, primitives::Amount};
+use common::{
+    chain::{DelegationId, OutPoint, PoolId},
+    primitives::Amount,
+};
 use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
 
-use crate::{error::Error, DelegationId, PoolId};
+use crate::error::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum PoolDataUndo {

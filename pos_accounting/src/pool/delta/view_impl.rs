@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use accounting::combine_amount_delta;
-use common::primitives::{signed_amount::SignedAmount, Amount};
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::{signed_amount::SignedAmount, Amount},
+};
 
 use crate::{
     error::Error,
@@ -25,7 +28,7 @@ use crate::{
         pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
-    DelegationId, DeltaMergeUndo, PoolId,
+    DeltaMergeUndo,
 };
 
 use super::{data::PoSAccountingDeltaData, PoSAccountingDelta};

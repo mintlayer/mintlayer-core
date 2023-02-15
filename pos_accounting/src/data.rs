@@ -15,10 +15,13 @@
 
 use std::collections::BTreeMap;
 
-use common::primitives::Amount;
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
+};
 use serialization::{Decode, Encode};
 
-use crate::{DelegationData, DelegationId, PoolData, PoolId};
+use crate::{DelegationData, PoolData};
 
 #[derive(Clone, Encode, Decode, Debug, PartialEq, Eq)]
 pub struct PoSAccountingData {

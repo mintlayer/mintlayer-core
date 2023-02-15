@@ -20,13 +20,13 @@ use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
+        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
 };
 use utxo::{Utxo, UtxosBlockUndo};
 
