@@ -79,8 +79,8 @@ impl Model {
     }
 
     /// New model obtained by dumping a database in a transaction. May contain uncommitted changes.
-    pub fn from_tx<Tx: for<'tx> backend::PrefixIter<'tx>>(tx: &Tx, map_id: DbMapId) -> Self {
-        Model(backend::PrefixIter::prefix_iter(tx, map_id, Data::new()).unwrap().collect())
+    pub fn from_tx<Tx: backend::ReadOps>(tx: &Tx, map_id: DbMapId) -> Self {
+        Model(backend::ReadOps::prefix_iter(tx, map_id, Data::new()).unwrap().collect())
     }
 
     /// Get the inner map

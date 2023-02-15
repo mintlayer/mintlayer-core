@@ -20,7 +20,7 @@ use crate::{
     Backend, Storage,
 };
 use std::collections::BTreeMap;
-use storage_core::backend::PrefixIter;
+use storage_core::backend::ReadOps;
 
 pub use storage_core::Data;
 

@@ -15,7 +15,9 @@
 
 //! Internal functions and types used in the implementation of prefix iterator for RW transactions
 
-use super::{Data, DbMapId, PrefixIter, TxRw};
+use crate::backend::ReadOps;
+
+use super::{Data, DbMapId, TxRw};
 use itertools::EitherOrBoth;
 
 // The prefix iterator type for mutable transaction is a fairly complicated type. Here, we
@@ -24,7 +26,7 @@ type DataPair = (Data, Data);
 type DataPairRef<'a> = (&'a [u8], &'a Option<Data>);
 type KeyCompareFn = fn(&DataPair, &DataPairRef<'_>) -> std::cmp::Ordering;
 type ItemMergeFn = fn(itertools::EitherOrBoth<DataPair, DataPairRef<'_>>) -> Option<DataPair>;
-type DbIter<'i, T> = <T as PrefixIter<'i>>::Iterator;
+type DbIter<'i, T> = <T as ReadOps>::PrefixIter<'i>;
 type DeltaIter<'i> = crate::util::PrefixIter<'i, Option<Data>>;
 type JoinIter<'i, T> = itertools::MergeJoinBy<DbIter<'i, T>, DeltaIter<'i>, KeyCompareFn>;
 pub type Iter<'i, T> = std::iter::FilterMap<JoinIter<'i, T>, ItemMergeFn>;
@@ -48,7 +50,7 @@ fn merger(item: EitherOrBoth<DataPair, DataPairRef<'_>>) -> Option<(Data, Data)>
 }
 
 /// Create the iterator
-pub fn iter<'tx, 'i, 'm: 'i, T: PrefixIter<'i>>(
+pub fn iter<'tx, 'i, 'm: 'i, T: ReadOps>(
     tx: &'m TxRw<'tx, T>,
     map_id: DbMapId,
     prefix: Data,
