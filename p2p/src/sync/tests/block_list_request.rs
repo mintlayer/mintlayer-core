@@ -15,14 +15,17 @@
 
 use std::{iter, sync::Arc};
 
+use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use p2p_test_utils::{
     create_block, create_n_blocks, import_blocks, start_chainstate, TestBlockInfo,
 };
 
 use crate::{
+    error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, BlockListRequest, BlockResponse, SyncMessage},
+    P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -62,7 +65,10 @@ async fn max_block_exceeded() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::BlocksRequestLimitExceeded(0, 0)).ban_score()
+    );
 }
 
 #[tokio::test]
@@ -93,7 +99,10 @@ async fn unknown_blocks() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::UnknownBlockRequested).ban_score()
+    );
 }
 
 #[tokio::test]

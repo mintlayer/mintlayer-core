@@ -2250,6 +2250,7 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "common",
+ "consensus",
  "crypto",
  "futures",
  "itertools",

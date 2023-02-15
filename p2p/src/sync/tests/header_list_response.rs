@@ -15,12 +15,15 @@
 
 use std::{iter, sync::Arc};
 
+use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
 
 use crate::{
+    error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, BlockListRequest, HeaderListResponse, SyncMessage},
+    P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -55,7 +58,10 @@ async fn header_count_limit_exceeded() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
+    );
 }
 
 #[tokio::test]
@@ -86,7 +92,10 @@ async fn unordered_headers() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
+    );
 }
 
 #[tokio::test]
@@ -114,7 +123,10 @@ async fn disconnected_headers() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
+    );
 }
 
 #[tokio::test]

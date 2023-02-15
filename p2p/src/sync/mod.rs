@@ -418,6 +418,7 @@ where
             .await??
             .is_none()
         {
+            // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
             self.request_headers(peer).await?;
             return Ok(());
         }

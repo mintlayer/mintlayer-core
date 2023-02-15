@@ -15,13 +15,15 @@
 
 use std::{iter, sync::Arc};
 
-use chainstate::Locator;
+use chainstate::{ban_score::BanScore, Locator};
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use p2p_test_utils::{create_block, import_blocks, start_chainstate, TestBlockInfo};
 
 use crate::{
+    error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, HeaderListRequest, SyncMessage},
+    P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -56,7 +58,10 @@ async fn locator_size_exceeded() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
+    );
 }
 
 #[tokio::test]

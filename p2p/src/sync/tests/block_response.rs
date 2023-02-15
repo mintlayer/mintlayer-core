@@ -15,15 +15,18 @@
 
 use std::sync::Arc;
 
+use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
 
 use crate::{
+    error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{
         tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, BlockResponse,
         HeaderListResponse, SyncMessage,
     },
+    P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -57,7 +60,10 @@ async fn unrequested_block() {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(score, 20);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
+    );
 }
 
 #[tokio::test]
