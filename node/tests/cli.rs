@@ -16,7 +16,6 @@
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
 use assert_cmd::Command;
-use directories::UserDirs;
 use tempfile::TempDir;
 
 use node::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
@@ -36,36 +35,52 @@ fn no_args() {
     Command::new(BIN_NAME).assert().failure();
 }
 
+fn create_empty_file(path: impl AsRef<Path>) {
+    let path = path.as_ref();
+    let _file = std::fs::File::create(path).unwrap();
+}
+
 #[test]
 fn create_default_config() {
     let data_dir = TempDir::new().unwrap();
 
-    Command::new(BIN_NAME)
-        .arg("--datadir")
-        .arg(data_dir.path().to_str().unwrap())
-        .arg("create-config")
-        .assert()
-        .success();
+    create_empty_file(data_dir.path().join(CONFIG_NAME));
+
     let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
-    let options = default_run_options();
-    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
-
-    assert_eq!(config.datadir, data_dir.path());
+    let options = RunOptions::default();
+    let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
     assert_eq!(
-        config.chainstate.chainstate_config.max_db_commit_attempts,
+        config
+            .chainstate
+            .clone()
+            .unwrap_or_default()
+            .chainstate_config
+            .max_db_commit_attempts,
         None
     );
-    assert_eq!(config.chainstate.chainstate_config.max_orphan_blocks, None);
+    assert_eq!(
+        config.chainstate.unwrap_or_default().chainstate_config.max_orphan_blocks,
+        None
+    );
 
-    assert!(config.p2p.bind_addresses.unwrap_or_default().is_empty());
-    assert_eq!(config.p2p.ban_threshold, None);
-    assert_eq!(config.p2p.outbound_connection_timeout, None);
+    assert!(config
+        .p2p
+        .clone()
+        .unwrap_or_default()
+        .bind_addresses
+        .unwrap_or_default()
+        .is_empty());
+    assert_eq!(config.p2p.clone().unwrap_or_default().ban_threshold, None);
+    assert_eq!(
+        config.p2p.clone().unwrap_or_default().outbound_connection_timeout,
+        None
+    );
 
     assert_eq!(
-        config.rpc.http_bind_address,
+        config.rpc.unwrap_or_default().http_bind_address,
         Some(SocketAddr::from_str("127.0.0.1:3030").unwrap())
     );
 }
@@ -75,12 +90,8 @@ fn create_default_config() {
 fn read_config_override_values() {
     let data_dir = TempDir::new().unwrap();
 
-    Command::new(BIN_NAME)
-        .arg("--datadir")
-        .arg(data_dir.path().to_str().unwrap())
-        .arg("create-config")
-        .assert()
-        .success();
+    create_empty_file(data_dir.path().join(CONFIG_NAME));
+
     let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
@@ -116,107 +127,62 @@ fn read_config_override_values() {
         ws_rpc_addr: Some(ws_rpc_addr),
         ws_rpc_enabled: Some(false),
     };
-    let datadir_opt = Some(data_dir.path().into());
-    let config = NodeConfigFile::read(&config_path, &datadir_opt, &options).unwrap();
-
-    assert_eq!(config.datadir, data_dir.path());
+    let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
     assert_eq!(
-        config.chainstate.chainstate_config.max_db_commit_attempts,
+        config.chainstate.clone().unwrap().chainstate_config.max_db_commit_attempts,
         Some(max_db_commit_attempts)
     );
     assert_eq!(
-        config.chainstate.chainstate_config.max_orphan_blocks,
+        config.chainstate.clone().unwrap().chainstate_config.max_orphan_blocks,
         Some(max_orphan_blocks)
     );
     assert_eq!(
-        config.chainstate.chainstate_config.tx_index_enabled,
+        config.chainstate.clone().unwrap().chainstate_config.tx_index_enabled,
         Some(false)
     );
     assert_eq!(
-        config.chainstate.chainstate_config.max_tip_age,
+        config.chainstate.clone().unwrap().chainstate_config.max_tip_age,
         Some(max_tip_age)
     );
 
-    assert_eq!(config.p2p.bind_addresses, Some(vec!(p2p_addr.to_owned())));
-    assert_eq!(config.p2p.added_nodes, Some(vec!(p2p_add_node.to_owned())));
-    assert_eq!(config.p2p.ban_threshold, Some(p2p_ban_threshold));
-    assert_eq!(config.p2p.outbound_connection_timeout, Some(p2p_timeout));
-    assert_eq!(config.p2p.ping_check_period, Some(p2p_ping_check_period));
-    assert_eq!(config.p2p.ping_timeout, Some(p2p_ping_timeout));
-    assert_eq!(config.p2p.node_type, Some(node_type));
+    assert_eq!(
+        config.p2p.clone().unwrap().bind_addresses,
+        Some(vec!(p2p_addr.to_owned()))
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().added_nodes,
+        Some(vec!(p2p_add_node.to_owned()))
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().ban_threshold,
+        Some(p2p_ban_threshold)
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().outbound_connection_timeout,
+        Some(p2p_timeout)
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().ping_check_period,
+        Some(p2p_ping_check_period)
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().ping_timeout,
+        Some(p2p_ping_timeout)
+    );
+    assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
 
-    assert_eq!(config.rpc.http_bind_address, Some(http_rpc_addr));
-    assert!(config.rpc.http_enabled.unwrap());
+    assert_eq!(
+        config.rpc.clone().unwrap().http_bind_address,
+        Some(http_rpc_addr)
+    );
+    assert!(config.rpc.clone().unwrap().http_enabled.unwrap());
 
-    assert_eq!(config.rpc.ws_bind_address, Some(ws_rpc_addr));
-    assert!(!config.rpc.ws_enabled.unwrap());
+    assert_eq!(
+        config.rpc.clone().unwrap().ws_bind_address,
+        Some(ws_rpc_addr)
+    );
+    assert!(!config.rpc.clone().unwrap().ws_enabled.unwrap());
 
-    assert_eq!(config.chainstate.storage_backend, backend_type);
-}
-
-// Check that the `--conf` option has the precedence over the default data directory value.
-#[test]
-fn custom_config_path() {
-    let temp_dir = TempDir::new().unwrap();
-    let config_path = temp_dir.path().join(CONFIG_NAME);
-
-    Command::new(BIN_NAME)
-        .arg("--conf")
-        .arg(config_path.to_str().unwrap())
-        .arg("create-config")
-        .assert()
-        .success();
-    let data_dir = UserDirs::new().unwrap().home_dir().join(".mintlayer");
-    assert!(data_dir.is_dir());
-    assert!(config_path.is_file());
-
-    let options = default_run_options();
-    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
-
-    assert_eq!(config.datadir, data_dir);
-}
-
-// Check that the `--conf` option has the precedence over the `--datadir` option.
-#[test]
-fn custom_config_path_and_data_dir() {
-    let data_dir = TempDir::new().unwrap();
-    let temp_dir = TempDir::new().unwrap();
-    let config_path = temp_dir.path().join(CONFIG_NAME);
-
-    Command::new(BIN_NAME)
-        .arg("--datadir")
-        .arg(data_dir.path().to_str().unwrap())
-        .arg("--conf")
-        .arg(config_path.to_str().unwrap())
-        .arg("create-config")
-        .assert()
-        .success();
-    assert!(config_path.is_file());
-
-    let options = default_run_options();
-    let config = NodeConfigFile::read(&config_path, &None, &options).unwrap();
-
-    assert_eq!(config.datadir, data_dir.path());
-}
-
-fn default_run_options() -> RunOptions {
-    RunOptions {
-        storage_backend: None,
-        node_type: None,
-        max_db_commit_attempts: None,
-        max_orphan_blocks: None,
-        tx_index_enabled: None,
-        p2p_addr: None,
-        p2p_add_node: None,
-        p2p_ban_threshold: None,
-        p2p_outbound_connection_timeout: None,
-        p2p_ping_check_period: None,
-        p2p_ping_timeout: None,
-        max_tip_age: None,
-        http_rpc_addr: None,
-        http_rpc_enabled: None,
-        ws_rpc_addr: None,
-        ws_rpc_enabled: None,
-    }
+    assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);
 }

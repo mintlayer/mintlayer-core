@@ -24,12 +24,12 @@ use common::{
 };
 use pos_accounting::PoSAccountingStorageRead;
 
-use crate::{detail::orphan_blocks::OrphanBlocks, TransactionVerificationStrategy};
+use crate::TransactionVerificationStrategy;
 
 use super::ChainstateRef;
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    BlockIndexHandle for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockIndexHandle
+    for ChainstateRef<'a, S, V>
 {
     fn get_block_index(
         &self,
@@ -66,8 +66,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    PoSAccountingSealedHandle for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingSealedHandle
+    for ChainstateRef<'a, S, V>
 {
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, PropertyQueryError> {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&self.db_tx, pool_id)

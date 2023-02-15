@@ -28,7 +28,10 @@ pub mod testing_utils;
 pub mod types;
 pub mod utils;
 
-use std::sync::Arc;
+use std::{
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    sync::Arc,
+};
 
 use interface::p2p_interface::P2pInterface;
 use peer_manager::peerdb::storage::PeerDbStorage;
@@ -73,8 +76,10 @@ where
     /// Start the P2P subsystem
     ///
     /// This function starts the networking backend and individual manager objects.
+    #[allow(clippy::too_many_arguments)]
     pub async fn new<S: PeerDbStorage + 'static>(
         transport: T::Transport,
+        bind_addresses: Vec<T::Address>,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -82,16 +87,6 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
-        let bind_addresses = p2p_config
-            .bind_addresses
-            .iter()
-            .map(|address| {
-                address.parse::<T::Address>().map_err(|_| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(address.clone()))
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         let (conn, sync) = T::start(
             transport,
             bind_addresses,
@@ -156,6 +151,41 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
+pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
+
+pub fn make_p2p_transport() -> NoiseTcpTransport {
+    let stream_adapter = NoiseEncryptionAdapter::gen_new();
+    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
+    NoiseTcpTransport::new(stream_adapter, base_transport)
+}
+
+fn get_p2p_bind_addresses<S: AsRef<str>>(
+    bind_addresses: &[S],
+    p2p_port: u16,
+) -> Result<Vec<SocketAddr>> {
+    if !bind_addresses.is_empty() {
+        bind_addresses
+            .iter()
+            .map(|address| {
+                address
+                    .as_ref()
+                    .parse::<<P2pNetworkingService as NetworkingService>::Address>()
+                    .map_err(|_| {
+                        P2pError::ConversionError(ConversionError::InvalidAddress(
+                            address.as_ref().to_owned(),
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>>>()
+    } else {
+        // Bind to default addresses if none are specified by the user
+        Ok(vec![
+            SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port),
+            SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port),
+        ])
+    }
+}
+
 pub async fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
@@ -164,12 +194,14 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
-    let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
-    let transport = NoiseTcpTransport::new(stream_adapter, base_transport);
+    let transport = make_p2p_transport();
 
-    let p2p = P2p::<DefaultNetworkingService<NoiseTcpTransport>>::new(
+    let bind_addresses =
+        get_p2p_bind_addresses(&p2p_config.bind_addresses, chain_config.p2p_port())?;
+
+    let p2p = P2p::<P2pNetworkingService>::new(
         transport,
+        bind_addresses,
         chain_config,
         p2p_config,
         chainstate_handle,

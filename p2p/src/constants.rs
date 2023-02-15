@@ -17,13 +17,5 @@
 //!
 //! See protocol specification for more details
 
-use std::time::Duration;
-
-/// Ping configuration
-/// NOTE: these are not from config but part of Mintlayer's protocol specification
-pub const PING_TIMEOUT: Duration = Duration::from_secs(60);
-pub const PING_INTERVAL: Duration = Duration::from_secs(60);
-pub const PING_MAX_RETRIES: u32 = 3;
-
 /// Maximum message size
 pub const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;

@@ -17,7 +17,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use crate::detail::{
     chainstateref::ChainstateRef,
-    orphan_blocks::OrphanBlocks,
     transaction_verifier::storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
@@ -41,8 +40,8 @@ use pos_accounting::{
 use tx_verifier::transaction_verifier::TransactionSource;
 use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosStorageRead};
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    TransactionVerifierStorageRef for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
+    for ChainstateRef<'a, S, V>
 {
     fn get_token_id_from_issuance_tx(
         &self,
@@ -101,8 +100,8 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    UtxosStorageRead for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStorageRead
+    for ChainstateRef<'a, S, V>
 {
     fn get_utxo(
         &self,
@@ -123,8 +122,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    FlushableUtxoView for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableUtxoView
+    for ChainstateRef<'a, S, V>
 {
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         let mut db = UtxosDB::new(&mut self.db_tx);
@@ -132,8 +131,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    TransactionVerifierStorageMut for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
+    TransactionVerifierStorageMut for ChainstateRef<'a, S, V>
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -269,9 +268,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
                     .db_tx
                     .get_block_index(&id)
                     .map_err(TransactionVerifierStorageError::from)?
-                    .ok_or(
-                        TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(id.into()),
-                    )?;
+                    .ok_or_else(|| {
+                        TransactionVerifierStorageError::GenBlockIndexRetrievalFailed(id.into())
+                    })?;
                 let current_epoch_index =
                     self.chain_config().epoch_index_from_height(&block_index.block_height());
                 let mut current_epoch_delta = self
@@ -291,8 +290,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationS
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    PoSAccountingView for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
+    for ChainstateRef<'a, S, V>
 {
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
@@ -349,8 +348,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationSt
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    FlushablePoSAccountingView for ChainstateRef<'a, S, O, V>
+impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushablePoSAccountingView
+    for ChainstateRef<'a, S, V>
 {
     fn batch_write_delta(
         &mut self,

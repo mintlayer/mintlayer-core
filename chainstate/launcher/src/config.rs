@@ -18,6 +18,7 @@
 use chainstate::ChainstateConfig;
 
 /// Storage type to use
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageBackendConfig {
     Lmdb,
@@ -31,6 +32,7 @@ impl Default for StorageBackendConfig {
 }
 
 /// Storage configuration
+#[must_use]
 #[derive(Debug, Default)]
 pub struct ChainstateLauncherConfig {
     /// Storage backend to use

@@ -17,10 +17,10 @@ use typename::TypeName;
 
 use crate::primitives::Id;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
-pub struct Pool;
+#[derive(Eq, PartialEq, TypeName)]
+pub enum Pool {}
 pub type PoolId = Id<Pool>;
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, TypeName)]
-pub struct Delegation;
+#[derive(Eq, PartialEq, TypeName)]
+pub enum Delegation {}
 pub type DelegationId = Id<Delegation>;

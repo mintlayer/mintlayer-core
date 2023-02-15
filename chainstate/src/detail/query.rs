@@ -28,22 +28,19 @@ use common::{
 };
 
 use super::{
-    chainstateref, orphan_blocks::OrphanBlocks,
-    tx_verification_strategy::TransactionVerificationStrategy, HEADER_LIMIT,
+    chainstateref, tx_verification_strategy::TransactionVerificationStrategy, HEADER_LIMIT,
 };
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
 }
 
-pub struct ChainstateQuery<'a, S, O, V> {
-    chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>,
+pub struct ChainstateQuery<'a, S, V> {
+    chainstate_ref: chainstateref::ChainstateRef<'a, S, V>,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphanBlocks, V: TransactionVerificationStrategy>
-    ChainstateQuery<'a, S, O, V>
-{
-    pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, O, V>) -> Self {
+impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> ChainstateQuery<'a, S, V> {
+    pub(crate) fn new(chainstate_ref: chainstateref::ChainstateRef<'a, S, V>) -> Self {
         Self { chainstate_ref }
     }
 

@@ -72,6 +72,15 @@ impl ChainType {
             ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
         }
     }
+
+    const fn default_p2p_port(&self) -> u16 {
+        match self {
+            ChainType::Mainnet => 3031,
+            ChainType::Testnet => 13031,
+            ChainType::Regtest => 23031,
+            ChainType::Signet => 33031,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +90,7 @@ pub struct ChainConfig {
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
+    p2p_port: u16,
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -123,8 +133,8 @@ impl ChainConfig {
         &self.magic_bytes
     }
 
-    pub fn magic_bytes_as_u32(&self) -> u32 {
-        u32::from_le_bytes(*self.magic_bytes())
+    pub fn p2p_port(&self) -> u16 {
+        self.p2p_port
     }
 
     pub fn version(&self) -> &SemVer {
@@ -315,6 +325,10 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
 
 pub fn create_mainnet() -> ChainConfig {
     Builder::new(ChainType::Mainnet).build()
+}
+
+pub fn create_testnet() -> ChainConfig {
+    Builder::new(ChainType::Testnet).build()
 }
 
 pub fn create_regtest() -> ChainConfig {

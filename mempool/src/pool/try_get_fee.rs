@@ -20,11 +20,11 @@ use common::{
 
 use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
 
-use super::Mempool;
+use super::{fee::Fee, Mempool};
 
 #[async_trait::async_trait]
 pub trait TryGetFee {
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError>;
+    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Fee, TxValidationError>;
 }
 
 #[async_trait::async_trait]
@@ -33,7 +33,7 @@ where
     M: GetMemoryUsage + Send + Sync,
 {
     // TODO this calculation is already done in ChainState, reuse it
-    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Amount, TxValidationError> {
+    async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Fee, TxValidationError> {
         let tx_clone = tx.clone();
 
         // Outputs in this vec are:
@@ -72,6 +72,7 @@ where
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
-        (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
+        let fee = (sum_inputs - sum_outputs).map(|f| f.into());
+        fee.ok_or(TxValidationError::InputsBelowOutputs)
     }
 }

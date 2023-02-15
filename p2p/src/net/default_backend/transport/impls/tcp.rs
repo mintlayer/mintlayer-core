@@ -13,20 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::{
-    config::DEFAULT_BIND_PORT,
     net::{
         default_backend::transport::{
             traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
         },
         AsBannableAddress,
     },
+    peer_manager::global_ip::IsGlobalIp,
     types::peer_address::PeerAddress,
     Result,
 };
@@ -36,8 +36,22 @@ impl TransportAddress for SocketAddr {
         (*self).into()
     }
 
-    fn from_peer_address(address: &PeerAddress) -> Option<Self> {
-        Some(address.into())
+    fn from_peer_address(address: &PeerAddress, allow_private_ips: bool) -> Option<Self> {
+        match &address {
+            PeerAddress::Ip4(socket)
+                if (Ipv4Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            PeerAddress::Ip6(socket)
+                if (Ipv6Addr::from(socket.ip).is_global_unicast_ip() || allow_private_ips)
+                    && socket.port != 0 =>
+            {
+                Some(address.into())
+            }
+            _ => None,
+        }
     }
 }
 
@@ -75,15 +89,6 @@ pub struct TcpTransportListener {
 
 impl TcpTransportListener {
     fn new(addresses: Vec<SocketAddr>) -> Result<Self> {
-        let addresses = if addresses.is_empty() {
-            vec![
-                SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-                SocketAddr::new(std::net::Ipv6Addr::UNSPECIFIED.into(), DEFAULT_BIND_PORT),
-            ]
-        } else {
-            addresses
-        };
-
         let listeners = addresses
             .into_iter()
             .map(|address| -> Result<TcpListener> {
@@ -128,6 +133,10 @@ impl TcpTransportListener {
 #[async_trait]
 impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
     async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
+        // select_next_some will panic if polled while empty
+        if self.listeners.is_empty() {
+            return std::future::pending().await;
+        }
         let mut tasks: FuturesUnordered<_> =
             self.listeners.iter().map(|listener| listener.accept()).collect();
         let (stream, address) = tasks.select_next_some().await?;
@@ -158,16 +167,18 @@ impl PeerStream for TcpTransportStream {}
 
 #[cfg(test)]
 mod tests {
+    use common::{
+        chain::block::Block,
+        primitives::{Id, H256},
+    };
+
     use crate::{
-        message::{BlockListRequest, SyncRequest},
+        message::BlockListRequest,
         testing_utils::{TestTransportMaker, TestTransportTcp},
     };
 
     use super::*;
-    use crate::net::default_backend::{
-        transport::BufferedTranscoder,
-        types::{Message, RequestId},
-    };
+    use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
     #[tokio::test]
     async fn send_recv() {
@@ -179,25 +190,12 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let request_id = RequestId::new();
-        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
+        let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
         let mut peer_stream = BufferedTranscoder::new(peer_stream);
-        peer_stream
-            .send(Message::Request {
-                request_id,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        peer_stream.send(message.clone()).await.unwrap();
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id,
-                request: request.into(),
-            }
-        );
+        assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 
     #[tokio::test]
@@ -210,40 +208,18 @@ mod tests {
         let server_stream = server_res.unwrap().0;
         let peer_stream = peer_res.unwrap();
 
-        let id_1 = RequestId::new();
-        let request = SyncRequest::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream);
-        peer_stream
-            .send(Message::Request {
-                request_id: id_1,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
+        let mut rng =
+            test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
+        let id: Id<Block> = H256::random_using(&mut rng).into();
+        let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
 
-        let id_2 = RequestId::new();
-        peer_stream
-            .send(Message::Request {
-                request_id: id_2,
-                request: request.clone().into(),
-            })
-            .await
-            .unwrap();
+        let mut peer_stream = BufferedTranscoder::new(peer_stream);
+        peer_stream.send(message_1.clone()).await.unwrap();
+        peer_stream.send(message_2.clone()).await.unwrap();
 
         let mut server_stream = BufferedTranscoder::new(server_stream);
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id: id_1,
-                request: request.clone().into(),
-            }
-        );
-        assert_eq!(
-            server_stream.recv().await.unwrap(),
-            Message::Request {
-                request_id: id_2,
-                request: request.into(),
-            }
-        );
+        assert_eq!(server_stream.recv().await.unwrap(), message_1);
+        assert_eq!(server_stream.recv().await.unwrap(), message_2);
     }
 }

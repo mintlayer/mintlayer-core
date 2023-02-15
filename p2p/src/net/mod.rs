@@ -27,8 +27,7 @@ use async_trait::async_trait;
 
 use crate::{
     config,
-    message::{Announcement, PeerManagerRequest},
-    message::{PeerManagerResponse, SyncRequest, SyncResponse},
+    message::{Announcement, PeerManagerMessage, SyncMessage},
 };
 
 use self::default_backend::transport::TransportAddress;
@@ -70,9 +69,6 @@ pub trait NetworkingService {
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Ord + Hash + Send + Sync + ToString + FromStr;
-
-    /// Unique ID assigned to each received request from a peer
-    type PeerRequestId: Copy + Debug + Eq + Hash + Send + Sync;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -116,27 +112,8 @@ where
     /// `peer_id` - Peer ID of the remote node
     fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
-    /// Send PeerManager's request to remote
-    ///
-    /// # Arguments
-    /// * `peer_id` - Unique ID of the peer the request is sent to
-    /// * `request` - Request to be sent
-    fn send_request(
-        &mut self,
-        peer_id: T::PeerId,
-        request: PeerManagerRequest,
-    ) -> crate::Result<T::PeerRequestId>;
-
-    /// Send response to remote
-    ///
-    /// # Arguments
-    /// * `request_id` - ID of the request this is a response to
-    /// * `response` - Response to be sent
-    fn send_response(
-        &mut self,
-        request_id: T::PeerRequestId,
-        response: PeerManagerResponse,
-    ) -> crate::Result<()>;
+    /// Sends a message to the given peer.
+    fn send_message(&mut self, peer: T::PeerId, message: PeerManagerMessage) -> crate::Result<()>;
 
     /// Return the socket addresses of the network service provider
     fn local_addresses(&self) -> &[T::Address];
@@ -157,27 +134,8 @@ pub trait SyncingMessagingService<T>
 where
     T: NetworkingService,
 {
-    /// Send block/header request to remote
-    ///
-    /// # Arguments
-    /// * `peer_id` - Unique ID of the peer the request is sent to
-    /// * `request` - Request to be sent
-    fn send_request(
-        &mut self,
-        peer_id: T::PeerId,
-        request: SyncRequest,
-    ) -> crate::Result<T::PeerRequestId>;
-
-    /// Send block/header response to remote
-    ///
-    /// # Arguments
-    /// * `request_id` - ID of the request this is a response to
-    /// * `response` - Response to be sent
-    fn send_response(
-        &mut self,
-        request_id: T::PeerRequestId,
-        response: SyncResponse,
-    ) -> crate::Result<()>;
+    /// Sends a message to the peer.
+    fn send_message(&mut self, peer: T::PeerId, message: SyncMessage) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;

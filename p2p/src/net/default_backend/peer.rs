@@ -494,12 +494,9 @@ mod tests {
         let mut socket2 = BufferedTranscoder::new(socket2);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
-            .send(types::Message::Request {
-                request_id: types::RequestId::new(),
-                request: message::Request::HeaderListRequest(message::HeaderListRequest::new(
-                    Locator::new(vec![]),
-                )),
-            })
+            .send(types::Message::HeaderListRequest(
+                message::HeaderListRequest::new(Locator::new(vec![])),
+            ))
             .await
             .unwrap();
 

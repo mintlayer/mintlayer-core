@@ -22,10 +22,7 @@ use serialization::{Decode, Encode};
 
 use crate::{BlockError, ChainstateConfig};
 
-use super::{
-    orphan_blocks::OrphanBlocks, query::ChainstateQuery,
-    tx_verification_strategy::TransactionVerificationStrategy,
-};
+use super::{query::ChainstateQuery, tx_verification_strategy::TransactionVerificationStrategy};
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum BootstrapError {
@@ -109,16 +106,11 @@ fn fill_buffer<S: std::io::Read>(
     Ok(())
 }
 
-pub fn export_bootstrap_stream<
-    'a,
-    S: BlockchainStorageRead,
-    O: OrphanBlocks,
-    V: TransactionVerificationStrategy,
->(
+pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>(
     magic_bytes: &[u8],
     writer: &mut std::io::BufWriter<Box<dyn std::io::Write + 'a + Send>>,
     include_orphans: bool,
-    query_interface: &ChainstateQuery<'a, S, O, V>,
+    query_interface: &ChainstateQuery<'a, S, V>,
 ) -> Result<(), BootstrapError>
 where
 {

@@ -30,5 +30,7 @@ directories = "4.0"
 paste = "1.0"
 
 [dev-dependencies]
+crypto = { path = "../crypto" }
+
 assert_cmd = "2"
 tempfile = "3.3"
