@@ -16,14 +16,14 @@
 use crate::BlockProductionError;
 
 pub trait BlockProductionInterface: Send {
-    /// When called, the block builder will start creating blocks at the next tip in chainstate
+    /// When called, the Block Builder will start creating blocks at the next tip in chainstate
     fn start(&self) -> Result<(), BlockProductionError>;
 
-    /// When called, the block builder will cancel all current attempts to create blocks
+    /// When called, the Block Builder will cancel all current attempts to create blocks
     /// and won't attempt to do it again for new tips in chainstate or mempool
     /// Call start() to enable again
     fn stop(&self) -> Result<(), BlockProductionError>;
 
-    /// Check if the block builder is currently connected
+    /// Check if the Block Builder is currently connected
     fn is_connected(&self) -> bool;
 }

@@ -203,14 +203,14 @@ impl PerpetualBlockBuilder {
     }
 }
 
-/// On destruction, this struct sends a message to all block makers to stop to aid a graceful exit
+/// On destruction, this struct sends a message to all Block Makers to stop to aid a graceful exit
 struct BlockMakersDestroyer(crossbeam_channel::Sender<BlockMakerControlCommand>);
 
 impl Drop for BlockMakersDestroyer {
     fn drop(&mut self) {
         match self.0.send(BlockMakerControlCommand::Stop) {
             Ok(_) => (),
-            Err(err) => log::error!("Failed to stop all block makers: {}", err),
+            Err(err) => log::error!("Failed to stop all Block Makers: {}", err),
         }
     }
 }
@@ -238,7 +238,7 @@ mod tests {
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
 
-        let mut builder = PerpetualBlockBuilder::new(
+        let mut block_builder = PerpetualBlockBuilder::new(
             chain_config,
             chainstate,
             mempool,
@@ -249,11 +249,15 @@ mod tests {
 
         let block_id = Id::new(H256::random_using(&mut make_pseudo_rng()));
 
-        builder
+        block_builder
             .new_tip(block_id, BlockHeight::one())
-            .expect("Error sending new tip to Makers");
+            .expect("Error sending new tip to Block Makers");
 
-        match builder.block_maker_rx.try_recv().expect("Error reading from Builder") {
+        match block_builder
+            .block_maker_rx
+            .try_recv()
+            .expect("Error reading from Block Builder")
+        {
             BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
                 assert!(block_id == new_block_id, "Invalid Block ID received");
                 assert!(
@@ -261,7 +265,7 @@ mod tests {
                     "Invalid block height received"
                 );
             }
-            _ => panic!("Error reading new tip from Builder"),
+            _ => panic!("Error reading new tip from Block Builder"),
         }
     }
 
@@ -271,7 +275,7 @@ mod tests {
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
 
-        let builder = PerpetualBlockBuilder::new(
+        let block_builder = PerpetualBlockBuilder::new(
             chain_config,
             chainstate,
             mempool,
@@ -280,11 +284,15 @@ mod tests {
             true,
         );
 
-        builder.stop_all_block_makers().expect("Error stopping all Makers");
+        block_builder.stop_all_block_makers().expect("Error stopping all Block Makers");
 
-        match builder.block_maker_rx.try_recv().expect("Error reading from Builder") {
+        match block_builder
+            .block_maker_rx
+            .try_recv()
+            .expect("Error reading from Block Builder")
+        {
             BlockMakerControlCommand::Stop => {}
-            _ => panic!("Invalid message received from Builder"),
+            _ => panic!("Invalid message received from Block Builder"),
         }
     }
 
@@ -294,7 +302,7 @@ mod tests {
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
 
-        let mut builder = PerpetualBlockBuilder::new(
+        let mut block_builder = PerpetualBlockBuilder::new(
             chain_config.clone(),
             chainstate.clone(),
             mempool,
@@ -303,7 +311,7 @@ mod tests {
             true,
         );
 
-        let block_maker_rx = builder.block_maker_rx.clone();
+        let block_maker_rx = block_builder.block_maker_rx.clone();
 
         let block = Block::new(
             vec![],
@@ -318,7 +326,7 @@ mod tests {
         let shutdown = manager.make_shutdown_trigger();
 
         thread::spawn(move || {
-            match block_maker_rx.recv().expect("Error reading from Builder") {
+            match block_maker_rx.recv().expect("Error reading from Block Builder") {
                 BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
                     assert!(block_id == new_block_id, "Invalid Block ID received");
                     assert!(
@@ -326,7 +334,7 @@ mod tests {
                         "Invalid block height received"
                     );
                 }
-                _ => panic!("Error reading new tip from Builder"),
+                _ => panic!("Error reading new tip from Block Builder"),
             }
 
             shutdown.initiate();
@@ -334,7 +342,7 @@ mod tests {
 
         tokio::spawn(async move {
             // This will error due to run()'s recv() on disconnect when done
-            builder.run().await.err();
+            block_builder.run().await.err();
         });
 
         let get_subscriber_count = {
@@ -365,7 +373,7 @@ mod tests {
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
 
-        let builder = PerpetualBlockBuilder::new(
+        let block_builder = PerpetualBlockBuilder::new(
             chain_config.clone(),
             chainstate.clone(),
             mempool,
@@ -377,7 +385,7 @@ mod tests {
         let shutdown = manager.make_shutdown_trigger();
 
         tokio::spawn(async move {
-            let mut chainstate_rx = builder
+            let mut chainstate_rx = block_builder
                 .subscribe_to_chainstate_events()
                 .await
                 .expect("Error subscribing to chainstate events");
