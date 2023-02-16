@@ -36,6 +36,9 @@ async fn nonexistent_peer() {
         peer,
         SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(Vec::new()))),
     );
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }
 
 #[tokio::test]
@@ -65,6 +68,7 @@ async fn max_locator_size_exceeded() {
         score,
         P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 #[tokio::test]
@@ -95,4 +99,5 @@ async fn valid_request() {
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
     assert!(matches!(message, SyncMessage::HeaderListResponse(_)));
+    handle.assert_no_error().await;
 }

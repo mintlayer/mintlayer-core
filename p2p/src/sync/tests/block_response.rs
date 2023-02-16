@@ -17,7 +17,9 @@ use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
+use crypto::random::Rng;
 use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
+use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
@@ -45,6 +47,9 @@ async fn nonexistent_peer() {
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
     );
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }
 
 #[tokio::test]
@@ -70,10 +75,16 @@ async fn unrequested_block() {
         score,
         P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn valid_response() {
+async fn valid_response(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -83,11 +94,14 @@ async fn valid_response() {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
+    let num_blocks = rng.gen_range(2..10);
+    println!("FIXME {num_blocks}");
     let blocks = create_n_blocks(
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        2,
+        num_blocks,
     );
+    println!("FIXME blocks len = {}", blocks.len());
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
     handle.send_message(
         peer,
@@ -102,26 +116,25 @@ async fn valid_response() {
         SyncMessage::BlockListRequest(BlockListRequest::new(ids))
     );
 
-    // First block.
-    handle.send_message(
-        peer,
-        SyncMessage::BlockResponse(BlockResponse::new(blocks[0].clone())),
-    );
-    assert_eq!(
-        handle.announcement().await,
-        Announcement::Block(blocks[0].header().clone())
-    );
+    for (i, block) in blocks.into_iter().enumerate() {
+        println!("FIXME");
+        handle.send_message(
+            peer,
+            SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
+        );
 
-    // Second block.
-    handle.send_message(
-        peer,
-        SyncMessage::BlockResponse(BlockResponse::new(blocks[1].clone())),
-    );
-    let (sent_to, message) = handle.message().await;
-    assert_eq!(peer, sent_to);
-    assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
-    assert_eq!(
-        handle.announcement().await,
-        Announcement::Block(blocks[1].header().clone())
-    );
+        // A peer would request headers after the last block.
+        if i == num_blocks - 1 {
+            let (sent_to, message) = handle.message().await;
+            assert_eq!(peer, sent_to);
+            assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+        }
+
+        assert_eq!(
+            handle.announcement().await,
+            Announcement::Block(block.header().clone())
+        );
+    }
+
+    handle.assert_no_error().await;
 }

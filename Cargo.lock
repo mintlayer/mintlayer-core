@@ -2263,6 +2263,7 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rpc",
+ "rstest",
  "serde",
  "serialization",
  "snowstorm",

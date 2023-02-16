@@ -49,6 +49,7 @@ async fn disconnect_nonexistent_peer() {
 
     let peer = PeerId::new();
     handle.disconnect_peer(peer);
+    handle.assert_no_error().await;
 }
 
 #[tokio::test]
@@ -58,4 +59,5 @@ async fn disconnect_peer() {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
     handle.disconnect_peer(peer);
+    handle.assert_no_error().await;
 }

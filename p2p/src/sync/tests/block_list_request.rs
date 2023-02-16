@@ -17,9 +17,11 @@ use std::{iter, sync::Arc};
 
 use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
+use crypto::random::Rng;
 use p2p_test_utils::{
     create_block, create_n_blocks, import_blocks, start_chainstate, TestBlockInfo,
 };
+use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
@@ -38,6 +40,9 @@ async fn nonexistent_peer() {
         peer,
         SyncMessage::BlockListRequest(BlockListRequest::new(Vec::new())),
     );
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }
 
 #[tokio::test]
@@ -76,6 +81,7 @@ async fn max_block_count_in_request_exceeded() {
         score,
         P2pError::ProtocolError(ProtocolError::BlocksRequestLimitExceeded(0, 0)).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 #[tokio::test]
@@ -113,17 +119,24 @@ async fn unknown_blocks() {
         score,
         P2pError::ProtocolError(ProtocolError::UnknownBlockRequested).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn valid_request() {
+async fn valid_request(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
     let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
     // Import several blocks.
+    let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        2,
+        num_blocks,
     );
     import_blocks(&chainstate, blocks.clone()).await;
 
@@ -142,17 +155,15 @@ async fn valid_request() {
         SyncMessage::BlockListRequest(BlockListRequest::new(ids)),
     );
 
-    let (sent_to, message) = handle.message().await;
-    assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::BlockResponse(BlockResponse::new(blocks[0].clone()))
-    );
+    for block in blocks {
+        let (sent_to, message) = handle.message().await;
+        assert_eq!(peer, sent_to);
+        assert_eq!(
+            message,
+            SyncMessage::BlockResponse(BlockResponse::new(block))
+        );
+    }
 
-    let (sent_to, message) = handle.message().await;
-    assert_eq!(peer, sent_to);
-    assert_eq!(
-        message,
-        SyncMessage::BlockResponse(BlockResponse::new(blocks[1].clone()))
-    );
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }

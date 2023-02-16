@@ -36,6 +36,9 @@ async fn nonexistent_peer() {
         peer,
         SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
     );
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }
 
 #[tokio::test]
@@ -69,6 +72,7 @@ async fn header_count_limit_exceeded() {
         score,
         P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 #[tokio::test]
@@ -106,6 +110,7 @@ async fn unordered_headers() {
         score,
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 #[tokio::test]
@@ -140,6 +145,7 @@ async fn disconnected_headers() {
         score,
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 #[tokio::test]
@@ -173,4 +179,6 @@ async fn valid_headers() {
             blocks.into_iter().map(|b| b.get_id()).collect()
         ))
     );
+
+    handle.assert_no_error().await;
 }

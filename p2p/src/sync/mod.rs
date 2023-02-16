@@ -422,11 +422,7 @@ where
         }
 
         let header_ = header.clone();
-        //self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
-        self.chainstate_handle
-            .call(|c| c.preliminary_header_check(header_))
-            .await?
-            .unwrap();
+        self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
         self.request_blocks(peer, vec![header])
     }
 

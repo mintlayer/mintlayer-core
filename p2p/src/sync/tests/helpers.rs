@@ -36,7 +36,9 @@ use crate::{
 };
 
 /// A timeout for blocking calls.
-const TIMEOUT: Duration = Duration::from_secs(5);
+const LONG_TIMEOUT: Duration = Duration::from_secs(5);
+/// A short timeout for events that shouldn't occur.
+const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// A wrapper over other ends of the sync manager channels.
 ///
@@ -153,22 +155,42 @@ impl SyncManagerHandle {
     /// Only fatal errors can be checked using this function. Non-fatal errors typically result in
     /// increasing the ban score of a peer.
     pub async fn error(&mut self) -> P2pError {
-        time::timeout(TIMEOUT, self.error_receiver.recv())
+        time::timeout(LONG_TIMEOUT, self.error_receiver.recv())
             .await
             .expect("Failed to receive error in time")
             .unwrap()
     }
 
+    /// Panics if the sync manager returns an error.
+    pub async fn assert_no_error(&mut self) {
+        time::timeout(SHORT_TIMEOUT, self.error_receiver.recv()).await.unwrap_err();
+    }
+
     /// Receives the `AdjustPeerScore` event from the peer manager.
     pub async fn adjust_peer_score_event(&mut self) -> (PeerId, u32) {
         match self.peer_manager_receiver.recv().await.unwrap() {
-            PeerManagerEvent::AdjustPeerScore(peer, score, _) => (peer, score),
+            PeerManagerEvent::AdjustPeerScore(peer, score, sender) => {
+                sender.send(Ok(()));
+                (peer, score)
+            }
             e => panic!("Unexpected peer manager event: {e:?}"),
         }
     }
 
+    /// Panics if there is an event from the peer manager.
+    pub async fn assert_no_peer_manager_event(&mut self) {
+        time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
+            .await
+            .unwrap_err();
+    }
+
+    /// Panics if the sync manager sends an event (message or announcement).
+    pub async fn assert_no_event(&mut self) {
+        time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
+    }
+
     async fn event(&mut self) -> SyncingEvent<NetworkingServiceStub> {
-        time::timeout(TIMEOUT, self.sync_event_receiver.recv())
+        time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
             .expect("Failed to receive event in time")
             .unwrap()
@@ -268,7 +290,7 @@ impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMo
     }
 
     async fn poll_next(&mut self) -> Result<SyncingEvent<NetworkingServiceStub>> {
-        Ok(time::timeout(TIMEOUT, self.events_receiver.recv())
+        Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await
             .expect("Failed to receive event in time")
             .unwrap())

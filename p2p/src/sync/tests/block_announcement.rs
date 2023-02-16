@@ -48,6 +48,9 @@ async fn nonexistent_peer() {
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
     );
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
 }
 
 // The header list request is sent if the parent of the announced block is unknown.
@@ -72,6 +75,7 @@ async fn unknown_prev_block() {
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+    handle.assert_no_peer_manager_event().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
@@ -105,6 +109,7 @@ async fn invalid_timestamp() {
         ))
         .ban_score()
     );
+    handle.assert_no_event().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
@@ -145,6 +150,8 @@ async fn invalid_consensus_data() {
         ))
         .ban_score()
     );
+    //handle.assert_no_event().await;
+    handle.assert_no_error().await;
 }
 
 #[tokio::test]
@@ -170,4 +177,5 @@ async fn valid_block() {
         message,
         SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
     );
+    handle.assert_no_error().await;
 }
