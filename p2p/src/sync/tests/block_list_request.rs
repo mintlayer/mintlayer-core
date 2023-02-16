@@ -25,7 +25,7 @@ use crate::{
     error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, BlockListRequest, BlockResponse, SyncMessage},
-    P2pError,
+    P2pConfig, P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -41,7 +41,8 @@ async fn nonexistent_peer() {
 }
 
 #[tokio::test]
-async fn max_block_exceeded() {
+async fn max_block_count_in_request_exceeded() {
+    let p2p_config = Arc::new(P2pConfig::default());
     let chain_config = Arc::new(create_unit_test_config());
     let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
     // Import a block to finish the initial block download.
@@ -51,13 +52,19 @@ async fn max_block_exceeded() {
     );
     import_blocks(&chainstate, vec![block.clone()]).await;
 
-    let mut handle =
-        SyncManagerHandle::with_chainstate_and_config(Arc::clone(&chain_config), chainstate).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let blocks = iter::repeat(block.get_id()).take(501).collect();
+    let blocks = iter::repeat(block.get_id())
+        .take(Into::<usize>::into(p2p_config.max_request_blocks_count.clone()) + 1)
+        .collect();
     handle.send_message(
         peer,
         SyncMessage::BlockListRequest(BlockListRequest::new(blocks)),
@@ -82,8 +89,11 @@ async fn unknown_blocks() {
     );
     import_blocks(&chainstate, vec![block.clone()]).await;
 
-    let mut handle =
-        SyncManagerHandle::with_chainstate_and_config(Arc::clone(&chain_config), chainstate).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_chainstate(chainstate)
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -117,8 +127,11 @@ async fn valid_request() {
     );
     import_blocks(&chainstate, blocks.clone()).await;
 
-    let mut handle =
-        SyncManagerHandle::with_chainstate_and_config(Arc::clone(&chain_config), chainstate).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;

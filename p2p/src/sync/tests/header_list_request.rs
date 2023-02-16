@@ -41,7 +41,10 @@ async fn nonexistent_peer() {
 #[tokio::test]
 async fn locator_size_exceeded() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -75,8 +78,11 @@ async fn valid_request() {
     );
     import_blocks(&chainstate, vec![block]).await;
 
-    let mut handle =
-        SyncManagerHandle::with_chainstate_and_config(Arc::clone(&chain_config), chainstate).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_chainstate(chainstate)
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;

@@ -53,21 +53,18 @@ impl SyncManagerHandle {
     /// Starts the sync manager event loop and returns a handle for manipulating and observing the
     /// manager state.
     pub async fn start() -> Self {
-        let chain_config = Arc::new(create_mainnet());
-        Self::with_config(chain_config).await
+        Self::builder().build().await
     }
 
-    pub async fn with_config(chain_config: Arc<ChainConfig>) -> Self {
-        let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
-        Self::with_chainstate_and_config(chain_config, chainstate).await
+    pub fn builder() -> SyncManagerHandleBuilder {
+        SyncManagerHandleBuilder::new()
     }
 
-    pub async fn with_chainstate_and_config(
+    pub async fn start_with_params(
         chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
     ) -> Self {
-        let p2p_config = Arc::new(P2pConfig::default());
-
         let (peer_event_sender, peer_event_receiver) = mpsc::unbounded_channel();
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
@@ -175,6 +172,49 @@ impl SyncManagerHandle {
             .await
             .expect("Failed to receive event in time")
             .unwrap()
+    }
+}
+
+pub struct SyncManagerHandleBuilder {
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate: Option<subsystem::Handle<Box<dyn ChainstateInterface>>>,
+}
+
+impl SyncManagerHandleBuilder {
+    pub fn new() -> Self {
+        Self {
+            chain_config: Arc::new(create_mainnet()),
+            p2p_config: Arc::new(P2pConfig::default()),
+            chainstate: None,
+        }
+    }
+
+    pub fn with_chain_config(mut self, chain_config: Arc<ChainConfig>) -> Self {
+        self.chain_config = chain_config;
+        self
+    }
+
+    pub fn with_chainstate(
+        mut self,
+        chainstaate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    ) -> Self {
+        self.chainstate = Some(chainstaate);
+        self
+    }
+
+    pub fn with_p2p_config(mut self, p2p_config: Arc<P2pConfig>) -> Self {
+        self.p2p_config = p2p_config;
+        self
+    }
+
+    pub async fn build(self) -> SyncManagerHandle {
+        let chainstate = match self.chainstate {
+            Some(chainstate) => chainstate,
+            None => start_chainstate(Arc::clone(&self.chain_config)).await,
+        };
+
+        SyncManagerHandle::start_with_params(self.chain_config, self.p2p_config, chainstate).await
     }
 }
 

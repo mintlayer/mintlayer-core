@@ -41,7 +41,10 @@ async fn nonexistent_peer() {
 #[tokio::test]
 async fn header_count_limit_exceeded() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -67,7 +70,10 @@ async fn header_count_limit_exceeded() {
 #[tokio::test]
 async fn unordered_headers() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -101,7 +107,10 @@ async fn unordered_headers() {
 #[tokio::test]
 async fn disconnected_headers() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -132,7 +141,10 @@ async fn disconnected_headers() {
 #[tokio::test]
 async fn valid_headers() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;

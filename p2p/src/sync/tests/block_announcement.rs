@@ -37,7 +37,10 @@ use crate::{
 #[tokio::test]
 async fn nonexistent_peer() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     let block = create_block(
@@ -51,7 +54,10 @@ async fn nonexistent_peer() {
 #[tokio::test]
 async fn unknown_prev_block() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -72,7 +78,10 @@ async fn unknown_prev_block() {
 #[tokio::test]
 async fn invalid_timestamp() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -107,7 +116,10 @@ async fn invalid_consensus_data() {
             .net_upgrades(NetUpgrades::new(ChainType::Mainnet))
             .build(),
     );
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -138,7 +150,10 @@ async fn invalid_consensus_data() {
 #[tokio::test]
 async fn valid_block() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;

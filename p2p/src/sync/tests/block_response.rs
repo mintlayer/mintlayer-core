@@ -33,7 +33,10 @@ use crate::{
 #[tokio::test]
 async fn nonexistent_peer() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
 
@@ -47,7 +50,10 @@ async fn nonexistent_peer() {
 #[tokio::test]
 async fn unrequested_block() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
@@ -69,7 +75,10 @@ async fn unrequested_block() {
 #[tokio::test]
 async fn valid_response() {
     let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::with_config(Arc::clone(&chain_config)).await;
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
