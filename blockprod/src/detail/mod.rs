@@ -83,7 +83,7 @@ mod tests {
     use crate::tests::setup_blockprod_test;
 
     #[tokio::test]
-    async fn test_stop() {
+    async fn stop() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_start() {
+    async fn start() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
@@ -137,7 +137,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_is_connected() {
+    async fn is_connected() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, _builder_rx) = mpsc::unbounded_channel();

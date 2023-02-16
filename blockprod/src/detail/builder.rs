@@ -233,7 +233,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new_tip() {
+    fn new_tip() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_stop() {
+    fn stop() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
@@ -289,7 +289,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_run_for_chainstate_events() {
+    async fn run_for_chainstate_events() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
@@ -360,7 +360,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_subscribe_to_chainstate_events() {
+    async fn subscribe_to_chainstate_events() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
