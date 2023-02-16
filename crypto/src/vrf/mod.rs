@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use merlin::Transcript;
+use rand::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 
 use crate::random::make_true_rng;
@@ -64,11 +65,17 @@ pub(crate) enum VRFPublicKeyHolder {
 }
 
 impl VRFPrivateKey {
-    pub fn new(key_kind: VRFKeyKind) -> (VRFPrivateKey, VRFPublicKey) {
-        let mut rng = make_true_rng();
+    pub fn new_from_entropy(key_kind: VRFKeyKind) -> (VRFPrivateKey, VRFPublicKey) {
+        Self::new_from_rng(&mut make_true_rng(), key_kind)
+    }
+
+    pub fn new_from_rng(
+        rng: &mut (impl Rng + CryptoRng),
+        key_kind: VRFKeyKind,
+    ) -> (VRFPrivateKey, VRFPublicKey) {
         match key_kind {
             VRFKeyKind::Schnorrkel => {
-                let k = schnorrkel::SchnorrkelPrivateKey::new(&mut rng);
+                let k = schnorrkel::SchnorrkelPrivateKey::new(rng);
                 (
                     VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(k.0),
@@ -125,15 +132,21 @@ impl VRFPublicKey {
 #[cfg(test)]
 mod tests {
     use hex::FromHex;
+    use rstest::rstest;
     use serialization::DecodeAll;
+    use test_utils::random::make_seedable_rng;
+    use test_utils::random::Seed;
 
     use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
 
     use super::{transcript::WrappedTranscript, *};
 
-    #[test]
-    fn key_serialization() {
-        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn key_serialization(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let encoded_sk = sk.encode();
         let encoded_pk = pk.encode();
@@ -178,11 +191,14 @@ mod tests {
             .finalize()
     }
 
-    #[test]
-    fn vrf_basic_usage() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn vrf_basic_usage(#[case] seed: Seed) {
         let transcript = make_arbitrary_transcript();
 
-        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(transcript.clone().into());
 
         match &vrf_data {
@@ -204,11 +220,14 @@ mod tests {
             .expect("Valid VRF check failed");
     }
 
-    #[test]
-    fn basic_usage_schonorrkel_mutated_message() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn basic_usage_schonorrkel_mutated_message(#[case] seed: Seed) {
         let transcript = make_arbitrary_transcript();
 
-        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(transcript.clone().into());
 
         match &vrf_data {
@@ -233,11 +252,14 @@ mod tests {
             .expect_err("Invalid VRF check succeeded");
     }
 
-    #[test]
-    fn basic_usage_schnorrkel_invalid_keys() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn basic_usage_schnorrkel_invalid_keys(#[case] seed: Seed) {
         let transcript = make_arbitrary_transcript();
 
-        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let mut rng = make_seedable_rng(seed);
+        let (sk, pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(transcript.clone().into());
 
         match &vrf_data {
@@ -255,7 +277,7 @@ mod tests {
             }
         }
 
-        let (_sk2, pk2) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let (_sk2, pk2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         pk2.verify_vrf_data(transcript.into(), &vrf_data)
             .expect_err("Invalid VRF check succeeded");
