@@ -16,9 +16,7 @@
 // Re-export a bunch of often used items
 pub use crate::model::{ApplyActions, Model, WriteAction};
 pub use storage_core::{
-    backend::{
-        Backend, Data, PrefixIter, ReadOps, TransactionalRo, TransactionalRw, TxRo, TxRw, WriteOps,
-    },
+    backend::{Backend, BackendImpl, Data, ReadOps, TxRo, TxRw, WriteOps},
     DbDesc, DbMapCount, DbMapDesc, DbMapId, DbMapsData,
 };
 pub use utils::{sync, thread};

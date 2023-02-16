@@ -71,18 +71,15 @@ impl<B: Backend, Sch: Schema> Storage<B, Sch> {
     }
 
     /// Start a read-only transaction
-    pub fn transaction_ro<'tx, 'st: 'tx>(&'st self) -> crate::Result<TransactionRo<'tx, B, Sch>> {
-        let dbtx = backend::TransactionalRo::transaction_ro(&self.backend)?;
+    pub fn transaction_ro(&self) -> crate::Result<TransactionRo<'_, B, Sch>> {
+        let dbtx = backend::BackendImpl::transaction_ro(&self.backend)?;
         let _schema = std::marker::PhantomData;
         Ok(TransactionRo { dbtx, _schema })
     }
 
     /// Start a read-write transaction
-    pub fn transaction_rw<'tx, 'st: 'tx>(
-        &'st self,
-        size: Option<usize>,
-    ) -> crate::Result<TransactionRw<'tx, B, Sch>> {
-        let dbtx = backend::TransactionalRw::transaction_rw(&self.backend, size)?;
+    pub fn transaction_rw(&self, size: Option<usize>) -> crate::Result<TransactionRw<'_, B, Sch>> {
+        let dbtx = backend::BackendImpl::transaction_rw(&self.backend, size)?;
         let _schema = std::marker::PhantomData;
         Ok(TransactionRw { dbtx, _schema })
     }

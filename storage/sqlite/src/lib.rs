@@ -26,10 +26,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::queries::SqliteQueries;
 use error::process_sqlite_error;
-use storage_core::{
-    backend::{self, TransactionalRo, TransactionalRw},
-    Data, DbDesc, DbMapId,
-};
+use storage_core::{backend, Data, DbDesc, DbMapId};
 use utils::shallow_clone::ShallowClone;
 use utils::sync::Arc;
 
@@ -100,14 +97,29 @@ impl Drop for DbTx<'_> {
     }
 }
 
-impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
-    type Iterator = PrefixIter;
+impl backend::ReadOps for DbTx<'_> {
+    type PrefixIter<'i> = PrefixIter where Self: 'i;
 
-    fn prefix_iter<'t: 'i>(
-        &'t self,
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        let mut stmt = self
+            .connection
+            .prepare_cached(self.queries[map_id].get_query.as_str())
+            .map_err(process_sqlite_error)?;
+
+        let params = (key,);
+        let res = stmt
+            .query_row(params, |row| row.get::<usize, Vec<u8>>(0))
+            .optional()
+            .map_err(process_sqlite_error)?;
+        let res = res.map(|v| v.into());
+        Ok(res)
+    }
+
+    fn prefix_iter(
+        &self,
         map_id: DbMapId,
         prefix: Data,
-    ) -> storage_core::Result<Self::Iterator> {
+    ) -> storage_core::Result<Self::PrefixIter<'_>> {
         // TODO check if prefix.is_empty()
         // TODO Perform the filtering in the SQL query itself
         let mut stmt = self
@@ -129,23 +141,6 @@ impl<'s, 'i> backend::PrefixIter<'i> for DbTx<'s> {
         let kv_iter = kv.into_iter();
 
         Ok(PrefixIter::new(kv_iter, prefix))
-    }
-}
-
-impl backend::ReadOps for DbTx<'_> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        let mut stmt = self
-            .connection
-            .prepare_cached(self.queries[map_id].get_query.as_str())
-            .map_err(process_sqlite_error)?;
-
-        let params = (key,);
-        let res = stmt
-            .query_row(params, |row| row.get::<usize, Vec<u8>>(0))
-            .optional()
-            .map_err(process_sqlite_error)?;
-        let res = res.map(|v| v.into());
-        Ok(res)
     }
 }
 
@@ -202,32 +197,25 @@ impl SqliteImpl {
     }
 }
 
-impl<'tx> TransactionalRo<'tx> for SqliteImpl {
-    type TxRo = DbTx<'tx>;
-
-    fn transaction_ro<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRo> {
-        self.start_transaction()
-    }
-}
-
-impl<'tx> TransactionalRw<'tx> for SqliteImpl {
-    type TxRw = DbTx<'tx>;
-
-    fn transaction_rw<'st: 'tx>(
-        &'st self,
-        _size: Option<usize>,
-    ) -> storage_core::Result<Self::TxRw> {
-        self.start_transaction()
-    }
-}
-
 impl ShallowClone for SqliteImpl {
     fn shallow_clone(&self) -> Self {
         Self(self.0.shallow_clone())
     }
 }
 
-impl backend::BackendImpl for SqliteImpl {}
+impl backend::BackendImpl for SqliteImpl {
+    type TxRo<'a> = DbTx<'a>;
+
+    type TxRw<'a> = DbTx<'a>;
+
+    fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
+        self.start_transaction()
+    }
+
+    fn transaction_rw(&self, _size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        self.start_transaction()
+    }
+}
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 enum SqliteStorageMode {

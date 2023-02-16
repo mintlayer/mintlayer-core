@@ -24,10 +24,7 @@ use std::{borrow::Cow, path::PathBuf};
 use initial_map_size::InitialMapSize;
 use lmdb::Cursor;
 use resize_callback::MapResizeCallback;
-use storage_core::{
-    backend::{self, TransactionalRo, TransactionalRw},
-    Data, DbDesc, DbMapDesc, DbMapId, DbMapsData,
-};
+use storage_core::{backend, Data, DbDesc, DbMapDesc, DbMapId, DbMapsData};
 use utils::const_value::ConstValue;
 use utils::sync::Arc;
 
@@ -66,14 +63,20 @@ pub struct DbTx<'m, Tx> {
 type DbTxRo<'a> = DbTx<'a, lmdb::RoTransaction<'a>>;
 type DbTxRw<'a> = DbTx<'a, lmdb::RwTransaction<'a>>;
 
-impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
-    type Iterator = PrefixIter<'i, lmdb::RoCursor<'i>>;
+impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
+    type PrefixIter<'i> = PrefixIter<'i, lmdb::RoCursor<'i>> where Self: 'i;
 
-    fn prefix_iter<'t: 'i>(
-        &'t self,
+    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
+        self.tx
+            .get(self.backend.dbs[map_id], &key)
+            .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
+    }
+
+    fn prefix_iter(
+        &self,
         map_id: DbMapId,
         prefix: Data,
-    ) -> storage_core::Result<Self::Iterator> {
+    ) -> storage_core::Result<Self::PrefixIter<'_>> {
         let cursor = self
             .tx
             .open_ro_cursor(self.backend.dbs[map_id])
@@ -84,14 +87,6 @@ impl<'s, 'i, Tx: lmdb::Transaction> backend::PrefixIter<'i> for DbTx<'s, Tx> {
             cursor.into_iter_from(prefix.as_slice())
         };
         Ok(PrefixIter::new(iter, prefix))
-    }
-}
-
-impl<Tx: lmdb::Transaction> backend::ReadOps for DbTx<'_, Tx> {
-    fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
-        self.tx
-            .get(self.backend.dbs[map_id], &key)
-            .map_or_else(error::process_with_none, |x| Ok(Some(x.into())))
     }
 }
 
@@ -187,26 +182,6 @@ impl LmdbImpl {
     }
 }
 
-impl<'tx> TransactionalRo<'tx> for LmdbImpl {
-    type TxRo = DbTxRo<'tx>;
-
-    fn transaction_ro<'st: 'tx>(&'st self) -> storage_core::Result<Self::TxRo> {
-        self.start_transaction(lmdb::Environment::begin_ro_txn)
-    }
-}
-
-impl<'tx> TransactionalRw<'tx> for LmdbImpl {
-    type TxRw = DbTxRw<'tx>;
-
-    fn transaction_rw<'st: 'tx>(
-        &'st self,
-        size: Option<usize>,
-    ) -> storage_core::Result<Self::TxRw> {
-        self.resize_if_resize_scheduled();
-        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
-    }
-}
-
 impl utils::shallow_clone::ShallowClone for LmdbImpl {
     fn shallow_clone(&self) -> Self {
         Self {
@@ -216,7 +191,20 @@ impl utils::shallow_clone::ShallowClone for LmdbImpl {
         }
     }
 }
-impl backend::BackendImpl for LmdbImpl {}
+impl backend::BackendImpl for LmdbImpl {
+    type TxRo<'a> = DbTxRo<'a>;
+
+    type TxRw<'a> = DbTxRw<'a>;
+
+    fn transaction_ro(&self) -> storage_core::Result<Self::TxRo<'_>> {
+        self.start_transaction(lmdb::Environment::begin_ro_txn)
+    }
+
+    fn transaction_rw(&self, size: Option<usize>) -> storage_core::Result<Self::TxRw<'_>> {
+        self.resize_if_resize_scheduled();
+        self.start_transaction(|env| lmdb::Environment::begin_rw_txn(env, size))
+    }
+}
 
 pub struct Lmdb {
     path: PathBuf,
