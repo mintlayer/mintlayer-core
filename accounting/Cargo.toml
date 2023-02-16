@@ -1,6 +1,6 @@
 [package]
 name = "accounting"
-license = "MIT"
+license.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
