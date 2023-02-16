@@ -219,7 +219,7 @@ impl Drop for BlockMakersDestroyer {
 mod tests {
     use crate::tests::setup_blockprod_test;
     use chainstate::BlockSource;
-    use crypto::random::{make_pseudo_rng, Rng};
+    use crypto::random::make_pseudo_rng;
     use std::thread;
     use tokio::task::yield_now;
     use tokio::time::{timeout, Duration};
@@ -247,7 +247,7 @@ mod tests {
             true,
         );
 
-        let block_id = Id::new(H256::from_low_u64_be(make_pseudo_rng().gen()));
+        let block_id = Id::new(H256::random_using(&mut make_pseudo_rng()));
 
         builder
             .new_tip(block_id, BlockHeight::one())
