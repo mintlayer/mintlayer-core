@@ -79,6 +79,10 @@ serialization = { path = "serialization"}
 storage = { path = "storage"}
 utxo = { path = "utxo"}
 
+[workspace.package]
+edition = "2021"
+rust-version = "1.67"
+
 [workspace.dependencies]
 async-trait = "0.1"
 futures = "0.3"
