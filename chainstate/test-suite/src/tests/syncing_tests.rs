@@ -17,7 +17,7 @@ use std::{iter, time::Duration};
 
 use rstest::rstest;
 
-use chainstate::{BlockSource, ChainstateConfig, ChainstateError, HEADER_LIMIT};
+use chainstate::{BlockSource, ChainstateConfig, ChainstateError};
 use chainstate_test_framework::TestFramework;
 use chainstate_types::PropertyQueryError;
 use common::{
@@ -82,7 +82,7 @@ fn get_locator(#[case] seed: Seed) {
 fn get_headers(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
+        let header_limit = rng.gen_range(1500..=2000);
         let headers_count = rng.gen_range(1000..header_limit);
         let blocks_count = rng.gen_range(1000..2000);
 
@@ -92,7 +92,10 @@ fn get_headers(#[case] seed: Seed) {
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
         let locator = tf.chainstate.get_locator().unwrap();
-        assert_eq!(tf.chainstate.get_headers(locator.clone()).unwrap(), vec![]);
+        assert_eq!(
+            tf.chainstate.get_headers(locator.clone(), header_limit).unwrap(),
+            vec![],
+        );
 
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
@@ -109,7 +112,7 @@ fn get_headers(#[case] seed: Seed) {
         .take(headers_count)
         .collect();
 
-        let headers = tf.chainstate.get_headers(locator.clone()).unwrap();
+        let headers = tf.chainstate.get_headers(locator.clone(), header_limit).unwrap();
         assert_eq!(headers, expected);
         // Because both the locator and chainstate are tracking the same chain, the first header of
         // the locator is always the parent of the first new block.
@@ -118,7 +121,7 @@ fn get_headers(#[case] seed: Seed) {
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
         tf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng)
             .unwrap();
-        let headers = tf.chainstate.get_headers(locator).unwrap();
+        let headers = tf.chainstate.get_headers(locator, header_limit).unwrap();
         assert_eq!(headers.len(), header_limit);
     });
 }
@@ -144,7 +147,8 @@ fn get_headers_genesis(#[case] seed: Seed) {
         assert_ne!(locator_1, locator_2);
         assert!(locator_1.len() < locator_2.len());
 
-        let headers = btf.chainstate.get_headers(locator_1).unwrap();
+        let header_count_limit = rng.gen_range(chain_length..chain_length * 2);
+        let headers = btf.chainstate.get_headers(locator_1, header_count_limit).unwrap();
         assert_eq!(headers[0].prev_block_id(), &genesis_id);
         assert_eq!(headers.len(), chain_length);
     });
@@ -168,7 +172,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let locator = tf.chainstate.get_locator().unwrap();
         tf.create_chain(&common_block_id, rng.gen_range(2500..5000), &mut rng).unwrap();
 
-        let headers = tf.chainstate.get_headers(locator).unwrap();
+        let headers = tf.chainstate.get_headers(locator, 2000).unwrap();
         let id = headers[0].prev_block_id();
         assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
     });
@@ -207,13 +211,14 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         tf1.create_chain(&prev_id, rng.gen_range(32..256), &mut rng).unwrap();
         tf2.create_chain(&prev_id, rng.gen_range(256..512), &mut rng).unwrap();
 
+        let header_count_limit = rng.gen_range(1000..3000);
         let locator = tf1.chainstate.get_locator().unwrap();
-        let headers = tf2.chainstate.get_headers(locator).unwrap();
+        let headers = tf2.chainstate.get_headers(locator, header_count_limit).unwrap();
         let id = *headers[0].prev_block_id();
         tf1.block_index(&id); // This panics if the ID is not found
 
         let locator = tf2.chainstate.get_locator().unwrap();
-        let headers = tf1.chainstate.get_headers(locator).unwrap();
+        let headers = tf1.chainstate.get_headers(locator, header_count_limit).unwrap();
         let id = *headers[0].prev_block_id();
         tf2.block_index(&id); // This panics if the ID is not found
     });
@@ -272,13 +277,14 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
 
         // Check that filter_already_existing_blocks retains only unique to other chain blocks.
         let locator = tf1.chainstate.get_locator().unwrap();
-        let headers = tf2.chainstate.get_headers(locator).unwrap();
+        let header_count_limit = rng.gen_range(1000..3000);
+        let headers = tf2.chainstate.get_headers(locator, header_count_limit).unwrap();
         assert!(headers.len() >= headers2.len());
         let headers = tf1.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers2);
 
         let locator = tf2.chainstate.get_locator().unwrap();
-        let headers = tf1.chainstate.get_headers(locator).unwrap();
+        let headers = tf1.chainstate.get_headers(locator, header_count_limit).unwrap();
         assert!(headers.len() >= headers1.len());
         let headers = tf2.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers1);

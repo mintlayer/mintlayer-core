@@ -209,8 +209,9 @@ where
             return Ok(());
         }
 
-        let headers = self.chainstate_handle.call(|c| c.get_headers(locator)).await??;
-        debug_assert!(headers.len() <= *self.p2p_config.msg_header_count_limit);
+        let limit = *self.p2p_config.msg_header_count_limit;
+        let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
+        debug_assert!(headers.len() <= limit);
         self.messaging_handle.send_message(
             peer,
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),

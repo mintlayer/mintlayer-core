@@ -27,9 +27,7 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 
-use super::{
-    chainstateref, tx_verification_strategy::TransactionVerificationStrategy, HEADER_LIMIT,
-};
+use super::{chainstateref, tx_verification_strategy::TransactionVerificationStrategy};
 
 pub fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
     itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
@@ -128,7 +126,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_block_height_in_main_chain(id)
     }
 
-    pub fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    pub fn get_headers(
+        &self,
+        locator: Locator,
+        header_count_limit: usize,
+    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+        let header_count_limit = BlockDistance::new(
+            header_count_limit.try_into().expect("Unreasonable header count limit"),
+        );
+
         // use genesis block if no common ancestor with better block height is found
         let mut best = BlockHeight::new(0);
 
@@ -149,7 +155,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .block_height();
 
         let limit = std::cmp::min(
-            (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
+            (best + header_count_limit).expect("BlockHeight limit reached"),
             best_height,
         );
 

@@ -143,11 +143,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError> {
+    fn get_headers(
+        &self,
+        locator: Locator,
+        header_count_limit: usize,
+    ) -> Result<Vec<BlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
-            .get_headers(locator)
+            .get_headers(locator, header_count_limit)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

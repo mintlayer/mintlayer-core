@@ -109,14 +109,15 @@ impl<
     fn get_headers(
         &self,
         locator: Locator,
-    ) -> Result<Vec<common::chain::block::BlockHeader>, ChainstateError> {
-        self.deref().get_headers(locator)
+        header_count_limit: usize,
+    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+        self.deref().get_headers(locator, header_count_limit)
     }
 
     fn filter_already_existing_blocks(
         &self,
-        headers: Vec<common::chain::block::BlockHeader>,
-    ) -> Result<Vec<common::chain::block::BlockHeader>, ChainstateError> {
+        headers: Vec<BlockHeader>,
+    ) -> Result<Vec<BlockHeader>, ChainstateError> {
         self.deref().filter_already_existing_blocks(headers)
     }
 
@@ -131,7 +132,7 @@ impl<
         self.deref().get_gen_block_index(id)
     }
 
-    fn get_best_block_index(&self) -> Result<chainstate_types::GenBlockIndex, ChainstateError> {
+    fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError> {
         self.deref().get_best_block_index()
     }
 
@@ -191,7 +192,7 @@ impl<
 
     fn get_block_reward(
         &self,
-        block_index: &chainstate_types::BlockIndex,
+        block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError> {
         self.deref().get_block_reward(block_index)
     }

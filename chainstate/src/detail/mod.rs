@@ -53,7 +53,7 @@ use common::{
         config::ChainConfig,
         Block,
     },
-    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -73,9 +73,6 @@ pub use orphan_blocks::OrphanBlocksRef;
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
 type ChainstateEventHandler = EventHandler<ChainstateEvent>;
-
-// TODO: move this to some configuration, maybe p2p?
-pub const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
