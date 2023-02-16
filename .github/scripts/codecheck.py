@@ -75,9 +75,13 @@ def check_workspace_and_package_versions_equal():
     workspace_version = root['package']['version']
     package_version = root['workspace']['package']['version']
 
-    if workspace_version != package_version:
+    result = workspace_version == package_version
+
+    if not result:
         print("Workspace vs package versions mismatch in Cargo.toml: '{}' != '{}'".format(workspace_version, package_version))
-    print()
+        print()
+
+    return result
 
 
 # Check crate versions
