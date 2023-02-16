@@ -23,7 +23,7 @@ use crate::{
     error::ProtocolError,
     net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, BlockListRequest, HeaderListResponse, SyncMessage},
-    P2pError,
+    P2pConfig, P2pError,
 };
 
 // Messages from unknown peers are ignored.
@@ -40,9 +40,11 @@ async fn nonexistent_peer() {
 
 #[tokio::test]
 async fn header_count_limit_exceeded() {
+    let p2p_config = Arc::new(P2pConfig::default());
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
         .build()
         .await;
 
@@ -53,7 +55,9 @@ async fn header_count_limit_exceeded() {
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
     );
-    let headers = iter::repeat(block.header().clone()).take(2001).collect();
+    let headers = iter::repeat(block.header().clone())
+        .take(*p2p_config.msg_header_count_limit + 1)
+        .collect();
     handle.send_message(
         peer,
         SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),

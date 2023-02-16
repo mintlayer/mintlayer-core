@@ -63,7 +63,7 @@ async fn max_block_count_in_request_exceeded() {
     handle.connect_peer(peer).await;
 
     let blocks = iter::repeat(block.get_id())
-        .take(Into::<usize>::into(p2p_config.max_request_blocks_count.clone()) + 1)
+        .take(*p2p_config.max_request_blocks_count + 1)
         .collect();
     handle.send_message(
         peer,

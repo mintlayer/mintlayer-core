@@ -39,7 +39,7 @@ async fn nonexistent_peer() {
 }
 
 #[tokio::test]
-async fn locator_size_exceeded() {
+async fn max_locator_size_exceeded() {
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))

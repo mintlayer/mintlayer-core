@@ -17,6 +17,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::mpsc;
 
+use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use common::{
     chain::block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
     primitives::Idable,
@@ -24,15 +25,15 @@ use common::{
 
 use p2p::{
     config::P2pConfig,
+    error::P2pError,
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, SyncMessage},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
     testing_utils::{connect_services, TestTransportMaker},
 };
-use p2p_test_utils::TestBlockInfo;
 
-tests![invalid_pubsub_block, invalid_sync_block,];
+tests![invalid_pubsub_block,];
 
 // Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
 // invalid block from the first service and verify that the `SyncManager` of the first service
@@ -116,71 +117,14 @@ where
     match rx_peer_manager.recv().await {
         Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) => {
             assert_eq!(peer_id, peer_info2.peer_id);
-            assert_eq!(score, 20);
+            assert_eq!(
+                score,
+                P2pError::ChainstateError(ChainstateError::ProcessBlockError(
+                    BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+                ))
+                .ban_score()
+            );
         }
         e => panic!("invalid event received: {e:?}"),
-    }
-}
-
-// Start two networking services and give an invalid block, verify that `PeerManager` is informed.
-async fn invalid_sync_block<T, N, A>()
-where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService + Debug + 'static,
-    N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
-{
-    let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-    let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
-    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
-
-    let (mut conn1, sync1) = N::start(
-        T::make_transport(),
-        vec![T::make_address()],
-        Arc::clone(&chain_config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-
-    let (mut conn2, _sync2) = N::start(
-        T::make_transport(),
-        vec![T::make_address()],
-        Arc::clone(&chain_config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-
-    let mut sync1 = BlockSyncManager::<N>::new(
-        Arc::clone(&chain_config),
-        Arc::new(P2pConfig::default()),
-        sync1,
-        handle.clone(),
-        rx_p2p_sync,
-        tx_peer_manager,
-    );
-
-    let (_address, _peer_info, peer_info2) = connect_services::<N>(&mut conn1, &mut conn2).await;
-
-    // create few blocks and offer an orphan block to the `SyncManager`
-    let best_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
-    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&chain_config), best_block, 3);
-
-    // register `conn2` to the `SyncManager`, process a block response
-    // and verify the `PeerManager` is notified of the protocol violation
-    let remote_id = peer_info2.peer_id;
-
-    tokio::spawn(async move {
-        sync1.register_peer(remote_id).await.unwrap();
-        let res = sync1.handle_block_response(remote_id, blocks[2].clone()).await;
-        sync1.handle_result(remote_id, res).await.unwrap();
-    });
-
-    if let Some(PeerManagerEvent::AdjustPeerScore(peer_id, score, _)) = rx_peer_manager.recv().await
-    {
-        assert_eq!(remote_id, peer_id);
-        assert_eq!(score, 20);
     }
 }
