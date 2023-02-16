@@ -214,3 +214,203 @@ impl Drop for BlockMakersDestroyer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::setup_blockprod_test;
+    use chainstate::BlockSource;
+    use crypto::random::{make_pseudo_rng, Rng};
+    use std::thread;
+    use tokio::task::yield_now;
+    use tokio::time::{timeout, Duration};
+
+    use common::{
+        chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        primitives::{Idable, H256},
+        time_getter::TimeGetter,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_new_tip() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+        let mut builder = PerpetualBlockBuilder::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            rx_builder,
+            true,
+        );
+
+        let block_id = Id::new(H256::from_low_u64_be(make_pseudo_rng().gen()));
+
+        builder
+            .new_tip(block_id, BlockHeight::one())
+            .expect("Error sending new tip to Makers");
+
+        match builder.block_maker_rx.try_recv().expect("Error reading from Builder") {
+            BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
+                assert!(block_id == new_block_id, "Invalid Block ID received");
+                assert!(
+                    new_block_height == BlockHeight::one(),
+                    "Invalid block height received"
+                );
+            }
+            _ => panic!("Error reading new tip from Builder"),
+        }
+    }
+
+    #[test]
+    fn test_stop() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+        let builder = PerpetualBlockBuilder::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            rx_builder,
+            true,
+        );
+
+        builder.stop_all_block_makers().expect("Error stopping all Makers");
+
+        match builder.block_maker_rx.try_recv().expect("Error reading from Builder") {
+            BlockMakerControlCommand::Stop => {}
+            _ => panic!("Invalid message received from Builder"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_run_for_chainstate_events() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+        let mut builder = PerpetualBlockBuilder::new(
+            chain_config.clone(),
+            chainstate.clone(),
+            mempool,
+            Default::default(),
+            rx_builder,
+            true,
+        );
+
+        let block_maker_rx = builder.block_maker_rx.clone();
+
+        let block = Block::new(
+            vec![],
+            chain_config.genesis_block_id(),
+            BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+            ConsensusData::None,
+            BlockReward::new(Vec::new()),
+        )
+        .expect("Error creating test block");
+
+        let block_id = block.get_id();
+        let shutdown = manager.make_shutdown_trigger();
+
+        thread::spawn(move || {
+            match block_maker_rx.recv().expect("Error reading from Builder") {
+                BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
+                    assert!(block_id == new_block_id, "Invalid Block ID received");
+                    assert!(
+                        new_block_height == BlockHeight::one(),
+                        "Invalid block height received"
+                    );
+                }
+                _ => panic!("Error reading new tip from Builder"),
+            }
+
+            shutdown.initiate();
+        });
+
+        tokio::spawn(async move {
+            // This will error due to run()'s recv() on disconnect when done
+            builder.run().await.err();
+        });
+
+        let get_subscriber_count = {
+            let chainstate = chainstate.clone();
+            move || chainstate.call_mut(|this| this.subscribers().len())
+        };
+
+        tokio::spawn(async move {
+            loop {
+                if get_subscriber_count().await.expect("Error getting subscriber count") > 0 {
+                    break;
+                }
+
+                yield_now().await;
+            }
+
+            chainstate.call_mut(|this| {
+                this.process_block(block, BlockSource::Local).expect("Error processing block")
+            });
+        });
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_to_chainstate_events() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+        let builder = PerpetualBlockBuilder::new(
+            chain_config.clone(),
+            chainstate.clone(),
+            mempool,
+            Default::default(),
+            rx_builder,
+            true,
+        );
+
+        let shutdown = manager.make_shutdown_trigger();
+
+        tokio::spawn(async move {
+            let mut chainstate_rx = builder
+                .subscribe_to_chainstate_events()
+                .await
+                .expect("Error subscribing to chainstate events");
+
+            let block = Block::new(
+                vec![],
+                chain_config.genesis_block_id(),
+                BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .expect("Error creating test block");
+
+            let block_id = block.get_id();
+
+            chainstate.call_mut(move |this| {
+                this.process_block(block, BlockSource::Local).expect("Error processing block");
+            });
+
+            let recv = timeout(Duration::from_millis(1000), chainstate_rx.recv());
+
+            tokio::select! {
+                msg = recv => match msg.expect("Chainstate timed out") {
+                    Some((new_block_id, _)) => {
+                        assert!(new_block_id == block_id, "Invalid Block Id received");
+                    }
+                    _ => panic!("Invalid message from chainstate"),
+                }
+            }
+
+            shutdown.initiate();
+        });
+
+        manager.main().await;
+    }
+}

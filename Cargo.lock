@@ -311,6 +311,7 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crossbeam-channel",
+ "crypto",
  "futures",
  "jsonrpsee",
  "logging",
