@@ -82,6 +82,7 @@ utxo = { path = "utxo"}
 [workspace.package]
 edition = "2021"
 rust-version = "1.67"
+version = "0.1.0"
 
 [workspace.dependencies]
 async-trait = "0.1"

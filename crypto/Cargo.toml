@@ -1,9 +1,9 @@
 [package]
 name = "crypto"
-version = "0.1.0"
+license = "MIT"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license = "MIT"
 authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

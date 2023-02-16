@@ -1,9 +1,9 @@
 [package]
 name = "serialization-tagged-derive"
-version = "0.1.0"
+license = "MIT"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license = "MIT"
 
 [lib]
 proc-macro = true
