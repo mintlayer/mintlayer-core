@@ -17,8 +17,8 @@ use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::block::timestamp::BlockTimestamp,
     primitives::{BlockHeight, Compact},
-    Uint256,
 };
+use crypto_bigint::{CheckedMul, U256};
 
 use crate::pow::error::ConsensusPoWError;
 
@@ -68,19 +68,19 @@ pub fn calculate_new_target(
     actual_timespan_of_last_interval: u64,
     target_timespan: u64,
     old_target: Compact,
-    difficulty_limit: Uint256,
+    difficulty_limit: U256,
 ) -> Result<Compact, ConsensusPoWError> {
-    let actual_timespan = Uint256::from_u64(actual_timespan_of_last_interval);
+    let actual_timespan = U256::from_u64(actual_timespan_of_last_interval);
 
-    let target_timespan = Uint256::from_u64(target_timespan);
+    let target_timespan = U256::from_u64(target_timespan);
 
-    let old_target = Uint256::try_from(old_target)
+    let old_target = U256::try_from(old_target)
         .map_err(|_| ConsensusPoWError::PreviousBitsDecodingFailed(old_target))?;
 
     // new target is computed by  multiplying the old target by ratio of the actual timespan / target timespan.
     // see Bitcoin's Protocol rules of Difficulty change: https://en.bitcoin.it/wiki/Protocol_rules
-    let mut new_target = old_target * actual_timespan;
-    new_target = new_target / target_timespan;
+    let mut new_target = old_target.checked_mul(&actual_timespan).unwrap();
+    new_target = new_target.checked_div(&target_timespan).unwrap();
 
     new_target = if new_target > difficulty_limit {
         difficulty_limit

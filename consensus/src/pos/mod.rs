@@ -24,11 +24,13 @@ use common::{
         ChainConfig, OutputPurpose, TxOutput,
     },
     primitives::{Idable, H256},
-    Uint256,
+    uint::into_u512,
 };
 use pos_accounting::PoSAccountingView;
 use utils::ensure;
 use utxo::UtxosView;
+
+use crypto_bigint::{CheckedMul, U256, U512};
 
 use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
@@ -40,9 +42,9 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
     spender_block_header: &BlockHeader,
     pos_accounting_view: &P,
 ) -> Result<H256, ConsensusPoSError> {
-    let target: Uint256 = (*pos_data.bits())
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
+    let target = U256::try_from(*pos_data.bits())
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))
+        .map(|v| into_u512(v))?;
 
     let pool_data = match kernel_output.purpose() {
         OutputPurpose::Transfer(_)
@@ -57,29 +59,30 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         OutputPurpose::StakePool(d) => d.as_ref(),
     };
 
-    let hash_pos: H256 = verify_vrf_and_get_vrf_output(
+    let hash_pos: U256 = verify_vrf_and_get_vrf_output(
         epoch_index,
         random_seed,
         pos_data.vrf_data(),
         pool_data.vrf_public_key(),
         spender_block_header,
-    )?;
+    )
+    .map_err(ConsensusPoSError::VRFDataVerificationFailed)?
+    .into();
 
-    let hash_pos_arith: Uint256 = hash_pos.into();
+    let hash_pos_arith = into_u512(hash_pos);
 
     let stake_pool_id = *pos_data.stake_pool_id();
     let pool_balance = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
-        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?
-        .into_atoms();
+        .map(|a| U512::from_u128(a.into_atoms()))
+        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
 
-    // TODO: the target multiplication can overflow, use Uint512
     ensure!(
-        hash_pos_arith <= target * pool_balance.into(),
+        hash_pos_arith <= target.checked_mul(&pool_balance).unwrap(),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
-    Ok(hash_pos)
+    Ok(hash_pos.into())
 }
 
 fn randomness_of_sealed_epoch<H: BlockIndexHandle>(

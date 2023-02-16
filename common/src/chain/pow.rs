@@ -15,7 +15,7 @@
 
 use crate::chain::config::ChainType;
 use crate::primitives::BlockDistance;
-use crate::Uint256;
+use crypto_bigint::U256;
 use std::time::Duration;
 
 /// Chain Parameters for Proof of Work.
@@ -27,7 +27,7 @@ pub struct PoWChainConfig {
     /// Checks whether minimum difficulty can be used for the block
     allow_min_difficulty_blocks: bool,
     /// The lowest possible difficulty
-    limit: Uint256,
+    limit: U256,
     /// The distance required to pass to allow spending the block reward
     reward_maturity_distance: BlockDistance,
 }
@@ -51,7 +51,7 @@ impl PoWChainConfig {
         self.allow_min_difficulty_blocks
     }
 
-    pub const fn limit(&self) -> Uint256 {
+    pub const fn limit(&self) -> U256 {
         self.limit
     }
 
@@ -91,21 +91,21 @@ const fn allow_min_difficulty_blocks(chain_type: ChainType) -> bool {
     }
 }
 
-pub(crate) const fn limit(chain_type: ChainType) -> Uint256 {
+pub(crate) const fn limit(chain_type: ChainType) -> U256 {
     match chain_type {
-        ChainType::Mainnet | ChainType::Testnet => Uint256([
+        ChainType::Mainnet | ChainType::Testnet => U256::from_words([
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
             0x00000000FFFFFFFF,
         ]),
-        ChainType::Signet => Uint256([
+        ChainType::Signet => U256::from_words([
             0x0000000000000000,
             0x0000000000000000,
             0x0000000000000000,
             0x00000377AE000000,
         ]),
-        ChainType::Regtest => Uint256([
+        ChainType::Regtest => U256::from_words([
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
             0xFFFFFFFFFFFFFFFF,
@@ -118,7 +118,7 @@ pub(crate) const fn limit(chain_type: ChainType) -> Uint256 {
 mod tests {
     use crate::chain::config::{create_mainnet, ChainType};
     use crate::chain::pow::{allow_min_difficulty_blocks, limit, no_retargeting};
-    use crate::Uint256;
+    use crypto_bigint::U256;
 
     #[test]
     fn check_mainnet_powconfig() {
@@ -145,15 +145,16 @@ mod tests {
         );
 
         if !mainnet_cfg.no_retargeting() {
-            let target_max = Uint256([
+            let target_max = U256::from_words([
                 0xFFFFFFFFFFFFFFFF,
                 0xFFFFFFFFFFFFFFFF,
                 0xFFFFFFFFFFFFFFFF,
                 0xFFFFFFFFFFFFFFFF,
             ]);
 
-            let target_max =
-                target_max / Uint256::from_u64(mainnet_cfg.target_timespan().as_secs() * 4);
+            let target_max = target_max
+                .checked_div(&U256::from_u64(mainnet_cfg.target_timespan().as_secs() * 4))
+                .unwrap();
             assert!(mainnet_cfg.limit() < target_max);
         }
     }

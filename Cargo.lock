@@ -431,6 +431,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "crypto-bigint",
  "hex",
  "itertools",
  "jsonrpsee",
@@ -518,6 +519,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "crypto-bigint",
  "expect-test",
  "hex",
  "itertools",
@@ -537,6 +539,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
+ "crypto-bigint",
  "generic-array",
  "parity-scale-codec",
  "serialization",
@@ -611,6 +614,7 @@ dependencies = [
  "bitcoin-bech32",
  "byteorder",
  "crypto",
+ "crypto-bigint",
  "expect-test",
  "generic-array",
  "hex",
@@ -640,6 +644,7 @@ version = "0.1.0"
 dependencies = [
  "chainstate-types",
  "common",
+ "crypto-bigint",
  "num",
  "pos_accounting",
  "rstest",
@@ -774,6 +779,16 @@ dependencies = [
  "test-utils",
  "thiserror",
  "zeroize",
+]
+
+[[package]]
+name = "crypto-bigint"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef2b4b23cddf68b89b8f8069890e8c270d54e2d5fe1b143820234805e4cb17ef"
+dependencies = [
+ "rand_core 0.6.4",
+ "subtle",
 ]
 
 [[package]]

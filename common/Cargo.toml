@@ -17,6 +17,7 @@ typename = { path = "../utils/typename" }
 
 anyhow = "1.0"
 bech32 = "0.9"
+crypto-bigint = "0.4"
 generic-array = "0.14"
 merkletree = "0.22"
 parity-scale-codec.workspace = true

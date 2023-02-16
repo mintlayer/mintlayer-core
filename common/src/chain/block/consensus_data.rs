@@ -15,10 +15,11 @@
 
 use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::{ChainConfig, PoolId};
-use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
+use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact};
 use crypto::vrf::VRFReturn;
-
 use serialization::{Decode, Encode};
+
+use crypto_bigint::U256;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum ConsensusData {
@@ -31,7 +32,7 @@ pub enum ConsensusData {
 }
 
 impl ConsensusData {
-    pub fn get_block_proof(&self) -> Option<Uint256> {
+    pub fn get_block_proof(&self) -> Option<U256> {
         match self {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
@@ -120,14 +121,13 @@ impl PoWData {
         self.nonce = nonce;
     }
 
-    pub fn get_block_proof(&self) -> Option<Uint256> {
+    pub fn get_block_proof(&self) -> Option<U256> {
         // 2**256 / (target + 1) == ~target / (target+1) + 1    (eqn shamelessly stolen from bitcoind)
-        let target: Uint256 = self.bits.try_into().ok()?;
+        let target: U256 = self.bits.try_into().ok()?;
         let mut ret = !target;
-        let mut ret1 = target;
-        ret1.increment();
-        ret = ret / ret1;
-        ret.increment();
+        let ret1 = target.wrapping_add(&U256::ONE);
+        ret = ret.checked_div(&ret1).unwrap();
+        ret = ret.wrapping_add(&U256::ONE);
         Some(ret)
     }
 }

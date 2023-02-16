@@ -41,7 +41,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable},
     time_getter::TimeGetter,
-    Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::{
@@ -49,9 +48,12 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use crypto_bigint::U256;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxoSource;
+
+use super::TEST_DIFFICULTY;
 
 #[rstest]
 #[trace]
@@ -451,7 +453,7 @@ fn straight_chain(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
-        assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(0));
+        assert_eq!(genesis_index.chain_trust(), &U256::ZERO);
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let chain_config_clone = tf.chainstate.get_chain_config();
@@ -693,8 +695,12 @@ fn consensus_type(#[case] seed: Seed) {
     let ignore_again = BlockHeight::new(10);
     let pow_again = BlockHeight::new(15);
 
-    let min_difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+    let min_difficulty = U256::from_words([
+        0xFFFFFFFFFFFFFFFF,
+        0xFFFFFFFFFFFFFFFF,
+        0xFFFFFFFFFFFFFFFF,
+        0xFFFFFFFFFFFFFFFF,
+    ]);
 
     let upgrades = vec![
         (
@@ -867,8 +873,7 @@ fn pow(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let ignore_consensus = BlockHeight::new(0);
     let pow_consensus = BlockHeight::new(1);
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
+    let difficulty = TEST_DIFFICULTY;
 
     let upgrades = vec![
         (
@@ -939,8 +944,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let ignore_consensus = BlockHeight::new(0);
     let pow_consensus = BlockHeight::new(1);
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
+    let difficulty = TEST_DIFFICULTY;
 
     let upgrades = vec![
         (

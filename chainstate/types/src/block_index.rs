@@ -17,7 +17,9 @@ use common::chain::block::block_header::BlockHeader;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable};
-use common::Uint256;
+use common::U256Encodable;
+
+use crypto_bigint::U256;
 use serialization::{Decode, Encode};
 
 use crate::preconnect_data::BlockPreconnectData;
@@ -28,7 +30,7 @@ pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
     some_ancestor: Id<GenBlock>,
-    chain_trust: Uint256,
+    chain_trust: U256Encodable,
     height: BlockHeight,
     time_max: BlockTimestamp,
     preconnect_data: BlockPreconnectData,
@@ -37,7 +39,7 @@ pub struct BlockIndex {
 impl BlockIndex {
     pub fn new(
         block: &Block,
-        chain_trust: Uint256,
+        chain_trust: U256,
         some_ancestor: Id<GenBlock>,
         height: BlockHeight,
         time_max: BlockTimestamp,
@@ -48,7 +50,7 @@ impl BlockIndex {
             block_header: block.header().clone(),
             block_id: block.get_id(),
             some_ancestor,
-            chain_trust,
+            chain_trust: U256Encodable(chain_trust),
             height,
             time_max,
             preconnect_data,
@@ -75,8 +77,8 @@ impl BlockIndex {
         self.height
     }
 
-    pub fn chain_trust(&self) -> &Uint256 {
-        &self.chain_trust
+    pub fn chain_trust(&self) -> &U256 {
+        &self.chain_trust.0
     }
 
     pub fn block_header(&self) -> &BlockHeader {

@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crypto_bigint::{CheckedAdd, U256};
 use std::{collections::BTreeSet, convert::TryInto};
 
 use chainstate_storage::{
@@ -34,7 +35,6 @@ use common::{
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetterFn,
-    Uint256,
 };
 use consensus::compute_extra_consensus_data;
 use logging::log;
@@ -620,7 +620,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn get_block_proof(&self, block: &Block) -> Result<Uint256, BlockError> {
+    fn get_block_proof(&self, block: &Block) -> Result<U256, BlockError> {
         block
             .header()
             .consensus_data()
@@ -889,8 +889,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
         };
 
-        let chain_trust =
-            *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
+        let chain_trust = prev_block_index
+            .chain_trust()
+            .checked_add(&self.get_block_proof(block).log_err()?)
+            .unwrap();
         let block_index = BlockIndex::new(
             block,
             chain_trust,

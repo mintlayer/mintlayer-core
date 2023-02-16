@@ -168,9 +168,8 @@ mod tests {
     use common::{
         chain::{block::timestamp::BlockTimestamp, config::Builder as ConfigBuilder, Block},
         primitives::H256,
-        uint::BitArray,
-        Uint256,
     };
+    use crypto_bigint::U256;
     use mockall::predicate::eq;
     use rstest::rstest;
 
@@ -183,7 +182,7 @@ mod tests {
         .unwrap();
         BlockIndex::new(
             &block,
-            Uint256::zero(),
+            U256::ZERO,
             H256::zero().into(),
             height,
             BlockTimestamp::from_int_seconds(1),

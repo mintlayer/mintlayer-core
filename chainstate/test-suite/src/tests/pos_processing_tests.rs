@@ -33,7 +33,6 @@ use common::{
         TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Idable, H256},
-    Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::random::CryptoRng;
@@ -42,6 +41,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey},
 };
+use crypto_bigint::U256;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -118,8 +118,7 @@ fn pos_basic(#[case] seed: Seed) {
 
     let (stake_pool_outpoint, pool_id, vrf_sk) = create_chain_with_stake_pool(&mut rng, &mut tf);
 
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+    let difficulty = U256::MAX;
     let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
     let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
@@ -173,8 +172,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         0,
     ));
 
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+    let difficulty = U256::MAX;
     let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
     let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
@@ -214,8 +212,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
 fn pos_invalid_vrf(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+    let difficulty = U256::MAX;
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -389,8 +386,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         create_chain_with_stake_pool(&mut rng, &mut tf);
     let random_pool_id: PoolId = H256::random_using(&mut rng).into();
 
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+    let difficulty = U256::MAX;
     let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
     let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);

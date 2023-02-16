@@ -19,10 +19,12 @@ pub use with_id::WithId;
 
 use std::fmt::{Debug, Display};
 
-use crate::{construct_fixed_hash, Uint256};
+use crate::construct_fixed_hash;
 use generic_array::{typenum, GenericArray};
-use serialization::{Decode, Encode};
 use typename::TypeName;
+
+use crypto_bigint::{Encoding, U256};
+use serialization::{Decode, Encode};
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -35,15 +37,15 @@ impl From<GenericArray<u8, typenum::U32>> for H256 {
     }
 }
 
-impl From<H256> for Uint256 {
+impl From<H256> for U256 {
     fn from(hash: H256) -> Self {
-        Uint256::from(hash.0)
+        U256::from_le_bytes(hash.0)
     }
 }
 
-impl From<Uint256> for H256 {
-    fn from(val: Uint256) -> Self {
-        H256(val.to_bytes())
+impl From<U256> for H256 {
+    fn from(val: U256) -> Self {
+        H256(val.to_le_bytes())
     }
 }
 
@@ -240,14 +242,14 @@ mod tests {
     fn h256_to_uint256_and_vice_versa() {
         fn check(value: &str) {
             let hash_value = H256::from_str(value).expect("nothing wrong");
-            let uint_value = Uint256::from(hash_value);
+            let uint_value = U256::from(hash_value);
 
             let hash_str = format!("{hash_value:?}");
-            let uint_str = format!("{uint_value:?}");
+            let uint_str = format!("{uint_value:#x}");
             assert_eq!(hash_str, uint_str);
 
             // make sure the position of the bytes are the same.
-            assert_eq!(hash_value.0, uint_value.to_bytes());
+            assert_eq!(hash_value.0, uint_value.to_le_bytes());
             assert_eq!(hash_value, H256::from(uint_value));
         }
 
@@ -265,9 +267,9 @@ mod tests {
             let bytes: Vec<u8> = FromHex::from_hex(hex_reversed).unwrap();
             let bytes = bytes.as_slice();
             let h = H256::from_str(hex).unwrap();
-            let u = Uint256::from_bytes(bytes.try_into().unwrap());
+            let u = U256::from_le_bytes(bytes.try_into().unwrap());
             assert_eq!(h.as_bytes(), bytes);
-            assert_eq!(u.to_bytes(), bytes);
+            assert_eq!(u.to_le_bytes(), bytes);
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)
     }

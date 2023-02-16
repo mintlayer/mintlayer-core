@@ -24,12 +24,13 @@ use common::{
         OutputPurpose,
     },
     primitives::{BlockHeight, Id},
-    Uint256,
 };
 use crypto::random::Rng;
 use rstest::rstest;
 use serialization::Encode;
 use test_utils::random::{make_seedable_rng, Seed};
+
+use crypto_bigint::U256;
 
 mod bootstrap;
 mod chainstate_accounting_storage_tests;
@@ -60,6 +61,13 @@ mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
+const TEST_DIFFICULTY: U256 = U256::from_words([
+    0xFFFFFFFFFFFFFFFF,
+    0xFFFFFFFFFFFFFFFF,
+    0xFFFFFFFFFFFFFFFF,
+    0x0FFFFFFFFFFFFFFF,
+]);
+
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready
 #[ignore]
@@ -69,8 +77,7 @@ type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(create_regtest()).build();
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
+    let difficulty = TEST_DIFFICULTY;
 
     for _ in 1..6 {
         let mut mined_block =

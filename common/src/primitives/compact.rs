@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::uint::Uint256;
 use serialization::{Decode, Encode};
 use std::ops::Shl;
+
+use crypto_bigint::U256;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug, Encode, Decode)]
 pub struct Compact(pub u32);
 
-impl TryFrom<Compact> for Uint256 {
-    type Error = Option<Uint256>;
+impl TryFrom<Compact> for U256 {
+    type Error = Option<U256>;
 
     // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L203
     fn try_from(value: Compact) -> Result<Self, Self::Error> {
@@ -32,9 +33,9 @@ impl TryFrom<Compact> for Uint256 {
         let value = if size <= 3 {
             word >>= 8 * (3 - size);
 
-            Uint256::from_u64(word as u64)
+            U256::from_u64(word as u64)
         } else {
-            let value = Uint256::from_u64(word as u64);
+            let value = U256::from_u64(word as u64);
             let shift = 8 * (size - 3);
             value.shl(shift as usize)
         };
@@ -51,15 +52,15 @@ impl TryFrom<Compact> for Uint256 {
 }
 
 // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L223
-impl From<Uint256> for Compact {
-    fn from(value: Uint256) -> Self {
-        let mut size = (value.bits() + 7) / 8;
+impl From<U256> for Compact {
+    fn from(value: U256) -> Self {
+        let mut size = (value.bits_vartime() + 7) / 8;
 
         let mut compact = if size <= 3 {
-            value.low_u64() << (8 * (3 - size))
+            value.to_words()[0] << (8 * (3 - size)) // FIXME: a problem for 32bit OS???
         } else {
             let bn = value >> (8 * (size - 3));
-            bn.low_u64()
+            bn.to_words()[0]
         };
 
         if (compact & 0x00800000) != 0 {
@@ -81,7 +82,7 @@ mod tests {
     fn check_conversion(for_uint256: u32, expected_value: u32) {
         let uint256 = {
             let compact = Compact(for_uint256);
-            Uint256::try_from(compact).expect("conversion should not fail from compact to uint256")
+            U256::try_from(compact).expect("conversion should not fail from compact to uint256")
         };
 
         let updated_compact = Compact::from(uint256);
@@ -90,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_compact_uint256_conversion() {
-        let u256 = Uint256::from_u64(0x80);
+        let u256 = U256::from_u64(0x80);
         let compact = Compact::from(u256);
         assert_eq!(compact, Compact(0x02008000));
 
@@ -122,7 +123,7 @@ mod tests {
     #[test]
     fn test_err_conversion() {
         fn err_conversion(c: u32) {
-            match Uint256::try_from(Compact(c)) {
+            match U256::try_from(Compact(c)) {
                 Ok(v) => {
                     panic!("conversion of {c} should fail, not {v:?}");
                 }

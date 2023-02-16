@@ -25,10 +25,8 @@ mod work;
 
 use std::time::Duration;
 
-use common::{
-    chain::{ChainConfig, PoWChainConfig},
-    Uint256,
-};
+use common::chain::{ChainConfig, PoWChainConfig};
+use crypto_bigint::U256;
 
 struct PoW(PoWChainConfig);
 
@@ -37,7 +35,7 @@ impl PoW {
         PoW(chain_config.get_proof_of_work_config())
     }
 
-    pub fn difficulty_limit(&self) -> Uint256 {
+    pub fn difficulty_limit(&self) -> U256 {
         self.0.limit()
     }
 

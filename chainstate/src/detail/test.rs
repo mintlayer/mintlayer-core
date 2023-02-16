@@ -23,8 +23,9 @@ use common::chain::config::Builder as ChainConfigBuilder;
 use common::chain::config::ChainType;
 use common::chain::Destination;
 use common::chain::NetUpgrades;
-use common::Uint256;
 use static_assertions::*;
+
+use crypto_bigint::U256;
 
 assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, DefaultTransactionVerificationStrategy>: Send);
 
@@ -66,7 +67,7 @@ fn process_genesis_block() {
         let block_at_0 =
             chainstate_ref.get_block_id_by_height(&BlockHeight::from(0)).unwrap().unwrap();
         assert_eq!(block_at_0, genesis_id);
-        assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(0));
+        assert_eq!(genesis_index.chain_trust(), &U256::ZERO);
     });
 }
 

@@ -22,6 +22,7 @@ consensus = {path = "../consensus"}
 oneshot = "0.1"
 
 async-trait.workspace = true
+crypto-bigint = "0.4"
 hex.workspace = true
 itertools.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }

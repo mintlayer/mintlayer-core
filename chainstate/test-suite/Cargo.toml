@@ -27,6 +27,8 @@ utxo = { path = '../../utxo' }
 hex.workspace = true
 itertools.workspace = true
 
+crypto-bigint = "0.4"
+
 [dev-dependencies]
 rstest = "0.16"
 expect-test = "1.3"

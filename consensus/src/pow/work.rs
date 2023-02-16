@@ -24,8 +24,8 @@ use common::{
         PoWStatus,
     },
     primitives::{Compact, Idable, H256},
-    Uint256,
 };
+use crypto_bigint::U256;
 
 use crate::pow::{
     error::ConsensusPoWError,
@@ -37,9 +37,9 @@ pub fn check_proof_of_work(
     block_hash: H256,
     block_bits: Compact,
 ) -> Result<bool, ConsensusPoWError> {
-    Uint256::try_from(block_bits)
+    U256::try_from(block_bits)
         .map(|target| {
-            let hash: Uint256 = block_hash.into();
+            let hash: U256 = block_hash.into();
 
             hash <= target
         })
@@ -224,6 +224,7 @@ mod tests {
     use crate::pow::work::check_proof_of_work;
     use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
+    use crypto_bigint::{CheckedMul, U256};
     use rstest::rstest;
     use std::str::FromStr;
 
@@ -253,7 +254,7 @@ mod tests {
         let pow_limit = cfg.get_proof_of_work_config().limit();
 
         let bits = Compact::from(pow_limit);
-        let hash = H256::from(pow_limit.mul_u32(2));
+        let hash = H256::from(pow_limit.checked_mul(&U256::from(2u8)).unwrap());
 
         assert!(!check_proof_of_work(hash, bits).unwrap());
     }
@@ -263,7 +264,7 @@ mod tests {
         let cfg = create_mainnet();
         let pow_limit = cfg.get_proof_of_work_config().limit();
 
-        let bits = Compact::from(pow_limit.mul_u32(2));
+        let bits = Compact::from(pow_limit.checked_mul(&U256::from(2u8)).unwrap());
         let hash =
             H256::from_str("1000000000000000000000000000000000000000000000000000000000000000")
                 .unwrap();
