@@ -15,7 +15,7 @@
 
 //! Wallet database schema
 
-use wallet_types::wallet_tx::WalletTx;
+use wallet_types::WalletTx;
 
 use common::{
     chain::{OutPoint, Transaction},

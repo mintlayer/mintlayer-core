@@ -14,3 +14,5 @@
 // limitations under the License.
 
 pub mod wallet;
+
+pub use crate::wallet::{Wallet, WalletError};

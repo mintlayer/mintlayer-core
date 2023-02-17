@@ -19,14 +19,12 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
+pub use internal::{Store, StoreTxRo, StoreTxRw};
+
 use common::chain::{OutPoint, Transaction};
 use common::primitives::Id;
-pub use internal::Store;
-use std::path::PathBuf;
-
-use crate::internal::StoreTxRw;
 use utxo::Utxo;
-use wallet_types::wallet_tx::WalletTx;
+use wallet_types::WalletTx;
 
 /// Possibly failing result of wallet storage query
 pub type Result<T> = storage::Result<T>;
@@ -47,6 +45,7 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<()>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<()>;
     fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> Result<()>;
+    fn del_transaction(&mut self, id: &Id<Transaction>) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction
@@ -84,16 +83,5 @@ pub trait Transactional<'t> {
 
 pub trait WalletStorage: WalletStorageWrite + for<'tx> Transactional<'tx> + Send {}
 
-impl Store<storage_sqlite::Sqlite> {
-    /// Create a default storage (mostly for testing, may want to remove this later)
-    pub fn new_in_memory() -> crate::Result<Self> {
-        Self::new(storage_sqlite::Sqlite::new_in_memory())
-    }
-
-    pub fn new_from_path(path: PathBuf) -> crate::Result<Self> {
-        Self::new(storage_sqlite::Sqlite::new(path))
-    }
-}
-
-pub type WalletStorageImpl = Store<storage_sqlite::Sqlite>;
+pub type DefaultBackend = storage_sqlite::Sqlite;
 pub type WalletStorageTxRwImpl<'st> = StoreTxRw<'st, storage_sqlite::Sqlite>;

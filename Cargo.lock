@@ -4169,6 +4169,8 @@ dependencies = [
  "common",
  "logging",
  "serialization",
+ "storage",
+ "tempfile",
  "thiserror",
  "utxo",
  "wallet-storage",

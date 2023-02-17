@@ -18,7 +18,7 @@ use common::primitives::Id;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
-use wallet_types::wallet_tx::WalletTx;
+use wallet_types::WalletTx;
 
 use crate::{
     schema::{self as db, Schema},
@@ -115,6 +115,10 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
 
     fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> crate::Result<()> {
         self.write::<db::DBTxs, _, _, _>(id, tx)
+    }
+
+    fn del_transaction(&mut self, id: &Id<Transaction>) -> crate::Result<()> {
+        self.0.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
     }
 }
 

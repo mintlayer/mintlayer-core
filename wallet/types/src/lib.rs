@@ -14,3 +14,5 @@
 // limitations under the License.
 
 pub mod wallet_tx;
+
+pub use wallet_tx::{TxState, WalletTx};

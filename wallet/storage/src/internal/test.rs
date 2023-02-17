@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use super::*;
-use crate::WalletStorageImpl;
+use crate::DefaultBackend;
 use common::chain::tokens::OutputValue;
 use common::chain::{Destination, OutPointSourceId, OutputPurpose, TxOutput};
 use common::primitives::{Amount, Id, H256};
@@ -26,7 +26,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 #[test]
 fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
-        let store = WalletStorageImpl::new_in_memory().unwrap();
+        let store = Store::new(DefaultBackend::new_in_memory()).unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
         assert_eq!(vtx, 1, "Default storage version wrong");
@@ -40,7 +40,7 @@ fn storage_get_default_version_in_tx() {
 #[case(Seed::from_entropy())]
 fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut db_interface = WalletStorageImpl::new_in_memory().unwrap();
+    let mut db_interface = Store::new(DefaultBackend::new_in_memory()).unwrap();
 
     // generate a utxo and outpoint
     let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
