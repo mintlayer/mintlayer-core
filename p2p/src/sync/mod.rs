@@ -84,6 +84,9 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// and removed either after sending a response or when the peer is disconnected. A number of
     /// blocks is limited by `P2pConfig::requested_blocks_limit` per peer.
     blocks_queue: VecDeque<(T::PeerId, Id<Block>)>,
+
+    /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
+    is_initial_block_download: bool,
 }
 
 /// Syncing manager
@@ -111,6 +114,7 @@ where
             chainstate_handle,
             peers: Default::default(),
             blocks_queue: Default::default(),
+            is_initial_block_download: true,
         }
     }
 
@@ -119,6 +123,7 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
+
         loop {
             tokio::select! {
                 event = self.messaging_handle.poll_next() => match event? {
@@ -135,7 +140,7 @@ where
                     SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await?,
                     SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
                 },
-                block_id = new_tip_receiver.recv(), if !self.chainstate_handle.call(|c| c.is_initial_block_download()).await?? => {
+                block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
@@ -198,6 +203,12 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
+        if self.is_initial_block_download {
+            self.is_initial_block_download =
+                self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+            return Ok(());
+        }
+
         let header = self
             .chainstate_handle
             .call(move |c| c.get_block(block_id))
