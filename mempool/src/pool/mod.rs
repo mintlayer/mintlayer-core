@@ -698,6 +698,9 @@ where
     }
 
     pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+        // TODO: turn on mempool new tip broadcasts when ready
+        // self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
+
         log::info!(
             "new tip with block_id {:?} and block_height {:?}",
             block_id,
