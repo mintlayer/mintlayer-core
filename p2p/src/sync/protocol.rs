@@ -15,7 +15,9 @@
 
 use std::mem;
 
-use chainstate::{ban_score::BanScore, BlockError, ChainstateError, Locator};
+use itertools::Itertools;
+
+use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
     chain::{block::BlockHeader, Block},
     primitives::{Id, Idable},
@@ -169,7 +171,7 @@ where
         // Each header must be connected to the previous one.
         if !headers
             .iter()
-            .zip(&headers[1..])
+            .tuple_windows()
             .all(|(left, right)| &left.get_id() == right.prev_block_id())
         {
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
@@ -229,18 +231,18 @@ where
             )));
         }
 
-        match self
-            .chainstate_handle
-            .call_mut(|c| {
-                c.preliminary_block_check(block)
-                    .and_then(|block| c.process_block(block, chainstate::BlockSource::Peer))
-            })
-            .await?
-        {
+        let block = match self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await? {
+            Ok(b) => b,
             // It is OK to receive an already processed block.
-            Ok(_) | Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => {}
+            Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => {
+                return Ok(())
+            }
             Err(e) => return Err(P2pError::ChainstateError(e)),
-        }
+        };
+
+        self.chainstate_handle
+            .call_mut(|c| c.process_block(block, BlockSource::Peer))
+            .await??;
 
         if peer_state.requested_blocks.is_empty() {
             if peer_state.known_headers.is_empty() {
