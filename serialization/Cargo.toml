@@ -1,9 +1,9 @@
 [package]
 name = "serialization"
-version = "0.1.0"
+license.workspace = true
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license = "MIT"
 
 [dependencies]
 serialization-core = { path = 'core' }

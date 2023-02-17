@@ -1,9 +1,9 @@
 [package]
+name = "chainstate"
+license.workspace = true
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license = "MIT"
-name = "chainstate"
-version = "0.1.0"
 
 [dependencies]
 chainstate-storage = {path = './storage'}

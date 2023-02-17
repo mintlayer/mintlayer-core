@@ -67,6 +67,23 @@ def check_crate_version_unique(crate_name):
 
     return len(versions) == 1
 
+# Ensure that the versions in the workspace's Cargo.toml are consistent
+def check_workspace_and_package_versions_equal():
+    print("==== Ensuring workspace and package versions are equal in the workspace's Cargo.toml")
+    root = toml.load('Cargo.toml')
+
+    workspace_version = root['package']['version']
+    package_version = root['workspace']['package']['version']
+
+    result = workspace_version == package_version
+
+    if not result:
+        print("Workspace vs package versions mismatch in Cargo.toml: '{}' != '{}'".format(workspace_version, package_version))
+        print()
+
+    return result
+
+
 # Check crate versions
 def check_crate_versions():
     print("==== Checking crate versions:")
@@ -82,7 +99,7 @@ def check_crate_versions():
 # Check license header in current project crates
 def check_local_licenses():
     print("==== Checking local license headers:")
-    
+
     # list of files exempted from license check
     exempted_files = [
         "./script/src/opcodes.rs",
@@ -92,14 +109,14 @@ def check_local_licenses():
         "./common/src/uint/impls.rs",
         "./common/src/uint/mod.rs"
         ]
-    
+
     template = re.compile('(?:' + r')\n(?:'.join(LICENSE_TEMPLATE) + ')')
 
     ok = True
     for path in rs_sources():
         if any(os.path.samefile(path, exempted) for exempted in exempted_files):
             continue
-        
+
         with open(path) as file:
             if not template.search(file.read()):
                 ok = False
@@ -111,16 +128,16 @@ def check_local_licenses():
 # check TODO(PR) and FIXME instances
 def check_todos():
     print("==== Checking TODO(PR) and FIXME instances:")
-    
+
     # list of files exempted from checks
     exempted_files = [
         ]
-    
+
     ok = True
     for path in rs_sources():
         if any(os.path.samefile(path, exempted) for exempted in exempted_files):
             continue
-        
+
         with open(path) as file:
             file_data = file.read()
             if 'TODO(PR)' in file_data or 'FIXME' in file_data:
@@ -136,6 +153,7 @@ def run_checks():
             disallow(JSONRPSEE_RE, exclude = ['rpc']),
             check_local_licenses(),
             check_crate_versions(),
+            check_workspace_and_package_versions_equal(),
             check_todos()
         ])
 
