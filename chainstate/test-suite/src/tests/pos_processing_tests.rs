@@ -22,15 +22,15 @@ use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use chainstate_types::vrf_tools::{construct_transcript, ProofOfStakeVRFError};
-use common::chain::PoolId;
-use common::chain::{signature::inputsig::InputWitness, stakelock::StakePoolData, OutPoint};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
-        config::Builder as ConfigBuilder,
+        config::{Builder as ConfigBuilder, EpochIndex},
+        signature::inputsig::InputWitness,
+        stakelock::StakePoolData,
         tokens::OutputValue,
-        ConsensusUpgrade, NetUpgrades, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
-        UpgradeVersion,
+        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, OutputPurpose, PoolId, TxInput,
+        TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Idable, H256},
     Uint256,
@@ -125,7 +125,7 @@ fn pos_basic(#[case] seed: Seed) {
     let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
     let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
     let pos_data = PoSData::new(
-        vec![TxInput::from_outpoint(stake_pool_outpoint)],
+        vec![stake_pool_outpoint.into()],
         vec![InputWitness::NoSignature(None)],
         pool_id,
         vrf_data,
@@ -244,14 +244,21 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         )),
     ));
 
+    let valid_prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let valid_block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
+    let valid_epoch: EpochIndex = 1;
+    let valid_vrf_transcript =
+        construct_transcript(valid_epoch, &valid_prev_randomness, valid_block_timestamp);
+    let valid_vrf_data = vrf_sk.produce_vrf_data(valid_vrf_transcript.clone().into());
+
     {
         // invalid prev randomness
-        let prev_randomness = H256::random_using(&mut rng);
-        let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
-        let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
+        let invalid_randomness = H256::random_using(&mut rng);
+        let vrf_transcript =
+            construct_transcript(valid_epoch, &invalid_randomness, valid_block_timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
         let pos_data = PoSData::new(
-            vec![TxInput::from_outpoint(stake_pool_outpoint.clone())],
+            vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
@@ -269,13 +276,12 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     {
         // invalid timestamp
-        let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
         let block_timestamp =
             BlockTimestamp::from_duration_since_epoch(tf.current_time().saturating_mul(2));
-        let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
+        let vrf_transcript = construct_transcript(1, &valid_prev_randomness, block_timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
         let pos_data = PoSData::new(
-            vec![TxInput::from_outpoint(stake_pool_outpoint.clone())],
+            vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
@@ -293,12 +299,10 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     {
         // invalid epoch
-        let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
-        let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
-        let vrf_transcript = construct_transcript(2, &prev_randomness, block_timestamp);
+        let vrf_transcript = construct_transcript(2, &valid_prev_randomness, valid_block_timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
         let pos_data = PoSData::new(
-            vec![TxInput::from_outpoint(stake_pool_outpoint.clone())],
+            vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
@@ -316,13 +320,10 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     {
         // invalid vrf private key
-        let prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
-        let block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
-        let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
         let (vrf_sk_2, _) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
-        let vrf_data = vrf_sk_2.produce_vrf_data(vrf_transcript.into());
+        let vrf_data = vrf_sk_2.produce_vrf_data(valid_vrf_transcript.into());
         let pos_data = PoSData::new(
-            vec![TxInput::from_outpoint(stake_pool_outpoint)],
+            vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
@@ -336,6 +337,23 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .unwrap_err();
 
         assert_eq!(res, expected_error);
+    }
+
+    {
+        // valid case
+        let pos_data = PoSData::new(
+            vec![stake_pool_outpoint.into()],
+            vec![InputWitness::NoSignature(None)],
+            pool_id,
+            valid_vrf_data,
+            Compact::from(difficulty),
+        );
+
+        tf.make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .build_and_process()
+            .unwrap()
+            .unwrap();
     }
 }
 
@@ -367,7 +385,8 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_outpoint, _, vrf_sk) = create_chain_with_stake_pool(&mut rng, &mut tf);
+    let (stake_pool_outpoint, expected_pool_id, vrf_sk) =
+        create_chain_with_stake_pool(&mut rng, &mut tf);
     let random_pool_id: PoolId = H256::random_using(&mut rng).into();
 
     let difficulty =
@@ -377,10 +396,10 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let vrf_transcript = construct_transcript(1, &prev_randomness, block_timestamp);
     let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
     let pos_data = PoSData::new(
-        vec![TxInput::from_outpoint(stake_pool_outpoint)],
+        vec![stake_pool_outpoint.clone().into()],
         vec![InputWitness::NoSignature(None)],
         random_pool_id,
-        vrf_data,
+        vrf_data.clone(),
         Compact::from(difficulty),
     );
 
@@ -398,4 +417,19 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
             ))
         ))
     );
+
+    // test valid case
+    let pos_data = PoSData::new(
+        vec![stake_pool_outpoint.into()],
+        vec![InputWitness::NoSignature(None)],
+        expected_pool_id,
+        vrf_data,
+        Compact::from(difficulty),
+    );
+
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .build_and_process()
+        .unwrap()
+        .unwrap();
 }

@@ -133,12 +133,14 @@ impl TxInput {
         }
     }
 
-    pub fn from_outpoint(outpoint: OutPoint) -> Self {
-        TxInput { outpoint }
-    }
-
     pub fn outpoint(&self) -> &OutPoint {
         &self.outpoint
+    }
+}
+
+impl From<OutPoint> for TxInput {
+    fn from(outpoint: OutPoint) -> TxInput {
+        TxInput { outpoint }
     }
 }
 
