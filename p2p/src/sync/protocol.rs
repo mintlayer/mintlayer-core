@@ -36,7 +36,11 @@ where
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
     T::PeerId: 'static,
 {
-    pub async fn handle_message(&mut self, peer: T::PeerId, message: SyncMessage) -> Result<()> {
+    pub(super) async fn handle_message(
+        &mut self,
+        peer: T::PeerId,
+        message: SyncMessage,
+    ) -> Result<()> {
         match message {
             SyncMessage::HeaderListRequest(r) => {
                 self.handle_header_request(peer, r.into_locator()).await
@@ -110,11 +114,17 @@ where
         log::trace!("Requested block ids: {block_ids:#?}");
 
         // Check that all blocks are known.
-        for id in block_ids.clone() {
-            self.chainstate_handle.call(move |c| c.get_block_index(&id)).await??.ok_or(
-                P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
-            )?;
-        }
+        let ids = block_ids.clone();
+        self.chainstate_handle
+            .call(move |c| {
+                for id in ids {
+                    c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
+                        ProtocolError::UnknownBlockRequested,
+                    ))?;
+                }
+                Result::<_>::Ok(())
+            })
+            .await??;
 
         block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
         peer_state.num_blocks_to_send += block_ids.len();
@@ -247,7 +257,7 @@ where
         Ok(())
     }
 
-    pub async fn handle_announcement(
+    pub(super) async fn handle_announcement(
         &mut self,
         peer: T::PeerId,
         announcement: Announcement,
