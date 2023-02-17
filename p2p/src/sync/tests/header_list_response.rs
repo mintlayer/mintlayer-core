@@ -21,8 +21,9 @@ use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
 
 use crate::{
     error::ProtocolError,
+    message::HeaderListResponse,
     net::default_backend::types::PeerId,
-    sync::{tests::helpers::SyncManagerHandle, BlockListRequest, HeaderListResponse, SyncMessage},
+    sync::{tests::helpers::SyncManagerHandle, BlockListRequest, SyncMessage},
     P2pConfig, P2pError,
 };
 
