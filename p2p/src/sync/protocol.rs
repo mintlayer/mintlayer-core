@@ -72,7 +72,7 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        if self.chainstate_handle.call(|c| c.is_initial_block_download()).await?? {
+        if self.is_initial_block_download {
             // TODO: Check if a peer has permissions to ask for headers during the initial block download.
             log::debug!("Ignoring headers request because the node is in initial block download");
             return Ok(());
@@ -102,7 +102,7 @@ where
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if self.chainstate_handle.call(|c| c.is_initial_block_download()).await?? {
+        if self.is_initial_block_download {
             log::debug!("Ignoring blocks request because the node is in initial block download");
             return Ok(());
         }
