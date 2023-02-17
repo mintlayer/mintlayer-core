@@ -14,10 +14,9 @@
 // limitations under the License.
 
 use merlin::Transcript;
-use rand::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 
-use crate::random::make_true_rng;
+use crate::random::{make_true_rng, CryptoRng, Rng};
 
 pub use self::primitives::VRFReturn;
 
