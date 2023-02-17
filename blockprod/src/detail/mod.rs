@@ -83,7 +83,7 @@ mod tests {
     use crate::tests::setup_blockprod_test;
 
     #[tokio::test]
-    async fn test_stop() {
+    async fn stop() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
@@ -95,22 +95,22 @@ mod tests {
             Default::default(),
             builder_tx,
         )
-        .expect("Error initializing Builder");
+        .expect("Error initializing Block Builder");
 
-        block_production.stop().expect("Error stopping Builder");
+        block_production.stop().expect("Error stopping Block Builder");
 
         let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
 
         tokio::select! {
-            msg = recv => match msg.expect("Builder timed out").expect("Error reading from Builder") {
+            msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
                 BlockBuilderControlCommand::Stop => {},
-                _ => panic!("Invalid message received from Builder"),
+                _ => panic!("Invalid message received from Block Builder"),
             }
         }
     }
 
     #[tokio::test]
-    async fn test_start() {
+    async fn start() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
@@ -122,22 +122,22 @@ mod tests {
             Default::default(),
             builder_tx,
         )
-        .expect("Error initializing Builder");
+        .expect("Error initializing Block Builder");
 
-        block_production.start().expect("Error starting Builder");
+        block_production.start().expect("Error starting Block Builder");
 
         let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
 
         tokio::select! {
-            msg = recv => match msg.expect("Builder timed out").expect("Error reading from Builder") {
+            msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
                 BlockBuilderControlCommand::Start => {},
-                _ => panic!("Invalid message received from Builder"),
+                _ => panic!("Invalid message received from Block Builder"),
             }
         }
     }
 
     #[tokio::test]
-    async fn test_is_connected() {
+    async fn is_connected() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (builder_tx, _builder_rx) = mpsc::unbounded_channel();
@@ -149,8 +149,11 @@ mod tests {
             Default::default(),
             builder_tx,
         )
-        .expect("Error initializing Builder");
+        .expect("Error initializing Block Builder");
 
-        assert!(block_production.is_connected(), "Builder is not connected");
+        assert!(
+            block_production.is_connected(),
+            "Block Builder is not connected"
+        );
     }
 }

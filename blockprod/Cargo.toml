@@ -10,6 +10,7 @@ license = "MIT"
 [dependencies]
 chainstate = { path = "../chainstate/" }
 common = { path = "../common/" }
+crypto = { path = "../crypto/" }
 mempool = { path = "../mempool/" }
 subsystem = { path = "../subsystem/" }
 logging = {path = '../logging'}
