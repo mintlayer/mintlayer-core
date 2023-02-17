@@ -96,13 +96,11 @@ async fn valid_response(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let num_blocks = rng.gen_range(2..10);
-    println!("FIXME {num_blocks}");
     let blocks = create_n_blocks(
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
         num_blocks,
     );
-    println!("FIXME blocks len = {}", blocks.len());
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
     handle.send_message(
         peer,
@@ -118,7 +116,6 @@ async fn valid_response(#[case] seed: Seed) {
     );
 
     for (i, block) in blocks.into_iter().enumerate() {
-        println!("FIXME");
         handle.send_message(
             peer,
             SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
