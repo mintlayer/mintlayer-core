@@ -79,7 +79,7 @@ fn calculate_generic_merkle_root(
     let hashes: Vec<H256> = iter::once(rewards_hash)
         .chain(body.transactions.iter().map(tx_hasher))
         .collect();
-    let t = merkle::merkletree_from_vec(&hashes)?;
+    let t = merkle::merkletree_from_vec(hashes)?;
     Ok(t.root())
 }
 

@@ -45,13 +45,13 @@ pub enum MerkleTreeFormError {
     Unknown(String),
 }
 
-fn merkletree_get_pad_data(elements: &[H256]) -> Vec<H256> {
+fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
     let orig_size = elements.len();
     let pow2_size = next_pow2(orig_size);
 
     assert!(pow2_size >= orig_size);
 
-    let mut padding = Vec::new();
+    let mut padding = Vec::with_capacity(pow2_size - orig_size);
     for _idx in orig_size..pow2_size {
         let to_hash = padding
             .last()
@@ -68,7 +68,7 @@ impl From<anyhow::Error> for MerkleTreeFormError {
     }
 }
 
-fn concatenate_with_padding_as_bytes(elements: &[H256], padding: Vec<H256>) -> Vec<u8> {
+fn concatenate_with_padding_as_bytes(elements: Vec<H256>, padding: Vec<H256>) -> Vec<u8> {
     let data = elements.iter().flat_map(|el| el.as_bytes().to_vec());
     let padding_data = padding.iter().flat_map(|el| el.as_bytes().to_vec());
     let data: Vec<u8> = data.into_iter().chain(padding_data.into_iter()).collect();
@@ -78,14 +78,14 @@ fn concatenate_with_padding_as_bytes(elements: &[H256], padding: Vec<H256>) -> V
 /// Given a set of leaf hashes, calculate the merkle tree
 /// Note: This WON'T hash the leaves
 pub fn merkletree_from_vec(
-    elements: &[H256],
+    elements: Vec<H256>,
 ) -> Result<MerkleTree<H256, BlockchainHashAlgorithm, VecStore<H256>>, MerkleTreeFormError> {
     if elements.len() < 2 {
         return Err(MerkleTreeFormError::TooSmall(elements.len()));
     }
 
     // pad up to the next power of two
-    let padding = merkletree_get_pad_data(elements);
+    let padding = create_merkletree_padding(&elements);
 
     // in order not to get MerkleTree library to rehash the children, we have to use u8 data
     // if we use the default MerkleTree::from_data() or similar, it'll hash the leaves
@@ -178,10 +178,10 @@ mod tests {
 
     #[test]
     fn merkletree_too_small() {
-        let t0 = merkletree_from_vec(&[]);
+        let t0 = merkletree_from_vec(vec![]);
         assert_eq!(t0.unwrap_err(), MerkleTreeFormError::TooSmall(0));
 
-        let t1 = merkletree_from_vec(&[H256::zero()]);
+        let t1 = merkletree_from_vec(vec![H256::zero()]);
         assert_eq!(t1.unwrap_err(), MerkleTreeFormError::TooSmall(1));
     }
 
@@ -317,7 +317,7 @@ mod tests {
         let v1 = H256::zero();
         let v2 = H256::from_low_u64_be(1);
 
-        let t = merkletree_from_vec(&[v1, v2]).unwrap();
+        let t = merkletree_from_vec(vec![v1, v2]).unwrap();
 
         // recreate the expected root
         let mut test_hasher = DefaultHashAlgoStream::new();
@@ -333,7 +333,7 @@ mod tests {
         let v2 = H256::from_low_u64_be(1);
         let v3 = H256::from_low_u64_be(2);
 
-        let t = merkletree_from_vec(&[v1, v2, v3]).unwrap();
+        let t = merkletree_from_vec(vec![v1, v2, v3]).unwrap();
 
         // recreate the expected root
         let mut node10 = DefaultHashAlgoStream::new();
@@ -366,7 +366,7 @@ mod tests {
         let v7 = default_hash(v6);
         let v8 = default_hash(v7);
 
-        let t = merkletree_from_vec(&[v1, v2, v3, v4, v5]).unwrap();
+        let t = merkletree_from_vec(vec![v1, v2, v3, v4, v5]).unwrap();
 
         // recreate the expected root
         let mut node20 = DefaultHashAlgoStream::new();
