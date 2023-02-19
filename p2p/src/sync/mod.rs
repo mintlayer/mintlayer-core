@@ -123,6 +123,8 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
+        self.is_initial_block_download =
+            self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
 
         loop {
             tokio::select! {
@@ -206,6 +208,9 @@ where
         if self.is_initial_block_download {
             self.is_initial_block_download =
                 self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+        }
+
+        if self.is_initial_block_download {
             return Ok(());
         }
 
