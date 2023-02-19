@@ -38,21 +38,6 @@ fn next_pow2(n: usize) -> usize {
     (1 << active_bits) as usize
 }
 
-#[test]
-fn merkletree_basic_two_leaf_node() {
-    let v1 = default_hash(H256::zero());
-    let v2 = default_hash(H256::from_low_u64_be(1));
-
-    let t = MerkleTree::from_leaves(vec![v1, v2]).unwrap();
-
-    // recreate the expected root
-    let mut test_hasher = DefaultHashAlgoStream::new();
-    test_hasher.write(v1);
-    test_hasher.write(v2);
-
-    assert_eq!(t.root(), test_hasher.finalize().into());
-}
-
 fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
     let orig_size = elements.len();
     let pow2_size = next_pow2(orig_size);
@@ -112,6 +97,21 @@ mod tests {
     fn merkletree_too_small() {
         let t0 = MerkleTree::from_leaves(vec![]);
         assert_eq!(t0.unwrap_err(), MerkleTreeFormError::TooSmall(0));
+    }
+
+    #[test]
+    fn merkletree_basic_two_leaf_node() {
+        let v1 = default_hash(H256::zero());
+        let v2 = default_hash(H256::from_low_u64_be(1));
+
+        let t = MerkleTree::from_leaves(vec![v1, v2]).unwrap();
+
+        // recreate the expected root
+        let mut test_hasher = DefaultHashAlgoStream::new();
+        test_hasher.write(v1);
+        test_hasher.write(v2);
+
+        assert_eq!(t.root(), test_hasher.finalize().into());
     }
 
     #[test]
