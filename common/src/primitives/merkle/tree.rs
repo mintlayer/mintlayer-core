@@ -25,7 +25,7 @@ use super::MerkleTreeFormError;
 /// Merkle tree in the form of a vector, where the bottom leaves are the based, and the root is
 /// the last element.
 #[derive(Debug)]
-pub struct BinaryMerkleTree {
+pub struct MerkleTree {
     tree: Vec<H256>,
 }
 
@@ -43,7 +43,7 @@ fn merkletree_basic_two_leaf_node() {
     let v1 = default_hash(H256::zero());
     let v2 = default_hash(H256::from_low_u64_be(1));
 
-    let t = BinaryMerkleTree::from_leaves(vec![v1, v2]).unwrap();
+    let t = MerkleTree::from_leaves(vec![v1, v2]).unwrap();
 
     // recreate the expected root
     let mut test_hasher = DefaultHashAlgoStream::new();
@@ -70,7 +70,7 @@ fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
     padding
 }
 
-impl BinaryMerkleTree {
+impl MerkleTree {
     fn combine_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn merkletree_too_small() {
-        let t0 = BinaryMerkleTree::from_leaves(vec![]);
+        let t0 = MerkleTree::from_leaves(vec![]);
         assert_eq!(t0.unwrap_err(), MerkleTreeFormError::TooSmall(0));
     }
 
@@ -121,7 +121,7 @@ mod tests {
         let v3 = default_hash(H256::from_low_u64_be(2));
         let v4 = default_hash(H256::from_low_u64_be(3));
 
-        let t = BinaryMerkleTree::from_leaves(vec![v1, v2, v3, v4]).unwrap();
+        let t = MerkleTree::from_leaves(vec![v1, v2, v3, v4]).unwrap();
 
         // recreate the expected root
         let mut node10 = DefaultHashAlgoStream::new();
@@ -154,7 +154,7 @@ mod tests {
         let v7 = default_hash(H256::from_low_u64_be(6));
         let v8 = default_hash(H256::from_low_u64_be(7));
 
-        let t = BinaryMerkleTree::from_leaves(vec![v1, v2, v3, v4, v5, v6, v7, v8]).unwrap();
+        let t = MerkleTree::from_leaves(vec![v1, v2, v3, v4, v5, v6, v7, v8]).unwrap();
 
         // recreate the expected root
         let mut node20 = DefaultHashAlgoStream::new();
@@ -203,7 +203,7 @@ mod tests {
         let v1 = H256::zero();
         let v2 = H256::from_low_u64_be(1);
 
-        let t = BinaryMerkleTree::from_leaves(vec![v1, v2]).unwrap();
+        let t = MerkleTree::from_leaves(vec![v1, v2]).unwrap();
 
         // recreate the expected root
         let mut test_hasher = DefaultHashAlgoStream::new();
@@ -219,7 +219,7 @@ mod tests {
         let v2 = H256::from_low_u64_be(1);
         let v3 = H256::from_low_u64_be(2);
 
-        let t = BinaryMerkleTree::from_leaves(vec![v1, v2, v3]).unwrap();
+        let t = MerkleTree::from_leaves(vec![v1, v2, v3]).unwrap();
 
         // recreate the expected root
         let mut node10 = DefaultHashAlgoStream::new();
@@ -252,7 +252,7 @@ mod tests {
         let v7 = default_hash(v6);
         let v8 = default_hash(v7);
 
-        let t = BinaryMerkleTree::from_leaves(vec![v1, v2, v3, v4, v5]).unwrap();
+        let t = MerkleTree::from_leaves(vec![v1, v2, v3, v4, v5]).unwrap();
 
         // recreate the expected root
         let mut node20 = DefaultHashAlgoStream::new();
