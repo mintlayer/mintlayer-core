@@ -19,12 +19,4 @@ pub mod tree;
 pub enum MerkleTreeFormError {
     #[error("Merkle tree input too small: {0}")]
     TooSmall(usize),
-    #[error("Unknown error: {0}")]
-    Unknown(String),
-}
-
-impl From<anyhow::Error> for MerkleTreeFormError {
-    fn from(err: anyhow::Error) -> Self {
-        MerkleTreeFormError::Unknown(err.to_string())
-    }
 }
