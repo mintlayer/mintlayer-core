@@ -92,17 +92,17 @@ impl MerkleTree {
         *self.tree.last().expect("By design, at least one element must exist")
     }
 
-    fn leaves_count_from_tree_size(
-        tree_size: NonZeroUsize,
-    ) -> Result<NonZeroUsize, MerkleTreeAccessError> {
-        if (tree_size.get() + 1).count_ones() != 1 {
-            return Err(MerkleTreeAccessError::InvalidTreeSize(tree_size.get()));
-        }
+    fn leaves_count_from_tree_size(tree_size: NonZeroUsize) -> NonZeroUsize {
+        assert_eq!(
+            (tree_size.get() + 1).count_ones(),
+            1,
+            "A valid tree size is always a power of 2 minus one"
+        );
 
         let tree_size = tree_size.get();
         let leaves_count = (tree_size + 1) >> 1;
         debug_assert!(leaves_count.is_power_of_two());
-        Ok(NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0"))
+        NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0")
     }
 
     /// Find adjacent leaves indices in a merkle tree
@@ -138,8 +138,7 @@ impl MerkleTree {
     pub fn level_count(&self) -> usize {
         let leaves_count = Self::leaves_count_from_tree_size(
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
-        )
-        .expect("Failed to extract leaves count");
+        );
 
         let level_count = leaves_count.trailing_zeros() as usize + 1;
 
@@ -176,13 +175,10 @@ impl MerkleTree {
     }
 
     /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
-    pub fn position_from_index(
-        tree_size: NonZeroUsize,
-        index: usize,
-    ) -> Result<(usize, usize), MerkleTreeAccessError> {
+    pub fn position_from_index(tree_size: NonZeroUsize, index: usize) -> (usize, usize) {
         assert_eq!(
-            tree_size.get().leading_zeros() + tree_size.get().trailing_ones(),
-            NonZeroUsize::BITS,
+            (tree_size.get() + 1).count_ones(),
+            1,
             "A valid tree size is always a power of 2 minus one"
         );
         assert!(
@@ -190,7 +186,7 @@ impl MerkleTree {
             "Index must be within the tree size"
         );
 
-        let leaves_count = Self::leaves_count_from_tree_size(tree_size)?;
+        let leaves_count = Self::leaves_count_from_tree_size(tree_size);
 
         let mut level = 0;
         let mut nodes_at_level_count = leaves_count.get();
@@ -200,7 +196,7 @@ impl MerkleTree {
             tree_node_counter += nodes_at_level_count;
             nodes_at_level_count >>= 1;
         }
-        Ok((level, index - tree_node_counter))
+        (level, index - tree_node_counter)
     }
 
     /// Multi-proof of inclusion for a list of elements
@@ -210,8 +206,7 @@ impl MerkleTree {
     ) -> Result<Vec<H256>, MerkleTreeProofExtractionError> {
         let leaves_count = Self::leaves_count_from_tree_size(
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
-        )
-        .expect("Failed to extract leaves count");
+        );
 
         if leaves_indices.iter().any(|v| *v > leaves_count.get() as u32) {
             return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
@@ -232,6 +227,8 @@ mod tests {
     use super::*;
     use crate::primitives::id::{default_hash, DefaultHashAlgoStream};
     use crypto::hash::StreamHasher;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Rng, Seed};
 
     #[test]
     fn merkletree_too_small() {
@@ -442,23 +439,24 @@ mod tests {
             let leaves_count = 1 << (i - 1);
             let tree_size = (1 << i) - 1;
             assert_eq!(
-                MerkleTree::leaves_count_from_tree_size(tree_size.try_into().unwrap()).unwrap(),
+                MerkleTree::leaves_count_from_tree_size(tree_size.try_into().unwrap()),
                 NonZeroUsize::new(leaves_count).unwrap(),
                 "Check failed for i = {}",
                 i
             );
         }
+    }
 
-        for i in 1..1000000 {
-            if (i + 1usize).count_ones() == 1 {
-                // exclude valid number of tree elements, which is 2^n-1
-                continue;
-            }
-            assert_eq!(
-                MerkleTree::leaves_count_from_tree_size(i.try_into().unwrap()).unwrap_err(),
-                MerkleTreeAccessError::InvalidTreeSize(i)
-            );
+    #[rstest]
+    #[should_panic(expected = "A valid tree size is always a power of 2 minus one")]
+    #[case(Seed::from_entropy())]
+    fn leaves_count_from_tree_size_error(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut i = rng.gen::<usize>();
+        while (i + 1usize).count_ones() == 1 {
+            i = rng.gen::<usize>();
         }
+        let _leaves_count = MerkleTree::leaves_count_from_tree_size(i.try_into().unwrap());
     }
 
     #[test]
@@ -576,7 +574,7 @@ mod tests {
             let level_end: usize = 1;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -592,7 +590,7 @@ mod tests {
             let level_end: usize = 2;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -603,7 +601,7 @@ mod tests {
             let level_end: usize = 3;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -619,7 +617,7 @@ mod tests {
             let level_end: usize = 4;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -630,7 +628,7 @@ mod tests {
             let level_end: usize = 6;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -641,7 +639,7 @@ mod tests {
             let level_end: usize = 7;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -657,7 +655,7 @@ mod tests {
             let level_end: usize = 8;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -668,7 +666,7 @@ mod tests {
             let level_end: usize = 12;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -679,7 +677,7 @@ mod tests {
             let level_end: usize = 14;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
@@ -690,7 +688,7 @@ mod tests {
             let level_end: usize = 15;
             for i in level_start..level_end {
                 assert_eq!(
-                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    MerkleTree::position_from_index(tree_size, i),
                     (level, i - level_start)
                 );
             }
