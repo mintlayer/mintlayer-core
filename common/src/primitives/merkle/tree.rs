@@ -94,11 +94,9 @@ impl MerkleTree {
 
     fn leaves_count_from_tree_size(
         tree_size: NonZeroUsize,
-    ) -> Result<NonZeroUsize, MerkleTreeProofExtractionError> {
+    ) -> Result<NonZeroUsize, MerkleTreeAccessError> {
         if (tree_size.get() + 1).count_ones() != 1 {
-            return Err(MerkleTreeProofExtractionError::InvalidTreeSize(
-                tree_size.get(),
-            ));
+            return Err(MerkleTreeAccessError::InvalidTreeSize(tree_size.get()));
         }
 
         let tree_size = tree_size.get();
@@ -137,17 +135,23 @@ impl MerkleTree {
         Ok(res)
     }
 
-    pub fn node_from_bottom(
-        &self,
-        level_from_bottom: usize,
-        index: usize,
-    ) -> Result<H256, MerkleTreeAccessError> {
+    pub fn level_count(&self) -> usize {
         let leaves_count = Self::leaves_count_from_tree_size(
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
         )
         .expect("Failed to extract leaves count");
 
         let level_count = leaves_count.trailing_zeros() as usize + 1;
+
+        level_count
+    }
+
+    pub fn node_from_bottom(
+        &self,
+        level_from_bottom: usize,
+        index: usize,
+    ) -> Result<H256, MerkleTreeAccessError> {
+        let level_count = self.level_count();
         if level_from_bottom >= level_count {
             return Err(MerkleTreeAccessError::LevelOutOfRange(
                 self.tree.len(),
@@ -169,6 +173,34 @@ impl MerkleTree {
         }
 
         Ok(self.tree[index])
+    }
+
+    /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
+    pub fn position_from_index(
+        tree_size: NonZeroUsize,
+        index: usize,
+    ) -> Result<(usize, usize), MerkleTreeAccessError> {
+        assert_eq!(
+            tree_size.get().leading_zeros() + tree_size.get().trailing_ones(),
+            NonZeroUsize::BITS,
+            "A valid tree size is always a power of 2 minus one"
+        );
+        assert!(
+            index < tree_size.get(),
+            "Index must be within the tree size"
+        );
+
+        let leaves_count = Self::leaves_count_from_tree_size(tree_size)?;
+
+        let mut level = 0;
+        let mut nodes_at_level_count = leaves_count.get();
+        let mut tree_node_counter = 0;
+        while tree_node_counter + nodes_at_level_count <= index {
+            level += 1;
+            tree_node_counter += nodes_at_level_count;
+            nodes_at_level_count >>= 1;
+        }
+        Ok((level, index - tree_node_counter))
     }
 
     /// Multi-proof of inclusion for a list of elements
@@ -424,7 +456,7 @@ mod tests {
             }
             assert_eq!(
                 MerkleTree::leaves_count_from_tree_size(i.try_into().unwrap()).unwrap_err(),
-                MerkleTreeProofExtractionError::InvalidTreeSize(i)
+                MerkleTreeAccessError::InvalidTreeSize(i)
             );
         }
     }
@@ -533,5 +565,135 @@ mod tests {
         assert!(!is_sorted_and_unique(&[1, 2, 5, 10, 100, 99]));
         assert!(!is_sorted_and_unique(&[2, 1, 2, 5, 10, 100]));
         assert!(!is_sorted_and_unique(&[1, 2, 5, 4, 10, 100]));
+    }
+
+    #[test]
+    fn position_from_index_1_tree_element() {
+        let tree_size: NonZeroUsize = 1.try_into().unwrap();
+        {
+            let level = 0;
+            let level_start = 0;
+            let level_end: usize = 1;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn position_from_index_3_tree_elements() {
+        let tree_size: NonZeroUsize = 3.try_into().unwrap();
+        {
+            let level = 0;
+            let level_start = 0;
+            let level_end: usize = 2;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 1;
+            let level_start = 2;
+            let level_end: usize = 3;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn position_from_index_7_tree_elements() {
+        let tree_size: NonZeroUsize = 7.try_into().unwrap();
+        {
+            let level = 0;
+            let level_start = 0;
+            let level_end: usize = 4;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 1;
+            let level_start = 4;
+            let level_end: usize = 6;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 2;
+            let level_start = 6;
+            let level_end: usize = 7;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn position_from_index_15_tree_elements() {
+        let tree_size: NonZeroUsize = 15.try_into().unwrap();
+        {
+            let level = 0;
+            let level_start = 0;
+            let level_end: usize = 8;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 1;
+            let level_start = 8;
+            let level_end: usize = 12;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 2;
+            let level_start = 12;
+            let level_end: usize = 14;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
+        {
+            let level = 3;
+            let level_start = 14;
+            let level_end: usize = 15;
+            for i in level_start..level_end {
+                assert_eq!(
+                    MerkleTree::position_from_index(tree_size, i).unwrap(),
+                    (level, i - level_start)
+                );
+            }
+        }
     }
 }

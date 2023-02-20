@@ -25,8 +25,6 @@ pub enum MerkleTreeFormError {
 pub enum MerkleTreeProofExtractionError {
     #[error("One or more indexes are larger than the number of leaves in the tree: {0:?} vs leaves count {1}")]
     IndexOutOfRange(Vec<u32>, usize),
-    #[error("Invalid tree size provided provided is invalid: {0}")]
-    InvalidTreeSize(usize),
     #[error("Leaves indices must be sorted in ascending: {0:?}")]
     UnsortedOrUniqueLeavesIndices(Vec<u32>),
     #[error("Access error: {0}")]
@@ -35,6 +33,8 @@ pub enum MerkleTreeProofExtractionError {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MerkleTreeAccessError {
+    #[error("Invalid tree size provided provided is invalid: {0}")]
+    InvalidTreeSize(usize),
     #[error("Invalid level number in tree size: {0}, where attempting to access level {1} and index {2}")]
     LevelOutOfRange(usize, usize, usize),
     #[error("Invalid index number in tree size: {0}, where attempting to access level {1} and index {2}")]
