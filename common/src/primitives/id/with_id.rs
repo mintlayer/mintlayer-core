@@ -79,10 +79,16 @@ impl<T: Idable> From<T> for WithId<T> {
     }
 }
 
+/// Implement a marker trait for decoding WithId wrapper type.
+/// The decoding of such type is assumed to be the same as
+/// the wrapped type.
 impl<T: Idable> WrapperTypeDecode for WithId<T> {
     type Wrapped = T;
 }
 
+/// Implement a marker trait that tells the encoder that
+/// WithId is a wrapper type and only the wrapped T
+/// would be encoded and not the id property.
 impl<T: Idable> WrapperTypeEncode for WithId<T> {}
 
 #[cfg(test)]
