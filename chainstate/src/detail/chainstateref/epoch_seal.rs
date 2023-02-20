@@ -141,8 +141,11 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
             }
         }
         BlockStateEventWithIndex::Disconnect(tip_height) => {
-            let disconnected_tip = tip_height.next_height();
-            if chain_config.is_last_block_in_epoch(&disconnected_tip) {
+            if chain_config.is_last_block_in_epoch(&tip_height) {
+                // If current tip is the last block of the epoch
+                // it means that the first block of next epoch was just disconnected
+                // and the epoch data for the next epoch should be deleted
+                let disconnected_tip = tip_height.next_height();
                 db_tx
                     .del_epoch_data(chain_config.epoch_index_from_height(&disconnected_tip))
                     .log_err()?;
@@ -151,4 +154,151 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
     };
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU64;
+
+    use super::*;
+    use chainstate_storage::mock::MockStoreTxRw;
+    use chainstate_types::{
+        pos_randomness::PoSRandomness, BlockPreconnectData, ConsensusExtraData,
+    };
+    use common::{
+        chain::{block::timestamp::BlockTimestamp, config::Builder as ConfigBuilder, Block},
+        primitives::H256,
+        uint::BitArray,
+        Uint256,
+    };
+    use rstest::rstest;
+
+    fn make_block_index(height: BlockHeight) -> BlockIndex {
+        let block = Block::new_with_no_consensus(
+            vec![],
+            H256::zero().into(),
+            BlockTimestamp::from_int_seconds(1),
+        )
+        .unwrap();
+        BlockIndex::new(
+            &block,
+            Uint256::zero(),
+            H256::zero().into(),
+            height,
+            BlockTimestamp::from_int_seconds(1),
+            BlockPreconnectData::new(ConsensusExtraData::PoS(PoSRandomness::new(H256::zero()))),
+        )
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(2), true)]
+    fn test_update_epoch_data_connect(
+        #[case] epoch_length: NonZeroU64,
+        #[case] tip_height: BlockHeight,
+        #[case] expect_call_to_db: bool,
+    ) {
+        let mut db = MockStoreTxRw::new();
+        let chain_config = ConfigBuilder::test_chain().epoch_length(epoch_length).build();
+        let block_index = make_block_index(tip_height);
+
+        if expect_call_to_db {
+            db.expect_set_epoch_data().times(1).return_const(Ok(()));
+        }
+
+        update_epoch_data(
+            &mut db,
+            &chain_config,
+            BlockStateEventWithIndex::Connect(tip_height, &block_index),
+        )
+        .unwrap();
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(2), true)]
+    fn test_update_epoch_data_disconnect(
+        #[case] epoch_length: NonZeroU64,
+        #[case] tip_height: BlockHeight,
+        #[case] expect_call_to_db: bool,
+    ) {
+        let mut db = MockStoreTxRw::new();
+        let chain_config = ConfigBuilder::test_chain().epoch_length(epoch_length).build();
+
+        if expect_call_to_db {
+            db.expect_del_epoch_data().times(1).return_const(Ok(()));
+        }
+
+        update_epoch_data(
+            &mut db,
+            &chain_config,
+            BlockStateEventWithIndex::Disconnect(tip_height),
+        )
+        .unwrap();
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(1), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(2), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(3), true)]
+    fn test_update_epoch_seal_connect(
+        #[case] epoch_length: NonZeroU64,
+        #[case] stride: usize,
+        #[case] tip_height: BlockHeight,
+        #[case] expect_call_to_db: bool,
+    ) {
+        let mut db = MockStoreTxRw::new();
+        let chain_config = ConfigBuilder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(stride)
+            .build();
+
+        if expect_call_to_db {
+            db.expect_get_accounting_epoch_delta()
+                .times(1)
+                .return_const(Ok(Some(pos_accounting::PoSAccountingDeltaData::new())));
+            db.expect_set_accounting_epoch_undo_delta().times(1).return_const(Ok(()));
+        }
+
+        update_epoch_seal(&mut db, &chain_config, BlockStateEvent::Connect(tip_height)).unwrap();
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(0), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(0), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(1), false)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(2), true)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(3), false)]
+    fn test_update_epoch_seal_disconnect(
+        #[case] epoch_length: NonZeroU64,
+        #[case] stride: usize,
+        #[case] tip_height: BlockHeight,
+        #[case] expect_call_to_db: bool,
+    ) {
+        let mut db = MockStoreTxRw::new();
+        let chain_config = ConfigBuilder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(stride)
+            .build();
+
+        if expect_call_to_db {
+            db.expect_get_accounting_epoch_undo_delta()
+                .times(1)
+                .return_const(Ok(Some(pos_accounting::DeltaMergeUndo::new())));
+            db.expect_del_accounting_epoch_undo_delta().times(1).return_const(Ok(()));
+        }
+
+        update_epoch_seal(
+            &mut db,
+            &chain_config,
+            BlockStateEvent::Disconnect(tip_height),
+        )
+        .unwrap();
+    }
 }

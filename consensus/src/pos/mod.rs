@@ -63,8 +63,7 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         pos_data.vrf_data(),
         pool_data.vrf_public_key(),
         spender_block_header,
-    )
-    .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
+    )?;
 
     let hash_pos_arith: Uint256 = hash_pos.into();
 

@@ -5,7 +5,7 @@ name = "chainstate"
 version = "0.1.0"
 
 [dependencies]
-chainstate-storage = {path = './storage'}
+chainstate-storage = {path = './storage', features = ["mock"]}
 chainstate-types = {path = './types'}
 tx-verifier = {path = './tx-verifier'}
 common = {path = '../common'}

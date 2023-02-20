@@ -77,11 +77,11 @@ impl PoSData {
         }
     }
 
-    pub fn kernel_inputs(&self) -> &Vec<TxInput> {
+    pub fn kernel_inputs(&self) -> &[TxInput] {
         &self.kernel_inputs
     }
 
-    pub fn kernel_witness(&self) -> &Vec<InputWitness> {
+    pub fn kernel_witness(&self) -> &[InputWitness] {
         &self.kernel_witness
     }
 

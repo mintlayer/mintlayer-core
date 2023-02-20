@@ -33,7 +33,7 @@ pub enum PoSRandomnessError {
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(ProofOfStakeVRFError),
+    VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
 }
 
 #[derive(Debug, Encode, Decode, Clone)]
@@ -50,14 +50,13 @@ impl PoSRandomness {
         chain_config: &ChainConfig,
         block_height: &BlockHeight,
         header: &BlockHeader,
-        previous_randomness: Option<&PoSRandomness>,
+        previous_randomness: Option<PoSRandomness>,
         kernel_output: &TxOutput,
         pos_data: &PoSData,
     ) -> Result<Self, PoSRandomnessError> {
         use crypto::hash::StreamHasher;
 
-        let prev_randomness =
-            previous_randomness.cloned().unwrap_or_else(|| Self::at_genesis(chain_config));
+        let prev_randomness = previous_randomness.unwrap_or_else(|| Self::at_genesis(chain_config));
         let prev_randomness_val = prev_randomness.value();
 
         let epoch_index = chain_config.epoch_index_from_height(block_height);
@@ -80,8 +79,7 @@ impl PoSRandomness {
             pos_data.vrf_data(),
             pool_data.vrf_public_key(),
             header,
-        )
-        .map_err(PoSRandomnessError::VRFDataVerificationFailed)?;
+        )?;
 
         let mut hasher = DefaultHashAlgoStream::new();
         hash_encoded_to(&prev_randomness_val, &mut hasher);

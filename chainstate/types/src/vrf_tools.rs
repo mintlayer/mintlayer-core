@@ -29,7 +29,7 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ProofOfStakeVRFError {
     #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(VRFError),
+    VRFDataVerificationFailed(#[from] VRFError),
 }
 
 pub fn construct_transcript(
@@ -75,12 +75,9 @@ pub fn verify_vrf_and_get_vrf_output(
     let transcript =
         construct_transcript(epoch_index, random_seed, spender_block_header.timestamp());
 
-    vrf_public_key
-        .verify_vrf_data(transcript.clone().into(), vrf_data)
-        .map_err(ProofOfStakeVRFError::VRFDataVerificationFailed)?;
+    vrf_public_key.verify_vrf_data(transcript.clone().into(), vrf_data)?;
 
-    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript)
-        .map_err(ProofOfStakeVRFError::VRFDataVerificationFailed)?;
+    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript)?;
 
     Ok(vrf_raw_output.into())
 }

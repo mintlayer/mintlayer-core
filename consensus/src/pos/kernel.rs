@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use common::chain::{block::consensus_data::PoSData, TxOutput};
-use utils::ensure;
 use utxo::UtxosView;
 
 use crate::pos::error::ConsensusPoSError;
@@ -23,19 +22,16 @@ pub fn get_kernel_output<U: UtxosView>(
     pos_data: &PoSData,
     utxos_view: &U,
 ) -> Result<TxOutput, ConsensusPoSError> {
-    ensure!(
-        !pos_data.kernel_inputs().is_empty(),
-        ConsensusPoSError::NoKernel,
-    );
-    // in general this should not be an issue, but we have to first study this security model with one kernel
-    ensure!(
-        pos_data.kernel_inputs().len() == 1,
-        ConsensusPoSError::MultipleKernels,
-    );
+    match pos_data.kernel_inputs() {
+        [] => Err(ConsensusPoSError::NoKernel),
+        [kernel_input] => {
+            let kernel_outpoint = kernel_input.outpoint();
+            let kernel_output =
+                utxos_view.utxo(kernel_outpoint).ok_or(ConsensusPoSError::NoKernel)?;
 
-    let kernel_outpoint =
-        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
-    let kernel_output = utxos_view.utxo(kernel_outpoint).ok_or(ConsensusPoSError::NoKernel)?;
-
-    Ok(kernel_output.output().clone())
+            Ok(kernel_output.output().clone())
+        }
+        // in general this should not be an issue, but we have to first study this security model with one kernel
+        _ => Err(ConsensusPoSError::MultipleKernels),
+    }
 }

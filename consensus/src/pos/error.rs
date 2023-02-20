@@ -42,7 +42,7 @@ pub enum ConsensusPoSError {
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(ProofOfStakeVRFError),
+    VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
     #[error("PoS accounting error: `{0}`")]

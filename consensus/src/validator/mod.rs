@@ -94,7 +94,7 @@ fn compute_current_randomness<U: UtxosView>(
         chain_config,
         &prev_block_index.block_height().next_height(),
         header,
-        prev_randomness,
+        prev_randomness.cloned(),
         &kernel_output,
         pos_data,
     )?;
