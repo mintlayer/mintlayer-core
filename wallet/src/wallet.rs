@@ -151,8 +151,8 @@ mod tests {
 
     #[test]
     fn wallet_transactions() {
-        let wallet_path =
-            tempfile::TempDir::new().unwrap().path().join("wallet_transactions.sqlite");
+        let temp_dir_path = tempfile::TempDir::new().unwrap();
+        let wallet_path = temp_dir_path.path().join("test_wallet_transactions.sqlite");
 
         let mut wallet = open_wallet_file(wallet_path.as_path()).expect("the wallet to load");
 
