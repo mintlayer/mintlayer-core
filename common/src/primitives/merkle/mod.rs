@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod proof;
 pub mod tree;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]

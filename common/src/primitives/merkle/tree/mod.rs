@@ -104,9 +104,7 @@ impl MerkleTree {
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
         );
 
-        let level_count = leaves_count.trailing_zeros() as usize + 1;
-
-        level_count
+        leaves_count.trailing_zeros() as usize + 1
     }
 
     pub fn node_from_bottom(
