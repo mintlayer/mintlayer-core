@@ -16,14 +16,13 @@
 use std::num::NonZeroUsize;
 
 use crypto::hash::StreamHasher;
-use itertools::Itertools;
 
 use crate::primitives::{
     id::{default_hash, DefaultHashAlgoStream},
     H256,
 };
 
-use super::{MerkleTreeAccessError, MerkleTreeFormError, MerkleTreeProofExtractionError};
+use super::{MerkleTreeAccessError, MerkleTreeFormError};
 
 pub enum AdjacentLeavesIndices {
     Alone(usize),
@@ -35,11 +34,6 @@ pub enum AdjacentLeavesIndices {
 #[derive(Debug)]
 pub struct MerkleTree {
     tree: Vec<H256>,
-}
-
-/// Ensure the leaves indices are sorted and unique
-fn is_sorted_and_unique(leaves_indices: &[u32]) -> bool {
-    leaves_indices.iter().tuple_windows::<(&u32, &u32)>().all(|(i, j)| i < j)
 }
 
 fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
@@ -105,36 +99,6 @@ impl MerkleTree {
         NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0")
     }
 
-    /// Find adjacent leaves indices in a merkle tree
-    fn get_adjacent_indices_states(
-        leaves_indices: &[u32],
-    ) -> Result<Vec<AdjacentLeavesIndices>, MerkleTreeProofExtractionError> {
-        if !is_sorted_and_unique(leaves_indices) {
-            return Err(
-                MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
-                    leaves_indices.to_vec(),
-                ),
-            );
-        }
-
-        let mut res = Vec::with_capacity(leaves_indices.len());
-
-        // we chain the windows with a max value to ensure we get the last element if it doesn't pair with the preceding value
-        let max_chain = std::iter::once(&u32::MAX);
-        for win in leaves_indices.iter().chain(max_chain).tuple_windows::<(&u32, &u32)>() {
-            let (a, b) = (*win.0, *win.1);
-
-            // In a tree, we expect elements to be adjacent if the first one has even index and the second one has index + 1.
-            if a % 2 == 0 && a + 1 == b {
-                res.push(AdjacentLeavesIndices::Together(a as usize, b as usize));
-            } else {
-                res.push(AdjacentLeavesIndices::Alone(a as usize));
-            }
-        }
-
-        Ok(res)
-    }
-
     pub fn level_count(&self) -> usize {
         let leaves_count = Self::leaves_count_from_tree_size(
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
@@ -197,28 +161,6 @@ impl MerkleTree {
             nodes_at_level_count >>= 1;
         }
         (level, index - tree_node_counter)
-    }
-
-    /// Multi-proof of inclusion for a list of elements
-    pub fn multi_proof(
-        &self,
-        leaves_indices: &[u32],
-    ) -> Result<Vec<H256>, MerkleTreeProofExtractionError> {
-        let leaves_count = Self::leaves_count_from_tree_size(
-            NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
-        );
-
-        if leaves_indices.iter().any(|v| *v > leaves_count.get() as u32) {
-            return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
-                leaves_indices.to_vec(),
-                leaves_count.get(),
-            ));
-        }
-
-        let _adjacent_states = Self::get_adjacent_indices_states(leaves_indices)?;
-        // TODO(PR): finish the implementation
-
-        todo!()
     }
 }
 
@@ -548,21 +490,6 @@ mod tests {
 
         let v30 = MerkleTree::combine_pair(&v20, &v21);
         assert_eq!(t.node_from_bottom(3, 0).unwrap(), v30);
-    }
-
-    #[test]
-    fn sorted_and_unique() {
-        assert!(is_sorted_and_unique(&[]));
-        assert!(is_sorted_and_unique(&[1]));
-        assert!(is_sorted_and_unique(&[1, 2]));
-        assert!(is_sorted_and_unique(&[1, 2, 5, 10]));
-        assert!(is_sorted_and_unique(&[1, 2, 5, 10, 100]));
-
-        assert!(!is_sorted_and_unique(&[1, 1]));
-        assert!(!is_sorted_and_unique(&[2, 1]));
-        assert!(!is_sorted_and_unique(&[1, 2, 5, 10, 100, 99]));
-        assert!(!is_sorted_and_unique(&[2, 1, 2, 5, 10, 100]));
-        assert!(!is_sorted_and_unique(&[1, 2, 5, 4, 10, 100]));
     }
 
     #[test]
