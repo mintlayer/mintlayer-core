@@ -418,7 +418,7 @@ mod tests {
         }
 
         for i in 1..1000000 {
-            if (i as usize + 1).count_ones() == 1 {
+            if (i + 1usize).count_ones() == 1 {
                 // exclude valid number of tree elements, which is 2^n-1
                 continue;
             }
