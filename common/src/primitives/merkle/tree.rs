@@ -13,14 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeSet, num::NonZeroUsize};
+
 use crypto::hash::StreamHasher;
+use itertools::Itertools;
 
 use crate::primitives::{
     id::{default_hash, DefaultHashAlgoStream},
     H256,
 };
 
-use super::MerkleTreeFormError;
+use super::{MerkleTreeAccessError, MerkleTreeFormError, MerkleTreeProofExtractionError};
+
+pub enum AdjacentLeavesIndices {
+    Alone(usize),
+    Together(usize, usize),
+}
 
 /// Merkle tree in the form of a vector, where the bottom leaves are the based, and the root is
 /// the last element.
@@ -65,6 +73,8 @@ impl MerkleTree {
 
     /// Create a new merkle tree from a list of leaves.
     pub fn from_leaves(leaves: Vec<H256>) -> Result<Self, MerkleTreeFormError> {
+        // TODO: separate padding from this function and create a type that includes padding
+        //       on creation by taking Vec<H256> as input and padding it and wrapping it with a strong type
         if leaves.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(leaves.len()));
         }
@@ -84,6 +94,115 @@ impl MerkleTree {
     /// Get the root of the merkle tree.
     pub fn root(&self) -> H256 {
         *self.tree.last().expect("By design, at least one element must exist")
+    }
+
+    fn leaves_count_from_tree_size(
+        tree_size: NonZeroUsize,
+    ) -> Result<NonZeroUsize, MerkleTreeProofExtractionError> {
+        if (tree_size.get() + 1).count_ones() != 1 {
+            return Err(MerkleTreeProofExtractionError::InvalidTreeSize(
+                tree_size.get(),
+            ));
+        }
+
+        let tree_size = tree_size.get();
+        let leaves_count = (tree_size + 1) >> 1;
+        debug_assert!(leaves_count.is_power_of_two());
+        Ok(NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0"))
+    }
+
+    /// Ensure the leaves indices are sorted and unique
+    fn is_sorted_and_unique(leaves_indices: &[u32]) -> bool {
+        let vals: BTreeSet<u32> = leaves_indices.iter().copied().collect();
+        let vals: Vec<u32> = vals.into_iter().collect();
+        vals == leaves_indices
+    }
+
+    /// Find adjacent leaves indices in a merkle tree
+    fn get_adjacent_indices_states(
+        leaves_indices: &[u32],
+    ) -> Result<Vec<AdjacentLeavesIndices>, MerkleTreeProofExtractionError> {
+        if !Self::is_sorted_and_unique(leaves_indices) {
+            return Err(
+                MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
+                    leaves_indices.to_vec(),
+                ),
+            );
+        }
+
+        let mut res = Vec::with_capacity(leaves_indices.len());
+
+        // we chain the windows with a max value to ensure we get the last element if it doesn't pair with the preceding value
+        let max_chain = std::iter::once(&u32::MAX);
+        for win in leaves_indices.iter().chain(max_chain).tuple_windows::<(&u32, &u32)>() {
+            let (a, b) = (*win.0, *win.1);
+
+            // In a tree, we expect elements to be adjacent if the first one has even index and the second one has index + 1.
+            if a % 2 == 0 && a + 1 == b {
+                res.push(AdjacentLeavesIndices::Together(a as usize, b as usize));
+            } else {
+                res.push(AdjacentLeavesIndices::Alone(a as usize));
+            }
+        }
+
+        Ok(res)
+    }
+
+    pub fn node_from_bottom(
+        &self,
+        level_from_bottom: usize,
+        index: usize,
+    ) -> Result<H256, MerkleTreeAccessError> {
+        let leaves_count = Self::leaves_count_from_tree_size(
+            NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
+        )
+        .expect("Failed to extract leaves count");
+
+        let level_count = leaves_count.trailing_zeros() as usize + 1;
+        if level_from_bottom >= level_count {
+            return Err(MerkleTreeAccessError::LevelOutOfRange(
+                self.tree.len(),
+                level_from_bottom,
+                index,
+            ));
+        }
+        let level_from_top = level_count - level_from_bottom;
+        let level_start = (self.tree.len() >> level_from_top) << level_from_top;
+        let index = level_start + index;
+        // TODO(PR): check index access
+        let index_size = usize::MAX;
+        if index >= index_size {
+            return Err(MerkleTreeAccessError::IndexOutOfRange(
+                self.tree.len(),
+                level_from_bottom,
+                index,
+            ));
+        }
+
+        Ok(self.tree[index])
+    }
+
+    /// Multi-proof of inclusion for a list of elements
+    pub fn multi_proof(
+        &self,
+        leaves_indices: &[u32],
+    ) -> Result<Vec<H256>, MerkleTreeProofExtractionError> {
+        let leaves_count = Self::leaves_count_from_tree_size(
+            NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
+        )
+        .expect("Failed to extract leaves count");
+
+        if leaves_indices.iter().any(|v| *v > leaves_count.get() as u32) {
+            return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
+                leaves_indices.to_vec(),
+                leaves_count.get(),
+            ));
+        }
+
+        let _adjacent_states = Self::get_adjacent_indices_states(leaves_indices)?;
+        // TODO(PR): finish the implementation
+
+        todo!()
     }
 }
 
@@ -321,5 +440,121 @@ mod tests {
         (129..257).for_each(|n| assert_eq!(next_pow2(n), 256));
         (257..513).for_each(|n| assert_eq!(next_pow2(n), 512));
         (513..1025).for_each(|n| assert_eq!(next_pow2(n), 1024));
+    }
+
+    #[test]
+    fn leaves_count_from_tree_size() {
+        for i in 1..30 {
+            let leaves_count = 1 << (i - 1);
+            let tree_size = (1 << i) - 1;
+            assert_eq!(
+                MerkleTree::leaves_count_from_tree_size(tree_size.try_into().unwrap()).unwrap(),
+                NonZeroUsize::new(leaves_count).unwrap(),
+                "Check failed for i = {}",
+                i
+            );
+        }
+
+        for i in 1..1000000 {
+            if (i as usize + 1).count_ones() == 1 {
+                // exclude valid number of tree elements, which is 2^n-1
+                continue;
+            }
+            assert_eq!(
+                MerkleTree::leaves_count_from_tree_size(i.try_into().unwrap()).unwrap_err(),
+                MerkleTreeProofExtractionError::InvalidTreeSize(i)
+            );
+        }
+    }
+
+    #[test]
+    fn bottom_access_one_leaf() {
+        let v00 = H256::from_low_u64_be(1);
+
+        let t = MerkleTree::from_leaves(vec![v00]).unwrap();
+
+        assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+    }
+
+    #[test]
+    fn bottom_access_two_leaves() {
+        let v00 = H256::zero();
+        let v01 = H256::from_low_u64_be(1);
+
+        let t = MerkleTree::from_leaves(vec![v00, v01]).unwrap();
+
+        assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+        assert_eq!(t.node_from_bottom(0, 1).unwrap(), v01);
+
+        let v10 = MerkleTree::combine_pair(&v00, &v01);
+
+        assert_eq!(t.node_from_bottom(1, 0).unwrap(), v10);
+    }
+
+    #[test]
+    fn bottom_access_four_leaves() {
+        let v00 = H256::zero();
+        let v01 = H256::from_low_u64_be(1);
+        let v02 = H256::from_low_u64_be(2);
+        let v03 = H256::from_low_u64_be(3);
+
+        let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03]).unwrap();
+
+        assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+        assert_eq!(t.node_from_bottom(0, 1).unwrap(), v01);
+        assert_eq!(t.node_from_bottom(0, 2).unwrap(), v02);
+        assert_eq!(t.node_from_bottom(0, 3).unwrap(), v03);
+
+        let v10 = MerkleTree::combine_pair(&v00, &v01);
+        let v11 = MerkleTree::combine_pair(&v02, &v03);
+
+        assert_eq!(t.node_from_bottom(1, 0).unwrap(), v10);
+        assert_eq!(t.node_from_bottom(1, 1).unwrap(), v11);
+
+        let v20 = MerkleTree::combine_pair(&v10, &v11);
+
+        assert_eq!(t.node_from_bottom(2, 0).unwrap(), v20);
+    }
+
+    #[test]
+    fn bottom_access_eight_leaves() {
+        let v00 = H256::zero();
+        let v01 = H256::from_low_u64_be(1);
+        let v02 = H256::from_low_u64_be(2);
+        let v03 = H256::from_low_u64_be(3);
+        let v04 = H256::from_low_u64_be(4);
+        let v05 = default_hash(v04);
+        let v06 = default_hash(v05);
+        let v07 = default_hash(v06);
+
+        let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03, v04]).unwrap();
+
+        assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+        assert_eq!(t.node_from_bottom(0, 1).unwrap(), v01);
+        assert_eq!(t.node_from_bottom(0, 2).unwrap(), v02);
+        assert_eq!(t.node_from_bottom(0, 3).unwrap(), v03);
+        assert_eq!(t.node_from_bottom(0, 4).unwrap(), v04);
+        assert_eq!(t.node_from_bottom(0, 5).unwrap(), v05);
+        assert_eq!(t.node_from_bottom(0, 6).unwrap(), v06);
+        assert_eq!(t.node_from_bottom(0, 7).unwrap(), v07);
+
+        let v10 = MerkleTree::combine_pair(&v00, &v01);
+        let v11 = MerkleTree::combine_pair(&v02, &v03);
+        let v12 = MerkleTree::combine_pair(&v04, &v05);
+        let v13 = MerkleTree::combine_pair(&v06, &v07);
+
+        assert_eq!(t.node_from_bottom(1, 0).unwrap(), v10);
+        assert_eq!(t.node_from_bottom(1, 1).unwrap(), v11);
+        assert_eq!(t.node_from_bottom(1, 2).unwrap(), v12);
+        assert_eq!(t.node_from_bottom(1, 3).unwrap(), v13);
+
+        let v20 = MerkleTree::combine_pair(&v10, &v11);
+        let v21 = MerkleTree::combine_pair(&v12, &v13);
+
+        assert_eq!(t.node_from_bottom(2, 0).unwrap(), v20);
+        assert_eq!(t.node_from_bottom(2, 1).unwrap(), v21);
+
+        let v30 = MerkleTree::combine_pair(&v20, &v21);
+        assert_eq!(t.node_from_bottom(3, 0).unwrap(), v30);
     }
 }
