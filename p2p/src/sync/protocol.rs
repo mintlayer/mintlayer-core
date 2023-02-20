@@ -231,18 +231,17 @@ where
             )));
         }
 
-        let block = match self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await? {
-            Ok(b) => b,
-            // It is OK to receive an already processed block.
-            Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => {
-                return Ok(())
-            }
-            Err(e) => return Err(P2pError::ChainstateError(e)),
-        };
-
-        self.chainstate_handle
+        let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
+        match self
+            .chainstate_handle
             .call_mut(|c| c.process_block(block, BlockSource::Peer))
-            .await??;
+            .await?
+        {
+            Ok(_) => Ok(()),
+            // It is OK to receive an already processed block.
+            Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => Ok(()),
+            Err(e) => Err(e),
+        }?;
 
         if peer_state.requested_blocks.is_empty() {
             if peer_state.known_headers.is_empty() {
