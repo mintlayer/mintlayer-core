@@ -110,30 +110,45 @@ impl MerkleTree {
     pub fn node_from_bottom(
         &self,
         level_from_bottom: usize,
-        index: usize,
+        index_in_level: usize,
     ) -> Result<H256, MerkleTreeAccessError> {
         let level_count = self.level_count();
         if level_from_bottom >= level_count {
             return Err(MerkleTreeAccessError::LevelOutOfRange(
                 self.tree.len(),
                 level_from_bottom,
-                index,
-            ));
-        }
-        let level_from_top = level_count - level_from_bottom;
-        let level_start = (self.tree.len() >> level_from_top) << level_from_top;
-        let index = level_start + index;
-        // TODO(PR): check index access
-        let index_size = usize::MAX;
-        if index >= index_size {
-            return Err(MerkleTreeAccessError::IndexOutOfRange(
-                self.tree.len(),
-                level_from_bottom,
-                index,
+                index_in_level,
             ));
         }
 
-        Ok(self.tree[index])
+        // To help in seeing how these formulas were derived, see this table that represents values in the case tree.len() == 31 == 0b11111:
+        //  level     level_start  level_start in binary    index_in_level_size
+        //  0         0            00000                    16
+        //  1         16           10000                    8
+        //  2         24           11000                    4
+        //  3         28           11100                    2
+        //  4         30           11110                    1
+
+        let level_from_top = level_count - level_from_bottom;
+        // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
+        let level_start = (self.tree.len() >> level_from_top) << level_from_top;
+        let index_in_tree = level_start + index_in_level;
+        // max number of nodes in a level, in level_from_bottom
+        let index_in_level_size = if level_start > 0 {
+            1 << (level_start.trailing_zeros() - 1)
+        } else {
+            Self::leaves_count_from_tree_size(self.tree.len().try_into().expect("Must be > 0"))
+                .get()
+        };
+        if index_in_level >= index_in_level_size {
+            return Err(MerkleTreeAccessError::IndexOutOfRange(
+                self.tree.len(),
+                level_from_bottom,
+                index_in_level,
+            ));
+        }
+
+        Ok(self.tree[index_in_tree])
     }
 
     /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)

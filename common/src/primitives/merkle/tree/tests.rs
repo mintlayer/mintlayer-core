@@ -255,6 +255,25 @@ fn bottom_access_one_leaf() {
     let t = MerkleTree::from_leaves(vec![v00]).unwrap();
 
     assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+
+    // Some invalid accesses at index
+    for idx in 1..100 {
+        let level = 0;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(1, level, idx)
+        );
+    }
+
+    // Some invalid accesses at level
+    for idx in 0..100 {
+        for level in 1..100 {
+            assert_eq!(
+                t.node_from_bottom(level, idx).unwrap_err(),
+                MerkleTreeAccessError::LevelOutOfRange(1, level, idx)
+            );
+        }
+    }
 }
 
 #[test]
@@ -270,6 +289,33 @@ fn bottom_access_two_leaves() {
     let v10 = MerkleTree::combine_pair(&v00, &v01);
 
     assert_eq!(t.node_from_bottom(1, 0).unwrap(), v10);
+
+    // Some invalid accesses at index
+    for idx in 2..100 {
+        let level = 0;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(3, level, idx)
+        );
+    }
+
+    for idx in 1..100 {
+        let level = 1;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(3, level, idx)
+        );
+    }
+
+    // Some invalid accesses at level
+    for idx in 0..100 {
+        for level in 2..100 {
+            assert_eq!(
+                t.node_from_bottom(level, idx).unwrap_err(),
+                MerkleTreeAccessError::LevelOutOfRange(3, level, idx)
+            );
+        }
+    }
 }
 
 #[test]
@@ -295,6 +341,41 @@ fn bottom_access_four_leaves() {
     let v20 = MerkleTree::combine_pair(&v10, &v11);
 
     assert_eq!(t.node_from_bottom(2, 0).unwrap(), v20);
+
+    // Some invalid accesses at index
+    for idx in 4..100 {
+        let level = 0;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
+        );
+    }
+
+    for idx in 2..100 {
+        let level = 1;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
+        );
+    }
+
+    for idx in 1..100 {
+        let level = 2;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
+        );
+    }
+
+    // Some invalid accesses at level
+    for idx in 0..100 {
+        for level in 3..100 {
+            assert_eq!(
+                t.node_from_bottom(level, idx).unwrap_err(),
+                MerkleTreeAccessError::LevelOutOfRange(7, level, idx)
+            );
+        }
+    }
 }
 
 #[test]
@@ -337,6 +418,49 @@ fn bottom_access_eight_leaves() {
 
     let v30 = MerkleTree::combine_pair(&v20, &v21);
     assert_eq!(t.node_from_bottom(3, 0).unwrap(), v30);
+
+    // Some invalid accesses at index
+    for idx in 8..100 {
+        let level = 0;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
+        );
+    }
+
+    for idx in 4..100 {
+        let level = 1;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
+        );
+    }
+
+    for idx in 2..100 {
+        let level = 2;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
+        );
+    }
+
+    for idx in 1..100 {
+        let level = 3;
+        assert_eq!(
+            t.node_from_bottom(level, idx).unwrap_err(),
+            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
+        );
+    }
+
+    // Some invalid accesses at level
+    for idx in 0..100 {
+        for level in 4..100 {
+            assert_eq!(
+                t.node_from_bottom(level, idx).unwrap_err(),
+                MerkleTreeAccessError::LevelOutOfRange(15, level, idx)
+            );
+        }
+    }
 }
 
 #[test]
