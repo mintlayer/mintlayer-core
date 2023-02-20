@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use crypto::hash::StreamHasher;
 use itertools::Itertools;
@@ -37,18 +37,14 @@ pub struct MerkleTree {
     tree: Vec<H256>,
 }
 
-fn next_pow2(n: usize) -> usize {
-    if n == 0 {
-        return 1;
-    }
-    let leading_zeros = (n - 1).leading_zeros() as usize;
-    let active_bits = usize::BITS as usize - leading_zeros;
-    (1 << active_bits) as usize
+/// Ensure the leaves indices are sorted and unique
+fn is_sorted_and_unique(leaves_indices: &[u32]) -> bool {
+    leaves_indices.iter().tuple_windows::<(&u32, &u32)>().all(|(i, j)| i < j)
 }
 
 fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
     let orig_size = elements.len();
-    let pow2_size = next_pow2(orig_size);
+    let pow2_size = orig_size.next_power_of_two();
 
     assert!(pow2_size >= orig_size);
 
@@ -111,18 +107,11 @@ impl MerkleTree {
         Ok(NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0"))
     }
 
-    /// Ensure the leaves indices are sorted and unique
-    fn is_sorted_and_unique(leaves_indices: &[u32]) -> bool {
-        let vals: BTreeSet<u32> = leaves_indices.iter().copied().collect();
-        let vals: Vec<u32> = vals.into_iter().collect();
-        vals == leaves_indices
-    }
-
     /// Find adjacent leaves indices in a merkle tree
     fn get_adjacent_indices_states(
         leaves_indices: &[u32],
     ) -> Result<Vec<AdjacentLeavesIndices>, MerkleTreeProofExtractionError> {
-        if !Self::is_sorted_and_unique(leaves_indices) {
+        if !is_sorted_and_unique(leaves_indices) {
             return Err(
                 MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
                     leaves_indices.to_vec(),
@@ -416,33 +405,6 @@ mod tests {
     }
 
     #[test]
-    fn next_pow2_tests() {
-        assert_eq!(next_pow2(0), 1);
-        assert_eq!(next_pow2(1), 1);
-        assert_eq!(next_pow2(2), 2);
-        assert_eq!(next_pow2(3), 4);
-        assert_eq!(next_pow2(4), 4);
-        assert_eq!(next_pow2(5), 8);
-        assert_eq!(next_pow2(6), 8);
-        assert_eq!(next_pow2(7), 8);
-        assert_eq!(next_pow2(8), 8);
-        assert_eq!(next_pow2(9), 16);
-        assert_eq!(next_pow2(10), 16);
-        assert_eq!(next_pow2(11), 16);
-        assert_eq!(next_pow2(12), 16);
-        assert_eq!(next_pow2(13), 16);
-        assert_eq!(next_pow2(14), 16);
-        assert_eq!(next_pow2(15), 16);
-        assert_eq!(next_pow2(16), 16);
-        (17..33).for_each(|n| assert_eq!(next_pow2(n), 32));
-        (33..65).for_each(|n| assert_eq!(next_pow2(n), 64));
-        (65..129).for_each(|n| assert_eq!(next_pow2(n), 128));
-        (129..257).for_each(|n| assert_eq!(next_pow2(n), 256));
-        (257..513).for_each(|n| assert_eq!(next_pow2(n), 512));
-        (513..1025).for_each(|n| assert_eq!(next_pow2(n), 1024));
-    }
-
-    #[test]
     fn leaves_count_from_tree_size() {
         for i in 1..30 {
             let leaves_count = 1 << (i - 1);
@@ -556,5 +518,20 @@ mod tests {
 
         let v30 = MerkleTree::combine_pair(&v20, &v21);
         assert_eq!(t.node_from_bottom(3, 0).unwrap(), v30);
+    }
+
+    #[test]
+    fn sorted_and_unique() {
+        assert!(is_sorted_and_unique(&[]));
+        assert!(is_sorted_and_unique(&[1]));
+        assert!(is_sorted_and_unique(&[1, 2]));
+        assert!(is_sorted_and_unique(&[1, 2, 5, 10]));
+        assert!(is_sorted_and_unique(&[1, 2, 5, 10, 100]));
+
+        assert!(!is_sorted_and_unique(&[1, 1]));
+        assert!(!is_sorted_and_unique(&[2, 1]));
+        assert!(!is_sorted_and_unique(&[1, 2, 5, 10, 100, 99]));
+        assert!(!is_sorted_and_unique(&[2, 1, 2, 5, 10, 100]));
+        assert!(!is_sorted_and_unique(&[1, 2, 5, 4, 10, 100]));
     }
 }
