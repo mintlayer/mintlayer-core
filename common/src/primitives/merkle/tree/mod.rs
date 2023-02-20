@@ -36,24 +36,24 @@ pub struct MerkleTree {
     tree: Vec<H256>,
 }
 
-fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
-    let orig_size = elements.len();
-    let pow2_size = orig_size.next_power_of_two();
-
-    assert!(pow2_size >= orig_size);
-
-    let mut padding = Vec::with_capacity(pow2_size - orig_size);
-    for _idx in orig_size..pow2_size {
-        let to_hash = padding
-            .last()
-            .unwrap_or_else(|| elements.last().expect("We already checked it's not empty"));
-        let to_push = default_hash(to_hash);
-        padding.push(to_push);
-    }
-    padding
-}
-
 impl MerkleTree {
+    fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
+        let orig_size = elements.len();
+        let pow2_size = orig_size.next_power_of_two();
+
+        assert!(pow2_size >= orig_size);
+
+        let mut padding = Vec::with_capacity(pow2_size - orig_size);
+        for _idx in orig_size..pow2_size {
+            let to_hash = padding
+                .last()
+                .unwrap_or_else(|| elements.last().expect("We already checked it's not empty"));
+            let to_push = default_hash(to_hash);
+            padding.push(to_push);
+        }
+        padding
+    }
+
     fn combine_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
@@ -68,7 +68,7 @@ impl MerkleTree {
         if leaves.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(leaves.len()));
         }
-        let padding = create_merkletree_padding(&leaves);
+        let padding = Self::create_merkletree_padding(&leaves);
         let leaves = leaves.into_iter().chain(padding).collect::<Vec<_>>();
         let steps = leaves.len() - 1;
         let mut tree = Vec::with_capacity(2 * leaves.len() - 1);
