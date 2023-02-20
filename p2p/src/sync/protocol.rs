@@ -93,7 +93,7 @@ where
     async fn handle_block_request(
         &mut self,
         peer: T::PeerId,
-        mut block_ids: Vec<Id<Block>>,
+        block_ids: Vec<Id<Block>>,
     ) -> Result<()> {
         log::debug!("Blocks request from peer {peer}");
 
@@ -107,12 +107,17 @@ where
             return Ok(());
         }
 
-        let requested_blocks_limit = *self.p2p_config.max_request_blocks_count;
-        if block_ids.len() > requested_blocks_limit {
-            return Err(P2pError::ProtocolError(
-                ProtocolError::BlocksRequestLimitExceeded(block_ids.len(), requested_blocks_limit),
-            ));
-        }
+        // Check that a peer doesn't exceed the blocks limit.
+        self.p2p_config
+            .max_request_blocks_count
+            .checked_sub(block_ids.len())
+            .and_then(|n| n.checked_sub(peer_state.num_blocks_to_send))
+            .ok_or(P2pError::ProtocolError(
+                ProtocolError::BlocksRequestLimitExceeded(
+                    block_ids.len() + peer_state.num_blocks_to_send,
+                    *self.p2p_config.max_request_blocks_count,
+                ),
+            ))?;
         log::trace!("Requested block ids: {block_ids:#?}");
 
         // Check that all blocks are known.
@@ -128,9 +133,7 @@ where
             })
             .await??;
 
-        block_ids.truncate(requested_blocks_limit - peer_state.num_blocks_to_send);
         peer_state.num_blocks_to_send += block_ids.len();
-        debug_assert!(peer_state.num_blocks_to_send <= requested_blocks_limit);
         self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, id)));
 
         Ok(())

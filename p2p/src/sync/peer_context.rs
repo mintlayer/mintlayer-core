@@ -21,6 +21,8 @@ use common::{
 };
 
 // TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
+// TODO: Track the block availability for a peer.
+// TODO: Track the best known block for a peer and take into account the chain work when syncing.
 pub struct PeerContext {
     /// A number of blocks that a peer has requested. This shouldn't be bigger than the
     /// `P2pConfig::requested_blocks_limit` value. The actual block identifiers are stored in

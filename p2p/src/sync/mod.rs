@@ -230,7 +230,10 @@ where
         self.peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-            .num_blocks_to_send -= 1;
+            .num_blocks_to_send
+            .checked_sub(1)
+            // This is safe because the function is called after the `blocks_queue.is_empty` check.
+            .expect("Trying to send a block when num_blocks_to_send is zero");
 
         let block = self.chainstate_handle.call(move |c| c.get_block(block)).await??.ok_or(
             P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
