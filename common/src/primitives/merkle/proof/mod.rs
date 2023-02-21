@@ -75,7 +75,7 @@ impl<'a> SingleProofNodes<'a> {
     }
 
     pub fn into_values(self) -> SingleProofHashes {
-        let proof = self.proof.into_iter().map(|node| *node.value()).collect::<Vec<_>>();
+        let proof = self.proof.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
         SingleProofHashes { proof }
     }
 

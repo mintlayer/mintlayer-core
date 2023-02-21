@@ -646,7 +646,7 @@ fn parent_iter_one_leaf() {
 
     let t = MerkleTree::from_leaves(vec![v00]).unwrap();
 
-    let val = |v: Node| *v.value();
+    let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(
@@ -671,7 +671,7 @@ fn parent_iter_two_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01]).unwrap();
 
-    let val = |v: Node| *v.value();
+    let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(
@@ -713,7 +713,7 @@ fn parent_iter_four_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03]).unwrap();
 
-    let val = |v: Node| *v.value();
+    let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(
@@ -794,7 +794,7 @@ fn parent_iter_eight_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03, v04]).unwrap();
 
-    let val = |v: Node| *v.value();
+    let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(

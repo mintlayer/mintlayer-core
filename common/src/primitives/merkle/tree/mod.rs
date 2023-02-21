@@ -263,7 +263,7 @@ pub struct Node<'a> {
 }
 
 impl<'a> Node<'a> {
-    pub fn value(&self) -> &H256 {
+    pub fn hash(&self) -> &H256 {
         &self.tree_ref.tree[self.absolute_index]
     }
 
