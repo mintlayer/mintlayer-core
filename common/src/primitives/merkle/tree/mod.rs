@@ -99,6 +99,12 @@ impl MerkleTree {
         NonZeroUsize::new(leaves_count).expect("By design, tree_size is always > 0")
     }
 
+    pub fn leaves_count(&self) -> NonZeroUsize {
+        Self::leaves_count_from_tree_size(
+            NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
+        )
+    }
+
     pub fn level_count(&self) -> usize {
         let leaves_count = Self::leaves_count_from_tree_size(
             NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
@@ -174,6 +180,56 @@ impl MerkleTree {
             nodes_at_level_count >>= 1;
         }
         (level, index - tree_node_counter)
+    }
+
+    pub fn iter_from_leaf_to_root(
+        &self,
+        leaf_index: usize,
+    ) -> Result<MerkleTreeNodeParentIterator, MerkleTreeAccessError> {
+        let leaves_count = self.leaves_count().get();
+
+        if leaf_index >= leaves_count {
+            return Err(MerkleTreeAccessError::IterStartIndexOutOfRange(
+                leaf_index,
+                leaves_count,
+            ));
+        }
+
+        let (level, index) = Self::position_from_index(
+            NonZeroUsize::new(self.tree.len()).expect("By design, tree_size is always > 0"),
+            leaf_index,
+        );
+
+        let res = MerkleTreeNodeParentIterator {
+            tree: self,
+            level,
+            index,
+        };
+
+        Ok(res)
+    }
+}
+
+#[must_use]
+#[derive(Debug)]
+pub struct MerkleTreeNodeParentIterator<'a> {
+    tree: &'a MerkleTree,
+    level: usize,
+    index: usize,
+}
+
+impl<'a> Iterator for MerkleTreeNodeParentIterator<'a> {
+    type Item = H256;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.level == self.tree.level_count() {
+            return None;
+        }
+
+        let res = self.tree.node_from_bottom(self.level, self.index);
+        self.index /= 2;
+        self.level += 1;
+        res.ok()
     }
 }
 

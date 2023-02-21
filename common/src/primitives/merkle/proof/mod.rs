@@ -15,15 +15,25 @@
 
 use crate::primitives::H256;
 
-use super::tree::MerkleTree;
+use super::{tree::MerkleTree, MerkleTreeProofExtractionError};
 
-pub struct MerkleProof {
+pub struct SingleProof {
     pub leaf: H256,
     pub proof: Vec<H256>,
 }
 
-impl MerkleProof {
-    pub fn from_tree(_tree: &MerkleTree, _index: usize) -> Self {
+impl SingleProof {
+    pub fn from_tree_leaf(
+        tree: &MerkleTree,
+        leaf_index: usize,
+    ) -> Result<Self, MerkleTreeProofExtractionError> {
+        let leaves_count = tree.leaves_count().get();
+        if leaf_index > leaves_count {
+            return Err(MerkleTreeProofExtractionError::LeafIndexOutOfRange(
+                leaf_index,
+                leaves_count,
+            ));
+        }
         todo!()
     }
 }
