@@ -6,7 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-chainstate-storage = {path = './storage'}
+chainstate-storage = {path = './storage', features = ["mock"]}
 chainstate-types = {path = './types'}
 tx-verifier = {path = './tx-verifier'}
 common = {path = '../common'}

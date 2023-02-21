@@ -138,6 +138,12 @@ impl TxInput {
     }
 }
 
+impl From<OutPoint> for TxInput {
+    fn from(outpoint: OutPoint) -> TxInput {
+        TxInput { outpoint }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use rstest::rstest;

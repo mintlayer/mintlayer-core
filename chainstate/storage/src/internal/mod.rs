@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
         block::BlockReward,
@@ -58,13 +58,12 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all utxos from the storage
-    #[allow(clippy::let_and_return)]
     pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
         let db = self.transaction_ro()?;
-        let map = db.0.get::<db::DBUtxo, _>();
-        let res = map.prefix_iter_decoded(&())?.collect::<BTreeMap<_, _>>();
-
-        Ok(res)
+        db.0.get::<db::DBUtxo, _>()
+            .prefix_iter_decoded(&())
+            .map(Iterator::collect)
+            .map_err(crate::Error::from)
     }
 
     /// Collect and return all tip accounting data from storage
@@ -246,6 +245,8 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 }
 
@@ -393,6 +394,9 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         ) -> crate::Result<()>;
 
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 }
 

@@ -18,7 +18,7 @@ use serialization::{Decode, Encode};
 
 use crate::random::make_true_rng;
 
-use self::primitives::VRFReturn;
+pub use self::primitives::VRFReturn;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum VRFError {
@@ -179,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn basic_usage() {
+    fn vrf_basic_usage() {
         let transcript = make_arbitrary_transcript();
 
         let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);

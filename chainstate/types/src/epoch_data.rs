@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A consensus related logic.
+use common::primitives::H256;
+use serialization::{Decode, Encode};
 
-mod pos;
-mod pow;
+use crate::pos_randomness::PoSRandomness;
 
-pub use crate::{
-    error::ConsensusVerificationError,
-    pos::error::ConsensusPoSError,
-    pow::{check_proof_of_work, mine, ConsensusPoWError},
-    validator::{compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError},
-};
+#[derive(Debug, Encode, Decode, Clone)]
+pub struct EpochData {
+    randomness: PoSRandomness,
+}
 
-mod error;
-mod validator;
+impl EpochData {
+    pub fn new(randomness: PoSRandomness) -> Self {
+        Self { randomness }
+    }
+
+    pub fn randomness(&self) -> H256 {
+        self.randomness.value()
+    }
+}

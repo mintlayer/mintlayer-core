@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 
 pub use internal::Store;
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::chain::block::BlockReward;
 use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
@@ -87,6 +87,9 @@ pub trait BlockchainStorageRead:
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
+
+    /// Get mainchain epoch data by its index
+    fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
 
     /// Get token creation tx
     fn get_token_aux_data(&self, token_id: &TokenId) -> crate::Result<Option<TokenAuxiliaryData>>;
@@ -157,6 +160,12 @@ pub trait BlockchainStorageWrite:
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+    /// Set the mainchain epoch data of the given epoch index
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+
+    /// Remove the mainchain epoch data of the given epoch index
+    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
 
     /// Set data associated with token issuance (and ACL changes in the future)
     fn set_token_aux_data(

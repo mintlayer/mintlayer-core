@@ -202,7 +202,7 @@ where
 
         for (peer_id, peer) in peers {
             let res = peer.tx.send(Event::SendMessage(Box::new(Message::Announcement(
-                announcement.clone(),
+                Box::new(announcement.clone()),
             ))));
             if let Err(e) = res {
                 log::error!("Failed to send announcement to peer {peer_id}: {e:?}")
@@ -486,7 +486,7 @@ where
                 peer,
                 message: PeerManagerMessage::PingResponse(r),
             })?,
-            Message::Announcement(announcement) => self.handle_announcement(peer, announcement)?,
+            Message::Announcement(announcement) => self.handle_announcement(peer, *announcement)?,
         }
         Ok(())
     }

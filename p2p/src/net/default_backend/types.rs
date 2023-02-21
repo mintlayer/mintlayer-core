@@ -202,7 +202,7 @@ pub enum Message {
     AddrListResponse(AddrListResponse),
     AnnounceAddrResponse(AnnounceAddrResponse),
     PingResponse(PingResponse),
-    Announcement(Announcement),
+    Announcement(Box<Announcement>),
 }
 
 impl From<PeerManagerMessage> for Message {

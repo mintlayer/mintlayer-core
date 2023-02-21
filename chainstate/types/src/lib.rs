@@ -13,19 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod pos_randomness;
 pub mod storage_result;
+pub mod vrf_tools;
 
 pub use crate::{
-    ancestor::block_index_ancestor_getter, ancestor::gen_block_index_getter,
-    block_index::BlockIndex, block_index_handle::BlockIndexHandle, error::GetAncestorError,
-    error::PropertyQueryError, gen_block_index::GenBlockIndex, height_skip::get_skip_height,
+    ancestor::block_index_ancestor_getter,
+    ancestor::gen_block_index_getter,
+    block_index::BlockIndex,
+    block_index_handle::BlockIndexHandle,
+    epoch_data::EpochData,
+    error::GetAncestorError,
+    error::PropertyQueryError,
+    gen_block_index::GenBlockIndex,
+    height_skip::get_skip_height,
     locator::Locator,
+    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
 };
 
 mod ancestor;
 mod block_index;
 mod block_index_handle;
+mod epoch_data;
 mod error;
 mod gen_block_index;
 mod height_skip;
 mod locator;
+mod preconnect_data;

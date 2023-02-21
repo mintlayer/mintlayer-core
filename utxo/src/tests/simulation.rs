@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{empty_test_utxos_view, test_helper::create_utxo};
+use super::test_helper::{create_utxo, empty_test_utxos_view};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
 use common::chain::OutPoint;
 use crypto::random::{CryptoRng, Rng};

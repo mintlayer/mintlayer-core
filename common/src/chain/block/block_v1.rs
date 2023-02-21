@@ -91,11 +91,11 @@ impl BlockV1 {
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
         let inputs = match &self.header.consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
-            ConsensusData::PoS(data) => Some(data.kernel_inputs().as_ref()),
+            ConsensusData::PoS(data) => Some(data.kernel_inputs()),
         };
         let witness = match &self.header.consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
-            ConsensusData::PoS(data) => Some(data.kernel_witness().as_ref()),
+            ConsensusData::PoS(data) => Some(data.kernel_witness()),
         };
 
         BlockRewardTransactable {

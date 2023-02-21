@@ -469,10 +469,7 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
 #[cfg(test)]
 mod unit_test {
     use super::*;
-    use crate::tests::{
-        empty_test_utxos_view,
-        test_helper::{insert_single_entry, Presence},
-    };
+    use crate::tests::test_helper::{empty_test_utxos_view, insert_single_entry, Presence};
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};

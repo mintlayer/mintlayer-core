@@ -438,7 +438,7 @@ where
                         self.process_message(peer, message).await?;
                     },
                     SyncingEvent::Announcement{ peer_id, announcement } => {
-                        self.process_announcement(peer_id, announcement).await?;
+                        self.process_announcement(peer_id, *announcement).await?;
                     }
                 },
                 event = self.rx_sync.recv() => match event.ok_or(P2pError::ChannelClosed)? {

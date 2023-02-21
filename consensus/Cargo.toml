@@ -7,8 +7,10 @@ rust-version.workspace = true
 
 [dependencies]
 common = {path = '../common'}
+utils = {path = "../utils"}
 chainstate-types = {path = '../chainstate/types'}
-chainstate-storage = {path = '../chainstate/storage'}
+pos_accounting = {path = '../pos_accounting'}
+utxo = {path = '../utxo'}
 
 thiserror.workspace = true
 num = "0.4.0"

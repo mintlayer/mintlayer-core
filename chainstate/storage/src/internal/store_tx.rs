@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
         block::BlockReward,
@@ -147,6 +147,10 @@ macro_rules! impl_read_ops {
                 height: &BlockHeight,
             ) -> crate::Result<Option<Id<GenBlock>>> {
                 self.read::<db::DBBlockByHeight, _, _>(height)
+            }
+
+            fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
+                self.read::<db::DBEpochData, _, _>(epoch_index)
             }
 
             fn get_token_aux_data(
@@ -473,6 +477,14 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
             .get_mut::<db::DBAccountingEpochDeltaUndo, _>()
             .del(epoch_index)
             .map_err(Into::into)
+    }
+
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
+        self.write::<db::DBEpochData, _, _, _>(epoch_index, epoch_data)
+    }
+
+    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
+        self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
     }
 }
 
