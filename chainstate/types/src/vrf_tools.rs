@@ -26,6 +26,11 @@ use crypto::vrf::{
 };
 use thiserror::Error;
 
+const TRANSCRIPT_MAIN_LABEL: &[u8] = b"MintlayerStakeVRF";
+const RANDOMNESS_COMPONENT_LABEL: &[u8] = b"Randomness";
+const SLOT_COMPONENT_LABEL: &[u8] = b"Slot";
+const EPOCH_INDEX_COMPONENT_LABEL: &[u8] = b"EpochIndex";
+
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ProofOfStakeVRFError {
     #[error("Failed to verify VRF data with error: {0}")]
@@ -37,16 +42,19 @@ pub fn construct_transcript(
     random_seed: &H256,
     block_timestamp: BlockTimestamp,
 ) -> WrappedTranscript {
-    TranscriptAssembler::new(b"MintlayerStakeVRF")
+    TranscriptAssembler::new(TRANSCRIPT_MAIN_LABEL)
         .attach(
-            b"Randomness",
+            RANDOMNESS_COMPONENT_LABEL,
             TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
         )
         .attach(
-            b"Slot",
+            SLOT_COMPONENT_LABEL,
             TranscriptComponent::U64(block_timestamp.as_int_seconds()),
         )
-        .attach(b"EpochIndex", TranscriptComponent::U64(epoch_index))
+        .attach(
+            EPOCH_INDEX_COMPONENT_LABEL,
+            TranscriptComponent::U64(epoch_index),
+        )
         .finalize()
 }
 

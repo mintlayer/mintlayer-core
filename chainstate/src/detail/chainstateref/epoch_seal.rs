@@ -171,6 +171,7 @@ mod tests {
         uint::BitArray,
         Uint256,
     };
+    use mockall::predicate::eq;
     use rstest::rstest;
 
     fn make_block_index(height: BlockHeight) -> BlockIndex {
@@ -202,9 +203,13 @@ mod tests {
         let mut db = MockStoreTxRw::new();
         let chain_config = ConfigBuilder::test_chain().epoch_length(epoch_length).build();
         let block_index = make_block_index(tip_height);
+        let expected_modified_epoch = chain_config.epoch_index_from_height(&tip_height);
 
         if expect_call_to_db {
-            db.expect_set_epoch_data().times(1).return_const(Ok(()));
+            db.expect_set_epoch_data()
+                .times(1)
+                .withf(move |epoch_index, _| *epoch_index == expected_modified_epoch)
+                .return_const(Ok(()));
         }
 
         update_epoch_data(
@@ -226,9 +231,14 @@ mod tests {
     ) {
         let mut db = MockStoreTxRw::new();
         let chain_config = ConfigBuilder::test_chain().epoch_length(epoch_length).build();
+        let expected_modified_epoch =
+            chain_config.epoch_index_from_height(&tip_height.next_height());
 
         if expect_call_to_db {
-            db.expect_del_epoch_data().times(1).return_const(Ok(()));
+            db.expect_del_epoch_data()
+                .times(1)
+                .with(eq(expected_modified_epoch))
+                .return_const(Ok(()));
         }
 
         update_epoch_data(
