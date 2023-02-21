@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_for_chainstate_events() {
+    async fn run() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
@@ -305,7 +305,7 @@ mod tests {
         let mut block_builder = PerpetualBlockBuilder::new(
             chain_config.clone(),
             chainstate.clone(),
-            mempool,
+            mempool.clone(),
             Default::default(),
             rx_builder,
             true,
@@ -322,22 +322,54 @@ mod tests {
         )
         .expect("Error creating test block");
 
-        let block_id = block.get_id();
-        let shutdown = manager.make_shutdown_trigger();
+        //
+        // Flag that the mempool saw the new tip event
+        //
 
-        thread::spawn(move || {
-            match block_maker_rx.recv().expect("Error reading from Block Builder") {
-                BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
-                    assert!(block_id == new_block_id, "Invalid Block ID received");
-                    assert!(
-                        new_block_height == BlockHeight::one(),
-                        "Invalid block height received"
-                    );
-                }
-                _ => panic!("Error reading new tip from Block Builder"),
+        let (tx, _rx) = crossbeam_channel::bounded(1);
+
+        mempool.call_async_mut({
+            let block_id = block.get_id();
+            move |this| {
+                this.subscribe_to_events(Arc::new(move |mempool_event| match mempool_event {
+                    MempoolEvent::NewTip(new_block_id, new_block_height) => {
+                        if block_id == new_block_id && new_block_height == BlockHeight::one() {
+                            tx.send(true).expect("Error sending new tip confirmation");
+                        }
+                    }
+                }))
             }
+        });
 
-            shutdown.initiate();
+        //
+        // Flag that chainstate saw the new tip event
+        //
+
+        thread::spawn({
+            let block_id = block.get_id();
+            let shutdown = manager.make_shutdown_trigger();
+
+            move || {
+                match block_maker_rx.recv().expect("Error reading from Block Builder") {
+                    BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
+                        assert!(block_id == new_block_id, "Invalid Block ID received");
+                        assert!(
+                            new_block_height == BlockHeight::one(),
+                            "Invalid block height received"
+                        );
+                    }
+                    _ => panic!("Error reading new tip from Block Builder"),
+                }
+
+                // TODO: the following assertion will fail until we turn on mempool broadcasts
+                //
+                // assert!(
+                //     rx.recv_timeout(Duration::from_millis(1000)).is_ok(),
+                //     "Mempool new tip timed out"
+                // );
+
+                shutdown.initiate();
+            }
         });
 
         tokio::spawn(async move {
@@ -352,7 +384,9 @@ mod tests {
 
         tokio::spawn(async move {
             loop {
-                if get_subscriber_count().await.expect("Error getting subscriber count") > 0 {
+                // One subscriber from this run()'s self.subscribe_to_chainstate_events()
+                // The other from mempool.run()'s self.subscribe_to_chainstate_events()
+                if get_subscriber_count().await.expect("Error getting subscriber count") == 2 {
                     break;
                 }
 
@@ -415,6 +449,63 @@ mod tests {
                     _ => panic!("Invalid message from chainstate"),
                 }
             }
+
+            shutdown.initiate();
+        });
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn subscribe_to_mempool_events() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let (_tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+        let block_builder = PerpetualBlockBuilder::new(
+            chain_config.clone(),
+            chainstate.clone(),
+            mempool,
+            Default::default(),
+            rx_builder,
+            true,
+        );
+
+        let shutdown = manager.make_shutdown_trigger();
+
+        tokio::spawn(async move {
+            let mut mempool_rx = block_builder
+                .subscribe_to_mempool_events()
+                .await
+                .expect("Error subscribing to chainstate events");
+
+            let block = Block::new(
+                vec![],
+                chain_config.genesis_block_id(),
+                BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .expect("Error creating test block");
+
+            let _block_id = block.get_id();
+
+            chainstate.call_mut(move |this| {
+                this.process_block(block, BlockSource::Local).expect("Error processing block");
+            });
+
+            let _recv = timeout(Duration::from_millis(1000), mempool_rx.recv());
+
+            // TODO: the following assertion will fail until we turn on mempool broadcasts
+            //
+            // tokio::select! {
+            //     msg = recv => match msg.expect("Mempool timed out") {
+            //         Some((new_block_id, _)) => {
+            //             assert!(new_block_id == block_id, "Invalid Block Id received");
+            //         }
+            //         _ => panic!("Invalid message from mempool"),
+            //     }
+            // }
 
             shutdown.initiate();
         });
