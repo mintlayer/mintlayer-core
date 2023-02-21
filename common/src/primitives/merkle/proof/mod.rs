@@ -74,9 +74,9 @@ impl<'a> SingleProofNodes<'a> {
         Ok(Some(result))
     }
 
-    pub fn into_values(self) -> SingleProofValues {
+    pub fn into_values(self) -> SingleProofHashes {
         let proof = self.proof.into_iter().map(|node| *node.value()).collect::<Vec<_>>();
-        SingleProofValues { proof }
+        SingleProofHashes { proof }
     }
 
     pub fn into_nodes(self) -> Vec<Node<'a>> {
@@ -84,11 +84,11 @@ impl<'a> SingleProofNodes<'a> {
     }
 }
 
-pub struct SingleProofValues {
+pub struct SingleProofHashes {
     pub proof: Vec<H256>,
 }
 
-impl SingleProofValues {
+impl SingleProofHashes {
     pub fn into_hashes(self) -> Vec<H256> {
         self.proof
     }
