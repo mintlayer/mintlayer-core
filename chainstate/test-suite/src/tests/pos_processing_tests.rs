@@ -51,7 +51,7 @@ fn create_chain_with_stake_pool(
 ) -> (OutPoint, PoolId, VRFPrivateKey) {
     let genesis_id = tf.genesis().get_id();
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
-    let (vrf_sk, vrf_pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let tx = TransactionBuilder::new()
         .add_input(
             TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
@@ -167,7 +167,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let genesis_id = tf.genesis().get_id();
-    let (vrf_sk, _) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
@@ -320,7 +320,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     {
         // invalid vrf private key
-        let (vrf_sk_2, _) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let (vrf_sk_2, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk_2.produce_vrf_data(valid_vrf_transcript.into());
         let pos_data = PoSData::new(
             vec![stake_pool_outpoint.clone().into()],

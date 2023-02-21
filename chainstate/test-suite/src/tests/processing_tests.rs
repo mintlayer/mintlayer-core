@@ -203,7 +203,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 
         // Case 7: reward is a stake lock
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-        let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()
             .with_reward(vec![TxOutput::new(

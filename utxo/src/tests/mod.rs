@@ -658,7 +658,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
-    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
     let pool_id = make_pool_id(&mut rng);
 
@@ -756,7 +756,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
-    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
     let pool_id = make_pool_id(&mut rng);
 
@@ -810,7 +810,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
         OutputPurpose::Burn,
     )];
 
-    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
     let pool_id = make_pool_id(&mut rng);
 
