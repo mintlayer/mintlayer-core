@@ -15,7 +15,10 @@
 
 use crate::primitives::H256;
 
-use super::{tree::MerkleTree, MerkleTreeProofExtractionError};
+use super::{
+    tree::{MerkleTree, Node},
+    MerkleTreeProofExtractionError,
+};
 
 pub struct SingleProof {
     pub leaf: H256,
@@ -23,10 +26,22 @@ pub struct SingleProof {
 }
 
 impl SingleProof {
+    /// Nodes are hashed in a specific order. We order them here.
+    fn order_pair<'a>((left, right): (Node<'a>, Node<'a>)) -> (Node<'a>, Node<'a>) {
+        if left.abs_index() < right.abs_index() {
+            (left, right)
+        } else {
+            (right, left)
+        }
+    }
+
+    /// Creates a proof for a leaf by its index in the lowest level (the tip).
+    /// A proof doesn't contain the root. Hence, passing a tree with only the root
+    /// returns Ok(None).
     pub fn from_tree_leaf(
         tree: &MerkleTree,
         leaf_index: usize,
-    ) -> Result<Self, MerkleTreeProofExtractionError> {
+    ) -> Result<Option<Self>, MerkleTreeProofExtractionError> {
         let leaves_count = tree.leaves_count().get();
         if leaf_index > leaves_count {
             return Err(MerkleTreeProofExtractionError::LeafIndexOutOfRange(
@@ -34,6 +49,35 @@ impl SingleProof {
                 leaves_count,
             ));
         }
-        todo!()
+
+        let leaf = tree.node_from_bottom(0, leaf_index)?;
+        if leaf.is_root() {
+            return Ok(None);
+        }
+
+        let mut proof = Vec::new();
+        let mut last_node = leaf;
+        loop {
+            let err_msg = "Should never happen because we break on root";
+            let curr_node = last_node.parent().expect(err_msg);
+            if curr_node.is_root() {
+                break;
+            }
+            let sibling = curr_node.sibling().unwrap();
+            let (left, right) = Self::order_pair((last_node, sibling));
+            proof.push(*left.value());
+            proof.push(*right.value());
+            last_node = curr_node;
+        }
+
+        let result = Self {
+            leaf: *leaf.value(),
+            proof,
+        };
+
+        Ok(Some(result))
     }
 }
+
+#[cfg(test)]
+mod tests;

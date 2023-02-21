@@ -256,7 +256,7 @@ impl MerkleTree {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Node<'a> {
     tree_ref: &'a MerkleTree,
     absolute_index: usize,
@@ -326,6 +326,10 @@ impl<'a> Node<'a> {
             })
         }
     }
+
+    pub fn is_root(&self) -> bool {
+        self.absolute_index == self.tree().tree.len() - 1
+    }
 }
 
 #[must_use]
@@ -341,7 +345,7 @@ impl<'a> Iterator for MerkleTreeNodeParentIterator<'a> {
         match self.node {
             None => None,
             Some(_) => {
-                let res = self.node.clone();
+                let res = self.node;
                 self.node = self.node.as_ref()?.parent();
                 res
             }
