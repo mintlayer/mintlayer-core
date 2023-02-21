@@ -20,14 +20,13 @@ use super::{
     MerkleTreeProofExtractionError,
 };
 
-pub struct SingleProof {
-    pub leaf: H256,
-    pub proof: Vec<H256>,
+pub struct SingleProofNodes<'a> {
+    pub proof: Vec<Node<'a>>,
 }
 
-impl SingleProof {
+impl<'a> SingleProofNodes<'a> {
     /// Nodes are hashed in a specific order. We order them here.
-    fn order_pair<'a>((left, right): (Node<'a>, Node<'a>)) -> (Node<'a>, Node<'a>) {
+    fn order_pair<'b>((left, right): (Node<'b>, Node<'b>)) -> (Node<'b>, Node<'b>) {
         if left.abs_index() < right.abs_index() {
             (left, right)
         } else {
@@ -39,7 +38,7 @@ impl SingleProof {
     /// A proof doesn't contain the root. Hence, passing a tree with only the root
     /// returns Ok(None).
     pub fn from_tree_leaf(
-        tree: &MerkleTree,
+        tree: &'a MerkleTree,
         leaf_index: usize,
     ) -> Result<Option<Self>, MerkleTreeProofExtractionError> {
         let leaves_count = tree.leaves_count().get();
@@ -55,7 +54,7 @@ impl SingleProof {
             return Ok(None);
         }
 
-        let mut proof = Vec::new();
+        let mut proof = vec![leaf];
         let mut last_node = leaf;
         loop {
             let err_msg = "Should never happen because we break on root";
@@ -65,17 +64,33 @@ impl SingleProof {
             }
             let sibling = curr_node.sibling().unwrap();
             let (left, right) = Self::order_pair((last_node, sibling));
-            proof.push(*left.value());
-            proof.push(*right.value());
+            proof.push(left);
+            proof.push(right);
             last_node = curr_node;
         }
 
-        let result = Self {
-            leaf: *leaf.value(),
-            proof,
-        };
+        let result = Self { proof };
 
         Ok(Some(result))
+    }
+
+    pub fn into_values(self) -> SingleProofValues {
+        let proof = self.proof.into_iter().map(|node| *node.value()).collect::<Vec<_>>();
+        SingleProofValues { proof }
+    }
+
+    pub fn into_nodes(self) -> Vec<Node<'a>> {
+        self.proof
+    }
+}
+
+pub struct SingleProofValues {
+    pub proof: Vec<H256>,
+}
+
+impl SingleProofValues {
+    pub fn into_hashes(self) -> Vec<H256> {
+        self.proof
     }
 }
 
