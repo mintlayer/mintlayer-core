@@ -25,7 +25,8 @@ use common::{
     chain::{Block, GenBlock, Transaction},
     primitives::{BlockDistance, BlockHeight, Id},
 };
-use consensus::ConsensusVerificationError;
+use consensus::{ConsensusVerificationError, ExtraConsensusDataError};
+
 use thiserror::Error;
 use tx_verifier::transaction_verifier::error::TxIndexError;
 
@@ -55,6 +56,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
+    #[error("Failed to compute consensus extra data: {0}")]
+    ConsensusExtraDataError(#[from] ExtraConsensusDataError),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Changing tx index state is not implemented for existing DB")]

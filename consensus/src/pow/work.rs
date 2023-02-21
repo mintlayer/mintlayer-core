@@ -76,6 +76,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
                 .chain_block_id()
                 .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
 
+            // TODO: this should use get_gen_block_index() because the previous block could be genesis
             let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
                 Ok(id) => id,
                 Err(err) => {

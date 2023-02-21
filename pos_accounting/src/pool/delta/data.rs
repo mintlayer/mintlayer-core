@@ -14,10 +14,11 @@
 // limitations under the License.
 
 use accounting::{DeltaAmountCollection, DeltaDataCollection};
+use common::chain::{DelegationId, PoolId};
 
 use crate::{
     pool::{delegation::DelegationData, pool_data::PoolData},
-    DelegationId, DeltaMergeUndo, Error, PoolId,
+    DeltaMergeUndo, Error,
 };
 
 use serialization::{Decode, Encode};

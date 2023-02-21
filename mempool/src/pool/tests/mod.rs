@@ -106,7 +106,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
     let flags = 0;
     let locktime = 0;
     let input = TxInput::new(outpoint_source_id, 0);
-    let relay_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
+    let relay_fee: Fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
     let tx = tx_spend_input(
         &mempool,
         input,
@@ -433,12 +433,12 @@ async fn tx_spend_input<M: GetMemoryUsage + Send + Sync>(
     mempool: &Mempool<M>,
     input: TxInput,
     witness: InputWitness,
-    fee: impl Into<Option<Amount>>,
+    fee: impl Into<Option<Fee>>,
     flags: u32,
     locktime: u32,
 ) -> anyhow::Result<SignedTransaction> {
     let fee = fee.into().map_or_else(
-        || Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))),
+        || Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into(),
         std::convert::identity,
     );
     tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags, locktime).await
@@ -448,7 +448,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
     mempool: &Mempool<M>,
     inputs: &[TxInput],
     witnesses: &[InputWitness],
-    fee: Amount,
+    fee: Fee,
     flags: u32,
     locktime: u32,
 ) -> anyhow::Result<SignedTransaction> {
@@ -478,7 +478,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
         anyhow::Error::msg(msg)
     })?;
 
-    let available_for_spending = (input_value - fee).ok_or_else(|| {
+    let available_for_spending = (input_value - *fee).ok_or_else(|| {
         let msg = format!(
             "tx_spend_several_inputs: input_value ({input_value:?}) lower than fee ({fee:?})"
         );
@@ -577,9 +577,9 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     );
 
     // TODO compute minimum necessary relay fee instead of just overestimating it
-    let original_fee = Amount::from_atoms(200);
+    let original_fee: Fee = Amount::from_atoms(200).into();
     let dummy_output = TxOutput::new(
-        OutputValue::Coin(original_fee),
+        OutputValue::Coin(*original_fee),
         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
     );
     let replaced_tx = tx_spend_several_inputs(
@@ -632,7 +632,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
             .expect("invalid witness count")
         })
         .collect::<Vec<_>>();
-    let fee = Amount::from_atoms(0);
+    let fee = Amount::from_atoms(0).into();
 
     // Generation 1
     let tx1_parents = BTreeSet::default();
@@ -773,7 +773,7 @@ async fn test_bip125_max_replacements(
             &mempool,
             input,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-            Amount::from_atoms(fee),
+            Fee::new(Amount::from_atoms(fee)),
             flags,
             locktime,
         )
@@ -782,7 +782,7 @@ async fn test_bip125_max_replacements(
     }
     let mempool_size_before_replacement = mempool.store.txs_by_id.len();
 
-    let replacement_fee = Amount::from_atoms(1_000_000_000_000_000) * fee;
+    let replacement_fee = (Amount::from_atoms(1_000_000_000_000_000) * fee).map(Fee::from);
     let replacement_tx = tx_spend_input(
         &mempool,
         input,
@@ -861,7 +861,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let locktime = 0;
     let flags = 0;
-    let original_fee = Amount::from_atoms(100);
+    let original_fee: Fee = Amount::from_atoms(100).into();
     let replaced_tx = tx_spend_input(
         &mempool,
         input1.clone(),
@@ -873,7 +873,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     mempool.add_transaction(replaced_tx).await?;
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let replacement_fee = Amount::from_atoms(100 + relay_fee);
+    let replacement_fee: Fee = Amount::from_atoms(100 + relay_fee).into();
     let incoming_tx = tx_spend_several_inputs(
         &mempool,
         &[input1, input2],
@@ -972,9 +972,10 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let child_0_id = child_0.transaction().get_id();
     log::debug!("child_0_id {}", child_0_id.get());
 
-    let big_fee = Amount::from_atoms(
+    let big_fee: Fee = Amount::from_atoms(
         get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100,
-    );
+    )
+    .into();
     let child_1 = tx_spend_input(
         &mempool,
         TxInput::new(outpoint_source_id.clone(), 1),
@@ -1274,9 +1275,10 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let flags = 0;
     let locktime = 0;
 
-    let tx_b_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
-    let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000)).unwrap();
-    let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_b_fee: Fee =
+        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_a_fee: Fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
+    let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
         TxInput::new(outpoint_source_id.clone(), 0),
@@ -1428,9 +1430,10 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let flags = 0;
     let locktime = 0;
 
-    let tx_b_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
-    let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000)).unwrap();
-    let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
+    let tx_b_fee: Fee =
+        Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
+    let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000).into()).unwrap();
+    let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
         TxInput::new(outpoint_source_id.clone(), 0),
@@ -1600,7 +1603,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
                 &mempool,
                 TxInput::new(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
                 empty_witness(&mut rng),
-                Amount::from_atoms(fee + u128::try_from(i).unwrap()),
+                Fee::new(Amount::from_atoms(fee + u128::try_from(i).unwrap())),
                 flags,
                 locktime,
             )

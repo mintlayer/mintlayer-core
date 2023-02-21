@@ -36,7 +36,7 @@ pub enum BlockProductionError {
     MempoolChannelClosed,
     #[error("Chainstate channel closed")]
     ChainstateChannelClosed,
-    #[error("Block builder command channel closed")]
+    #[error("Block Builder command channel closed")]
     BlockBuilderChannelClosed,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
@@ -152,11 +152,11 @@ mod tests {
         tokio::spawn(async move {
             blockprod
                 .call(move |this| {
-                    assert!(this.is_connected(), "Builder is not connected");
+                    assert!(this.is_connected(), "Block Builder is not connected");
                     shutdown.initiate();
                 })
                 .await
-                .expect("Error initializing Builder");
+                .expect("Error initializing Block Builder");
         });
 
         manager.main().await;

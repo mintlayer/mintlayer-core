@@ -16,12 +16,12 @@
 use std::collections::BTreeMap;
 
 use chainstate_types::storage_result::Error;
-use common::primitives::{Amount, H256};
-
-use crate::{
-    pool::{delegation::DelegationData, pool_data::PoolData},
-    DelegationId, PoolId,
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::{Amount, H256},
 };
+
+use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
 use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 

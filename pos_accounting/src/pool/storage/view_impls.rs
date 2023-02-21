@@ -15,7 +15,10 @@
 
 use std::collections::BTreeMap;
 
-use common::primitives::Amount;
+use common::{
+    chain::{DelegationId, PoolId},
+    primitives::Amount,
+};
 
 use crate::{
     error::Error,
@@ -26,7 +29,7 @@ use crate::{
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite},
-    DelegationId, DeltaMergeUndo, PoSAccountingDB, PoolId, StorageTag,
+    DeltaMergeUndo, PoSAccountingDB, StorageTag,
 };
 
 impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAccountingDB<S, T> {

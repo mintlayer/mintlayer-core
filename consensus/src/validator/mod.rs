@@ -13,28 +13,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::transaction_index_handle::TransactionIndexHandle;
+pub use self::error::ExtraConsensusDataError;
 
-mod transaction_index_handle;
-
-use chainstate_types::BlockIndexHandle;
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
+};
 use common::{
     chain::{
-        block::{BlockHeader, ConsensusData},
+        block::{consensus_data::PoSData, BlockHeader, ConsensusData},
         config::ChainConfig,
         PoWStatus, RequiredConsensus,
     },
     primitives::Idable,
 };
+use pos_accounting::PoSAccountingView;
+use utxo::UtxosView;
 
-use crate::{error::ConsensusVerificationError, pow::check_pow_consensus};
+pub mod error;
+
+use crate::{
+    error::ConsensusVerificationError,
+    pos::{check_proof_of_stake, kernel::get_kernel_output},
+    pow::check_pow_consensus,
+};
 
 /// Checks if the given block identified by the header contains the correct consensus data.  
-pub fn validate_consensus<H: BlockIndexHandle>(
+pub fn validate_consensus<H, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     block_index_handle: &H,
-) -> Result<(), ConsensusVerificationError> {
+    utxos_view: &U,
+    pos_accounting_view: &P,
+) -> Result<(), ConsensusVerificationError>
+where
+    H: BlockIndexHandle,
+    U: UtxosView,
+    P: PoSAccountingView,
+{
     let prev_block_id = *header.prev_block_id();
 
     let prev_block_height = block_index_handle
@@ -49,7 +64,63 @@ pub fn validate_consensus<H: BlockIndexHandle>(
 
     let block_height = prev_block_height.next_height();
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
-    do_validate(chain_config, header, &consensus_status, block_index_handle)
+    match consensus_status {
+        RequiredConsensus::PoW(pow_status) => {
+            validate_pow_consensus(chain_config, header, &pow_status, block_index_handle)
+        }
+        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
+        RequiredConsensus::PoS => validate_pos_consensus(
+            chain_config,
+            block_index_handle,
+            utxos_view,
+            pos_accounting_view,
+            header,
+        ),
+        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
+    }
+}
+
+fn compute_current_randomness<U: UtxosView>(
+    chain_config: &ChainConfig,
+    pos_data: &PoSData,
+    prev_block_index: &BlockIndex,
+    header: &BlockHeader,
+    utxos_view: &U,
+) -> Result<PoSRandomness, ExtraConsensusDataError> {
+    let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
+    let kernel_output = get_kernel_output(pos_data, utxos_view)
+        .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
+    let current_randomness = PoSRandomness::from_block(
+        chain_config,
+        &prev_block_index.block_height().next_height(),
+        header,
+        prev_randomness.cloned(),
+        &kernel_output,
+        pos_data,
+    )?;
+    Ok(current_randomness)
+}
+
+pub fn compute_extra_consensus_data<U: UtxosView>(
+    chain_config: &ChainConfig,
+    prev_block_index: &BlockIndex,
+    header: &BlockHeader,
+    utxos_view: &U,
+) -> Result<ConsensusExtraData, ExtraConsensusDataError> {
+    match header.consensus_data() {
+        ConsensusData::None => Ok(ConsensusExtraData::None),
+        ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
+        ConsensusData::PoS(pos_data) => {
+            let current_randomness = compute_current_randomness(
+                chain_config,
+                pos_data,
+                prev_block_index,
+                header,
+                utxos_view,
+            )?;
+            Ok(ConsensusExtraData::PoS(current_randomness))
+        }
+    }
 }
 
 fn validate_pow_consensus<H: BlockIndexHandle>(
@@ -66,7 +137,7 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
         }
         ConsensusData::PoW(_) => {
             check_pow_consensus(chain_config, header, pow_status, block_index_handle)
-                .map_err(ConsensusVerificationError::PoWError)
+                .map_err(Into::into)
         }
     }
 }
@@ -80,27 +151,30 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificationError> {
+fn validate_pos_consensus<H, U, P>(
+    chain_config: &ChainConfig,
+    block_index_handle: &H,
+    utxos_view: &U,
+    pos_accounting_view: &P,
+    header: &BlockHeader,
+) -> Result<(), ConsensusVerificationError>
+where
+    H: BlockIndexHandle,
+    U: UtxosView,
+    P: PoSAccountingView,
+{
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::PoS(_) => Ok(()),
-    }
-}
-
-fn do_validate<H: BlockIndexHandle>(
-    chain_config: &ChainConfig,
-    header: &BlockHeader,
-    consensus_status: &RequiredConsensus,
-    block_index_handle: &H,
-) -> Result<(), ConsensusVerificationError> {
-    match consensus_status {
-        RequiredConsensus::PoW(pow_status) => {
-            validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
-        }
-        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => validate_pos_consensus(header),
-        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
+        ConsensusData::PoS(pos_data) => check_proof_of_stake(
+            chain_config,
+            header,
+            pos_data,
+            block_index_handle,
+            utxos_view,
+            pos_accounting_view,
+        )
+        .map_err(Into::into),
     }
 }

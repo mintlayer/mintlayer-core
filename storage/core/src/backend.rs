@@ -21,23 +21,18 @@ use utils::shallow_clone::ShallowClone;
 
 pub use crate::{Data, DbDesc, DbMapId};
 
-/// Types providing capability of iterating over keys with given prefix
-pub trait PrefixIter<'i> {
-    /// The iterator type
-    type Iterator: 'i + Iterator<Item = (Data, Data)>;
-
-    /// Get iterator over key-value pairs where the key has given prefix
-    fn prefix_iter<'m: 'i>(
-        &'m self,
-        map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<Self::Iterator>;
-}
-
 /// Read-only database operations
-pub trait ReadOps: for<'i> PrefixIter<'i> {
+pub trait ReadOps {
+    /// The prefix iterator type
+    type PrefixIter<'i>: Iterator<Item = (Data, Data)> + 'i
+    where
+        Self: 'i;
+
     /// Get value associated with given key.
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>>;
+
+    /// Get iterator over key-value pairs where the key has given prefix
+    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>>;
 }
 
 /// Write database operation
@@ -62,32 +57,19 @@ pub trait TxRw: ReadOps + WriteOps {
     fn commit(self) -> crate::Result<()>;
 }
 
-/// Read-only transactional interface to the storage
-pub trait TransactionalRo<'tx> {
+/// Storage backend internal implementation type
+pub trait BackendImpl: 'static + Send + Sync + ShallowClone {
     /// Read-only transaction internal type
-    type TxRo: TxRo + 'tx;
+    type TxRo<'a>: TxRo + 'a;
+
+    /// Start a read-write transaction
+    type TxRw<'a>: TxRw + 'a;
 
     /// Start a read-only transaction
-    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TxRo>;
-}
-
-/// Read-write transactional interface to the storage
-pub trait TransactionalRw<'tx> {
-    /// Start a read-write transaction
-    type TxRw: TxRw + 'tx;
+    fn transaction_ro(&self) -> crate::Result<Self::TxRo<'_>>;
 
     /// Start a read-write transaction
-    fn transaction_rw<'st: 'tx>(&'st self, size: Option<usize>) -> crate::Result<Self::TxRw>;
-}
-
-/// Storage backend internal implementation type
-pub trait BackendImpl
-where
-    Self: 'static + Send + Sync,
-    Self: for<'tx> TransactionalRo<'tx>,
-    Self: for<'tx> TransactionalRw<'tx>,
-    Self: ShallowClone,
-{
+    fn transaction_rw(&self, size: Option<usize>) -> crate::Result<Self::TxRw<'_>>;
 }
 
 /// Storage backend type. Used to set up storage.

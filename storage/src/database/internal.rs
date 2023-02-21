@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use crate::schema;
 use serialization::{encoded::Encoded, EncodeLike};
 use storage_core::{
-    backend::{self, PrefixIter, ReadOps},
+    backend::{self, ReadOps},
     Backend, DbMapId,
 };
 
@@ -31,11 +31,11 @@ pub trait TxImpl {
 }
 
 impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRo<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::TransactionalRo<'tx>>::TxRo;
+    type Impl = <B::Impl as backend::BackendImpl>::TxRo<'tx>;
 }
 
 impl<'tx, B: Backend, Sch> TxImpl for super::TransactionRw<'tx, B, Sch> {
-    type Impl = <B::Impl as backend::TransactionalRw<'tx>>::TxRw;
+    type Impl = <B::Impl as backend::BackendImpl>::TxRw<'tx>;
 }
 
 /// Get a value from the database backend as a SCALE-encoded object
@@ -59,11 +59,11 @@ impl<DbMap: schema::DbMap, I: Iterator<Item = (DbMap::Key, Encoded<Vec<u8>, DbMa
 {
 }
 
-pub fn prefix_iter<'tx, DbMap: schema::DbMap, Tx: PrefixIter<'tx>>(
-    dbtx: &'tx Tx,
+pub fn prefix_iter<DbMap: schema::DbMap, Tx: ReadOps>(
+    dbtx: &Tx,
     map_id: DbMapId,
     prefix: Vec<u8>,
-) -> crate::Result<impl 'tx + EntryIterator<DbMap>> {
+) -> crate::Result<impl '_ + EntryIterator<DbMap>> {
     dbtx.prefix_iter(map_id, prefix).map(|iter| {
         iter.map(|(k, v)| {
             (

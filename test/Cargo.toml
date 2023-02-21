@@ -1,9 +1,10 @@
 [package]
 name = "mintlayer-test"
-version = "0.1.0"
-edition = "2021"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 homepage = "https://github.com/mintlayer/mintlayer-core/issues"
-license = "MIT"
 
 [dependencies]
 node = { path = "../node" }

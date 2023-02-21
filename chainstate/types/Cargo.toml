@@ -1,8 +1,9 @@
 [package]
 name = "chainstate-types"
-version = "0.1.0"
-edition = "2021"
-license = "MIT"
+license.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,6 +11,8 @@ license = "MIT"
 serialization = { path = "../../serialization" }
 common = { path = "../../common/" }
 storage = { path = "../../storage/" }
+crypto = { path = "../../crypto" }
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true
+generic-array = "0.14"

@@ -21,13 +21,11 @@ use common::{
     primitives::Id,
 };
 
-use crate::ConsensusPoWError;
+use crate::{pos::error::ConsensusPoSError, ConsensusPoWError};
 
 /// A consensus related error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusVerificationError {
-    #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] chainstate_storage::Error),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
     PrevBlockLoadError(Id<GenBlock>, Id<Block>, PropertyQueryError),
     #[error("Previous block {0} of block {1} not found in database")]
@@ -35,7 +33,9 @@ pub enum ConsensusVerificationError {
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
-    PoWError(ConsensusPoWError),
+    PoWError(#[from] ConsensusPoWError),
+    #[error("PoS error: {0}")]
+    PoSError(#[from] ConsensusPoSError),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
 }

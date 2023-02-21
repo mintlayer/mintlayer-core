@@ -15,18 +15,18 @@
 
 //! Chainstate database schema
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPoint, OutPointSourceId, Transaction, TxMainChainIndex,
+        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
 };
 use utxo::{Utxo, UtxosBlockUndo};
 
@@ -47,6 +47,8 @@ storage::decl_schema! {
         pub DBUtxo: Map<OutPoint, Utxo>,
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
+        /// Store for EpochData
+        pub DBEpochData: Map<EpochIndex, EpochData>,
         /// Store for token's info; created on issuance
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id

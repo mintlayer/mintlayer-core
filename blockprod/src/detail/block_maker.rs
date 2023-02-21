@@ -38,7 +38,7 @@ pub enum BlockMakerControlCommand {
     Stop,
 }
 
-/// Slave to the [PerpetualBlockBuilder]. Every new block tip gets one BlockMaker, and keeps running
+/// Slave to the [PerpetualBlockBuilder]. Every new block tip gets one Block Maker, and keeps running
 /// until either it's successful in submitting a block, or there's a new tip in chainstate, deeming
 /// the effort pointless
 pub struct BlockMaker {
@@ -129,7 +129,7 @@ impl BlockMaker {
                 .log_err()?;
             if let Ok(_new_block_index) = block_submit_result {
                 log::info!(
-                "Success in submitting block {} at height {}. Exiting block maker at tip {} and height {}",
+                "Success in submitting block {} at height {}. Exiting Block Maker at tip {} and height {}",
                 block_id,
                 self.current_tip_height.next_height(),
                 self.current_tip_id,
@@ -157,16 +157,16 @@ impl BlockMaker {
                 BlockSubmitResult::Success => break,
             }
 
-            // attempt to receive new commands from the perpetual builder
+            // attempt to receive new commands from the perpetual Block Builder
             let new_info = match self.block_maker_rx.try_recv() {
                 Ok(cmd) => cmd,
                 Err(e) => match e {
                     // if there's nothing from the channel, then we can keep trying to build the block
                     crossbeam_channel::TryRecvError::Empty => continue,
-                    // if the channel is lost, that means the perpetual builder is destroyed.
+                    // if the channel is lost, that means the perpetual Block Builder is destroyed.
                     // No point in continuing since it seems that the node exited.
                     crossbeam_channel::TryRecvError::Disconnected => {
-                        log::error!("Block maker control channel lost. Exiting maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
+                        log::error!("Block Maker control channel lost. Exiting Block Maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
                         break;
                     }
                 },

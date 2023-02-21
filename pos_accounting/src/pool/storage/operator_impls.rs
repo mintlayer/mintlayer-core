@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::OutPoint, primitives::Amount};
+use common::{
+    chain::{DelegationId, OutPoint, PoolId},
+    primitives::Amount,
+};
 use crypto::key::PublicKey;
 
 use crate::{
@@ -30,7 +33,7 @@ use crate::{
         view::PoSAccountingView,
     },
     storage::PoSAccountingStorageWrite,
-    DelegationId, PoSAccountingDB, PoolId, StorageTag,
+    PoSAccountingDB, StorageTag,
 };
 
 impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations

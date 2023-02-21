@@ -19,6 +19,8 @@ use common::primitives::amount::Amount;
 
 use crate::error::TxValidationError;
 
+use super::fee::Fee;
+
 pub const INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
 pub const INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
 
@@ -33,23 +35,24 @@ impl FeeRate {
     }
 
     pub fn from_total_tx_fee(
-        total_tx_fee: Amount,
+        total_tx_fee: Fee,
         tx_size: NonZeroUsize,
     ) -> Result<Self, TxValidationError> {
         let tx_size = u128::try_from(usize::from(tx_size)).expect("div_up conversion");
         Ok(Self {
-            amount_per_kb: ((total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)? / tx_size)
+            amount_per_kb: ((*total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)?
+                / tx_size)
                 .expect("tx_size nonzero"),
         })
     }
 
-    pub fn compute_fee(&self, size: usize) -> Result<Amount, TxValidationError> {
+    pub fn compute_fee(&self, size: usize) -> Result<Fee, TxValidationError> {
         let size = u128::try_from(size).expect("compute_fee conversion");
         let fee = (self.amount_per_kb * size).ok_or(TxValidationError::FeeOverflow)?;
         // +999 for ceil operation
         let fee = (((fee + Amount::from_atoms(999)).ok_or(TxValidationError::FeeOverflow)?) / 1000)
             .expect("valid division");
-        Ok(fee)
+        Ok(fee.into())
     }
 
     pub const fn atoms_per_kb(&self) -> u128 {
@@ -80,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_from_total_tx_fee() {
-        let fee = Amount::from_atoms(7);
+        let fee = Amount::from_atoms(7).into();
         let tx_size = usize::MAX;
         let rate = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap()).unwrap();
         assert_eq!(
@@ -90,12 +93,12 @@ mod tests {
             }
         );
 
-        let fee = Amount::from_atoms(u128::MAX);
+        let fee = Amount::from_atoms(u128::MAX).into();
         let tx_size = 1;
         let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
         assert!(matches!(res, Err(TxValidationError::FeeOverflow)));
 
-        let fee = Amount::from_atoms(u128::MAX - 1);
+        let fee = Amount::from_atoms(u128::MAX - 1).into();
         let tx_size = 3;
         let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
         assert!(matches!(res, Err(TxValidationError::FeeOverflow)));

@@ -47,7 +47,7 @@ pub enum ProtocolError {
     UnknownRequestId,
 }
 
-/// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
+/// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PeerError {
     #[error("Peer disconnected")]

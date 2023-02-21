@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use crate::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{block::BlockReward, Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -45,4 +45,6 @@ pub trait BlockIndexHandle {
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, PropertyQueryError>;
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError>;
 }

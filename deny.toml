@@ -46,8 +46,4 @@ unsound = "warn"
 yanked = "warn"
 notice = "warn"
 severity-threshold = "medium"
-ignore = [
-    # time/chrono problems, have not been a problem in practice
-    "RUSTSEC-2020-0159",
-    "RUSTSEC-2020-0071",
-]
+ignore = []

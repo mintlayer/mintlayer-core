@@ -847,8 +847,7 @@ where
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has this main responsibilities:
-    /// - listening to and handling control events from [`crate::sync::SyncManager`]/
-    /// [`crate::pubsub::PubSubMessageHandler`]/RPC
+    /// - listening to and handling control events from [`crate::sync::BlockSyncManager`]/RPC
     /// - listening to network events
     /// - updating internal state
     /// - sending and checking ping requests
@@ -856,7 +855,8 @@ where
     /// After handling an event from one of the aforementioned sources, the event loop
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
     /// to perform the peer manager maintenance. If the `PeerManager` doesn't receive any events,
-    /// [`PEER_MGR_HEARTBEAT_INTERVAL`] defines how often the heartbeat function is called.
+    /// [`PEER_MGR_HEARTBEAT_INTERVAL_MIN`] and [`PEER_MGR_HEARTBEAT_INTERVAL_MAX`] defines how
+    /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {

@@ -14,12 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::OutPoint,
+    chain::{DelegationId, OutPoint, PoolId},
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
 };
 use crypto::hash::StreamHasher;
-
-use crate::{DelegationId, PoolId};
 
 pub fn pool_id_preimage_suffix() -> u32 {
     // arbitrary, we use this to create different values when hashing with no security requirements

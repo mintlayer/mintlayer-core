@@ -20,8 +20,8 @@ use super::*;
 
 async fn test_replace_tx(
     rng: &mut (impl Rng + CryptoRng),
-    original_fee: Amount,
-    replacement_fee: Amount,
+    original_fee: Fee,
+    replacement_fee: Fee,
 ) -> Result<(), Error> {
     log::debug!(
         "tx_replace_tx: original_fee: {:?}, replacement_fee {:?}",
@@ -90,7 +90,8 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     let input = TxInput::new(outpoint_source_id, 0);
     let flags = 0;
     let locktime = 0;
-    let original_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
+    let original_fee: Fee =
+        Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let original = tx_spend_input(
         &mempool,
@@ -106,7 +107,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(original).await?;
 
     let flags = 0;
-    let replacement_fee = (original_fee + Amount::from_atoms(1000)).unwrap();
+    let replacement_fee = (original_fee + Fee::new(Amount::from_atoms(1000))).unwrap();
     let replacement = tx_spend_input(
         &mempool,
         input,
@@ -138,23 +139,33 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
 async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let replacement_fee = Amount::from_atoms(relay_fee + 100);
-    test_replace_tx(&mut rng, Amount::from_atoms(100), replacement_fee).await?;
-    let res = test_replace_tx(&mut rng, Amount::from_atoms(300), replacement_fee).await;
+    let replacement_fee: Fee = Amount::from_atoms(relay_fee + 100).into();
+    test_replace_tx(&mut rng, Fee::new(Amount::from_atoms(100)), replacement_fee).await?;
+    let res = test_replace_tx(&mut rng, Fee::new(Amount::from_atoms(300)), replacement_fee).await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
             TxValidationError::InsufficientFeesToRelayRBF
         ))
     ));
-    let res = test_replace_tx(&mut rng, Amount::from_atoms(100), Amount::from_atoms(100)).await;
+    let res = test_replace_tx(
+        &mut rng,
+        Amount::from_atoms(100).into(),
+        Amount::from_atoms(100).into(),
+    )
+    .await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
             TxValidationError::ReplacementFeeLowerThanOriginal { .. }
         ))
     ));
-    let res = test_replace_tx(&mut rng, Amount::from_atoms(100), Amount::from_atoms(90)).await;
+    let res = test_replace_tx(
+        &mut rng,
+        Amount::from_atoms(100).into(),
+        Amount::from_atoms(90).into(),
+    )
+    .await;
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
@@ -196,7 +207,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         &mempool,
         child_tx_input.clone(),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
-        Amount::from_atoms(100),
+        Fee::new(Amount::from_atoms(100)),
         flags,
         locktime,
     )
@@ -204,7 +215,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(child_tx).await?;
 
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let replacement_fee = Amount::from_atoms(relay_fee + 100);
+    let replacement_fee: Fee = Amount::from_atoms(relay_fee + 100).into();
     let replacement_tx = tx_spend_input(
         &mempool,
         child_tx_input,
@@ -250,7 +261,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let no_rbf = 0;
 
     // Create transaction that we will attempt to replace
-    let original_fee = Amount::from_atoms(100);
+    let original_fee: Fee = Amount::from_atoms(100).into();
     let replaced_tx = tx_spend_input(
         &mempool,
         input.clone(),
@@ -267,7 +278,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     // Create some children for this transaction
     let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id);
 
-    let descendant1_fee = Amount::from_atoms(100);
+    let descendant1_fee: Fee = Amount::from_atoms(100).into();
     let descendant1 = tx_spend_input(
         &mempool,
         TxInput::new(descendant_outpoint_source_id.clone(), 0),
@@ -280,7 +291,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let descendant1_id = descendant1.transaction().get_id();
     mempool.add_transaction(descendant1).await?;
 
-    let descendant2_fee = Amount::from_atoms(100);
+    let descendant2_fee: Fee = Amount::from_atoms(100).into();
     let descendant2 = tx_spend_input(
         &mempool,
         TxInput::new(descendant_outpoint_source_id, 1),
@@ -318,7 +329,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     ));
 
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
-    let sufficient_rbf_fee = insufficient_rbf_fee + Amount::from_atoms(relay_fee);
+    let sufficient_rbf_fee = insufficient_rbf_fee + Amount::from_atoms(relay_fee).into();
     let incoming_tx = tx_spend_input(
         &mempool,
         input,

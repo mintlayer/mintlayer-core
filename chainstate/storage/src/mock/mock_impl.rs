@@ -17,20 +17,19 @@
 
 use std::collections::BTreeMap;
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, EpochData};
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
     chain::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, GenBlock, OutPoint,
+        Block, DelegationId, GenBlock, OutPoint, PoolId,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use pos_accounting::{
-    AccountingBlockUndo, DelegationData, DelegationId, DeltaMergeUndo, PoSAccountingDeltaData,
-    PoolData, PoolId,
+    AccountingBlockUndo, DelegationData, DeltaMergeUndo, PoSAccountingDeltaData, PoolData,
 };
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosStorageWrite};
 
@@ -86,6 +85,8 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -181,6 +182,9 @@ mockall::mock! {
             undo: &DeltaMergeUndo,
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -319,6 +323,8 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -423,6 +429,8 @@ mockall::mock! {
             &self,
             epoch_index: EpochIndex,
         ) -> crate::Result<Option<DeltaMergeUndo>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -519,6 +527,9 @@ mockall::mock! {
             undo: &DeltaMergeUndo,
         ) -> crate::Result<()>;
         fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

@@ -25,19 +25,20 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
+        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
     primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
+    random::CryptoRng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::{PoolData, PoolId};
+use pos_accounting::PoolData;
 use utxo::UtxosStorageRead;
 
 fn make_tx_with_stake_pool_from_genesis(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     amount_to_stake: Amount,
     pub_key: &PublicKey,
@@ -47,7 +48,7 @@ fn make_tx_with_stake_pool_from_genesis(
 }
 
 fn make_tx_with_stake_pool_from_tx(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     tx_id: Id<Transaction>,
     amount_to_stake: Amount,
     pub_key: &PublicKey,
@@ -57,12 +58,12 @@ fn make_tx_with_stake_pool_from_tx(
 }
 
 fn make_tx_with_stake_pool(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     outpoint_id: OutPointSourceId,
     amount_to_stake: Amount,
     pub_key: &PublicKey,
 ) -> (SignedTransaction, PoolId) {
-    let (_, vrf_pub_key) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+    let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let tx_output = TxOutput::new(
         OutputValue::Coin(amount_to_stake),
         OutputPurpose::StakePool(Box::new(StakePoolData::new(

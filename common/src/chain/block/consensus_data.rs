@@ -14,14 +14,13 @@
 // limitations under the License.
 
 use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::ChainConfig;
-use crate::primitives::Compact;
-use crate::Uint256;
-use crate::{chain::TxInput, primitives::BlockDistance};
+use crate::chain::{ChainConfig, PoolId};
+use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
+use crypto::vrf::VRFReturn;
 
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum ConsensusData {
     #[codec(index = 0)]
     None,
@@ -52,10 +51,12 @@ impl ConsensusData {
 }
 
 /// Fake PoS just to test spending block rewards; will be removed at some point in the future
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSData {
     kernel_inputs: Vec<TxInput>,
     kernel_witness: Vec<InputWitness>,
+    stake_pool_id: PoolId,
+    vrf_data: VRFReturn,
     bits: Compact,
 }
 
@@ -63,25 +64,37 @@ impl PoSData {
     pub fn new(
         kernel_inputs: Vec<TxInput>,
         kernel_witness: Vec<InputWitness>,
+        stake_pool_id: PoolId,
+        vrf_data: VRFReturn,
         bits: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
+            stake_pool_id,
+            vrf_data,
             bits,
         }
     }
 
-    pub fn kernel_inputs(&self) -> &Vec<TxInput> {
+    pub fn kernel_inputs(&self) -> &[TxInput] {
         &self.kernel_inputs
     }
 
-    pub fn kernel_witness(&self) -> &Vec<InputWitness> {
+    pub fn kernel_witness(&self) -> &[InputWitness] {
         &self.kernel_witness
+    }
+
+    pub fn stake_pool_id(&self) -> &PoolId {
+        &self.stake_pool_id
     }
 
     pub fn bits(&self) -> &Compact {
         &self.bits
+    }
+
+    pub fn vrf_data(&self) -> &VRFReturn {
+        &self.vrf_data
     }
 }
 

@@ -311,6 +311,7 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crossbeam-channel",
+ "crypto",
  "futures",
  "jsonrpsee",
  "logging",
@@ -535,6 +536,8 @@ name = "chainstate-types"
 version = "0.1.0"
 dependencies = [
  "common",
+ "crypto",
+ "generic-array",
  "parity-scale-codec",
  "serialization",
  "storage",
@@ -635,12 +638,14 @@ dependencies = [
 name = "consensus"
 version = "0.1.0"
 dependencies = [
- "chainstate-storage",
  "chainstate-types",
  "common",
  "num",
+ "pos_accounting",
  "rstest",
  "thiserror",
+ "utils",
+ "utxo",
 ]
 
 [[package]]

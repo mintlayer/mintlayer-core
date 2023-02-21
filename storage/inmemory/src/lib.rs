@@ -32,19 +32,17 @@ impl<'i> Iterator for PrefixIter<'i> {
 pub struct StorageMaps(DbMapsData<Map>);
 
 impl backend::ReadOps for StorageMaps {
+    type PrefixIter<'i> = PrefixIter<'i>;
+
     fn get(&self, map_id: DbMapId, key: &[u8]) -> storage_core::Result<Option<Cow<[u8]>>> {
         Ok(self.0[map_id].get(key).map(|p| p.into()))
     }
-}
 
-impl<'i> backend::PrefixIter<'i> for StorageMaps {
-    type Iterator = PrefixIter<'i>;
-
-    fn prefix_iter<'m: 'i>(
-        &'m self,
+    fn prefix_iter(
+        &self,
         map_id: DbMapId,
         prefix: Data,
-    ) -> storage_core::Result<Self::Iterator> {
+    ) -> storage_core::Result<Self::PrefixIter<'_>> {
         Ok(PrefixIter(util::PrefixIter::new(&self.0[map_id], prefix)))
     }
 }

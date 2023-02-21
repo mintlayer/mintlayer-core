@@ -72,7 +72,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
 
             // prepare tx_a
             let (_, pub_key_a) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-            let (_, vrf_pub_key_a) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+            let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_a = TransactionBuilder::new()
                 .add_input(
                     TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
@@ -109,7 +109,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
 
             // prepare tx_c
             let (_, pub_key_c) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-            let (_, vrf_pub_key_c) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+            let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_c = TransactionBuilder::new()
                 .add_input(
                     TxInput::new(

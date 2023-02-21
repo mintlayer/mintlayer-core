@@ -20,7 +20,7 @@ mod prefix_iter_rw;
 
 use crate::{
     adaptor::{Construct, CoreOps},
-    backend::{self, PrefixIter, ReadOps, WriteOps},
+    backend::{self, ReadOps, WriteOps},
     Data, DbDesc, DbMapCount, DbMapId, DbMapsData,
 };
 
@@ -31,19 +31,13 @@ use utils::{const_value::ConstValue, sync};
 pub struct TxRo<'tx, T>(sync::RwLockReadGuard<'tx, T>);
 
 impl<'tx, T: ReadOps> ReadOps for TxRo<'tx, T> {
+    type PrefixIter<'i> = T::PrefixIter<'i> where Self: 'i;
+
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.0.get(map_id, key)
     }
-}
 
-impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRo<'tx, T> {
-    type Iterator = T::Iterator;
-
-    fn prefix_iter<'m: 'i>(
-        &'m self,
-        map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<Self::Iterator> {
+    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>> {
         self.0.prefix_iter(map_id, prefix)
     }
 }
@@ -67,22 +61,16 @@ impl<'tx, T> TxRw<'tx, T> {
 }
 
 impl<'tx, T: ReadOps> ReadOps for TxRw<'tx, T> {
+    type PrefixIter<'i> = prefix_iter_rw::Iter<'i, T> where Self: 'i;
+
     fn get(&self, map_id: DbMapId, key: &[u8]) -> crate::Result<Option<Cow<[u8]>>> {
         self.deltas[map_id].get(key).map_or_else(
             || self.db.get(map_id, key),
             |x| Ok(x.as_deref().map(|p| p.into())),
         )
     }
-}
 
-impl<'tx, 'i, T: PrefixIter<'i>> PrefixIter<'i> for TxRw<'tx, T> {
-    type Iterator = prefix_iter_rw::Iter<'i, T>;
-
-    fn prefix_iter<'m: 'i>(
-        &'m self,
-        map_id: DbMapId,
-        prefix: Data,
-    ) -> crate::Result<Self::Iterator> {
+    fn prefix_iter(&self, map_id: DbMapId, prefix: Data) -> crate::Result<Self::PrefixIter<'_>> {
         prefix_iter_rw::iter(self, map_id, prefix)
     }
 }
@@ -134,26 +122,22 @@ impl<T> utils::shallow_clone::ShallowClone for TransactionLockImpl<T> {
     }
 }
 
-impl<'tx, T: 'tx + ReadOps> backend::TransactionalRo<'tx> for TransactionLockImpl<T> {
-    type TxRo = TxRo<'tx, T>;
+impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLockImpl<T> {
+    type TxRo<'a> = TxRo<'a, T>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TxRo> {
+    type TxRw<'a> = TxRw<'a, T>;
+
+    fn transaction_ro(&self) -> crate::Result<Self::TxRo<'_>> {
         Ok(TxRo(self.db.read().expect("lock to be alive")))
     }
-}
 
-impl<'tx, T: 'tx + ReadOps + WriteOps> backend::TransactionalRw<'tx> for TransactionLockImpl<T> {
-    type TxRw = TxRw<'tx, T>;
-
-    fn transaction_rw<'st: 'tx>(&'st self, _: Option<usize>) -> crate::Result<Self::TxRw> {
+    fn transaction_rw(&self, _size: Option<usize>) -> crate::Result<Self::TxRw<'_>> {
         Ok(TxRw {
             db: self.db.write().expect("lock to be alive"),
             deltas: DbMapsData::new(*self.num_maps, |_| BTreeMap::new()),
         })
     }
 }
-
-impl<T: CoreOps + Sync + Send + 'static> backend::BackendImpl for TransactionLockImpl<T> {}
 
 /// Add lock-based transactions to given bare backend implementation.
 ///
