@@ -24,7 +24,7 @@ use common::{
         ChainConfig, OutputPurpose, TxOutput,
     },
     primitives::{Idable, H256},
-    Uint256,
+    Uint256, Uint512,
 };
 use pos_accounting::PoSAccountingView;
 use utils::ensure;
@@ -39,7 +39,7 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
     pos_accounting_view: &P,
-) -> Result<H256, ConsensusPoSError> {
+) -> Result<(), ConsensusPoSError> {
     let target: Uint256 = (*pos_data.bits())
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
@@ -57,29 +57,29 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         OutputPurpose::StakePool(d) => d.as_ref(),
     };
 
-    let hash_pos: H256 = verify_vrf_and_get_vrf_output(
+    let hash_pos: Uint256 = verify_vrf_and_get_vrf_output(
         epoch_index,
         random_seed,
         pos_data.vrf_data(),
         pool_data.vrf_public_key(),
         spender_block_header,
-    )?;
+    )?
+    .into();
 
-    let hash_pos_arith: Uint256 = hash_pos.into();
+    let hash_pos_arith: Uint512 = hash_pos.into();
 
     let stake_pool_id = *pos_data.stake_pool_id();
-    let pool_balance = pos_accounting_view
+    let pool_balance: Uint512 = pos_accounting_view
         .get_pool_balance(stake_pool_id)?
         .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?
-        .into_atoms();
+        .into();
 
-    // TODO: the target multiplication can overflow, use Uint512
     ensure!(
-        hash_pos_arith <= target * pool_balance.into(),
+        hash_pos_arith <= pool_balance * target.into(),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
-    Ok(hash_pos)
+    Ok(())
 }
 
 fn randomness_of_sealed_epoch<H: BlockIndexHandle>(

@@ -31,6 +31,7 @@ macro_rules! construct_uint {
 
         impl $name {
             pub const ZERO: Self = Self::from_u64(0u64);
+            pub const ONE: Self = Self::from_u64(1u64);
 
             /// Conversion to u32
             #[inline]
@@ -548,6 +549,7 @@ macro_rules! construct_uint {
     };
 }
 
+construct_uint!(Uint512, 8);
 construct_uint!(Uint256, 4);
 construct_uint!(Uint128, 2);
 
@@ -603,6 +605,13 @@ impl Uint256 {
     pub fn low_128(&self) -> Uint128 {
         let &Uint256(data) = self;
         Uint128([data[0], data[1]])
+    }
+}
+
+impl From<Uint256> for Uint512 {
+    #[inline]
+    fn from(n: Uint256) -> Self {
+        Uint512([n[0], n[1], n[2], n[3], 0x0, 0x0, 0x0, 0x0])
     }
 }
 
@@ -916,6 +925,28 @@ mod tests {
                 0x928D92B4D7F5DF33u64
             ])
         );
+
+        let u256_val: Uint512 = Uint256([
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x7FFFFFFFFFFFFFFF,
+        ])
+        .into();
+        let u512_res = u256_val * u256_val;
+        assert_eq!(
+            u512_res,
+            Uint512([
+                0x0000000000000001,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0x3FFFFFFFFFFFFFFF,
+            ])
+        );
     }
 
     #[test]
@@ -963,6 +994,24 @@ mod tests {
                 0x0000000000000000u64,
             ])
         );
+
+        let max_val_u256 = Uint256([u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        let mut a = Uint512::from(max_val_u256);
+        a.increment();
+        assert_eq!(a, Uint512([0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]));
+
+        let mut max_val = Uint512([
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+            u64::MAX,
+        ]);
+        max_val.increment();
+        assert_eq!(max_val, Uint512::ZERO);
     }
 
     #[test]
@@ -1026,5 +1075,14 @@ mod tests {
         test_op_equality(1000000000000000000000000);
         test_op_equality(10000000000000000000000000);
         test_op_equality(100000000000000000000000000);
+    }
+
+    #[test]
+    pub fn uint512_from_uint256() {
+        assert_eq!(Uint512::ONE, Uint512::from(Uint256::ONE));
+
+        let a = Uint256([0xFA, 0xFB, 0xFC, 0xFD]);
+        let b = Uint512([0xFA, 0xFB, 0xFC, 0xFD, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(Uint512::from(a), b);
     }
 }

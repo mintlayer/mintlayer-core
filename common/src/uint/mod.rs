@@ -19,7 +19,7 @@ pub(crate) mod endian;
 
 mod impls;
 
-pub use impls::{Uint128, Uint256};
+pub use impls::{Uint128, Uint256, Uint512};
 
 /// A trait which allows numbers to act as fixed-size bit arrays
 pub trait BitArray {
