@@ -261,10 +261,7 @@ where
                 message: *message,
             }),
             types::SyncingEvent::Announcement { peer, announcement } => {
-                Ok(SyncingEvent::Announcement {
-                    peer,
-                    announcement: *announcement,
-                })
+                Ok(SyncingEvent::Announcement { peer, announcement })
             }
         }
     }

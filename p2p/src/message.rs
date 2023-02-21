@@ -112,12 +112,14 @@ impl HeaderListResponse {
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct BlockResponse {
-    block: Block,
+    block: Box<Block>,
 }
 
 impl BlockResponse {
     pub fn new(block: Block) -> Self {
-        Self { block }
+        Self {
+            block: Box::new(block),
+        }
     }
 
     pub fn block(&self) -> &Block {
@@ -125,7 +127,7 @@ impl BlockResponse {
     }
 
     pub fn into_block(self) -> Block {
-        self.block
+        *self.block
     }
 }
 

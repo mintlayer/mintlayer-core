@@ -30,6 +30,7 @@ use common::{
     primitives::{Compact, Id, H256},
     Uint256,
 };
+use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
 use serialization::Encode;
 
 use p2p::{
@@ -181,6 +182,9 @@ where
     N::SyncingMessagingHandle: SyncingMessagingService<N>,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
+    // TODO: Use seedable random.
+    let mut rng = crypto::random::make_true_rng();
+
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
@@ -207,7 +211,15 @@ where
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
     ))];
-    let pos = PoSData::new(Vec::new(), signatures, Compact::from(Uint256::from_u64(0)));
+    let (sk, _pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let pos = PoSData::new(
+        Vec::new(),
+        signatures,
+        H256::random_using(&mut rng).into(),
+        vrf_data,
+        Compact::from(Uint256::from_u64(0)),
+    );
     let block = Block::new(
         Vec::new(),
         Id::new(H256([0x04; 32])),

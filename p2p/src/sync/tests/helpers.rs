@@ -127,7 +127,10 @@ impl SyncManagerHandle {
     /// Sends an announcement to the sync manager.
     pub fn make_announcement(&mut self, peer: PeerId, announcement: Announcement) {
         self.sync_event_sender
-            .send(SyncingEvent::Announcement { peer, announcement })
+            .send(SyncingEvent::Announcement {
+                peer,
+                announcement: Box::new(announcement),
+            })
             .unwrap();
     }
 
@@ -145,7 +148,7 @@ impl SyncManagerHandle {
             SyncingEvent::Announcement {
                 peer: _,
                 announcement,
-            } => announcement,
+            } => *announcement,
             e => panic!("Unexpected event: {e:?}"),
         }
     }
@@ -283,7 +286,7 @@ impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMo
         self.events_sender
             .send(SyncingEvent::Announcement {
                 peer: "0".parse().unwrap(),
-                announcement,
+                announcement: Box::new(announcement),
             })
             .unwrap();
         Ok(())

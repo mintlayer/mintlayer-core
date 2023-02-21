@@ -134,7 +134,7 @@ where
                         self.handle_result(peer, res).await?;
                     },
                     SyncingEvent::Announcement{ peer, announcement } => {
-                        let res = self.handle_announcement(peer, announcement).await;
+                        let res = self.handle_announcement(peer, *announcement).await;
                         self.handle_result(peer, res).await?;
                     }
                 },

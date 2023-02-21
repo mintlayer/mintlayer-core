@@ -2291,6 +2291,7 @@ version = "0.1.0"
 dependencies = [
  "chainstate",
  "common",
+ "crypto",
  "futures",
  "libtest-mimic",
  "logging",
