@@ -176,7 +176,7 @@ impl MerkleTree {
         Ok(index_in_tree)
     }
 
-    pub fn node_from_bottom(
+    pub fn node_value_from_bottom(
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
@@ -188,6 +188,23 @@ impl MerkleTree {
         )?;
 
         Ok(self.tree[index_in_tree])
+    }
+
+    pub fn node_from_bottom(
+        &self,
+        level_from_bottom: usize,
+        index_in_level: usize,
+    ) -> Result<Node, MerkleTreeAccessError> {
+        let index_in_tree = Self::absolute_index_from_bottom(
+            self.tree.len().try_into().expect("Tree size is by design > 0"),
+            level_from_bottom,
+            index_in_level,
+        )?;
+
+        Ok(Node {
+            tree_ref: self,
+            absolute_index: index_in_tree,
+        })
     }
 
     /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
@@ -262,7 +279,7 @@ impl<'a> Node<'a> {
         )
     }
 
-    pub fn absolute_index(&self) -> usize {
+    pub fn abs_index(&self) -> usize {
         self.absolute_index
     }
 
@@ -286,6 +303,28 @@ impl<'a> Node<'a> {
             tree_ref: self.tree_ref,
             absolute_index: parent_absolute_index,
         })
+    }
+
+    /// Return the node that combines with this node to create a hash
+    /// The idea is simply: If it's even, then the odd next to it is the one.
+    ///                     If it's odd, then the even before it is the one.
+    /// This can only be None for the root node.
+    pub fn sibling(&self) -> Option<Node<'a>> {
+        if self.absolute_index == self.tree().tree.len() - 1 {
+            return None;
+        }
+
+        if self.absolute_index % 2 == 0 {
+            Some(Node {
+                tree_ref: self.tree_ref,
+                absolute_index: self.absolute_index + 1,
+            })
+        } else {
+            Some(Node {
+                tree_ref: self.tree_ref,
+                absolute_index: self.absolute_index - 1,
+            })
+        }
     }
 }
 
