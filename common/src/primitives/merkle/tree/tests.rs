@@ -594,16 +594,63 @@ fn position_from_index_15_tree_elements() {
 }
 
 #[test]
+fn absolute_index_from_bottom() {
+    // Tree size: 1
+    let s: NonZeroUsize = 1.try_into().expect("is not zero");
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
+
+    // Tree size: 3
+    let s: NonZeroUsize = 3.try_into().expect("is not zero");
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 2);
+
+    // Tree size: 7
+    let s: NonZeroUsize = 7.try_into().expect("is not zero");
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 3).unwrap(), 3);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 4);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 1).unwrap(), 5);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 0).unwrap(), 6);
+
+    // Tree size: 15
+    let s: NonZeroUsize = 15.try_into().expect("is not zero");
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 3).unwrap(), 3);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 4).unwrap(), 4);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 5).unwrap(), 5);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 6).unwrap(), 6);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 7).unwrap(), 7);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 8);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 1).unwrap(), 9);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 2).unwrap(), 10);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 3).unwrap(), 11);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 0).unwrap(), 12);
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 1).unwrap(), 13);
+
+    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 3, 0).unwrap(), 14);
+}
+
+#[test]
 fn parent_iter_one_leaf() {
     let v00 = H256::from_low_u64_be(1);
 
     let t = MerkleTree::from_leaves(vec![v00]).unwrap();
 
-    assert_eq!(t.node_from_bottom(0, 0).unwrap(), v00);
+    let val = |v: Node| *v.value();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(0, 0).ok());
-    assert_eq!(leaf0iter.next(), None);
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(0, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), None);
 
     // Error cases: Invalid access
     for i in t.leaves_count().get()..100 {
@@ -621,15 +668,17 @@ fn parent_iter_two_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01]).unwrap();
 
+    let val = |v: Node| *v.value();
+
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(0, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf0iter.next(), None);
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(0, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf0iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(0, 1).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf0iter.next(), None);
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(0, 1).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), None);
 
     // Error cases: Invalid access
     for i in t.leaves_count().get()..100 {
@@ -649,29 +698,31 @@ fn parent_iter_four_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03]).unwrap();
 
+    let val = |v: Node| *v.value();
+
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(0, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf0iter.next(), None);
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(0, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(0, 1).ok());
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf1iter.next(), None);
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(0, 1).ok());
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf1iter.next().map(val), None);
 
     let mut leaf2iter = t.iter_from_leaf_to_root(2).unwrap();
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(0, 2).ok());
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(1, 1).ok());
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf2iter.next(), None);
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(0, 2).ok());
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(1, 1).ok());
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf2iter.next().map(val), None);
 
     let mut leaf3iter = t.iter_from_leaf_to_root(3).unwrap();
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(0, 3).ok());
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(1, 1).ok());
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf3iter.next(), None);
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(0, 3).ok());
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(1, 1).ok());
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf3iter.next().map(val), None);
 
     // Error cases: Invalid access
     for i in t.leaves_count().get()..100 {
@@ -692,61 +743,63 @@ fn parent_iter_eight_leaves() {
 
     let t = MerkleTree::from_leaves(vec![v00, v01, v02, v03, v04]).unwrap();
 
+    let val = |v: Node| *v.value();
+
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(0, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf0iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf0iter.next(), None);
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(0, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(0, 1).ok());
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(1, 0).ok());
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf1iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf1iter.next(), None);
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(0, 1).ok());
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(1, 0).ok());
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf1iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf1iter.next().map(val), None);
 
     let mut leaf2iter = t.iter_from_leaf_to_root(2).unwrap();
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(0, 2).ok());
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(1, 1).ok());
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf2iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf2iter.next(), None);
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(0, 2).ok());
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(1, 1).ok());
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf2iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf2iter.next().map(val), None);
 
     let mut leaf3iter = t.iter_from_leaf_to_root(3).unwrap();
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(0, 3).ok());
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(1, 1).ok());
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(2, 0).ok());
-    assert_eq!(leaf3iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf3iter.next(), None);
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(0, 3).ok());
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(1, 1).ok());
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(2, 0).ok());
+    assert_eq!(leaf3iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf3iter.next().map(val), None);
 
     let mut leaf4iter = t.iter_from_leaf_to_root(4).unwrap();
-    assert_eq!(leaf4iter.next(), t.node_from_bottom(0, 4).ok());
-    assert_eq!(leaf4iter.next(), t.node_from_bottom(1, 2).ok());
-    assert_eq!(leaf4iter.next(), t.node_from_bottom(2, 1).ok());
-    assert_eq!(leaf4iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf4iter.next(), None);
+    assert_eq!(leaf4iter.next().map(val), t.node_from_bottom(0, 4).ok());
+    assert_eq!(leaf4iter.next().map(val), t.node_from_bottom(1, 2).ok());
+    assert_eq!(leaf4iter.next().map(val), t.node_from_bottom(2, 1).ok());
+    assert_eq!(leaf4iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf4iter.next().map(val), None);
 
     let mut leaf5iter = t.iter_from_leaf_to_root(5).unwrap();
-    assert_eq!(leaf5iter.next(), t.node_from_bottom(0, 5).ok());
-    assert_eq!(leaf5iter.next(), t.node_from_bottom(1, 2).ok());
-    assert_eq!(leaf5iter.next(), t.node_from_bottom(2, 1).ok());
-    assert_eq!(leaf5iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf5iter.next(), None);
+    assert_eq!(leaf5iter.next().map(val), t.node_from_bottom(0, 5).ok());
+    assert_eq!(leaf5iter.next().map(val), t.node_from_bottom(1, 2).ok());
+    assert_eq!(leaf5iter.next().map(val), t.node_from_bottom(2, 1).ok());
+    assert_eq!(leaf5iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf5iter.next().map(val), None);
 
     let mut leaf6iter = t.iter_from_leaf_to_root(6).unwrap();
-    assert_eq!(leaf6iter.next(), t.node_from_bottom(0, 6).ok());
-    assert_eq!(leaf6iter.next(), t.node_from_bottom(1, 3).ok());
-    assert_eq!(leaf6iter.next(), t.node_from_bottom(2, 1).ok());
-    assert_eq!(leaf6iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf6iter.next(), None);
+    assert_eq!(leaf6iter.next().map(val), t.node_from_bottom(0, 6).ok());
+    assert_eq!(leaf6iter.next().map(val), t.node_from_bottom(1, 3).ok());
+    assert_eq!(leaf6iter.next().map(val), t.node_from_bottom(2, 1).ok());
+    assert_eq!(leaf6iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf6iter.next().map(val), None);
 
     let mut leaf7iter = t.iter_from_leaf_to_root(7).unwrap();
-    assert_eq!(leaf7iter.next(), t.node_from_bottom(0, 7).ok());
-    assert_eq!(leaf7iter.next(), t.node_from_bottom(1, 3).ok());
-    assert_eq!(leaf7iter.next(), t.node_from_bottom(2, 1).ok());
-    assert_eq!(leaf7iter.next(), t.node_from_bottom(3, 0).ok());
-    assert_eq!(leaf7iter.next(), None);
+    assert_eq!(leaf7iter.next().map(val), t.node_from_bottom(0, 7).ok());
+    assert_eq!(leaf7iter.next().map(val), t.node_from_bottom(1, 3).ok());
+    assert_eq!(leaf7iter.next().map(val), t.node_from_bottom(2, 1).ok());
+    assert_eq!(leaf7iter.next().map(val), t.node_from_bottom(3, 0).ok());
+    assert_eq!(leaf7iter.next().map(val), None);
 
     // Error cases: Invalid access
     for i in t.leaves_count().get()..100 {
