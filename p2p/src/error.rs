@@ -25,10 +25,26 @@ pub enum ProtocolError {
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
     InvalidVersion(SemVer, SemVer),
+    // TODO: This error is very generic and probably should be replaced with several different ones,
+    // because it has a ban score of 100 and in many cases it is too harsh.
     #[error("Peer sent an invalid message")]
     InvalidMessage,
     #[error("Peer is unresponsive")]
     Unresponsive,
+    #[error("Locator size ({0}) exceeds allowed limit ({1})")]
+    LocatorSizeExceeded(usize, usize),
+    #[error("Requested {0} blocks with limit of {1}")]
+    BlocksRequestLimitExceeded(usize, usize),
+    #[error("Number of headers in message ({0}) exceeds allowed limit ({1})")]
+    HeadersLimitExceeded(usize, usize),
+    #[error("A peer requested an unknown block")]
+    UnknownBlockRequested,
+    #[error("Headers aren't connected")]
+    DisconnectedHeaders,
+    #[error("Received a message ({0}) that wasn't expected")]
+    UnexpectedMessage(&'static str),
+    #[error("Unknown request identifier")]
+    UnknownRequestId,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
@@ -66,6 +82,8 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
+    #[error("Accept failed")]
+    AcceptFailed,
 }
 
 /// Conversion errors
@@ -101,8 +119,8 @@ pub enum P2pError {
     ConversionError(ConversionError),
     #[error("Noise protocol handshake error")]
     NoiseHandshakeError(String),
-    #[error("Other: `{0}`")]
-    Other(&'static str),
+    #[error("The configuration value is invalid: {0}")]
+    InvalidConfigurationValue(String),
 }
 
 impl From<std::io::Error> for P2pError {
@@ -150,12 +168,12 @@ impl BanScore for P2pError {
             P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
             P2pError::SubsystemFailure => 0,
-            P2pError::ChainstateError(_) => 0,
+            P2pError::ChainstateError(_) => 20,
             P2pError::StorageFailure(_) => 0,
             P2pError::ConversionError(err) => err.ban_score(),
             // Could be a noise protocol violation but also a network error, do not ban peer
             P2pError::NoiseHandshakeError(_) => 0,
-            P2pError::Other(_) => 0,
+            P2pError::InvalidConfigurationValue(_) => 0,
         }
     }
 }
@@ -167,6 +185,13 @@ impl BanScore for ProtocolError {
             ProtocolError::InvalidVersion(_, _) => 100,
             ProtocolError::InvalidMessage => 100,
             ProtocolError::Unresponsive => 100,
+            ProtocolError::LocatorSizeExceeded(_, _) => 20,
+            ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
+            ProtocolError::HeadersLimitExceeded(_, _) => 20,
+            ProtocolError::UnknownBlockRequested => 20,
+            ProtocolError::DisconnectedHeaders => 20,
+            ProtocolError::UnexpectedMessage(_) => 20,
+            ProtocolError::UnknownRequestId => 20,
         }
     }
 }

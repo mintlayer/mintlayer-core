@@ -13,6 +13,7 @@ logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }
 chainstate = { path = "../../chainstate/" }
 subsystem = { path = "../../subsystem/" }
+crypto = { path = "../../crypto" }
 
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 futures.workspace = true

@@ -27,7 +27,7 @@ pub enum SyncMessage {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
     HeaderListResponse(HeaderListResponse),
-    BlockListResponse(BlockListResponse),
+    BlockResponse(BlockResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,21 +111,23 @@ impl HeaderListResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockListResponse {
-    blocks: Vec<Block>,
+pub struct BlockResponse {
+    block: Box<Block>,
 }
 
-impl BlockListResponse {
-    pub fn new(blocks: Vec<Block>) -> Self {
-        Self { blocks }
+impl BlockResponse {
+    pub fn new(block: Block) -> Self {
+        Self {
+            block: Box::new(block),
+        }
     }
 
-    pub fn blocks(&self) -> &[Block] {
-        &self.blocks
+    pub fn block(&self) -> &Block {
+        &self.block
     }
 
-    pub fn into_blocks(self) -> Vec<Block> {
-        self.blocks
+    pub fn into_block(self) -> Block {
+        *self.block
     }
 }
 
@@ -145,5 +147,5 @@ pub struct PingResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]
-    Block(Block),
+    Block(BlockHeader),
 }

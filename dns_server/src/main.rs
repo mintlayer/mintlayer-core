@@ -47,6 +47,9 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         ping_timeout: Default::default(),
         node_type: NodeType::DnsServer.into(),
         allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
 
     let transport = p2p::make_p2p_transport();

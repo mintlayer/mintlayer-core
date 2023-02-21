@@ -26,6 +26,9 @@ make_config_setting!(NodeTypeSetting, NodeType, NodeType::Full);
 make_config_setting!(AllowDiscoverPrivateIps, bool, false);
 make_config_setting!(PingCheckPeriod, Duration, Duration::from_secs(60));
 make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
+make_config_setting!(HeaderLimit, usize, 2000);
+make_config_setting!(MaxLocatorSize, usize, 101);
+make_config_setting!(RequestedBlocksLimit, usize, 500);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -78,4 +81,10 @@ pub struct P2pConfig {
     pub node_type: NodeTypeSetting,
     /// Allow announcing and discovering local and private IPs. Should be used for testing only.
     pub allow_discover_private_ips: AllowDiscoverPrivateIps,
+    /// A maximum allowed number of headers in one message.
+    pub msg_header_count_limit: HeaderLimit,
+    /// A maximum number of the elements in the locator.
+    pub msg_max_locator_count: MaxLocatorSize,
+    /// A maximum number of blocks that can be requested from a single peer.
+    pub max_request_blocks_count: RequestedBlocksLimit,
 }

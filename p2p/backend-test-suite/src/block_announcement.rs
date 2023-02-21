@@ -17,17 +17,20 @@ use std::{fmt::Debug, sync::Arc};
 
 use common::{
     chain::{
-        block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
+        block::{
+            consensus_data::{ConsensusData, PoSData},
+            timestamp::BlockTimestamp,
+            Block, BlockReward,
+        },
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype,
         },
-        transaction::signed_transaction::SignedTransaction,
-        transaction::Transaction,
-        TxInput,
     },
-    primitives::{Id, H256},
+    primitives::{Compact, Id, H256},
+    Uint256,
 };
+use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
 use serialization::Encode;
 
 use p2p::{
@@ -74,46 +77,42 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    sync1
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x01; 32])),
-                BlockTimestamp::from_int_seconds(1337u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x01; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 
     // Poll an event from the network for server2.
-    let block = match sync2.poll_next().await.unwrap() {
+    let header = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement,
         } => match *announcement {
             Announcement::Block(block) => block,
         },
         _ => panic!("Unexpected event"),
     };
-    assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
-    sync2
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x02; 32])),
-                BlockTimestamp::from_int_seconds(1338u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    assert_eq!(header.timestamp().as_int_seconds(), 1337u64);
+    assert_eq!(&header, block.header());
 
-    let block = match sync1.poll_next().await.unwrap() {
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x02; 32])),
+        BlockTimestamp::from_int_seconds(1338u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+
+    let header = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
-            peer_id: _,
+            peer: _,
             announcement,
         } => match *announcement {
             Announcement::Block(block) => block,
@@ -121,6 +120,7 @@ where
         _ => panic!("Unexpected event"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
+    assert_eq!(&header, block.header());
 }
 
 async fn block_announcement_no_subscription<T, N, A>()
@@ -141,6 +141,9 @@ where
         ping_timeout: Default::default(),
         node_type: NodeType::Inactive.into(),
         allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
     });
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
@@ -161,18 +164,15 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    sync1
-        .make_announcement(Announcement::Block(
-            Block::new(
-                vec![],
-                Id::new(H256([0x01; 32])),
-                BlockTimestamp::from_int_seconds(1337u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap(),
-        ))
-        .unwrap();
+    let block = Block::new(
+        vec![],
+        Id::new(H256([0x01; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 }
 
 async fn block_announcement_too_big_message<T, N, A>()
@@ -182,6 +182,9 @@ where
     N::SyncingMessagingHandle: SyncingMessagingService<N>,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
+    // TODO: Use seedable random.
+    let mut rng = crypto::random::make_true_rng();
+
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),
@@ -203,28 +206,29 @@ where
 
     connect_services::<N>(&mut conn1, &mut conn2).await;
 
-    let input = TxInput::new(config.genesis_block_id().into(), 0);
     let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
     ))];
-    let txs = vec![SignedTransaction::new(
-        Transaction::new(0, vec![input], vec![], 0).unwrap(),
+    let (sk, _pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+    let pos = PoSData::new(
+        Vec::new(),
         signatures,
-    )
-    .expect("invalid witness count")];
-
-    let message = Announcement::Block(
-        Block::new(
-            txs,
-            Id::new(H256([0x04; 32])),
-            BlockTimestamp::from_int_seconds(1337u64),
-            ConsensusData::None,
-            BlockReward::new(Vec::new()),
-        )
-        .unwrap(),
+        H256::random_using(&mut rng).into(),
+        vrf_data,
+        Compact::from(Uint256::from_u64(0)),
     );
+    let block = Block::new(
+        Vec::new(),
+        Id::new(H256([0x04; 32])),
+        BlockTimestamp::from_int_seconds(1337u64),
+        ConsensusData::PoS(pos),
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+    let message = Announcement::Block(block.header().clone());
     let encoded_size = message.encode().len();
 
     assert_eq!(

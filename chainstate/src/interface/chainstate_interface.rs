@@ -68,7 +68,11 @@ pub trait ChainstateInterface: Send {
     ///
     /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
     /// header is returned in case there is no common ancestor with a better block height.
-    fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError>;
+    fn get_headers(
+        &self,
+        locator: Locator,
+        header_count_limit: usize,
+    ) -> Result<Vec<BlockHeader>, ChainstateError>;
 
     /// Removes all headers that are already known to the chain from the given vector.
     fn filter_already_existing_blocks(

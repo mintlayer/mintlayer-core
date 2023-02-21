@@ -148,7 +148,7 @@ pub enum SyncingEvent<T: NetworkingService> {
     },
     /// An announcement that is broadcast to all peers.
     Announcement {
-        peer_id: T::PeerId,
+        peer: T::PeerId,
         announcement: Box<Announcement>,
     },
 }
@@ -158,7 +158,6 @@ pub enum SyncingEvent<T: NetworkingService> {
 pub enum PubSubTopic {
     /// Transactions
     Transactions,
-
     /// Blocks
     Blocks,
 

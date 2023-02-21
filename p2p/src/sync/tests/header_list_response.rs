@@ -13,51 +13,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
 use chainstate::ban_score::BanScore;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
-use crypto::random::Rng;
 use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
-use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
     message::HeaderListResponse,
     net::default_backend::types::PeerId,
-    sync::{
-        tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, BlockResponse,
-        SyncMessage,
-    },
-    P2pError,
+    sync::{tests::helpers::SyncManagerHandle, BlockListRequest, SyncMessage},
+    P2pConfig, P2pError,
 };
 
 // Messages from unknown peers are ignored.
 #[tokio::test]
 async fn nonexistent_peer() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .build()
-        .await;
+    let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
-
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
+    handle.send_message(
+        peer,
+        SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
     );
-    handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
     handle.assert_no_error().await;
     handle.assert_no_peer_manager_event().await;
 }
 
 #[tokio::test]
-async fn unrequested_block() {
+async fn header_count_limit_exceeded() {
+    let p2p_config = Arc::new(P2pConfig::default());
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
         .build()
         .await;
 
@@ -68,24 +59,25 @@ async fn unrequested_block() {
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
     );
-    handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
+    let headers = iter::repeat(block.header().clone())
+        .take(*p2p_config.msg_header_count_limit + 1)
+        .collect();
+    handle.send_message(
+        peer,
+        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
-        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
+        P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
     );
     handle.assert_no_event().await;
 }
 
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn valid_response(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
+async fn unordered_headers() {
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -95,13 +87,86 @@ async fn valid_response(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(
         Arc::clone(&chain_config),
         TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        num_blocks,
+        3,
+    );
+    // Skip the header in the middle.
+    let headers = blocks
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| *i != 1)
+        .map(|(_, b)| b.header().clone())
+        .collect();
+
+    handle.send_message(
+        peer,
+        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
+    );
+
+    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    assert_eq!(peer, adjusted_peer);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
+    );
+    handle.assert_no_event().await;
+}
+
+#[tokio::test]
+async fn disconnected_headers() {
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let headers = create_n_blocks(
+        Arc::clone(&chain_config),
+        TestBlockInfo::from_genesis(chain_config.genesis_block()),
+        3,
+    )
+    .into_iter()
+    .skip(1)
+    .map(|b| b.header().clone())
+    .collect();
+
+    handle.send_message(
+        peer,
+        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
+    );
+
+    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    assert_eq!(peer, adjusted_peer);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
+    );
+    handle.assert_no_event().await;
+}
+
+#[tokio::test]
+async fn valid_headers() {
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let blocks = create_n_blocks(
+        Arc::clone(&chain_config),
+        TestBlockInfo::from_genesis(chain_config.genesis_block()),
+        3,
     );
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
+
     handle.send_message(
         peer,
         SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
@@ -109,30 +174,12 @@ async fn valid_response(#[case] seed: Seed) {
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    let ids = blocks.iter().map(|b| b.get_id()).collect();
     assert_eq!(
         message,
-        SyncMessage::BlockListRequest(BlockListRequest::new(ids))
+        SyncMessage::BlockListRequest(BlockListRequest::new(
+            blocks.into_iter().map(|b| b.get_id()).collect()
+        ))
     );
-
-    for (i, block) in blocks.into_iter().enumerate() {
-        handle.send_message(
-            peer,
-            SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
-        );
-
-        // A peer would request headers after the last block.
-        if i == num_blocks - 1 {
-            let (sent_to, message) = handle.message().await;
-            assert_eq!(peer, sent_to);
-            assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
-        }
-
-        assert_eq!(
-            handle.announcement().await,
-            Announcement::Block(block.header().clone())
-        );
-    }
 
     handle.assert_no_error().await;
 }

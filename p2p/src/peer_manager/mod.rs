@@ -133,7 +133,7 @@ where
         let now = tokio::time::Instant::now();
         utils::ensure!(
             !p2p_config.ping_timeout.is_zero(),
-            P2pError::Other("ping timeout can't be 0")
+            P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
         );
         Ok(Self {
             peer_connectivity_handle: handle,
@@ -384,14 +384,16 @@ where
     /// If peer is banned, it is removed from the connected peers
     /// and its address is marked as banned.
     fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
-        log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
-
         let peer = match self.peers.get_mut(&peer_id) {
             Some(peer) => peer,
             None => return Ok(()),
         };
 
         peer.score = peer.score.saturating_add(score);
+        log::info!(
+            "Adjusting peer score for peer {peer_id}, adjustment {score}, new score {}",
+            peer.score
+        );
 
         if peer.score >= *self.p2p_config.ban_threshold {
             self.peerdb.ban_peer(&peer.address)?;

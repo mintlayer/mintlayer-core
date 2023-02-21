@@ -27,8 +27,8 @@ use crate::{
     error,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse, Announcement,
-        BlockListRequest, BlockListResponse, HeaderListRequest, HeaderListResponse,
-        PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
+        BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage,
+        PingRequest, PingResponse, SyncMessage,
     },
     net::{
         default_backend::transport::TransportSocket,
@@ -58,10 +58,10 @@ pub enum Command<T: TransportSocket> {
 pub enum SyncingEvent {
     Message {
         peer: PeerId,
-        message: SyncMessage,
+        message: Box<SyncMessage>,
     },
     Announcement {
-        peer_id: PeerId,
+        peer: PeerId,
         announcement: Box<Announcement>,
     },
 }
@@ -198,7 +198,7 @@ pub enum Message {
     AnnounceAddrRequest(AnnounceAddrRequest),
     PingRequest(PingRequest),
     HeaderListResponse(HeaderListResponse),
-    BlockListResponse(BlockListResponse),
+    BlockResponse(BlockResponse),
     AddrListResponse(AddrListResponse),
     AnnounceAddrResponse(AnnounceAddrResponse),
     PingResponse(PingResponse),
@@ -224,7 +224,7 @@ impl From<SyncMessage> for Message {
             SyncMessage::HeaderListRequest(r) => Message::HeaderListRequest(r),
             SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
             SyncMessage::HeaderListResponse(r) => Message::HeaderListResponse(r),
-            SyncMessage::BlockListResponse(r) => Message::BlockListResponse(r),
+            SyncMessage::BlockResponse(r) => Message::BlockResponse(r),
         }
     }
 }

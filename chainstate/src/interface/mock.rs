@@ -67,6 +67,7 @@ mockall::mock! {
         fn get_headers(
             &self,
             locator: Locator,
+            header_count_limit: usize,
         ) -> Result<Vec<BlockHeader>, ChainstateError>;
         fn filter_already_existing_blocks(
             &self,

@@ -34,7 +34,9 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// Get peer IDs and addresses of connected peers
     GetConnectedPeers(oneshot_nofail::Sender<Vec<ConnectedPeer>>),
 
-    /// Adjust peer score
+    /// Increases the ban score of a peer by the given amount.
+    ///
+    /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
     AdjustPeerScore(T::PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 }
 

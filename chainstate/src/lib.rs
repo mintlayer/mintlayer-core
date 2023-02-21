@@ -28,7 +28,6 @@ pub use crate::{
         ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
         CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, InitializationError,
         Locator, OrphanCheckError, TokensError, TransactionVerifierStorageError, TxIndexError,
-        HEADER_LIMIT,
     },
 };
 
