@@ -22,4 +22,4 @@ pub mod uint;
 #[macro_use]
 mod fixed_hash;
 
-pub use uint::{Uint128, Uint256};
+pub use uint::{Uint128, Uint256, Uint512};
