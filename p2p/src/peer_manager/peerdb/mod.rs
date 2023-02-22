@@ -41,7 +41,7 @@ use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 
 use crate::{
     config,
-    error::{ConversionError, P2pError},
+    error::P2pError,
     net::{types::Role, AsBannableAddress, NetworkingService},
 };
 
@@ -95,7 +95,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
             .iter()
             .map(|addr| {
                 addr.parse::<T::Address>().map_err(|_err| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(addr.clone()))
+                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
                 })
             })
             .collect::<Result<BTreeSet<_>, _>>()?;
@@ -132,11 +132,11 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         self.connected_inbound.contains(address) || self.connected_outbound.contains(address)
     }
 
-    /// Selects requested count of peer addresses from the DB randomly.
+    /// Iterator of all known addresses.
     ///
     /// Result could be shared with remote peers over network.
-    pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
-        self.addresses.keys().cloned().choose_multiple(&mut make_pseudo_rng(), count)
+    pub fn known_addresses(&self) -> impl Iterator<Item = &T::Address> {
+        self.addresses.keys()
     }
 
     /// Selects peer addresses for outbound connections

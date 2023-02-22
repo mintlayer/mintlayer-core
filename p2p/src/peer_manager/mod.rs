@@ -568,12 +568,10 @@ where
     fn handle_add_list_request(&mut self, peer: PeerId) -> crate::Result<()> {
         let addresses = self
             .peerdb
-            .random_known_addresses(MAX_ADDRESS_COUNT + 100)
-            .iter()
+            .known_addresses()
             .map(TransportAddress::as_peer_address)
             .filter(|address| self.is_peer_address_valid(address))
-            .take(MAX_ADDRESS_COUNT)
-            .collect();
+            .choose_multiple(&mut make_pseudo_rng(), MAX_ADDRESS_COUNT);
 
         self.peer_connectivity_handle.send_message(
             peer,
