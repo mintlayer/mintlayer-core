@@ -15,7 +15,10 @@
 
 use common::chain::block::Block;
 
-use crate::{interface::types::ConnectedPeer, net::NetworkingService, utils::oneshot_nofail};
+use crate::{
+    interface::types::ConnectedPeer, net::NetworkingService, types::peer_id::PeerId,
+    utils::oneshot_nofail,
+};
 
 #[derive(Debug)]
 pub enum PeerManagerEvent<T: NetworkingService> {
@@ -23,7 +26,7 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     Connect(T::Address, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(T::PeerId, oneshot_nofail::Sender<crate::Result<()>>),
+    Disconnect(PeerId, oneshot_nofail::Sender<crate::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot_nofail::Sender<usize>),
@@ -37,7 +40,7 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     /// Increases the ban score of a peer by the given amount.
     ///
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
-    AdjustPeerScore(T::PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
+    AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
 }
 
 #[derive(Debug)]
@@ -47,10 +50,10 @@ pub enum SyncEvent {
 }
 
 #[derive(Debug)]
-pub enum SyncControlEvent<T: NetworkingService> {
+pub enum SyncControlEvent {
     /// Peer connected
-    Connected(T::PeerId),
+    Connected(PeerId),
 
     /// Peer disconnected
-    Disconnected(T::PeerId),
+    Disconnected(PeerId),
 }

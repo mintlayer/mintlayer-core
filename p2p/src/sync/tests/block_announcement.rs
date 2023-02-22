@@ -28,8 +28,8 @@ use consensus::ConsensusVerificationError;
 use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
 
 use crate::{
-    net::default_backend::types::PeerId,
     sync::{tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, SyncMessage},
+    types::peer_id::PeerId,
     P2pError,
 };
 

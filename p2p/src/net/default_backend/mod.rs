@@ -35,11 +35,11 @@ use crate::{
         default_backend::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
-            types::PeerId,
         },
         types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
+    types::peer_id::PeerId,
 };
 
 #[derive(Debug)]
@@ -108,7 +108,6 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type Transport = T;
     type Address = T::Address;
     type BannableAddress = T::BannableAddress;
-    type PeerId = PeerId;
     type ConnectivityHandle = ConnectivityHandle<Self, T>;
     type SyncingMessagingHandle = SyncingMessagingHandle<Self, T>;
 
@@ -154,7 +153,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 #[async_trait]
 impl<S, T> ConnectivityService<S> for ConnectivityHandle<S, T>
 where
-    S: NetworkingService<Address = T::Address, PeerId = PeerId> + Send,
+    S: NetworkingService<Address = T::Address> + Send,
     T: TransportSocket,
 {
     fn connect(&mut self, address: S::Address) -> crate::Result<()> {
@@ -166,13 +165,13 @@ where
         self.cmd_tx.send(types::Command::Connect { address }).map_err(P2pError::from)
     }
 
-    fn disconnect(&mut self, peer_id: S::PeerId) -> crate::Result<()> {
+    fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, {peer_id}");
 
         self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
     }
 
-    fn send_message(&mut self, peer: S::PeerId, message: PeerManagerMessage) -> crate::Result<()> {
+    fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
         self.cmd_tx
             .send(types::Command::SendMessage {
                 peer,
@@ -185,7 +184,7 @@ where
         &self.local_addresses
     }
 
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S::Address>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::Message { peer, message } => {
                 Ok(ConnectivityEvent::Message { peer, message })
@@ -222,12 +221,10 @@ where
 }
 
 #[async_trait]
-impl<S, T> SyncingMessagingService<S> for SyncingMessagingHandle<S, T>
-where
-    S: NetworkingService<PeerId = PeerId> + Send,
-    T: TransportSocket,
+impl<S: NetworkingService, T: TransportSocket> SyncingMessagingService<S>
+    for SyncingMessagingHandle<S, T>
 {
-    fn send_message(&mut self, peer: S::PeerId, message: SyncMessage) -> crate::Result<()> {
+    fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {
         self.cmd_tx
             .send(types::Command::SendMessage {
                 peer,
@@ -254,7 +251,7 @@ where
             .map_err(P2pError::from)
     }
 
-    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<S>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::SyncingEvent::Message { peer, message } => Ok(SyncingEvent::Message {
                 peer,
@@ -494,16 +491,6 @@ mod tests {
         if let Ok(ConnectivityEvent::ConnectionError { address, error }) = conn1.poll_next().await {
             assert_eq!(address, conn1.local_addresses()[0]);
             assert_eq!(error, P2pError::DialError(DialError::AttemptToDialSelf));
-        } else {
-            panic!("invalid event received");
-        }
-
-        // Two ConnectionClosed will be also reported
-        if let Ok(ConnectivityEvent::ConnectionClosed { peer_id: _ }) = conn1.poll_next().await {
-        } else {
-            panic!("invalid event received");
-        }
-        if let Ok(ConnectivityEvent::ConnectionClosed { peer_id: _ }) = conn1.poll_next().await {
         } else {
             panic!("invalid event received");
         }

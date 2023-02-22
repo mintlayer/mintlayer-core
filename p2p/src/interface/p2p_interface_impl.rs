@@ -17,6 +17,7 @@ use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
     net::NetworkingService,
+    types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2p,
 };
@@ -42,7 +43,7 @@ where
     async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
         let peer_id = peer_id
-            .parse::<T::PeerId>()
+            .parse::<PeerId>()
             .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
 
         self.tx_peer_manager

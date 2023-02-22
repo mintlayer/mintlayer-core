@@ -26,11 +26,11 @@ use crate::{
     net::{
         default_backend::{
             transport::TransportSocket,
-            types::{self, Event, PeerEvent, PeerId},
+            types::{self, Event, PeerEvent},
         },
         types::Role,
     },
-    types::peer_address::PeerAddress,
+    types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 use super::{transport::BufferedTranscoder, types::HandshakeNonce};

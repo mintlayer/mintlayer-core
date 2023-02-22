@@ -20,7 +20,7 @@ use std::{sync::Arc, time::Duration};
 
 use p2p::{
     config::P2pConfig,
-    net::{default_backend::types::PeerId, AsBannableAddress, NetworkingService},
+    net::{AsBannableAddress, NetworkingService},
     peer_manager::peerdb::{
         storage::{PeerDbStorageRead, PeerDbTransactional},
         PeerDb,
@@ -32,7 +32,7 @@ tests![unban_peer,];
 
 async fn unban_peer<T, N, A>()
 where
-    N: NetworkingService<PeerId = PeerId>,
+    N: NetworkingService,
     A: RandomAddressMaker<Address = N::Address>,
 {
     let db_store = peerdb_inmemory_store();

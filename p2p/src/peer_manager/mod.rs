@@ -53,7 +53,10 @@ use crate::{
         types::{PeerInfo, PubSubTopic},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
-    types::peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
+    types::{
+        peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
+        peer_id::PeerId,
+    },
     utils::oneshot_nofail,
 };
 
@@ -93,16 +96,16 @@ where
     rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
     /// TX channel for sending events to SyncManager
-    tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+    tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
 
     /// Hashmap of pending outbound connections
     pending_connects: HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Hashmap of pending disconnect requests
-    pending_disconnects: HashMap<T::PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+    pending_disconnects: HashMap<PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Set of active peers
-    peers: BTreeMap<T::PeerId, PeerContext<T>>,
+    peers: BTreeMap<PeerId, PeerContext<T>>,
 
     /// Peer database
     peerdb: peerdb::PeerDb<T, S>,
@@ -111,7 +114,7 @@ where
     last_heartbeat: Instant,
 
     /// List of connected peers that subscribed to PeerAddresses topic
-    subscribed_to_peer_addresses: BTreeSet<T::PeerId>,
+    subscribed_to_peer_addresses: BTreeSet<PeerId>,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -125,7 +128,7 @@ where
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
-        tx_sync: mpsc::UnboundedSender<SyncControlEvent<T>>,
+        tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
@@ -173,7 +176,7 @@ where
     /// This won't work for majority of nodes but that should be accepted.
     fn handle_outbound_receiver_address(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         receiver_address: PeerAddress,
     ) -> crate::Result<()> {
         if !self.subscribed_to_peer_addresses.contains(&peer_id) {
@@ -219,7 +222,7 @@ where
     }
 
     /// Send address announcement to the selected peer (if the address is new)
-    fn announce_address(&mut self, peer_id: T::PeerId, address: T::Address) -> crate::Result<()> {
+    fn announce_address(&mut self, peer_id: PeerId, address: T::Address) -> crate::Result<()> {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         if !peer.announced_addresses.contains(&address) {
             self.peer_connectivity_handle.send_message(
@@ -242,7 +245,7 @@ where
         &mut self,
         address: T::Address,
         role: Role,
-        info: PeerInfo<T::PeerId>,
+        info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
@@ -321,7 +324,7 @@ where
     fn accept_inbound_connection(
         &mut self,
         address: T::Address,
-        info: net::types::PeerInfo<T::PeerId>,
+        info: net::types::PeerInfo,
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
@@ -352,7 +355,7 @@ where
     ///
     /// This can happen when the remote peer has dropped its connection
     /// or if a disconnect request has been sent by PeerManager to the backend.
-    fn connection_closed(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    fn connection_closed(&mut self, peer_id: PeerId) -> crate::Result<()> {
         // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
         if let Some(peer) = self.peers.remove(&peer_id) {
             log::info!(
@@ -383,7 +386,7 @@ where
     ///
     /// If peer is banned, it is removed from the connected peers
     /// and its address is marked as banned.
-    fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
+    fn adjust_peer_score(&mut self, peer_id: PeerId, score: u32) -> crate::Result<()> {
         let peer = match self.peers.get_mut(&peer_id) {
             Some(peer) => peer,
             None => return Ok(()),
@@ -469,7 +472,7 @@ where
         Ok(())
     }
 
-    fn try_disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+    fn try_disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         ensure!(
             !self.pending_disconnects.contains_key(&peer_id),
             P2pError::PeerError(PeerError::Pending(peer_id.to_string())),
@@ -490,7 +493,7 @@ where
     /// this connection in favor of another potential connection.
     fn disconnect(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: PeerId,
         response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) -> crate::Result<()> {
         log::debug!("disconnect peer {peer_id}");
@@ -553,7 +556,7 @@ where
 
     fn handle_incoming_message(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         message: PeerManagerMessage,
     ) -> crate::Result<()> {
         match message {
@@ -568,7 +571,7 @@ where
         }
     }
 
-    fn handle_add_list_request(&mut self, peer: T::PeerId) -> crate::Result<()> {
+    fn handle_add_list_request(&mut self, peer: PeerId) -> crate::Result<()> {
         let addresses = self
             .peerdb
             .random_known_addresses(MAX_ADDRESS_COUNT)
@@ -585,7 +588,7 @@ where
 
     fn handle_announce_addr_request(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         address: PeerAddress,
     ) -> crate::Result<()> {
         // TODO: Rate limit announce address requests to prevent DoS attacks.
@@ -614,7 +617,7 @@ where
         Ok(())
     }
 
-    fn handle_ping_request(&mut self, peer: T::PeerId, nonce: u64) -> crate::Result<()> {
+    fn handle_ping_request(&mut self, peer: PeerId, nonce: u64) -> crate::Result<()> {
         self.peer_connectivity_handle.send_message(
             peer,
             PeerManagerMessage::PingResponse(PingResponse { nonce }),
@@ -633,7 +636,7 @@ where
         Ok(())
     }
 
-    fn handle_ping_response(&mut self, peer: T::PeerId, nonce: u64) -> crate::Result<()> {
+    fn handle_ping_response(&mut self, peer: PeerId, nonce: u64) -> crate::Result<()> {
         if let Some(peer) = self.peers.get_mut(&peer) {
             if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
                 // Correct reply received, clear pending request.
@@ -657,7 +660,7 @@ where
     /// `result` - result of the operation that was performed
     pub fn handle_result(
         &mut self,
-        peer_id: Option<T::PeerId>,
+        peer_id: Option<PeerId>,
         result: crate::Result<()>,
     ) -> crate::Result<()> {
         match result {
@@ -719,7 +722,7 @@ where
     /// Handle connectivity event.
     fn handle_connectivity_event_result(
         &mut self,
-        event_res: crate::Result<ConnectivityEvent<T>>,
+        event_res: crate::Result<ConnectivityEvent<T::Address>>,
     ) -> crate::Result<()> {
         match event_res {
             Ok(event) => match event {
@@ -804,7 +807,7 @@ where
     }
 
     /// Checks if the peer is in active state
-    pub fn is_peer_connected(&self, peer_id: &T::PeerId) -> bool {
+    pub fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
         self.peers.get(peer_id).is_some()
     }
 

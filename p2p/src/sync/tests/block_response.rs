@@ -24,11 +24,11 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::HeaderListResponse,
-    net::default_backend::types::PeerId,
     sync::{
         tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, BlockResponse,
         SyncMessage,
     },
+    types::peer_id::PeerId,
     P2pError,
 };
 

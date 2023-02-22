@@ -34,7 +34,7 @@ pub struct SentPing {
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
-    pub info: types::PeerInfo<T::PeerId>,
+    pub info: types::PeerInfo,
 
     /// Peer's address
     pub address: T::Address,

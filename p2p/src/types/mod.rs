@@ -15,3 +15,4 @@
 
 pub mod ip_address;
 pub mod peer_address;
+pub mod peer_id;

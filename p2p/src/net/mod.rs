@@ -16,18 +16,14 @@
 pub mod default_backend;
 pub mod types;
 
-use std::{
-    fmt::{Debug, Display},
-    hash::Hash,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 
 use crate::{
     config,
     message::{Announcement, PeerManagerMessage, SyncMessage},
+    types::peer_id::PeerId,
 };
 
 use self::default_backend::transport::TransportAddress;
@@ -66,9 +62,6 @@ pub trait NetworkingService {
     /// Usually it is part of the `NetworkingService::Address`. For example for a socket address
     /// that consists of an IP address and a port we want to ban the IP address.
     type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
-
-    /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Display + Eq + Ord + Hash + Send + Sync + ToString + FromStr;
 
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
@@ -110,10 +103,10 @@ where
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote node
-    fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
+    fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     /// Sends a message to the given peer.
-    fn send_message(&mut self, peer: T::PeerId, message: PeerManagerMessage) -> crate::Result<()>;
+    fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()>;
 
     /// Return the socket addresses of the network service provider
     fn local_addresses(&self) -> &[T::Address];
@@ -124,7 +117,7 @@ where
     /// - incoming peer connections
     /// - new discovered peers
     /// - peer expiration events
-    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T::Address>>;
 }
 
 /// [SyncingMessagingService] provides an interface for sending and receiving block
@@ -135,13 +128,13 @@ where
     T: NetworkingService,
 {
     /// Sends a message to the peer.
-    fn send_message(&mut self, peer: T::PeerId, message: SyncMessage) -> crate::Result<()>;
+    fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service
-    async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent>;
 }
 
 /// Extracts a bannable part from an address.

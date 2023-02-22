@@ -28,6 +28,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{Announcement, HeaderListResponse},
     sync::{BlockSyncManager, SyncMessage},
+    types::peer_id::PeerId,
     utils::oneshot_nofail,
     NetworkingService, PeerManagerEvent, Result, SyncingMessagingService,
 };
@@ -36,11 +37,10 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerId: 'static,
 {
     pub(super) async fn handle_message(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         message: SyncMessage,
     ) -> Result<()> {
         match message {
@@ -58,7 +58,7 @@ where
     }
 
     /// Processes a header request by sending requested data to the peer.
-    async fn handle_header_request(&mut self, peer: T::PeerId, locator: Locator) -> Result<()> {
+    async fn handle_header_request(&mut self, peer: PeerId, locator: Locator) -> Result<()> {
         log::debug!("Headers request from peer {peer}");
 
         // Check that the peer is connected.
@@ -92,7 +92,7 @@ where
     /// Processes the blocks request.
     async fn handle_block_request(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         block_ids: Vec<Id<Block>>,
     ) -> Result<()> {
         log::debug!("Blocks request from peer {peer}");
@@ -141,7 +141,7 @@ where
 
     async fn handle_header_response(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         headers: Vec<BlockHeader>,
     ) -> Result<()> {
         log::debug!("Headers response from peer {peer}");
@@ -221,7 +221,7 @@ where
         self.request_blocks(peer, headers)
     }
 
-    async fn handle_block_response(&mut self, peer: T::PeerId, block: Block) -> Result<()> {
+    async fn handle_block_response(&mut self, peer: PeerId, block: Block) -> Result<()> {
         log::debug!("Block ({}) from peer {peer}", block.get_id());
 
         let peer_state = self
@@ -263,7 +263,7 @@ where
 
     pub(super) async fn handle_announcement(
         &mut self,
-        peer: T::PeerId,
+        peer: PeerId,
         announcement: Announcement,
     ) -> Result<()> {
         match announcement {
@@ -271,11 +271,7 @@ where
         }
     }
 
-    async fn handle_block_announcement(
-        &mut self,
-        peer: T::PeerId,
-        header: BlockHeader,
-    ) -> Result<()> {
+    async fn handle_block_announcement(&mut self, peer: PeerId, header: BlockHeader) -> Result<()> {
         log::debug!("Block announcement from peer {peer}: {header:?}");
 
         let peer_state = self
@@ -312,7 +308,7 @@ where
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
-    pub async fn handle_result(&mut self, peer: T::PeerId, result: Result<()>) -> Result<()> {
+    pub async fn handle_result(&mut self, peer: PeerId, result: Result<()>) -> Result<()> {
         let error = match result {
             Ok(()) => return Ok(()),
             Err(e) => e,
