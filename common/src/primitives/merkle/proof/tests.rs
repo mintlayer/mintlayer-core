@@ -16,6 +16,80 @@
 use crate::primitives::{id::default_hash, merkle::tree::MerkleTree, H256};
 
 #[test]
+fn single_proof_two_leaves() {
+    let v0 = default_hash(H256::zero());
+    let v1 = default_hash(H256::from_low_u64_be(1));
+
+    let leaves = vec![v0, v1];
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    {
+        let leaf_index = 0;
+        let p0 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p0.proof().len(), 1);
+        assert_eq!(p0.proof()[0].position(), (0, 1));
+
+        assert!(p0.verify(leaves[leaf_index], t.root()));
+    }
+    {
+        let leaf_index = 1;
+        let p1 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p1.proof().len(), 1);
+        assert_eq!(p1.proof()[0].position(), (0, 0));
+
+        assert!(p1.verify(leaves[leaf_index], t.root()));
+    }
+}
+
+#[test]
+fn single_proof_four_leaves() {
+    let v0 = default_hash(H256::zero());
+    let v1 = default_hash(H256::from_low_u64_be(1));
+    let v2 = default_hash(H256::from_low_u64_be(2));
+    let v3 = default_hash(H256::from_low_u64_be(3));
+
+    let leaves = vec![v0, v1, v2, v3];
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    {
+        let leaf_index = 0;
+        let p0 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p0.proof().len(), 2);
+        assert_eq!(p0.proof()[0].position(), (0, 1));
+        assert_eq!(p0.proof()[1].position(), (1, 1));
+
+        assert!(p0.verify(leaves[leaf_index], t.root()));
+    }
+    {
+        let leaf_index = 1;
+        let p1 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p1.proof().len(), 2);
+        assert_eq!(p1.proof()[0].position(), (0, 0));
+        assert_eq!(p1.proof()[1].position(), (1, 1));
+
+        assert!(p1.verify(leaves[leaf_index], t.root()));
+    }
+    {
+        let leaf_index = 2;
+        let p2 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p2.proof().len(), 2);
+        assert_eq!(p2.proof()[0].position(), (0, 3));
+        assert_eq!(p2.proof()[1].position(), (1, 0));
+
+        assert!(p2.verify(leaves[leaf_index], t.root()));
+    }
+    {
+        let leaf_index = 3;
+        let p2 = t.proof_from_leaf(leaf_index).unwrap().unwrap();
+        assert_eq!(p2.proof().len(), 2);
+        assert_eq!(p2.proof()[0].position(), (0, 2));
+        assert_eq!(p2.proof()[1].position(), (1, 0));
+
+        assert!(p2.verify(leaves[leaf_index], t.root()));
+    }
+}
+
+#[test]
 fn single_proof_eight_leaves() {
     let v0 = default_hash(H256::zero());
     let v1 = default_hash(H256::from_low_u64_be(1));
