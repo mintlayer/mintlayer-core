@@ -622,6 +622,7 @@ mod tests {
 
     use super::*;
     use crate::uint::BitArray;
+    use proptest::prelude::*;
     use test_utils::random::Seed;
 
     #[rstest]
@@ -1038,51 +1039,38 @@ mod tests {
         );
     }
 
-    fn test_op_equality(v: u128) {
-        let a1 = v;
-        let b1 = a1 << 64;
-        let a2 = Uint256::from_u64(v as u64);
-        let b2 = a2 << 64;
-        let b3 = Uint256::from_u128(b1);
-        assert_eq!(b2, b3);
+    proptest! {
+        #[test]
+        fn uint256_from_uint128(v in proptest::num::u128::ANY) {
+            let a1 = v;
+            let b1 = a1 << 64;
+            let a2 = Uint256::from_u64(v as u64);
+            let b2 = a2 << 64;
+            let b3 = Uint256::from_u128(b1);
+            assert_eq!(b2, b3);
+        }
+
+        #[test]
+        fn uint512_from_uint256(v in proptest::num::u128::ANY) {
+            let a1 = v << 64;
+            let b1 = Uint256::from_u128(a1) << (64 * 2);
+            let a2 = Uint512::from_u64(v as u64);
+            let b2 = a2 << (64 * 3);
+            let b3 = Uint512::from(b1);
+            assert_eq!(b2, b3);
+        }
     }
 
     #[test]
-    pub fn uint256_from_uint128() {
-        test_op_equality(1);
-        test_op_equality(10);
-        test_op_equality(100);
-        test_op_equality(1000);
-        test_op_equality(10000);
-        test_op_equality(100000);
-        test_op_equality(1000000);
-        test_op_equality(10000000);
-        test_op_equality(100000000);
-        test_op_equality(10000000000);
-        test_op_equality(100000000000);
-        test_op_equality(1000000000000);
-        test_op_equality(10000000000000);
-        test_op_equality(100000000000000);
-        test_op_equality(1000000000000000);
-        test_op_equality(10000000000000000);
-        test_op_equality(100000000000000000);
-        test_op_equality(1000000000000000000);
-        test_op_equality(10000000000000000000);
-        test_op_equality(100000000000000000000);
-        test_op_equality(1000000000000000000000);
-        test_op_equality(10000000000000000000000);
-        test_op_equality(100000000000000000000000);
-        test_op_equality(1000000000000000000000000);
-        test_op_equality(10000000000000000000000000);
-        test_op_equality(100000000000000000000000000);
-    }
-
-    #[test]
-    pub fn uint512_from_uint256() {
+    pub fn uint512_from_uint256_simple() {
         assert_eq!(Uint512::ONE, Uint512::from(Uint256::ONE));
 
         let a = Uint256([0xFA, 0xFB, 0xFC, 0xFD]);
         let b = Uint512([0xFA, 0xFB, 0xFC, 0xFD, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(Uint512::from(a), b);
+
+        let a = Uint256([u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        let b = Uint512([u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(Uint512::from(a), b);
     }
 }
