@@ -37,11 +37,7 @@ use std::{
 use common::chain::ChainConfig;
 use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
-use p2p::{
-    error::P2pError,
-    net::{default_backend::transport::TransportAddress, types::PeerInfo},
-    types::peer_id::PeerId,
-};
+use p2p::{error::P2pError, net::types::PeerInfo, types::peer_id::PeerId};
 
 use crate::crawler_p2p::crawler::address_data::AddressStateTransitionTo;
 
@@ -95,7 +91,7 @@ pub enum CrawlerCommand<A> {
     },
 }
 
-impl<A: Ord + Clone + TransportAddress + ToString> Crawler<A> {
+impl<A: Ord + Clone + ToString> Crawler<A> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         loaded_addresses: BTreeSet<A>,

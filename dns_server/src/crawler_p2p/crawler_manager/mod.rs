@@ -67,7 +67,7 @@ pub struct CrawlerManager<N: NetworkingService, S> {
     /// The time when the crawler was updated last time
     last_crawler_timer: Instant,
 
-    /// CrawlerP2p
+    /// Crawler
     crawler: Crawler<N::Address>,
 
     /// Config
