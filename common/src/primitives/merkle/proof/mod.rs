@@ -80,7 +80,11 @@ impl<'a> SingleProofNodes<'a> {
         &self.branch
     }
 
-    pub fn verify(&self, leaf: H256, root: H256) -> bool {
+    /// Verifies that the given leaf can produce the root's hash.
+    /// Returns None if the proof is empty (the tree has only one node).
+    /// This choice, to return None, is a security measure to prevent a malicious user from
+    /// circumventing verification by providing a proof of a single node.
+    pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
         self.clone().into_values().verify(leaf, root)
     }
 }
@@ -98,14 +102,15 @@ impl SingleProofHashes {
         self.branch
     }
 
-    pub fn verify(&self, leaf: H256, root: H256) -> bool {
+    /// Same as SingleProofNodes::verify()
+    pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
         let mut hash = leaf;
         let mut proof_index = 0;
         let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
-            return hash == root;
+            return None;
         }
 
         loop {
@@ -123,7 +128,7 @@ impl SingleProofHashes {
 
             // the last hash in the proof is the one right before root, hence hashing will result in root's hash
             if proof_index >= self.branch.len() {
-                return parent_hash == root;
+                return Some(parent_hash == root);
             }
         }
     }

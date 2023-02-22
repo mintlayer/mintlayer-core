@@ -27,7 +27,7 @@ fn single_proof_one_leaf() {
         let p0 = t.proof_from_leaf(leaf_index).unwrap();
         assert_eq!(p0.proof().len(), 0);
 
-        assert!(p0.verify(leaves[leaf_index], t.root()));
+        assert!(p0.verify(leaves[leaf_index], t.root()).is_none());
     }
 }
 
@@ -45,7 +45,7 @@ fn single_proof_two_leaves() {
         assert_eq!(p0.proof().len(), 1);
         assert_eq!(p0.proof()[0].position(), (0, 1));
 
-        assert!(p0.verify(leaves[leaf_index], t.root()));
+        assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
@@ -53,7 +53,7 @@ fn single_proof_two_leaves() {
         assert_eq!(p1.proof().len(), 1);
         assert_eq!(p1.proof()[0].position(), (0, 0));
 
-        assert!(p1.verify(leaves[leaf_index], t.root()));
+        assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
 }
 
@@ -74,7 +74,7 @@ fn single_proof_four_leaves() {
         assert_eq!(p0.proof()[0].position(), (0, 1));
         assert_eq!(p0.proof()[1].position(), (1, 1));
 
-        assert!(p0.verify(leaves[leaf_index], t.root()));
+        assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
@@ -83,7 +83,7 @@ fn single_proof_four_leaves() {
         assert_eq!(p1.proof()[0].position(), (0, 0));
         assert_eq!(p1.proof()[1].position(), (1, 1));
 
-        assert!(p1.verify(leaves[leaf_index], t.root()));
+        assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 2;
@@ -92,7 +92,7 @@ fn single_proof_four_leaves() {
         assert_eq!(p2.proof()[0].position(), (0, 3));
         assert_eq!(p2.proof()[1].position(), (1, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 3;
@@ -101,7 +101,7 @@ fn single_proof_four_leaves() {
         assert_eq!(p2.proof()[0].position(), (0, 2));
         assert_eq!(p2.proof()[1].position(), (1, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
 }
 
@@ -127,7 +127,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p0.proof()[1].position(), (1, 1));
         assert_eq!(p0.proof()[2].position(), (2, 1));
 
-        assert!(p0.verify(leaves[leaf_index], t.root()));
+        assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
@@ -137,7 +137,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p1.proof()[1].position(), (1, 1));
         assert_eq!(p1.proof()[2].position(), (2, 1));
 
-        assert!(p1.verify(leaves[leaf_index], t.root()));
+        assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 2;
@@ -147,7 +147,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 0));
         assert_eq!(p2.proof()[2].position(), (2, 1));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 3;
@@ -157,7 +157,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 0));
         assert_eq!(p2.proof()[2].position(), (2, 1));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 4;
@@ -167,7 +167,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 3));
         assert_eq!(p2.proof()[2].position(), (2, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 5;
@@ -177,7 +177,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 3));
         assert_eq!(p2.proof()[2].position(), (2, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 6;
@@ -187,7 +187,7 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 2));
         assert_eq!(p2.proof()[2].position(), (2, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 7;
@@ -197,6 +197,6 @@ fn single_proof_eight_leaves() {
         assert_eq!(p2.proof()[1].position(), (1, 2));
         assert_eq!(p2.proof()[2].position(), (2, 0));
 
-        assert!(p2.verify(leaves[leaf_index], t.root()));
+        assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
 }
