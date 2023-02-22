@@ -16,24 +16,17 @@
 use crate::primitives::H256;
 
 use super::{
+    pos::NodePosition,
     tree::{MerkleTree, Node},
     MerkleTreeProofExtractionError,
 };
 
 pub struct SingleProofNodes<'a> {
-    pub proof: Vec<Node<'a>>,
+    leaf: Node<'a>,
+    proof: Vec<Node<'a>>,
 }
 
 impl<'a> SingleProofNodes<'a> {
-    /// Nodes are hashed in a specific order. We order them here.
-    fn order_pair<'b>((left, right): (Node<'b>, Node<'b>)) -> (Node<'b>, Node<'b>) {
-        if left.abs_index() < right.abs_index() {
-            (left, right)
-        } else {
-            (right, left)
-        }
-    }
-
     /// Creates a proof for a leaf by its index in the lowest level (the tip).
     /// A proof doesn't contain the root. Hence, passing a tree with only the root
     /// returns Ok(None).
@@ -54,38 +47,55 @@ impl<'a> SingleProofNodes<'a> {
             return Ok(None);
         }
 
-        let mut proof = vec![leaf];
         let mut last_node = leaf;
+        let mut proof = vec![leaf.sibling().expect("There must be a sibling, this isn't root")];
         loop {
-            let err_msg = "Should never happen because we break on root";
-            let curr_node = last_node.parent().expect(err_msg);
-            if curr_node.is_root() {
+            let err_msg = "Should never happen because we break on root and never start with root";
+            last_node = last_node.parent().expect(err_msg);
+            if last_node.is_root() {
                 break;
             }
-            let sibling = curr_node.sibling().unwrap();
-            let (left, right) = Self::order_pair((last_node, sibling));
-            proof.push(left);
-            proof.push(right);
-            last_node = curr_node;
+            // We push siblings of parents because they're what we need to calculate the root, upwards.
+            let sibling = last_node.sibling().unwrap();
+            proof.push(sibling);
         }
 
-        let result = Self { proof };
+        let result = Self { leaf, proof };
 
         Ok(Some(result))
     }
 
     pub fn into_values(self) -> SingleProofHashes {
         let proof = self.proof.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
-        SingleProofHashes { proof }
+        let leaf_abs_index = self.leaf.abs_index() as u32;
+        SingleProofHashes {
+            leaf_abs_index,
+            proof,
+        }
     }
 
     pub fn into_nodes(self) -> Vec<Node<'a>> {
         self.proof
     }
+
+    pub fn proof(&self) -> &[Node<'a>] {
+        &self.proof
+    }
+
+    pub fn verify(&self) -> bool {
+        let _node_pos = NodePosition::from_abs_index(
+            self.leaf.tree().total_node_count(),
+            self.leaf.abs_index(),
+        );
+
+        todo!()
+    }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofHashes {
-    pub proof: Vec<H256>,
+    leaf_abs_index: u32,
+    proof: Vec<H256>,
 }
 
 impl SingleProofHashes {

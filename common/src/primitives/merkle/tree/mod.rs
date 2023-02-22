@@ -22,7 +22,10 @@ use crate::primitives::{
     H256,
 };
 
-use super::{MerkleTreeAccessError, MerkleTreeFormError};
+use super::{
+    proof::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
+    MerkleTreeProofExtractionError,
+};
 
 pub enum AdjacentLeavesIndices {
     Alone(usize),
@@ -54,7 +57,7 @@ impl MerkleTree {
         padding
     }
 
-    fn combine_pair(left: &H256, right: &H256) -> H256 {
+    pub(crate) fn combine_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
         hasher.write(right.as_bytes());
@@ -254,6 +257,14 @@ impl MerkleTree {
 
         Ok(res)
     }
+
+    /// See SingleProofNodes::from_tree_leaf
+    pub fn proof_from_leaf(
+        &self,
+        leaf_index: usize,
+    ) -> Result<Option<SingleProofNodes>, MerkleTreeProofExtractionError> {
+        SingleProofNodes::from_tree_leaf(self, leaf_index)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -305,7 +316,7 @@ impl<'a> Node<'a> {
         })
     }
 
-    /// Return the node that combines with this node to create a hash
+    /// Return the node that combines with this node to create a hash at the parent level.
     /// The idea is simply: If it's even, then the odd next to it is the one.
     ///                     If it's odd, then the even before it is the one.
     /// This can only be None for the root node.

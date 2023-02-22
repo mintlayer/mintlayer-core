@@ -684,16 +684,16 @@ fn parent_iter_two_leaves() {
     );
     assert_eq!(leaf0iter.next().map(val), None);
 
-    let mut leaf0iter = t.iter_from_leaf_to_root(1).unwrap();
+    let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
     assert_eq!(
-        leaf0iter.next().map(val),
+        leaf1iter.next().map(val),
         t.node_value_from_bottom(0, 1).ok()
     );
     assert_eq!(
-        leaf0iter.next().map(val),
+        leaf1iter.next().map(val),
         t.node_value_from_bottom(1, 0).ok()
     );
-    assert_eq!(leaf0iter.next().map(val), None);
+    assert_eq!(leaf1iter.next().map(val), None);
 
     // Error cases: Invalid access
     for i in t.leaves_count().get()..100 {
