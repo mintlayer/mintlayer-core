@@ -622,14 +622,14 @@ mod tests {
 
     use super::*;
     use crate::uint::BitArray;
-    use proptest::prelude::*;
-    use test_utils::random::Seed;
+    use crypto::random::Rng;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
     pub fn uint256_serialization(#[case] seed: Seed) {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let h256val = H256::random_using(&mut rng);
         let uint256val: Uint256 = h256val.into();
@@ -1039,19 +1039,28 @@ mod tests {
         );
     }
 
-    proptest! {
-        #[test]
-        fn uint256_from_uint128(v in proptest::num::u128::ANY) {
-            let a1 = v;
-            let b1 = a1 << 64;
-            let a2 = Uint256::from_u64(v as u64);
-            let b2 = a2 << 64;
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uint256_from_uint128(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        for _ in 0..1000 {
+            let v = rng.gen::<u128>();
+            let b1 = v << 64;
+            let a1 = Uint256::from_u64(v as u64);
+            let b2 = a1 << 64;
             let b3 = Uint256::from_u128(b1);
             assert_eq!(b2, b3);
         }
+    }
 
-        #[test]
-        fn uint512_from_uint256(v in proptest::num::u128::ANY) {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uint512_from_uint256(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        for _ in 0..1000 {
+            let v = rng.gen::<u128>();
             let a1 = v << 64;
             let b1 = Uint256::from_u128(a1) << (64 * 2);
             let a2 = Uint512::from_u64(v as u64);
