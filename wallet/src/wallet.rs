@@ -75,8 +75,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         let mut db_tx = self.db.transaction_rw(None).map_err(WalletError::DatabaseError)?;
 
-        let mut wallet_tx = WalletTx::new(tx, state);
-        wallet_tx.set_order(Some(self.txs.len() as u64));
+        let wallet_tx = WalletTx::new(tx, state);
 
         db_tx.set_transaction(&tx_id, &wallet_tx).map_err(WalletError::DatabaseError)?;
         db_tx.commit().map_err(WalletError::DatabaseError)?;
