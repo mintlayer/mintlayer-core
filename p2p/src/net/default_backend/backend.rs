@@ -508,10 +508,6 @@ where
                 peer,
                 message: PeerManagerMessage::AddrListResponse(r),
             })?,
-            Message::AnnounceAddrResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::AnnounceAddrResponse(r),
-            })?,
             Message::PingResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
                 message: PeerManagerMessage::PingResponse(r),

@@ -124,7 +124,7 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peerdb.peer_discovered(&addr).unwrap();
+    pm1.peerdb.peer_discovered(&addr);
     pm1.heartbeat().unwrap();
 
     assert_eq!(pm1.pending_connects.len(), 1);

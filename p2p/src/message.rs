@@ -36,7 +36,6 @@ pub enum PeerManagerMessage {
     AnnounceAddrRequest(AnnounceAddrRequest),
     PingRequest(PingRequest),
     AddrListResponse(AddrListResponse),
-    AnnounceAddrResponse(AnnounceAddrResponse),
     PingResponse(PingResponse),
 }
 
@@ -130,9 +129,6 @@ impl BlockResponse {
         *self.block
     }
 }
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct AnnounceAddrResponse {}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct AddrListResponse {

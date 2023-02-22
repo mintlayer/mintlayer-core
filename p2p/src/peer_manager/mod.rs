@@ -68,6 +68,9 @@ use self::{
 /// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
 
+/// Maximum number of outbound connections the [`PeerManager`] is allowed to have open
+const MAX_OUTBOUND_CONNECTIONS: usize = 8;
+
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
@@ -303,7 +306,7 @@ where
         );
         assert!(old_value.is_none());
 
-        self.peerdb.peer_connected(address);
+        self.peerdb.peer_connected(address, role);
 
         if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
             self.handle_outbound_receiver_address(peer_id, receiver_address)?;
@@ -336,7 +339,7 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address)?,
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -372,7 +375,7 @@ where
 
             self.subscribed_to_peer_addresses.remove(&peer_id);
 
-            self.peerdb.peer_disconnected(peer.address);
+            self.peerdb.peer_disconnected(peer.address, peer.role);
         }
 
         Ok(())
@@ -399,7 +402,7 @@ where
         );
 
         if peer.score >= *self.p2p_config.ban_threshold {
-            self.peerdb.ban_peer(&peer.address)?;
+            self.peerdb.ban_peer(&peer.address);
             self.disconnect(peer_id, None)?;
         }
 
@@ -441,7 +444,7 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address)?,
+            !self.peerdb.is_address_banned(&bannable_address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -460,7 +463,8 @@ where
 
         match res {
             Ok(()) => {
-                self.pending_connects.insert(address, response);
+                self.pending_connects.insert(address.clone(), response);
+                self.peerdb.outbound_connection_initiated(address);
             }
             Err(e) => {
                 if let Some(response) = response {
@@ -536,20 +540,11 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     fn heartbeat(&mut self) -> crate::Result<()> {
-        let count = std::cmp::min(
-            self.peerdb.available_addresses_count(),
-            MAX_ACTIVE_CONNECTIONS
-                .saturating_sub(self.peerdb.available_addresses_count())
-                .saturating_sub(self.pending_connects.len()),
-        );
+        let new_addresses = self.peerdb.select_new_outbound_addresses();
 
-        let addresses = self.peerdb.random_known_addresses(count);
-
-        for address in addresses {
+        for address in new_addresses {
             self.connect(address, None)?;
         }
-
-        // TODO: update peer scores
 
         Ok(())
     }
@@ -566,7 +561,6 @@ where
             }
             PeerManagerMessage::PingRequest(r) => self.handle_ping_request(peer, r.nonce),
             PeerManagerMessage::AddrListResponse(r) => self.handle_add_list_response(r.addresses),
-            PeerManagerMessage::AnnounceAddrResponse(_) => Ok(()),
             PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
         }
     }
@@ -574,10 +568,11 @@ where
     fn handle_add_list_request(&mut self, peer: PeerId) -> crate::Result<()> {
         let addresses = self
             .peerdb
-            .random_known_addresses(MAX_ADDRESS_COUNT)
+            .random_known_addresses(MAX_ADDRESS_COUNT + 100)
             .iter()
             .map(TransportAddress::as_peer_address)
             .filter(|address| self.is_peer_address_valid(address))
+            .take(MAX_ADDRESS_COUNT)
             .collect();
 
         self.peer_connectivity_handle.send_message(
@@ -597,7 +592,7 @@ where
             &address,
             *self.p2p_config.allow_discover_private_ips,
         ) {
-            self.peerdb.peer_discovered(&address)?;
+            self.peerdb.peer_discovered(&address);
 
             self.peers
                 .get_mut(&peer)
@@ -625,12 +620,13 @@ where
     }
 
     fn handle_add_list_response(&mut self, addresses: Vec<PeerAddress>) -> crate::Result<()> {
+        // TODO: Ban the peer if the response is unexpected or invalid (more than 1000 addresses)
         for address in addresses {
             if let Some(address) = TransportAddress::from_peer_address(
                 &address,
                 *self.p2p_config.allow_discover_private_ips,
             ) {
-                self.peerdb.peer_discovered(&address)?;
+                self.peerdb.peer_discovered(&address);
             }
         }
         Ok(())
@@ -639,7 +635,7 @@ where
     fn handle_ping_response(&mut self, peer: PeerId, nonce: u64) -> crate::Result<()> {
         if let Some(peer) = self.peers.get_mut(&peer) {
             if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
-                // Correct reply received, clear pending request.
+                // Correct reply received, clear pending request
                 peer.sent_ping = None;
             }
         }
@@ -684,7 +680,7 @@ where
 
     /// Handle control event.
     ///
-    /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
+    /// Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager.
     fn handle_control_event(&mut self, event: PeerManagerEvent<T>) -> crate::Result<()> {
         match event {
             PeerManagerEvent::Connect(address, response) => {
@@ -719,7 +715,7 @@ where
         Ok(())
     }
 
-    /// Handle connectivity event.
+    /// Handle connectivity event
     fn handle_connectivity_event_result(
         &mut self,
         event_res: crate::Result<ConnectivityEvent<T::Address>>,

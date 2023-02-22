@@ -20,9 +20,9 @@ use serialization::{Decode, Encode};
 
 use crate::{
     message::{
-        AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse, Announcement,
-        BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage,
-        PingRequest, PingResponse, SyncMessage,
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, Announcement, BlockListRequest,
+        BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage, PingRequest,
+        PingResponse, SyncMessage,
     },
     net::types::PubSubTopic,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -114,7 +114,6 @@ pub enum Message {
     HeaderListResponse(HeaderListResponse),
     BlockResponse(BlockResponse),
     AddrListResponse(AddrListResponse),
-    AnnounceAddrResponse(AnnounceAddrResponse),
     PingResponse(PingResponse),
     Announcement(Box<Announcement>),
 }
@@ -126,7 +125,6 @@ impl From<PeerManagerMessage> for Message {
             PeerManagerMessage::AnnounceAddrRequest(r) => Message::AnnounceAddrRequest(r),
             PeerManagerMessage::PingRequest(r) => Message::PingRequest(r),
             PeerManagerMessage::AddrListResponse(r) => Message::AddrListResponse(r),
-            PeerManagerMessage::AnnounceAddrResponse(r) => Message::AnnounceAddrResponse(r),
             PeerManagerMessage::PingResponse(r) => Message::PingResponse(r),
         }
     }

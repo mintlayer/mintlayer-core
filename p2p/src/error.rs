@@ -119,6 +119,8 @@ pub enum P2pError {
     NoiseHandshakeError(String),
     #[error("The configuration value is invalid: {0}")]
     InvalidConfigurationValue(String),
+    #[error("The storage state is invalid: {0}")]
+    InvalidStorageState(String),
 }
 
 impl From<std::io::Error> for P2pError {
@@ -172,6 +174,7 @@ impl BanScore for P2pError {
             // Could be a noise protocol violation but also a network error, do not ban peer
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
+            P2pError::InvalidStorageState(_) => 0,
         }
     }
 }

@@ -65,7 +65,7 @@ where
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000), Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
+    assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -112,7 +112,7 @@ where
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 1000), Ok(()));
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
+    assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -168,10 +168,10 @@ where
     let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 10), Ok(()));
-    assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
+    assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()));
 
     assert_eq!(pm2.adjust_peer_score(peer_id, 90), Ok(()));
-    assert!(pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
+    assert!(pm2.peerdb.is_address_banned(&remote_addr.as_bannable()));
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     match &event {
@@ -236,8 +236,10 @@ where
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // invalid version
+    let address = B::new();
+    peer_manager.peerdb.outbound_connection_initiated(address.clone());
     let res = peer_manager.accept_connection(
-        B::new(),
+        address,
         Role::Outbound,
         net::types::PeerInfo {
             peer_id,
@@ -253,6 +255,7 @@ where
 
     // valid connection
     let address = B::new();
+    peer_manager.peerdb.outbound_connection_initiated(address.clone());
     let res = peer_manager.accept_connection(
         address.clone(),
         Role::Outbound,
@@ -268,7 +271,7 @@ where
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
     assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]
@@ -358,7 +361,7 @@ where
     assert!(res.is_ok());
     assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
     assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]

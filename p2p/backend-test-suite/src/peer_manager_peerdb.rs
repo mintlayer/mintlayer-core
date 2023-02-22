@@ -58,9 +58,9 @@ where
     .unwrap();
 
     let address = A::new();
-    peerdb.ban_peer(&address).unwrap();
+    peerdb.ban_peer(&address);
 
-    assert!(peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb
         .get_storage_mut()
         .transaction_ro()
@@ -71,7 +71,7 @@ where
 
     time_getter.advance_time(Duration::from_secs(120)).await;
 
-    assert!(!peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb
         .get_storage_mut()
         .transaction_ro()
