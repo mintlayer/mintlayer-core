@@ -23,7 +23,7 @@ use crate::primitives::{
 };
 
 use super::{
-    proof::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
+    proof::single::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
     MerkleTreeProofExtractionError,
 };
 
