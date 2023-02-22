@@ -16,9 +16,10 @@
 use std::sync::Arc;
 
 use chainstate::ban_score::BanScore;
+use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use crypto::random::Rng;
-use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
+use p2p_test_utils::{chainstate_subsystem, create_n_blocks};
 use test_utils::random::Seed;
 
 use crate::{
@@ -33,41 +34,57 @@ use crate::{
 };
 
 // Messages from unknown peers are ignored.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn nonexistent_peer() {
+async fn nonexistent_peer(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
 
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
     handle.assert_no_error().await;
     handle.assert_no_peer_manager_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn unrequested_block() {
+async fn unrequested_block(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -87,20 +104,22 @@ async fn valid_response(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let num_blocks = rng.gen_range(2..10);
+    let blocks = create_n_blocks(&mut tf, num_blocks);
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let num_blocks = rng.gen_range(2..10);
-    let blocks = create_n_blocks(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        num_blocks,
-    );
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
     handle.send_message(
         peer,

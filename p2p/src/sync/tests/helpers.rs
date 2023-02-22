@@ -222,9 +222,9 @@ impl SyncManagerHandleBuilder {
 
     pub fn with_chainstate(
         mut self,
-        chainstaate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
     ) -> Self {
-        self.chainstate = Some(chainstaate);
+        self.chainstate = Some(chainstate);
         self
     }
 

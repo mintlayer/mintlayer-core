@@ -39,6 +39,7 @@ serde.workspace = true
 socket2 = { version = "0.4.0", features = ["all"] }
 
 [dev-dependencies]
+chainstate-test-framework = { path = "../chainstate/test-framework" }
 chainstate-storage = { path = "../chainstate/storage" }
 crypto = { path = "../crypto/" }
 p2p-test-utils = { path = "p2p-test-utils" }

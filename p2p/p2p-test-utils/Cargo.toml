@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
 chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
