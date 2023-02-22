@@ -104,7 +104,7 @@ impl SingleProofHashes {
         let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
         // in case it's a single-node tree, we don't need to verify or hash anything
-        if self.branch.len() == 0 {
+        if self.branch.is_empty() {
             return hash == root;
         }
 
