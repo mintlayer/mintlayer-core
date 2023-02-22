@@ -58,6 +58,18 @@ impl NodePosition {
         MerkleTree::position_from_index(self.tree_size, self.absolute_index)
     }
 
+    pub fn is_left(&self) -> bool {
+        self.absolute_index % 2 == 0
+    }
+
+    pub fn is_right(&self) -> bool {
+        !self.is_left()
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.absolute_index == self.tree_size.get() - 1
+    }
+
     pub fn tree_level_count(&self) -> NonZeroUsize {
         assert_eq!(
             (self.tree_size.get() + 1).count_ones(),

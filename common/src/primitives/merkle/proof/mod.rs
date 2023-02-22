@@ -82,13 +82,33 @@ impl<'a> SingleProofNodes<'a> {
         &self.proof
     }
 
-    pub fn verify(&self) -> bool {
-        let _node_pos = NodePosition::from_abs_index(
+    pub fn verify(&self, leaf: H256, root: H256) -> bool {
+        let node_pos = NodePosition::from_abs_index(
             self.leaf.tree().total_node_count(),
             self.leaf.abs_index(),
-        );
+        )
+        .expect("Starting position cannot be invalid");
 
-        todo!()
+        let mut hash = leaf;
+        let mut node_pos = node_pos;
+        let mut proof_index = 0;
+
+        loop {
+            let sibling = self.proof[proof_index].hash();
+            let parent_hash = if node_pos.is_left() {
+                MerkleTree::combine_pair(&hash, sibling)
+            } else {
+                MerkleTree::combine_pair(sibling, &hash)
+            };
+
+            hash = parent_hash;
+            node_pos = node_pos.parent().expect("Should never happen");
+            proof_index += 1;
+
+            if node_pos.is_root() {
+                return parent_hash == root;
+            }
+        }
     }
 }
 
