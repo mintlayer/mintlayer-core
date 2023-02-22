@@ -262,7 +262,7 @@ impl MerkleTree {
     pub fn proof_from_leaf(
         &self,
         leaf_index: usize,
-    ) -> Result<Option<SingleProofNodes>, MerkleTreeProofExtractionError> {
+    ) -> Result<SingleProofNodes, MerkleTreeProofExtractionError> {
         SingleProofNodes::from_tree_leaf(self, leaf_index)
     }
 }
