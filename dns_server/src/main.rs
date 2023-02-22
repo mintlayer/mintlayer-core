@@ -17,7 +17,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use config::DnsServerConfig;
-use crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig};
+use crawler_p2p::crawler_manager::{
+    storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
+};
 use p2p::{
     config::{NodeType, P2pConfig},
     net::NetworkingService,
@@ -25,12 +27,12 @@ use p2p::{
 use tokio::sync::mpsc;
 
 mod config;
-mod crawler;
+mod crawler_p2p;
 mod dns_server;
 mod error;
 
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
-    let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
 
     let chain_config = match config.network {
         config::Network::Mainnet => Arc::new(common::chain::config::create_mainnet()),
@@ -69,28 +71,28 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         Default::default(),
     ))?;
 
-    let crawler_config = CrawlerConfig {
+    let crawler_config = CrawlerManagerConfig {
         add_node: config.add_node.clone(),
-        p2p_port: chain_config.p2p_port(),
+        default_p2p_port: chain_config.p2p_port(),
     };
 
-    let mut crawler = Crawler::<p2p::P2pNetworkingService, _>::new(
+    let mut crawler_manager = CrawlerManager::<p2p::P2pNetworkingService, _>::new(
         crawler_config,
         chain_config,
         conn,
         sync,
         storage,
-        command_tx,
+        dns_server_cmd_tx,
     )?;
 
-    let server = dns_server::DnsServer::new(config, command_rx).await?;
+    let server = dns_server::DnsServer::new(config, dns_server_cmd_rx).await?;
 
     // Spawn for better parallelism
-    let crawler_task = tokio::spawn(async move { crawler.run().await });
+    let crawler_manager_task = tokio::spawn(async move { crawler_manager.run().await });
     let server_task = tokio::spawn(server.run());
 
     tokio::select! {
-        res = crawler_task => {
+        res = crawler_manager_task => {
             res.expect("crawler should not panic")
         },
         res = server_task => {

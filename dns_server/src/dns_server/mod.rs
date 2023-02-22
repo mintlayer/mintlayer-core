@@ -40,7 +40,7 @@ use trust_dns_server::{
 use crate::{config::DnsServerConfig, error::DnsServerError};
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum ServerCommands {
+pub enum DnsServerCommand {
     AddAddress(IpAddr),
 
     DelAddress(IpAddr),
@@ -51,7 +51,7 @@ pub struct DnsServer {
 
     server: ServerFuture<Catalog>,
 
-    command_tx: mpsc::UnboundedReceiver<ServerCommands>,
+    cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
 }
 
 // Same values as in `https://github.com/sipa/bitcoin-seeder/blob/3ef602de83a76bc95a06867d4bfc239f13992140/dns.cpp`
@@ -74,7 +74,7 @@ const MAX_IPV6_RECORDS: usize = 14;
 impl DnsServer {
     pub async fn new(
         config: Arc<DnsServerConfig>,
-        command_tx: mpsc::UnboundedReceiver<ServerCommands>,
+        cmd_rx: mpsc::UnboundedReceiver<DnsServerCommand>,
     ) -> Result<Self, DnsServerError> {
         let inner = InMemoryAuthority::empty(config.host.clone(), ZoneType::Primary, false);
 
@@ -103,7 +103,7 @@ impl DnsServer {
         Ok(Self {
             auth,
             server,
-            command_tx,
+            cmd_rx,
         })
     }
 
@@ -111,11 +111,11 @@ impl DnsServer {
         let DnsServer {
             auth,
             server,
-            mut command_tx,
+            mut cmd_rx,
         } = self;
 
         tokio::spawn(async move {
-            while let Some(command) = command_tx.recv().await {
+            while let Some(command) = cmd_rx.recv().await {
                 handle_command(&auth, command);
             }
         });
@@ -266,21 +266,21 @@ impl Authority for AuthorityImpl {
     }
 }
 
-fn handle_command(auth: &AuthorityImpl, command: ServerCommands) {
+fn handle_command(auth: &AuthorityImpl, command: DnsServerCommand) {
     match command {
-        ServerCommands::AddAddress(IpAddr::V4(ip)) => {
+        DnsServerCommand::AddAddress(IpAddr::V4(ip)) => {
             auth.ip4.lock().expect("mutex must be valid (add ipv4)").push(ip);
         }
-        ServerCommands::AddAddress(IpAddr::V6(ip)) => {
+        DnsServerCommand::AddAddress(IpAddr::V6(ip)) => {
             auth.ip6.lock().expect("mutex must be valid (add ipv6)").push(ip);
         }
-        ServerCommands::DelAddress(IpAddr::V4(ip)) => {
+        DnsServerCommand::DelAddress(IpAddr::V4(ip)) => {
             auth.ip4
                 .lock()
                 .expect("mutex must be valid (remove ipv4)")
                 .retain(|val| *val != ip);
         }
-        ServerCommands::DelAddress(IpAddr::V6(ip)) => {
+        DnsServerCommand::DelAddress(IpAddr::V6(ip)) => {
             auth.ip6
                 .lock()
                 .expect("mutex must be valid (remove ipv6)")

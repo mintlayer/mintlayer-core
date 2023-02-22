@@ -21,7 +21,7 @@ use trust_dns_server::{
     store::in_memory::InMemoryAuthority,
 };
 
-use crate::dns_server::{handle_command, AuthorityImpl, ServerCommands};
+use crate::dns_server::{handle_command, AuthorityImpl, DnsServerCommand};
 
 #[tokio::test]
 async fn dns_server_basic() {
@@ -43,8 +43,8 @@ async fn dns_server_basic() {
 
     let ip1: Ipv4Addr = "1.2.3.4".parse().unwrap();
     let ip2: Ipv6Addr = "2a00::1".parse().unwrap();
-    handle_command(&auth, ServerCommands::AddAddress(ip1.into()));
-    handle_command(&auth, ServerCommands::AddAddress(ip2.into()));
+    handle_command(&auth, DnsServerCommand::AddAddress(ip1.into()));
+    handle_command(&auth, DnsServerCommand::AddAddress(ip2.into()));
     assert_eq!(auth.ip4.lock().unwrap().len(), 1);
     assert_eq!(auth.ip6.lock().unwrap().len(), 1);
 
@@ -70,8 +70,8 @@ async fn dns_server_basic() {
     assert_eq!(result_aaaa.len(), 1);
     assert_eq!(result_aaaa[0].data(), Some(&RData::AAAA(ip2)));
 
-    handle_command(&auth, ServerCommands::DelAddress(ip1.into()));
-    handle_command(&auth, ServerCommands::DelAddress(ip2.into()));
+    handle_command(&auth, DnsServerCommand::DelAddress(ip1.into()));
+    handle_command(&auth, DnsServerCommand::DelAddress(ip2.into()));
     assert_eq!(auth.ip4.lock().unwrap().len(), 0);
     assert_eq!(auth.ip6.lock().unwrap().len(), 0);
 }
