@@ -25,7 +25,7 @@ fn single_proof_one_leaf() {
     {
         let leaf_index = 0;
         let p0 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p0.proof().len(), 0);
+        assert_eq!(p0.branch().len(), 0);
 
         assert!(p0.verify(leaves[leaf_index], t.root()).is_none());
     }
@@ -42,16 +42,16 @@ fn single_proof_two_leaves() {
     {
         let leaf_index = 0;
         let p0 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p0.proof().len(), 1);
-        assert_eq!(p0.proof()[0].position(), (0, 1));
+        assert_eq!(p0.branch().len(), 1);
+        assert_eq!(p0.branch()[0].position(), (0, 1));
 
         assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
         let p1 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p1.proof().len(), 1);
-        assert_eq!(p1.proof()[0].position(), (0, 0));
+        assert_eq!(p1.branch().len(), 1);
+        assert_eq!(p1.branch()[0].position(), (0, 0));
 
         assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
@@ -70,36 +70,36 @@ fn single_proof_four_leaves() {
     {
         let leaf_index = 0;
         let p0 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p0.proof().len(), 2);
-        assert_eq!(p0.proof()[0].position(), (0, 1));
-        assert_eq!(p0.proof()[1].position(), (1, 1));
+        assert_eq!(p0.branch().len(), 2);
+        assert_eq!(p0.branch()[0].position(), (0, 1));
+        assert_eq!(p0.branch()[1].position(), (1, 1));
 
         assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
         let p1 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p1.proof().len(), 2);
-        assert_eq!(p1.proof()[0].position(), (0, 0));
-        assert_eq!(p1.proof()[1].position(), (1, 1));
+        assert_eq!(p1.branch().len(), 2);
+        assert_eq!(p1.branch()[0].position(), (0, 0));
+        assert_eq!(p1.branch()[1].position(), (1, 1));
 
         assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 2;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 2);
-        assert_eq!(p2.proof()[0].position(), (0, 3));
-        assert_eq!(p2.proof()[1].position(), (1, 0));
+        assert_eq!(p2.branch().len(), 2);
+        assert_eq!(p2.branch()[0].position(), (0, 3));
+        assert_eq!(p2.branch()[1].position(), (1, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 3;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 2);
-        assert_eq!(p2.proof()[0].position(), (0, 2));
-        assert_eq!(p2.proof()[1].position(), (1, 0));
+        assert_eq!(p2.branch().len(), 2);
+        assert_eq!(p2.branch()[0].position(), (0, 2));
+        assert_eq!(p2.branch()[1].position(), (1, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
@@ -122,80 +122,80 @@ fn single_proof_eight_leaves() {
     {
         let leaf_index = 0;
         let p0 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p0.proof().len(), 3);
-        assert_eq!(p0.proof()[0].position(), (0, 1));
-        assert_eq!(p0.proof()[1].position(), (1, 1));
-        assert_eq!(p0.proof()[2].position(), (2, 1));
+        assert_eq!(p0.branch().len(), 3);
+        assert_eq!(p0.branch()[0].position(), (0, 1));
+        assert_eq!(p0.branch()[1].position(), (1, 1));
+        assert_eq!(p0.branch()[2].position(), (2, 1));
 
         assert!(p0.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 1;
         let p1 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p1.proof().len(), 3);
-        assert_eq!(p1.proof()[0].position(), (0, 0));
-        assert_eq!(p1.proof()[1].position(), (1, 1));
-        assert_eq!(p1.proof()[2].position(), (2, 1));
+        assert_eq!(p1.branch().len(), 3);
+        assert_eq!(p1.branch()[0].position(), (0, 0));
+        assert_eq!(p1.branch()[1].position(), (1, 1));
+        assert_eq!(p1.branch()[2].position(), (2, 1));
 
         assert!(p1.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 2;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 3));
-        assert_eq!(p2.proof()[1].position(), (1, 0));
-        assert_eq!(p2.proof()[2].position(), (2, 1));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 3));
+        assert_eq!(p2.branch()[1].position(), (1, 0));
+        assert_eq!(p2.branch()[2].position(), (2, 1));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 3;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 2));
-        assert_eq!(p2.proof()[1].position(), (1, 0));
-        assert_eq!(p2.proof()[2].position(), (2, 1));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 2));
+        assert_eq!(p2.branch()[1].position(), (1, 0));
+        assert_eq!(p2.branch()[2].position(), (2, 1));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 4;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 5));
-        assert_eq!(p2.proof()[1].position(), (1, 3));
-        assert_eq!(p2.proof()[2].position(), (2, 0));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 5));
+        assert_eq!(p2.branch()[1].position(), (1, 3));
+        assert_eq!(p2.branch()[2].position(), (2, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 5;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 4));
-        assert_eq!(p2.proof()[1].position(), (1, 3));
-        assert_eq!(p2.proof()[2].position(), (2, 0));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 4));
+        assert_eq!(p2.branch()[1].position(), (1, 3));
+        assert_eq!(p2.branch()[2].position(), (2, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 6;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 7));
-        assert_eq!(p2.proof()[1].position(), (1, 2));
-        assert_eq!(p2.proof()[2].position(), (2, 0));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 7));
+        assert_eq!(p2.branch()[1].position(), (1, 2));
+        assert_eq!(p2.branch()[2].position(), (2, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }
     {
         let leaf_index = 7;
         let p2 = t.proof_from_leaf(leaf_index).unwrap();
-        assert_eq!(p2.proof().len(), 3);
-        assert_eq!(p2.proof()[0].position(), (0, 6));
-        assert_eq!(p2.proof()[1].position(), (1, 2));
-        assert_eq!(p2.proof()[2].position(), (2, 0));
+        assert_eq!(p2.branch().len(), 3);
+        assert_eq!(p2.branch()[0].position(), (0, 6));
+        assert_eq!(p2.branch()[1].position(), (1, 2));
+        assert_eq!(p2.branch()[2].position(), (2, 0));
 
         assert!(p2.verify(leaves[leaf_index], t.root()).unwrap());
     }

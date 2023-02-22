@@ -77,7 +77,7 @@ impl<'a> SingleProofNodes<'a> {
         self.branch
     }
 
-    pub fn proof(&self) -> &[Node<'a>] {
+    pub fn branch(&self) -> &[Node<'a>] {
         &self.branch
     }
 
@@ -87,6 +87,10 @@ impl<'a> SingleProofNodes<'a> {
     /// circumventing verification by providing a proof of a single node.
     pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
         self.clone().into_values().verify(leaf, root)
+    }
+
+    pub fn leaf(&self) -> Node<'a> {
+        self.leaf
     }
 }
 
