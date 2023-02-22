@@ -15,44 +15,18 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     sync::Arc,
     time::Duration,
 };
 
-use async_trait::async_trait;
 use common::chain::ChainConfig;
 use crypto::random::Rng;
-use p2p::{config::P2pConfig, net::NetworkingService, types::peer_id::PeerId};
+use p2p::types::peer_id::PeerId;
 
 use crate::crawler_p2p::crawler::{
     address_data::AddressState, Crawler, CrawlerCommand, CrawlerEvent,
 };
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct MockNetworkingService {}
-
-pub struct MockConnectivityHandle {}
-
-pub struct MockSyncingMessagingHandle {}
-
-#[async_trait]
-impl NetworkingService for MockNetworkingService {
-    type Transport = ();
-    type Address = SocketAddr;
-    type BannableAddress = IpAddr;
-    type ConnectivityHandle = MockConnectivityHandle;
-    type SyncingMessagingHandle = MockSyncingMessagingHandle;
-
-    async fn start(
-        _transport: Self::Transport,
-        _bind_addresses: Vec<Self::Address>,
-        _chain_config: Arc<common::chain::ChainConfig>,
-        _p2p_config: Arc<P2pConfig>,
-    ) -> p2p::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
-        unreachable!()
-    }
-}
 
 /// Mock crawler
 pub struct MockCrawler {
