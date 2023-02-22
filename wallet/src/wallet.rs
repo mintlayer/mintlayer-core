@@ -159,7 +159,6 @@ mod tests {
         let tx2 = Transaction::new(2, vec![], vec![], 0).unwrap();
         let tx3 = Transaction::new(3, vec![], vec![], 0).unwrap();
         let tx4 = Transaction::new(4, vec![], vec![], 0).unwrap();
-        let tx5 = Transaction::new(5, vec![], vec![], 0).unwrap();
 
         let block_id: Id<GenBlock> = H256::from_low_u64_le(123).into();
 
@@ -167,21 +166,18 @@ mod tests {
         wallet.add_transaction(tx2.clone(), TxState::Conflicted(block_id)).unwrap();
         wallet.add_transaction(tx3.clone(), TxState::InMempool).unwrap();
         wallet.add_transaction(tx4.clone(), TxState::Inactive).unwrap();
-        wallet.add_transaction(tx5.clone(), TxState::Unrecognized).unwrap();
         drop(wallet);
 
         let mut wallet = open_wallet_file(wallet_path.as_path()).expect("the wallet to load");
 
-        assert_eq!(5, wallet.txs.len());
+        assert_eq!(4, wallet.txs.len());
         assert_eq!(&tx1, wallet.txs.get(&tx1.get_id()).unwrap().get_tx());
         assert_eq!(&tx2, wallet.txs.get(&tx2.get_id()).unwrap().get_tx());
         assert_eq!(&tx3, wallet.txs.get(&tx3.get_id()).unwrap().get_tx());
         assert_eq!(&tx4, wallet.txs.get(&tx4.get_id()).unwrap().get_tx());
-        assert_eq!(&tx5, wallet.txs.get(&tx5.get_id()).unwrap().get_tx());
 
         wallet.delete_transaction(tx1.get_id()).unwrap();
         wallet.delete_transaction(tx3.get_id()).unwrap();
-        wallet.delete_transaction(tx5.get_id()).unwrap();
         drop(wallet);
 
         let wallet = open_wallet_file(wallet_path.as_path()).expect("the wallet to load");

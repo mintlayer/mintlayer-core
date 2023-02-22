@@ -21,7 +21,6 @@ use common::primitives::Id;
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum TxState {
-    // TxStateConfirmed, TxStateInMempool, TxStateConflicted, TxStateInactive, TxStateUnrecognized
     /// Confirmed transaction in a block
     #[codec(index = 0)]
     Confirmed(Id<GenBlock>),
@@ -34,9 +33,6 @@ pub enum TxState {
     /// Transaction that is not confirmed or conflicted and is not in the mempool.
     #[codec(index = 3)]
     Inactive,
-    /// Unrecognized state
-    #[codec(index = 4)]
-    Unrecognized,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
