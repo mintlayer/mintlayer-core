@@ -174,9 +174,9 @@ where
                     )
                     .expect("send_message must succeed");
             }
-            PeerManagerMessage::AddrListResponse(_) => todo!(),
-            PeerManagerMessage::AnnounceAddrResponse(_) => todo!(),
-            PeerManagerMessage::PingResponse(_) => todo!(),
+            PeerManagerMessage::AddrListResponse(_) => {}
+            PeerManagerMessage::AnnounceAddrResponse(_) => {}
+            PeerManagerMessage::PingResponse(_) => {}
         }
     }
 
