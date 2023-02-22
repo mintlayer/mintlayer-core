@@ -18,6 +18,7 @@ use std::{pin::Pin, task};
 use futures::future::BoxFuture;
 use logging::log;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use utils::shallow_clone::ShallowClone;
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
@@ -105,6 +106,12 @@ pub struct Handle<T: ?Sized> {
 
 impl<T: ?Sized> Clone for Handle<T> {
     fn clone(&self) -> Self {
+        self.shallow_clone()
+    }
+}
+
+impl<T: ?Sized> ShallowClone for Handle<T> {
+    fn shallow_clone(&self) -> Self {
         Self {
             action_tx: self.action_tx.clone(),
         }

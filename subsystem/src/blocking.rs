@@ -17,6 +17,7 @@
 
 use crate::{subsystem::CallError, CallResult, Handle};
 use futures::future::BoxFuture;
+use utils::shallow_clone::ShallowClone;
 
 /// Blocking version of [subsystem::Handle].
 ///
@@ -25,7 +26,19 @@ use futures::future::BoxFuture;
 /// blocking calls, a new one is spawned.
 pub struct BlockingHandle<T: ?Sized>(Handle<T>);
 
-impl<T: 'static + Send + ?Sized> BlockingHandle<T> {
+impl<T: ?Sized> Clone for BlockingHandle<T> {
+    fn clone(&self) -> Self {
+        Self::new(self.0.clone())
+    }
+}
+
+impl<T> ShallowClone for BlockingHandle<T> {
+    fn shallow_clone(&self) -> Self {
+        Self::new(self.0.shallow_clone())
+    }
+}
+
+impl<T: ?Sized> BlockingHandle<T> {
     /// A new blocking handle with a dedicated worker
     pub fn new(handle: Handle<T>) -> Self {
         Self(handle)
@@ -35,7 +48,9 @@ impl<T: 'static + Send + ?Sized> BlockingHandle<T> {
     pub fn handle(&self) -> &Handle<T> {
         &self.0
     }
+}
 
+impl<T: 'static + Send + ?Sized> BlockingHandle<T> {
     /// Perform given closure in a worker, passing the handle to it, get the result
     fn with_handle<R: 'static + Send>(
         &self,
