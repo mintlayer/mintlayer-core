@@ -23,7 +23,7 @@ use super::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofNodes<'a> {
     leaf: Node<'a>,
-    proof: Vec<Node<'a>>,
+    branch: Vec<Node<'a>>,
 }
 
 impl<'a> SingleProofNodes<'a> {
@@ -54,26 +54,29 @@ impl<'a> SingleProofNodes<'a> {
             last_node = last_node.parent().expect("This can never be root");
         }
 
-        let result = Self { leaf, proof };
+        let result = Self {
+            leaf,
+            branch: proof,
+        };
 
         Ok(result)
     }
 
     pub fn into_values(self) -> SingleProofHashes {
-        let proof = self.proof.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
+        let proof = self.branch.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
         let leaf_abs_index = self.leaf.position().1 as u32;
         SingleProofHashes {
             leaf_index_in_level: leaf_abs_index,
-            proof,
+            branch: proof,
         }
     }
 
     pub fn into_nodes(self) -> Vec<Node<'a>> {
-        self.proof
+        self.branch
     }
 
     pub fn proof(&self) -> &[Node<'a>] {
-        &self.proof
+        &self.branch
     }
 
     pub fn verify(&self, leaf: H256, root: H256) -> bool {
@@ -84,12 +87,12 @@ impl<'a> SingleProofNodes<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofHashes {
     leaf_index_in_level: u32,
-    proof: Vec<H256>,
+    branch: Vec<H256>,
 }
 
 impl SingleProofHashes {
     pub fn into_hashes(self) -> Vec<H256> {
-        self.proof
+        self.branch
     }
 
     pub fn verify(&self, leaf: H256, root: H256) -> bool {
@@ -98,12 +101,12 @@ impl SingleProofHashes {
         let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
         // in case it's a single-node tree, we don't need to verify or hash anything
-        if self.proof.len() == 0 {
+        if self.branch.len() == 0 {
             return hash == root;
         }
 
         loop {
-            let sibling = self.proof[proof_index];
+            let sibling = self.branch[proof_index];
             let parent_hash = if curr_leaf_index % 2 == 0 {
                 MerkleTree::combine_pair(&hash, &sibling)
             } else {
@@ -116,7 +119,7 @@ impl SingleProofHashes {
             curr_leaf_index /= 2;
 
             // the last hash in the proof is the one right before root, hence hashing will result in root's hash
-            if proof_index >= self.proof.len() {
+            if proof_index >= self.branch.len() {
                 return parent_hash == root;
             }
         }
