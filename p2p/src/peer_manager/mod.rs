@@ -82,6 +82,14 @@ const MAX_ADDRESS_COUNT: usize = 1000;
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 
+/// Hardcoded seed DNS hostnames
+// TODO: Replace with actual values
+const DNS_SEEDS: [&str; 2] = ["seed.mintlayer.org", "seed2.mintlayer.org"];
+/// Maximum number of records accepted in a single DNS server response
+const MAX_DNS_RECORDS: usize = 10;
+/// Minimum time to query DNS servers
+const MIN_DNS_QUERY_PERIOD: Duration = Duration::from_secs(60);
+
 pub struct PeerManager<T, S>
 where
     T: NetworkingService,
@@ -115,6 +123,9 @@ where
 
     /// Last time when heartbeat was called
     last_heartbeat: Instant,
+
+    /// Last time the DNS seed was loaded
+    last_dns_reload: Option<Instant>,
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
@@ -152,6 +163,7 @@ where
             chain_config,
             p2p_config,
             last_heartbeat: now,
+            last_dns_reload: None,
             subscribed_to_peer_addresses: BTreeSet::new(),
         })
     }
@@ -518,6 +530,50 @@ where
         Ok(())
     }
 
+    /// Fill PeerDb with addresses from DNS seed servers
+    async fn reload_dns_seed(&mut self) {
+        let now = Instant::now();
+        let resolved_recently = self
+            .last_dns_reload
+            .map(|time| now.duration_since(time) < MIN_DNS_QUERY_PERIOD)
+            .unwrap_or(false);
+        if resolved_recently {
+            return;
+        }
+        self.last_dns_reload = Some(now);
+
+        log::debug!("Resolve DNS seed...");
+        let results = futures::future::join_all(
+            DNS_SEEDS
+                .iter()
+                .map(|host| tokio::net::lookup_host((*host, self.chain_config.p2p_port()))),
+        )
+        .await;
+
+        let mut total = 0;
+        for result in results {
+            match result {
+                Ok(list) => {
+                    list.filter_map(|addr| {
+                        TransportAddress::from_peer_address(
+                            &addr.into(),
+                            *self.p2p_config.allow_discover_private_ips,
+                        )
+                    })
+                    .take(MAX_DNS_RECORDS)
+                    .for_each(|addr| {
+                        total += 1;
+                        self.peerdb.peer_discovered(&addr);
+                    });
+                }
+                Err(err) => {
+                    log::error!("resolve DNS seed failed: {err}");
+                }
+            }
+        }
+        log::debug!("DNS seed records found: {total}");
+    }
+
     /// Maintains the peer manager state.
     ///
     /// `PeerManager::heartbeat()` is called every time a network/control event is received
@@ -539,8 +595,20 @@ where
     /// the number of desired connections and there are available peers, the function tries to
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
-    fn heartbeat(&mut self) -> crate::Result<()> {
+    async fn heartbeat(&mut self) -> crate::Result<()> {
         let new_addresses = self.peerdb.select_new_outbound_addresses();
+
+        // Try to get some records from DNS servers if there are no addresses to connect.
+        // Do this only if no peers are currently connected.
+        let new_addresses = if new_addresses.is_empty()
+            && self.peers.is_empty()
+            && self.pending_connects.is_empty()
+        {
+            self.reload_dns_seed().await;
+            self.peerdb.select_new_outbound_addresses()
+        } else {
+            new_addresses
+        };
 
         for address in new_addresses {
             self.connect(address, None)?;
@@ -882,7 +950,7 @@ where
             // finally update peer manager state
             let now = tokio::time::Instant::now();
             if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
-                self.heartbeat()?;
+                self.heartbeat().await?;
                 self.last_heartbeat = now;
             }
         }
