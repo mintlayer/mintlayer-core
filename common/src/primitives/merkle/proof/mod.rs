@@ -49,7 +49,8 @@ impl<'a> SingleProofNodes<'a> {
         // once we reach root we stop
         while !last_node.is_root() {
             // We push siblings of parents because they're what we need to calculate the root, upwards.
-            let sibling = last_node.sibling().unwrap();
+            let err_msg = "In this loop, this cannot be root, so sibling must exist";
+            let sibling = last_node.sibling().expect(err_msg);
             proof.push(sibling);
 
             last_node = last_node.parent().expect("This can never be root");
