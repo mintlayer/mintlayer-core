@@ -121,7 +121,7 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
         let utxos = EmptyUtxosView {};
         let accounting = EmptyAccountingView {};
 
-        let verifier = TransactionVerifier::new_from_handle(
+        let verifier = TransactionVerifier::new_generic(
             &storage,
             &chain_config,
             utxos,

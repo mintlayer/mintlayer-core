@@ -18,7 +18,7 @@ use crate::{
 };
 
 // Check that the header list request is sent to a newly connected peer.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn connect_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -27,7 +27,7 @@ async fn connect_peer() {
 }
 
 // Check that the attempt to connect the peer twice results in an error.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn connect_peer_twice() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -41,7 +41,7 @@ async fn connect_peer_twice() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Unregistering unknown peer:"]
 async fn disconnect_nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
@@ -52,7 +52,7 @@ async fn disconnect_nonexistent_peer() {
     handle.resume_panic().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_peer() {
     let mut handle = SyncManagerHandle::start().await;
 

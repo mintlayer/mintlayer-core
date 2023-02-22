@@ -16,21 +16,21 @@
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
-use crate::ChainstateConfig;
-use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::TxInput;
-use common::chain::{
-    block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
-    tokens::{RPCTokenInfo, TokenId},
-    ChainConfig, OutPointSourceId, TxMainChainIndex,
+use crate::{ChainstateConfig, ChainstateError, ChainstateEvent};
+
+use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
-use common::chain::{OutPoint, Transaction};
-use common::primitives::{Amount, BlockHeight, Id};
+use pos_accounting::PoolData;
 use utils::eventhandler::EventHandler;
 
-use crate::{ChainstateError, ChainstateEvent};
-use chainstate_types::Locator;
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
@@ -166,4 +166,31 @@ pub trait ChainstateInterface: Send {
 
     /// Returns true if the initial block download isn't finished yet.
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+
+    fn get_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
+
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError>;
+
+    fn get_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
+
+    fn get_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError>;
 }

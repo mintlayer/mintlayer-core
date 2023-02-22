@@ -29,7 +29,8 @@ macro_rules! tests {
                 libtest_mimic::Trial::test(
                 concat!(module_path!(), "::", stringify!($name)),
                 || {
-                    tokio::runtime::Builder::new_current_thread()
+                    tokio::runtime::Builder::new_multi_thread()
+                        .worker_threads(2)
                         .enable_all()
                         .build()
                         .unwrap()

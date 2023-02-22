@@ -14,3 +14,14 @@
 // limitations under the License.
 
 pub mod transaction_verifier;
+
+pub use transaction_verifier::{
+    config::TransactionVerifierConfig,
+    error,
+    flush::flush_to_storage,
+    storage::{
+        TransactionVerifierStorageError, TransactionVerifierStorageMut,
+        TransactionVerifierStorageRef,
+    },
+    Fee, TransactionSource, TransactionVerifier,
+};

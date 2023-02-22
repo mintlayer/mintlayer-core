@@ -150,6 +150,7 @@ impl Manager {
         // Name strings
         let manager_name = self.name;
         let subsys_name = config.subsystem_name;
+
         // Shutdown-related channels
         let shutting_down_tx = self.shutting_down_tx.clone();
         let shutdown_rq = ShutdownRequest(self.shutdown_request_tx.subscribe());

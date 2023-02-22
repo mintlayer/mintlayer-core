@@ -15,8 +15,7 @@
 
 use common::chain::SignedTransaction;
 
-use super::{fee::Fee, try_get_fee::TryGetFee, Mempool};
-use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
+use super::fee::Fee;
 
 pub struct TxWithFee {
     tx: SignedTransaction,
@@ -24,12 +23,8 @@ pub struct TxWithFee {
 }
 
 impl TxWithFee {
-    pub async fn new<M: GetMemoryUsage + Sync + Send>(
-        mempool: &Mempool<M>,
-        tx: SignedTransaction,
-    ) -> Result<Self, TxValidationError> {
-        let fee = mempool.try_get_fee(&tx).await?;
-        Ok(Self { tx, fee })
+    pub fn new_with_fee(tx: SignedTransaction, fee: Fee) -> Self {
+        Self { tx, fee }
     }
 
     pub fn tx(&self) -> &SignedTransaction {
@@ -38,5 +33,10 @@ impl TxWithFee {
 
     pub fn fee(&self) -> Fee {
         self.fee
+    }
+
+    pub fn into_tx_and_fee(self) -> (SignedTransaction, Fee) {
+        let Self { tx, fee } = self;
+        (tx, fee)
     }
 }

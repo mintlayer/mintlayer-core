@@ -16,8 +16,10 @@
 use std::sync::Arc;
 
 use common::chain::block::BlockReward;
+use common::chain::DelegationId;
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
+use common::chain::PoolId;
 use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::TxMainChainIndex;
@@ -37,6 +39,7 @@ use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
+use pos_accounting::PoolData;
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
@@ -135,6 +138,26 @@ mockall::mock! {
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+        fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+        fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+        fn get_pool_delegations_shares(
+            &self,
+            pool_id: PoolId,
+        ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
+        fn get_delegation_balance(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, ChainstateError>;
+        fn get_delegation_data(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
+        fn get_pool_delegation_share(
+            &self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, ChainstateError>;
     }
 }
 

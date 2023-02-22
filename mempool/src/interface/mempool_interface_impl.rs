@@ -23,41 +23,46 @@ use common::{
     primitives::Id,
     time_getter::TimeGetter,
 };
+use logging::log;
 use std::sync::Arc;
 use subsystem::{CallRequest, ShutdownRequest};
 use tokio::sync::mpsc;
 use utils::tap_error_log::LogError;
 
-struct MempoolInterfaceImpl<M> {
-    pool: Mempool<M>,
+/// Mempool initializer
+///
+/// Contains all the information required to spin up the mempool subsystem
+struct MempoolInit<M> {
+    chain_config: Arc<ChainConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    time_getter: TimeGetter,
+    memory_usage_estimator: M,
 }
 
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterfaceImpl<M> {
+impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInit<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         time_getter: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
-        let pool = Mempool::new(
+        Self {
             chain_config,
             chainstate_handle,
             time_getter,
             memory_usage_estimator,
-        );
-        Self { pool }
+        }
     }
 
     pub async fn subscribe_to_chainstate_events(
-        &mut self,
+        chainstate: &subsystem::Handle<Box<dyn ChainstateInterface>>,
     ) -> crate::Result<mpsc::UnboundedReceiver<chainstate::ChainstateEvent>> {
         let (tx, rx) = mpsc::unbounded_channel();
         let subscribe_func = Arc::new(move |chainstate_event: chainstate::ChainstateEvent| {
             let _ = tx.send(chainstate_event).log_err_pfx("Mempool event handler closed");
         });
 
-        self.pool
-            .chainstate_handle()
+        chainstate
             .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
             .map_err(|_| Error::SubsystemFailure)?;
@@ -66,59 +71,67 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterfaceImpl<M> {
 }
 
 #[async_trait::async_trait]
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface
-    for MempoolInterfaceImpl<M>
-{
+impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for MempoolInit<M> {
     async fn run(
-        mut self,
+        self,
         mut call_rq: CallRequest<dyn MempoolInterface>,
         mut shut_rq: ShutdownRequest,
     ) {
-        let mut chainstate_events_rx = self
-            .subscribe_to_chainstate_events()
-            .await
-            .log_err()
-            .expect("chainstate event subscription");
+        log::trace!("Starting mempool");
+        let mut mempool = Mempool::new(
+            self.chain_config,
+            self.chainstate_handle,
+            self.time_getter,
+            self.memory_usage_estimator,
+        );
+
+        log::trace!("Subscribing to chaninstate events");
+        let mut chainstate_events_rx =
+            Self::subscribe_to_chainstate_events(mempool.chainstate_handle())
+                .await
+                .log_err()
+                .expect("chainstate event subscription");
+
+        log::trace!("Entering mempool main loop");
         loop {
             tokio::select! {
                 () = shut_rq.recv() => break,
-                call = call_rq.recv() => call(&mut self).await,
-                Some(evt) = chainstate_events_rx.recv() => self.pool.process_chainstate_event(evt),
+                call = call_rq.recv() => call(&mut mempool).await,
+                Some(evt) = chainstate_events_rx.recv() => mempool.process_chainstate_event(evt),
             }
         }
     }
 }
 
-#[async_trait::async_trait]
-impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for MempoolInterfaceImpl<M> {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        self.pool.add_transaction(tx).await
+impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> {
+    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+        self.add_transaction(tx)
     }
 
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
-        Ok(self.pool.get_all())
+    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
+        Ok(self.get_all())
     }
 
-    async fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
-        Ok(self.pool.contains_transaction(tx_id))
+    fn contains_transaction(&self, tx_id: &Id<Transaction>) -> Result<bool, Error> {
+        Ok(self.contains_transaction(tx_id))
     }
 
-    async fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        Ok(self.pool.transaction(id).cloned())
+    fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
+        Ok(self.transaction(id).cloned())
     }
 
-    async fn collect_txs(
+    fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
     ) -> Result<Box<dyn TransactionAccumulator>, Error> {
-        Ok(self.pool.collect_txs(tx_accumulator))
+        Ok(self.collect_txs(tx_accumulator))
     }
 
-    async fn subscribe_to_events(
+    fn subscribe_to_events(
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error> {
-        self.pool.subscribe_to_events(handler);
+        self.subscribe_to_events(handler);
         Ok(())
     }
 }
@@ -133,7 +146,7 @@ pub fn make_mempool<M>(
 where
     M: GetMemoryUsage + 'static + Send + Sync,
 {
-    MempoolInterfaceImpl::new(
+    MempoolInit::new(
         chain_config,
         chainstate_handle,
         time_getter,

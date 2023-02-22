@@ -50,3 +50,9 @@ impl Sum<Fee> for Option<Fee> {
         iter.try_fold(Fee(Amount::ZERO), std::ops::Add::add)
     }
 }
+
+impl From<chainstate::tx_verifier::Fee> for Fee {
+    fn from(value: chainstate::tx_verifier::Fee) -> Self {
+        Self(value.0)
+    }
+}

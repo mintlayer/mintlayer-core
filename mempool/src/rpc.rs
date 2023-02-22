@@ -15,14 +15,20 @@
 
 //! Mempool subsystem RPC handler
 
+use common::{chain::Transaction, primitives::Id};
+
 #[rpc::rpc(server, namespace = "mempool")]
 trait MempoolRpc {
-    #[method(name = "dummy")]
-    fn dummy(&self) -> rpc::Result<String>;
+    #[method(name = "contains_tx")]
+    async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool>;
 }
 
+#[async_trait::async_trait]
 impl MempoolRpcServer for super::MempoolHandle {
-    fn dummy(&self) -> rpc::Result<String> {
-        Ok("dummy".to_string())
+    async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
+        self.call(move |this| this.contains_transaction(&tx_id))
+            .await
+            .map_err(rpc::Error::to_call_error)?
+            .map_err(rpc::Error::to_call_error)
     }
 }
