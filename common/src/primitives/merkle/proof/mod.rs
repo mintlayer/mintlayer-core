@@ -16,11 +16,11 @@
 use crate::primitives::H256;
 
 use super::{
-    pos::NodePosition,
     tree::{MerkleTree, Node},
     MerkleTreeProofExtractionError,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofNodes<'a> {
     leaf: Node<'a>,
     proof: Vec<Node<'a>>,
@@ -61,9 +61,9 @@ impl<'a> SingleProofNodes<'a> {
 
     pub fn into_values(self) -> SingleProofHashes {
         let proof = self.proof.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
-        let leaf_abs_index = self.leaf.abs_index() as u32;
+        let leaf_abs_index = self.leaf.position().1 as u32;
         SingleProofHashes {
-            leaf_abs_index,
+            leaf_index_in_level: leaf_abs_index,
             proof,
         }
     }
@@ -77,15 +77,25 @@ impl<'a> SingleProofNodes<'a> {
     }
 
     pub fn verify(&self, leaf: H256, root: H256) -> bool {
-        let node_pos = NodePosition::from_abs_index(
-            self.leaf.tree().total_node_count(),
-            self.leaf.abs_index(),
-        )
-        .expect("Starting position cannot be invalid");
+        self.clone().into_values().verify(leaf, root)
+    }
+}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SingleProofHashes {
+    leaf_index_in_level: u32,
+    proof: Vec<H256>,
+}
+
+impl SingleProofHashes {
+    pub fn into_hashes(self) -> Vec<H256> {
+        self.proof
+    }
+
+    pub fn verify(&self, leaf: H256, root: H256) -> bool {
         let mut hash = leaf;
-        let mut node_pos = node_pos;
         let mut proof_index = 0;
+        let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.proof.len() == 0 {
@@ -93,33 +103,23 @@ impl<'a> SingleProofNodes<'a> {
         }
 
         loop {
-            let sibling = self.proof[proof_index].hash();
-            let parent_hash = if node_pos.is_left() {
-                MerkleTree::combine_pair(&hash, sibling)
+            let sibling = self.proof[proof_index];
+            let parent_hash = if curr_leaf_index % 2 == 0 {
+                MerkleTree::combine_pair(&hash, &sibling)
             } else {
-                MerkleTree::combine_pair(sibling, &hash)
+                MerkleTree::combine_pair(&sibling, &hash)
             };
 
+            // move to the next level
             hash = parent_hash;
-            node_pos = node_pos.parent().expect("Should never happen");
             proof_index += 1;
+            curr_leaf_index /= 2;
 
-            if node_pos.is_root() {
+            // the last hash in the proof is the one right before root, hence hashing will result in root's hash
+            if proof_index >= self.proof.len() {
                 return parent_hash == root;
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SingleProofHashes {
-    leaf_abs_index: u32,
-    proof: Vec<H256>,
-}
-
-impl SingleProofHashes {
-    pub fn into_hashes(self) -> Vec<H256> {
-        self.proof
     }
 }
 
