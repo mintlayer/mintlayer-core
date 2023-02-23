@@ -37,7 +37,7 @@ where
 {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pTestTimeGetter::new();
-    let mut peerdb = PeerDb::<N, _>::new(
+    let mut peerdb = PeerDb::new(
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
             added_nodes: Default::default(),

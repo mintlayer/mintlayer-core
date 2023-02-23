@@ -114,7 +114,7 @@ where
     peers: BTreeMap<PeerId, PeerContext<T::Address>>,
 
     /// Peer database
-    peerdb: peerdb::PeerDb<T, S>,
+    peerdb: peerdb::PeerDb<T::Address, T::BannableAddress, S>,
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
@@ -540,7 +540,7 @@ where
                     .into_iter()
                     .for_each(|addr| {
                         total += 1;
-                        self.peerdb.peer_discovered(&addr);
+                        self.peerdb.peer_discovered(addr);
                     });
                 }
                 Err(err) => {
@@ -631,17 +631,17 @@ where
     ) -> crate::Result<()> {
         // TODO: Rate limit announce address requests to prevent DoS attacks.
         // For example it's 0.1 req/sec in Bitcoin Core.
-        if let Some(address) = TransportAddress::from_peer_address(
+        if let Some(address) = <T::Address as TransportAddress>::from_peer_address(
             &address,
             *self.p2p_config.allow_discover_private_ips,
         ) {
-            self.peerdb.peer_discovered(&address);
-
             self.peers
                 .get_mut(&peer)
                 .expect("peer sending AnnounceAddrRequest must be known")
                 .announced_addresses
                 .insert(address.clone());
+
+            self.peerdb.peer_discovered(address.clone());
 
             let peer_ids = self
                 .subscribed_to_peer_addresses
@@ -669,7 +669,7 @@ where
                 &address,
                 *self.p2p_config.allow_discover_private_ips,
             ) {
-                self.peerdb.peer_discovered(&address);
+                self.peerdb.peer_discovered(address);
             }
         }
         Ok(())

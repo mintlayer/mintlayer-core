@@ -32,6 +32,7 @@ mod storage_load;
 
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -43,7 +44,7 @@ use logging::log;
 use crate::{
     config,
     error::P2pError,
-    net::{types::Role, AsBannableAddress, NetworkingService},
+    net::{types::Role, AsBannableAddress},
 };
 
 use self::{
@@ -54,48 +55,52 @@ use self::{
 
 use super::MAX_OUTBOUND_CONNECTIONS;
 
-pub struct PeerDb<T: NetworkingService, S> {
+pub struct PeerDb<A, B, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
     /// Set of currently connected addresses (outbound)
-    connected_outbound: BTreeSet<T::Address>,
+    connected_outbound: BTreeSet<A>,
 
     /// Set of currently connected addresses (inbound)
-    connected_inbound: BTreeSet<T::Address>,
+    connected_inbound: BTreeSet<A>,
 
     /// Set of currently connecting outbound addresses
-    pending_outbound: BTreeSet<T::Address>,
+    pending_outbound: BTreeSet<A>,
 
     /// Map of all known addresses
-    addresses: BTreeMap<T::Address, AddressData>,
+    addresses: BTreeMap<A, AddressData>,
 
     /// Banned addresses along with the duration of the ban.
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
     /// when `current_time > ban_duration`.
-    banned_addresses: BTreeMap<T::BannableAddress, Duration>,
+    banned_addresses: BTreeMap<B, Duration>,
 
     time_getter: TimeGetter,
 
     storage: S,
 }
 
-impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
+impl<
+        A: Ord + FromStr + ToString + Clone + AsBannableAddress<BannableAddress = B>,
+        B: Ord + FromStr + ToString,
+        S: PeerDbStorage,
+    > PeerDb<A, B, S>
+{
     pub fn new(
         p2p_config: Arc<config::P2pConfig>,
         time_getter: TimeGetter,
         storage: S,
     ) -> crate::Result<Self> {
         // Node won't start if DB loading fails!
-        let loaded_storage =
-            LoadedStorage::<T::Address, T::BannableAddress>::load_storage(&storage)?;
+        let loaded_storage = LoadedStorage::<A, B>::load_storage(&storage)?;
 
         let added_nodes = p2p_config
             .added_nodes
             .iter()
             .map(|addr| {
-                addr.parse::<T::Address>().map_err(|_err| {
+                addr.parse::<A>().map_err(|_err| {
                     P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
                 })
             })
@@ -129,7 +134,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     }
 
     /// Checks if the given address is already connected.
-    pub fn is_address_connected(&self, address: &T::Address) -> bool {
+    pub fn is_address_connected(&self, address: &A) -> bool {
         self.connected_inbound.contains(address) || self.connected_outbound.contains(address)
     }
 
@@ -144,12 +149,12 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     /// Iterator of all known addresses.
     ///
     /// Result could be shared with remote peers over network.
-    pub fn known_addresses(&self) -> impl Iterator<Item = &T::Address> {
+    pub fn known_addresses(&self) -> impl Iterator<Item = &A> {
         self.addresses.keys()
     }
 
     /// Selects peer addresses for outbound connections
-    pub fn select_new_outbound_addresses(&self) -> Vec<T::Address> {
+    pub fn select_new_outbound_addresses(&self) -> Vec<A> {
         let count = MAX_OUTBOUND_CONNECTIONS
             .saturating_sub(self.pending_outbound.len())
             .saturating_sub(self.connected_outbound.len());
@@ -164,7 +169,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     }
 
     /// Checks if the given address is banned
-    pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> bool {
+    pub fn is_address_banned(&mut self, address: &B) -> bool {
         if let Some(banned_till) = self.banned_addresses.get(address) {
             // Check if the ban has expired
             let now = self.time_getter.get_time();
@@ -184,7 +189,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     }
 
     /// Add new peer addresses
-    pub fn peer_discovered(&mut self, address: &T::Address) {
+    pub fn peer_discovered(&mut self, address: A) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
             log::debug!("new address discovered: {}", address.to_string());
             entry.insert(AddressData {
@@ -199,8 +204,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, address: T::Address) {
-        // TODO: implement
+    pub fn report_outbound_failure(&mut self, address: A) {
         let removed = self.pending_outbound.remove(&address);
         assert!(removed);
 
@@ -209,7 +213,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         }
     }
 
-    pub fn outbound_connection_initiated(&mut self, address: T::Address) {
+    pub fn outbound_connection_initiated(&mut self, address: A) {
         let inserted = self.pending_outbound.insert(address);
         assert!(inserted);
     }
@@ -218,7 +222,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(&mut self, address: T::Address, role: Role) {
+    pub fn peer_connected(&mut self, address: A, role: Role) {
         match role {
             Role::Inbound => {
                 let inserted = self.connected_inbound.insert(address);
@@ -248,7 +252,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn peer_disconnected(&mut self, address: T::Address, role: Role) {
+    pub fn peer_disconnected(&mut self, address: A, role: Role) {
         match role {
             Role::Inbound => {
                 let removed = self.connected_inbound.remove(&address);
@@ -262,7 +266,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     }
 
     /// Changes the address state to banned
-    pub fn ban_peer(&mut self, address: &T::Address) {
+    pub fn ban_peer(&mut self, address: &A) {
         let bannable_address = address.as_bannable();
         let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
 
