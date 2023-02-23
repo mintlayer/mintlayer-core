@@ -25,6 +25,8 @@ use crate::primitives::merkle::{
 use super::single::SingleProofNodes;
 
 // Merkle proofs for multiple leaves.
+#[must_use]
+#[derive(Debug, Clone)]
 pub struct MultiProofNodes<'a> {
     /// The leaves where the calculation will start
     leaves: Vec<Node<'a>>,
@@ -42,6 +44,10 @@ impl<'a> MultiProofNodes<'a> {
         tree: &'a MerkleTree,
         leaves_indices: &[usize],
     ) -> Result<Self, MerkleTreeProofExtractionError> {
+        if leaves_indices.is_empty() {
+            return Err(MerkleTreeProofExtractionError::NoLeavesToCreateProof);
+        }
+
         if !is_sorted_and_unique(leaves_indices) {
             return Err(
                 MerkleTreeProofExtractionError::UnsortedOrUniqueLeavesIndices(
@@ -50,13 +56,15 @@ impl<'a> MultiProofNodes<'a> {
             );
         }
 
-        let leaves_count = tree.leaves_count();
+        {
+            let leaves_count = tree.leaves_count();
 
-        if leaves_indices.iter().any(|v| *v >= leaves_count.get()) {
-            return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
-                leaves_indices.to_vec(),
-                leaves_count.get(),
-            ));
+            if leaves_indices.iter().any(|v| *v >= leaves_count.get()) {
+                return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
+                    leaves_indices.to_vec(),
+                    leaves_count.get(),
+                ));
+            }
         }
 
         let single_proofs = leaves_indices
@@ -64,30 +72,33 @@ impl<'a> MultiProofNodes<'a> {
             .map(|i| SingleProofNodes::from_tree_leaf(tree, *i))
             .collect::<Result<Vec<_>, _>>()?;
 
+        let mut level = 0;
         let mut computed_from_prev_level = vec![];
-
         let mut proof = vec![];
 
-        let mut level = 0;
-        while level < leaves_count.get() {
-            let leaves = single_proofs
-                .iter()
-                .map(|sp| (sp.branch()[level].abs_index(), sp.branch()[level]))
-                .collect::<BTreeMap<usize, Node<'a>>>();
+        let level_count = tree.level_count();
+
+        while level < level_count.get() - 1 {
+            let leaves = single_proofs.iter().map(|sp| sp.branch()[level]).collect::<Vec<_>>();
 
             let siblings = single_proofs
                 .iter()
-                .map(|sp| sp.branch()[level].sibling().unwrap())
-                .collect::<Vec<_>>();
+                .map(|sp| {
+                    (
+                        sp.branch()[level].sibling().unwrap().abs_index(),
+                        sp.branch()[level].sibling().unwrap(),
+                    )
+                })
+                .collect::<BTreeMap<usize, Node<'a>>>();
 
             // We remove leaves that are already in siblings because they will come from the verification input.
             // This happens when the leaves, for which a proof is requested, are used together to build a parent node
             // in the tree. In that case, given that the verification will have both as inputs, we don't need to include
             // them in the proof.
             // We also remove the nodes that can be computed from the previous level, because they will be included in the proof
-            let proofs_at_level = siblings
+            let proofs_at_level = leaves
                 .into_iter()
-                .filter(|node| !leaves.contains_key(&node.abs_index()))
+                .filter(|node| !siblings.contains_key(&node.abs_index()))
                 .filter(|node| !computed_from_prev_level.contains(&node.abs_index()))
                 .collect::<Vec<_>>();
 

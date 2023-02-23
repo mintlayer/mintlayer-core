@@ -25,6 +25,8 @@ pub enum MerkleTreeFormError {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MerkleTreeProofExtractionError {
+    #[error("No leaves were provided to create a proof")]
+    NoLeavesToCreateProof,
     #[error("One or more indexes are larger than the number of leaves in the tree: {0:?} vs leaves count {1}")]
     IndexOutOfRange(Vec<usize>, usize),
     #[error("Leaf index out of range: {0} vs leaves count {1}")]

@@ -21,6 +21,7 @@ use super::super::{
 };
 
 /// A proof for a single leaf in a Merkle tree. The proof contains the leaf and the branch of the tree.
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofNodes<'a> {
     leaf: Node<'a>,
@@ -96,6 +97,7 @@ impl<'a> SingleProofNodes<'a> {
 
 /// Same as SingleProofNodes, but has only hashes and leaf index in the lowest level.
 /// This is the minimum information required to prove that the given leaf can produce the root's hash.
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofHashes {
     leaf_index_in_level: u32,
