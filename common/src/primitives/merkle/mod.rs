@@ -48,3 +48,17 @@ pub enum MerkleTreeAccessError {
     #[error("Invalid initial index for leaf in iterator. Provided {0} vs size {1}")]
     IterStartIndexOutOfRange(usize, usize),
 }
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum MerkleProofVerificationError {
+    #[error("No leaves provided")]
+    LeavesContainerProvidedIsEmpty,
+    #[error("Invalid tree size")]
+    InvalidTreeLeavesCount(usize),
+    #[error("One or more leaves have indices out of range: {0:?} vs leaves count {1}")]
+    LeavesIndicesOutOfRange(Vec<usize>, usize),
+    #[error("One or more nodes have indices out of range: {0:?} vs tree size {1}")]
+    NodesIndicesOutOfRange(Vec<usize>, usize),
+    #[error("A required node is missing. Index of node: {0}")]
+    RequiredNodeMissing(usize),
+}
