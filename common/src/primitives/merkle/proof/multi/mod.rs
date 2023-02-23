@@ -24,7 +24,7 @@ use crate::primitives::merkle::{
     MerkleTreeProofExtractionError,
 };
 
-use self::ordered_node::NodesWithAbsOrder;
+use self::ordered_node::NodeWithAbsOrder;
 
 use super::single::SingleProofNodes;
 
@@ -104,7 +104,7 @@ impl<'a> MultiProofNodes<'a> {
                 .into_iter()
                 .filter(|node| !siblings.contains_key(&node.abs_index()))
                 .filter(|node| !computed_from_prev_level.contains(&node.abs_index()))
-                .map(NodesWithAbsOrder::from)
+                .map(NodeWithAbsOrder::from)
                 .collect::<BTreeSet<_>>();
 
             // We collect all the nodes that can be computed from this level, and will use it in the next iteration

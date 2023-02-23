@@ -16,41 +16,41 @@
 use crate::primitives::merkle::tree::Node;
 
 #[derive(Debug, Clone, Eq)]
-pub struct NodesWithAbsOrder<'a> {
+pub struct NodeWithAbsOrder<'a> {
     node: Node<'a>,
 }
 
-impl<'a> NodesWithAbsOrder<'a> {
+impl<'a> NodeWithAbsOrder<'a> {
     pub fn get(&self) -> &Node<'a> {
         &self.node
     }
 }
 
-impl<'a> From<Node<'a>> for NodesWithAbsOrder<'a> {
+impl<'a> From<Node<'a>> for NodeWithAbsOrder<'a> {
     fn from(node: Node<'a>) -> Self {
         Self { node }
     }
 }
 
-impl<'a> From<NodesWithAbsOrder<'a>> for Node<'a> {
-    fn from(node: NodesWithAbsOrder<'a>) -> Self {
+impl<'a> From<NodeWithAbsOrder<'a>> for Node<'a> {
+    fn from(node: NodeWithAbsOrder<'a>) -> Self {
         node.node
     }
 }
 
-impl Ord for NodesWithAbsOrder<'_> {
+impl Ord for NodeWithAbsOrder<'_> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.node.abs_index().cmp(&other.node.abs_index())
     }
 }
 
-impl PartialOrd for NodesWithAbsOrder<'_> {
+impl PartialOrd for NodeWithAbsOrder<'_> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.node.abs_index().partial_cmp(&other.node.abs_index())
     }
 }
 
-impl PartialEq for NodesWithAbsOrder<'_> {
+impl PartialEq for NodeWithAbsOrder<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.node.abs_index() == other.node.abs_index()
     }
