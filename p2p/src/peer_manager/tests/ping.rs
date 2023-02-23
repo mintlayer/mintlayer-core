@@ -24,10 +24,10 @@ use crate::{
     net::{
         default_backend::{
             transport::TcpTransportSocket,
-            types::{Command, ConnectivityEvent, Message},
+            types::{Command, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
-        types::PeerInfo,
+        types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter},

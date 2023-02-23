@@ -39,9 +39,9 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, SyncingEvent},
+            types::{Command, Event, Message, PeerEvent},
         },
-        types::{PeerInfo, PubSubTopic},
+        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
         Announcement,
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -99,7 +99,7 @@ pub struct Backend<T: TransportSocket> {
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T>>,
+    conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
 
     /// TX channel for sending syncing events
     sync_tx: mpsc::UnboundedSender<SyncingEvent>,
@@ -120,7 +120,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         cmd_rx: mpsc::UnboundedReceiver<Command<T>>,
-        conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T>>,
+        conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
     ) -> Self {
         Self {
@@ -476,11 +476,11 @@ where
             }
             Message::HeaderListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::HeaderListRequest(r)),
+                message: SyncMessage::HeaderListRequest(r),
             })?,
             Message::BlockListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::BlockListRequest(r)),
+                message: SyncMessage::BlockListRequest(r),
             })?,
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -496,11 +496,11 @@ where
             })?,
             Message::HeaderListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::HeaderListResponse(r)),
+                message: SyncMessage::HeaderListResponse(r),
             })?,
             Message::BlockResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::BlockResponse(r)),
+                message: SyncMessage::BlockResponse(r),
             })?,
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
