@@ -91,16 +91,6 @@ pub enum ConnectivityEvent<T: TransportSocket> {
     },
 }
 
-// TODO: use two events, one for txs and one for blocks?
-pub enum PubSubEvent<T: TransportSocket> {
-    /// Message received from one of the pubsub topics
-    Announcement {
-        peer_id: T::Address,
-        topic: PubSubTopic,
-        message: Announcement,
-    },
-}
-
 /// Random nonce sent in outbound handshake.
 /// Used to detect and drop self connections.
 pub type HandshakeNonce = u64;

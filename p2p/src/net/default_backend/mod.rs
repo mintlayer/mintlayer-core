@@ -74,20 +74,6 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
     }
 }
 
-pub struct PubSubHandle<S, T>
-where
-    S: NetworkingService,
-    T: TransportSocket,
-{
-    /// TX channel for sending commands to default_backend backend
-    _cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
-
-    /// RX channel for receiving pubsub events from default_backend backend
-    _pubsub_rx: mpsc::UnboundedReceiver<types::PubSubEvent<T>>,
-
-    _marker: PhantomData<fn() -> S>,
-}
-
 #[derive(Debug)]
 pub struct SyncingMessagingHandle<S, T>
 where
