@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+mod ordered_node;
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use itertools::Itertools;
 
@@ -21,6 +23,8 @@ use crate::primitives::merkle::{
     tree::{MerkleTree, Node},
     MerkleTreeProofExtractionError,
 };
+
+use self::ordered_node::NodesWithAbsOrder;
 
 use super::single::SingleProofNodes;
 
@@ -100,17 +104,19 @@ impl<'a> MultiProofNodes<'a> {
                 .into_iter()
                 .filter(|node| !siblings.contains_key(&node.abs_index()))
                 .filter(|node| !computed_from_prev_level.contains(&node.abs_index()))
-                .collect::<Vec<_>>();
+                .map(NodesWithAbsOrder::from)
+                .collect::<BTreeSet<_>>();
 
             // We collect all the nodes that can be computed from this level, and will use it in the next iteration
             computed_from_prev_level = proofs_at_level
                 .iter()
+                .map(|n| n.get())
                 .tuple_windows::<(&Node, &Node)>()
                 .filter(|n| n.0.abs_index() % 2 == 0 && n.0.abs_index() + 1 == n.1.abs_index())
                 .map(|(n1, _n2)| n1.parent().unwrap().abs_index())
                 .collect();
 
-            proof.extend(proofs_at_level.iter().cloned());
+            proof.extend(proofs_at_level.into_iter().map(Node::from));
 
             level += 1;
         }
