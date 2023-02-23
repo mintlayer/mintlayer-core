@@ -468,9 +468,7 @@ fn gen_leaves_indices_combinations(leaves_count: usize) -> impl Iterator<Item = 
     for i in 0..leaves_count {
         leaves_indices.push(i);
     }
-    (0..leaves_count + 1)
-        .map(move |n| leaves_indices.clone().into_iter().combinations(n))
-        .flatten()
+    (0..leaves_count + 1).flat_map(move |n| leaves_indices.clone().into_iter().combinations(n))
 }
 
 #[rstest]
@@ -485,7 +483,14 @@ fn leaves_count_combinations_generator(#[case] leaves_count: usize) {
 }
 
 #[rstest]
+#[case(1)]
+#[case(2)]
+#[case(4)]
 #[case(8)]
+#[case(16)]
+#[case(32)]
+#[case(64)]
+#[case(128)]
 fn multi_proof_verification_leaves_empty(#[case] leaves_count: usize) {
     let leaves = gen_leaves(leaves_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
@@ -553,7 +558,7 @@ fn multi_proof_verification_one_leaf() {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
     };
 
-    let leaves_indices = &[0].to_vec();
+    let leaves_indices = vec![0];
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
     let leaves_hashes_map = indices_to_map(&leaves_indices);
