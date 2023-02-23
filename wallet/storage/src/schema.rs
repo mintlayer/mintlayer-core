@@ -15,7 +15,12 @@
 
 //! Wallet database schema
 
-use common::chain::OutPoint;
+use wallet_types::WalletTx;
+
+use common::{
+    chain::{OutPoint, Transaction},
+    primitives::Id,
+};
 use utxo::Utxo;
 
 storage::decl_schema! {
@@ -25,5 +30,7 @@ storage::decl_schema! {
         pub DBValue: Map<Vec<u8>, Vec<u8>>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<OutPoint, Utxo>,
+        /// Store for Transaction entries
+        pub DBTxs: Map<Id<Transaction>, WalletTx>,
     }
 }

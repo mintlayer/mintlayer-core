@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,13 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Blockchain data encoding and decoding tools
+pub mod wallet;
 
-// Re-export SCALE traits
-pub use parity_scale_codec::{
-    Codec, Decode, DecodeAll, Encode, EncodeLike, Input, Output, WrapperTypeDecode,
-    WrapperTypeEncode,
-};
-
-// Re-export SCALE types
-pub use parity_scale_codec::{Compact, Error};
+pub use crate::wallet::{Wallet, WalletError};

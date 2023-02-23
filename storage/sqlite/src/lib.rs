@@ -21,7 +21,7 @@ mod queries;
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use std::borrow::Cow;
 use std::cmp::max;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use crate::queries::SqliteQueries;
@@ -236,9 +236,9 @@ impl Sqlite {
     }
 
     /// New Sqlite database backend
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
-            backend: SqliteStorageMode::File(path),
+            backend: SqliteStorageMode::File(path.as_ref().to_path_buf()),
         }
     }
 

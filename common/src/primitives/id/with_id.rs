@@ -16,6 +16,7 @@
 //! ID caching mechanism
 
 use super::{Id, Idable};
+use serialization::{WrapperTypeDecode, WrapperTypeEncode};
 
 /// An object together with its pre-calculated ID.
 ///
@@ -78,12 +79,25 @@ impl<T: Idable> From<T> for WithId<T> {
     }
 }
 
+/// Implement a marker trait for decoding WithId wrapper type.
+/// The decoding of such type is assumed to be the same as
+/// the wrapped type.
+impl<T: Idable> WrapperTypeDecode for WithId<T> {
+    type Wrapped = T;
+}
+
+/// Implement a marker trait that tells the encoder that
+/// WithId is a wrapper type and only the wrapped T
+/// would be encoded and not the id property.
+impl<T: Idable> WrapperTypeEncode for WithId<T> {}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    use serialization::{Decode, DecodeAll, Encode};
     use typename::TypeName;
 
-    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode, TypeName)]
+    #[derive(Eq, PartialEq, Debug, Clone, Encode, Decode, TypeName)]
     struct TestStruct {
         num: u64,
         blurb: String,
@@ -94,6 +108,21 @@ mod test {
         fn get_id(&self) -> Id<Self::Tag> {
             Id::new(super::super::hash_encoded(self))
         }
+    }
+
+    #[test]
+    fn serialization() {
+        let data = TestStruct {
+            num: 1337,
+            blurb: "Hello!".into(),
+        };
+
+        let data_clone = data.clone();
+        let encoded = WithId::new(data).encode();
+        let decoded = WithId::<TestStruct>::decode_all(&mut encoded.as_slice()).unwrap();
+
+        assert_eq!(data_clone.get_id(), decoded.get_id());
+        assert_eq!(data_clone, WithId::take(decoded));
     }
 
     #[test]

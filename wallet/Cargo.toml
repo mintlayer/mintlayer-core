@@ -8,5 +8,15 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common = {path = '../common'}
 logging = { path = "../logging" }
+serialization = { path = "../serialization" }
+storage = { path = '../storage', features = ['inmemory'] }
+utxo = { path = '../utxo' }
 wallet-storage = {path = './storage'}
+wallet-types = {path = './types'}
+
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3.3"

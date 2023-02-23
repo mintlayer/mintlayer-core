@@ -13,6 +13,7 @@ serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 storage-sqlite = { path = "../../storage/sqlite" }
 utxo = { path = '../../utxo' }
+wallet-types = { path = '../types' }
 
 [dev-dependencies]
 test-utils = {path = '../../test-utils'}
