@@ -111,14 +111,14 @@ impl SingleProofHashes {
 
     /// Same as SingleProofNodes::verify()
     pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
-        let mut hash = leaf;
-        let mut proof_index = 0;
-        let mut curr_leaf_index = self.leaf_index_in_level as usize;
-
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
             return None;
         }
+
+        let mut hash = leaf;
+        let mut proof_index = 0;
+        let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
         loop {
             let sibling = self.branch[proof_index];

@@ -64,8 +64,9 @@ fn multi_proof_one_leaf_with_multiproof_as_single_proof() {
     let single_proof = SingleProofNodes::from_tree_leaf(&t, 0).unwrap();
     assert_eq!(multi_proof.nodes().len(), 0);
     assert_eq!(multi_proof.nodes(), single_proof.branch());
-    assert_eq!(multi_proof.leaves().len(), 1);
-    assert_eq!(multi_proof.leaves()[0], single_proof.leaf());
+    assert_eq!(multi_proof.proof_leaves().len(), 1);
+    assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
+    assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
 
 /// Proof of one leaf must be equivalent to single proof
@@ -79,8 +80,9 @@ fn multi_proof_two_leaves_with_multiproof_as_single_proof() {
         let single_proof = SingleProofNodes::from_tree_leaf(&t, i).unwrap();
         assert_eq!(multi_proof.nodes().len(), 1);
         assert_eq!(multi_proof.nodes(), single_proof.branch());
-        assert_eq!(multi_proof.leaves().len(), 1);
-        assert_eq!(multi_proof.leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.proof_leaves().len(), 1);
+        assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
     }
 }
 
@@ -95,8 +97,9 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
         let single_proof = SingleProofNodes::from_tree_leaf(&t, i).unwrap();
         assert_eq!(multi_proof.nodes().len(), 2);
         assert_eq!(multi_proof.nodes(), single_proof.branch());
-        assert_eq!(multi_proof.leaves().len(), 1);
-        assert_eq!(multi_proof.leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.proof_leaves().len(), 1);
+        assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
     }
 }
 
@@ -116,9 +119,10 @@ fn multi_proof_two_leaves_with_proof_leaves(
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
         input
     );
+    assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
 
 /// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 4 for 4 leaves, yielding 15 tests.
@@ -149,9 +153,10 @@ fn multi_proof_four_leaves_with_proof_leaves(
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
         input
     );
+    assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
 
 /// Proof of one leaf must be equivalent to single proof
@@ -165,8 +170,9 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
         let single_proof = SingleProofNodes::from_tree_leaf(&t, i).unwrap();
         assert_eq!(multi_proof.nodes().len(), 3);
         assert_eq!(multi_proof.nodes(), single_proof.branch());
-        assert_eq!(multi_proof.leaves().len(), 1);
-        assert_eq!(multi_proof.leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.proof_leaves().len(), 1);
+        assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
+        assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
     }
 }
 
@@ -436,7 +442,12 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
         nodes
     );
     assert_eq!(
-        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        multi_proof
+            .proof_leaves()
+            .iter()
+            .map(|leaf| leaf.abs_index())
+            .collect::<Vec<_>>(),
         input
     );
+    assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }

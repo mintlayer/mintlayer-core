@@ -15,7 +15,10 @@
 
 mod ordered_node;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    num::NonZeroUsize,
+};
 
 use itertools::Itertools;
 
@@ -32,10 +35,12 @@ use super::single::SingleProofNodes;
 #[must_use]
 #[derive(Debug, Clone)]
 pub struct MultiProofNodes<'a> {
-    /// The leaves where the calculation will start
-    leaves: Vec<Node<'a>>,
-    /// The minimal set of nodes needed to recreate the root hash
+    /// The leaves where the calculation upwards to the root hash will start
+    proof_leaves: Vec<Node<'a>>,
+    /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
     nodes: Vec<Node<'a>>,
+    /// The number of leaves in the tree, from which this proof was extracted
+    tree_leaves_count: NonZeroUsize,
 }
 
 /// Ensure the leaves indices are sorted and unique
@@ -122,11 +127,12 @@ impl<'a> MultiProofNodes<'a> {
         }
 
         Ok(Self {
-            leaves: leaves_indices
+            proof_leaves: leaves_indices
                 .iter()
                 .map(|i| tree.node_from_bottom(0, *i).expect("Leaves already checked"))
                 .collect(),
             nodes: proof,
+            tree_leaves_count: tree.leaves_count(),
         })
     }
 
@@ -134,8 +140,12 @@ impl<'a> MultiProofNodes<'a> {
         &self.nodes
     }
 
-    pub fn leaves(&self) -> &[Node<'a>] {
-        &self.leaves
+    pub fn proof_leaves(&self) -> &[Node<'a>] {
+        &self.proof_leaves
+    }
+
+    pub fn tree_leaves_count(&self) -> NonZeroUsize {
+        self.tree_leaves_count
     }
 }
 
