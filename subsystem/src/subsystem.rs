@@ -130,7 +130,7 @@ pub enum CallError {
 ///
 /// Calls happen asynchronously. A value of this type represents the return value of the call of
 /// type `T`. To actually fetch the return value, use `.await`. Alternatively, use
-/// [CallResult::response] to verify if the call submission suceeded and get the return value at
+/// [CallResult::response] to verify if the call submission succeeded and get the return value at
 /// a later time.
 pub struct CallResult<T>(Result<CallResponse<T>, CallError>);
 
