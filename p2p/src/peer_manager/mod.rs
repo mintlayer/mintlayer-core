@@ -581,7 +581,6 @@ where
             && self.peers.is_empty()
             && self.pending_connects.is_empty()
         {
-            // TODO(PR): Change this
             self.reload_dns_seed().await;
             self.peerdb.select_new_outbound_addresses()
         } else {

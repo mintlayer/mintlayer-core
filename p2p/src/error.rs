@@ -82,8 +82,6 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
-    #[error("Accept failed")]
-    AcceptFailed,
 }
 
 /// Conversion errors
