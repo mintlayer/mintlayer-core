@@ -37,9 +37,10 @@ pub enum TxState {
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct WalletTx {
-    /// The actual transaction
+    /// The wrapped transaction with cached transaction id
     tx: WithId<Transaction>,
-    /// The state of this transaction
+    /// The state of this transaction in relation to the inclusion or not on the blockchain. For
+    /// example it could be confirmed, pending in mempool, conflicted etc.
     state: TxState,
 }
 
