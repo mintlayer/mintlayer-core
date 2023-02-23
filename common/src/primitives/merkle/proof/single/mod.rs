@@ -82,14 +82,6 @@ impl<'a> SingleProofNodes<'a> {
         &self.branch
     }
 
-    /// Verifies that the given leaf can produce the root's hash.
-    /// Returns None if the proof is empty (the tree has only one node).
-    /// This choice, to return None, is a security measure to prevent a malicious user from
-    /// circumventing verification by providing a proof of a single node.
-    pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
-        self.clone().into_values().verify(leaf, root)
-    }
-
     pub fn leaf(&self) -> Node<'a> {
         self.leaf
     }
@@ -109,7 +101,18 @@ impl SingleProofHashes {
         self.branch
     }
 
-    /// Same as SingleProofNodes::verify()
+    pub fn branch(&self) -> &[H256] {
+        &self.branch
+    }
+
+    pub fn leaf_index_in_level(&self) -> u32 {
+        self.leaf_index_in_level
+    }
+
+    /// Verifies that the given leaf can produce the root's hash.
+    /// Returns None if the proof is empty (the tree has only one node).
+    /// This choice, to return None, is a security measure to prevent a malicious user from
+    /// circumventing verification by providing a proof of a single node.
     pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
