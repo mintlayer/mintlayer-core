@@ -19,10 +19,7 @@ use tokio::time::Instant;
 
 use crate::{
     interface::types::ConnectedPeer,
-    net::{
-        types::{self, Role},
-        NetworkingService,
-    },
+    net::types::{self, Role},
 };
 
 #[derive(Debug)]
@@ -32,12 +29,12 @@ pub struct SentPing {
 }
 
 #[derive(Debug)]
-pub struct PeerContext<T: NetworkingService> {
+pub struct PeerContext<A> {
     /// Peer information
     pub info: types::PeerInfo,
 
     /// Peer's address
-    pub address: T::Address,
+    pub address: A,
 
     /// Peer's role (inbound or outbound)
     pub role: Role,
@@ -51,10 +48,10 @@ pub struct PeerContext<T: NetworkingService> {
     /// All addresses that were announced to or from some peer.
     /// Used to prevent infinity loops while broadcasting addresses.
     // TODO: Use bloom filter (like it's done in Bitcoin Core).
-    pub announced_addresses: HashSet<T::Address>,
+    pub announced_addresses: HashSet<A>,
 }
 
-impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {
+impl<T: ToString> From<&PeerContext<T>> for ConnectedPeer {
     fn from(context: &PeerContext<T>) -> Self {
         ConnectedPeer {
             peer_id: context.info.peer_id,

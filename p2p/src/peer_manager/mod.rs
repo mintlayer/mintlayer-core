@@ -105,7 +105,7 @@ where
     pending_disconnects: HashMap<PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Set of active peers
-    peers: BTreeMap<PeerId, PeerContext<T>>,
+    peers: BTreeMap<PeerId, PeerContext<T::Address>>,
 
     /// Peer database
     peerdb: peerdb::PeerDb<T, S>,
