@@ -38,6 +38,7 @@ use std::{
 
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
+use logging::log;
 
 use crate::{
     config,
@@ -177,6 +178,7 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: &T::Address) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
+            log::debug!("new address discovered: {}", address.to_string());
             entry.insert(AddressData {
                 was_reachable: false,
                 user_added: false.into(),

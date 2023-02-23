@@ -355,10 +355,8 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        // if the maximum number of connections is reached, the connection cannot be
-        // accepted even if it's valid. The peer is still reported to the PeerDb which
-        // knows of all peers and later on if the number of connections falls below
-        // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
+        // If the maximum number of connections is reached, the connection cannot be
+        // accepted even if it's valid.
         if self.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
@@ -371,7 +369,7 @@ where
     /// This can happen when the remote peer has dropped its connection
     /// or if a disconnect request has been sent by PeerManager to the backend.
     fn connection_closed(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        // The backend is always sending ConnectionClosed event when somebody disconnects, ensure that the peer is active
+        // The peer will not be in `peers` for rejected inbound connections
         if let Some(peer) = self.peers.remove(&peer_id) {
             log::info!(
                 "peer disconnected, peer_id: {}, address: {:?}",
@@ -560,7 +558,9 @@ where
                             *self.p2p_config.allow_discover_private_ips,
                         )
                     })
-                    .take(MAX_DNS_RECORDS)
+                    // Randomize selection because records can be sorted by type (A and AAAA)
+                    .choose_multiple(&mut make_pseudo_rng(), MAX_DNS_RECORDS)
+                    .into_iter()
                     .for_each(|addr| {
                         total += 1;
                         self.peerdb.peer_discovered(&addr);
@@ -791,7 +791,7 @@ where
                 ConnectivityEvent::Message { peer, message } => {
                     self.handle_incoming_message(peer, message)?
                 }
-                net::types::ConnectivityEvent::InboundAccepted {
+                ConnectivityEvent::InboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
@@ -814,7 +814,7 @@ where
                         }
                     }
                 }
-                net::types::ConnectivityEvent::OutboundAccepted {
+                ConnectivityEvent::OutboundAccepted {
                     address,
                     peer_info,
                     receiver_address,
@@ -836,15 +836,15 @@ where
                         None => log::error!("connection accepted but it's not pending?"),
                     }
                 }
-                net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                ConnectivityEvent::ConnectionClosed { peer_id } => {
                     let res = self.connection_closed(peer_id);
                     self.handle_result(Some(peer_id), res)?;
                 }
-                net::types::ConnectivityEvent::ConnectionError { address, error } => {
+                ConnectivityEvent::ConnectionError { address, error } => {
                     let res = self.handle_outbound_error(address, error);
                     self.handle_result(None, res)?;
                 }
-                net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                ConnectivityEvent::Misbehaved { peer_id, error } => {
                     let res = self.adjust_peer_score(peer_id, error.ban_score());
                     self.handle_result(Some(peer_id), res)?;
                 }
