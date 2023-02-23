@@ -100,6 +100,60 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
     }
 }
 
+/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 2 for 2 leaves, yielding 3 tests.
+#[rstest]
+#[rustfmt::skip]
+#[case(&[0], vec![1])]
+#[case(&[1], vec![0])]
+#[case(&[0,1], vec![])]
+fn multi_proof_two_leaves_with_proof_leaves(
+    #[case] input: &[usize],
+    #[case] nodes: Vec<usize>,
+) {
+    let leaves = gen_leaves(2);
+    let t = MerkleTree::from_leaves(leaves).unwrap();
+
+    let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
+    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
+    assert_eq!(
+        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        input
+    );
+}
+
+/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 4 for 4 leaves, yielding 15 tests.
+#[rstest]
+#[rustfmt::skip]
+#[case(&[0], vec![1,5])]
+#[case(&[1], vec![0,5])]
+#[case(&[2], vec![3,4])]
+#[case(&[3], vec![2,4])]
+#[case(&[0,1], vec![5])]
+#[case(&[0,2], vec![1,3])]
+#[case(&[0,3], vec![1,2])]
+#[case(&[1,2], vec![0,3])]
+#[case(&[1,3], vec![0,2])]
+#[case(&[2,3], vec![4])]
+#[case(&[0,1,2], vec![3])]
+#[case(&[0,1,3], vec![2])]
+#[case(&[0,2,3], vec![1])]
+#[case(&[1,2,3], vec![0])]
+#[case(&[0,1,2,3], vec![])]
+fn multi_proof_four_leaves_with_proof_leaves(
+    #[case] input: &[usize],
+    #[case] nodes: Vec<usize>,
+) {
+    let leaves = gen_leaves(4);
+    let t = MerkleTree::from_leaves(leaves).unwrap();
+
+    let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
+    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
+    assert_eq!(
+        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        input
+    );
+}
+
 /// Proof of one leaf must be equivalent to single proof
 #[test]
 fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
@@ -381,50 +435,8 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
         multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
         nodes
     );
-}
-
-/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 4 for 4 leaves, yielding 15 tests.
-#[rstest]
-#[rustfmt::skip]
-#[case(&[0], vec![1,5])]
-#[case(&[1], vec![0,5])]
-#[case(&[2], vec![3,4])]
-#[case(&[3], vec![2,4])]
-#[case(&[0,1], vec![5])]
-#[case(&[0,2], vec![1,3])]
-#[case(&[0,3], vec![1,2])]
-#[case(&[1,2], vec![0,3])]
-#[case(&[1,3], vec![0,2])]
-#[case(&[2,3], vec![4])]
-#[case(&[0,1,2], vec![3])]
-#[case(&[0,1,3], vec![2])]
-#[case(&[0,2,3], vec![1])]
-#[case(&[1,2,3], vec![0])]
-#[case(&[0,1,2,3], vec![])]
-fn multi_proof_four_leaves_with_proof_leaves(
-    #[case] input: &[usize],
-    #[case] nodes: Vec<usize>,
-) {
-    let leaves = gen_leaves(4);
-    let t = MerkleTree::from_leaves(leaves).unwrap();
-
-    let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
-}
-
-/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 2 for 2 leaves, yielding 3 tests.
-#[rstest]
-#[rustfmt::skip]
-#[case(&[0], vec![1])]
-#[case(&[1], vec![0])]
-#[case(&[0,1], vec![])]
-fn multi_proof_two_leaves_with_proof_leaves(
-    #[case] input: &[usize],
-    #[case] nodes: Vec<usize>,
-) {
-    let leaves = gen_leaves(2);
-    let t = MerkleTree::from_leaves(leaves).unwrap();
-
-    let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
+    assert_eq!(
+        multi_proof.leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        input
+    );
 }
