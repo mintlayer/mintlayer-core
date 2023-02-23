@@ -214,7 +214,6 @@ impl MultiProofHashes {
         root: H256,
     ) -> Result<Option<bool>, MerkleProofVerificationError> {
         // in case it's a single-node tree, we don't need to verify or hash anything
-        // TODO(PR): Maybe return an error instead?
 
         if leaves.is_empty() {
             return Err(MerkleProofVerificationError::LeavesContainerProvidedIsEmpty);
