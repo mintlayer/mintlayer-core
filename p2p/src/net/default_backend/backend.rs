@@ -39,9 +39,9 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, SyncingEvent},
+            types::{Command, Event, Message, PeerEvent},
         },
-        types::{PeerInfo, PubSubTopic},
+        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
         Announcement,
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -83,7 +83,7 @@ pub struct Backend<T: TransportSocket> {
     p2p_config: Arc<P2pConfig>,
 
     /// RX channel for receiving commands from the frontend
-    cmd_rx: mpsc::UnboundedReceiver<Command<T>>,
+    cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
 
     /// Active peers
     peers: HashMap<PeerId, PeerContext>,
@@ -99,7 +99,7 @@ pub struct Backend<T: TransportSocket> {
     ),
 
     /// TX channel for sending events to the frontend
-    conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T>>,
+    conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
 
     /// TX channel for sending syncing events
     sync_tx: mpsc::UnboundedSender<SyncingEvent>,
@@ -119,8 +119,8 @@ where
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        cmd_rx: mpsc::UnboundedReceiver<Command<T>>,
-        conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T>>,
+        cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
+        conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
     ) -> Self {
         Self {
@@ -169,13 +169,15 @@ where
     }
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
-    fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        let peer =
-            self.peers.get(peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+    fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         peer.tx.send(Event::Disconnect).map_err(P2pError::from)?;
 
-        self.destroy_peer(*peer_id)
+        self.destroy_peer(peer_id)
     }
 
     /// Sends a message the remote peer. Might fail if the peer is already disconnected.
@@ -476,11 +478,11 @@ where
             }
             Message::HeaderListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::HeaderListRequest(r)),
+                message: SyncMessage::HeaderListRequest(r),
             })?,
             Message::BlockListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::BlockListRequest(r)),
+                message: SyncMessage::BlockListRequest(r),
             })?,
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -496,11 +498,11 @@ where
             })?,
             Message::HeaderListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::HeaderListResponse(r)),
+                message: SyncMessage::HeaderListResponse(r),
             })?,
             Message::BlockResponse(r) => self.sync_tx.send(SyncingEvent::Message {
                 peer,
-                message: Box::new(SyncMessage::BlockResponse(r)),
+                message: SyncMessage::BlockResponse(r),
             })?,
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -519,7 +521,7 @@ where
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
+    async fn handle_command(&mut self, command: Command<T::Address>) -> crate::Result<()> {
         // All handlings are separated to two parts:
         // - Async (can't take mutable reference to self because they are run concurrently).
         // - Sync (take mutable reference to self because they are run sequentially).
@@ -543,7 +545,7 @@ where
             }
             Command::Disconnect { peer_id } => async move {
                 boxed_cb(move |this: &mut Self| {
-                    let res = this.disconnect_peer(&peer_id);
+                    let res = this.disconnect_peer(peer_id);
                     if let Err(e) = res {
                         log::debug!("Failed to disconnect peer {peer_id}: {e}")
                     }

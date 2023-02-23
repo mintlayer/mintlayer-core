@@ -89,8 +89,6 @@ pub enum DialError {
 /// Conversion errors
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConversionError {
-    #[error("Invalid peer ID: `{0}`")]
-    InvalidPeerId(String),
     #[error("Invalid address: `{0}`")]
     InvalidAddress(String),
     #[error("Failed to decode data: `{0}`")]
@@ -207,7 +205,6 @@ impl BanScore for PublishError {
 impl BanScore for ConversionError {
     fn ban_score(&self) -> u32 {
         match self {
-            ConversionError::InvalidPeerId(_) => 0,
             ConversionError::InvalidAddress(_) => 0,
             ConversionError::DecodeError(_) => 100,
         }

@@ -40,11 +40,8 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
+    async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
-        let peer_id = peer_id
-            .parse::<PeerId>()
-            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
 
         self.tx_peer_manager
             .send(PeerManagerEvent::Disconnect(peer_id, tx))

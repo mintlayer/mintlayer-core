@@ -8,7 +8,6 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# Local dependencies
 crypto = { path = "../crypto" }
 p2p = { path = "../p2p" }
 common = { path = "../common" }
@@ -18,7 +17,6 @@ serialization = { path = "../serialization" }
 logging = { path = "../logging" }
 utils = { path = '../utils' }
 
-# External dependencies
 tokio = { workspace = true, default-features = false }
 trust-dns-client = "0.22.0"
 trust-dns-server = "0.22.0"
@@ -30,5 +28,6 @@ clap = { version = "4", features = ["derive"] }
 directories = "4.0"
 
 [dev-dependencies]
-rstest = "0.16"
 test-utils = { path = "../test-utils" }
+
+rstest = "0.16"

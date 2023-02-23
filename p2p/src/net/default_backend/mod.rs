@@ -51,10 +51,10 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     local_addresses: Vec<S::Address>,
 
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
 
     /// RX channel for receiving connectivity events from default_backend backend
-    conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
+    conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -62,8 +62,8 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
 impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
     pub fn new(
         local_addresses: Vec<S::Address>,
-        cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
-        conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent<T>>,
+        cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
+        conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
     ) -> Self {
         Self {
             local_addresses,
@@ -74,20 +74,6 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
     }
 }
 
-pub struct PubSubHandle<S, T>
-where
-    S: NetworkingService,
-    T: TransportSocket,
-{
-    /// TX channel for sending commands to default_backend backend
-    _cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
-
-    /// RX channel for receiving pubsub events from default_backend backend
-    _pubsub_rx: mpsc::UnboundedReceiver<types::PubSubEvent<T>>,
-
-    _marker: PhantomData<fn() -> S>,
-}
-
 #[derive(Debug)]
 pub struct SyncingMessagingHandle<S, T>
 where
@@ -95,10 +81,10 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
 
     /// RX channel for receiving syncing events
-    sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
+    sync_rx: mpsc::UnboundedReceiver<SyncingEvent>,
 
     _marker: PhantomData<fn() -> S>,
 }
@@ -185,38 +171,7 @@ where
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<S::Address>> {
-        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::Message { peer, message } => {
-                Ok(ConnectivityEvent::Message { peer, message })
-            }
-            types::ConnectivityEvent::InboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => Ok(ConnectivityEvent::InboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            }),
-            types::ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            } => Ok(ConnectivityEvent::OutboundAccepted {
-                address,
-                peer_info,
-                receiver_address,
-            }),
-            types::ConnectivityEvent::ConnectionError { address, error } => {
-                Ok(ConnectivityEvent::ConnectionError { address, error })
-            }
-            types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                Ok(ConnectivityEvent::ConnectionClosed { peer_id })
-            }
-            types::ConnectivityEvent::Misbehaved { peer_id, error } => {
-                Ok(ConnectivityEvent::Misbehaved { peer_id, error })
-            }
-        }
+        self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 
@@ -252,15 +207,7 @@ impl<S: NetworkingService, T: TransportSocket> SyncingMessagingService<S>
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent> {
-        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::Message { peer, message } => Ok(SyncingEvent::Message {
-                peer,
-                message: *message,
-            }),
-            types::SyncingEvent::Announcement { peer, announcement } => {
-                Ok(SyncingEvent::Announcement { peer, announcement })
-            }
-        }
+        self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)
     }
 }
 

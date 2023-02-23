@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Debug, serde::Serialize)]
-pub struct ConnectedPeer {
-    // TODO: Replace String with actual type, once libp2p removed
-    pub peer_id: String,
+use serde::Serialize;
 
-    // TODO: Replace String with actual type, once libp2p removed
+use crate::types::peer_id::PeerId;
+
+#[derive(Debug, Serialize)]
+pub struct ConnectedPeer {
+    pub peer_id: PeerId,
+
     pub address: String,
 
     pub inbound: bool,

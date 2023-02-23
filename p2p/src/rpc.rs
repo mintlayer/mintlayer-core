@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::P2pError, interface::types::ConnectedPeer};
+use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "p2p")]
@@ -24,7 +24,7 @@ trait P2pRpc {
 
     /// Disconnect peer
     #[method(name = "disconnect")]
-    async fn disconnect(&self, peer_id: String) -> rpc::Result<()>;
+    async fn disconnect(&self, peer_id: PeerId) -> rpc::Result<()>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
@@ -46,8 +46,8 @@ impl P2pRpcServer for super::P2pHandle {
         handle_error(res)
     }
 
-    async fn disconnect(&self, peer_id: String) -> rpc::Result<()> {
-        let res = self.call_async_mut(|this| Box::pin(this.disconnect(peer_id))).await;
+    async fn disconnect(&self, peer_id: PeerId) -> rpc::Result<()> {
+        let res = self.call_async_mut(move |this| Box::pin(this.disconnect(peer_id))).await;
         handle_error(res)
     }
 

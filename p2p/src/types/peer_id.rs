@@ -18,9 +18,12 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use serde::{Deserialize, Serialize};
 use serialization::{Decode, Encode};
 
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode)]
+#[derive(
+    Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode, Serialize, Deserialize,
+)]
 pub struct PeerId(u64);
 
 impl FromStr for PeerId {

@@ -158,6 +158,7 @@ pub enum SyncingEvent {
 pub enum PubSubTopic {
     /// Transactions
     Transactions,
+
     /// Blocks
     Blocks,
 

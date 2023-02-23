@@ -19,23 +19,19 @@ use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
 
 use crate::{
-    error,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, AnnounceAddrResponse, Announcement,
         BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage,
         PingRequest, PingResponse, SyncMessage,
     },
-    net::{
-        default_backend::transport::TransportSocket,
-        types::{PeerInfo, PubSubTopic},
-    },
+    net::types::PubSubTopic,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 #[derive(Debug)]
-pub enum Command<T: TransportSocket> {
+pub enum Command<A> {
     Connect {
-        address: T::Address,
+        address: A,
     },
     Disconnect {
         peer_id: PeerId,
@@ -47,57 +43,6 @@ pub enum Command<T: TransportSocket> {
     AnnounceData {
         topic: PubSubTopic,
         message: Vec<u8>,
-    },
-}
-
-pub enum SyncingEvent {
-    Message {
-        peer: PeerId,
-        message: Box<SyncMessage>,
-    },
-    Announcement {
-        peer: PeerId,
-        announcement: Box<Announcement>,
-    },
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ConnectivityEvent<T: TransportSocket> {
-    Message {
-        peer: PeerId,
-        message: PeerManagerMessage,
-    },
-    InboundAccepted {
-        address: T::Address,
-        peer_info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
-    },
-    OutboundAccepted {
-        address: T::Address,
-        peer_info: PeerInfo,
-        receiver_address: Option<PeerAddress>,
-    },
-    ConnectionError {
-        address: T::Address,
-        error: error::P2pError,
-    },
-    ConnectionClosed {
-        peer_id: PeerId,
-    },
-    /// A peer misbehaved and its reputation must be adjusted according to the error type.
-    Misbehaved {
-        peer_id: PeerId,
-        error: error::P2pError,
-    },
-}
-
-// TODO: use two events, one for txs and one for blocks?
-pub enum PubSubEvent<T: TransportSocket> {
-    /// Message received from one of the pubsub topics
-    Announcement {
-        peer_id: T::Address,
-        topic: PubSubTopic,
-        message: Announcement,
     },
 }
 

@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::types::peer_id::PeerId;
+
 use super::types::ConnectedPeer;
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: String) -> crate::Result<()>;
 
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()>;
+    async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
 
