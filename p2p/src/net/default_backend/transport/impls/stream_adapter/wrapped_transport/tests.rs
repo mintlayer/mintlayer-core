@@ -26,7 +26,7 @@ use tokio::{
 };
 
 use crate::testing_utils::{
-    P2pTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
+    P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
 };
 use common::{
     chain::Block,
@@ -266,7 +266,7 @@ async fn pending_handshakes() {
 
 #[tokio::test]
 async fn handshake_timeout() {
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),

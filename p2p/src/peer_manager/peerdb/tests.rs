@@ -20,16 +20,16 @@ use crate::{
     net::AsBannableAddress,
     peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
     testing_utils::{
-        peerdb_inmemory_store, P2pTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
+        peerdb_inmemory_store, P2pBasicTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
     },
 };
 
 use super::PeerDb;
 
-#[tokio::test]
-async fn unban_peer() {
+#[test]
+fn unban_peer() {
     let db_store = peerdb_inmemory_store();
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pBasicTestTimeGetter::new();
     let mut peerdb = PeerDb::new(
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
@@ -58,7 +58,7 @@ async fn unban_peer() {
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 1);
 
-    time_getter.advance_time(Duration::from_secs(120)).await;
+    time_getter.advance_time(Duration::from_secs(120));
 
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();

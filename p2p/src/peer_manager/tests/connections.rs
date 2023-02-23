@@ -26,7 +26,7 @@ use crate::{
     net::types::Role,
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
-        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
+        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTokioTestTimeGetter,
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
@@ -673,7 +673,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
@@ -776,7 +776,7 @@ where
 {
     let chain_config = Arc::new(config::create_mainnet());
 
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
 
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {

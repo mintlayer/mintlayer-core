@@ -30,7 +30,7 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManager,
-    testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter},
+    testing_utils::{peerdb_inmemory_store, P2pTokioTestTimeGetter},
     types::peer_id::PeerId,
 };
 
@@ -47,7 +47,7 @@ async fn ping_timeout() {
     let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
     let (sync_tx, _sync_rx) = tokio::sync::mpsc::unbounded_channel();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
