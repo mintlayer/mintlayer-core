@@ -24,6 +24,7 @@ use itertools::Itertools;
 
 use crate::primitives::{
     merkle::{
+        pos::NodePosition,
         tree::{MerkleTree, Node},
         MerkleProofVerificationError, MerkleTreeProofExtractionError,
     },
@@ -177,6 +178,32 @@ impl MultiProofHashes {
         self.tree_leaves_count
     }
 
+    /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
+    fn calculate_missing_nodes(
+        tree_size: NonZeroUsize,
+        input: BTreeMap<&usize, &H256>,
+    ) -> BTreeMap<usize, H256> {
+        let mut result =
+            input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, H256>>();
+        for index in 0..tree_size.get() - 1 {
+            if !result.contains_key(&index) || !result.contains_key(&(index + 1)) {
+                continue;
+            }
+
+            let node_l = NodePosition::from_abs_index(tree_size, index).unwrap();
+            let node_r = NodePosition::from_abs_index(tree_size, index + 1).unwrap();
+
+            if node_l.is_left() && node_r.is_right() {
+                let parent = node_l.parent().expect("Cannot be root because of loop range");
+                let hash = MerkleTree::combine_pair(&result[&index], &result[&(index + 1)]);
+
+                result.insert(parent.abs_index(), hash);
+            }
+        }
+
+        result
+    }
+
     /// Given a set of leaves and their indices, verify that the root hash is correct
     pub fn verify(
         &self,
@@ -203,36 +230,35 @@ impl MultiProofHashes {
             ));
         }
 
-        let tree_size = self.tree_leaves_count.get() * 2 - 1;
-        let level_count = tree_size.trailing_ones() as usize;
+        let tree_size = NonZeroUsize::new(self.tree_leaves_count.get() * 2 - 1)
+            .expect("Already proven from source");
 
-        if self.nodes.iter().any(|(index, _hash)| *index >= tree_size) {
+        if self.nodes.iter().any(|(index, _hash)| *index >= tree_size.get()) {
             return Err(MerkleProofVerificationError::NodesIndicesOutOfRange(
                 self.nodes.keys().cloned().collect(),
-                tree_size,
+                tree_size.get(),
             ));
         }
 
-        let leaf_sibling_index = |leaf_index: usize| {
-            if leaf_index % 2 == 0 {
-                leaf_index + 1
-            } else {
-                leaf_index - 1
-            }
-        };
-
         let all_nodes = self.nodes.iter().chain(leaves.iter()).collect::<BTreeMap<_, _>>();
+        let all_nodes = MultiProofHashes::calculate_missing_nodes(tree_size, all_nodes);
 
         // Result is Option<bool> because it must pass through the loop inside at least once; other nothing is checked
         let mut result = None;
 
-        for (leaf_index_in_level, leaf_hash) in &leaves {
+        // Verify the root for every leaf we got
+        // Note: This can be made more efficient by marking "hashed" nodes and skipping them,
+        // but we don't care about performance here. We care more about security.
+        for (leaf_index, leaf_hash) in &leaves {
             let mut hash = *leaf_hash;
-            let mut curr_leaf_index = *leaf_index_in_level;
-            let mut proof_level_index = 0;
+            // let mut curr_leaf_index = *leaf_index_in_level;
+            let mut curr_node_pos = NodePosition::from_position(tree_size, 0, *leaf_index)
+                .expect("At level zero, leave index be valid");
 
-            loop {
-                let sibling_index = leaf_sibling_index(curr_leaf_index);
+            // In this loop we move up the tree, combining the hashes of the current node with its sibling
+            while !curr_node_pos.is_root() {
+                let sibling_index =
+                    curr_node_pos.sibling().expect("This cannot be root").abs_index();
                 let sibling = match all_nodes.get(&sibling_index) {
                     Some(sibling) => *sibling,
                     None => {
@@ -241,24 +267,24 @@ impl MultiProofHashes {
                         ))
                     }
                 };
-                let parent_hash = if curr_leaf_index % 2 == 0 {
-                    MerkleTree::combine_pair(&hash, sibling)
+                let parent_hash = if curr_node_pos.is_left() {
+                    MerkleTree::combine_pair(&hash, &sibling)
                 } else {
-                    MerkleTree::combine_pair(sibling, &hash)
+                    MerkleTree::combine_pair(&sibling, &hash)
                 };
 
                 // move to the next level
+                let err_msg = "We can never be at root yet as we checked in the loop entry";
+                curr_node_pos = curr_node_pos.parent().expect(err_msg);
                 hash = parent_hash;
-                curr_leaf_index /= 2;
-                proof_level_index += 1;
 
-                result = match result {
-                    Some(r) => Some(r | (parent_hash == root)),
-                    None => Some(parent_hash == root),
-                };
+                // If the next iteration is going to be the root, check if the root hash is correct and exit the inner loop
+                if curr_node_pos.is_root() {
+                    result = match result {
+                        Some(r) => Some(r | (parent_hash == root)),
+                        None => Some(parent_hash == root),
+                    };
 
-                // the last hash in the proof is the one right before root, hence hashing will result in root's hash
-                if proof_level_index + 1 >= level_count {
                     break;
                 }
             }

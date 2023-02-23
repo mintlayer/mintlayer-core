@@ -461,7 +461,7 @@ fn multi_proof_eight_leaves() {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
     };
 
-    let leaves_indices = &[0, 1, 2];
+    let leaves_indices = &[0, 1, 6];
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, leaves_indices).unwrap();
     assert!(multi_proof
         .into_values()
