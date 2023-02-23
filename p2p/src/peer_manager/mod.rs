@@ -121,9 +121,6 @@ where
     /// Peer database
     peerdb: peerdb::PeerDb<T, S>,
 
-    /// Last time when heartbeat was called
-    last_heartbeat: Instant,
-
     /// Last time the DNS seed was loaded
     last_dns_reload: Option<Instant>,
 
@@ -147,7 +144,6 @@ where
         peerdb_storage: S,
     ) -> crate::Result<Self> {
         let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter, peerdb_storage)?;
-        let now = tokio::time::Instant::now();
         utils::ensure!(
             !p2p_config.ping_timeout.is_zero(),
             P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
@@ -162,7 +158,6 @@ where
             pending_disconnects: HashMap::new(),
             chain_config,
             p2p_config,
-            last_heartbeat: now,
             last_dns_reload: None,
             subscribed_to_peer_addresses: BTreeSet::new(),
         })
@@ -933,7 +928,20 @@ where
             tokio::time::interval(Duration::MAX)
         };
 
+        // Last time when heartbeat was called
+        let mut last_heartbeat = None;
+
         loop {
+            // Run heartbeat if needed
+            let now = Instant::now();
+            let recent_heartbeat = last_heartbeat
+                .map(|time| now.duration_since(time) < PEER_MGR_HEARTBEAT_INTERVAL_MIN)
+                .unwrap_or(false);
+            if !recent_heartbeat {
+                self.heartbeat().await?;
+                last_heartbeat = Some(now);
+            }
+
             tokio::select! {
                 event = self.rx_peer_manager.recv() => {
                     self.handle_control_event(event.ok_or(P2pError::ChannelClosed)?)?;
@@ -945,13 +953,6 @@ where
                     self.ping_check()?;
                 }
                 _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
-            }
-
-            // finally update peer manager state
-            let now = tokio::time::Instant::now();
-            if now.duration_since(self.last_heartbeat) > PEER_MGR_HEARTBEAT_INTERVAL_MIN {
-                self.heartbeat().await?;
-                self.last_heartbeat = now;
             }
         }
     }
