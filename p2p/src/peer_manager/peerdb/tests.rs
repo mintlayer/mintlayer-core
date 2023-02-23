@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,28 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Test functions need to be marked async because of the `tests!` macro.
-#![allow(clippy::unused_async)]
-
 use std::{sync::Arc, time::Duration};
 
-use p2p::{
+use crate::{
     config::P2pConfig,
-    net::{AsBannableAddress, NetworkingService},
-    peer_manager::peerdb::{
-        storage::{PeerDbStorageRead, PeerDbTransactional},
-        PeerDb,
+    net::AsBannableAddress,
+    peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
+    testing_utils::{
+        peerdb_inmemory_store, P2pTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
     },
-    testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter, RandomAddressMaker},
 };
 
-tests![unban_peer,];
+use super::PeerDb;
 
-async fn unban_peer<T, N, A>()
-where
-    N: NetworkingService,
-    A: RandomAddressMaker<Address = N::Address>,
-{
+#[tokio::test]
+async fn unban_peer() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pTestTimeGetter::new();
     let mut peerdb = PeerDb::new(
@@ -58,26 +51,16 @@ where
     )
     .unwrap();
 
-    let address = A::new();
+    let address = TestTcpAddressMaker::new();
     peerdb.ban_peer(&address);
 
     assert!(peerdb.is_address_banned(&address.as_bannable()));
-    let banned_addresses = peerdb
-        .get_storage_mut()
-        .transaction_ro()
-        .unwrap()
-        .get_banned_addresses()
-        .unwrap();
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 1);
 
     time_getter.advance_time(Duration::from_secs(120)).await;
 
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
-    let banned_addresses = peerdb
-        .get_storage_mut()
-        .transaction_ro()
-        .unwrap()
-        .get_banned_addresses()
-        .unwrap();
+    let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 0);
 }

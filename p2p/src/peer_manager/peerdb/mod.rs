@@ -277,9 +277,7 @@ impl<
 
         self.banned_addresses.insert(bannable_address, ban_till);
     }
-
-    #[cfg(feature = "testing_utils")]
-    pub fn get_storage_mut(&mut self) -> &mut S {
-        &mut self.storage
-    }
 }
+
+#[cfg(test)]
+mod tests;
