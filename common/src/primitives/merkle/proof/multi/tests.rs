@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crypto::random::SliceRandom;
 use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::primitives::{
     id::default_hash,
@@ -516,14 +518,20 @@ fn multi_proof_verification_leaves_empty(#[case] leaves_count: usize) {
 }
 
 #[rstest]
-#[case(2, None)]
-#[case(4, None)]
-#[case(8, None)]
-#[case(16, Some(500))]
-#[case(32, Some(500))]
-#[case(64, Some(500))]
-#[case(128, Some(500))]
-fn multi_proof_verification(#[case] leaves_count: usize, #[case] max_test_cases: Option<usize>) {
+#[case(Seed::from_entropy(), 2, None)]
+#[case(Seed::from_entropy(), 4, None)]
+#[case(Seed::from_entropy(), 8, None)]
+#[case(Seed::from_entropy(), 16, Some(500))]
+#[case(Seed::from_entropy(), 32, Some(500))]
+#[case(Seed::from_entropy(), 64, Some(500))]
+#[case(Seed::from_entropy(), 128, Some(500))]
+fn multi_proof_verification(
+    #[case] seed: Seed,
+    #[case] leaves_count: usize,
+    #[case] max_test_cases: Option<usize>,
+) {
+    let mut rng = make_seedable_rng(seed);
+
     let leaves = gen_leaves(leaves_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
@@ -531,10 +539,13 @@ fn multi_proof_verification(#[case] leaves_count: usize, #[case] max_test_cases:
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
     };
 
-    let cases_iter =
-        gen_leaves_indices_combinations(leaves_count).take(max_test_cases.unwrap_or(usize::MAX));
+    let mut cases = gen_leaves_indices_combinations(leaves_count)
+        .into_iter()
+        .take(max_test_cases.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    cases.shuffle(&mut rng);
 
-    for leaves_indices in cases_iter {
+    for leaves_indices in cases {
         if leaves_indices.is_empty() {
             // Empty case is tested in another test
             continue;
