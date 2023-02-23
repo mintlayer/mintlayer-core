@@ -2251,6 +2251,7 @@ dependencies = [
  "bytes",
  "chainstate",
  "chainstate-storage",
+ "chainstate-test-framework",
  "common",
  "consensus",
  "crypto",
@@ -2305,6 +2306,7 @@ version = "0.1.0"
 dependencies = [
  "chainstate",
  "chainstate-storage",
+ "chainstate-test-framework",
  "common",
  "crypto",
  "mempool",

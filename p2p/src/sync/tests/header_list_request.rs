@@ -16,8 +16,10 @@
 use std::{iter, sync::Arc};
 
 use chainstate::{ban_score::BanScore, Locator};
+use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
-use p2p_test_utils::{create_block, import_blocks, start_chainstate, TestBlockInfo};
+use p2p_test_utils::chainstate_subsystem;
+use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
@@ -41,21 +43,29 @@ async fn nonexistent_peer() {
     handle.assert_no_peer_manager_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn max_locator_size_exceeded() {
+async fn max_locator_size_exceeded(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
     let headers = iter::repeat(block.get_id().into()).take(102).collect();
     handle.send_message(
         peer,
@@ -71,19 +81,23 @@ async fn max_locator_size_exceeded() {
     handle.assert_no_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn valid_request() {
+async fn valid_request(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
-    let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
-    // Import a block to finish the initial block download.
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
-    import_blocks(&chainstate, vec![block]).await;
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    tf.make_block_builder().build_and_process().unwrap().unwrap();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
         .with_chainstate(chainstate)
         .build()
         .await;

@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
+use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -25,7 +26,8 @@ use common::{
     primitives::Idable,
 };
 use consensus::ConsensusVerificationError;
-use p2p_test_utils::{create_block, create_n_blocks, TestBlockInfo};
+use p2p_test_utils::chainstate_subsystem;
+use test_utils::random::Seed;
 
 use crate::{
     sync::{tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, SyncMessage},
@@ -34,19 +36,28 @@ use crate::{
 };
 
 // Announcements from unknown peers are ignored.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn nonexistent_peer() {
+async fn nonexistent_peer(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
+
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
 
     handle.assert_no_error().await;
@@ -54,23 +65,31 @@ async fn nonexistent_peer() {
 }
 
 // The header list request is sent if the parent of the announced block is unknown.
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn unknown_prev_block() {
+async fn unknown_prev_block(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block_1 = tf.make_block_builder().build();
+    let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let blocks = create_n_blocks(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        2,
-    );
-    handle.make_announcement(peer, Announcement::Block(blocks[1].header().clone()));
+    handle.make_announcement(peer, Announcement::Block(block_2.header().clone()));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
@@ -154,21 +173,29 @@ async fn invalid_consensus_data() {
     handle.assert_no_error().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn valid_block() {
+async fn valid_block(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
+        .with_chainstate(chainstate)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
 
     let (sent_to, message) = handle.message().await;

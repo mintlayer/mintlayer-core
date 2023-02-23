@@ -15,12 +15,11 @@
 
 use std::{iter, sync::Arc};
 
-use chainstate::ban_score::BanScore;
+use chainstate::{ban_score::BanScore, BlockSource};
+use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use crypto::random::Rng;
-use p2p_test_utils::{
-    create_block, create_n_blocks, import_blocks, start_chainstate, TestBlockInfo,
-};
+use p2p_test_utils::{chainstate_subsystem, create_n_blocks};
 use test_utils::random::Seed;
 
 use crate::{
@@ -36,6 +35,7 @@ async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
+
     handle.send_message(
         peer,
         SyncMessage::BlockListRequest(BlockListRequest::new(Vec::new())),
@@ -45,22 +45,27 @@ async fn nonexistent_peer() {
     handle.assert_no_peer_manager_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn max_block_count_in_request_exceeded() {
-    let p2p_config = Arc::new(P2pConfig::default());
-    let chain_config = Arc::new(create_unit_test_config());
-    let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
-    // Import a block to finish the initial block download.
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
-    import_blocks(&chainstate, vec![block.clone()]).await;
+async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    let block = tf.make_block_builder().build();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
+    let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
         .with_p2p_config(Arc::clone(&p2p_config))
+        .with_chainstate(chainstate)
         .build()
         .await;
 
@@ -84,19 +89,24 @@ async fn max_block_count_in_request_exceeded() {
     handle.assert_no_event().await;
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn unknown_blocks() {
+async fn unknown_blocks(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let chain_config = Arc::new(create_unit_test_config());
-    let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
-    // Import a block to finish the initial block download.
-    let block = create_block(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-    );
-    import_blocks(&chainstate, vec![block.clone()]).await;
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    tf.make_block_builder().build_and_process().unwrap().unwrap();
+    let unknown_blocks = create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
+        .with_chain_config(chain_config)
         .with_chainstate(chainstate)
         .build()
         .await;
@@ -104,10 +114,6 @@ async fn unknown_blocks() {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let unknown_blocks = create_n_blocks(chain_config, TestBlockInfo::from_block(&block), 2)
-        .into_iter()
-        .map(|b| b.get_id())
-        .collect();
     handle.send_message(
         peer,
         SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)),
@@ -130,15 +136,16 @@ async fn valid_request(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());
-    let chainstate = start_chainstate(Arc::clone(&chain_config)).await;
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
     // Import several blocks.
     let num_blocks = rng.gen_range(2..10);
-    let blocks = create_n_blocks(
-        Arc::clone(&chain_config),
-        TestBlockInfo::from_genesis(chain_config.genesis_block()),
-        num_blocks,
-    );
-    import_blocks(&chainstate, blocks.clone()).await;
+    let blocks = create_n_blocks(&mut tf, num_blocks);
+    for block in blocks.clone() {
+        tf.process_block(block, BlockSource::Local).unwrap().unwrap();
+    }
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)

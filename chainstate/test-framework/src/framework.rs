@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    utils::{outputs_from_block, outputs_from_genesis},
-    BlockBuilder, TestFrameworkBuilder, TestStore,
+use std::{
+    collections::BTreeMap,
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
 };
+
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource, ChainstateError};
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
@@ -25,16 +27,17 @@ use common::{
     time_getter::TimeGetter,
 };
 use crypto::random::{CryptoRng, Rng};
+
 use rstest::rstest;
-use std::{
-    collections::BTreeMap,
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
+
+use crate::{
+    utils::{outputs_from_block, outputs_from_genesis},
+    BlockBuilder, TestChainstate, TestFrameworkBuilder, TestStore,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
-    pub chainstate: super::TestChainstate,
+    pub chainstate: TestChainstate,
     pub storage: TestStore,
     pub block_indexes: Vec<BlockIndex>,
     // A clone of the TimeGetter supplied to the chainstate
@@ -51,7 +54,7 @@ impl TestFramework {
         TestFrameworkBuilder::new(rng)
     }
 
-    pub fn chainstate(self) -> super::TestChainstate {
+    pub fn chainstate(self) -> TestChainstate {
         self.chainstate
     }
 
@@ -180,6 +183,11 @@ impl TestFramework {
     pub fn index_at(&self, at: usize) -> &BlockIndex {
         assert!(at > 0, "No block index for genesis");
         &self.block_indexes[at - 1]
+    }
+
+    /// Consumes a test framework and returns chainstate.
+    pub fn into_chainstate(self) -> TestChainstate {
+        self.chainstate
     }
 }
 
