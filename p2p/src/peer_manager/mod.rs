@@ -87,8 +87,6 @@ const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 const DNS_SEEDS: [&str; 2] = ["seed.mintlayer.org", "seed2.mintlayer.org"];
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
-/// Minimum time to query DNS servers
-const MIN_DNS_QUERY_PERIOD: Duration = Duration::from_secs(60);
 
 pub struct PeerManager<T, S>
 where
@@ -120,9 +118,6 @@ where
 
     /// Peer database
     peerdb: peerdb::PeerDb<T, S>,
-
-    /// Last time the DNS seed was loaded
-    last_dns_reload: Option<Instant>,
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
@@ -158,7 +153,6 @@ where
             pending_disconnects: HashMap::new(),
             chain_config,
             p2p_config,
-            last_dns_reload: None,
             subscribed_to_peer_addresses: BTreeSet::new(),
         })
     }
@@ -525,16 +519,6 @@ where
 
     /// Fill PeerDb with addresses from DNS seed servers
     async fn reload_dns_seed(&mut self) {
-        let now = Instant::now();
-        let resolved_recently = self
-            .last_dns_reload
-            .map(|time| now.duration_since(time) < MIN_DNS_QUERY_PERIOD)
-            .unwrap_or(false);
-        if resolved_recently {
-            return;
-        }
-        self.last_dns_reload = Some(now);
-
         log::debug!("Resolve DNS seed...");
         let results = futures::future::join_all(
             DNS_SEEDS
