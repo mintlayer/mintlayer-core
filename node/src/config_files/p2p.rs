@@ -56,6 +56,8 @@ pub struct P2pConfigFile {
     pub bind_addresses: Option<Vec<String>>,
     /// Optional list of initial node addresses to connect.
     pub added_nodes: Option<Vec<String>>,
+    /// Maximum allowed number of inbound connections.
+    pub max_inbound_connections: Option<usize>,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: Option<u32>,
     /// Duration of bans in seconds.
@@ -75,6 +77,7 @@ impl From<P2pConfigFile> for P2pConfig {
         P2pConfig {
             bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
             added_nodes: c.added_nodes.clone().unwrap_or_default(),
+            max_inbound_connections: c.max_inbound_connections.into(),
             ban_threshold: c.ban_threshold.into(),
             ban_duration: c.ban_duration.map(Duration::from_secs).into(),
             outbound_connection_timeout: c

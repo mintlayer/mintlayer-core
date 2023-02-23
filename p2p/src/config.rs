@@ -19,6 +19,7 @@ use utils::make_config_setting;
 
 use crate::net::types::PubSubTopic;
 
+make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(BanThreshold, u32, 100);
 make_config_setting!(BanDuration, Duration, Duration::from_secs(60 * 60 * 24));
 make_config_setting!(OutboundConnectionTimeout, Duration, Duration::from_secs(10));
@@ -37,7 +38,7 @@ pub enum NodeType {
     Full,
     /// A node that only download blocks, but ignores transactions.
     BlocksOnly,
-    /// A node that only is interested in network address announcements
+    /// A node interested only in network address announcements.
     DnsServer,
     /// A node that doesn't subscribe to any events.
     ///
@@ -67,6 +68,8 @@ pub struct P2pConfig {
     pub bind_addresses: Vec<String>,
     /// Optional list of initial node addresses, could be used to specify boot nodes for example.
     pub added_nodes: Vec<String>,
+    /// Maximum allowed number of inbound connections.
+    pub max_inbound_connections: MaxInboundConnections,
     /// The score threshold after which a peer is banned.
     pub ban_threshold: BanThreshold,
     /// Duration of bans in seconds.

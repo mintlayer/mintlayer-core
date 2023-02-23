@@ -99,6 +99,7 @@ fn read_config_override_values() {
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
     let p2p_add_node = "add_node";
+    let p2p_max_inbound_connections = 123;
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let p2p_ping_check_period = 30;
@@ -117,6 +118,7 @@ fn read_config_override_values() {
         tx_index_enabled: Some(false),
         p2p_addr: Some(vec![p2p_addr.to_owned()]),
         p2p_add_node: Some(vec![p2p_add_node.to_owned()]),
+        p2p_max_inbound_connections: Some(p2p_max_inbound_connections),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         p2p_ping_check_period: Some(p2p_ping_check_period),
@@ -153,6 +155,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.p2p.clone().unwrap().added_nodes,
         Some(vec!(p2p_add_node.to_owned()))
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().max_inbound_connections,
+        Some(p2p_max_inbound_connections)
     );
     assert_eq!(
         config.p2p.clone().unwrap().ban_threshold,

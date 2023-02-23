@@ -65,9 +65,6 @@ use self::{
     peerdb::storage::PeerDbStorage,
 };
 
-/// Maximum number of connections the [`PeerManager`] is allowed to have open
-const MAX_ACTIVE_CONNECTIONS: usize = 128;
-
 /// Maximum number of outbound connections the [`PeerManager`] is allowed to have open
 const MAX_OUTBOUND_CONNECTIONS: usize = 8;
 
@@ -344,9 +341,9 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        // If the maximum number of connections is reached, the connection cannot be
-        // accepted even if it's valid.
-        if self.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
+        // If the maximum number of inbound connections is reached,
+        // the connection cannot be accepted even if it's valid.
+        if self.peerdb.inbound_peer_count() >= *self.p2p_config.max_inbound_connections {
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
@@ -533,6 +530,7 @@ where
                 Ok(list) => {
                     list.filter_map(|addr| {
                         TransportAddress::from_peer_address(
+                            // Convert SocketAddr to PeerAddress
                             &addr.into(),
                             *self.p2p_config.allow_discover_private_ips,
                         )
@@ -583,6 +581,7 @@ where
             && self.peers.is_empty()
             && self.pending_connects.is_empty()
         {
+            // TODO(PR): Change this
             self.reload_dns_seed().await;
             self.peerdb.select_new_outbound_addresses()
         } else {
@@ -918,10 +917,9 @@ where
         loop {
             // Run heartbeat if needed
             let now = Instant::now();
-            let recent_heartbeat = last_heartbeat
-                .map(|time| now.duration_since(time) < PEER_MGR_HEARTBEAT_INTERVAL_MIN)
-                .unwrap_or(false);
-            if !recent_heartbeat {
+            if last_heartbeat.map_or(true, |time| {
+                now.duration_since(time) >= PEER_MGR_HEARTBEAT_INTERVAL_MIN
+            }) {
                 self.heartbeat().await?;
                 last_heartbeat = Some(now);
             }

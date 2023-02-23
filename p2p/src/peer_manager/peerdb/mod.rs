@@ -133,6 +133,14 @@ impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
         self.connected_inbound.contains(address) || self.connected_outbound.contains(address)
     }
 
+    pub fn outbound_peer_count(&self) -> usize {
+        self.connected_outbound.len()
+    }
+
+    pub fn inbound_peer_count(&self) -> usize {
+        self.connected_inbound.len()
+    }
+
     /// Iterator of all known addresses.
     ///
     /// Result could be shared with remote peers over network.

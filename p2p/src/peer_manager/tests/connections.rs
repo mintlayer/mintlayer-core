@@ -22,7 +22,7 @@ use std::{
 use tokio::time::timeout;
 
 use crate::{
-    config::P2pConfig,
+    config::{MaxInboundConnections, P2pConfig},
     net::types::Role,
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
@@ -423,8 +423,8 @@ where
         pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
     }
     assert_eq!(
-        pm1.active_peer_count(),
-        peer_manager::MAX_ACTIVE_CONNECTIONS
+        pm1.peerdb.inbound_peer_count(),
+        *MaxInboundConnections::default()
     );
 
     let (_address, peer_info, _) = connect_services::<T>(
@@ -448,7 +448,7 @@ where
 #[tokio::test]
 async fn inbound_connection_too_many_peers_tcp() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
@@ -475,7 +475,7 @@ async fn inbound_connection_too_many_peers_tcp() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_channels() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("{}", index + 10000).parse().expect("valid address"),
@@ -502,7 +502,7 @@ async fn inbound_connection_too_many_peers_channels() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_noise() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
@@ -680,6 +680,7 @@ where
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -710,6 +711,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses,
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -780,6 +782,7 @@ where
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -811,6 +814,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses.clone(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -835,6 +839,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses,
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
