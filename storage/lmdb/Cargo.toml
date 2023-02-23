@@ -15,7 +15,7 @@ lmdb-mintlayer = { git = 'https://github.com/mintlayer/lmdb-rs-mintlayer.git', t
 [dev-dependencies]
 storage-backend-test-suite = { path = "../backend-test-suite" }
 test-utils = { path = "../../test-utils" }
-tempdir = "0.3"
+tempfile = "3.3"
 rstest = "0.16"
 
 [[test]]

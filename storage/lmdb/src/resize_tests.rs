@@ -15,12 +15,11 @@
 
 use std::{collections::BTreeMap, sync::Mutex};
 
-use memsize::MemSize;
 use rstest::rstest;
+
+use memsize::MemSize;
 use storage_core::backend::{Backend, BackendImpl, ReadOps, TxRw, WriteOps};
-use tempdir::TempDir;
-use test_utils::random::make_seedable_rng;
-use test_utils::random::{CryptoRng, Rng, Seed};
+use test_utils::random::{make_seedable_rng, CryptoRng, Rng, Seed};
 
 use super::*;
 
@@ -71,7 +70,7 @@ fn auto_map_resize_between_txs(#[case] seed: Seed) {
             resize_trigger_percentage: 0.9,
         };
 
-        let data_dir = TempDir::new("lmdb_resize").unwrap();
+        let data_dir = tempfile::Builder::new().prefix("lmdb_resize").tempdir().unwrap();
         let lmdb = Lmdb::new(
             data_dir.path().to_owned(),
             MemSize::from_bytes(initial_map_size).into(),
@@ -142,7 +141,7 @@ fn auto_map_resize_between_puts(#[case] seed: Seed) {
             resize_trigger_percentage: 0.9,
         };
 
-        let data_dir = TempDir::new("lmdb_resize").unwrap();
+        let data_dir = tempfile::Builder::new().prefix("lmdb_resize").tempdir().unwrap();
         let lmdb = Lmdb::new(
             data_dir.path().to_owned(),
             MemSize::from_bytes(initial_map_size).into(),
