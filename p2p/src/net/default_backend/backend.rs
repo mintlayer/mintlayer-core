@@ -83,7 +83,7 @@ pub struct Backend<T: TransportSocket> {
     p2p_config: Arc<P2pConfig>,
 
     /// RX channel for receiving commands from the frontend
-    cmd_rx: mpsc::UnboundedReceiver<Command<T>>,
+    cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
 
     /// Active peers
     peers: HashMap<PeerId, PeerContext>,
@@ -119,7 +119,7 @@ where
         socket: T::Listener,
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        cmd_rx: mpsc::UnboundedReceiver<Command<T>>,
+        cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
     ) -> Self {
@@ -519,7 +519,7 @@ where
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: Command<T>) -> crate::Result<()> {
+    async fn handle_command(&mut self, command: Command<T::Address>) -> crate::Result<()> {
         // All handlings are separated to two parts:
         // - Async (can't take mutable reference to self because they are run concurrently).
         // - Sync (take mutable reference to self because they are run sequentially).

@@ -24,14 +24,14 @@ use crate::{
         BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage,
         PingRequest, PingResponse, SyncMessage,
     },
-    net::{default_backend::transport::TransportSocket, types::PubSubTopic},
+    net::types::PubSubTopic,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 #[derive(Debug)]
-pub enum Command<T: TransportSocket> {
+pub enum Command<A> {
     Connect {
-        address: T::Address,
+        address: A,
     },
     Disconnect {
         peer_id: PeerId,

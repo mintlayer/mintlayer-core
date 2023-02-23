@@ -51,7 +51,7 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
     local_addresses: Vec<S::Address>,
 
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
 
     /// RX channel for receiving connectivity events from default_backend backend
     conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
@@ -62,7 +62,7 @@ pub struct ConnectivityHandle<S: NetworkingService, T: TransportSocket> {
 impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
     pub fn new(
         local_addresses: Vec<S::Address>,
-        cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+        cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
         conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<T::Address>>,
     ) -> Self {
         Self {
@@ -81,7 +81,7 @@ where
     T: TransportSocket,
 {
     /// TX channel for sending commands to default_backend backend
-    cmd_tx: mpsc::UnboundedSender<types::Command<T>>,
+    cmd_tx: mpsc::UnboundedSender<types::Command<T::Address>>,
 
     /// RX channel for receiving syncing events
     sync_rx: mpsc::UnboundedReceiver<SyncingEvent>,
