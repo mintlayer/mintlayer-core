@@ -22,9 +22,12 @@ use std::{
 
 use itertools::Itertools;
 
-use crate::primitives::merkle::{
-    tree::{MerkleTree, Node},
-    MerkleTreeProofExtractionError,
+use crate::primitives::{
+    merkle::{
+        tree::{MerkleTree, Node},
+        MerkleTreeProofExtractionError,
+    },
+    H256,
 };
 
 use self::ordered_node::NodeWithAbsOrder;
@@ -146,6 +149,109 @@ impl<'a> MultiProofNodes<'a> {
 
     pub fn tree_leaves_count(&self) -> NonZeroUsize {
         self.tree_leaves_count
+    }
+
+    pub fn into_values(self) -> MultiProofHashes {
+        MultiProofHashes {
+            nodes: self.nodes.into_iter().map(|n| (n.abs_index(), *n.hash())).collect(),
+            tree_leaves_count: self.proof_leaves[0].tree().leaves_count(),
+        }
+    }
+}
+
+#[must_use]
+#[derive(Debug, Clone)]
+pub struct MultiProofHashes {
+    /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
+    nodes: BTreeMap<usize, H256>,
+    /// The number of leaves in the tree, from which this proof was extracted
+    tree_leaves_count: NonZeroUsize,
+}
+
+impl MultiProofHashes {
+    pub fn nodes(&self) -> &BTreeMap<usize, H256> {
+        &self.nodes
+    }
+
+    pub fn tree_leaves_count(&self) -> NonZeroUsize {
+        self.tree_leaves_count
+    }
+
+    /// Given a set of leaves and their indices, verify that the root hash is correct
+    pub fn verify(&self, leaves: BTreeMap<usize, H256>, root: H256) -> Option<bool> {
+        // in case it's a single-node tree, we don't need to verify or hash anything
+        // TODO(PR): Maybe return an error instead?
+        if self.nodes.is_empty() {
+            return None;
+        }
+
+        if leaves.is_empty() {
+            return None;
+            // no leaves provided
+        }
+
+        if self.tree_leaves_count.get().count_ones() != 1 {
+            // Must be a power of two
+            return None;
+        }
+
+        if leaves.iter().any(|(index, _hash)| *index >= self.tree_leaves_count.get()) {
+            // One or more indices are out of range
+            return None;
+        }
+
+        let tree_size = self.tree_leaves_count.get() * 2 - 1;
+        let level_count = tree_size.trailing_ones() as usize;
+
+        if self.nodes.iter().any(|(index, _hash)| *index >= tree_size) {
+            // One ore more nodes index is out of range
+            return None;
+        }
+
+        let leaf_sibling_index = |leaf_index: usize| {
+            if leaf_index % 2 == 0 {
+                leaf_index + 1
+            } else {
+                leaf_index - 1
+            }
+        };
+
+        let all_nodes = self.nodes.iter().chain(leaves.iter()).collect::<BTreeMap<_, _>>();
+
+        let mut result = true;
+
+        for (leaf_index_in_level, leaf_hash) in &leaves {
+            let mut hash = *leaf_hash;
+            let mut curr_leaf_index = *leaf_index_in_level;
+            let mut proof_level_index = 0;
+
+            loop {
+                let sibling_index = leaf_sibling_index(curr_leaf_index);
+                let sibling = match all_nodes.get(&sibling_index) {
+                    Some(sibling) => *sibling,
+                    None => return None, // Sibling not found error / incomplete proof
+                };
+                let parent_hash = if curr_leaf_index % 2 == 0 {
+                    MerkleTree::combine_pair(&hash, sibling)
+                } else {
+                    MerkleTree::combine_pair(sibling, &hash)
+                };
+
+                // move to the next level
+                hash = parent_hash;
+                curr_leaf_index /= 2;
+                proof_level_index += 1;
+
+                result |= parent_hash == root;
+
+                // the last hash in the proof is the one right before root, hence hashing will result in root's hash
+                if proof_level_index + 1 >= level_count {
+                    break;
+                }
+            }
+        }
+
+        Some(result)
     }
 }
 

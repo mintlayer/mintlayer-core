@@ -451,3 +451,20 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
     );
     assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
+
+#[test]
+fn multi_proof_eight_leaves() {
+    let leaves = gen_leaves(8);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let leaves_indices = &[0, 1, 2];
+    let multi_proof = MultiProofNodes::from_tree_leaves(&t, leaves_indices).unwrap();
+    assert!(multi_proof
+        .into_values()
+        .verify(indices_to_map(leaves_indices), t.root())
+        .unwrap());
+}
