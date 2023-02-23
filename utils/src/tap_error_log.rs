@@ -45,7 +45,7 @@ impl<T, E: Display> LogError for Result<T, E> {
     #[inline(always)]
     fn log_err_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            logging::log::error!("{}{}", prefix, err);
+            logging::log::error!("{}: {}", prefix, err);
         }
         self
     }
@@ -53,7 +53,7 @@ impl<T, E: Display> LogError for Result<T, E> {
     #[inline(always)]
     fn log_warn_pfx(self, prefix: &str) -> Self {
         if let Err(ref err) = self {
-            logging::log::warn!("{}{}", prefix, err);
+            logging::log::warn!("{}: {}", prefix, err);
         }
         self
     }

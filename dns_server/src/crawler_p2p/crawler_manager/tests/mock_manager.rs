@@ -31,17 +31,20 @@ use p2p::{
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, Announcement, PeerManagerMessage, SyncMessage},
     net::{
-        default_backend::{transport::TransportAddress, types::PeerId},
+        default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     testing_utils::P2pTestTimeGetter,
+    types::peer_id::PeerId,
 };
 use tokio::sync::mpsc;
 
 use crate::{
-    crawler::{storage_impl::DnsServerStorageImpl, Crawler, CrawlerConfig},
-    dns_server::ServerCommands,
+    crawler_p2p::crawler_manager::{
+        storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
+    },
+    dns_server::DnsServerCommand,
 };
 
 pub struct TestNode {
@@ -50,11 +53,11 @@ pub struct TestNode {
 
 #[derive(Clone)]
 pub struct MockStateRef {
-    pub crawler_config: CrawlerConfig,
+    pub crawler_config: CrawlerManagerConfig,
     pub online: Arc<Mutex<BTreeMap<SocketAddr, TestNode>>>,
     pub connected: Arc<Mutex<BTreeMap<SocketAddr, PeerId>>>,
     pub connection_attempts: Arc<Mutex<Vec<SocketAddr>>>,
-    pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent<MockNetworkingService>>,
+    pub conn_tx: mpsc::UnboundedSender<ConnectivityEvent<SocketAddr>>,
 }
 
 impl MockStateRef {
@@ -63,16 +66,6 @@ impl MockStateRef {
             ip,
             TestNode {
                 chain_config: Arc::new(common::chain::config::create_mainnet()),
-            },
-        );
-        assert!(old.is_none());
-    }
-
-    pub fn node_online_incompatible(&self, ip: SocketAddr) {
-        let old = self.online.lock().unwrap().insert(
-            ip,
-            TestNode {
-                chain_config: Arc::new(common::chain::config::create_regtest()),
             },
         );
         assert!(old.is_none());
@@ -99,12 +92,12 @@ impl MockStateRef {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MockNetworkingService {}
 
 pub struct MockConnectivityHandle {
     pub state: MockStateRef,
-    pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<MockNetworkingService>>,
+    pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<SocketAddr>>,
 }
 
 pub struct MockSyncingMessagingHandle {}
@@ -114,7 +107,6 @@ impl NetworkingService for MockNetworkingService {
     type Transport = ();
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
-    type PeerId = PeerId;
     type ConnectivityHandle = MockConnectivityHandle;
     type SyncingMessagingHandle = MockSyncingMessagingHandle;
 
@@ -182,10 +174,10 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
     }
 
     fn local_addresses(&self) -> &[SocketAddr] {
-        unreachable!()
+        &[]
     }
 
-    async fn poll_next(&mut self) -> p2p::Result<ConnectivityEvent<MockNetworkingService>> {
+    async fn poll_next(&mut self) -> p2p::Result<ConnectivityEvent<SocketAddr>> {
         Ok(self.conn_rx.recv().await.unwrap())
     }
 }
@@ -200,7 +192,7 @@ impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHand
         unreachable!()
     }
 
-    async fn poll_next(&mut self) -> p2p::Result<SyncingEvent<MockNetworkingService>> {
+    async fn poll_next(&mut self) -> p2p::Result<SyncingEvent> {
         std::future::pending().await
     }
 }
@@ -208,16 +200,16 @@ impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHand
 pub fn test_crawler(
     add_node: Vec<SocketAddr>,
 ) -> (
-    Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
+    CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
-    mpsc::UnboundedReceiver<ServerCommands>,
+    mpsc::UnboundedReceiver<DnsServerCommand>,
     P2pTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let add_node = add_node.iter().map(ToString::to_string).collect();
-    let crawler_config = CrawlerConfig {
+    let crawler_config = CrawlerManagerConfig {
         add_node,
-        p2p_port: 3031,
+        default_p2p_port: 3031,
     };
 
     let state = MockStateRef {
@@ -237,28 +229,31 @@ pub fn test_crawler(
     let storage = storage::inmemory::InMemory::new();
     let store = DnsServerStorageImpl::new(storage).unwrap();
 
-    let (command_tx, command_rx) = mpsc::unbounded_channel();
+    let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
-    let crawler = Crawler::<MockNetworkingService, _>::new(
+    let crawler = CrawlerManager::<MockNetworkingService, _>::new(
         crawler_config,
         chain_config,
         conn,
         sync,
         store,
-        command_tx,
+        dns_server_cmd_tx,
     )
     .unwrap();
 
     let time_getter = P2pTestTimeGetter::new();
 
-    (crawler, state, command_rx, time_getter)
+    (crawler, state, dns_server_cmd_rx, time_getter)
 }
 
 /// Move tokio time multiple times in specified steps, polling the crawler at the same time
 /// Used to simulate elapsed time more accurately.
 pub async fn advance_time(
-    crawler: &mut Crawler<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
+    crawler: &mut CrawlerManager<
+        MockNetworkingService,
+        DnsServerStorageImpl<storage::inmemory::InMemory>,
+    >,
     time_getter: &P2pTestTimeGetter,
     step: Duration,
     count: u32,

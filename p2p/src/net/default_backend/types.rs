@@ -13,12 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeSet,
-    hash::Hash,
-    str::FromStr,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::collections::BTreeSet;
 
 use common::primitives::semver::SemVer;
 use serialization::{Decode, Encode};
@@ -34,7 +29,7 @@ use crate::{
         default_backend::transport::TransportSocket,
         types::{PeerInfo, PubSubTopic},
     },
-    types::peer_address::PeerAddress,
+    types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 #[derive(Debug)]
@@ -74,12 +69,12 @@ pub enum ConnectivityEvent<T: TransportSocket> {
     },
     InboundAccepted {
         address: T::Address,
-        peer_info: PeerInfo<PeerId>,
+        peer_info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     },
     OutboundAccepted {
         address: T::Address,
-        peer_info: PeerInfo<PeerId>,
+        peer_info: PeerInfo,
         receiver_address: Option<PeerAddress>,
     },
     ConnectionError {
@@ -104,32 +99,6 @@ pub enum PubSubEvent<T: TransportSocket> {
         topic: PubSubTopic,
         message: Announcement,
     },
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug, Encode, Decode)]
-pub struct PeerId(u64);
-
-impl FromStr for PeerId {
-    type Err = <u64 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        u64::from_str(s).map(Self)
-    }
-}
-
-static NEXT_PEER_ID: AtomicU64 = AtomicU64::new(1);
-
-impl PeerId {
-    pub fn new() -> Self {
-        let id = NEXT_PEER_ID.fetch_add(1, Ordering::Relaxed);
-        Self(id)
-    }
-}
-
-impl std::fmt::Display for PeerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
 }
 
 /// Random nonce sent in outbound handshake.

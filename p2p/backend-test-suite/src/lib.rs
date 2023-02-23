@@ -29,10 +29,7 @@ use std::fmt::Debug;
 use libtest_mimic::{Arguments, Trial};
 
 use p2p::{
-    net::{
-        default_backend::types::PeerId, ConnectivityService, NetworkingService,
-        SyncingMessagingService,
-    },
+    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
     testing_utils::{RandomAddressMaker, TestTransportMaker},
 };
 
@@ -40,7 +37,7 @@ use p2p::{
 pub fn run<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService<PeerId = PeerId> + Debug + 'static,
+    N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
     N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
     A: RandomAddressMaker<Address = N::Address>,
@@ -54,7 +51,7 @@ where
 fn tests<T, N, A>() -> Vec<Trial>
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService<PeerId = PeerId> + Debug + 'static,
+    N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
     N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
     A: RandomAddressMaker<Address = N::Address>,

@@ -24,13 +24,14 @@ use crate::{
     net::{
         default_backend::{
             transport::TcpTransportSocket,
-            types::{Command, ConnectivityEvent, Message, PeerId},
+            types::{Command, ConnectivityEvent, Message},
             ConnectivityHandle, DefaultNetworkingService,
         },
         types::PeerInfo,
     },
     peer_manager::PeerManager,
     testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter},
+    types::peer_id::PeerId,
 };
 
 #[tokio::test]

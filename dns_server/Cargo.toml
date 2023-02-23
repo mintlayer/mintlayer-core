@@ -16,6 +16,7 @@ storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
 serialization = { path = "../serialization" }
 logging = { path = "../logging" }
+utils = { path = '../utils' }
 
 # External dependencies
 tokio = { workspace = true, default-features = false }
@@ -27,3 +28,7 @@ parity-scale-codec.workspace = true
 void = "1.0"
 clap = { version = "4", features = ["derive"] }
 directories = "4.0"
+
+[dev-dependencies]
+rstest = "0.16"
+test-utils = { path = "../test-utils" }

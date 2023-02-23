@@ -13,20 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mock;
+mod mock_manager;
 
 use std::{net::SocketAddr, time::Duration};
 
 use crate::{
-    crawler::{
+    crawler_p2p::crawler_manager::{
         storage::{DnsServerStorageRead, DnsServerTransactional},
-        tests::mock::{advance_time, test_crawler},
+        tests::mock_manager::{advance_time, test_crawler},
     },
-    dns_server::ServerCommands,
+    dns_server::DnsServerCommand,
 };
 
 #[tokio::test]
-async fn dns_crawler_basic() {
+async fn basic() {
     let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
@@ -35,7 +35,7 @@ async fn dns_crawler_basic() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.ip())
     );
 
     // Node goes offline, DNS record removed
@@ -43,12 +43,12 @@ async fn dns_crawler_basic() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::DelAddress(node1.ip())
+        DnsServerCommand::DelAddress(node1.ip())
     );
 }
 
 #[tokio::test]
-async fn dns_crawler_long_offline() {
+async fn long_offline() {
     let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
 
@@ -66,12 +66,12 @@ async fn dns_crawler_long_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.ip())
     );
 }
 
 #[tokio::test]
-async fn dns_crawler_announced_online() {
+async fn announced_online() {
     let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
     let node2: SocketAddr = "1.2.3.5:3031".parse().unwrap();
     let node3: SocketAddr = "[2a00::1]:3031".parse().unwrap();
@@ -84,21 +84,21 @@ async fn dns_crawler_announced_online() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.ip())
     );
 
     state.announce_address(node1, node2);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.ip())
     );
 
     state.announce_address(node2, node3);
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node3.ip())
+        DnsServerCommand::AddAddress(node3.ip())
     );
 
     let addresses = crawler.storage.transaction_ro().unwrap().get_addresses().unwrap();
@@ -106,14 +106,10 @@ async fn dns_crawler_announced_online() {
         addresses,
         vec![node1.to_string(), node2.to_string(), node3.to_string()]
     );
-
-    assert!(crawler.addresses.get(&node1).unwrap().user_added);
-    assert!(!crawler.addresses.get(&node2).unwrap().user_added);
-    assert!(!crawler.addresses.get(&node3).unwrap().user_added);
 }
 
 #[tokio::test]
-async fn dns_crawler_announced_offline() {
+async fn announced_offline() {
     let node1: SocketAddr = "1.2.3.4:3031".parse().unwrap();
     let node2: SocketAddr = "1.2.3.5:3031".parse().unwrap();
     let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
@@ -123,7 +119,7 @@ async fn dns_crawler_announced_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 1);
 
@@ -138,13 +134,13 @@ async fn dns_crawler_announced_offline() {
     advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 24 * 60).await;
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.ip())
     );
     assert_eq!(state.connection_attempts.lock().unwrap().len(), 3);
 }
 
 #[tokio::test]
-async fn dns_private_ip_non_default_port() {
+async fn private_ip() {
     let node1: SocketAddr = "1.0.0.1:3031".parse().unwrap();
     let node2: SocketAddr = "[2a00::1]:3031".parse().unwrap();
     let node3: SocketAddr = "192.168.0.1:3031".parse().unwrap();
@@ -166,11 +162,11 @@ async fn dns_private_ip_non_default_port() {
     // Check that only nodes with public addresses and on the default port are added to DNS
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node1.ip())
+        DnsServerCommand::AddAddress(node1.ip())
     );
     assert_eq!(
         command_rx.recv().await.unwrap(),
-        ServerCommands::AddAddress(node2.ip())
+        DnsServerCommand::AddAddress(node2.ip())
     );
     assert!(command_rx.try_recv().is_err());
 
@@ -187,16 +183,4 @@ async fn dns_private_ip_non_default_port() {
     addresses.sort();
     addresses_expected.sort();
     assert_eq!(addresses, addresses_expected);
-}
-
-#[tokio::test]
-async fn dns_crawler_incompatible_node() {
-    let node1: SocketAddr = "1.0.0.1:3031".parse().unwrap();
-    let (mut crawler, state, mut command_rx, time_getter) = test_crawler(vec![node1]);
-
-    // Incompatible node goes online, connection closed
-    state.node_online_incompatible(node1);
-    advance_time(&mut crawler, &time_getter, Duration::from_secs(60), 60).await;
-    assert!(command_rx.try_recv().is_err());
-    assert_eq!(crawler.outbound_peers.len(), 0);
 }

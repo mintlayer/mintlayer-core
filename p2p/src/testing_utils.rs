@@ -155,7 +155,7 @@ impl RandomAddressMaker for TestChannelAddressMaker {
 pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
-) -> (T::Address, PeerInfo<T::PeerId>, PeerInfo<T::PeerId>)
+) -> (T::Address, PeerInfo, PeerInfo)
 where
     T: NetworkingService + Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
@@ -194,11 +194,11 @@ where
 pub async fn filter_connectivity_event<T, F>(
     conn: &mut T::ConnectivityHandle,
     predicate: F,
-) -> crate::Result<ConnectivityEvent<T>>
+) -> crate::Result<ConnectivityEvent<T::Address>>
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    F: Fn(&crate::Result<ConnectivityEvent<T>>) -> bool,
+    F: Fn(&crate::Result<ConnectivityEvent<T::Address>>) -> bool,
 {
     let recv_fut = async {
         loop {
@@ -217,12 +217,12 @@ where
 /// Returns first event or panics on timeout.
 pub async fn get_connectivity_event<T>(
     conn: &mut T::ConnectivityHandle,
-) -> crate::Result<ConnectivityEvent<T>>
+) -> crate::Result<ConnectivityEvent<T::Address>>
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    filter_connectivity_event(conn, |_event| true).await
+    filter_connectivity_event::<T, _>(conn, |_event| true).await
 }
 
 pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory> {

@@ -93,6 +93,15 @@ impl IsGlobalIp for std::net::Ipv6Addr {
     }
 }
 
+impl IsGlobalIp for std::net::IpAddr {
+    fn is_global_unicast_ip(&self) -> bool {
+        match self {
+            std::net::IpAddr::V4(ip) => ip.is_global_unicast_ip(),
+            std::net::IpAddr::V6(ip) => ip.is_global_unicast_ip(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::IsGlobalIp;

@@ -906,13 +906,16 @@ dependencies = [
  "logging",
  "p2p",
  "parity-scale-codec",
+ "rstest",
  "serialization",
  "storage",
  "storage-lmdb",
+ "test-utils",
  "thiserror",
  "tokio",
  "trust-dns-client",
  "trust-dns-server",
+ "utils",
  "void",
 ]
 

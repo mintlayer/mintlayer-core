@@ -14,8 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    error::PeerError, net::default_backend::types::PeerId, sync::tests::helpers::SyncManagerHandle,
-    P2pError,
+    error::PeerError, sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId, P2pError,
 };
 
 // Check that the header list request is sent to a newly connected peer.

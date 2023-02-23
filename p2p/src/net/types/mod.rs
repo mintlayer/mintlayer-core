@@ -23,8 +23,8 @@ use serialization::{Decode, Encode};
 
 use crate::{
     message::{Announcement, PeerManagerMessage, SyncMessage},
-    types::peer_address::PeerAddress,
-    NetworkingService, P2pError,
+    types::{peer_address::PeerAddress, peer_id::PeerId},
+    P2pError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,9 +43,9 @@ pub enum Role {
 /// the information is passed on to [crate::peer_manager::PeerManager] which decides whether it
 /// wants to keep the connection open or close it and possibly ban the peer from.
 #[derive(Debug, PartialEq, Eq)]
-pub struct PeerInfo<P> {
+pub struct PeerInfo {
     /// Unique ID of the peer
-    pub peer_id: P,
+    pub peer_id: PeerId,
 
     /// Peer network
     pub network: [u8; 4],
@@ -60,14 +60,14 @@ pub struct PeerInfo<P> {
     pub subscriptions: BTreeSet<PubSubTopic>,
 }
 
-impl<P> PeerInfo<P> {
+impl PeerInfo {
     pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
         // TODO: Check version here
         self.network == *chain_config.magic_bytes()
     }
 }
 
-impl<P: Debug> Display for PeerInfo<P> {
+impl Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
@@ -85,18 +85,18 @@ impl<P: Debug> Display for PeerInfo<P> {
 
 /// Connectivity-related events received from the network
 #[derive(Debug)]
-pub enum ConnectivityEvent<T: NetworkingService> {
+pub enum ConnectivityEvent<A> {
     Message {
-        peer: T::PeerId,
+        peer: PeerId,
         message: PeerManagerMessage,
     },
     /// Outbound connection accepted
     OutboundAccepted {
         /// Peer address
-        address: T::Address,
+        address: A,
 
         /// Peer information
-        peer_info: PeerInfo<T::PeerId>,
+        peer_info: PeerInfo,
 
         /// Socket address of this node as seen by remote peer
         receiver_address: Option<PeerAddress>,
@@ -105,10 +105,10 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Inbound connection received
     InboundAccepted {
         /// Peer address
-        address: T::Address,
+        address: A,
 
         /// Peer information
-        peer_info: PeerInfo<T::PeerId>,
+        peer_info: PeerInfo,
 
         /// Socket address of this node as seen by remote peer
         receiver_address: Option<PeerAddress>,
@@ -117,7 +117,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection failed
     ConnectionError {
         /// Address that was dialed
-        address: T::Address,
+        address: A,
 
         /// Error that occurred
         error: P2pError,
@@ -126,13 +126,13 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Remote closed connection
     ConnectionClosed {
         /// Unique ID of the peer
-        peer_id: T::PeerId,
+        peer_id: PeerId,
     },
 
     /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer
-        peer_id: T::PeerId,
+        peer_id: PeerId,
 
         /// Error code of the violation
         error: P2pError,
@@ -141,14 +141,14 @@ pub enum ConnectivityEvent<T: NetworkingService> {
 
 /// Syncing-related events
 #[derive(Debug)]
-pub enum SyncingEvent<T: NetworkingService> {
+pub enum SyncingEvent {
     Message {
-        peer: T::PeerId,
+        peer: PeerId,
         message: SyncMessage,
     },
     /// An announcement that is broadcast to all peers.
     Announcement {
-        peer: T::PeerId,
+        peer: PeerId,
         announcement: Box<Announcement>,
     },
 }

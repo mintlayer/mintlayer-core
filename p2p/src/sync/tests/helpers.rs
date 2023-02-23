@@ -30,8 +30,9 @@ use common::chain::{config::create_mainnet, ChainConfig};
 use p2p_test_utils::start_chainstate;
 
 use crate::{
-    net::default_backend::{transport::TcpTransportSocket, types::PeerId},
+    net::default_backend::transport::TcpTransportSocket,
     sync::{Announcement, BlockSyncManager, SyncControlEvent, SyncMessage, SyncingEvent},
+    types::peer_id::PeerId,
     NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
 };
 
@@ -44,10 +45,10 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 ///
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct SyncManagerHandle {
-    peer_event_sender: UnboundedSender<SyncControlEvent<NetworkingServiceStub>>,
+    peer_event_sender: UnboundedSender<SyncControlEvent>,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
-    sync_event_sender: UnboundedSender<SyncingEvent<NetworkingServiceStub>>,
-    sync_event_receiver: UnboundedReceiver<SyncingEvent<NetworkingServiceStub>>,
+    sync_event_sender: UnboundedSender<SyncingEvent>,
+    sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
 }
 
@@ -192,7 +193,7 @@ impl SyncManagerHandle {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
     }
 
-    async fn event(&mut self) -> SyncingEvent<NetworkingServiceStub> {
+    async fn event(&mut self) -> SyncingEvent {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
             .expect("Failed to receive event in time")
@@ -255,7 +256,6 @@ impl NetworkingService for NetworkingServiceStub {
     type Transport = TcpTransportSocket;
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
-    type PeerId = PeerId;
     type ConnectivityHandle = ();
     type SyncingMessagingHandle = SyncingMessagingHandleMock;
 
@@ -271,8 +271,8 @@ impl NetworkingService for NetworkingServiceStub {
 
 /// A mock implementation of the `SyncingMessagingService` trait.
 struct SyncingMessagingHandleMock {
-    events_sender: UnboundedSender<SyncingEvent<NetworkingServiceStub>>,
-    events_receiver: UnboundedReceiver<SyncingEvent<NetworkingServiceStub>>,
+    events_sender: UnboundedSender<SyncingEvent>,
+    events_receiver: UnboundedReceiver<SyncingEvent>,
 }
 
 #[async_trait]
@@ -292,7 +292,7 @@ impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMo
         Ok(())
     }
 
-    async fn poll_next(&mut self) -> Result<SyncingEvent<NetworkingServiceStub>> {
+    async fn poll_next(&mut self) -> Result<SyncingEvent> {
         Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await
             .expect("Failed to receive event in time")

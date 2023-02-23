@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod ip_address;
-pub mod peer_address;
-pub mod peer_id;
+//! # Mintlayer network crawler
+
+pub mod crawler;
+pub mod crawler_manager;

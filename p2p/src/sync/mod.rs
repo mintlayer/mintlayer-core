@@ -45,6 +45,7 @@ use crate::{
     message::{Announcement, BlockListRequest, BlockResponse, HeaderListRequest, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     sync::peer_context::PeerContext,
+    types::peer_id::PeerId,
     Result,
 };
 
@@ -67,13 +68,13 @@ pub struct BlockSyncManager<T: NetworkingService> {
     messaging_handle: T::SyncingMessagingHandle,
 
     /// A receiver for connect/disconnect events.
-    peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
+    peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent>,
 
     /// A sender for the peer manager events.
     peer_manager_sender: mpsc::UnboundedSender<PeerManagerEvent<T>>,
 
     /// A mapping from a peer identifier to the context for every connected peer.
-    peers: HashMap<T::PeerId, PeerContext>,
+    peers: HashMap<PeerId, PeerContext>,
 
     /// A handle to the chainstate subsystem.
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -83,7 +84,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// The block identifiers are added to the queue as a result of BlockListRequest processing
     /// and removed either after sending a response or when the peer is disconnected. A number of
     /// blocks is limited by `P2pConfig::requested_blocks_limit` per peer.
-    blocks_queue: VecDeque<(T::PeerId, Id<Block>)>,
+    blocks_queue: VecDeque<(PeerId, Id<Block>)>,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
     is_initial_block_download: bool,
@@ -94,7 +95,6 @@ impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
-    T::PeerId: 'static,
 {
     /// Creates a new sync manager instance.
     pub fn new(
@@ -102,7 +102,7 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent<T>>,
+        peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent>,
         peer_manager_sender: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         Self {
@@ -180,7 +180,7 @@ where
     /// Registers the connected peer by creating a context for it.
     ///
     /// The `HeaderListRequest` message is sent to newly connected peers.
-    pub async fn register_peer(&mut self, peer: T::PeerId) -> Result<()> {
+    pub async fn register_peer(&mut self, peer: PeerId) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 
         self.request_headers(peer).await?;
@@ -192,7 +192,7 @@ where
     }
 
     /// Removes the state (`PeerContext`) of the given peer.
-    fn unregister_peer(&mut self, peer: T::PeerId) {
+    fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
 
         // Remove the queued block responses associated with the disconnected peer.
@@ -226,7 +226,7 @@ where
     }
 
     /// Sends a block to the peer.
-    async fn send_block(&mut self, peer: T::PeerId, block: Id<Block>) -> Result<()> {
+    async fn send_block(&mut self, peer: PeerId, block: Id<Block>) -> Result<()> {
         self.peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
@@ -243,7 +243,7 @@ where
     }
 
     /// Sends a header list request to the given peer.
-    async fn request_headers(&mut self, peer: T::PeerId) -> Result<()> {
+    async fn request_headers(&mut self, peer: PeerId) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
@@ -259,7 +259,7 @@ where
     ///
     /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
     /// headers are stored in the peer context.
-    fn request_blocks(&mut self, peer: T::PeerId, mut headers: Vec<BlockHeader>) -> Result<()> {
+    fn request_blocks(&mut self, peer: PeerId, mut headers: Vec<BlockHeader>) -> Result<()> {
         let peer_state = self
             .peers
             .get_mut(&peer)

@@ -39,11 +39,12 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             peer,
             transport::{TransportListener, TransportSocket},
-            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, PeerId, SyncingEvent},
+            types::{Command, ConnectivityEvent, Event, Message, PeerEvent, SyncingEvent},
         },
         types::{PeerInfo, PubSubTopic},
         Announcement,
     },
+    types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
@@ -147,7 +148,7 @@ where
             Ok(socket) => {
                 let handshake_nonce = make_pseudo_rng().gen();
 
-                self.create_peer(
+                self.create_pending_peer(
                     socket,
                     PeerId::new(),
                     PeerRole::Outbound { handshake_nonce },
@@ -169,12 +170,12 @@ where
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .remove(peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        let peer =
+            self.peers.get(peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        peer.tx.send(Event::Disconnect).map_err(P2pError::from)
+        peer.tx.send(Event::Disconnect).map_err(P2pError::from)?;
+
+        self.destroy_peer(*peer_id)
     }
 
     /// Sends a message the remote peer. Might fail if the peer is already disconnected.
@@ -262,7 +263,7 @@ where
                 res = self.socket.accept() => {
                     let (stream, address) = res.map_err(|_| P2pError::DialError(DialError::AcceptFailed))?;
 
-                    self.create_peer(
+                    self.create_pending_peer(
                         stream,
                         PeerId::new(),
                         PeerRole::Inbound,
@@ -273,12 +274,12 @@ where
         }
     }
 
-    /// Create new peer
+    /// Create new pending peer
     ///
     /// Move the connection to `pending` where it stays until either the connection is closed
     /// or the handshake message is received at which point the peer information is moved from
     /// `pending` to `peers` and the front-end is notified about the peer.
-    fn create_peer(
+    fn create_pending_peer(
         &mut self,
         socket: T::Stream,
         remote_peer_id: PeerId,
@@ -320,6 +321,72 @@ where
         });
 
         Ok(())
+    }
+
+    /// Create new peer after handshake.
+    ///
+    /// Try to create a new peer after receiving a handshake.
+    fn create_peer(
+        &mut self,
+        peer_id: PeerId,
+        handshake_nonce: HandshakeNonce,
+        peer_info: PeerInfo,
+        receiver_address: Option<PeerAddress>,
+    ) -> crate::Result<()> {
+        let PendingPeerContext {
+            address,
+            peer_role,
+            tx,
+        } = match self.pending.remove(&peer_id) {
+            Some(pending) => pending,
+            // Could be removed if self-connection was detected earlier
+            None => return Ok(()),
+        };
+
+        if self.is_connection_from_self(peer_role, handshake_nonce)? {
+            return Ok(());
+        }
+
+        let subscriptions = peer_info.subscriptions.clone();
+
+        match peer_role {
+            PeerRole::Outbound { handshake_nonce: _ } => {
+                self.conn_tx
+                    .send(ConnectivityEvent::OutboundAccepted {
+                        address,
+                        peer_info,
+                        receiver_address,
+                    })
+                    .map_err(P2pError::from)?;
+            }
+            PeerRole::Inbound => {
+                self.conn_tx
+                    .send(ConnectivityEvent::InboundAccepted {
+                        address,
+                        peer_info,
+                        receiver_address,
+                    })
+                    .map_err(P2pError::from)?;
+            }
+        }
+
+        self.peers.insert(peer_id, PeerContext { subscriptions, tx });
+
+        Ok(())
+    }
+
+    /// Destroy peer.
+    ///
+    /// Peer should not be in pending state.
+    fn destroy_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        // Make sure the peer exists so that `ConnectionClosed` is sent only once
+        self.peers
+            .remove(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        self.conn_tx
+            .send(ConnectivityEvent::ConnectionClosed { peer_id })
+            .map_err(P2pError::from)
     }
 
     fn is_connection_from_self(
@@ -373,72 +440,33 @@ where
                 subscriptions,
                 receiver_address,
                 handshake_nonce,
-            } => {
-                let PendingPeerContext {
-                    address,
-                    peer_role,
-                    tx,
-                } = match self.pending.remove(&peer_id) {
-                    Some(pending) => pending,
-                    // Might be removed if self-connection detected
-                    None => return Ok(()),
-                };
+            } => self.create_peer(
+                peer_id,
+                handshake_nonce,
+                PeerInfo {
+                    peer_id,
+                    network,
+                    version,
+                    agent: None,
+                    subscriptions,
+                },
+                receiver_address,
+            ),
 
-                if self.is_connection_from_self(peer_role, handshake_nonce)? {
-                    return Ok(());
-                }
+            PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 
-                match peer_role {
-                    PeerRole::Outbound { handshake_nonce: _ } => {
-                        self.conn_tx
-                            .send(ConnectivityEvent::OutboundAccepted {
-                                address,
-                                peer_info: PeerInfo {
-                                    peer_id,
-                                    network,
-                                    version,
-                                    agent: None,
-                                    subscriptions: subscriptions.clone(),
-                                },
-                                receiver_address,
-                            })
-                            .map_err(P2pError::from)?;
-                    }
-                    PeerRole::Inbound => {
-                        self.conn_tx
-                            .send(ConnectivityEvent::InboundAccepted {
-                                address,
-                                peer_info: PeerInfo {
-                                    peer_id,
-                                    network,
-                                    version,
-                                    agent: None,
-                                    subscriptions: subscriptions.clone(),
-                                },
-                                receiver_address,
-                            })
-                            .map_err(P2pError::from)?;
-                    }
-                }
-
-                self.peers.insert(peer_id, PeerContext { subscriptions, tx });
-            }
-            PeerEvent::MessageReceived { message } => {
-                self.handle_message(peer_id, message)?;
-            }
             PeerEvent::ConnectionClosed => {
                 self.pending.remove(&peer_id);
-                self.peers.remove(&peer_id);
 
-                // Probably ConnectionClosed should be only sent if InboundAccepted or OutboundAccepted was sent before.
-                // This can be done by checking self.peers first.
-                // But doing so will break some unit tests.
-                self.conn_tx
-                    .send(ConnectivityEvent::ConnectionClosed { peer_id })
-                    .map_err(P2pError::from)?;
+                // If the peer was previously disconnected by us, the `peers' will be empty.
+                // `ConnectionClosed` should be ignored in such case.
+                if self.peers.contains_key(&peer_id) {
+                    self.destroy_peer(peer_id)?;
+                }
+
+                Ok(())
             }
         }
-        Ok(())
     }
 
     fn handle_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
