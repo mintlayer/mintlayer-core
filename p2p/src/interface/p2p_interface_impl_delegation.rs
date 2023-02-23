@@ -15,6 +15,8 @@
 
 use std::ops::{Deref, DerefMut};
 
+use crate::types::peer_id::PeerId;
+
 use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
@@ -25,7 +27,7 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
         self.deref_mut().connect(addr).await
     }
 
-    async fn disconnect(&mut self, peer_id: String) -> crate::Result<()> {
+    async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         self.deref_mut().disconnect(peer_id).await
     }
 

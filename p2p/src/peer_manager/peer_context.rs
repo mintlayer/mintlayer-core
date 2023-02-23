@@ -57,7 +57,7 @@ pub struct PeerContext<T: NetworkingService> {
 impl<T: NetworkingService> From<&PeerContext<T>> for ConnectedPeer {
     fn from(context: &PeerContext<T>) -> Self {
         ConnectedPeer {
-            peer_id: context.info.peer_id.to_string(),
+            peer_id: context.info.peer_id,
             address: context.address.to_string(),
             inbound: context.role == Role::Inbound,
             ban_score: context.score,

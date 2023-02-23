@@ -169,13 +169,15 @@ where
     }
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
-    fn disconnect_peer(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        let peer =
-            self.peers.get(peer_id).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+    fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         peer.tx.send(Event::Disconnect).map_err(P2pError::from)?;
 
-        self.destroy_peer(*peer_id)
+        self.destroy_peer(peer_id)
     }
 
     /// Sends a message the remote peer. Might fail if the peer is already disconnected.
@@ -543,7 +545,7 @@ where
             }
             Command::Disconnect { peer_id } => async move {
                 boxed_cb(move |this: &mut Self| {
-                    let res = this.disconnect_peer(&peer_id);
+                    let res = this.disconnect_peer(peer_id);
                     if let Err(e) = res {
                         log::debug!("Failed to disconnect peer {peer_id}: {e}")
                     }

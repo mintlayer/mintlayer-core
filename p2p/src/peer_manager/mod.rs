@@ -265,7 +265,7 @@ where
             ))
         );
         ensure!(
-            !self.is_peer_connected(&info.peer_id),
+            !self.is_peer_connected(info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
         ensure!(
@@ -330,7 +330,7 @@ where
         log::debug!("validate inbound connection, inbound address {address:?}");
 
         ensure!(
-            !self.is_peer_connected(&info.peer_id),
+            !self.is_peer_connected(info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
@@ -807,8 +807,8 @@ where
     }
 
     /// Checks if the peer is in active state
-    pub fn is_peer_connected(&self, peer_id: &PeerId) -> bool {
-        self.peers.get(peer_id).is_some()
+    pub fn is_peer_connected(&self, peer_id: PeerId) -> bool {
+        self.peers.get(&peer_id).is_some()
     }
 
     /// Sends ping requests and disconnects peers that do not respond in time
