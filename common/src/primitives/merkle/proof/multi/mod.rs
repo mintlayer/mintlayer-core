@@ -205,11 +205,14 @@ impl MultiProofHashes {
     }
 
     /// Given a set of leaves and their indices, verify that the root hash is correct
+    /// Returns Ok(None) if the proof is empty (i.e. the tree has only one node)
+    /// This choice, to return None, is a security measure to prevent a malicious user from
+    /// circumventing verification by providing a proof of a single node.
     pub fn verify(
         &self,
         leaves: BTreeMap<usize, H256>,
         root: H256,
-    ) -> Result<bool, MerkleProofVerificationError> {
+    ) -> Result<Option<bool>, MerkleProofVerificationError> {
         // in case it's a single-node tree, we don't need to verify or hash anything
         // TODO(PR): Maybe return an error instead?
 
@@ -290,7 +293,7 @@ impl MultiProofHashes {
             }
         }
 
-        Ok(result.unwrap_or(false))
+        Ok(result)
     }
 }
 

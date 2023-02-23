@@ -105,21 +105,24 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
 
 /// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 2 for 2 leaves, yielding 3 tests.
 #[rstest]
-#[rustfmt::skip]
 #[case(&[0], vec![1])]
 #[case(&[1], vec![0])]
 #[case(&[0,1], vec![])]
-fn multi_proof_two_leaves_with_proof_leaves(
-    #[case] input: &[usize],
-    #[case] nodes: Vec<usize>,
-) {
+fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(2);
     let t = MerkleTree::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
+        nodes
+    );
+    assert_eq!(
+        multi_proof
+            .proof_leaves()
+            .iter()
+            .map(|leaf| leaf.abs_index())
+            .collect::<Vec<_>>(),
         input
     );
     assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
@@ -127,7 +130,6 @@ fn multi_proof_two_leaves_with_proof_leaves(
 
 /// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 4 for 4 leaves, yielding 15 tests.
 #[rstest]
-#[rustfmt::skip]
 #[case(&[0], vec![1,5])]
 #[case(&[1], vec![0,5])]
 #[case(&[2], vec![3,4])]
@@ -143,17 +145,21 @@ fn multi_proof_two_leaves_with_proof_leaves(
 #[case(&[0,2,3], vec![1])]
 #[case(&[1,2,3], vec![0])]
 #[case(&[0,1,2,3], vec![])]
-fn multi_proof_four_leaves_with_proof_leaves(
-    #[case] input: &[usize],
-    #[case] nodes: Vec<usize>,
-) {
+fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(4);
     let t = MerkleTree::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
-    assert_eq!(multi_proof.nodes().iter().map(|n|n.abs_index()).collect::<Vec<_>>(), nodes);
     assert_eq!(
-        multi_proof.proof_leaves().iter().map(|leaf| leaf.abs_index()).collect::<Vec<_>>(),
+        multi_proof.nodes().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
+        nodes
+    );
+    assert_eq!(
+        multi_proof
+            .proof_leaves()
+            .iter()
+            .map(|leaf| leaf.abs_index())
+            .collect::<Vec<_>>(),
         input
     );
     assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
@@ -452,19 +458,110 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
     assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
 
-#[test]
-fn multi_proof_eight_leaves() {
-    let leaves = gen_leaves(8);
+fn gen_leaves_indices_combinations(leaves_count: usize) -> impl Iterator<Item = Vec<usize>> {
+    assert_eq!(
+        leaves_count.count_ones(),
+        1,
+        "leaves_count must be a power of 2"
+    );
+    let mut leaves_indices = vec![];
+    for i in 0..leaves_count {
+        leaves_indices.push(i);
+    }
+    (0..leaves_count + 1)
+        .map(move |n| leaves_indices.clone().into_iter().combinations(n))
+        .flatten()
+}
+
+#[rstest]
+#[case(2)]
+#[case(4)]
+#[case(8)]
+fn leaves_count_combinations_generator(#[case] leaves_count: usize) {
+    assert_eq!(
+        gen_leaves_indices_combinations(leaves_count).count(),
+        1 << leaves_count
+    );
+}
+
+#[rstest]
+#[case(8)]
+fn multi_proof_verification_leaves_empty(#[case] leaves_count: usize) {
+    let leaves = gen_leaves(leaves_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
     };
 
-    let leaves_indices = &[0, 1, 6];
-    let multi_proof = MultiProofNodes::from_tree_leaves(&t, leaves_indices).unwrap();
-    assert!(multi_proof
-        .into_values()
-        .verify(indices_to_map(leaves_indices), t.root())
-        .unwrap());
+    // So creating the proof won't work anyway without leaves... but this can still be manipulated
+    assert_eq!(
+        MultiProofNodes::from_tree_leaves(&t, &[]).unwrap_err(),
+        MerkleTreeProofExtractionError::NoLeavesToCreateProof
+    );
+
+    // we provide something  in the creation because it doesn't work with empty leaves, yet we test verification with it
+    let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[0]).unwrap();
+    assert_eq!(
+        multi_proof.into_values().verify(indices_to_map(&[]), t.root()).unwrap_err(),
+        MerkleProofVerificationError::LeavesContainerProvidedIsEmpty,
+        "Failed for indices: {:?}",
+        &[0]
+    );
+}
+
+#[rstest]
+#[case(2, None)]
+#[case(4, None)]
+#[case(8, None)]
+#[case(16, Some(500))]
+#[case(32, Some(500))]
+#[case(64, Some(500))]
+#[case(128, Some(500))]
+fn multi_proof_verification(#[case] leaves_count: usize, #[case] max_test_cases: Option<usize>) {
+    let leaves = gen_leaves(leaves_count);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let cases_iter =
+        gen_leaves_indices_combinations(leaves_count).take(max_test_cases.unwrap_or(usize::MAX));
+
+    for leaves_indices in cases_iter {
+        if leaves_indices.is_empty() {
+            // Empty case is tested in another test
+            continue;
+        }
+        let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
+        let leaves_hashes_map = indices_to_map(&leaves_indices);
+        assert!(
+            multi_proof.into_values().verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+            "Failed for indices: {:?}",
+            leaves_indices
+        );
+    }
+}
+
+#[test]
+fn multi_proof_verification_one_leaf() {
+    let leaves = gen_leaves(1);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let leaves_indices = &[0].to_vec();
+
+    let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
+    let leaves_hashes_map = indices_to_map(&leaves_indices);
+
+    assert_eq!(
+        multi_proof.into_values().verify(leaves_hashes_map, t.root()).unwrap(),
+        None,
+        "Failed for indices: {:?}",
+        leaves_indices
+    );
 }
