@@ -30,5 +30,8 @@ clap = { version = "4", features = ["derive"] }
 directories = "4.0"
 
 [dev-dependencies]
-rstest = "0.16"
+# Local dependencies
 test-utils = { path = "../test-utils" }
+
+# External dependencies
+rstest = "0.16"
