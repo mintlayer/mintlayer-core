@@ -32,7 +32,7 @@ impl<T: ?Sized> Clone for BlockingHandle<T> {
     }
 }
 
-impl<T> ShallowClone for BlockingHandle<T> {
+impl<T: ?Sized> ShallowClone for BlockingHandle<T> {
     fn shallow_clone(&self) -> Self {
         Self::new(self.0.shallow_clone())
     }
