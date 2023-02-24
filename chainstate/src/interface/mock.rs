@@ -136,3 +136,5 @@ mockall::mock! {
         fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
     }
 }
+
+impl subsystem::Subsystem for MockChainstateInterfaceMock {}
