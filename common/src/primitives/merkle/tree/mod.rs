@@ -26,10 +26,7 @@ use crate::primitives::{
 
 use self::tree_size::TreeSize;
 
-use super::{
-    pos::NodePosition, proof::single::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
-    MerkleTreeProofExtractionError,
-};
+use super::{pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 
 pub enum AdjacentLeavesIndices {
     Alone(usize),
@@ -179,14 +176,6 @@ impl MerkleTree {
         };
 
         Ok(res)
-    }
-
-    /// See SingleProofNodes::from_tree_leaf
-    pub fn proof_from_leaf(
-        &self,
-        leaf_index: usize,
-    ) -> Result<SingleProofNodes, MerkleTreeProofExtractionError> {
-        SingleProofNodes::from_tree_leaf(self, leaf_index)
     }
 }
 

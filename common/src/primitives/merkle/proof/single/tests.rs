@@ -16,7 +16,11 @@
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use crate::primitives::{id::default_hash, merkle::tree::MerkleTree, H256};
+use crate::primitives::{
+    id::default_hash,
+    merkle::{proof::single::SingleProofNodes, tree::MerkleTree},
+    H256,
+};
 
 fn gen_leaves(n: usize) -> Vec<H256> {
     (0..n).map(|i| default_hash(H256::from_low_u64_be(i as u64))).collect()
@@ -30,7 +34,7 @@ fn single_proof_one_leaf() {
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
     let leaf_index = 0;
-    let p0 = t.proof_from_leaf(leaf_index).unwrap();
+    let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(p0.branch().len(), 0);
 
     assert!(p0.into_values().verify(leaves[leaf_index], t.root()).is_none());
@@ -75,7 +79,7 @@ fn single_proof_eight_leaves(
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
-    let p = t.proof_from_leaf(leaf_index).unwrap();
+    let p = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(
         p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
         branch
@@ -98,7 +102,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
     for (leaf_index, _) in leaves.iter().enumerate() {
-        let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
+        let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
 
         // Tamper with the proof
         for node_index in 0..proof.branch.len() {
@@ -123,7 +127,7 @@ fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_c
     let t = MerkleTree::from_leaves(leaves).unwrap();
 
     for leaf_index in 0..leaf_count {
-        let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
+        let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
 
         // Use a botched leaf
         assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
