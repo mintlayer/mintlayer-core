@@ -91,18 +91,14 @@ impl<'a> MultiProofNodes<'a> {
 
         let level_count = tree.level_count();
 
+        // loop over all levels in all proofs, starting from the bottom, and recreate the hashes required to verify the root hash
         while level < level_count.get() - 1 {
             let leaves = single_proofs.iter().map(|sp| sp.branch()[level]).collect::<Vec<_>>();
 
             let siblings = single_proofs
                 .iter()
-                .map(|sp| {
-                    (
-                        sp.branch()[level].sibling().unwrap().abs_index(),
-                        sp.branch()[level].sibling().unwrap(),
-                    )
-                })
-                .collect::<BTreeMap<usize, Node<'a>>>();
+                .map(|sp| sp.branch()[level].sibling().unwrap().abs_index())
+                .collect::<BTreeSet<usize>>();
 
             // We remove leaves that are already in siblings because they will come from the verification input.
             // This happens when the leaves, for which a proof is requested, are used together to build a parent node
@@ -111,7 +107,7 @@ impl<'a> MultiProofNodes<'a> {
             // We also remove the nodes that can be computed from the previous level, because they will be included in the proof
             let proofs_at_level = leaves
                 .into_iter()
-                .filter(|node| !siblings.contains_key(&node.abs_index()))
+                .filter(|node| !siblings.contains(&node.abs_index()))
                 .filter(|node| !computed_from_prev_level.contains(&node.abs_index()))
                 .map(NodeWithAbsOrder::from)
                 .collect::<BTreeSet<_>>();
