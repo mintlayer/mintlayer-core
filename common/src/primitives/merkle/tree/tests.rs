@@ -221,14 +221,14 @@ fn merkletree_with_arbitrary_length_5() {
 }
 
 #[test]
-fn leaves_count_from_tree_size() {
+fn leaf_count_from_tree_size() {
     for i in 1..30 {
-        let leaves_count = 1 << (i - 1);
+        let leaf_count = 1 << (i - 1);
         let tree_size = (1 << i) - 1;
         let tree_size: TreeSize = tree_size.try_into().unwrap();
         assert_eq!(
             tree_size.leaf_count(),
-            NonZeroUsize::new(leaves_count).unwrap(),
+            NonZeroUsize::new(leaf_count).unwrap(),
             "Check failed for i = {}",
             i
         );
@@ -598,10 +598,10 @@ fn parent_iter_one_leaf() {
     assert_eq!(leaf0iter.next().map(val), None);
 
     // Error cases: Invalid access
-    for i in t.leaves_count().get()..100 {
+    for i in t.leaf_count().get()..100 {
         assert_eq!(
             t.iter_from_leaf_to_root(i).unwrap_err(),
-            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaves_count().get())
+            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaf_count().get())
         );
     }
 }
@@ -626,10 +626,10 @@ fn parent_iter_two_leaves() {
     assert_eq!(leaf1iter.next().map(val), None);
 
     // Error cases: Invalid access
-    for i in t.leaves_count().get()..100 {
+    for i in t.leaf_count().get()..100 {
         assert_eq!(
             t.iter_from_leaf_to_root(i).unwrap_err(),
-            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaves_count().get())
+            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaf_count().get())
         );
     }
 }
@@ -670,10 +670,10 @@ fn parent_iter_four_leaves() {
     assert_eq!(leaf3iter.next().map(val), None);
 
     // Error cases: Invalid access
-    for i in t.leaves_count().get()..100 {
+    for i in t.leaf_count().get()..100 {
         assert_eq!(
             t.iter_from_leaf_to_root(i).unwrap_err(),
-            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaves_count().get())
+            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaf_count().get())
         );
     }
 }
@@ -747,10 +747,10 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf7iter.next().map(val), None);
 
     // Error cases: Invalid access
-    for i in t.leaves_count().get()..100 {
+    for i in t.leaf_count().get()..100 {
         assert_eq!(
             t.iter_from_leaf_to_root(i).unwrap_err(),
-            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaves_count().get())
+            MerkleTreeAccessError::IterStartIndexOutOfRange(i, t.leaf_count().get())
         );
     }
 }

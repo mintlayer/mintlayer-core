@@ -87,10 +87,10 @@ impl NodePosition {
             "Index must be within the tree size"
         );
 
-        let leaves_count = self.tree_size.leaf_count();
+        let leaf_count = self.tree_size.leaf_count();
 
         let mut level = 0;
-        let mut nodes_at_level_count = leaves_count.get();
+        let mut nodes_at_level_count = leaf_count.get();
         let mut tree_node_counter = 0;
         while tree_node_counter + nodes_at_level_count <= self.abs_index() {
             level += 1;

@@ -128,7 +128,7 @@ mod tests {
     }
 
     #[test]
-    fn construction_from_leaves_count() {
+    fn construction_from_leaf_count() {
         assert_eq!(TreeSize::from_leaf_count(0), Err(TreeSizeError::ZeroSize));
         assert_eq!(TreeSize::from_leaf_count(1), Ok(TreeSize(1)));
         assert_eq!(TreeSize::from_leaf_count(2), Ok(TreeSize(3)));

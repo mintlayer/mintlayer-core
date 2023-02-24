@@ -101,9 +101,9 @@ impl MerkleTree {
             .expect("(total_node_count) By design, tree_size is always > 0")
     }
 
-    pub fn leaves_count(&self) -> NonZeroUsize {
+    pub fn leaf_count(&self) -> NonZeroUsize {
         let tree_size = TreeSize::from_value(self.tree.len())
-            .expect("(leaves_count) Tree size valid by construction");
+            .expect("(leaf_count) Tree size valid by construction");
         tree_size.leaf_count()
     }
 
@@ -163,12 +163,11 @@ impl MerkleTree {
         &self,
         leaf_index: usize,
     ) -> Result<MerkleTreeNodeParentIterator, MerkleTreeAccessError> {
-        let leaves_count = self.leaves_count().get();
+        let leaf_count = self.leaf_count().get();
 
-        if leaf_index >= leaves_count {
+        if leaf_index >= leaf_count {
             return Err(MerkleTreeAccessError::IterStartIndexOutOfRange(
-                leaf_index,
-                leaves_count,
+                leaf_index, leaf_count,
             ));
         }
 

@@ -44,7 +44,7 @@ pub struct MultiProofNodes<'a> {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
     nodes: Vec<Node<'a>>,
     /// The number of leaves in the tree, from which this proof was extracted
-    tree_leaves_count: NonZeroUsize,
+    tree_leaf_count: NonZeroUsize,
 }
 
 /// Ensure the leaves indices are sorted and unique
@@ -86,12 +86,12 @@ impl<'a> MultiProofNodes<'a> {
         }
 
         {
-            let leaves_count = tree.leaves_count();
+            let leaf_count = tree.leaf_count();
 
-            if leaves_indices.iter().any(|v| *v >= leaves_count.get()) {
+            if leaves_indices.iter().any(|v| *v >= leaf_count.get()) {
                 return Err(MerkleTreeProofExtractionError::IndexOutOfRange(
                     leaves_indices.to_vec(),
-                    leaves_count.get(),
+                    leaf_count.get(),
                 ));
             }
         }
@@ -162,7 +162,7 @@ impl<'a> MultiProofNodes<'a> {
                 .map(|i| tree.node_from_bottom(0, *i).expect("Leaves already checked"))
                 .collect(),
             nodes: proof,
-            tree_leaves_count: tree.leaves_count(),
+            tree_leaf_count: tree.leaf_count(),
         })
     }
 
@@ -174,14 +174,14 @@ impl<'a> MultiProofNodes<'a> {
         &self.proof_leaves
     }
 
-    pub fn tree_leaves_count(&self) -> NonZeroUsize {
-        self.tree_leaves_count
+    pub fn tree_leaf_count(&self) -> NonZeroUsize {
+        self.tree_leaf_count
     }
 
     pub fn into_values(self) -> MultiProofHashes {
         MultiProofHashes {
             nodes: self.nodes.into_iter().map(|n| (n.abs_index(), *n.hash())).collect(),
-            tree_leaves_count: self.proof_leaves[0].tree().leaves_count(),
+            tree_leaf_count: self.proof_leaves[0].tree().leaf_count(),
         }
     }
 }
@@ -192,7 +192,7 @@ pub struct MultiProofHashes {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
     nodes: BTreeMap<usize, H256>,
     /// The number of leaves in the tree, from which this proof was extracted
-    tree_leaves_count: NonZeroUsize,
+    tree_leaf_count: NonZeroUsize,
 }
 
 impl MultiProofHashes {
@@ -200,8 +200,8 @@ impl MultiProofHashes {
         &self.nodes
     }
 
-    pub fn tree_leaves_count(&self) -> NonZeroUsize {
-        self.tree_leaves_count
+    pub fn tree_leaf_count(&self) -> NonZeroUsize {
+        self.tree_leaf_count
     }
 
     /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
@@ -247,20 +247,20 @@ impl MultiProofHashes {
             return Err(MerkleProofVerificationError::LeavesContainerProvidedIsEmpty);
         }
 
-        if self.tree_leaves_count.get().count_ones() != 1 {
+        if self.tree_leaf_count.get().count_ones() != 1 {
             return Err(MerkleProofVerificationError::InvalidTreeLeavesCount(
-                self.tree_leaves_count().get(),
+                self.tree_leaf_count().get(),
             ));
         }
 
-        if leaves.iter().any(|(index, _hash)| *index >= self.tree_leaves_count.get()) {
+        if leaves.iter().any(|(index, _hash)| *index >= self.tree_leaf_count.get()) {
             return Err(MerkleProofVerificationError::LeavesIndicesOutOfRange(
                 leaves.keys().cloned().collect(),
-                self.tree_leaves_count.get(),
+                self.tree_leaf_count.get(),
             ));
         }
 
-        let tree_size = TreeSize::from_value(self.tree_leaves_count.get() * 2 - 1)
+        let tree_size = TreeSize::from_value(self.tree_leaf_count.get() * 2 - 1)
             .expect("Already proven from source");
 
         if self.nodes.iter().any(|(index, _hash)| *index >= tree_size.get()) {

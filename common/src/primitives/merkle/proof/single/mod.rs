@@ -35,11 +35,10 @@ impl<'a> SingleProofNodes<'a> {
         tree: &'a MerkleTree,
         leaf_index: usize,
     ) -> Result<Self, MerkleTreeProofExtractionError> {
-        let leaves_count = tree.leaves_count().get();
-        if leaf_index > leaves_count {
+        let leaf_count = tree.leaf_count().get();
+        if leaf_index > leaf_count {
             return Err(MerkleTreeProofExtractionError::LeafIndexOutOfRange(
-                leaf_index,
-                leaves_count,
+                leaf_index, leaf_count,
             ));
         }
 
