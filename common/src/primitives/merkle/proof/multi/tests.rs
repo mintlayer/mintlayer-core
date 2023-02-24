@@ -105,7 +105,7 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
     }
 }
 
-/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 2 for 2 leaves, yielding 3 tests.
+/// The number of tests is the 2^n-1, where n = 2 for 2 leaves, yielding 3 tests (we exclude the empty input case).
 #[rstest]
 #[case(&[0], vec![1])]
 #[case(&[1], vec![0])]
@@ -130,7 +130,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nod
     assert_eq!(multi_proof.tree_leaves_count(), t.leaves_count());
 }
 
-/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 4 for 4 leaves, yielding 15 tests.
+/// The number of tests is the 2^n-1, where n = 4 for 4 leaves, yielding 15 tests (we exclude the empty input case).
 #[rstest]
 #[case(&[0], vec![1,5])]
 #[case(&[1], vec![0,5])]
@@ -184,7 +184,7 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
     }
 }
 
-/// The number of tests is the sum of binomial terms (n choose k) for k = 1..n-1, where n = 8 for 8 leaves, yielding 254 tests.
+/// The number of tests is the 2^n-1, where n = 8 for 8 leaves, yielding 255 tests (we exclude the empty input case).
 #[rstest]
 #[case(&[0], vec![1,9,13])]
 #[case(&[1], vec![0,9,13])]
@@ -439,6 +439,7 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
 #[case(&[0,1,2,4,5,6,7], vec![3])]
 #[case(&[0,1,3,4,5,6,7], vec![2])]
 #[case(&[0,2,3,4,5,6,7], vec![1])]
+#[case(&[1,2,3,4,5,6,7], vec![0])]
 #[case(&[0,1,2,3,4,5,6,7], vec![])]
 fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(8);
@@ -581,3 +582,5 @@ fn multi_proof_verification_one_leaf() {
         leaves_indices
     );
 }
+
+// TODO(PR): tampering tests
