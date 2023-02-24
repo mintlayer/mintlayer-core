@@ -20,6 +20,23 @@ pub mod test_dir;
 
 use crypto::random::distributions::uniform::SampleRange;
 use crypto::random::Rng;
+use hex::ToHex;
+
+/// Assert that the encoded object matches the expected hex string.
+pub fn assert_encoded_eq<E: serialization::Encode>(to_encode: &E, expected_hex: &str) {
+    assert_eq!(to_encode.encode().encode_hex::<String>(), expected_hex);
+}
+
+/// Encodes an object to a hex string
+pub fn encode_to_hex<E: serialization::Encode>(to_encode: &E) -> String {
+    to_encode.encode().encode_hex::<String>()
+}
+
+/// Decodes a hex string to an object. Will panic on errors
+pub fn decode_from_hex<D: serialization::DecodeAll>(to_decode: &str) -> D {
+    D::decode_all(&mut hex::decode(to_decode).expect("The provided string is a hex").as_slice())
+        .expect("The decoding succeeded")
+}
 
 pub fn random_string<R: SampleRange<usize>>(rng: &mut impl Rng, range_len: R) -> String {
     use crypto::random::distributions::{Alphanumeric, DistString};

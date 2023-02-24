@@ -3531,6 +3531,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
+ "hex",
  "rand_chacha",
  "serialization",
 ]
@@ -4094,15 +4095,19 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 name = "wallet"
 version = "0.1.0"
 dependencies = [
+ "bip39",
  "common",
+ "crypto",
  "logging",
  "serialization",
  "storage",
  "tempfile",
+ "test-utils",
  "thiserror",
  "utxo",
  "wallet-storage",
  "wallet-types",
+ "zeroize",
 ]
 
 [[package]]
@@ -4125,10 +4130,13 @@ dependencies = [
 name = "wallet-types"
 version = "0.1.0"
 dependencies = [
+ "bip39",
  "common",
  "parity-scale-codec",
  "serialization",
+ "test-utils",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]

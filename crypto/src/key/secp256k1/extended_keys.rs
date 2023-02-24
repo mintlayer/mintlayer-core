@@ -168,23 +168,17 @@ mod test {
     use super::*;
     use crate::key::hdkd::derivation_path::DerivationPath;
     use bip39::Mnemonic;
-    use hex::ToHex;
-    use serialization::DecodeAll;
-    use serialization::Encode;
     use std::str::FromStr;
+    use test_utils::{assert_encoded_eq, decode_from_hex};
 
     #[test]
     fn serialization() {
         let sk_hex = "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67";
-        let sk =
-            Secp256k1ExtendedPrivateKey::decode_all(&mut hex::decode(sk_hex).unwrap().as_slice())
-                .unwrap();
-        assert_eq!(sk.encode().encode_hex::<String>(), sk_hex);
+        let sk = decode_from_hex::<Secp256k1ExtendedPrivateKey>(sk_hex);
+        assert_encoded_eq(&sk, sk_hex);
         let pk_hex = "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70ed902f35f560e0470c63313c7369168d9d7df2d49bf295fd9fb7cb109ccee0494";
-        let pk =
-            Secp256k1ExtendedPublicKey::decode_all(&mut hex::decode(pk_hex).unwrap().as_slice())
-                .unwrap();
-        assert_eq!(pk.encode().encode_hex::<String>(), pk_hex);
+        let pk = decode_from_hex::<Secp256k1ExtendedPublicKey>(pk_hex);
+        assert_encoded_eq(&pk, pk_hex);
     }
 
     #[test]
@@ -195,14 +189,8 @@ mod test {
             Secp256k1ExtendedPrivateKey::new_master(&mnemonic.to_seed_normalized("")).unwrap();
         let master_pub_key = Secp256k1ExtendedPublicKey::from_private_key(&master_key);
         assert_eq!(master_key.chain_code, master_pub_key.chain_code);
-        assert_eq!(
-            master_key.encode().encode_hex::<String>(),
-            "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67"
-        );
-        assert_eq!(
-            master_pub_key.encode().encode_hex::<String>(),
-            "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70ed902f35f560e0470c63313c7369168d9d7df2d49bf295fd9fb7cb109ccee0494"
-        );
+        assert_encoded_eq(&master_key, "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70e1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67");
+        assert_encoded_eq(&master_pub_key, "7923408dadd3c7b56eed15567707ae5e5dca089de972e07f3b860450e2a3b70ed902f35f560e0470c63313c7369168d9d7df2d49bf295fd9fb7cb109ccee0494");
 
         let test_vec = vec![
             (
@@ -260,14 +248,8 @@ mod test {
             let sk = master_key.clone().derive_path(&path).unwrap();
             let pk = Secp256k1ExtendedPublicKey::from_private_key(&sk);
             assert_eq!(sk.chain_code, pk.chain_code);
-            assert_eq!(
-                sk.encode().encode_hex::<String>(),
-                format!("{chaincode}{secret}")
-            );
-            assert_eq!(
-                pk.encode().encode_hex::<String>(),
-                format!("{chaincode}{public}")
-            );
+            assert_encoded_eq(&sk, format!("{chaincode}{secret}").as_str());
+            assert_encoded_eq(&pk, format!("{chaincode}{public}").as_str());
         }
     }
 }

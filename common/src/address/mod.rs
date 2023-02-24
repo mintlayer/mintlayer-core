@@ -36,9 +36,11 @@ pub trait AddressableData<T: AsRef<[u8]>> {
     fn set_data(&mut self, data: &[u8]);
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum AddressError {
+    #[error("Bech39 encoding error: {0}")]
     Bech32EncodingError(Bech32Error),
+    #[error("Invalid prefix: {0}")]
     InvalidPrefix(String),
 }
 
