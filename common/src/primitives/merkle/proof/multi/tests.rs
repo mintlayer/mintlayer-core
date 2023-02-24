@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// We need lazy evaluations of bit shifting because it could overflow in cases
+#![allow(clippy::unnecessary_lazy_evaluations)]
+
 use crypto::random::SliceRandom;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -631,7 +634,7 @@ fn multi_proof_verification_tampered_nodes(
         let multi_proof =
             MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
 
-        for (node_idx, _hash) in &multi_proof.nodes {
+        for node_idx in multi_proof.nodes.keys() {
             // assert that the node we'll mess with is already in the proof
             assert!(multi_proof.nodes.contains_key(node_idx));
 
@@ -691,7 +694,7 @@ fn multi_proof_verification_tampered_leaves(
             MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
         let leaves_hashes_map = indices_to_map(&leaves_indices);
 
-        for (leaf_idx, _hash) in &leaves_hashes_map {
+        for leaf_idx in leaves_hashes_map.keys() {
             //assert that the leaf we'll mess with is part of the input list
             assert!(leaves_hashes_map.contains_key(leaf_idx));
 
