@@ -18,6 +18,10 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::primitives::{id::default_hash, merkle::tree::MerkleTree, H256};
 
+fn gen_leaves(n: usize) -> Vec<H256> {
+    (0..n).map(|i| default_hash(H256::from_low_u64_be(i as u64))).collect()
+}
+
 #[test]
 fn single_proof_one_leaf() {
     let v0 = default_hash(H256::zero());
@@ -105,151 +109,47 @@ fn single_proof_eight_leaves(#[case] leaf_index: usize, #[case] branch: &[usize]
 }
 
 #[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
-fn single_proof_two_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_index: usize) {
-    let mut rng = make_seedable_rng(seed);
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-
-    let leaves = vec![v0, v1];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
-
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
-
-    // Tamper with the proof
-    for node_index in 0..proof.branch.len() {
-        let mut p = proof.clone();
-        p.branch[node_index] = H256::random_using(&mut rng);
-        assert!(!p.verify(leaves[leaf_index], t.root()).unwrap());
-    }
-}
-
-#[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
 #[case(Seed::from_entropy(), 2)]
-#[case(Seed::from_entropy(), 3)]
-fn single_proof_four_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_index: usize) {
-    let mut rng = make_seedable_rng(seed);
-
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-
-    let leaves = vec![v0, v1, v2, v3];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
-
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
-
-    // Tamper with the proof
-    for node_index in 0..proof.branch.len() {
-        let mut p = proof.clone();
-        p.branch[node_index] = H256::random_using(&mut rng);
-        assert!(!p.verify(leaves[leaf_index], t.root()).unwrap());
-    }
-}
-
-#[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
-#[case(Seed::from_entropy(), 2)]
-#[case(Seed::from_entropy(), 3)]
 #[case(Seed::from_entropy(), 4)]
-#[case(Seed::from_entropy(), 5)]
-#[case(Seed::from_entropy(), 6)]
-#[case(Seed::from_entropy(), 7)]
-fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_index: usize) {
+#[case(Seed::from_entropy(), 8)]
+#[case(Seed::from_entropy(), 16)]
+#[case(Seed::from_entropy(), 32)]
+#[case(Seed::from_entropy(), 64)]
+fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_count: usize) {
     let mut rng = make_seedable_rng(seed);
 
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-    let v4 = default_hash(H256::from_low_u64_be(4));
-    let v5 = default_hash(H256::from_low_u64_be(5));
-    let v6 = default_hash(H256::from_low_u64_be(6));
-    let v7 = default_hash(H256::from_low_u64_be(7));
-
-    let leaves = vec![v0, v1, v2, v3, v4, v5, v6, v7];
+    let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
+    for (leaf_index, _) in leaves.iter().enumerate() {
+        let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
 
-    // Tamper with the proof
-    for node_index in 0..proof.branch.len() {
-        let mut p = proof.clone();
-        p.branch[node_index] = H256::random_using(&mut rng);
-        assert!(!p.verify(leaves[leaf_index], t.root()).unwrap());
+        // Tamper with the proof
+        for node_index in 0..proof.branch.len() {
+            let mut p = proof.clone();
+            p.branch[node_index] = H256::random_using(&mut rng);
+            assert!(!p.verify(leaves[leaf_index], t.root()).unwrap());
+        }
     }
 }
 
 #[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
-fn single_proof_two_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_index: usize) {
-    let mut rng = make_seedable_rng(seed);
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-
-    let leaves = vec![v0, v1];
-    let t = MerkleTree::from_leaves(leaves).unwrap();
-
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
-
-    // Use a botched leaf
-    assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
-}
-
-#[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
 #[case(Seed::from_entropy(), 2)]
-#[case(Seed::from_entropy(), 3)]
-fn single_proof_four_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_index: usize) {
-    let mut rng = make_seedable_rng(seed);
-
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-
-    let leaves = vec![v0, v1, v2, v3];
-    let t = MerkleTree::from_leaves(leaves).unwrap();
-
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
-
-    // Use a botched leaf
-    assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
-}
-
-#[rstest]
-#[case(Seed::from_entropy(), 0)]
-#[case(Seed::from_entropy(), 1)]
-#[case(Seed::from_entropy(), 2)]
-#[case(Seed::from_entropy(), 3)]
 #[case(Seed::from_entropy(), 4)]
-#[case(Seed::from_entropy(), 5)]
-#[case(Seed::from_entropy(), 6)]
-#[case(Seed::from_entropy(), 7)]
-fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_index: usize) {
+#[case(Seed::from_entropy(), 8)]
+#[case(Seed::from_entropy(), 16)]
+#[case(Seed::from_entropy(), 32)]
+#[case(Seed::from_entropy(), 64)]
+fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_count: usize) {
     let mut rng = make_seedable_rng(seed);
 
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-    let v4 = default_hash(H256::from_low_u64_be(4));
-    let v5 = default_hash(H256::from_low_u64_be(5));
-    let v6 = default_hash(H256::from_low_u64_be(6));
-    let v7 = default_hash(H256::from_low_u64_be(7));
-
-    let leaves = vec![v0, v1, v2, v3, v4, v5, v6, v7];
+    let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::from_leaves(leaves).unwrap();
 
-    let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
+    for leaf_index in 0..leaf_count {
+        let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
 
-    // Use a botched leaf
-    assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
+        // Use a botched leaf
+        assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
+    }
 }
