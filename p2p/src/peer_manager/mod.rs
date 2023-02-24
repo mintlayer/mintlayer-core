@@ -910,19 +910,12 @@ where
             tokio::time::interval(Duration::MAX)
         };
 
+        // Run heartbeat right away to start outbound connections
+        self.heartbeat().await?;
         // Last time when heartbeat was called
-        let mut last_heartbeat = None;
+        let mut last_heartbeat = Instant::now();
 
         loop {
-            // Run heartbeat if needed
-            let now = Instant::now();
-            if last_heartbeat.map_or(true, |time| {
-                now.duration_since(time) >= PEER_MGR_HEARTBEAT_INTERVAL_MIN
-            }) {
-                self.heartbeat().await?;
-                last_heartbeat = Some(now);
-            }
-
             tokio::select! {
                 event = self.rx_peer_manager.recv() => {
                     self.handle_control_event(event.ok_or(P2pError::ChannelClosed)?)?;
@@ -934,6 +927,13 @@ where
                     self.ping_check()?;
                 }
                 _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
+            }
+
+            // Finally, update the peer manager state
+            let now = Instant::now();
+            if now.duration_since(last_heartbeat) >= PEER_MGR_HEARTBEAT_INTERVAL_MIN {
+                self.heartbeat().await?;
+                last_heartbeat = now;
             }
         }
     }
