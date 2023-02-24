@@ -15,7 +15,7 @@
 
 use std::num::NonZeroUsize;
 
-use super::tree::{tree_size::TreeSize, MerkleTree};
+use super::tree::tree_size::TreeSize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePosition {
@@ -127,16 +127,13 @@ impl NodePosition {
         let parent_level = level + 1;
         let parent_node_index_in_level = index / 2;
 
-        let parent_absolute_index = MerkleTree::absolute_index_from_bottom(
-            self.tree_size,
-            parent_level,
-            parent_node_index_in_level,
-        )
-        .expect("Parent index must be in range");
+        let parent_position =
+            NodePosition::from_position(self.tree_size, parent_level, parent_node_index_in_level)
+                .expect("Parent index must be in range");
 
         Some(Self {
             tree_size: self.tree_size,
-            absolute_index: parent_absolute_index,
+            absolute_index: parent_position.abs_index(),
         })
     }
 
