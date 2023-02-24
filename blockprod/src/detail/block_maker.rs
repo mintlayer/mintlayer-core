@@ -211,10 +211,6 @@ mod tests {
 
     use super::*;
 
-    //
-    // TODO get rid of the unwraps
-    //
-
     #[tokio::test]
     async fn collect_transactions_subsystem_error() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
@@ -265,7 +261,7 @@ mod tests {
             );
         })
         .await
-        .expect("TODO");
+        .expect("Subsystem error thread failed");
     }
 
     #[tokio::test]
@@ -405,7 +401,7 @@ mod tests {
             );
         })
         .await
-        .expect("TODO");
+        .expect("Subsystem error thread failed");
     }
 
     #[tokio::test]
