@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod tree_size;
+
 use std::num::NonZeroUsize;
 
 use crypto::hash::StreamHasher;
