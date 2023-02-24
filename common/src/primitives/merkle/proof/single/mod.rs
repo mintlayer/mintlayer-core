@@ -21,6 +21,8 @@ use super::super::{
 };
 
 /// A proof for a single leaf in a Merkle tree. The proof contains the leaf and the branch of the tree.
+/// This is considered an intermediary object. For storage, use `SingleProofHashes` through
+/// `SingleProofNodes::into_values()`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofNodes<'a> {
@@ -93,8 +95,9 @@ impl<'a> SingleProofNodes<'a> {
     }
 }
 
-/// Same as SingleProofNodes, but has only hashes and leaf index in the lowest level.
+/// Same as `SingleProofNodes`, but has only hashes and leaf index in the lowest level.
 /// This is the minimum information required to prove that the given leaf can produce the root's hash.
+/// This struct is supposed to be serialized, unlike `SingleProofNodes`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SingleProofHashes {

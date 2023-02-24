@@ -17,6 +17,8 @@ use std::num::NonZeroUsize;
 
 use super::tree::tree_size::TreeSize;
 
+/// Given a binary tree with leaf-count as powers of 2, this struct represents a position in the tree.
+/// This also contains all the math required to convert position representations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePosition {
     tree_size: TreeSize,
@@ -160,6 +162,7 @@ impl NodePosition {
     }
 }
 
+/// An iterator over the parents of a node, given its position.
 #[must_use]
 #[derive(Debug)]
 pub struct MerkleTreeNodePositionParentIterator {

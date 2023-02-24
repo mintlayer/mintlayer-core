@@ -35,7 +35,12 @@ use self::ordered_node::NodeWithAbsOrder;
 
 use super::single::SingleProofNodes;
 
-// Merkle proofs for multiple leaves.
+/// Merkle proofs for multiple leaves.
+/// An object that contains the information required to proof that multiple leaves are in a Merkle tree.
+/// See SingleProofNodes for proving a single leaf is in a merkle tree.
+/// This object is considered temporary (notice it refers to the tree through a reference).
+/// This object is discarded in favor of `MultiProofHashes`, which can be created
+/// using the `MultiProofNodes::into_values()` method.
 #[must_use]
 #[derive(Debug, Clone)]
 pub struct MultiProofNodes<'a> {
@@ -186,6 +191,8 @@ impl<'a> MultiProofNodes<'a> {
     }
 }
 
+/// The information required to prove that multiple leaves are part of a Merkle tree.
+/// This struct is supposed to be serialized and stored to be used later, unlike `MultiProofNodes`.
 #[must_use]
 #[derive(Debug, Clone)]
 pub struct MultiProofHashes {

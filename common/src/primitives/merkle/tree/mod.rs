@@ -265,6 +265,7 @@ impl<'a> Node<'a> {
     }
 }
 
+/// An iterator that iterates from a leaf node to the root node.
 #[must_use]
 #[derive(Debug)]
 pub struct MerkleTreeNodeParentIterator<'a> {
