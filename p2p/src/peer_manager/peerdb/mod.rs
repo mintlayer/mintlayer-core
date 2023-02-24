@@ -16,8 +16,7 @@
 //! Peer database
 //!
 //! The peer database stores:
-//! - connected peers
-//! - available (discovered) addresses
+//! - all outbound peer addresses
 //! - banned addresses
 //!
 //! Connected peers are those peers that the [`crate::peer_manager::PeerManager`] has an active
@@ -41,11 +40,7 @@ use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
 
-use crate::{
-    config,
-    error::P2pError,
-    net::{types::Role, AsBannableAddress},
-};
+use crate::{config, error::P2pError, net::AsBannableAddress};
 
 use self::{
     address_data::AddressData,
@@ -59,13 +54,7 @@ pub struct PeerDb<A, B, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
-    /// Set of currently connected addresses (outbound)
-    connected_outbound: BTreeSet<A>,
-
-    /// Set of currently connected addresses (inbound)
-    connected_inbound: BTreeSet<A>,
-
-    /// Map of all known addresses
+    /// Map of all outbound peer addresses
     addresses: BTreeMap<A, AddressData>,
 
     /// Banned addresses along with the duration of the ban.
@@ -119,27 +108,12 @@ impl<
             .collect();
 
         Ok(Self {
-            connected_outbound: Default::default(),
-            connected_inbound: Default::default(),
             addresses,
             banned_addresses: loaded_storage.banned_addresses,
             p2p_config,
             time_getter,
             storage,
         })
-    }
-
-    /// Checks if the given address is already connected.
-    pub fn is_address_connected(&self, address: &A) -> bool {
-        self.connected_inbound.contains(address) || self.connected_outbound.contains(address)
-    }
-
-    pub fn outbound_peer_count(&self) -> usize {
-        self.connected_outbound.len()
-    }
-
-    pub fn inbound_peer_count(&self) -> usize {
-        self.connected_inbound.len()
     }
 
     /// Iterator of all known addresses.
@@ -150,16 +124,18 @@ impl<
     }
 
     /// Selects peer addresses for outbound connections
-    pub fn select_new_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
+    pub fn select_new_outbound_addresses(
+        &self,
+        pending_outbound: &BTreeSet<A>,
+        connected_outbound: &BTreeSet<A>,
+    ) -> Vec<A> {
         let count = MAX_OUTBOUND_CONNECTIONS
             .saturating_sub(pending_outbound.len())
-            .saturating_sub(self.connected_outbound.len());
+            .saturating_sub(connected_outbound.len());
 
         self.addresses
             .keys()
-            .filter(|addr| {
-                !pending_outbound.contains(addr) && !self.connected_outbound.contains(addr)
-            })
+            .filter(|addr| !pending_outbound.contains(addr) && !connected_outbound.contains(addr))
             .cloned()
             .choose_multiple(&mut make_pseudo_rng(), count)
     }
@@ -210,26 +186,15 @@ impl<
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(&mut self, address: A, role: Role) {
-        match role {
-            Role::Inbound => {
-                let inserted = self.connected_inbound.insert(address);
-                assert!(inserted);
-            }
-            Role::Outbound => {
-                let inserted = self.connected_outbound.insert(address.clone());
-                assert!(inserted);
+    pub fn outbound_peer_connected(&mut self, address: A) {
+        if let Some(address_data) = self.addresses.get_mut(&address) {
+            if !address_data.was_reachable {
+                address_data.was_reachable = true;
 
-                if let Some(address_data) = self.addresses.get_mut(&address) {
-                    if !address_data.was_reachable {
-                        address_data.was_reachable = true;
-
-                        storage::update_db(&self.storage, |tx| {
-                            tx.add_known_address(&address.to_string())
-                        })
-                        .expect("adding address expected to succeed (peer_connected)");
-                    }
-                }
+                storage::update_db(&self.storage, |tx| {
+                    tx.add_known_address(&address.to_string())
+                })
+                .expect("adding address expected to succeed (peer_connected)");
             }
         }
     }
@@ -237,17 +202,8 @@ impl<
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn peer_disconnected(&mut self, address: A, role: Role) {
-        match role {
-            Role::Inbound => {
-                let removed = self.connected_inbound.remove(&address);
-                assert!(removed);
-            }
-            Role::Outbound => {
-                let removed = self.connected_outbound.remove(&address);
-                assert!(removed);
-            }
-        }
+    pub fn outbound_peer_disconnected(&mut self, _address: A) {
+        // TODO(PR)
     }
 
     /// Changes the address state to banned

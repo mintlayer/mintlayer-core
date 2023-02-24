@@ -422,10 +422,7 @@ where
     for peer in peers.into_iter() {
         pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
     }
-    assert_eq!(
-        pm1.peerdb.inbound_peer_count(),
-        *MaxInboundConnections::default()
-    );
+    assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
     let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,

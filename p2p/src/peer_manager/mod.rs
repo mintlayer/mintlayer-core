@@ -271,7 +271,7 @@ where
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
         ensure!(
-            !self.peerdb.is_address_connected(&address),
+            !self.is_address_connected(&address),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
@@ -305,7 +305,9 @@ where
         );
         assert!(old_value.is_none());
 
-        self.peerdb.peer_connected(address, role);
+        if role == Role::Outbound {
+            self.peerdb.outbound_peer_connected(address);
+        }
 
         if let (Some(receiver_address), Role::Outbound) = (receiver_address, role) {
             self.handle_outbound_receiver_address(peer_id, receiver_address)?;
@@ -344,7 +346,7 @@ where
 
         // If the maximum number of inbound connections is reached,
         // the connection cannot be accepted even if it's valid.
-        if self.peerdb.inbound_peer_count() >= *self.p2p_config.max_inbound_connections {
+        if self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections {
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
@@ -372,7 +374,9 @@ where
 
             self.subscribed_to_peer_addresses.remove(&peer_id);
 
-            self.peerdb.peer_disconnected(peer.address, peer.role);
+            if peer.role == Role::Outbound {
+                self.peerdb.outbound_peer_disconnected(peer.address);
+            }
         }
 
         Ok(())
@@ -435,7 +439,7 @@ where
         );
 
         ensure!(
-            !self.peerdb.is_address_connected(&address),
+            !self.is_address_connected(&address),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
@@ -574,7 +578,21 @@ where
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
-        let new_addresses = self.peerdb.select_new_outbound_addresses(&pending_outbound);
+        let connected_outbound = self
+            .peers
+            .values()
+            .filter_map(|peer| {
+                if peer.role == Role::Outbound {
+                    Some(peer.address.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let new_addresses = self
+            .peerdb
+            .select_new_outbound_addresses(&pending_outbound, &connected_outbound);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
@@ -583,7 +601,8 @@ where
             && self.pending_outbound_connects.is_empty()
         {
             self.reload_dns_seed().await;
-            self.peerdb.select_new_outbound_addresses(&pending_outbound)
+            self.peerdb
+                .select_new_outbound_addresses(&pending_outbound, &connected_outbound)
         } else {
             new_addresses
         };
@@ -849,6 +868,14 @@ where
     /// Checks if the peer is in active state
     pub fn is_peer_connected(&self, peer_id: PeerId) -> bool {
         self.peers.get(&peer_id).is_some()
+    }
+
+    fn is_address_connected(&self, address: &T::Address) -> bool {
+        self.peers.values().any(|peer| peer.address == *address)
+    }
+
+    fn inbound_peer_count(&self) -> usize {
+        self.peers.values().filter(|peer| peer.role == Role::Inbound).count()
     }
 
     /// Sends ping requests and disconnects peers that do not respond in time
