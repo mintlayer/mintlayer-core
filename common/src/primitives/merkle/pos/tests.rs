@@ -16,6 +16,30 @@
 use super::*;
 
 #[test]
+fn construction_from_abs_index() {
+    for tree_size in 1..16 {
+        let tree_size: NonZeroUsize = tree_size.try_into().unwrap();
+        for abs_index in 0..tree_size.get() {
+            let success = (tree_size.get() + 1).count_ones() == 1 && abs_index < tree_size.get();
+            let pos = NodePosition::from_abs_index(tree_size, abs_index);
+            assert_eq!(
+                pos.is_some(),
+                success,
+                "Assertion failed for tree_size = {}, index = {}",
+                tree_size,
+                abs_index
+            );
+            if !success {
+                continue;
+            }
+            let pos = pos.unwrap();
+            assert_eq!(pos.abs_index(), abs_index);
+            assert_eq!(pos.tree_size(), tree_size);
+        }
+    }
+}
+
+#[test]
 fn parent_iter_one_leaf() {
     let t_size = 1.try_into().unwrap();
 
