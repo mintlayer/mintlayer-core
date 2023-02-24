@@ -27,3 +27,4 @@ async-trait.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage/" }
+chainstate-types = {path = '../chainstate/types'}

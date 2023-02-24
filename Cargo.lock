@@ -309,6 +309,7 @@ dependencies = [
  "async-trait",
  "chainstate",
  "chainstate-storage",
+ "chainstate-types",
  "common",
  "crossbeam-channel",
  "crypto",
