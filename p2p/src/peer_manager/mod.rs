@@ -105,12 +105,13 @@ where
     tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
 
     /// Hashmap of pending outbound connections
-    pending_connects: HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
+    pending_outbound_connects:
+        HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
     /// Hashmap of pending disconnect requests
     pending_disconnects: HashMap<PeerId, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
 
-    /// Set of active peers
+    /// Map of all connected peers
     peers: BTreeMap<PeerId, PeerContext<T::Address>>,
 
     /// Peer database
@@ -146,7 +147,7 @@ where
             tx_sync,
             peerdb,
             peers: BTreeMap::new(),
-            pending_connects: HashMap::new(),
+            pending_outbound_connects: HashMap::new(),
             pending_disconnects: HashMap::new(),
             chain_config,
             p2p_config,
@@ -414,7 +415,7 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
-        if let Some(Some(channel)) = self.pending_connects.remove(&address) {
+        if let Some(Some(channel)) = self.pending_outbound_connects.remove(&address) {
             channel.send(Err(error));
         }
 
@@ -429,7 +430,7 @@ where
     /// whether the connection failed or succeeded.
     fn try_connect(&mut self, address: T::Address) -> crate::Result<()> {
         ensure!(
-            !self.pending_connects.contains_key(&address),
+            !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
 
@@ -459,8 +460,7 @@ where
 
         match res {
             Ok(()) => {
-                self.pending_connects.insert(address.clone(), response);
-                self.peerdb.outbound_connection_initiated(address);
+                self.pending_outbound_connects.insert(address.clone(), response);
             }
             Err(e) => {
                 if let Some(response) = response {
@@ -573,16 +573,17 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
-        let new_addresses = self.peerdb.select_new_outbound_addresses();
+        let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
+        let new_addresses = self.peerdb.select_new_outbound_addresses(&pending_outbound);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
         let new_addresses = if new_addresses.is_empty()
             && self.peers.is_empty()
-            && self.pending_connects.is_empty()
+            && self.pending_outbound_connects.is_empty()
         {
             self.reload_dns_seed().await;
-            self.peerdb.select_new_outbound_addresses()
+            self.peerdb.select_new_outbound_addresses(&pending_outbound)
         } else {
             new_addresses
         };
@@ -805,7 +806,7 @@ where
                     );
                     self.handle_result(Some(peer_id), res)?;
 
-                    match self.pending_connects.remove(&address) {
+                    match self.pending_outbound_connects.remove(&address) {
                         Some(Some(channel)) => {
                             channel.send(Ok(()));
                         }

@@ -65,9 +65,6 @@ pub struct PeerDb<A, B, S> {
     /// Set of currently connected addresses (inbound)
     connected_inbound: BTreeSet<A>,
 
-    /// Set of currently connecting outbound addresses
-    pending_outbound: BTreeSet<A>,
-
     /// Map of all known addresses
     addresses: BTreeMap<A, AddressData>,
 
@@ -124,7 +121,6 @@ impl<
         Ok(Self {
             connected_outbound: Default::default(),
             connected_inbound: Default::default(),
-            pending_outbound: Default::default(),
             addresses,
             banned_addresses: loaded_storage.banned_addresses,
             p2p_config,
@@ -154,15 +150,15 @@ impl<
     }
 
     /// Selects peer addresses for outbound connections
-    pub fn select_new_outbound_addresses(&self) -> Vec<A> {
+    pub fn select_new_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
         let count = MAX_OUTBOUND_CONNECTIONS
-            .saturating_sub(self.pending_outbound.len())
+            .saturating_sub(pending_outbound.len())
             .saturating_sub(self.connected_outbound.len());
 
         self.addresses
             .keys()
             .filter(|addr| {
-                !self.pending_outbound.contains(addr) && !self.connected_outbound.contains(addr)
+                !pending_outbound.contains(addr) && !self.connected_outbound.contains(addr)
             })
             .cloned()
             .choose_multiple(&mut make_pseudo_rng(), count)
@@ -205,17 +201,9 @@ impl<
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
     pub fn report_outbound_failure(&mut self, address: A) {
-        let removed = self.pending_outbound.remove(&address);
-        assert!(removed);
-
         if let Some(address) = self.addresses.get_mut(&address) {
             address.fail_count += 1;
         }
-    }
-
-    pub fn outbound_connection_initiated(&mut self, address: A) {
-        let inserted = self.pending_outbound.insert(address);
-        assert!(inserted);
     }
 
     /// Mark peer as connected
@@ -231,9 +219,6 @@ impl<
             Role::Outbound => {
                 let inserted = self.connected_outbound.insert(address.clone());
                 assert!(inserted);
-
-                let removed = self.pending_outbound.remove(&address);
-                assert!(removed);
 
                 if let Some(address_data) = self.addresses.get_mut(&address) {
                     if !address_data.was_reachable {

@@ -127,7 +127,7 @@ where
     pm1.peerdb.peer_discovered(addr);
     pm1.heartbeat().await.unwrap();
 
-    assert_eq!(pm1.pending_connects.len(), 1);
+    assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })

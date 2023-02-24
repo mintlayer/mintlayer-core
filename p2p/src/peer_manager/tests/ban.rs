@@ -237,7 +237,6 @@ where
 
     // invalid version
     let address = B::new();
-    peer_manager.peerdb.outbound_connection_initiated(address.clone());
     let res = peer_manager.accept_connection(
         address,
         Role::Outbound,
@@ -255,7 +254,6 @@ where
 
     // valid connection
     let address = B::new();
-    peer_manager.peerdb.outbound_connection_initiated(address.clone());
     let res = peer_manager.accept_connection(
         address.clone(),
         Role::Outbound,
