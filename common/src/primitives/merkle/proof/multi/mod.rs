@@ -52,6 +52,22 @@ fn is_sorted_and_unique(leaves_indices: &[usize]) -> bool {
     leaves_indices.iter().tuple_windows::<(&usize, &usize)>().all(|(i, j)| i < j)
 }
 
+fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
+    if v.is_empty() {
+        return Vec::new();
+    }
+    let len = v[0].len();
+    let mut iters: Vec<_> = v.into_iter().map(|n| n.into_iter()).collect();
+    (0..len)
+        .map(|_| {
+            iters
+                .iter_mut()
+                .map(|n| n.next().expect("Iter is in tandem. Should never happen."))
+                .collect::<Vec<T>>()
+        })
+        .collect()
+}
+
 impl<'a> MultiProofNodes<'a> {
     pub fn from_tree_leaves(
         tree: &'a MerkleTree,
@@ -85,19 +101,34 @@ impl<'a> MultiProofNodes<'a> {
             .map(|i| SingleProofNodes::from_tree_leaf(tree, *i))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let mut level = 0;
         let mut computed_from_prev_level = vec![];
         let mut proof = vec![];
 
-        let level_count = tree.level_count();
+        let single_proofs_branches = single_proofs
+            .clone()
+            .into_iter()
+            .map(|sp| sp.branch().to_vec())
+            .collect::<Vec<_>>();
 
-        // loop over all levels in all proofs, starting from the bottom, and recreate the hashes required to verify the root hash
-        while level < level_count.get() - 1 {
-            let leaves = single_proofs.iter().map(|sp| sp.branch()[level]).collect::<Vec<_>>();
-
-            let siblings = single_proofs
+        // We expect all proofs to have the same branch lengths
+        if !single_proofs_branches.is_empty()
+            && !single_proofs_branches
                 .iter()
-                .map(|sp| sp.branch()[level].sibling().unwrap().abs_index())
+                .all(|v| v.len() == single_proofs_branches[0].len())
+        {
+            panic!("Proofs of the same tree are all expected to have the same length")
+        }
+
+        // Proofs have branches that extend from leaves to the root, but they never reach the root.
+        // We want to loop on the tree level, hence we transpose the branches of the single proofs
+        let single_proofs_levels = transpose(single_proofs_branches);
+
+        for nodes_of_level in single_proofs_levels {
+            let sibling_err =
+                "Only root has no sibling. We are never at root here, so this should never happen.";
+            let siblings = nodes_of_level
+                .iter()
+                .map(|node| node.sibling().expect(sibling_err).abs_index())
                 .collect::<BTreeSet<usize>>();
 
             // We remove leaves that are already in siblings because they will come from the verification input.
@@ -105,7 +136,7 @@ impl<'a> MultiProofNodes<'a> {
             // in the tree. In that case, given that the verification will have both as inputs, we don't need to include
             // them in the proof.
             // We also remove the nodes that can be computed from the previous level, because they will be included in the proof
-            let proofs_at_level = leaves
+            let proofs_at_level = nodes_of_level
                 .into_iter()
                 .filter(|node| !siblings.contains(&node.abs_index()))
                 .filter(|node| !computed_from_prev_level.contains(&node.abs_index()))
@@ -113,17 +144,16 @@ impl<'a> MultiProofNodes<'a> {
                 .collect::<BTreeSet<_>>();
 
             // We collect all the nodes that can be computed from this level, and will use it in the next iteration
+            let parent_err = "We should never be at root, so there should always be a parent";
             computed_from_prev_level = proofs_at_level
                 .iter()
                 .map(|n| n.get())
                 .tuple_windows::<(&Node, &Node)>()
                 .filter(|n| n.0.abs_index() % 2 == 0 && n.0.abs_index() + 1 == n.1.abs_index())
-                .map(|(n1, _n2)| n1.parent().unwrap().abs_index())
+                .map(|(n1, _n2)| n1.parent().expect(parent_err).abs_index())
                 .collect();
 
             proof.extend(proofs_at_level.into_iter().map(Node::from));
-
-            level += 1;
         }
 
         Ok(Self {
@@ -186,8 +216,10 @@ impl MultiProofHashes {
                 continue;
             }
 
-            let node_l = NodePosition::from_abs_index(tree_size, index).unwrap();
-            let node_r = NodePosition::from_abs_index(tree_size, index + 1).unwrap();
+            let err = "We never reach the root as per the loop's range, so this should always work";
+
+            let node_l = NodePosition::from_abs_index(tree_size, index).expect(err);
+            let node_r = NodePosition::from_abs_index(tree_size, index + 1).expect(err);
 
             if node_l.is_left() && node_r.is_right() {
                 let parent = node_l.parent().expect("Cannot be root because of loop range");
