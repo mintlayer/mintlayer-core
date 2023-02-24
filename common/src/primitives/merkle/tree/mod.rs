@@ -35,6 +35,19 @@ pub enum AdjacentLeavesIndices {
 
 /// Merkle tree in the form of a vector, where the bottom leaves are the based, and the root is
 /// the last element.
+/// Definitions:
+/// - Leaf: A node that cannot have children.
+/// - Node: any element of the tree.
+/// - Absolute index: The data structure that represents the tree internally is a Vec.
+///   Leaves start from 0 and from the left and end at the right, then next, higher levels. The last element is the root.
+///   The absolute index is the index to find a specific node in this tree, regardless of where it lies.
+/// - Position: The "coordinates" to find a node, given as level (leaves are at level 0, root is highest level),
+///   and index (we count from left to right).
+/// - Root: The root of the tree; in merkle-tree's case, it's the node that's created by hashing all the elements underneath.
+/// - Padding: Extra elements we add to the tree to make the number of leaves a power of 2. This has to match some security specs.
+///
+/// Given that this is strictly a filled-up binary tree, the number of leaves is always a power of 2, and the total number of
+/// nodes is always 2 * leaves - 1. These are invariants that are always held through type-level checks.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MerkleTree {
     tree: Vec<H256>,
@@ -58,7 +71,7 @@ impl MerkleTree {
         padding
     }
 
-    pub(crate) fn combine_pair(left: &H256, right: &H256) -> H256 {
+    pub(super) fn combine_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
         hasher.write(right.as_bytes());
@@ -86,7 +99,6 @@ impl MerkleTree {
         Ok(res)
     }
 
-    /// Get the root of the merkle tree.
     pub fn root(&self) -> H256 {
         *self.tree.last().expect("By design, at least one element must exist")
     }
