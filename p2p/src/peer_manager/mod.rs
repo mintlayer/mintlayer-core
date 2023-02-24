@@ -460,7 +460,11 @@ where
             log::warn!("connection rejected for peer {peer_id}: {accept_err}");
             let disconnect_res = self.peer_connectivity_handle.disconnect(peer_id);
             if let Err(err) = disconnect_res {
-                log::error!("disconnect failed unexpectedly: {err}")
+                log::error!("disconnect failed unexpectedly: {err}");
+            }
+
+            if role == Role::Outbound {
+                self.peerdb.report_outbound_failure(address.clone(), accept_err);
             }
         }
 
@@ -484,6 +488,8 @@ where
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) {
+        self.peerdb.report_outbound_failure(address.clone(), &error);
+
         let pending_connect = self
             .pending_outbound_connects
             .remove(&address)
@@ -491,8 +497,6 @@ where
         if let Some(channel) = pending_connect {
             channel.send(Err(error));
         }
-
-        self.peerdb.report_outbound_failure(address);
     }
 
     /// The connection to a remote peer is reported as closed.

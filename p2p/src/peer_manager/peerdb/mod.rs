@@ -156,7 +156,7 @@ impl<
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, address: A) {
+    pub fn report_outbound_failure(&mut self, address: A, _error: &P2pError) {
         if let Some(address) = self.addresses.get_mut(&address) {
             address.fail_count += 1;
         }
