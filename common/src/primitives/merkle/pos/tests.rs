@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use rstest::rstest;
+use std::ops::Range;
+
 use super::*;
 
 #[test]
@@ -44,6 +47,53 @@ fn construction_from_abs_index() {
             }
             let pos = pos.unwrap();
             assert_eq!(pos.abs_index(), abs_index);
+            assert_eq!(pos.tree_size(), tree_size);
+        }
+    }
+}
+
+const BIG_VAL: usize = 1000;
+
+#[rstest]
+#[case(1,  0..1, &[0..1], true)]
+#[case(3,  0..2, &[0..2,  0..1], true)]
+#[case(7,  0..2, &[0..4,  0..2,  0..1], true)]
+#[case(15, 0..2, &[0..8,  0..4,  0..2, 0..1], true)]
+#[case(31, 0..2, &[0..16, 0..8,  0..4, 0..2, 0..1], true)]
+#[case(63, 0..2, &[0..32, 0..16, 0..8, 0..4, 0..2, 0..1], true)]
+#[case(1,  0..1, &[1..BIG_VAL], false)]
+#[case(3,  0..2, &[2..BIG_VAL,  1..BIG_VAL], false)]
+#[case(7,  0..2, &[4..BIG_VAL,  2..BIG_VAL,  1..BIG_VAL], false)]
+#[case(15, 0..2, &[8..BIG_VAL,  4..BIG_VAL,  2..BIG_VAL, 1..BIG_VAL], false)]
+#[case(31, 0..2, &[16..BIG_VAL, 8..BIG_VAL,  4..BIG_VAL, 2..BIG_VAL, 1..BIG_VAL], false)]
+#[case(63, 0..2, &[32..BIG_VAL, 16..BIG_VAL, 8..BIG_VAL, 4..BIG_VAL, 2..BIG_VAL, 1..BIG_VAL], false)]
+fn construction_from_position(
+    #[case] tree_size: usize,
+    #[case] levels: Range<usize>,
+    #[case] indices_in_levels: &[Range<usize>],
+    #[case] success: bool,
+) {
+    let tree_size: TreeSize = tree_size.try_into().unwrap();
+    let make_pos = |tree_size: TreeSize, level: usize, index: usize| {
+        NodePosition::from_position(tree_size, level, index)
+    };
+
+    for level in levels {
+        for index in indices_in_levels[level].clone() {
+            let pos = make_pos(tree_size, level, index);
+            assert_eq!(
+                pos.is_some(),
+                success,
+                "Assertion failed for tree_size = {}, level = {}, index = {}",
+                tree_size,
+                level,
+                index
+            );
+            if !success {
+                continue;
+            }
+            let pos = pos.unwrap();
+            assert_eq!(pos.position(), (level, index));
             assert_eq!(pos.tree_size(), tree_size);
         }
     }

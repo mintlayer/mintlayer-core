@@ -24,8 +24,6 @@ pub struct NodePosition {
 }
 
 impl NodePosition {
-    // TODO(PR): test all these constructors
-    // TODO(PR): See whether we wanna create a TreeSize type that can be created from both leaf count or total node count
     pub fn from_abs_index(tree_size: TreeSize, absolute_index: usize) -> Option<Self> {
         if (tree_size.get() + 1).count_ones() != 1 {
             return None;
