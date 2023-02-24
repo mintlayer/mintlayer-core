@@ -226,10 +226,9 @@ impl<'a> Node<'a> {
         self.tree_ref
     }
 
-    pub fn position(&self) -> (usize, usize) {
-        let tree_size = TreeSize::from_value(self.tree_ref.tree.len())
-            .expect("By design, tree_size is always valid");
-        MerkleTree::position_from_index(tree_size, self.absolute_index)
+    pub fn into_position(self) -> NodePosition {
+        NodePosition::from_abs_index(self.tree().total_node_count(), self.absolute_index)
+            .expect("Should never fail since the index is transitively valid")
     }
 
     pub fn abs_index(&self) -> usize {
@@ -237,7 +236,8 @@ impl<'a> Node<'a> {
     }
 
     pub fn parent(&self) -> Option<Node<'a>> {
-        let (level, index) = self.position();
+        let pos = self.into_position();
+        let (level, index) = pos.position();
         if level == self.tree().level_count().get() - 1 {
             return None;
         }

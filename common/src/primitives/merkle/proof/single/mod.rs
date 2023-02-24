@@ -74,7 +74,7 @@ impl<'a> SingleProofNodes<'a> {
 
     pub fn into_values(self) -> SingleProofHashes {
         let proof = self.branch.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
-        let leaf_abs_index = self.leaf.position().1 as u32;
+        let leaf_abs_index = self.leaf.into_position().position().1 as u32;
         SingleProofHashes {
             leaf_index_in_level: leaf_abs_index,
             branch: proof,
