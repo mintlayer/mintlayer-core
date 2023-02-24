@@ -194,7 +194,7 @@ fn single_proof_two_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_ind
     let v1 = default_hash(H256::from_low_u64_be(1));
 
     let leaves = vec![v0, v1];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::from_leaves(leaves).unwrap();
 
     let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
 
@@ -216,7 +216,7 @@ fn single_proof_four_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_in
     let v3 = default_hash(H256::from_low_u64_be(3));
 
     let leaves = vec![v0, v1, v2, v3];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::from_leaves(leaves).unwrap();
 
     let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
 
@@ -246,7 +246,7 @@ fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_i
     let v7 = default_hash(H256::from_low_u64_be(7));
 
     let leaves = vec![v0, v1, v2, v3, v4, v5, v6, v7];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::from_leaves(leaves).unwrap();
 
     let proof = t.proof_from_leaf(leaf_index).unwrap().into_values();
 
