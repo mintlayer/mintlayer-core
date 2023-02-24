@@ -82,7 +82,22 @@ impl NodePosition {
     }
 
     pub fn position(&self) -> (usize, usize) {
-        MerkleTree::position_from_index(self.tree_size, self.absolute_index)
+        assert!(
+            self.abs_index() < self.tree_size.get(),
+            "Index must be within the tree size"
+        );
+
+        let leaves_count = self.tree_size.leaf_count();
+
+        let mut level = 0;
+        let mut nodes_at_level_count = leaves_count.get();
+        let mut tree_node_counter = 0;
+        while tree_node_counter + nodes_at_level_count <= self.abs_index() {
+            level += 1;
+            tree_node_counter += nodes_at_level_count;
+            nodes_at_level_count >>= 1;
+        }
+        (level, self.abs_index() - tree_node_counter)
     }
 
     pub fn is_left(&self) -> bool {

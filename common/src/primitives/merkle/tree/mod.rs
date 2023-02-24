@@ -154,29 +154,9 @@ impl MerkleTree {
         })
     }
 
-    /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
-    pub fn position_from_index(tree_size: TreeSize, index: usize) -> (usize, usize) {
-        assert_eq!(
-            (tree_size.get() + 1).count_ones(),
-            1,
-            "A valid tree size is always a power of 2 minus one"
-        );
-        assert!(
-            index < tree_size.get(),
-            "Index must be within the tree size"
-        );
-
-        let leaves_count = tree_size.leaf_count();
-
-        let mut level = 0;
-        let mut nodes_at_level_count = leaves_count.get();
-        let mut tree_node_counter = 0;
-        while tree_node_counter + nodes_at_level_count <= index {
-            level += 1;
-            tree_node_counter += nodes_at_level_count;
-            nodes_at_level_count >>= 1;
-        }
-        (level, index - tree_node_counter)
+    /// Given an absolute index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
+    pub fn position_from_index(tree_size: TreeSize, absolute_index: usize) -> Option<NodePosition> {
+        NodePosition::from_abs_index(tree_size, absolute_index)
     }
 
     pub fn iter_from_leaf_to_root(
