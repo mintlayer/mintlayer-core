@@ -71,11 +71,6 @@ impl NodePosition {
     }
 
     pub fn tree_level_count(&self) -> NonZeroUsize {
-        assert_eq!(
-            (self.tree_size.get() + 1).count_ones(),
-            1,
-            "A valid tree size is always a power of 2 minus one"
-        );
         (self.tree_size.get().trailing_ones() as usize)
             .try_into()
             .expect("Cannot be zero if tree_size is not zero")
