@@ -140,26 +140,6 @@ impl<
             .choose_multiple(&mut make_pseudo_rng(), count)
     }
 
-    /// Checks if the given address is banned
-    pub fn is_address_banned(&mut self, address: &B) -> bool {
-        if let Some(banned_till) = self.banned_addresses.get(address) {
-            // Check if the ban has expired
-            let now = self.time_getter.get_time();
-            if now <= *banned_till {
-                return true;
-            }
-
-            self.banned_addresses.remove(address);
-
-            storage::update_db(&self.storage, |tx| {
-                tx.del_banned_address(&address.to_string())
-            })
-            .expect("removing banned address is expected to succeed (is_address_banned)");
-        }
-
-        false
-    }
-
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: A) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
@@ -204,6 +184,26 @@ impl<
     /// Close the connection to an active peer.
     pub fn outbound_peer_disconnected(&mut self, _address: A) {
         // TODO(PR)
+    }
+
+    /// Checks if the given address is banned
+    pub fn is_address_banned(&mut self, address: &B) -> bool {
+        if let Some(banned_till) = self.banned_addresses.get(address) {
+            // Check if the ban has expired
+            let now = self.time_getter.get_time();
+            if now <= *banned_till {
+                return true;
+            }
+
+            self.banned_addresses.remove(address);
+
+            storage::update_db(&self.storage, |tx| {
+                tx.del_banned_address(&address.to_string())
+            })
+            .expect("removing banned address is expected to succeed (is_address_banned)");
+        }
+
+        false
     }
 
     /// Changes the address state to banned
