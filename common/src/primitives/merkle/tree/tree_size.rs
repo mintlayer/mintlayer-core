@@ -97,34 +97,42 @@ mod tests {
     #[test]
     fn calculations() {
         let t1 = TreeSize::try_from(1).unwrap();
+        assert_eq!(t1.get(), 1);
         assert_eq!(t1.leaf_count(), 1);
         assert_eq!(t1.level_count(), 1);
 
         let t3 = TreeSize::try_from(3).unwrap();
+        assert_eq!(t3.get(), 3);
         assert_eq!(t3.leaf_count(), 2);
         assert_eq!(t3.level_count(), 2);
 
         let t7 = TreeSize::try_from(7).unwrap();
+        assert_eq!(t7.get(), 7);
         assert_eq!(t7.leaf_count(), 4);
         assert_eq!(t7.level_count(), 3);
 
         let t15 = TreeSize::try_from(15).unwrap();
+        assert_eq!(t15.get(), 15);
         assert_eq!(t15.leaf_count(), 8);
         assert_eq!(t15.level_count(), 4);
 
         let t31 = TreeSize::try_from(31).unwrap();
+        assert_eq!(t31.get(), 31);
         assert_eq!(t31.leaf_count(), 16);
         assert_eq!(t31.level_count(), 5);
 
         let t63 = TreeSize::try_from(63).unwrap();
+        assert_eq!(t63.get(), 63);
         assert_eq!(t63.leaf_count(), 32);
         assert_eq!(t63.level_count(), 6);
 
         let t127 = TreeSize::try_from(127).unwrap();
+        assert_eq!(t127.get(), 127);
         assert_eq!(t127.leaf_count(), 64);
         assert_eq!(t127.level_count(), 7);
 
         let t255 = TreeSize::try_from(255).unwrap();
+        assert_eq!(t255.get(), 255);
         assert_eq!(t255.leaf_count(), 128);
         assert_eq!(t255.level_count(), 8);
     }
