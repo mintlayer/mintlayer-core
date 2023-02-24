@@ -17,8 +17,18 @@ use super::*;
 
 #[test]
 fn construction_from_abs_index() {
-    for tree_size in 1..16 {
-        let tree_size: NonZeroUsize = tree_size.try_into().unwrap();
+    for tree_size_in in 1..16 {
+        let tree_size: Result<TreeSize, _> = tree_size_in.try_into();
+        let tree_size = match tree_size {
+            Ok(t) => {
+                assert_eq!((tree_size_in + 1).count_ones(), 1);
+                t
+            }
+            Err(_) => {
+                assert!((tree_size_in + 1).count_ones() != 1);
+                continue;
+            }
+        };
         for abs_index in 0..tree_size.get() {
             let success = (tree_size.get() + 1).count_ones() == 1 && abs_index < tree_size.get();
             let pos = NodePosition::from_abs_index(tree_size, abs_index);

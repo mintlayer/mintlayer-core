@@ -15,18 +15,18 @@
 
 use std::num::NonZeroUsize;
 
-use super::tree::MerkleTree;
+use super::tree::{tree_size::TreeSize, MerkleTree};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePosition {
-    tree_size: NonZeroUsize,
+    tree_size: TreeSize,
     absolute_index: usize,
 }
 
 impl NodePosition {
     // TODO(PR): test all these constructors
     // TODO(PR): See whether we wanna create a TreeSize type that can be created from both leaf count or total node count
-    pub fn from_abs_index(tree_size: NonZeroUsize, absolute_index: usize) -> Option<Self> {
+    pub fn from_abs_index(tree_size: TreeSize, absolute_index: usize) -> Option<Self> {
         if (tree_size.get() + 1).count_ones() != 1 {
             return None;
         }
@@ -37,7 +37,7 @@ impl NodePosition {
         })
     }
 
-    pub fn from_position(tree_size: NonZeroUsize, level: usize, index: usize) -> Option<Self> {
+    pub fn from_position(tree_size: TreeSize, level: usize, index: usize) -> Option<Self> {
         let absolute_index =
             MerkleTree::absolute_index_from_bottom(tree_size, level, index).ok()?;
         Some(Self {
@@ -46,7 +46,7 @@ impl NodePosition {
         })
     }
 
-    pub fn tree_size(&self) -> NonZeroUsize {
+    pub fn tree_size(&self) -> TreeSize {
         self.tree_size
     }
 

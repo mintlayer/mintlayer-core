@@ -1,3 +1,8 @@
+use std::{
+    fmt::{Display, Formatter},
+    num::NonZeroUsize,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TreeSize(usize);
 
@@ -18,12 +23,12 @@ impl TreeSize {
         self.0
     }
 
-    pub fn leaf_count(&self) -> usize {
-        (self.0 + 1) / 2
+    pub fn leaf_count(&self) -> NonZeroUsize {
+        ((self.0 + 1) / 2).try_into().expect("Guaranteed by construction")
     }
 
-    pub fn level_count(&self) -> usize {
-        self.0.count_ones() as usize
+    pub fn level_count(&self) -> NonZeroUsize {
+        (self.0.count_ones() as usize).try_into().expect("Guaranteed by construction")
     }
 
     pub fn from_value(value: usize) -> Result<Self, TreeSizeError> {
@@ -63,6 +68,12 @@ impl From<TreeSize> for usize {
 impl AsRef<usize> for TreeSize {
     fn as_ref(&self) -> &usize {
         &self.0
+    }
+}
+
+impl Display for TreeSize {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -163,42 +174,42 @@ mod tests {
     fn calculations() {
         let t1 = TreeSize::try_from(1).unwrap();
         assert_eq!(t1.get(), 1);
-        assert_eq!(t1.leaf_count(), 1);
-        assert_eq!(t1.level_count(), 1);
+        assert_eq!(t1.leaf_count().get(), 1);
+        assert_eq!(t1.level_count().get(), 1);
 
         let t3 = TreeSize::try_from(3).unwrap();
         assert_eq!(t3.get(), 3);
-        assert_eq!(t3.leaf_count(), 2);
-        assert_eq!(t3.level_count(), 2);
+        assert_eq!(t3.leaf_count().get(), 2);
+        assert_eq!(t3.level_count().get(), 2);
 
         let t7 = TreeSize::try_from(7).unwrap();
         assert_eq!(t7.get(), 7);
-        assert_eq!(t7.leaf_count(), 4);
-        assert_eq!(t7.level_count(), 3);
+        assert_eq!(t7.leaf_count().get(), 4);
+        assert_eq!(t7.level_count().get(), 3);
 
         let t15 = TreeSize::try_from(15).unwrap();
         assert_eq!(t15.get(), 15);
-        assert_eq!(t15.leaf_count(), 8);
-        assert_eq!(t15.level_count(), 4);
+        assert_eq!(t15.leaf_count().get(), 8);
+        assert_eq!(t15.level_count().get(), 4);
 
         let t31 = TreeSize::try_from(31).unwrap();
         assert_eq!(t31.get(), 31);
-        assert_eq!(t31.leaf_count(), 16);
-        assert_eq!(t31.level_count(), 5);
+        assert_eq!(t31.leaf_count().get(), 16);
+        assert_eq!(t31.level_count().get(), 5);
 
         let t63 = TreeSize::try_from(63).unwrap();
         assert_eq!(t63.get(), 63);
-        assert_eq!(t63.leaf_count(), 32);
-        assert_eq!(t63.level_count(), 6);
+        assert_eq!(t63.leaf_count().get(), 32);
+        assert_eq!(t63.level_count().get(), 6);
 
         let t127 = TreeSize::try_from(127).unwrap();
         assert_eq!(t127.get(), 127);
-        assert_eq!(t127.leaf_count(), 64);
-        assert_eq!(t127.level_count(), 7);
+        assert_eq!(t127.leaf_count().get(), 64);
+        assert_eq!(t127.level_count().get(), 7);
 
         let t255 = TreeSize::try_from(255).unwrap();
         assert_eq!(t255.get(), 255);
-        assert_eq!(t255.leaf_count(), 128);
-        assert_eq!(t255.level_count(), 8);
+        assert_eq!(t255.leaf_count().get(), 128);
+        assert_eq!(t255.level_count().get(), 8);
     }
 }

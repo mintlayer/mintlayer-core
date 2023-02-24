@@ -24,6 +24,8 @@ use crate::primitives::{
     H256,
 };
 
+use self::tree_size::TreeSize;
+
 use super::{
     proof::single::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
     MerkleTreeProofExtractionError,
@@ -82,6 +84,7 @@ impl MerkleTree {
             let el = Self::combine_pair(&tree[i * 2], &tree[i * 2 + 1]);
             tree.push(el);
         }
+        TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
         let res = Self { tree };
         Ok(res)
     }
@@ -91,62 +94,34 @@ impl MerkleTree {
         *self.tree.last().expect("By design, at least one element must exist")
     }
 
-    pub fn total_node_count(&self) -> NonZeroUsize {
+    pub fn total_node_count(&self) -> TreeSize {
         self.tree
             .len()
             .try_into()
             .expect("(total_node_count) By design, tree_size is always > 0")
     }
 
-    pub fn level_count_from_tree_size(tree_size: NonZeroUsize) -> NonZeroUsize {
-        assert_eq!(
-            (tree_size.get() + 1).count_ones(),
-            1,
-            "A valid tree size is always a power of 2 minus one"
-        );
-        (tree_size.get().trailing_ones() as usize)
-            .try_into()
-            .expect("Cannot be zero if tree_size is not zero")
-    }
-
-    fn leaves_count_from_tree_size(tree_size: NonZeroUsize) -> NonZeroUsize {
-        assert_eq!(
-            (tree_size.get() + 1).count_ones(),
-            1,
-            "A valid tree size is always a power of 2 minus one"
-        );
-
-        let tree_size = tree_size.get();
-        let leaves_count = (tree_size + 1) >> 1;
-        debug_assert!(leaves_count.is_power_of_two());
-        NonZeroUsize::new(leaves_count)
-            .expect("(leaves_count_from_tree_size) By design, tree_size is always > 0")
-    }
-
     pub fn leaves_count(&self) -> NonZeroUsize {
-        Self::leaves_count_from_tree_size(
-            NonZeroUsize::new(self.tree.len())
-                .expect("(leaves_count) By design, tree_size is always > 0"),
-        )
+        let tree_size = TreeSize::from_value(self.tree.len())
+            .expect("(leaves_count) Tree size valid by construction");
+        tree_size.leaf_count()
     }
 
     pub fn level_count(&self) -> NonZeroUsize {
-        Self::level_count_from_tree_size(
-            NonZeroUsize::new(self.tree.len())
-                .expect("(level_count) By design, tree_size is always > 0"),
-        )
+        let tree_size = TreeSize::from_value(self.tree.len())
+            .expect("(level_count) Tree size valid by construction");
+        tree_size.level_count()
     }
 
     pub fn absolute_index_from_bottom(
-        tree_size: NonZeroUsize,
+        tree_size: TreeSize,
         level_from_bottom: usize,
         index_in_level: usize,
     ) -> Result<usize, MerkleTreeAccessError> {
-        let level_count = Self::level_count_from_tree_size(tree_size).get();
-        let tree_size = tree_size.get();
+        let level_count = tree_size.level_count().get();
         if level_from_bottom >= level_count {
             return Err(MerkleTreeAccessError::LevelOutOfRange(
-                tree_size,
+                tree_size.get(),
                 level_from_bottom,
                 index_in_level,
             ));
@@ -162,17 +137,17 @@ impl MerkleTree {
 
         let level_from_top = level_count - level_from_bottom;
         // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
-        let level_start = (tree_size >> level_from_top) << level_from_top;
+        let level_start = (tree_size.get() >> level_from_top) << level_from_top;
         let index_in_tree = level_start + index_in_level;
         // max number of nodes in a level, in level_from_bottom
         let index_in_level_size = if level_start > 0 {
             1 << (level_start.trailing_zeros() - 1)
         } else {
-            Self::leaves_count_from_tree_size(tree_size.try_into().expect("Must be > 0")).get()
+            tree_size.leaf_count().get()
         };
         if index_in_level >= index_in_level_size {
             return Err(MerkleTreeAccessError::IndexOutOfRange(
-                tree_size,
+                tree_size.get(),
                 level_from_bottom,
                 index_in_level,
             ));
@@ -213,7 +188,7 @@ impl MerkleTree {
     }
 
     /// Given an index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
-    pub fn position_from_index(tree_size: NonZeroUsize, index: usize) -> (usize, usize) {
+    pub fn position_from_index(tree_size: TreeSize, index: usize) -> (usize, usize) {
         assert_eq!(
             (tree_size.get() + 1).count_ones(),
             1,
@@ -224,7 +199,7 @@ impl MerkleTree {
             "Index must be within the tree size"
         );
 
-        let leaves_count = Self::leaves_count_from_tree_size(tree_size);
+        let leaves_count = tree_size.leaf_count();
 
         let mut level = 0;
         let mut nodes_at_level_count = leaves_count.get();
@@ -285,11 +260,9 @@ impl<'a> Node<'a> {
     }
 
     pub fn position(&self) -> (usize, usize) {
-        MerkleTree::position_from_index(
-            NonZeroUsize::new(self.tree_ref.tree.len())
-                .expect("By design, tree_size is always > 0"),
-            self.absolute_index,
-        )
+        let tree_size = TreeSize::from_value(self.tree_ref.tree.len())
+            .expect("By design, tree_size is always valid");
+        MerkleTree::position_from_index(tree_size, self.absolute_index)
     }
 
     pub fn abs_index(&self) -> usize {

@@ -16,8 +16,6 @@
 use super::*;
 use crate::primitives::id::{default_hash, DefaultHashAlgoStream};
 use crypto::hash::StreamHasher;
-use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Rng, Seed};
 
 #[test]
 fn merkletree_too_small() {
@@ -227,25 +225,14 @@ fn leaves_count_from_tree_size() {
     for i in 1..30 {
         let leaves_count = 1 << (i - 1);
         let tree_size = (1 << i) - 1;
+        let tree_size: TreeSize = tree_size.try_into().unwrap();
         assert_eq!(
-            MerkleTree::leaves_count_from_tree_size(tree_size.try_into().unwrap()),
+            tree_size.leaf_count(),
             NonZeroUsize::new(leaves_count).unwrap(),
             "Check failed for i = {}",
             i
         );
     }
-}
-
-#[rstest]
-#[should_panic(expected = "A valid tree size is always a power of 2 minus one")]
-#[case(Seed::from_entropy())]
-fn leaves_count_from_tree_size_error(#[case] seed: Seed) {
-    let mut rng = make_seedable_rng(seed);
-    let mut i = rng.gen::<usize>();
-    while (i + 1usize).count_ones() == 1 {
-        i = rng.gen::<usize>();
-    }
-    let _leaves_count = MerkleTree::leaves_count_from_tree_size(i.try_into().unwrap());
 }
 
 #[test]
@@ -465,7 +452,7 @@ fn bottom_access_eight_leaves() {
 
 #[test]
 fn position_from_index_1_tree_element() {
-    let tree_size: NonZeroUsize = 1.try_into().unwrap();
+    let tree_size: TreeSize = 1.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
@@ -481,7 +468,7 @@ fn position_from_index_1_tree_element() {
 
 #[test]
 fn position_from_index_3_tree_elements() {
-    let tree_size: NonZeroUsize = 3.try_into().unwrap();
+    let tree_size: TreeSize = 3.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
@@ -508,7 +495,7 @@ fn position_from_index_3_tree_elements() {
 
 #[test]
 fn position_from_index_7_tree_elements() {
-    let tree_size: NonZeroUsize = 7.try_into().unwrap();
+    let tree_size: TreeSize = 7.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
@@ -546,7 +533,7 @@ fn position_from_index_7_tree_elements() {
 
 #[test]
 fn position_from_index_15_tree_elements() {
-    let tree_size: NonZeroUsize = 15.try_into().unwrap();
+    let tree_size: TreeSize = 15.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
@@ -596,18 +583,18 @@ fn position_from_index_15_tree_elements() {
 #[test]
 fn absolute_index_from_bottom() {
     // Tree size: 1
-    let s: NonZeroUsize = 1.try_into().expect("is not zero");
+    let s: TreeSize = 1.try_into().expect("is not zero");
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
 
     // Tree size: 3
-    let s: NonZeroUsize = 3.try_into().expect("is not zero");
+    let s: TreeSize = 3.try_into().expect("is not zero");
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
 
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 2);
 
     // Tree size: 7
-    let s: NonZeroUsize = 7.try_into().expect("is not zero");
+    let s: TreeSize = 7.try_into().expect("is not zero");
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);
@@ -619,7 +606,7 @@ fn absolute_index_from_bottom() {
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 0).unwrap(), 6);
 
     // Tree size: 15
-    let s: NonZeroUsize = 15.try_into().expect("is not zero");
+    let s: TreeSize = 15.try_into().expect("is not zero");
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
     assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);

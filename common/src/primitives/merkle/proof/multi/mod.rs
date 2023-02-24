@@ -25,7 +25,7 @@ use itertools::Itertools;
 use crate::primitives::{
     merkle::{
         pos::NodePosition,
-        tree::{MerkleTree, Node},
+        tree::{tree_size::TreeSize, MerkleTree, Node},
         MerkleProofVerificationError, MerkleTreeProofExtractionError,
     },
     H256,
@@ -180,7 +180,7 @@ impl MultiProofHashes {
 
     /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
     fn calculate_missing_nodes(
-        tree_size: NonZeroUsize,
+        tree_size: TreeSize,
         input: BTreeMap<&usize, &H256>,
     ) -> BTreeMap<usize, H256> {
         let mut result =
@@ -232,7 +232,7 @@ impl MultiProofHashes {
             ));
         }
 
-        let tree_size = NonZeroUsize::new(self.tree_leaves_count.get() * 2 - 1)
+        let tree_size = TreeSize::from_value(self.tree_leaves_count.get() * 2 - 1)
             .expect("Already proven from source");
 
         if self.nodes.iter().any(|(index, _hash)| *index >= tree_size.get()) {
