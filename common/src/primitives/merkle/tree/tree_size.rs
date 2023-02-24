@@ -29,6 +29,13 @@ impl TreeSize {
     pub fn from_value(value: usize) -> Result<Self, TreeSizeError> {
         Self::try_from(value)
     }
+
+    pub fn from_leaf_count(leaf_count: usize) -> Result<Self, TreeSizeError> {
+        if leaf_count == 0 {
+            return Err(TreeSizeError::ZeroSize);
+        }
+        Self::try_from(leaf_count * 2 - 1)
+    }
 }
 
 impl TryFrom<usize> for TreeSize {
@@ -64,7 +71,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn construction() {
+    fn construction_from_tree_size() {
         assert_eq!(TreeSize::try_from(0), Err(TreeSizeError::ZeroSize));
         assert_eq!(TreeSize::try_from(1), Ok(TreeSize(1)));
         assert_eq!(TreeSize::try_from(2), Err(TreeSizeError::InvalidSize(2)));
@@ -92,6 +99,64 @@ mod tests {
                 assert_eq!(TreeSize::from_value(i), Err(TreeSizeError::InvalidSize(i)));
             }
         }
+    }
+
+    #[test]
+    fn construction_from_leaves_count() {
+        assert_eq!(TreeSize::from_leaf_count(0), Err(TreeSizeError::ZeroSize));
+        assert_eq!(TreeSize::from_leaf_count(1), Ok(TreeSize(1)));
+        assert_eq!(TreeSize::from_leaf_count(2), Ok(TreeSize(3)));
+        assert_eq!(
+            TreeSize::from_leaf_count(3),
+            Err(TreeSizeError::InvalidSize(5))
+        );
+        assert_eq!(TreeSize::from_leaf_count(4), Ok(TreeSize(7)));
+        assert_eq!(
+            TreeSize::from_leaf_count(5),
+            Err(TreeSizeError::InvalidSize(9))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(6),
+            Err(TreeSizeError::InvalidSize(11))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(7),
+            Err(TreeSizeError::InvalidSize(13))
+        );
+        assert_eq!(TreeSize::from_leaf_count(8), Ok(TreeSize(15)));
+        assert_eq!(
+            TreeSize::from_leaf_count(9),
+            Err(TreeSizeError::InvalidSize(17))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(10),
+            Err(TreeSizeError::InvalidSize(19))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(11),
+            Err(TreeSizeError::InvalidSize(21))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(12),
+            Err(TreeSizeError::InvalidSize(23))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(13),
+            Err(TreeSizeError::InvalidSize(25))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(14),
+            Err(TreeSizeError::InvalidSize(27))
+        );
+        assert_eq!(
+            TreeSize::from_leaf_count(15),
+            Err(TreeSizeError::InvalidSize(29))
+        );
+        assert_eq!(TreeSize::from_leaf_count(16), Ok(TreeSize(31)));
+        assert_eq!(
+            TreeSize::from_leaf_count(17),
+            Err(TreeSizeError::InvalidSize(33))
+        );
     }
 
     #[test]
