@@ -37,66 +37,42 @@ fn single_proof_one_leaf() {
 }
 
 #[rstest]
-#[case(0, &[1])]
-#[case(1, &[0])]
-fn single_proof_two_leaves(#[case] leaf_index: usize, #[case] branch: &[usize]) {
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-
-    let leaves = vec![v0, v1];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
-
-    let p = t.proof_from_leaf(leaf_index).unwrap();
-    assert_eq!(
-        p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        branch
-    );
-    assert!(p.into_values().verify(leaves[leaf_index], t.root()).unwrap());
-}
-
-#[rstest]
-#[case(0, &[1,5])]
-#[case(1, &[0,5])]
-#[case(2, &[3,4])]
-#[case(3, &[2,4])]
-fn single_proof_four_leaves(#[case] leaf_index: usize, #[case] branch: &[usize]) {
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-
-    let leaves = vec![v0, v1, v2, v3];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
-
-    let p = t.proof_from_leaf(leaf_index).unwrap();
-    assert_eq!(
-        p.branch().iter().map(|n| n.abs_index()).collect::<Vec<_>>(),
-        branch
-    );
-
-    assert!(p.into_values().verify(leaves[leaf_index], t.root()).unwrap());
-}
-
-#[rstest]
-#[case(0, &[1,9,13])]
-#[case(1, &[0,9,13])]
-#[case(2, &[3,8,13])]
-#[case(3, &[2,8,13])]
-#[case(4, &[5,11,12])]
-#[case(5, &[4,11,12])]
-#[case(6, &[7,10,12])]
-#[case(7, &[6,10,12])]
-fn single_proof_eight_leaves(#[case] leaf_index: usize, #[case] branch: &[usize]) {
-    let v0 = default_hash(H256::zero());
-    let v1 = default_hash(H256::from_low_u64_be(1));
-    let v2 = default_hash(H256::from_low_u64_be(2));
-    let v3 = default_hash(H256::from_low_u64_be(3));
-    let v4 = default_hash(H256::from_low_u64_be(4));
-    let v5 = default_hash(H256::from_low_u64_be(5));
-    let v6 = default_hash(H256::from_low_u64_be(6));
-    let v7 = default_hash(H256::from_low_u64_be(7));
-
-    let leaves = vec![v0, v1, v2, v3, v4, v5, v6, v7];
+#[case(2, 0, &[1])]
+#[case(2, 1, &[0])]
+#[case(4, 0, &[1,5])]
+#[case(4, 1, &[0,5])]
+#[case(4, 2, &[3,4])]
+#[case(4, 3, &[2,4])]
+#[case(8, 0, &[1,9,13])]
+#[case(8, 1, &[0,9,13])]
+#[case(8, 2, &[3,8,13])]
+#[case(8, 3, &[2,8,13])]
+#[case(8, 4, &[5,11,12])]
+#[case(8, 5, &[4,11,12])]
+#[case(8, 6, &[7,10,12])]
+#[case(8, 7, &[6,10,12])]
+#[case(16, 0, &[1,17,25,29])]
+#[case(16, 1, &[0,17,25,29])]
+#[case(16, 2, &[3,16,25,29])]
+#[case(16, 3, &[2,16,25,29])]
+#[case(16, 4, &[5,19,24,29])]
+#[case(16, 5, &[4,19,24,29])]
+#[case(16, 6, &[7,18,24,29])]
+#[case(16, 7, &[6,18,24,29])]
+#[case(16, 8, &[9,21,27,28])]
+#[case(16, 9, &[8,21,27,28])]
+#[case(16, 10, &[11,20,27,28])]
+#[case(16, 11, &[10,20,27,28])]
+#[case(16, 12, &[13,23,26,28])]
+#[case(16, 13, &[12,23,26,28])]
+#[case(16, 14, &[15,22,26,28])]
+#[case(16, 15, &[14,22,26,28])]
+fn single_proof_eight_leaves(
+    #[case] leaf_count: usize,
+    #[case] leaf_index: usize,
+    #[case] branch: &[usize],
+) {
+    let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
 
     let p = t.proof_from_leaf(leaf_index).unwrap();
