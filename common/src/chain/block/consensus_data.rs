@@ -50,14 +50,25 @@ impl ConsensusData {
     }
 }
 
-/// Fake PoS just to test spending block rewards; will be removed at some point in the future
+/// Data required to validate a block according to the PoS consensus rules.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSData {
+    /// Inputs for block reward
     kernel_inputs: Vec<TxInput>,
     kernel_witness: Vec<InputWitness>,
+
+    /// Id of the stake pool used for target calculations
     stake_pool_id: PoolId,
-    vrf_data: VRFReturn,
-    bits: Compact,
+
+    /// VRF data used for calculating hash below the target.
+    /// It represents random seed generated based on the randomness of the sealed epoch.
+    vrf_data_from_sealed_epoch: VRFReturn,
+
+    /// VRF data used for calculating randomness for the current block.
+    /// It represents random seed generated based on the randomness of the previous block.
+    vrf_data_from_prev_block: VRFReturn,
+
+    target: Compact, // TODO: do we really need to store it?
 }
 
 impl PoSData {
@@ -65,15 +76,17 @@ impl PoSData {
         kernel_inputs: Vec<TxInput>,
         kernel_witness: Vec<InputWitness>,
         stake_pool_id: PoolId,
-        vrf_data: VRFReturn,
-        bits: Compact,
+        vrf_data_from_sealed_epoch: VRFReturn,
+        vrf_data_from_prev_block: VRFReturn,
+        target: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
             stake_pool_id,
-            vrf_data,
-            bits,
+            vrf_data_from_sealed_epoch,
+            vrf_data_from_prev_block,
+            target,
         }
     }
 
@@ -89,12 +102,16 @@ impl PoSData {
         &self.stake_pool_id
     }
 
-    pub fn bits(&self) -> &Compact {
-        &self.bits
+    pub fn target(&self) -> &Compact {
+        &self.target
     }
 
-    pub fn vrf_data(&self) -> &VRFReturn {
-        &self.vrf_data
+    pub fn vrf_data_from_sealed_epoch(&self) -> &VRFReturn {
+        &self.vrf_data_from_sealed_epoch
+    }
+
+    pub fn vrf_data_from_prev_block(&self) -> &VRFReturn {
+        &self.vrf_data_from_prev_block
     }
 }
 

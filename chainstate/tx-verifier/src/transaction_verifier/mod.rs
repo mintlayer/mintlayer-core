@@ -424,8 +424,9 @@ where
         let timelock = match output.purpose() {
             OutputPurpose::Transfer(_) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
-            OutputPurpose::StakePool(_) => return Ok(()),
             OutputPurpose::Burn => return Ok(()),
+            OutputPurpose::StakePool(_) => return Ok(()),
+            OutputPurpose::StakedOutput(_, tl) => tl,
         };
 
         let source_block_height = source_block_index.block_height();
@@ -562,7 +563,8 @@ where
                 OutputPurpose::StakePool(data) => Some((data, output.value())),
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn => None,
+                | OutputPurpose::Burn
+                | OutputPurpose::StakedOutput(_, _) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -633,7 +635,8 @@ where
             }
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn => Ok(()),
+            | OutputPurpose::Burn
+            | OutputPurpose::StakedOutput(_, _) => Ok(()),
         })
     }
 

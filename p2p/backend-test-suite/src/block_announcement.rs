@@ -28,7 +28,6 @@ use common::{
         },
     },
     primitives::{user_agent::mintlayer_core_user_agent, Compact, Id, H256},
-    Uint256,
 };
 use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
 use serialization::Encode;
@@ -245,8 +244,9 @@ where
         Vec::new(),
         signatures,
         H256::random_using(&mut rng).into(),
+        vrf_data.clone(),
         vrf_data,
-        Compact::from(Uint256::from_u64(0)),
+        Compact(0),
     );
     let block = Block::new(
         Vec::new(),

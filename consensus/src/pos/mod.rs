@@ -40,9 +40,9 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
     spender_block_header: &BlockHeader,
     pos_accounting_view: &P,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = (*pos_data.bits())
+    let target: Uint256 = (*pos_data.target())
         .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.target()))?;
 
     let pool_data = match kernel_output.purpose() {
         OutputPurpose::Transfer(_)
@@ -55,12 +55,13 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         }
 
         OutputPurpose::StakePool(d) => d.as_ref(),
+        OutputPurpose::StakedOutput(d, _) => d.as_ref(),
     };
 
     let hash_pos: Uint256 = verify_vrf_and_get_vrf_output(
         epoch_index,
         random_seed,
-        pos_data.vrf_data(),
+        pos_data.vrf_data_from_sealed_epoch(),
         pool_data.vrf_public_key(),
         spender_block_header,
     )?

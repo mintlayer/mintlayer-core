@@ -44,9 +44,13 @@ pub enum OutputPurpose {
     #[codec(index = 1)]
     LockThenTransfer(Destination, OutputTimeLock),
     #[codec(index = 2)]
-    StakePool(Box<StakePoolData>),
-    #[codec(index = 3)]
     Burn,
+    /// Output type that is used to create a stake pool
+    #[codec(index = 3)]
+    StakePool(Box<StakePoolData>),
+    /// Output type that represents a spending of a stake pool output in order to produce a block
+    #[codec(index = 4)]
+    StakedOutput(Box<StakePoolData>, OutputTimeLock),
 }
 
 impl OutputPurpose {
@@ -54,16 +58,18 @@ impl OutputPurpose {
         match self {
             OutputPurpose::Transfer(d) => Some(d),
             OutputPurpose::LockThenTransfer(d, _) => Some(d),
-            OutputPurpose::StakePool(d) => Some(d.staker()),
             OutputPurpose::Burn => None,
+            OutputPurpose::StakePool(d) => Some(d.staker()),
+            OutputPurpose::StakedOutput(d, _) => Some(d.staker()),
         }
     }
 
     pub fn is_burn(&self) -> bool {
         match self {
-            OutputPurpose::Transfer(_) => false,
-            OutputPurpose::LockThenTransfer(_, _) => false,
-            OutputPurpose::StakePool(_) => false,
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::LockThenTransfer(_, _)
+            | OutputPurpose::StakePool(_)
+            | OutputPurpose::StakedOutput(_, _) => false,
             OutputPurpose::Burn => true,
         }
     }
@@ -90,10 +96,8 @@ impl TxOutput {
 
     pub fn has_timelock(&self) -> bool {
         match &self.purpose {
-            OutputPurpose::Transfer(_) => false,
-            OutputPurpose::LockThenTransfer(_, _) => true,
-            OutputPurpose::StakePool(_) => false,
-            OutputPurpose::Burn => false,
+            OutputPurpose::Transfer(_) | OutputPurpose::Burn | OutputPurpose::StakePool(_) => false,
+            OutputPurpose::LockThenTransfer(_, _) | OutputPurpose::StakedOutput(_, _) => true,
         }
     }
 }

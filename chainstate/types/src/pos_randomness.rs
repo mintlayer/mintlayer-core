@@ -71,12 +71,13 @@ impl PoSRandomness {
                 ));
             }
             OutputPurpose::StakePool(d) => d.as_ref(),
+            OutputPurpose::StakedOutput(d, _) => d.as_ref(),
         };
 
         let hash_pos: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
             &prev_randomness_val,
-            pos_data.vrf_data(),
+            pos_data.vrf_data_from_prev_block(),
             pool_data.vrf_public_key(),
             header,
         )?;

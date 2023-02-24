@@ -28,9 +28,10 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
+        timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, OutputPurpose, Transaction,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -388,55 +389,57 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         let required = block.consensus_data().reward_maturity_distance(self.chain_config);
+        let timelock_check_fn = |tl: &OutputTimeLock| -> Result<(), CheckBlockError> {
+            match tl {
+                OutputTimeLock::UntilHeight(_) => Err(
+                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                ),
+                OutputTimeLock::UntilTime(_) => Err(
+                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                ),
+                OutputTimeLock::ForBlockCount(c) => {
+                    let cs: i64 = (*c)
+                        .try_into()
+                        .map_err(|_| {
+                            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
+                                block.get_id(),
+                                *c,
+                            )
+                        })
+                        .log_err()?;
+                    let given = BlockDistance::new(cs);
+                    if given < required {
+                        Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
+                            block.get_id(),
+                            given,
+                            required,
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                }
+                OutputTimeLock::ForSeconds(_) => Err(
+                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                ),
+            }
+        };
+
         for output in block.block_reward().outputs() {
             match output.purpose() {
-                common::chain::OutputPurpose::Transfer(_) => {
+                OutputPurpose::Transfer(_) => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))
                 }
-                common::chain::OutputPurpose::LockThenTransfer(_, tl) => match tl {
-                    common::chain::timelock::OutputTimeLock::UntilHeight(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                    common::chain::timelock::OutputTimeLock::UntilTime(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                    common::chain::timelock::OutputTimeLock::ForBlockCount(c) => {
-                        let cs: i64 = (*c)
-                            .try_into()
-                            .map_err(|_| {
-                                CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
-                                    block.get_id(),
-                                    *c,
-                                )
-                            })
-                            .log_err()?;
-                        let given = BlockDistance::new(cs);
-                        if given < required {
-                            return Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
-                                block.get_id(),
-                                given,
-                                required,
-                            ));
-                        }
-                    }
-                    common::chain::timelock::OutputTimeLock::ForSeconds(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                },
-                common::chain::OutputPurpose::StakePool(_) => {
+                OutputPurpose::LockThenTransfer(_, tl) => timelock_check_fn(tl)?,
+                OutputPurpose::StakePool(_) => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))
                 }
-                common::chain::OutputPurpose::Burn => {
+                // FIXME: single output?
+                OutputPurpose::StakedOutput(_, tl) => timelock_check_fn(tl)?,
+                OutputPurpose::Burn => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))
