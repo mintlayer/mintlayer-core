@@ -125,7 +125,7 @@ where
 
     // "discover" the other networking service
     pm1.peerdb.peer_discovered(addr);
-    pm1.heartbeat().await.unwrap();
+    pm1.heartbeat().await;
 
     assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(
@@ -260,10 +260,7 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
-        Ok(())
-    );
+    pm2.try_accept_connection(address, Role::Inbound, peer_info, None).unwrap();
 }
 
 #[tokio::test]
@@ -316,7 +313,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.try_accept_connection(address, Role::Inbound, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -420,7 +417,7 @@ where
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
+        pm1.try_accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
