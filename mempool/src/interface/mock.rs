@@ -136,8 +136,8 @@ impl MempoolSubsystemInterface for MempoolInterfaceMock {
 
         if !*self.run_should_error.lock().unwrap() {
             tokio::select! {
-            call = call_rq.recv() => call(&mut self).await
-                }
+                call = call_rq.recv() => call(&mut self).await
+            }
         }
     }
 }
