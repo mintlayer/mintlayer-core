@@ -35,9 +35,38 @@ impl NodePosition {
         })
     }
 
-    pub fn from_position(tree_size: TreeSize, level: usize, index: usize) -> Option<Self> {
-        let absolute_index =
-            MerkleTree::absolute_index_from_bottom(tree_size, level, index).ok()?;
+    pub fn from_position(
+        tree_size: TreeSize,
+        level_from_bottom: usize,
+        index_in_level: usize,
+    ) -> Option<Self> {
+        let level_count = tree_size.level_count().get();
+        if level_from_bottom >= level_count {
+            return None;
+        }
+
+        // To help in seeing how these formulas were derived, see this table that represents values in the case tree.len() == 31 == 0b11111:
+        //  level     level_start  level_start in binary    index_in_level_size
+        //  0         0            00000                    16
+        //  1         16           10000                    8
+        //  2         24           11000                    4
+        //  3         28           11100                    2
+        //  4         30           11110                    1
+
+        let level_from_top = level_count - level_from_bottom;
+        // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
+        let level_start = (tree_size.get() >> level_from_top) << level_from_top;
+        let absolute_index = level_start + index_in_level;
+        // max number of nodes in a level, in level_from_bottom
+        let index_in_level_size = if level_start > 0 {
+            1 << (level_start.trailing_zeros() - 1)
+        } else {
+            tree_size.leaf_count().get()
+        };
+        if index_in_level >= index_in_level_size {
+            return None;
+        }
+
         Some(Self {
             tree_size,
             absolute_index,

@@ -41,10 +41,8 @@ pub enum MerkleTreeProofExtractionError {
 pub enum MerkleTreeAccessError {
     #[error("Invalid tree size provided provided is invalid: {0}")]
     InvalidTreeSize(usize),
-    #[error("Invalid level number in tree size: {0}, where attempting to access level {1} and index {2}")]
-    LevelOutOfRange(usize, usize, usize),
-    #[error("Invalid index number in tree size: {0}, where attempting to access level {1} and index {2}")]
-    IndexOutOfRange(usize, usize, usize),
+    #[error("Invalid initial index for leaf in iterator. Provided {0} vs tree size {1}")]
+    AbsIndexOutOfRange(usize, usize),
     #[error("Invalid initial index for leaf in iterator. Provided {0} vs size {1}")]
     IterStartIndexOutOfRange(usize, usize),
 }

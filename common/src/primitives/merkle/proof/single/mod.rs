@@ -43,7 +43,14 @@ impl<'a> SingleProofNodes<'a> {
             ));
         }
 
-        let leaf = tree.node_from_bottom(0, leaf_index)?;
+        let leaf = tree.node_from_bottom(0, leaf_index).ok_or(
+            MerkleTreeProofExtractionError::AccessError(
+                crate::primitives::merkle::MerkleTreeAccessError::AbsIndexOutOfRange(
+                    leaf_index,
+                    tree.total_node_count().get(),
+                ),
+            ),
+        )?;
 
         let mut last_node = leaf;
         let mut proof = vec![];

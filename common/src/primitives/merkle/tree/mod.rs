@@ -27,7 +27,7 @@ use crate::primitives::{
 use self::tree_size::TreeSize;
 
 use super::{
-    proof::single::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
+    pos::NodePosition, proof::single::SingleProofNodes, MerkleTreeAccessError, MerkleTreeFormError,
     MerkleTreeProofExtractionError,
 };
 
@@ -117,73 +117,40 @@ impl MerkleTree {
         tree_size: TreeSize,
         level_from_bottom: usize,
         index_in_level: usize,
-    ) -> Result<usize, MerkleTreeAccessError> {
-        let level_count = tree_size.level_count().get();
-        if level_from_bottom >= level_count {
-            return Err(MerkleTreeAccessError::LevelOutOfRange(
-                tree_size.get(),
-                level_from_bottom,
-                index_in_level,
-            ));
-        }
+    ) -> Option<usize> {
+        let node = NodePosition::from_position(tree_size, level_from_bottom, index_in_level)?;
 
-        // To help in seeing how these formulas were derived, see this table that represents values in the case tree.len() == 31 == 0b11111:
-        //  level     level_start  level_start in binary    index_in_level_size
-        //  0         0            00000                    16
-        //  1         16           10000                    8
-        //  2         24           11000                    4
-        //  3         28           11100                    2
-        //  4         30           11110                    1
-
-        let level_from_top = level_count - level_from_bottom;
-        // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
-        let level_start = (tree_size.get() >> level_from_top) << level_from_top;
-        let index_in_tree = level_start + index_in_level;
-        // max number of nodes in a level, in level_from_bottom
-        let index_in_level_size = if level_start > 0 {
-            1 << (level_start.trailing_zeros() - 1)
-        } else {
-            tree_size.leaf_count().get()
-        };
-        if index_in_level >= index_in_level_size {
-            return Err(MerkleTreeAccessError::IndexOutOfRange(
-                tree_size.get(),
-                level_from_bottom,
-                index_in_level,
-            ));
-        }
-
-        Ok(index_in_tree)
+        Some(node.abs_index())
     }
 
     pub fn node_value_from_bottom(
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
-    ) -> Result<H256, MerkleTreeAccessError> {
+    ) -> Option<H256> {
         let index_in_tree = Self::absolute_index_from_bottom(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
             index_in_level,
         )?;
 
-        Ok(self.tree[index_in_tree])
+        Some(self.tree[index_in_tree])
     }
 
     pub fn node_from_bottom(
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
-    ) -> Result<Node, MerkleTreeAccessError> {
-        let index_in_tree = Self::absolute_index_from_bottom(
+    ) -> Option<Node> {
+        let absolute_index = Self::absolute_index_from_bottom(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
             index_in_level,
         )?;
 
-        Ok(Node {
+        Some(Node {
             tree_ref: self,
-            absolute_index: index_in_tree,
+            absolute_index,
         })
     }
 

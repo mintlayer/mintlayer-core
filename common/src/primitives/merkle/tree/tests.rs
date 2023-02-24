@@ -246,19 +246,13 @@ fn bottom_access_one_leaf() {
     // Some invalid accesses at index
     for idx in 1..100 {
         let level = 0;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(1, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     // Some invalid accesses at level
     for idx in 0..100 {
         for level in 1..100 {
-            assert_eq!(
-                t.node_value_from_bottom(level, idx).unwrap_err(),
-                MerkleTreeAccessError::LevelOutOfRange(1, level, idx)
-            );
+            assert!(t.node_value_from_bottom(level, idx).is_none());
         }
     }
 }
@@ -280,27 +274,18 @@ fn bottom_access_two_leaves() {
     // Some invalid accesses at index
     for idx in 2..100 {
         let level = 0;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(3, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 1..100 {
         let level = 1;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(3, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     // Some invalid accesses at level
     for idx in 0..100 {
         for level in 2..100 {
-            assert_eq!(
-                t.node_value_from_bottom(level, idx).unwrap_err(),
-                MerkleTreeAccessError::LevelOutOfRange(3, level, idx)
-            );
+            assert!(t.node_value_from_bottom(level, idx).is_none());
         }
     }
 }
@@ -332,35 +317,23 @@ fn bottom_access_four_leaves() {
     // Some invalid accesses at index
     for idx in 4..100 {
         let level = 0;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 2..100 {
         let level = 1;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 1..100 {
         let level = 2;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(7, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     // Some invalid accesses at level
     for idx in 0..100 {
         for level in 3..100 {
-            assert_eq!(
-                t.node_value_from_bottom(level, idx).unwrap_err(),
-                MerkleTreeAccessError::LevelOutOfRange(7, level, idx)
-            );
+            assert!(t.node_value_from_bottom(level, idx).is_none());
         }
     }
 }
@@ -409,43 +382,28 @@ fn bottom_access_eight_leaves() {
     // Some invalid accesses at index
     for idx in 8..100 {
         let level = 0;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 4..100 {
         let level = 1;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 2..100 {
         let level = 2;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     for idx in 1..100 {
         let level = 3;
-        assert_eq!(
-            t.node_value_from_bottom(level, idx).unwrap_err(),
-            MerkleTreeAccessError::IndexOutOfRange(15, level, idx)
-        );
+        assert!(t.node_value_from_bottom(level, idx).is_none());
     }
 
     // Some invalid accesses at level
     for idx in 0..100 {
         for level in 4..100 {
-            assert_eq!(
-                t.node_value_from_bottom(level, idx).unwrap_err(),
-                MerkleTreeAccessError::LevelOutOfRange(15, level, idx)
-            );
+            assert!(t.node_value_from_bottom(level, idx).is_none());
         }
     }
 }
@@ -636,10 +594,7 @@ fn parent_iter_one_leaf() {
     let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(0, 0).ok()
-    );
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
     assert_eq!(leaf0iter.next().map(val), None);
 
     // Error cases: Invalid access
@@ -661,25 +616,13 @@ fn parent_iter_two_leaves() {
     let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(0, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(1, 0));
     assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(0, 1).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(0, 1));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(1, 0));
     assert_eq!(leaf1iter.next().map(val), None);
 
     // Error cases: Invalid access
@@ -703,63 +646,27 @@ fn parent_iter_four_leaves() {
     let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(0, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(1, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(2, 0));
     assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(0, 1).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(0, 1));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(1, 0));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(2, 0));
     assert_eq!(leaf1iter.next().map(val), None);
 
     let mut leaf2iter = t.iter_from_leaf_to_root(2).unwrap();
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(0, 2).ok()
-    );
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(1, 1).ok()
-    );
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(0, 2));
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(1, 1));
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(2, 0));
     assert_eq!(leaf2iter.next().map(val), None);
 
     let mut leaf3iter = t.iter_from_leaf_to_root(3).unwrap();
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(0, 3).ok()
-    );
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(1, 1).ok()
-    );
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(0, 3));
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(1, 1));
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(2, 0));
     assert_eq!(leaf3iter.next().map(val), None);
 
     // Error cases: Invalid access
@@ -784,155 +691,59 @@ fn parent_iter_eight_leaves() {
     let val = |v: Node| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(0, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
-    assert_eq!(
-        leaf0iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(1, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(2, 0));
+    assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf0iter.next().map(val), None);
 
     let mut leaf1iter = t.iter_from_leaf_to_root(1).unwrap();
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(0, 1).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(1, 0).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
-    assert_eq!(
-        leaf1iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(0, 1));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(1, 0));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(2, 0));
+    assert_eq!(leaf1iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf1iter.next().map(val), None);
 
     let mut leaf2iter = t.iter_from_leaf_to_root(2).unwrap();
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(0, 2).ok()
-    );
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(1, 1).ok()
-    );
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
-    assert_eq!(
-        leaf2iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(0, 2));
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(1, 1));
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(2, 0));
+    assert_eq!(leaf2iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf2iter.next().map(val), None);
 
     let mut leaf3iter = t.iter_from_leaf_to_root(3).unwrap();
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(0, 3).ok()
-    );
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(1, 1).ok()
-    );
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(2, 0).ok()
-    );
-    assert_eq!(
-        leaf3iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(0, 3));
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(1, 1));
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(2, 0));
+    assert_eq!(leaf3iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf3iter.next().map(val), None);
 
     let mut leaf4iter = t.iter_from_leaf_to_root(4).unwrap();
-    assert_eq!(
-        leaf4iter.next().map(val),
-        t.node_value_from_bottom(0, 4).ok()
-    );
-    assert_eq!(
-        leaf4iter.next().map(val),
-        t.node_value_from_bottom(1, 2).ok()
-    );
-    assert_eq!(
-        leaf4iter.next().map(val),
-        t.node_value_from_bottom(2, 1).ok()
-    );
-    assert_eq!(
-        leaf4iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf4iter.next().map(val), t.node_value_from_bottom(0, 4));
+    assert_eq!(leaf4iter.next().map(val), t.node_value_from_bottom(1, 2));
+    assert_eq!(leaf4iter.next().map(val), t.node_value_from_bottom(2, 1));
+    assert_eq!(leaf4iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf4iter.next().map(val), None);
 
     let mut leaf5iter = t.iter_from_leaf_to_root(5).unwrap();
-    assert_eq!(
-        leaf5iter.next().map(val),
-        t.node_value_from_bottom(0, 5).ok()
-    );
-    assert_eq!(
-        leaf5iter.next().map(val),
-        t.node_value_from_bottom(1, 2).ok()
-    );
-    assert_eq!(
-        leaf5iter.next().map(val),
-        t.node_value_from_bottom(2, 1).ok()
-    );
-    assert_eq!(
-        leaf5iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf5iter.next().map(val), t.node_value_from_bottom(0, 5));
+    assert_eq!(leaf5iter.next().map(val), t.node_value_from_bottom(1, 2));
+    assert_eq!(leaf5iter.next().map(val), t.node_value_from_bottom(2, 1));
+    assert_eq!(leaf5iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf5iter.next().map(val), None);
 
     let mut leaf6iter = t.iter_from_leaf_to_root(6).unwrap();
-    assert_eq!(
-        leaf6iter.next().map(val),
-        t.node_value_from_bottom(0, 6).ok()
-    );
-    assert_eq!(
-        leaf6iter.next().map(val),
-        t.node_value_from_bottom(1, 3).ok()
-    );
-    assert_eq!(
-        leaf6iter.next().map(val),
-        t.node_value_from_bottom(2, 1).ok()
-    );
-    assert_eq!(
-        leaf6iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf6iter.next().map(val), t.node_value_from_bottom(0, 6));
+    assert_eq!(leaf6iter.next().map(val), t.node_value_from_bottom(1, 3));
+    assert_eq!(leaf6iter.next().map(val), t.node_value_from_bottom(2, 1));
+    assert_eq!(leaf6iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf6iter.next().map(val), None);
 
     let mut leaf7iter = t.iter_from_leaf_to_root(7).unwrap();
-    assert_eq!(
-        leaf7iter.next().map(val),
-        t.node_value_from_bottom(0, 7).ok()
-    );
-    assert_eq!(
-        leaf7iter.next().map(val),
-        t.node_value_from_bottom(1, 3).ok()
-    );
-    assert_eq!(
-        leaf7iter.next().map(val),
-        t.node_value_from_bottom(2, 1).ok()
-    );
-    assert_eq!(
-        leaf7iter.next().map(val),
-        t.node_value_from_bottom(3, 0).ok()
-    );
+    assert_eq!(leaf7iter.next().map(val), t.node_value_from_bottom(0, 7));
+    assert_eq!(leaf7iter.next().map(val), t.node_value_from_bottom(1, 3));
+    assert_eq!(leaf7iter.next().map(val), t.node_value_from_bottom(2, 1));
+    assert_eq!(leaf7iter.next().map(val), t.node_value_from_bottom(3, 0));
     assert_eq!(leaf7iter.next().map(val), None);
 
     // Error cases: Invalid access
