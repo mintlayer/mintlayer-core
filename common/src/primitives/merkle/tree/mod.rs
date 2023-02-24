@@ -65,10 +65,10 @@ impl MerkleTree {
         H256::from(hasher.finalize())
     }
 
-    /// Create a new merkle tree from a list of leaves.
+    /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
+    /// Incremental padding means that the padding is created by hashing the last element of the list,
+    /// and then hashing the result with the next element of the list, and so on.
     pub fn from_leaves(leaves: Vec<H256>) -> Result<Self, MerkleTreeFormError> {
-        // TODO: separate padding from this function and create a type that includes padding
-        //       on creation by taking Vec<H256> as input and padding it and wrapping it with a strong type
         if leaves.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(leaves.len()));
         }
