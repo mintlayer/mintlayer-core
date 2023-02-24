@@ -333,11 +333,6 @@ where
     ) -> crate::Result<()> {
         log::debug!("validate inbound connection, inbound address {address:?}");
 
-        ensure!(
-            !self.is_peer_connected(info.peer_id),
-            P2pError::PeerError(PeerError::PeerAlreadyExists),
-        );
-
         let bannable_address = address.as_bannable();
         ensure!(
             !self.peerdb.is_address_banned(&bannable_address),
@@ -418,13 +413,16 @@ where
     /// If the connection was initiated by the user via RPC, inform them that the connection failed.
     /// Inform the [`crate::peer_manager::peerdb::PeerDb`] about the address failure so it knows to
     /// update its own records.
-    fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
-        if let Some(Some(channel)) = self.pending_outbound_connects.remove(&address) {
+    fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) {
+        let pending_connect = self
+            .pending_outbound_connects
+            .remove(&address)
+            .expect("pending_outbound_connects must exist (handle_outbound_error)");
+        if let Some(channel) = pending_connect {
             channel.send(Err(error));
         }
 
         self.peerdb.report_outbound_failure(address);
-        Ok(())
     }
 
     /// Attempt to establish an outbound connection
@@ -711,17 +709,9 @@ where
     /// Other errors are logged as warnings and `Ok(())` is returned as they should
     /// not disturb the operation of `PeerManager`.
     ///
-    /// If an error has ban score greater than zero, the peer score is updated and connection
-    /// to that peer is possibly closed if their score crossed the ban threshold.
-    ///
     /// # Arguments
-    /// `peer_id` - peer ID of the remote peer, if available
     /// `result` - result of the operation that was performed
-    pub fn handle_result(
-        &mut self,
-        peer_id: Option<PeerId>,
-        result: crate::Result<()>,
-    ) -> crate::Result<()> {
+    pub fn handle_result(&mut self, result: crate::Result<()>) -> crate::Result<()> {
         match result {
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed | P2pError::SubsystemFailure) => {
@@ -730,12 +720,6 @@ where
             }
             Err(err) => {
                 log::warn!("non-fatal error occurred: {err}");
-
-                if let Some(peer_id) = peer_id {
-                    log::info!("adjust peer score for peer {peer_id}, reason {err}");
-                    return self.adjust_peer_score(peer_id, err.ban_score());
-                }
-
                 Ok(())
             }
         }
@@ -816,39 +800,37 @@ where
                     peer_info,
                     receiver_address,
                 } => {
-                    let peer_id = peer_info.peer_id;
                     let res = self.accept_connection(
                         address.clone(),
                         Role::Outbound,
                         peer_info,
                         receiver_address,
                     );
-                    self.handle_result(Some(peer_id), res)?;
+                    self.handle_result(res)?;
 
-                    match self.pending_outbound_connects.remove(&address) {
-                        Some(Some(channel)) => {
-                            channel.send(Ok(()));
-                        }
-                        Some(None) => {}
-                        None => log::error!("connection accepted but it's not pending?"),
+                    let pending_connect = self
+                        .pending_outbound_connects
+                        .remove(&address)
+                        .expect("pending_outbound_connects must exist (OutboundAccepted)");
+                    if let Some(channel) = pending_connect {
+                        channel.send(Ok(()));
                     }
                 }
                 ConnectivityEvent::ConnectionClosed { peer_id } => {
                     let res = self.connection_closed(peer_id);
-                    self.handle_result(Some(peer_id), res)?;
+                    self.handle_result(res)?;
                 }
                 ConnectivityEvent::ConnectionError { address, error } => {
-                    let res = self.handle_outbound_error(address, error);
-                    self.handle_result(None, res)?;
+                    self.handle_outbound_error(address, error);
                 }
                 ConnectivityEvent::Misbehaved { peer_id, error } => {
                     let res = self.adjust_peer_score(peer_id, error.ban_score());
-                    self.handle_result(Some(peer_id), res)?;
+                    self.handle_result(res)?;
                 }
             },
             Err(err) => {
                 log::error!("failed to read network event: {err:?}");
-                self.handle_result(None, Err(err))?;
+                self.handle_result(Err(err))?;
             }
         }
 

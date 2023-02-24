@@ -232,7 +232,7 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // invalid version
@@ -249,7 +249,7 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // valid connection
@@ -267,7 +267,7 @@ where
         None,
     );
     assert!(res.is_ok());
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(peer_manager.is_peer_connected(peer_id));
     assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
@@ -325,7 +325,7 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // invalid version
@@ -340,7 +340,7 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // valid connection
@@ -357,7 +357,7 @@ where
         None,
     );
     assert!(res.is_ok());
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert_eq!(peer_manager.handle_result(res), Ok(()));
     assert!(peer_manager.is_peer_connected(peer_id));
     assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
