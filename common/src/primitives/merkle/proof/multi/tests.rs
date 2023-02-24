@@ -546,6 +546,12 @@ fn multi_proof_verification(
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);
 
+    // ensure we're really going through all the test cases we expect
+    assert_eq!(
+        cases.len(),
+        max_test_cases.unwrap_or_else(|| 1 << leaves_count)
+    );
+
     for leaves_indices in cases {
         if leaves_indices.is_empty() {
             // Empty case is tested in another test
@@ -583,4 +589,236 @@ fn multi_proof_verification_one_leaf() {
     );
 }
 
-// TODO(PR): tampering tests
+#[rstest]
+#[case(Seed::from_entropy(), 2, None)]
+#[case(Seed::from_entropy(), 4, None)]
+#[case(Seed::from_entropy(), 8, None)]
+#[case(Seed::from_entropy(), 16, Some(50))]
+#[case(Seed::from_entropy(), 32, Some(50))]
+#[case(Seed::from_entropy(), 64, Some(50))]
+#[case(Seed::from_entropy(), 128, Some(50))]
+fn multi_proof_verification_tampered_nodes(
+    #[case] seed: Seed,
+    #[case] leaves_count: usize,
+    #[case] max_test_cases: Option<usize>,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    let leaves = gen_leaves(leaves_count);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let mut cases = gen_leaves_indices_combinations(leaves_count)
+        .into_iter()
+        .take(max_test_cases.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    cases.shuffle(&mut rng);
+
+    // ensure we're really going through all the test cases we expect
+    assert_eq!(
+        cases.len(),
+        max_test_cases.unwrap_or_else(|| 1 << leaves_count)
+    );
+
+    for leaves_indices in cases {
+        if leaves_indices.is_empty() {
+            // Empty case is tested in another test
+            continue;
+        }
+        let multi_proof =
+            MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
+
+        for (node_idx, _hash) in &multi_proof.nodes {
+            // assert that the node we'll mess with is already in the proof
+            assert!(multi_proof.nodes.contains_key(node_idx));
+
+            let mut multi_proof = multi_proof.clone();
+            multi_proof.nodes.insert(*node_idx, H256::random_using(&mut rng));
+
+            let leaves_hashes_map = indices_to_map(&leaves_indices);
+            assert!(
+                !multi_proof.verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+                "Failed for indices: {:?}",
+                leaves_indices
+            );
+        }
+    }
+}
+
+#[rstest]
+#[case(Seed::from_entropy(), 2, None)]
+#[case(Seed::from_entropy(), 4, None)]
+#[case(Seed::from_entropy(), 8, None)]
+#[case(Seed::from_entropy(), 16, Some(50))]
+#[case(Seed::from_entropy(), 32, Some(50))]
+#[case(Seed::from_entropy(), 64, Some(50))]
+#[case(Seed::from_entropy(), 128, Some(50))]
+fn multi_proof_verification_tampered_leaves(
+    #[case] seed: Seed,
+    #[case] leaves_count: usize,
+    #[case] max_test_cases: Option<usize>,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    let leaves = gen_leaves(leaves_count);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let mut cases = gen_leaves_indices_combinations(leaves_count)
+        .into_iter()
+        .take(max_test_cases.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    cases.shuffle(&mut rng);
+
+    // ensure we're really going through all the test cases we expect
+    assert_eq!(
+        cases.len(),
+        max_test_cases.unwrap_or_else(|| 1 << leaves_count)
+    );
+
+    for leaves_indices in cases {
+        if leaves_indices.is_empty() {
+            // Empty case is tested in another test
+            continue;
+        }
+        let multi_proof =
+            MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
+        let leaves_hashes_map = indices_to_map(&leaves_indices);
+
+        for (leaf_idx, _hash) in &leaves_hashes_map {
+            //assert that the leaf we'll mess with is part of the input list
+            assert!(leaves_hashes_map.contains_key(leaf_idx));
+
+            let mut leaves_hashes_map = leaves_hashes_map.clone();
+            leaves_hashes_map.insert(*leaf_idx, H256::random_using(&mut rng));
+
+            assert!(
+                !multi_proof.verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+                "Failed for indices: {:?}",
+                leaves_indices
+            );
+        }
+    }
+}
+
+#[rstest]
+#[case(Seed::from_entropy(), 2, None)]
+#[case(Seed::from_entropy(), 4, None)]
+#[case(Seed::from_entropy(), 8, None)]
+#[case(Seed::from_entropy(), 16, Some(50))]
+#[case(Seed::from_entropy(), 32, Some(50))]
+#[case(Seed::from_entropy(), 64, Some(50))]
+#[case(Seed::from_entropy(), 128, Some(50))]
+fn multi_proof_verification_tampered_tree_size_into_invalid_value(
+    #[case] seed: Seed,
+    #[case] leaves_count: usize,
+    #[case] max_test_cases: Option<usize>,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    let leaves = gen_leaves(leaves_count);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let mut cases = gen_leaves_indices_combinations(leaves_count)
+        .into_iter()
+        .take(max_test_cases.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    cases.shuffle(&mut rng);
+
+    // ensure we're really going through all the test cases we expect
+    assert_eq!(
+        cases.len(),
+        max_test_cases.unwrap_or_else(|| 1 << leaves_count)
+    );
+
+    for leaves_indices in cases {
+        if leaves_indices.is_empty() {
+            // Empty case is tested in another test
+            continue;
+        }
+        let mut multi_proof =
+            MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
+        let leaves_hashes_map = indices_to_map(&leaves_indices);
+
+        // Tamper with tree size
+        multi_proof.tree_leaves_count =
+            NonZeroUsize::new(multi_proof.tree_leaves_count.get() + 1).unwrap();
+
+        assert_eq!(
+            multi_proof.verify(leaves_hashes_map, t.root()).unwrap_err(),
+            MerkleProofVerificationError::InvalidTreeLeavesCount(
+                multi_proof.tree_leaves_count.get()
+            ),
+            "Failed for indices: {:?}",
+            leaves_indices
+        );
+    }
+}
+
+#[rstest]
+#[case(Seed::from_entropy(), 2, None)]
+#[case(Seed::from_entropy(), 4, None)]
+#[case(Seed::from_entropy(), 8, None)]
+#[case(Seed::from_entropy(), 16, Some(50))]
+#[case(Seed::from_entropy(), 32, Some(50))]
+#[case(Seed::from_entropy(), 64, Some(50))]
+#[case(Seed::from_entropy(), 128, Some(50))]
+fn multi_proof_verification_tampered_tree_size_into_wrong_value(
+    #[case] seed: Seed,
+    #[case] leaves_count: usize,
+    #[case] max_test_cases: Option<usize>,
+) {
+    let mut rng = make_seedable_rng(seed);
+
+    let leaves = gen_leaves(leaves_count);
+    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+
+    let indices_to_map = |leaves_indices: &[usize]| {
+        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    };
+
+    let mut cases = gen_leaves_indices_combinations(leaves_count)
+        .into_iter()
+        .take(max_test_cases.unwrap_or(usize::MAX))
+        .collect::<Vec<_>>();
+    cases.shuffle(&mut rng);
+
+    // ensure we're really going through all the test cases we expect
+    assert_eq!(
+        cases.len(),
+        max_test_cases.unwrap_or_else(|| 1 << leaves_count)
+    );
+
+    for leaves_indices in cases {
+        if leaves_indices.is_empty() {
+            // Empty case is tested in another test
+            continue;
+        }
+        let mut multi_proof =
+            MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
+        let leaves_hashes_map = indices_to_map(&leaves_indices);
+
+        // Tamper with tree size. By multiplying by 2, the size is valid, but the nodes are not for that tree
+        multi_proof.tree_leaves_count =
+            NonZeroUsize::new(multi_proof.tree_leaves_count.get() * 2).unwrap();
+
+        let verify_result = multi_proof.verify(leaves_hashes_map, t.root());
+
+        // The verification can result now in an error (due to missing nodes) or in a valid result (due to bad hashing order)
+        assert!(
+            verify_result.is_err() || !verify_result.unwrap().unwrap(),
+            "Failed for indices: {:?}",
+            leaves_indices
+        );
+    }
+}
