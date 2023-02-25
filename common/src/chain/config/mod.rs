@@ -114,6 +114,7 @@ pub struct ChainConfig {
     token_min_hash_len: usize,
     token_max_hash_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
+    max_classic_multisig_public_keys_count: usize,
 }
 
 impl ChainConfig {
@@ -255,6 +256,10 @@ impl ChainConfig {
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
+
+    pub fn max_classic_multisig_public_keys_count(&self) -> usize {
+        self.max_classic_multisig_public_keys_count
+    }
 }
 
 impl AsRef<ChainConfig> for ChainConfig {
@@ -263,7 +268,6 @@ impl AsRef<ChainConfig> for ChainConfig {
     }
 }
 
-// DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
@@ -275,6 +279,7 @@ const TOKEN_MAX_HASH_LEN: usize = 32;
 const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
+const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 
 fn create_mainnet_genesis() -> Genesis {
     use crate::chain::transaction::TxOutput;

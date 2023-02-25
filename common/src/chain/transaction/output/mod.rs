@@ -17,8 +17,11 @@ use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, prim
 use script::Script;
 use serialization::{Decode, Encode};
 
-use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
+use self::{
+    classic_multisig::ClassicMultisigChallenge, stakelock::StakePoolData, timelock::OutputTimeLock,
+};
 
+pub mod classic_multisig;
 pub mod stakelock;
 pub mod timelock;
 
@@ -31,6 +34,8 @@ pub enum Destination {
     #[codec(index = 2)]
     ScriptHash(Id<Script>),
     #[codec(index = 3)]
+    ClassicMultisig(ClassicMultisigChallenge),
+    #[codec(index = 4)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
 }
 

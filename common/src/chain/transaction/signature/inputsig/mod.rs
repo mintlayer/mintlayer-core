@@ -92,6 +92,7 @@ impl StandardInputSignature {
                     TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
             }
+            Destination::ClassicMultisig(_) => todo!(),
         }
         Ok(())
     }
@@ -119,6 +120,7 @@ impl StandardInputSignature {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
                 return Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
             }
+            Destination::ClassicMultisig(_) => todo!(),
         };
         Ok(Self {
             sighash_type,

@@ -321,6 +321,7 @@ pub fn verify_signature<T: Transactable>(
             Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {
                 return Err(TransactionSigError::SignatureNotFound)
             }
+            Destination::ClassicMultisig(_) => todo!(),
             Destination::AnyoneCanSpend => {}
         },
         inputsig::InputWitness::Standard(witness) => {
