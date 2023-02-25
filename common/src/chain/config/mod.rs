@@ -288,7 +288,7 @@ fn create_mainnet_genesis() -> Genesis {
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
     // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
     // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
-    let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
+    let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
     let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
