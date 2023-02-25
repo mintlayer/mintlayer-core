@@ -1,17 +1,17 @@
 use std::num::NonZeroU32;
 
+use crypto::key::PublicKey;
 use parity_scale_codec::{Decode, Encode};
 
-use crate::{address::pubkeyhash::PublicKeyHash, chain::ChainConfig};
+use crate::chain::ChainConfig;
 
 /// A challenge represented by a set of public keys and a minimum number of signatures required to pass the challenge.
-/// The public keys are hashed for privacy.
 /// Keep in mind that this object must be checked on construction using `is_valid` to ensure that it follows the rules
 /// of the blockchain. An invalid object can still be constructed with deserialization.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ClassicMultisigChallenge {
     min_required_signatures: NonZeroU32,
-    public_keys_hashes: Vec<PublicKeyHash>,
+    public_keys: Vec<PublicKey>,
 }
 
 // TODO(PR): add a check in consensus that the number of public keys is not too large
@@ -22,7 +22,7 @@ pub enum ClassicMultisigChallengeError {
     TooManyPublicKeys(usize, usize),
     #[error("More required signatures than public keys: {0} > {1}")]
     MoreRequiredSignaturesThanPublicKeys(NonZeroU32, usize),
-    #[error("Public keys hashes vector is empty")]
+    #[error("Public keys vector is empty")]
     EmptyPublicKeys,
 }
 
@@ -30,11 +30,11 @@ impl ClassicMultisigChallenge {
     pub fn new(
         chain_config: &ChainConfig,
         min_required_signatures: NonZeroU32,
-        public_keys: Vec<PublicKeyHash>,
+        public_keys: Vec<PublicKey>,
     ) -> Result<Self, ClassicMultisigChallengeError> {
         let res = Self {
             min_required_signatures,
-            public_keys_hashes: public_keys,
+            public_keys,
         };
         res.is_valid(chain_config)?;
         Ok(res)
@@ -44,20 +44,20 @@ impl ClassicMultisigChallenge {
         &self,
         chain_config: &ChainConfig,
     ) -> Result<(), ClassicMultisigChallengeError> {
-        if self.public_keys_hashes.is_empty() {
+        if self.public_keys.is_empty() {
             return Err(ClassicMultisigChallengeError::EmptyPublicKeys);
         }
-        if self.public_keys_hashes.len() > chain_config.max_classic_multisig_public_keys_count() {
+        if self.public_keys.len() > chain_config.max_classic_multisig_public_keys_count() {
             return Err(ClassicMultisigChallengeError::TooManyPublicKeys(
-                self.public_keys_hashes.len(),
+                self.public_keys.len(),
                 chain_config.max_classic_multisig_public_keys_count(),
             ));
         }
-        if self.min_required_signatures.get() as usize > self.public_keys_hashes.len() {
+        if self.min_required_signatures.get() as usize > self.public_keys.len() {
             return Err(
                 ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
                     self.min_required_signatures,
-                    self.public_keys_hashes.len(),
+                    self.public_keys.len(),
                 ),
             );
         }
@@ -69,7 +69,7 @@ impl ClassicMultisigChallenge {
         self.min_required_signatures
     }
 
-    pub fn public_keys(&self) -> &[PublicKeyHash] {
-        &self.public_keys_hashes
+    pub fn public_keys(&self) -> &[PublicKey] {
+        &self.public_keys
     }
 }
