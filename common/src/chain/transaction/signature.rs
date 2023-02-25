@@ -24,7 +24,7 @@ use crate::{
     },
 };
 
-use self::inputsig::{InputWitness, StandardInputSignature};
+use self::inputsig::{standard_signature::StandardInputSignature, InputWitness};
 
 use super::{signed_transaction::SignedTransaction, Destination, Transaction, TxOutput};
 

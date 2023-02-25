@@ -17,10 +17,7 @@ use common::chain::signed_transaction::SignedTransaction;
 use common::primitives::Idable;
 use common::{
     chain::{
-        signature::{
-            inputsig::{InputWitness, StandardInputSignature},
-            sighashtype::SigHashType,
-        },
+        signature::{inputsig::InputWitness, sighashtype::SigHashType},
         tokens::OutputValue,
         Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
@@ -30,6 +27,7 @@ use crypto::key::{KeyKind, PrivateKey};
 
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use rstest::rstest;
 use test_utils::random::Seed;
 

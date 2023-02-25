@@ -19,13 +19,13 @@ use itertools::Itertools;
 use rstest::rstest;
 
 use self::utils::*;
-use super::{
-    inputsig::{InputWitness, StandardInputSignature},
-    sighashtype::SigHashType,
-};
+use super::{inputsig::InputWitness, sighashtype::SigHashType};
 use crate::{
     chain::{
-        signature::{verify_signature, TransactionSigError},
+        signature::{
+            inputsig::standard_signature::StandardInputSignature, verify_signature,
+            TransactionSigError,
+        },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
         Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,

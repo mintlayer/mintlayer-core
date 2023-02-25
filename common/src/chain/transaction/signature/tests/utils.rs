@@ -25,7 +25,7 @@ use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         signature::{
-            inputsig::{InputWitness, StandardInputSignature},
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
