@@ -37,7 +37,7 @@ impl ClassicMultisigChallenge {
             public_keys_hashes: public_keys,
         };
         res.is_valid(chain_config)?;
-        return Ok(res);
+        Ok(res)
     }
 
     pub fn is_valid(
