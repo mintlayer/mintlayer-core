@@ -17,19 +17,19 @@ mod helpers;
 mod sample_subsystems;
 
 use sample_subsystems::{Counter, Substringer};
-use subsystem::subsystem::{CallRequest, ShutdownRequest};
+use subsystem::{
+    blocking::BlockingHandle,
+    subsystem::{CallRequest, ShutdownRequest},
+};
 
 // The subsystem testing the other two subsystems
 pub struct Tester {
-    substringer: subsystem::blocking::BlockingHandle<Substringer>,
-    counter: subsystem::blocking::BlockingHandle<Counter>,
+    substringer: BlockingHandle<Substringer>,
+    counter: BlockingHandle<Counter>,
 }
 
 impl Tester {
-    fn new(
-        substringer: subsystem::blocking::BlockingHandle<Substringer>,
-        counter: subsystem::blocking::BlockingHandle<Counter>,
-    ) -> Self {
+    fn new(substringer: BlockingHandle<Substringer>, counter: BlockingHandle<Counter>) -> Self {
         Self {
             substringer,
             counter,
@@ -74,5 +74,49 @@ fn basic_passive_subsystem_blocking() {
 
             app.main().await
         })
+    })
+}
+
+fn tester_worker_thread(
+    substringer: BlockingHandle<Substringer>,
+    counter: BlockingHandle<Counter>,
+    shutdown: subsystem::manager::ShutdownTrigger,
+) {
+    eprintln!("res0");
+    let res0 = substringer.call_mut(|this| this.append_get("xyz"));
+    assert_eq!(res0, Ok("abcxyz".to_string()));
+    assert_eq!(substringer.call(Substringer::size), Ok(6));
+
+    eprintln!("res1");
+    let res1 = substringer.call(|this| this.substr(2, 5));
+    assert_eq!(res1, Ok("cxy".to_string()));
+
+    eprintln!("res2");
+    let res2 = counter.call(Counter::get);
+    assert_eq!(res2, Ok(13));
+
+    eprintln!("res3");
+    let res3 = counter.call_mut(|this| this.add_and_get(3));
+    assert_eq!(res3, Ok(16));
+
+    shutdown.initiate();
+}
+
+#[test]
+fn basic_passive_subsystem_called_from_separate_thread() {
+    let runtime = helpers::init_test_runtime();
+    utils::concurrency::model(move || {
+        let mut app = subsystem::Manager::new("app");
+
+        let substr =
+            BlockingHandle::new(app.add_subsystem("substr", Substringer::new("abc".into())));
+        let counter = BlockingHandle::new(app.add_subsystem("counter", Counter::new()));
+        let shutdown = app.make_shutdown_trigger();
+
+        let tester_thread =
+            utils::thread::spawn(move || tester_worker_thread(substr, counter, shutdown));
+
+        runtime.block_on(app.main());
+        tester_thread.join().expect("tester to finish successfully");
     })
 }
