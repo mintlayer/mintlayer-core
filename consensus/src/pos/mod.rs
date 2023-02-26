@@ -55,7 +55,7 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         }
 
         OutputPurpose::StakePool(d) => d.as_ref(),
-        OutputPurpose::StakedOutput(d, _) => d.as_ref(),
+        OutputPurpose::SpendStakePool(d, _) => d.as_ref(),
     };
 
     let hash_pos: Uint256 = verify_vrf_and_get_vrf_output(

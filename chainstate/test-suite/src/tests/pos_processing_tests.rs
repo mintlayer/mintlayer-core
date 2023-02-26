@@ -95,11 +95,7 @@ fn add_block_with_stake_pool(
         0,
     ));
 
-    tf.make_block_builder()
-        .add_transaction(tx)
-        .build_and_process()
-        .unwrap()
-        .unwrap();
+    tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
     (
         OutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
@@ -195,7 +191,6 @@ fn pos_basic(#[case] seed: Seed) {
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(pos_data))
         .build_and_process()
-        .unwrap()
         .unwrap();
 }
 
@@ -527,23 +522,22 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(pos_data))
         .build_and_process()
-        .unwrap()
         .unwrap();
 }
 
 // Create a chain:
 //
-// genesis <- block_1(StakePool) <- block_2(StakedOutput) <- block_3(StakedOutput).
+// genesis <- block_1(StakePool) <- block_2(SpendStakePool) <- block_3(SpendStakePool).
 //
 // PoS consensus activates on height 2.
 // block_1 has valid StakePool output.
-// block_2 has kernel input from block_1 and StakedOutput as an output.
-// block_3 has kernel input from block_2 and StakedOutput as an output.
+// block_2 has kernel input from block_1 and SpendStakePool as an output.
+// block_3 has kernel input from block_2 and SpendStakePool as an output.
 // Check that the chain is valid.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn spend_staked_output_same_epoch(#[case] seed: Seed) {
+fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     let upgrades = vec![
@@ -569,7 +563,7 @@ fn spend_staked_output_same_epoch(#[case] seed: Seed) {
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
 
-    // prepare and process block_2 with StakePool -> StakedOutput kernel
+    // prepare and process block_2 with StakePool -> SpendStakePool kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pos_data = create_pos_data(
         &mut tf,
@@ -586,7 +580,7 @@ fn spend_staked_output_same_epoch(#[case] seed: Seed) {
         .into();
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::StakedOutput(
+        OutputPurpose::SpendStakePool(
             Box::new(stake_pool_data.clone()),
             OutputTimeLock::ForBlockCount(reward_maturity as u64),
         ),
@@ -595,10 +589,9 @@ fn spend_staked_output_same_epoch(#[case] seed: Seed) {
         .with_consensus_data(consensus_data)
         .with_reward(vec![reward_output])
         .build_and_process()
-        .unwrap()
         .unwrap();
 
-    // prepare and process block_3 with StakedOutput -> StakedOutput kernel
+    // prepare and process block_3 with SpendStakePool -> SpendStakePool kernel
     let block_2_reward_outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
@@ -617,7 +610,7 @@ fn spend_staked_output_same_epoch(#[case] seed: Seed) {
     let consensus_data = ConsensusData::PoS(pos_data);
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::StakedOutput(
+        OutputPurpose::SpendStakePool(
             Box::new(stake_pool_data),
             OutputTimeLock::ForBlockCount(reward_maturity as u64),
         ),
@@ -626,6 +619,73 @@ fn spend_staked_output_same_epoch(#[case] seed: Seed) {
         .with_consensus_data(consensus_data)
         .with_reward(vec![reward_output])
         .build_and_process()
-        .unwrap()
         .unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn process_arbitrary_number_of_blocks(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let blocks_count = 10usize;
+    let epoch_length = rng.gen_range(1..=(blocks_count + 2)); // blocks_count + genesis
+    let sealed_epoch_distance = rng.gen_range(0..blocks_count); // FIXME
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+        ),
+    ];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let chain_config = ConfigBuilder::test_chain()
+        .net_upgrades(net_upgrades)
+        .epoch_length(NonZeroU64::new(epoch_length as u64).unwrap())
+        .sealed_epoch_distance_from_tip(sealed_epoch_distance)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    // create initial chain: genesis <- block_1
+    let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
+
+    for _ in 0..blocks_count {
+        let block_2_reward_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
+            0,
+        );
+        let prev_block_randomness = get_best_block_randomness(&tf);
+        let sealed_epoch_randomness = tf.chainstate.get_chain_config().initial_randomness();
+        let pos_data = create_pos_data(
+            &mut tf,
+            block_2_reward_outpoint,
+            &vrf_sk,
+            sealed_epoch_randomness,
+            prev_block_randomness.value(),
+            pool_id,
+            1,
+        );
+
+        let consensus_data = ConsensusData::PoS(pos_data);
+        let reward_maturity: i64 = consensus_data
+            .reward_maturity_distance(&tf.chainstate.get_chain_config())
+            .into();
+        let reward_output = TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::SpendStakePool(
+                Box::new(stake_pool_data),
+                OutputTimeLock::ForBlockCount(reward_maturity as u64),
+            ),
+        );
+        tf.make_block_builder()
+            .with_consensus_data(consensus_data)
+            .with_reward(vec![reward_output])
+            .build_and_process()
+            .unwrap();
+    }
 }

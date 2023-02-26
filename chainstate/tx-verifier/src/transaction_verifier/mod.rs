@@ -426,7 +426,7 @@ where
             OutputPurpose::LockThenTransfer(_, tl) => tl,
             OutputPurpose::Burn => return Ok(()),
             OutputPurpose::StakePool(_) => return Ok(()),
-            OutputPurpose::StakedOutput(_, tl) => tl,
+            OutputPurpose::SpendStakePool(_, tl) => tl,
         };
 
         let source_block_height = source_block_index.block_height();
@@ -564,7 +564,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
-                | OutputPurpose::StakedOutput(_, _) => None,
+                | OutputPurpose::SpendStakePool(_, _) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -636,7 +636,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn
-            | OutputPurpose::StakedOutput(_, _) => Ok(()),
+            | OutputPurpose::SpendStakePool(_, _) => Ok(()),
         })
     }
 
@@ -651,6 +651,12 @@ where
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache
             .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
+
+        // check output purposes
+        {
+            // StakePool/SpendStakePool inputs not allowed to Transfer
+            //
+        }
 
         // check for attempted money printing
         let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
