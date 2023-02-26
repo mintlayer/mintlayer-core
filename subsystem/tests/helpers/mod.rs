@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -18,8 +18,10 @@ static INIT: std::sync::Once = std::sync::Once::new();
 pub fn init_test_runtime() -> tokio::runtime::Runtime {
     INIT.call_once(|| logging::init_logging::<&std::path::Path>(None));
 
+    //let mut runtime = tokio::runtime::Builder::new_current_thread();
     let mut runtime = tokio::runtime::Builder::new_multi_thread();
     #[cfg(not(loom))]
     runtime.enable_all();
-    runtime.worker_threads(4).build().unwrap()
+    //runtime.worker_threads(4).build().unwrap()
+    runtime.build().unwrap()
 }

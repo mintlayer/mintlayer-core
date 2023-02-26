@@ -12,15 +12,16 @@ time = [ "tokio/time" ]
 [dependencies]
 # Local dependencies
 logging = { path = "../logging" }
+utils = { path = "../utils" }
 
 # External dependencies
 async-trait.workspace = true
 cfg-if = "1.0"
+oneshot = "0.1"
 thiserror.workspace = true
 futures = { workspace = true, default-features = false, features = ["alloc"]}
 tokio = { workspace = true, default-features = false, features = ["macros", "rt", "rt-multi-thread", "signal", "sync"]}
 
 [dev-dependencies]
+static_assertions = "1.1"
 testing_logger = "0.1"
-
-utils = { path = "../utils" }

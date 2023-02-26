@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -33,6 +33,7 @@
 //!    request by shutting themselves down.
 //! 3. The main task waits for all subsystems to terminate.
 
+pub mod blocking;
 pub mod manager;
 pub mod subsystem;
 

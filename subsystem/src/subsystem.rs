@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -18,6 +18,7 @@ use std::{pin::Pin, task};
 use futures::future::BoxFuture;
 use logging::log;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use utils::shallow_clone::ShallowClone;
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
@@ -40,7 +41,7 @@ impl SubsystemConfig {
 }
 
 // Internal action type sent in the channel.
-type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>>;
+type Action<T, R> = Box<dyn Send + FnOnce(&mut T) -> BoxFuture<R>>;
 
 /// Call request
 pub struct CallRequest<T: ?Sized>(pub(crate) mpsc::UnboundedReceiver<Action<T, ()>>);
@@ -59,6 +60,12 @@ impl<T: 'static + ?Sized> CallRequest<T> {
 
 /// Call response that can be polled for result
 pub struct CallResponse<T>(oneshot::Receiver<T>);
+
+impl<T> CallResponse<T> {
+    fn blocking_recv(self) -> Result<T, CallError> {
+        self.0.blocking_recv().map_err(|_| CallError::ResultFetchFailed)
+    }
+}
 
 impl<T> std::future::Future for CallResponse<T> {
     type Output = Result<T, CallError>;
@@ -99,6 +106,12 @@ pub struct Handle<T: ?Sized> {
 
 impl<T: ?Sized> Clone for Handle<T> {
     fn clone(&self) -> Self {
+        self.shallow_clone()
+    }
+}
+
+impl<T: ?Sized> ShallowClone for Handle<T> {
+    fn shallow_clone(&self) -> Self {
         Self {
             action_tx: self.action_tx.clone(),
         }
@@ -117,7 +130,7 @@ pub enum CallError {
 ///
 /// Calls happen asynchronously. A value of this type represents the return value of the call of
 /// type `T`. To actually fetch the return value, use `.await`. Alternatively, use
-/// [CallResult::response] to verify if the call submission suceeded and get the return value at
+/// [CallResult::response] to verify if the call submission succeeded and get the return value at
 /// a later time.
 pub struct CallResult<T>(Result<CallResponse<T>, CallError>);
 
@@ -125,6 +138,13 @@ impl<T> CallResult<T> {
     /// Get the corresponding [`CallResponse`], with the opportunity to handle errors at send time.
     pub fn response(self) -> Result<CallResponse<T>, CallError> {
         self.0
+    }
+
+    /// Get the result, wait for it by blocking the thread.
+    ///
+    /// Panics if called from async context
+    pub(crate) fn blocking_get(self) -> Result<T, CallError> {
+        self.0.and_then(|resp| resp.blocking_recv())
     }
 }
 
@@ -148,7 +168,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call an async procedure to the subsystem. Result has to be await-ed explicitly
     pub fn call_async_mut<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
+        func: impl FnOnce(&mut T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
         let (rtx, rrx) = oneshot::channel::<R>();
 
@@ -170,7 +190,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call an async procedure to the subsystem (immutable).
     pub fn call_async<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
+        func: impl FnOnce(&T) -> BoxFuture<R> + Send + 'static,
     ) -> CallResult<R> {
         self.call_async_mut(|this| func(this))
     }
@@ -178,7 +198,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call a procedure to the subsystem.
     pub fn call_mut<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
+        func: impl FnOnce(&mut T) -> R + Send + 'static,
     ) -> CallResult<R> {
         self.call_async_mut(|this| Box::pin(core::future::ready(func(this))))
     }
@@ -186,7 +206,7 @@ impl<T: ?Sized + Send + 'static> Handle<T> {
     /// Call a procedure to the subsystem (immutable).
     pub fn call<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
+        func: impl FnOnce(&T) -> R + Send + 'static,
     ) -> CallResult<R> {
         self.call_mut(|this| func(this))
     }
