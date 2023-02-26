@@ -15,6 +15,7 @@
 
 pub mod authorize_pubkey_spend;
 pub mod authorize_pubkeyhash_spend;
+pub mod multisig_partial_signature;
 pub mod standard_signature;
 
 use serialization::{Decode, Encode};
