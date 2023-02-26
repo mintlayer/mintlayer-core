@@ -12,7 +12,7 @@ common = { path = "../../common/" }
 serialization = { path = "../../serialization" }
 
 bip39 = { version = "1.0", default-features = false} #TODO use `features = ["std"]`
-zeroize = "1.5.7"
+zeroize = "1.5"
 thiserror.workspace = true
 parity-scale-codec.workspace = true
 
