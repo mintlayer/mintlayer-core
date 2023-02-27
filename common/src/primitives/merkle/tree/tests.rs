@@ -417,7 +417,7 @@ fn position_from_index_1_tree_element() {
         let level_end: usize = 1;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i).unwrap(),
+                NodePosition::from_abs_index(tree_size, i).unwrap(),
                 NodePosition::from_position(tree_size, level, i - level_start).unwrap()
             );
         }
@@ -433,7 +433,7 @@ fn position_from_index_3_tree_elements() {
         let level_end: usize = 2;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -444,7 +444,7 @@ fn position_from_index_3_tree_elements() {
         let level_end: usize = 3;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -460,7 +460,7 @@ fn position_from_index_7_tree_elements() {
         let level_end: usize = 4;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -471,7 +471,7 @@ fn position_from_index_7_tree_elements() {
         let level_end: usize = 6;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -482,7 +482,7 @@ fn position_from_index_7_tree_elements() {
         let level_end: usize = 7;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -498,7 +498,7 @@ fn position_from_index_15_tree_elements() {
         let level_end: usize = 8;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -509,7 +509,7 @@ fn position_from_index_15_tree_elements() {
         let level_end: usize = 12;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -520,7 +520,7 @@ fn position_from_index_15_tree_elements() {
         let level_end: usize = 14;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }
@@ -531,7 +531,7 @@ fn position_from_index_15_tree_elements() {
         let level_end: usize = 15;
         for i in level_start..level_end {
             assert_eq!(
-                MerkleTree::position_from_index(tree_size, i),
+                NodePosition::from_abs_index(tree_size, i),
                 NodePosition::from_position(tree_size, level, i - level_start)
             );
         }

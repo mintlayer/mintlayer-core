@@ -161,11 +161,6 @@ impl MerkleTree {
         })
     }
 
-    /// Given an absolute index in the flattened tree, return the level and index at that level in the form (level, index_at_level)
-    pub fn position_from_index(tree_size: TreeSize, absolute_index: usize) -> Option<NodePosition> {
-        NodePosition::from_abs_index(tree_size, absolute_index)
-    }
-
     pub fn iter_from_leaf_to_root(
         &self,
         leaf_index: usize,
