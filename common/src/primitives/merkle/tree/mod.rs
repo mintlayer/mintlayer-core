@@ -33,7 +33,7 @@ pub enum AdjacentLeavesIndices {
     Together(usize, usize),
 }
 
-/// Merkle tree in the form of a vector, where the bottom leaves are the based, and the root is
+/// Merkle tree in the form of a vector, where the bottom leaves first, from left to right, and the root is
 /// the last element.
 /// Definitions:
 /// - Leaf: A node that cannot have children.
