@@ -126,6 +126,7 @@ mod tests {
     fn construction_from_tree_size(#[case] seed: test_utils::random::Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
+        // select simple values
         assert_eq!(TreeSize::try_from(0), Err(TreeSizeError::ZeroSize));
         assert_eq!(TreeSize::try_from(1), Ok(TreeSize(1)));
         assert_eq!(TreeSize::try_from(2), Err(TreeSizeError::InvalidSize(2)));
@@ -144,9 +145,14 @@ mod tests {
         assert_eq!(TreeSize::try_from(15), Ok(TreeSize(15)));
         assert_eq!(TreeSize::try_from(16), Err(TreeSizeError::InvalidSize(16)));
 
-        let attempts_count: usize = 1000;
+        // exhaustive valid
+        for i in 1..MAX_TREE_SIZE.ilog2() as usize {
+            assert_eq!(TreeSize::try_from((1 << i) - 1), Ok(TreeSize((1 << i) - 1)));
+        }
 
-        for _ in 1..attempts_count {
+        // random invalid
+        let attempts_count: usize = 1000;
+        for _ in 0..attempts_count {
             let sz = rng.gen::<usize>() % MAX_TREE_SIZE;
             if (sz + 1).is_power_of_two() {
                 assert_eq!(TreeSize::try_from(sz), Ok(TreeSize(sz)));
