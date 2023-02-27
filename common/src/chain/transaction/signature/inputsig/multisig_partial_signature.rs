@@ -56,6 +56,7 @@ impl PartiallySignedMultisigChallenge {
         self.challenge.min_required_signatures().get() as i32 - self.signatures.len() as i32
     }
 
+    /// Check whether the structure of the multisig challenge and signatures is valid, but without validating signatures
     pub fn is_structurally_valid(
         &self,
         chain_config: &ChainConfig,
@@ -78,7 +79,9 @@ impl PartiallySignedMultisigChallenge {
                 self.signatures.len(),
                 self.challenge.min_required_signatures().get() as usize,
             ),
-            std::cmp::Ordering::Equal => PartiallySignedMultisigState::Complete,
+            std::cmp::Ordering::Equal => {
+                PartiallySignedMultisigState::Complete(self.signatures.len())
+            }
             std::cmp::Ordering::Greater => PartiallySignedMultisigState::Incomplete(
                 self.signatures.len(),
                 self.challenge.min_required_signatures().get() as usize,
@@ -102,10 +105,15 @@ impl PartiallySignedMultisigChallenge {
 
 #[must_use]
 pub enum PartiallySignedMultisigState {
+    /// Not enough signatures have been added to the challenge.
     Incomplete(usize, usize),
-    Complete,
+    /// Enough signatures have been added to the challenge.
+    Complete(usize),
+    /// Too many signatures have been added to the challenge.
     Overconstrained(usize, usize),
+    /// The challenge is structurally invalid and can never be used.
     InvalidChallenge(ClassicMultisigChallengeError),
+    /// The challenge contains a signature for a public key that does not exist.
     InvalidSignatureIndex,
 }
 
@@ -113,7 +121,7 @@ impl PartiallySignedMultisigState {
     pub fn is_valid_for_signing(&self) -> bool {
         match self {
             PartiallySignedMultisigState::Incomplete(_, _) => true,
-            PartiallySignedMultisigState::Complete => true,
+            PartiallySignedMultisigState::Complete(_) => true,
             PartiallySignedMultisigState::Overconstrained(_, _) => false,
             PartiallySignedMultisigState::InvalidChallenge(_) => false,
             PartiallySignedMultisigState::InvalidSignatureIndex => false,
