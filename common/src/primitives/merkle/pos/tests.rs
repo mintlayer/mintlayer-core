@@ -314,3 +314,17 @@ fn node_and_siblings_eight_leaves() {
         assert!(node.sibling().is_none());
     }
 }
+
+#[test]
+fn from_abs_index_construction_boundaries() {
+    for p in 1..10 {
+        let t_size: TreeSize = ((1 << p) - 1).try_into().unwrap();
+
+        for i in 0..t_size.get() {
+            assert!(NodePosition::from_abs_index(t_size, i).is_some());
+        }
+        for i in t_size.get()..t_size.get() + 1000 {
+            assert!(NodePosition::from_abs_index(t_size, i).is_none());
+        }
+    }
+}

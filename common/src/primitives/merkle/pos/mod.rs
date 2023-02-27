@@ -27,7 +27,7 @@ pub struct NodePosition {
 
 impl NodePosition {
     pub fn from_abs_index(tree_size: TreeSize, absolute_index: usize) -> Option<Self> {
-        if (tree_size.get() + 1).count_ones() != 1 {
+        if absolute_index >= tree_size.get() {
             return None;
         }
 
