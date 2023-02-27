@@ -36,7 +36,7 @@ use self::ordered_node::NodeWithAbsOrder;
 use super::single::SingleProofNodes;
 
 /// Merkle proofs for multiple leaves.
-/// An object that contains the information required to proof that multiple leaves are in a Merkle tree.
+/// An object that contains the information required to prove that multiple leaves are in a Merkle tree.
 /// See SingleProofNodes for proving a single leaf is in a merkle tree.
 /// This object is considered temporary (notice it refers to the tree through a reference).
 /// This object is discarded in favor of `MultiProofHashes`, which can be created
@@ -281,7 +281,7 @@ impl MultiProofHashes {
         let all_nodes = self.nodes.iter().chain(leaves.iter()).collect::<BTreeMap<_, _>>();
         let all_nodes = MultiProofHashes::calculate_missing_nodes(tree_size, all_nodes);
 
-        // Result is Option<bool> because it must pass through the loop inside at least once; other nothing is checked
+        // Result is Option<bool> because it must pass through the loop inside at least once; otherwise nothing is checked
         let mut result = None;
 
         // Verify the root for every leaf we got
