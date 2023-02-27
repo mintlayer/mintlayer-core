@@ -47,17 +47,7 @@ impl NodePosition {
             return None;
         }
 
-        // To help in seeing how these formulas were derived, see this table that represents values in the case tree.len() == 31 == 0b11111:
-        //  level     level_start  level_start in binary    index_in_level_size
-        //  0         0            00000                    16
-        //  1         16           10000                    8
-        //  2         24           11000                    4
-        //  3         28           11100                    2
-        //  4         30           11110                    1
-
-        let level_from_top = level_count - level_from_bottom;
-        // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
-        let level_start = (tree_size.get() >> level_from_top) << level_from_top;
+        let level_start = tree_size.level_start(level_from_bottom)?;
         let absolute_index = level_start + index_in_level;
         // max number of nodes in a level, in level_from_bottom
         let index_in_level_size = if level_start > 0 {
@@ -83,23 +73,22 @@ impl NodePosition {
         self.absolute_index
     }
 
+    /// Returns the level and index in the level of the node, as in (level, index).
+    /// Notice that the index value is capped by the number of nodes in the level.
     pub fn position(&self) -> (usize, usize) {
         assert!(
             self.abs_index() < self.tree_size.get(),
             "Index must be within the tree size"
         );
 
-        let leaf_count = self.tree_size.leaf_count();
+        let level_from_top = (self.tree_size.get() - self.abs_index() + 1)
+            .next_power_of_two()
+            .trailing_zeros() as usize;
 
-        let mut level = 0;
-        let mut nodes_at_level_count = leaf_count.get();
-        let mut tree_node_counter = 0;
-        while tree_node_counter + nodes_at_level_count <= self.abs_index() {
-            level += 1;
-            tree_node_counter += nodes_at_level_count;
-            nodes_at_level_count >>= 1;
-        }
-        (level, self.abs_index() - tree_node_counter)
+        let level = self.tree_size.level_count().get() - level_from_top;
+        let level_start = self.tree_size.level_start(level).expect("Abs index is valid");
+        assert!(level_start <= self.abs_index());
+        (level, self.abs_index() - level_start)
     }
 
     /// Returns true if the node is a left child of its parent.
