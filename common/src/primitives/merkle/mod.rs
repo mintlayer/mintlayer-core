@@ -39,7 +39,7 @@ pub enum MerkleTreeProofExtractionError {
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum MerkleTreeAccessError {
-    #[error("Invalid tree size provided provided is invalid: {0}")]
+    #[error("Invalid tree size provided is invalid: {0}")]
     InvalidTreeSize(usize),
     #[error("Invalid initial index for leaf in iterator. Provided {0} vs tree size {1}")]
     AbsIndexOutOfRange(usize, usize),
