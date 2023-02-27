@@ -74,13 +74,10 @@ fn construction_from_position(
     #[case] success: bool,
 ) {
     let tree_size: TreeSize = tree_size.try_into().unwrap();
-    let make_pos = |tree_size: TreeSize, level: usize, index: usize| {
-        NodePosition::from_position(tree_size, level, index)
-    };
 
     for level in levels {
         for index in indices_in_levels[level].clone() {
-            let pos = make_pos(tree_size, level, index);
+            let pos = NodePosition::from_position(tree_size, level, index);
             assert_eq!(
                 pos.is_some(),
                 success,
