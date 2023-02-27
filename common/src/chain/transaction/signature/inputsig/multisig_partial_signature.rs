@@ -26,6 +26,7 @@ use crate::chain::{
 pub struct PartiallySignedMultisigChallenge {
     /// The signatures that have been added to this challenge. The indices are the indices of the public keys.
     signatures: BTreeMap<u32, Signature>,
+    /// The message that is being signed.
     message: Vec<u8>,
     /// The challenge that is being signed.
     challenge: ClassicMultisigChallenge,
@@ -48,12 +49,16 @@ impl PartiallySignedMultisigChallenge {
         self.signatures.insert(index, signature);
     }
 
+    pub fn challenge(&self) -> &ClassicMultisigChallenge {
+        &self.challenge
+    }
+
     pub fn signatures(&self) -> &BTreeMap<u32, Signature> {
         &self.signatures
     }
 
     pub fn missing_signatures_count(&self) -> i32 {
-        self.challenge.min_required_signatures().get() as i32 - self.signatures.len() as i32
+        self.challenge.min_required_signatures() as i32 - self.signatures.len() as i32
     }
 
     /// Check whether the structure of the multisig challenge and signatures is valid, but without validating signatures
@@ -77,14 +82,14 @@ impl PartiallySignedMultisigChallenge {
         match missing_signatures_count.cmp(&0) {
             std::cmp::Ordering::Less => PartiallySignedMultisigState::Overconstrained(
                 self.signatures.len(),
-                self.challenge.min_required_signatures().get() as usize,
+                self.challenge.min_required_signatures() as usize,
             ),
             std::cmp::Ordering::Equal => {
                 PartiallySignedMultisigState::Complete(self.signatures.len())
             }
             std::cmp::Ordering::Greater => PartiallySignedMultisigState::Incomplete(
                 self.signatures.len(),
-                self.challenge.min_required_signatures().get() as usize,
+                self.challenge.min_required_signatures() as usize,
             ),
         }
     }
@@ -92,6 +97,10 @@ impl PartiallySignedMultisigChallenge {
     pub fn validate_signatures(&self, chain_config: &ChainConfig) -> Option<bool> {
         if !self.is_structurally_valid(chain_config).is_valid_for_signing() {
             return None;
+        }
+
+        if self.signatures.is_empty() {
+            return Some(false);
         }
 
         let validation_status = self.signatures.iter().all(|(index, signature)| {

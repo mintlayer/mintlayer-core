@@ -25,7 +25,8 @@ use crate::chain::ChainConfig;
 /// of the blockchain. An invalid object can still be constructed with deserialization.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ClassicMultisigChallenge {
-    min_required_signatures: NonZeroU32,
+    #[codec(compact)]
+    min_required_signatures: u32,
     public_keys: Vec<PublicKey>,
 }
 
@@ -36,9 +37,11 @@ pub enum ClassicMultisigChallengeError {
     #[error("Too many public keys, more than allowed: {0} > {1}")]
     TooManyPublicKeys(usize, usize),
     #[error("More required signatures than public keys: {0} > {1}")]
-    MoreRequiredSignaturesThanPublicKeys(NonZeroU32, usize),
+    MoreRequiredSignaturesThanPublicKeys(u32, usize),
     #[error("Public keys vector is empty")]
     EmptyPublicKeys,
+    #[error("Minimum required signatures is 0")]
+    MinRequiredSignaturesIsZero,
 }
 
 impl ClassicMultisigChallenge {
@@ -48,7 +51,7 @@ impl ClassicMultisigChallenge {
         public_keys: Vec<PublicKey>,
     ) -> Result<Self, ClassicMultisigChallengeError> {
         let res = Self {
-            min_required_signatures,
+            min_required_signatures: min_required_signatures.get(),
             public_keys,
         };
         res.is_valid(chain_config)?;
@@ -68,7 +71,12 @@ impl ClassicMultisigChallenge {
                 chain_config.max_classic_multisig_public_keys_count(),
             ));
         }
-        if self.min_required_signatures.get() as usize > self.public_keys.len() {
+
+        if self.min_required_signatures == 0 {
+            return Err(ClassicMultisigChallengeError::MinRequiredSignaturesIsZero);
+        }
+
+        if self.min_required_signatures as usize > self.public_keys.len() {
             return Err(
                 ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
                     self.min_required_signatures,
@@ -80,7 +88,7 @@ impl ClassicMultisigChallenge {
         Ok(())
     }
 
-    pub fn min_required_signatures(&self) -> NonZeroU32 {
+    pub fn min_required_signatures(&self) -> u32 {
         self.min_required_signatures
     }
 
