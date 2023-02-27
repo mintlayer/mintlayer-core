@@ -33,12 +33,33 @@ pub struct PartiallySignedMultisigChallenge {
 }
 
 impl PartiallySignedMultisigChallenge {
-    pub fn from_challenge(challenge: ClassicMultisigChallenge, message: Vec<u8>) -> Self {
-        PartiallySignedMultisigChallenge {
+    pub fn empty_from_challenge(
+        chain_config: &ChainConfig,
+        challenge: ClassicMultisigChallenge,
+        message: Vec<u8>,
+    ) -> Result<Self, ClassicMultisigChallengeError> {
+        challenge.is_valid(chain_config)?;
+        let result = PartiallySignedMultisigChallenge {
             signatures: BTreeMap::new(),
             challenge,
             message,
-        }
+        };
+        Ok(result)
+    }
+
+    pub fn from_partial(
+        chain_config: &ChainConfig,
+        challenge: ClassicMultisigChallenge,
+        message: Vec<u8>,
+        signatures: BTreeMap<u32, Signature>,
+    ) -> Result<Self, ClassicMultisigChallengeError> {
+        challenge.is_valid(chain_config)?;
+        let result = PartiallySignedMultisigChallenge {
+            signatures,
+            challenge,
+            message,
+        };
+        Ok(result)
     }
 
     pub fn take_signatures(self) -> BTreeMap<u32, Signature> {
@@ -94,7 +115,9 @@ impl PartiallySignedMultisigChallenge {
         }
     }
 
-    pub fn validate_signatures(&self, chain_config: &ChainConfig) -> Option<bool> {
+    /// Checks whatever signatures available.
+    /// Returns None if no signatures exist or if self is not structurally valid.
+    pub fn verify_available_signatures(&self, chain_config: &ChainConfig) -> Option<bool> {
         if !self.is_structurally_valid(chain_config).is_valid_for_signing() {
             return None;
         }
@@ -109,6 +132,14 @@ impl PartiallySignedMultisigChallenge {
         });
 
         Some(validation_status)
+    }
+
+    pub fn verify_all_signatures(&self, chain_config: &ChainConfig) -> Option<bool> {
+        if self.signatures().len() < self.challenge.min_required_signatures() as usize {
+            return None;
+        }
+
+        self.verify_available_signatures(chain_config)
     }
 }
 
