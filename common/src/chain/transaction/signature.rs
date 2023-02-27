@@ -318,10 +318,12 @@ pub fn verify_signature<T: Transactable>(
 
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {
+            Destination::Address(_)
+            | Destination::PublicKey(_)
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => {
                 return Err(TransactionSigError::SignatureNotFound)
             }
-            Destination::ClassicMultisig(_) => todo!(),
             Destination::AnyoneCanSpend => {}
         },
         inputsig::InputWitness::Standard(witness) => {
