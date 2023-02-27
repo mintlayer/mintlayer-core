@@ -243,7 +243,7 @@ impl<'a> Node<'a> {
     ///                     If it's odd, then the even before it is the one.
     /// This can only be None for the root node.
     pub fn sibling(&self) -> Option<Node<'a>> {
-        if self.absolute_index == self.tree().tree.len() - 1 {
+        if self.is_root() {
             return None;
         }
 
