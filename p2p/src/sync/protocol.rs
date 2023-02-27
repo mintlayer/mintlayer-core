@@ -15,6 +15,7 @@
 
 use std::mem;
 
+use futures::FutureExt;
 use itertools::Itertools;
 
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
@@ -27,7 +28,7 @@ use logging::log;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{Announcement, HeaderListResponse},
-    sync::{BlockSyncManager, SyncMessage},
+    sync::{BlockSyncManager, SyncMessage, SyncingEvent, TaskCallback},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     NetworkingService, PeerManagerEvent, Result, SyncingMessagingService,
@@ -35,14 +36,25 @@ use crate::{
 
 impl<T> BlockSyncManager<T>
 where
-    T: NetworkingService,
+    T: NetworkingService + 'static,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    pub(super) async fn handle_message(
-        &mut self,
-        peer: PeerId,
-        message: SyncMessage,
-    ) -> Result<()> {
+    pub(super) async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
+        match event {
+            SyncingEvent::Message { peer, message } => {
+                let res = self.handle_message(peer, message).await;
+                self.handle_result(peer, res).await?;
+            }
+            SyncingEvent::Announcement { peer, announcement } => {
+                let res = self.handle_announcement(peer, *announcement).await;
+                self.handle_result(peer, res).await?;
+            }
+        };
+
+        Ok(())
+    }
+
+    async fn handle_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         match message {
             SyncMessage::HeaderListRequest(r) => {
                 self.handle_header_request(peer, r.into_locator()).await
@@ -134,7 +146,16 @@ where
             .await??;
 
         peer_state.num_blocks_to_send += block_ids.len();
-        self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, id)));
+        for id in block_ids {
+            let callback: TaskCallback<T> = Box::new(move |this: &mut Self| {
+                async move {
+                    let res = this.send_block(peer, id).await;
+                    this.handle_result(peer, res).await
+                }
+                .boxed()
+            });
+            self.task_queue.push(async move { callback }.boxed());
+        }
 
         Ok(())
     }

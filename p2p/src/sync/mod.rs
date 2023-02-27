@@ -19,11 +19,9 @@
 mod peer_context;
 mod protocol;
 
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
+use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::sync::mpsc;
 use void::Void;
 
@@ -79,21 +77,17 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// A handle to the chainstate subsystem.
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
-    /// A queue of the blocks requested by peers.
-    ///
-    /// The block identifiers are added to the queue as a result of BlockListRequest processing
-    /// and removed either after sending a response or when the peer is disconnected. A number of
-    /// blocks is limited by `P2pConfig::requested_blocks_limit` per peer.
-    blocks_queue: VecDeque<(PeerId, Id<Block>)>,
-
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
     is_initial_block_download: bool,
+
+    /// TODO: FIXME:
+    task_queue: FuturesUnordered<Task<T>>,
 }
 
 /// Syncing manager
 impl<T> BlockSyncManager<T>
 where
-    T: NetworkingService,
+    T: NetworkingService + 'static,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     /// Creates a new sync manager instance.
@@ -113,8 +107,8 @@ where
             peer_manager_sender,
             chainstate_handle,
             peers: Default::default(),
-            blocks_queue: Default::default(),
             is_initial_block_download: true,
+            task_queue: FuturesUnordered::new(),
         }
     }
 
@@ -128,29 +122,42 @@ where
 
         loop {
             tokio::select! {
-                event = self.messaging_handle.poll_next() => match event? {
-                    SyncingEvent::Message { peer, message } => {
-                        let res = self.handle_message(peer, message).await;
-                        self.handle_result(peer, res).await?;
-                    },
-                    SyncingEvent::Announcement{ peer, announcement } => {
-                        let res = self.handle_announcement(peer, *announcement).await;
-                        self.handle_result(peer, res).await?;
-                    }
+                // Poll futures in the order they are declared.
+                biased;
+
+                // Receive an event and queue its processing.
+                event = self.messaging_handle.poll_next() => {
+                    let event = event?;
+                    let callback: TaskCallback<T> = Box::new(|this: &mut Self| {
+                        async move {
+                            this.handle_event(event).await
+                        }.boxed()
+                    });
+                    self.task_queue.push(async move {
+                        callback
+                    }.boxed());
                 },
+
+                // Connect/disconnect events are quickly processed. Additionally this slightly
+                // reduces the changes of getting a message from a peer before the corresponding
+                // connect event. See https://github.com/mintlayer/mintlayer-core/issues/718 issue
+                // for details.
                 event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await?,
                     SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
                 },
+
+                // The new tip processing is very lightweight if the node is in the initial block
+                // download mode and relatively rare otherwise.
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
                 },
-                (peer, block) = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
-                    let res = self.send_block(peer, block).await;
-                    self.handle_result(peer, res).await?;
-                }
+
+                callback = self.task_queue.select_next_some(), if !self.task_queue.is_empty() => {
+                    callback(self).await?;
+                },
             }
         }
     }
@@ -195,8 +202,9 @@ where
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
 
+        // TODO: FIXME:
         // Remove the queued block responses associated with the disconnected peer.
-        self.blocks_queue.retain(|(p, _)| p != &peer);
+        // self.blocks_queue.retain(|(p, _)| p != &peer);
 
         if self.peers.remove(&peer).is_some() {
             log::warn!("Unregistering unknown peer: {peer}");
@@ -280,6 +288,10 @@ where
         Ok(())
     }
 }
+
+type Task<T> = BoxFuture<'static, TaskCallback<T>>;
+type TaskCallback<T> = Box<dyn FnOnce(&mut BlockSyncManager<T>) -> TaskCallBackResult + Send>;
+type TaskCallBackResult<'a> = BoxFuture<'a, Result<()>>;
 
 #[cfg(test)]
 mod tests;
