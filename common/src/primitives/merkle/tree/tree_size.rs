@@ -94,10 +94,17 @@ impl Display for TreeSize {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn construction_from_tree_size() {
+    use super::*;
+    use crypto::random::Rng;
+
+    #[rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn construction_from_tree_size(#[case] seed: test_utils::random::Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         assert_eq!(TreeSize::try_from(0), Err(TreeSizeError::ZeroSize));
         assert_eq!(TreeSize::try_from(1), Ok(TreeSize(1)));
         assert_eq!(TreeSize::try_from(2), Err(TreeSizeError::InvalidSize(2)));
@@ -116,13 +123,19 @@ mod tests {
         assert_eq!(TreeSize::try_from(15), Ok(TreeSize(15)));
         assert_eq!(TreeSize::try_from(16), Err(TreeSizeError::InvalidSize(16)));
 
-        for i in 1..1000usize {
-            if (i + 1).count_ones() == 1 {
-                assert_eq!(TreeSize::try_from(i), Ok(TreeSize(i)));
-                assert_eq!(TreeSize::from_value(i), Ok(TreeSize(i)));
+        let attempts_count: usize = 1000;
+
+        for _ in 1..attempts_count {
+            let sz = rng.gen::<usize>() % MAX_TREE_SIZE;
+            if (sz + 1).count_ones() == 1 {
+                assert_eq!(TreeSize::try_from(sz), Ok(TreeSize(sz)));
+                assert_eq!(TreeSize::from_value(sz), Ok(TreeSize(sz)));
             } else {
-                assert_eq!(TreeSize::try_from(i), Err(TreeSizeError::InvalidSize(i)));
-                assert_eq!(TreeSize::from_value(i), Err(TreeSizeError::InvalidSize(i)));
+                assert_eq!(TreeSize::try_from(sz), Err(TreeSizeError::InvalidSize(sz)));
+                assert_eq!(
+                    TreeSize::from_value(sz),
+                    Err(TreeSizeError::InvalidSize(sz))
+                );
             }
         }
     }
