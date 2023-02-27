@@ -36,7 +36,7 @@ pub enum AdjacentLeavesIndices {
 /// Merkle tree in the form of a vector, where the bottom leaves first, from left to right, and the root is
 /// the last element.
 /// Definitions:
-/// - Leaf: A node that cannot have children.
+/// - Leaf: A node does not have children.
 /// - Node: any element of the tree.
 /// - Absolute index: The data structure that represents the tree internally is a Vec.
 ///   Leaves start from 0 and from the left and end at the right, then next, higher levels. The last element is the root.
