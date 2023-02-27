@@ -27,6 +27,7 @@ use logging::log;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{Announcement, HeaderListResponse},
+    net::types::SyncingEvent,
     sync::{BlockSyncManager, SyncMessage},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -38,11 +39,22 @@ where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    pub(super) async fn handle_message(
-        &mut self,
-        peer: PeerId,
-        message: SyncMessage,
-    ) -> Result<()> {
+    pub(super) async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
+        match event {
+            SyncingEvent::Message { peer, message } => {
+                let res = self.handle_message(peer, message).await;
+                self.handle_result(peer, res).await?;
+            }
+            SyncingEvent::Announcement { peer, announcement } => {
+                let res = self.handle_announcement(peer, *announcement).await;
+                self.handle_result(peer, res).await?;
+            }
+        };
+
+        Ok(())
+    }
+
+    async fn handle_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         match message {
             SyncMessage::HeaderListRequest(r) => {
                 self.handle_header_request(peer, r.into_locator()).await

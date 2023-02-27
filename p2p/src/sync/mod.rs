@@ -43,7 +43,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event::{PeerManagerEvent, SyncControlEvent},
     message::{Announcement, BlockListRequest, BlockResponse, HeaderListRequest, SyncMessage},
-    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    net::{NetworkingService, SyncingMessagingService},
     sync::peer_context::PeerContext,
     types::peer_id::PeerId,
     Result,
@@ -128,25 +128,33 @@ where
 
         loop {
             tokio::select! {
-                event = self.messaging_handle.poll_next() => match event? {
-                    SyncingEvent::Message { peer, message } => {
-                        let res = self.handle_message(peer, message).await;
-                        self.handle_result(peer, res).await?;
-                    },
-                    SyncingEvent::Announcement{ peer, announcement } => {
-                        let res = self.handle_announcement(peer, *announcement).await;
-                        self.handle_result(peer, res).await?;
-                    }
-                },
+                // Poll futures in the order they are declared.
+                biased;
+
+                // Connect/disconnect events are quickly processed. Additionally this slightly
+                // reduces the changes of getting a message from a peer before the corresponding
+                // connect event. See https://github.com/mintlayer/mintlayer-core/issues/718 issue
+                // for details.
                 event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await?,
                     SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
                 },
+
+                // The new tip processing is very lightweight if the node is in the initial block
+                // download mode and relatively rare otherwise.
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
                 },
+
+                // Process a message from a peer.
+                event = self.messaging_handle.poll_next() => {
+                    let event = event?;
+                    self.handle_event(event).await?;
+                },
+
+                // Sending blocks to peers has the least priority.
                 (peer, block) = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
                     let res = self.send_block(peer, block).await;
                     self.handle_result(peer, res).await?;
