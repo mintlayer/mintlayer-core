@@ -229,21 +229,11 @@ impl<'a> Node<'a> {
     ///                     If it's odd, then the even before it is the one.
     /// This can only be None for the root node.
     pub fn sibling(&self) -> Option<Node<'a>> {
-        if self.is_root() {
-            return None;
-        }
-
-        if self.absolute_index % 2 == 0 {
-            Some(Node {
-                tree_ref: self.tree_ref,
-                absolute_index: self.absolute_index + 1,
-            })
-        } else {
-            Some(Node {
-                tree_ref: self.tree_ref,
-                absolute_index: self.absolute_index - 1,
-            })
-        }
+        let absolute_index = self.into_position().sibling()?;
+        Some(Node {
+            tree_ref: self.tree_ref,
+            absolute_index: absolute_index.abs_index(),
+        })
     }
 
     pub fn is_root(&self) -> bool {
