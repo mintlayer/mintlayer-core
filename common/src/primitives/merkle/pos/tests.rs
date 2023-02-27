@@ -55,6 +55,7 @@ fn construction_from_abs_index() {
 const BIG_VAL: usize = 1000;
 
 #[rstest]
+#[trace]
 #[case(1,  0..1, &[0..1], true)]
 #[case(3,  0..2, &[0..2,  0..1], true)]
 #[case(7,  0..2, &[0..4,  0..2,  0..1], true)]

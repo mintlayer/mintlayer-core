@@ -41,6 +41,7 @@ fn single_proof_one_leaf() {
 }
 
 #[rstest]
+#[trace]
 #[case(2, 0, &[1])]
 #[case(2, 1, &[0])]
 #[case(4, 0, &[1,5])]
@@ -89,6 +90,7 @@ fn single_proof_eight_leaves(
 }
 
 #[rstest]
+#[trace]
 #[case(Seed::from_entropy(), 2)]
 #[case(Seed::from_entropy(), 4)]
 #[case(Seed::from_entropy(), 8)]
@@ -114,6 +116,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
 }
 
 #[rstest]
+#[trace]
 #[case(Seed::from_entropy(), 2)]
 #[case(Seed::from_entropy(), 4)]
 #[case(Seed::from_entropy(), 8)]
