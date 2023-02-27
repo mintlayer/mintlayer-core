@@ -267,7 +267,7 @@ fn bottom_access_two_leaves() {
     assert_eq!(t.node_value_from_bottom(0, 0).unwrap(), v00);
     assert_eq!(t.node_value_from_bottom(0, 1).unwrap(), v01);
 
-    let v10 = MerkleTree::combine_pair(&v00, &v01);
+    let v10 = MerkleTree::hash_pair(&v00, &v01);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
 
@@ -304,13 +304,13 @@ fn bottom_access_four_leaves() {
     assert_eq!(t.node_value_from_bottom(0, 2).unwrap(), v02);
     assert_eq!(t.node_value_from_bottom(0, 3).unwrap(), v03);
 
-    let v10 = MerkleTree::combine_pair(&v00, &v01);
-    let v11 = MerkleTree::combine_pair(&v02, &v03);
+    let v10 = MerkleTree::hash_pair(&v00, &v01);
+    let v11 = MerkleTree::hash_pair(&v02, &v03);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
     assert_eq!(t.node_value_from_bottom(1, 1).unwrap(), v11);
 
-    let v20 = MerkleTree::combine_pair(&v10, &v11);
+    let v20 = MerkleTree::hash_pair(&v10, &v11);
 
     assert_eq!(t.node_value_from_bottom(2, 0).unwrap(), v20);
 
@@ -360,23 +360,23 @@ fn bottom_access_eight_leaves() {
     assert_eq!(t.node_value_from_bottom(0, 6).unwrap(), v06);
     assert_eq!(t.node_value_from_bottom(0, 7).unwrap(), v07);
 
-    let v10 = MerkleTree::combine_pair(&v00, &v01);
-    let v11 = MerkleTree::combine_pair(&v02, &v03);
-    let v12 = MerkleTree::combine_pair(&v04, &v05);
-    let v13 = MerkleTree::combine_pair(&v06, &v07);
+    let v10 = MerkleTree::hash_pair(&v00, &v01);
+    let v11 = MerkleTree::hash_pair(&v02, &v03);
+    let v12 = MerkleTree::hash_pair(&v04, &v05);
+    let v13 = MerkleTree::hash_pair(&v06, &v07);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
     assert_eq!(t.node_value_from_bottom(1, 1).unwrap(), v11);
     assert_eq!(t.node_value_from_bottom(1, 2).unwrap(), v12);
     assert_eq!(t.node_value_from_bottom(1, 3).unwrap(), v13);
 
-    let v20 = MerkleTree::combine_pair(&v10, &v11);
-    let v21 = MerkleTree::combine_pair(&v12, &v13);
+    let v20 = MerkleTree::hash_pair(&v10, &v11);
+    let v21 = MerkleTree::hash_pair(&v12, &v13);
 
     assert_eq!(t.node_value_from_bottom(2, 0).unwrap(), v20);
     assert_eq!(t.node_value_from_bottom(2, 1).unwrap(), v21);
 
-    let v30 = MerkleTree::combine_pair(&v20, &v21);
+    let v30 = MerkleTree::hash_pair(&v20, &v21);
     assert_eq!(t.node_value_from_bottom(3, 0).unwrap(), v30);
 
     // Some invalid accesses at index

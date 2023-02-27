@@ -136,9 +136,9 @@ impl SingleProofHashes {
         loop {
             let sibling = self.branch[proof_index];
             let parent_hash = if curr_leaf_index % 2 == 0 {
-                MerkleTree::combine_pair(&hash, &sibling)
+                MerkleTree::hash_pair(&hash, &sibling)
             } else {
-                MerkleTree::combine_pair(&sibling, &hash)
+                MerkleTree::hash_pair(&sibling, &hash)
             };
 
             // move to the next level

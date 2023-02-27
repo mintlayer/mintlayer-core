@@ -71,7 +71,7 @@ impl MerkleTree {
         padding
     }
 
-    pub(super) fn combine_pair(left: &H256, right: &H256) -> H256 {
+    pub(super) fn hash_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
         hasher.write(right.as_bytes());
@@ -91,7 +91,7 @@ impl MerkleTree {
         let mut tree = Vec::with_capacity(2 * leaves.len() - 1);
         tree.extend(leaves.into_iter());
         for i in 0..steps {
-            let el = Self::combine_pair(&tree[i * 2], &tree[i * 2 + 1]);
+            let el = Self::hash_pair(&tree[i * 2], &tree[i * 2 + 1]);
             tree.push(el);
         }
         TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");

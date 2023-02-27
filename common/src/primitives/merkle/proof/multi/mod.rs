@@ -231,7 +231,7 @@ impl MultiProofHashes {
 
             if node_l.is_left().expect(root_err) && node_r.is_right().expect(root_err) {
                 let parent = node_l.parent().expect("Cannot be root because of loop range");
-                let hash = MerkleTree::combine_pair(&result[&index], &result[&(index + 1)]);
+                let hash = MerkleTree::hash_pair(&result[&index], &result[&(index + 1)]);
 
                 result.insert(parent.abs_index(), hash);
             }
@@ -307,9 +307,9 @@ impl MultiProofHashes {
                     }
                 };
                 let parent_hash = if curr_node_pos.is_left().expect(err_msg) {
-                    MerkleTree::combine_pair(&hash, &sibling)
+                    MerkleTree::hash_pair(&hash, &sibling)
                 } else {
-                    MerkleTree::combine_pair(&sibling, &hash)
+                    MerkleTree::hash_pair(&sibling, &hash)
                 };
 
                 // move to the next level
