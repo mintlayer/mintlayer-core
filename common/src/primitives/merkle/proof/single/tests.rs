@@ -92,10 +92,15 @@ fn single_proof_eight_leaves(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2)]
+#[trace]
 #[case(Seed::from_entropy(), 4)]
+#[trace]
 #[case(Seed::from_entropy(), 8)]
+#[trace]
 #[case(Seed::from_entropy(), 16)]
+#[trace]
 #[case(Seed::from_entropy(), 32)]
+#[trace]
 #[case(Seed::from_entropy(), 64)]
 fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_count: usize) {
     let mut rng = make_seedable_rng(seed);
@@ -118,10 +123,15 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2)]
+#[trace]
 #[case(Seed::from_entropy(), 4)]
+#[trace]
 #[case(Seed::from_entropy(), 8)]
+#[trace]
 #[case(Seed::from_entropy(), 16)]
+#[trace]
 #[case(Seed::from_entropy(), 32)]
+#[trace]
 #[case(Seed::from_entropy(), 64)]
 fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_count: usize) {
     let mut rng = make_seedable_rng(seed);

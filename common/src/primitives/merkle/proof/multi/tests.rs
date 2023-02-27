@@ -110,7 +110,6 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
 
 /// The number of tests is the 2^n-1, where n = 2 for 2 leaves, yielding 3 tests (we exclude the empty input case).
 #[rstest]
-#[trace]
 #[case(&[0], vec![1])]
 #[case(&[1], vec![0])]
 #[case(&[0,1], vec![])]
@@ -136,7 +135,6 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nod
 
 /// The number of tests is the 2^n-1, where n = 4 for 4 leaves, yielding 15 tests (we exclude the empty input case).
 #[rstest]
-#[trace]
 #[case(&[0], vec![1,5])]
 #[case(&[1], vec![0,5])]
 #[case(&[2], vec![3,4])]
@@ -481,7 +479,6 @@ fn gen_leaves_indices_combinations(leaf_count: usize) -> impl Iterator<Item = Ve
 }
 
 #[rstest]
-#[trace]
 #[case(2)]
 #[case(4)]
 #[case(8)]
@@ -493,7 +490,6 @@ fn leaf_count_combinations_generator(#[case] leaf_count: usize) {
 }
 
 #[rstest]
-#[trace]
 #[case(1)]
 #[case(2)]
 #[case(4)]
@@ -529,11 +525,17 @@ fn multi_proof_verification_leaves_empty(#[case] leaf_count: usize) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2, None)]
+#[trace]
 #[case(Seed::from_entropy(), 4, None)]
+#[trace]
 #[case(Seed::from_entropy(), 8, None)]
+#[trace]
 #[case(Seed::from_entropy(), 16, Some(500))]
+#[trace]
 #[case(Seed::from_entropy(), 32, Some(500))]
+#[trace]
 #[case(Seed::from_entropy(), 64, Some(500))]
+#[trace]
 #[case(Seed::from_entropy(), 128, Some(500))]
 fn multi_proof_verification(
     #[case] seed: Seed,
@@ -601,11 +603,17 @@ fn multi_proof_verification_one_leaf() {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2, None)]
+#[trace]
 #[case(Seed::from_entropy(), 4, None)]
+#[trace]
 #[case(Seed::from_entropy(), 8, None)]
+#[trace]
 #[case(Seed::from_entropy(), 16, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 32, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 64, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_nodes(
     #[case] seed: Seed,
@@ -661,11 +669,17 @@ fn multi_proof_verification_tampered_nodes(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2, None)]
+#[trace]
 #[case(Seed::from_entropy(), 4, None)]
+#[trace]
 #[case(Seed::from_entropy(), 8, None)]
+#[trace]
 #[case(Seed::from_entropy(), 16, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 32, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 64, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_leaves(
     #[case] seed: Seed,
@@ -721,11 +735,17 @@ fn multi_proof_verification_tampered_leaves(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2, None)]
+#[trace]
 #[case(Seed::from_entropy(), 4, None)]
+#[trace]
 #[case(Seed::from_entropy(), 8, None)]
+#[trace]
 #[case(Seed::from_entropy(), 16, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 32, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 64, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     #[case] seed: Seed,
@@ -778,11 +798,17 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy(), 2, None)]
+#[trace]
 #[case(Seed::from_entropy(), 4, None)]
+#[trace]
 #[case(Seed::from_entropy(), 8, None)]
+#[trace]
 #[case(Seed::from_entropy(), 16, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 32, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 64, Some(50))]
+#[trace]
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     #[case] seed: Seed,
