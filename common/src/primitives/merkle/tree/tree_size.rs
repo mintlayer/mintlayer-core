@@ -240,4 +240,15 @@ mod tests {
         assert_eq!(t255.leaf_count().get(), 128);
         assert_eq!(t255.level_count().get(), 8);
     }
+
+    #[test]
+    fn huge_tree_sizes() {
+        assert!(TreeSize::try_from(MAX_TREE_SIZE - 1).is_ok());
+        // ensure it'll fit in a 32-bit integer, since MAX_TREE_SIZE*2 can overflow in 32-bit systems, depending on its value
+        let huge_tree_size = (((MAX_TREE_SIZE as u64) << 1) - 1) as usize;
+        assert_eq!(
+            TreeSize::try_from(huge_tree_size).unwrap_err(),
+            TreeSizeError::HugeTreeUnsupported(huge_tree_size)
+        );
+    }
 }
