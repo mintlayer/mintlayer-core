@@ -288,7 +288,6 @@ impl MultiProofHashes {
         // but we don't care about performance here. We care more about security.
         for (leaf_index, leaf_hash) in &leaves {
             let mut hash = *leaf_hash;
-            // let mut curr_leaf_index = *leaf_index_in_level;
             let mut curr_node_pos = NodePosition::from_position(tree_size, 0, *leaf_index)
                 .expect("At level zero, leave index be valid");
 
