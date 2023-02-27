@@ -102,12 +102,24 @@ impl NodePosition {
         (level, self.abs_index() - tree_node_counter)
     }
 
-    pub fn is_left(&self) -> bool {
-        self.absolute_index % 2 == 0
+    /// Returns true if the node is a left child of its parent.
+    /// Returns None if the node is the root.
+    pub fn is_left(&self) -> Option<bool> {
+        if self.is_root() {
+            None
+        } else {
+            Some(self.absolute_index % 2 == 0)
+        }
     }
 
-    pub fn is_right(&self) -> bool {
-        !self.is_left()
+    /// Returns true if the node is a right child of its parent.
+    /// Returns None if the node is the root.
+    pub fn is_right(&self) -> Option<bool> {
+        if self.is_root() {
+            None
+        } else {
+            Some(self.absolute_index % 2 == 1)
+        }
     }
 
     pub fn is_root(&self) -> bool {

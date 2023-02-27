@@ -223,12 +223,13 @@ impl MultiProofHashes {
                 continue;
             }
 
-            let err = "We never reach the root as per the loop's range, so this should always work";
+            let root_err =
+                "We never reach the root as per the loop's range, so this should always work";
 
-            let node_l = NodePosition::from_abs_index(tree_size, index).expect(err);
-            let node_r = NodePosition::from_abs_index(tree_size, index + 1).expect(err);
+            let node_l = NodePosition::from_abs_index(tree_size, index).expect(root_err);
+            let node_r = NodePosition::from_abs_index(tree_size, index + 1).expect(root_err);
 
-            if node_l.is_left() && node_r.is_right() {
+            if node_l.is_left().expect(root_err) && node_r.is_right().expect(root_err) {
                 let parent = node_l.parent().expect("Cannot be root because of loop range");
                 let hash = MerkleTree::combine_pair(&result[&index], &result[&(index + 1)]);
 
@@ -293,6 +294,8 @@ impl MultiProofHashes {
 
             // In this loop we move up the tree, combining the hashes of the current node with its sibling
             while !curr_node_pos.is_root() {
+                let err_msg = "We can never be at root yet as we checked in the loop entry";
+
                 let sibling_index =
                     curr_node_pos.sibling().expect("This cannot be root").abs_index();
                 let sibling = match all_nodes.get(&sibling_index) {
@@ -303,14 +306,13 @@ impl MultiProofHashes {
                         ))
                     }
                 };
-                let parent_hash = if curr_node_pos.is_left() {
+                let parent_hash = if curr_node_pos.is_left().expect(err_msg) {
                     MerkleTree::combine_pair(&hash, &sibling)
                 } else {
                     MerkleTree::combine_pair(&sibling, &hash)
                 };
 
                 // move to the next level
-                let err_msg = "We can never be at root yet as we checked in the loop entry";
                 curr_node_pos = curr_node_pos.parent().expect(err_msg);
                 hash = parent_hash;
 
