@@ -263,6 +263,10 @@ impl<'a> Node<'a> {
     pub fn is_root(&self) -> bool {
         self.absolute_index == self.tree().tree.len() - 1
     }
+
+    pub fn into_iter_parents(self) -> MerkleTreeNodeParentIterator<'a> {
+        MerkleTreeNodeParentIterator { node: Some(self) }
+    }
 }
 
 /// An iterator that iterates from a leaf node to the root node.

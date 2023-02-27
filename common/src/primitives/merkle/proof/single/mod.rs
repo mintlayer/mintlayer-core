@@ -53,17 +53,17 @@ impl<'a> SingleProofNodes<'a> {
             ),
         )?;
 
-        let mut last_node = leaf;
         let mut proof = vec![];
 
         // once we reach root we stop
-        while !last_node.is_root() {
+        for node in leaf.into_iter_parents() {
+            if node.is_root() {
+                break;
+            }
             // We push siblings of parents because they're what we need to calculate the root, upwards.
             let err_msg = "In this loop, this cannot be root, so sibling must exist";
-            let sibling = last_node.sibling().expect(err_msg);
+            let sibling = node.sibling().expect(err_msg);
             proof.push(sibling);
-
-            last_node = last_node.parent().expect("This can never be root");
         }
 
         let result = Self {

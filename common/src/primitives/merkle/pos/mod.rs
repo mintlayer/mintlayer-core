@@ -157,8 +157,8 @@ impl NodePosition {
         }
     }
 
-    pub fn iter_parents(&self) -> MerkleTreeNodePositionParentIterator {
-        MerkleTreeNodePositionParentIterator { node: Some(*self) }
+    pub fn into_iter_parents(self) -> MerkleTreeNodePositionParentIterator {
+        MerkleTreeNodePositionParentIterator { node: Some(self) }
     }
 }
 

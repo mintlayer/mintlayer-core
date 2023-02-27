@@ -105,7 +105,7 @@ fn parent_iter_one_leaf() {
     let t_size = 1.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
-    let mut leaf0iter = n.iter_parents();
+    let mut leaf0iter = n.into_iter_parents();
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 0, 0));
     assert_eq!(leaf0iter.next(), None);
 }
@@ -115,13 +115,13 @@ fn parent_iter_two_leaves() {
     let t_size = 3.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
-    let mut leaf0iter = n.iter_parents();
+    let mut leaf0iter = n.into_iter_parents();
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 0, 0));
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf0iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 1).unwrap();
-    let mut leaf1iter = n.iter_parents();
+    let mut leaf1iter = n.into_iter_parents();
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 0, 1));
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf1iter.next(), None);
@@ -132,28 +132,28 @@ fn parent_iter_four_leaves() {
     let t_size = 7.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
-    let mut leaf0iter = n.iter_parents();
+    let mut leaf0iter = n.into_iter_parents();
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 0, 0));
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 2, 0));
     assert_eq!(leaf0iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 1).unwrap();
-    let mut leaf1iter = n.iter_parents();
+    let mut leaf1iter = n.into_iter_parents();
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 0, 1));
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 2, 0));
     assert_eq!(leaf1iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 2).unwrap();
-    let mut leaf2iter = n.iter_parents();
+    let mut leaf2iter = n.into_iter_parents();
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 0, 2));
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 1, 1));
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 2, 0));
     assert_eq!(leaf2iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 3).unwrap();
-    let mut leaf3iter = n.iter_parents();
+    let mut leaf3iter = n.into_iter_parents();
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 0, 3));
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 1, 1));
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 2, 0));
@@ -165,7 +165,7 @@ fn parent_iter_eight_leaves() {
     let t_size = 15.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
-    let mut leaf0iter = n.iter_parents();
+    let mut leaf0iter = n.into_iter_parents();
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 0, 0));
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf0iter.next(), NodePosition::from_position(t_size, 2, 0));
@@ -173,7 +173,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf0iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 1).unwrap();
-    let mut leaf1iter = n.iter_parents();
+    let mut leaf1iter = n.into_iter_parents();
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 0, 1));
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 1, 0));
     assert_eq!(leaf1iter.next(), NodePosition::from_position(t_size, 2, 0));
@@ -181,7 +181,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf1iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 2).unwrap();
-    let mut leaf2iter = n.iter_parents();
+    let mut leaf2iter = n.into_iter_parents();
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 0, 2));
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 1, 1));
     assert_eq!(leaf2iter.next(), NodePosition::from_position(t_size, 2, 0));
@@ -189,7 +189,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf2iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 3).unwrap();
-    let mut leaf3iter = n.iter_parents();
+    let mut leaf3iter = n.into_iter_parents();
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 0, 3));
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 1, 1));
     assert_eq!(leaf3iter.next(), NodePosition::from_position(t_size, 2, 0));
@@ -197,7 +197,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf3iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 4).unwrap();
-    let mut leaf4iter = n.iter_parents();
+    let mut leaf4iter = n.into_iter_parents();
     assert_eq!(leaf4iter.next(), NodePosition::from_position(t_size, 0, 4));
     assert_eq!(leaf4iter.next(), NodePosition::from_position(t_size, 1, 2));
     assert_eq!(leaf4iter.next(), NodePosition::from_position(t_size, 2, 1));
@@ -205,7 +205,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf4iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 5).unwrap();
-    let mut leaf5iter = n.iter_parents();
+    let mut leaf5iter = n.into_iter_parents();
     assert_eq!(leaf5iter.next(), NodePosition::from_position(t_size, 0, 5));
     assert_eq!(leaf5iter.next(), NodePosition::from_position(t_size, 1, 2));
     assert_eq!(leaf5iter.next(), NodePosition::from_position(t_size, 2, 1));
@@ -213,7 +213,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf5iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 6).unwrap();
-    let mut leaf6iter = n.iter_parents();
+    let mut leaf6iter = n.into_iter_parents();
     assert_eq!(leaf6iter.next(), NodePosition::from_position(t_size, 0, 6));
     assert_eq!(leaf6iter.next(), NodePosition::from_position(t_size, 1, 3));
     assert_eq!(leaf6iter.next(), NodePosition::from_position(t_size, 2, 1));
@@ -221,7 +221,7 @@ fn parent_iter_eight_leaves() {
     assert_eq!(leaf6iter.next(), None);
 
     let n = NodePosition::from_abs_index(t_size, 7).unwrap();
-    let mut leaf7iter = n.iter_parents();
+    let mut leaf7iter = n.into_iter_parents();
     assert_eq!(leaf7iter.next(), NodePosition::from_position(t_size, 0, 7));
     assert_eq!(leaf7iter.next(), NodePosition::from_position(t_size, 1, 3));
     assert_eq!(leaf7iter.next(), NodePosition::from_position(t_size, 2, 1));
