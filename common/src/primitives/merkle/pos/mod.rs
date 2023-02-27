@@ -49,12 +49,11 @@ impl NodePosition {
 
         let level_start = tree_size.level_start(level_from_bottom)?;
         let absolute_index = level_start + index_in_level;
-        // max number of nodes in a level, in level_from_bottom
-        let index_in_level_size = if level_start > 0 {
-            1 << (level_start.trailing_zeros() - 1)
-        } else {
-            tree_size.leaf_count().get()
-        };
+        let level_from_top = level_count - level_from_bottom - 1;
+
+        // number of nodes in the level
+        let index_in_level_size = 1 << level_from_top;
+
         if index_in_level >= index_in_level_size {
             return None;
         }
