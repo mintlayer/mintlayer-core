@@ -120,26 +120,17 @@ impl MerkleTree {
         tree_size.level_count()
     }
 
-    pub fn absolute_index_from_bottom(
-        tree_size: TreeSize,
-        level_from_bottom: usize,
-        index_in_level: usize,
-    ) -> Option<usize> {
-        let node = NodePosition::from_position(tree_size, level_from_bottom, index_in_level)?;
-
-        Some(node.abs_index())
-    }
-
     pub fn node_value_from_bottom(
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
     ) -> Option<H256> {
-        let index_in_tree = Self::absolute_index_from_bottom(
+        let index_in_tree = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
             index_in_level,
-        )?;
+        )?
+        .abs_index();
 
         Some(self.tree[index_in_tree])
     }
@@ -149,11 +140,12 @@ impl MerkleTree {
         level_from_bottom: usize,
         index_in_level: usize,
     ) -> Option<Node> {
-        let absolute_index = Self::absolute_index_from_bottom(
+        let absolute_index = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
             index_in_level,
-        )?;
+        )?
+        .abs_index();
 
         Some(Node {
             tree_ref: self,
@@ -218,12 +210,13 @@ impl<'a> Node<'a> {
         let parent_level = level + 1;
         let parent_node_index_in_level = index / 2;
 
-        let parent_absolute_index = MerkleTree::absolute_index_from_bottom(
+        let parent_absolute_index = NodePosition::from_position(
             self.tree().total_node_count(),
             parent_level,
             parent_node_index_in_level,
         )
-        .expect("Parent index must be in range");
+        .expect("Parent index must be in range")
+        .abs_index();
 
         Some(Node {
             tree_ref: self.tree_ref,

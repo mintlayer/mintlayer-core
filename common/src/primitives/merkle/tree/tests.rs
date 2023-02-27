@@ -539,53 +539,6 @@ fn position_from_index_15_tree_elements() {
 }
 
 #[test]
-fn absolute_index_from_bottom() {
-    // Tree size: 1
-    let s: TreeSize = 1.try_into().expect("is not zero");
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
-
-    // Tree size: 3
-    let s: TreeSize = 3.try_into().expect("is not zero");
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 2);
-
-    // Tree size: 7
-    let s: TreeSize = 7.try_into().expect("is not zero");
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 3).unwrap(), 3);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 4);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 1).unwrap(), 5);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 0).unwrap(), 6);
-
-    // Tree size: 15
-    let s: TreeSize = 15.try_into().expect("is not zero");
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 0).unwrap(), 0);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 1).unwrap(), 1);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 2).unwrap(), 2);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 3).unwrap(), 3);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 4).unwrap(), 4);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 5).unwrap(), 5);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 6).unwrap(), 6);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 0, 7).unwrap(), 7);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 0).unwrap(), 8);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 1).unwrap(), 9);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 2).unwrap(), 10);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 1, 3).unwrap(), 11);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 0).unwrap(), 12);
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 2, 1).unwrap(), 13);
-
-    assert_eq!(MerkleTree::absolute_index_from_bottom(s, 3, 0).unwrap(), 14);
-}
-
-#[test]
 fn parent_iter_one_leaf() {
     let v00 = H256::from_low_u64_be(1);
 

@@ -328,3 +328,65 @@ fn from_abs_index_construction_boundaries() {
         }
     }
 }
+
+#[test]
+fn absolute_index_from_bottom() {
+    // Tree size: 1
+    let s: TreeSize = 1.try_into().expect("is not zero");
+    assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
+
+    // Tree size: 3
+    let s: TreeSize = 3.try_into().expect("is not zero");
+    assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
+    assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
+
+    assert_eq!(NodePosition::from_position(s, 1, 0).unwrap().abs_index(), 2);
+
+    // Tree size: 7
+    let s: TreeSize = 7.try_into().expect("is not zero");
+    assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
+    assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
+    assert_eq!(NodePosition::from_position(s, 0, 2).unwrap().abs_index(), 2);
+    assert_eq!(NodePosition::from_position(s, 0, 3).unwrap().abs_index(), 3);
+
+    assert_eq!(NodePosition::from_position(s, 1, 0).unwrap().abs_index(), 4);
+    assert_eq!(NodePosition::from_position(s, 1, 1).unwrap().abs_index(), 5);
+
+    assert_eq!(NodePosition::from_position(s, 2, 0).unwrap().abs_index(), 6);
+
+    // Tree size: 15
+    let s: TreeSize = 15.try_into().expect("is not zero");
+    assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
+    assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
+    assert_eq!(NodePosition::from_position(s, 0, 2).unwrap().abs_index(), 2);
+    assert_eq!(NodePosition::from_position(s, 0, 3).unwrap().abs_index(), 3);
+    assert_eq!(NodePosition::from_position(s, 0, 4).unwrap().abs_index(), 4);
+    assert_eq!(NodePosition::from_position(s, 0, 5).unwrap().abs_index(), 5);
+    assert_eq!(NodePosition::from_position(s, 0, 6).unwrap().abs_index(), 6);
+    assert_eq!(NodePosition::from_position(s, 0, 7).unwrap().abs_index(), 7);
+
+    assert_eq!(NodePosition::from_position(s, 1, 0).unwrap().abs_index(), 8);
+    assert_eq!(NodePosition::from_position(s, 1, 1).unwrap().abs_index(), 9);
+    assert_eq!(
+        NodePosition::from_position(s, 1, 2).unwrap().abs_index(),
+        10
+    );
+    assert_eq!(
+        NodePosition::from_position(s, 1, 3).unwrap().abs_index(),
+        11
+    );
+
+    assert_eq!(
+        NodePosition::from_position(s, 2, 0).unwrap().abs_index(),
+        12
+    );
+    assert_eq!(
+        NodePosition::from_position(s, 2, 1).unwrap().abs_index(),
+        13
+    );
+
+    assert_eq!(
+        NodePosition::from_position(s, 3, 0).unwrap().abs_index(),
+        14
+    );
+}
