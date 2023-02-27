@@ -140,21 +140,14 @@ impl NodePosition {
     }
 
     pub fn sibling(&self) -> Option<Self> {
-        if self.absolute_index == self.tree_size.get() - 1 {
+        if self.is_root() {
             return None;
         }
 
-        if self.absolute_index % 2 == 0 {
-            Some(Self {
-                tree_size: self.tree_size,
-                absolute_index: self.absolute_index + 1,
-            })
-        } else {
-            Some(Self {
-                tree_size: self.tree_size,
-                absolute_index: self.absolute_index - 1,
-            })
-        }
+        Some(Self {
+            tree_size: self.tree_size,
+            absolute_index: self.absolute_index ^ 1,
+        })
     }
 
     pub fn into_iter_parents(self) -> MerkleTreeNodePositionParentIterator {

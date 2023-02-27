@@ -466,9 +466,8 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
 }
 
 fn gen_leaves_indices_combinations(leaf_count: usize) -> impl Iterator<Item = Vec<usize>> {
-    assert_eq!(
-        leaf_count.count_ones(),
-        1,
+    assert!(
+        leaf_count.is_power_of_two(),
         "leaf_count must be a power of 2"
     );
     let mut leaves_indices = vec![];

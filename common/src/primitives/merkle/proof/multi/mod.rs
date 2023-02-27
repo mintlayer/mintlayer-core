@@ -254,7 +254,7 @@ impl MultiProofHashes {
             return Err(MerkleProofVerificationError::LeavesContainerProvidedIsEmpty);
         }
 
-        if self.tree_leaf_count.get().count_ones() != 1 {
+        if !self.tree_leaf_count.get().is_power_of_two() {
             return Err(MerkleProofVerificationError::InvalidTreeLeavesCount(
                 self.tree_leaf_count().get(),
             ));

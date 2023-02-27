@@ -64,7 +64,7 @@ impl TryFrom<usize> for TreeSize {
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         if value == 0 {
             Err(TreeSizeError::ZeroSize)
-        } else if (value + 1).count_ones() != 1 {
+        } else if !(value + 1).is_power_of_two() {
             Err(TreeSizeError::InvalidSize(value))
         } else if value > MAX_TREE_SIZE {
             Err(TreeSizeError::HugeTreeUnsupported(value))
@@ -127,7 +127,7 @@ mod tests {
 
         for _ in 1..attempts_count {
             let sz = rng.gen::<usize>() % MAX_TREE_SIZE;
-            if (sz + 1).count_ones() == 1 {
+            if (sz + 1).is_power_of_two() {
                 assert_eq!(TreeSize::try_from(sz), Ok(TreeSize(sz)));
                 assert_eq!(TreeSize::from_value(sz), Ok(TreeSize(sz)));
             } else {

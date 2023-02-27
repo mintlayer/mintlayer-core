@@ -24,16 +24,16 @@ fn construction_from_abs_index() {
         let tree_size: Result<TreeSize, _> = tree_size_in.try_into();
         let tree_size = match tree_size {
             Ok(t) => {
-                assert_eq!((tree_size_in + 1).count_ones(), 1);
+                assert!((tree_size_in + 1).is_power_of_two());
                 t
             }
             Err(_) => {
-                assert!((tree_size_in + 1).count_ones() != 1);
+                assert!(!(tree_size_in + 1).is_power_of_two());
                 continue;
             }
         };
         for abs_index in 0..tree_size.get() {
-            let success = (tree_size.get() + 1).count_ones() == 1 && abs_index < tree_size.get();
+            let success = (tree_size.get() + 1).is_power_of_two() && abs_index < tree_size.get();
             let pos = NodePosition::from_abs_index(tree_size, abs_index);
             assert_eq!(
                 pos.is_some(),
