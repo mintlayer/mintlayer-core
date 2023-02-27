@@ -111,14 +111,12 @@ impl MerkleTree {
     }
 
     pub fn leaf_count(&self) -> NonZeroUsize {
-        let tree_size = TreeSize::from_value(self.tree.len())
-            .expect("(leaf_count) Tree size valid by construction");
+        let tree_size = self.total_node_count();
         tree_size.leaf_count()
     }
 
     pub fn level_count(&self) -> NonZeroUsize {
-        let tree_size = TreeSize::from_value(self.tree.len())
-            .expect("(level_count) Tree size valid by construction");
+        let tree_size = self.total_node_count();
         tree_size.level_count()
     }
 
