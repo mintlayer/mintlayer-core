@@ -29,6 +29,9 @@ use crate::{
 };
 
 use super::{
+    authorize_classical_multisig::{
+        verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+    },
     authorize_pubkey_spend::{
         sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
@@ -82,7 +85,11 @@ impl StandardInputSignature {
                     TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
             }
-            Destination::ClassicMultisig(_) => todo!(),
+            Destination::ClassicMultisig(c) => {
+                let sig_components =
+                    AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
+                verify_classical_multisig_spending(c, &sig_components, sighash)?
+            }
         }
         Ok(())
     }
