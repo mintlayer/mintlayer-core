@@ -19,6 +19,7 @@ use super::tree::tree_size::TreeSize;
 
 /// Given a binary tree with leaf-count as powers of 2, this struct represents a position in the tree.
 /// This also contains all the math required to convert position representations.
+#[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePosition {
     tree_size: TreeSize,

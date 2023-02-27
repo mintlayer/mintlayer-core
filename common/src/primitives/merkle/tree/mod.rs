@@ -201,26 +201,11 @@ impl<'a> Node<'a> {
     }
 
     pub fn parent(&self) -> Option<Node<'a>> {
-        let pos = self.into_position();
-        let (level, index) = pos.position();
-        if level == self.tree().level_count().get() - 1 {
-            return None;
-        }
-
-        let parent_level = level + 1;
-        let parent_node_index_in_level = index / 2;
-
-        let parent_absolute_index = NodePosition::from_position(
-            self.tree().total_node_count(),
-            parent_level,
-            parent_node_index_in_level,
-        )
-        .expect("Parent index must be in range")
-        .abs_index();
+        let pos = self.into_position().parent()?;
 
         Some(Node {
             tree_ref: self.tree_ref,
-            absolute_index: parent_absolute_index,
+            absolute_index: pos.abs_index(),
         })
     }
 
