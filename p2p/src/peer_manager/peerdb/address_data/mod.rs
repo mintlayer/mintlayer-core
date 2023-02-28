@@ -87,9 +87,10 @@ impl AddressData {
                     let age = now - disconnected_at;
                     match fail_count {
                         0 => true,
-                        1 => age > Duration::from_secs(60),
-                        2 => age > Duration::from_secs(360),
-                        _ => age > Duration::from_secs(3600),
+                        1 => age > Duration::from_secs(10),
+                        2 => age > Duration::from_secs(60),
+                        3 => age > Duration::from_secs(180),
+                        _ => age > Duration::from_secs(360),
                     }
                 } else if was_reachable {
                     match fail_count {
