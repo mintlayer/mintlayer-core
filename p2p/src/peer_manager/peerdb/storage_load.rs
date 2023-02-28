@@ -60,6 +60,7 @@ impl<A: Ord + FromStr, B: Ord + FromStr> LoadedStorage<A, B> {
     fn load_storage_v1<S: PeerDbStorage>(storage: &S) -> crate::Result<LoadedStorage<A, B>> {
         let tx = storage.transaction_ro()?;
 
+        // TODO: Is there a concern that the number of addresses will be so huge that it'll cause a hiccup?
         let known_addresses = tx
             .get_known_addresses()?
             .iter()

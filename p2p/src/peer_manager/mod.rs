@@ -60,7 +60,7 @@ use self::{
     peerdb::storage::PeerDbStorage,
 };
 
-/// Maximum number of outbound connections the [`PeerManager`] is allowed to have open
+/// Maximum number of outbound connections the [`PeerManager`] is allowed to have open.
 /// This value is constant because users should not change this.
 const MAX_OUTBOUND_CONNECTIONS: usize = 8;
 
@@ -350,7 +350,9 @@ where
         }
     }
 
-    /// Check if the (inbound or outbound) peer connection can be accepted
+    /// Check if the (inbound or outbound) peer connection can be accepted.
+    ///
+    /// For example, an inbound connection will not be accepted when the limit of inbound connections is reached.
     fn validate_connection(
         &mut self,
         address: &T::Address,
@@ -419,6 +421,8 @@ where
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
+        // For security reasons, the address list is only requested from outbound peers.
+        // (inbound peers are generally less trustworthy than outbound peers).
         let expect_addr_list_response = role == Role::Outbound;
 
         if expect_addr_list_response {

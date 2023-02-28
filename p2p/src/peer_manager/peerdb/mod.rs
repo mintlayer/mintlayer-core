@@ -137,6 +137,7 @@ where
 
         // TODO: Ignore banned addresses
         // TODO: Allow only one connection per IP address
+        // TODO: Always try to connect to user-added addresses without considering `MAX_OUTBOUND_CONNECTIONS`
         self.addresses
             .iter()
             .filter(|(addr, address_data)| {
