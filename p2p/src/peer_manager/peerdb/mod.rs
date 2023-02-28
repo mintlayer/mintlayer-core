@@ -68,11 +68,11 @@ pub struct PeerDb<A, B, S> {
     storage: S,
 }
 
-impl<
-        A: Ord + FromStr + ToString + Clone + AsBannableAddress<BannableAddress = B>,
-        B: Ord + FromStr + ToString,
-        S: PeerDbStorage,
-    > PeerDb<A, B, S>
+impl<A, B, S> PeerDb<A, B, S>
+where
+    A: Ord + FromStr + ToString + Clone + AsBannableAddress<BannableAddress = B>,
+    B: Ord + FromStr + ToString,
+    S: PeerDbStorage,
 {
     pub fn new(
         p2p_config: Arc<config::P2pConfig>,
