@@ -134,7 +134,7 @@ impl<
             .saturating_sub(pending_outbound.len())
             .saturating_sub(connected_outbound.len());
 
-        // TODO(PR): Ignore banned addresses
+        // TODO: Ignore banned addresses
         self.addresses
             .iter()
             .filter(|(addr, address_data)| {

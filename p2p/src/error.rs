@@ -43,8 +43,6 @@ pub enum ProtocolError {
     DisconnectedHeaders,
     #[error("Received a message ({0}) that wasn't expected")]
     UnexpectedMessage(&'static str),
-    #[error("Unknown request identifier")]
-    UnknownRequestId,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
@@ -190,7 +188,6 @@ impl BanScore for ProtocolError {
             ProtocolError::UnknownBlockRequested => 20,
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnexpectedMessage(_) => 20,
-            ProtocolError::UnknownRequestId => 20,
         }
     }
 }

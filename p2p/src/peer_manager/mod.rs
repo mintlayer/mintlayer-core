@@ -413,6 +413,16 @@ where
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
+        let expect_addr_list_response = role == Role::Outbound;
+
+        if expect_addr_list_response {
+            Self::send_peer_message(
+                &mut self.peer_connectivity_handle,
+                peer_id,
+                PeerManagerMessage::AddrListRequest(AddrListRequest {}),
+            );
+        }
+
         let old_value = self.peers.insert(
             peer_id,
             PeerContext {
@@ -421,18 +431,13 @@ where
                 role,
                 score: 0,
                 sent_ping: None,
+                expect_addr_list_response,
                 announced_addresses: HashSet::new(),
             },
         );
         assert!(old_value.is_none());
 
         if role == Role::Outbound {
-            Self::send_peer_message(
-                &mut self.peer_connectivity_handle,
-                peer_id,
-                PeerManagerMessage::AddrListRequest(AddrListRequest {}),
-            );
-
             self.peerdb.outbound_peer_connected(address);
 
             if let Some(receiver_address) = receiver_address {
@@ -652,7 +657,9 @@ where
                 self.handle_announce_addr_request(peer, r.address)
             }
             PeerManagerMessage::PingRequest(r) => self.handle_ping_request(peer, r.nonce),
-            PeerManagerMessage::AddrListResponse(r) => self.handle_addr_list_response(r.addresses),
+            PeerManagerMessage::AddrListResponse(r) => {
+                self.handle_addr_list_response(peer, r.addresses)
+            }
             PeerManagerMessage::PingResponse(r) => self.handle_ping_response(peer, r.nonce),
         }
     }
@@ -691,6 +698,8 @@ where
             .filter(|address| self.is_peer_address_valid(address))
             .choose_multiple(&mut make_pseudo_rng(), MAX_ADDRESS_COUNT);
 
+        assert!(addresses.len() <= MAX_ADDRESS_COUNT);
+
         Self::send_peer_message(
             &mut self.peer_connectivity_handle,
             peer,
@@ -698,8 +707,26 @@ where
         );
     }
 
-    fn handle_addr_list_response(&mut self, addresses: Vec<PeerAddress>) {
-        // TODO: Ban the peer if the response is unexpected or invalid (more than 1000 addresses)
+    fn try_handle_addr_list_response(
+        &mut self,
+        peer_id: PeerId,
+        addresses: Vec<PeerAddress>,
+    ) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        ensure!(
+            addresses.len() <= MAX_ADDRESS_COUNT,
+            P2pError::ProtocolError(ProtocolError::InvalidMessage)
+        );
+        ensure!(
+            peer.expect_addr_list_response,
+            P2pError::ProtocolError(ProtocolError::UnexpectedMessage("AddrListResponse"))
+        );
+
+        peer.expect_addr_list_response = false;
+
         for address in addresses {
             if let Some(address) = TransportAddress::from_peer_address(
                 &address,
@@ -707,6 +734,16 @@ where
             ) {
                 self.peerdb.peer_discovered(address);
             }
+        }
+
+        Ok(())
+    }
+
+    fn handle_addr_list_response(&mut self, peer_id: PeerId, addresses: Vec<PeerAddress>) {
+        let res = self.try_handle_addr_list_response(peer_id, addresses);
+        if let Err(err) = res {
+            log::debug!("try_handle_addr_list_response failed: {err}");
+            self.adjust_peer_score(peer_id, err.ban_score());
         }
     }
 
