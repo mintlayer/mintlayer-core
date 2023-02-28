@@ -19,7 +19,7 @@ anyhow = "1.0"
 bech32 = "0.9"
 generic-array = "0.14"
 parity-scale-codec.workspace = true
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true
 thiserror.workspace = true
 hex.workspace = true
