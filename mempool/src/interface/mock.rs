@@ -131,13 +131,14 @@ impl MempoolSubsystemInterface for MempoolInterfaceMock {
     async fn run(
         mut self,
         mut call_rq: CallRequest<dyn MempoolInterface>,
-        _shut_rq: ShutdownRequest,
+        mut shut_rq: ShutdownRequest,
     ) {
         self.run_called.store(true, Relaxed);
 
         if !self.run_should_error.load(Relaxed) {
             tokio::select! {
-                call = call_rq.recv() => call(&mut self).await
+                call = call_rq.recv() => call(&mut self).await,
+                () = shut_rq.recv() => return,
             }
         }
     }
