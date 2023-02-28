@@ -191,7 +191,9 @@ mod tests {
     use crate::tests::setup_blockprod_test;
     use chainstate_types::{BlockIndex, BlockPreconnectData, ConsensusExtraData};
     use crypto::random::make_pseudo_rng;
-    use mempool::{MempoolInterfaceMock, MempoolSubsystemInterface};
+    use mempool::{MempoolInterface, MempoolInterfaceMock, MempoolSubsystemInterface};
+    use std::sync::atomic::Ordering::Relaxed;
+    use subsystem::CallRequest;
 
     use chainstate::{
         chainstate_interface::ChainstateInterface,
@@ -248,7 +250,7 @@ mod tests {
             let accumulator = block_maker.collect_transactions().await;
 
             assert!(
-                !*mock_mempool.collect_txs_called.lock().unwrap(),
+                !mock_mempool.collect_txs_called.load(Relaxed),
                 "Expected collect_tx() to not be called"
             );
 
@@ -269,7 +271,7 @@ mod tests {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
         let mock_mempool = MempoolInterfaceMock::new();
-        *mock_mempool.collect_txs_should_error.lock().unwrap() = true;
+        mock_mempool.collect_txs_should_error.store(true, Relaxed);
 
         let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
             let mock_mempool = mock_mempool.clone();
