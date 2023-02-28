@@ -97,6 +97,20 @@ fn construction_from_position(
 }
 
 #[test]
+fn abs_index_to_and_from_pos() {
+    // Exhaustive to a limit to avoid making the test take too long
+    for tree_log_size in 1..10 {
+        let tree_size: TreeSize = ((1 << tree_log_size) - 1).try_into().unwrap();
+        for abs_pos in 0..tree_size.get() {
+            let pos_from_abs = NodePosition::from_abs_index(tree_size, abs_pos).unwrap();
+            let (level, index) = pos_from_abs.position();
+            let pos_from_levels = NodePosition::from_position(tree_size, level, index).unwrap();
+            assert_eq!(pos_from_abs, pos_from_levels);
+        }
+    }
+}
+
+#[test]
 fn parent_iter_one_leaf() {
     let t_size = 1.try_into().unwrap();
 
