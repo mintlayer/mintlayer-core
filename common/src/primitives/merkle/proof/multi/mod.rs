@@ -218,20 +218,26 @@ impl MultiProofHashes {
     ) -> BTreeMap<usize, H256> {
         let mut result =
             input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, H256>>();
-        for index in 0..tree_size.get() - 1 {
-            if !result.contains_key(&index) || !result.contains_key(&(index + 1)) {
+        for (index_l, index_r) in
+            (0..tree_size.get() - 1).tuple_windows::<(usize, usize)>().step_by(2)
+        {
+            if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
             }
+
+            let range_err = "We must be in range because index stops at tree_size - 1";
+            let node_l = NodePosition::from_abs_index(tree_size, index_l).expect(range_err);
+            let node_r = NodePosition::from_abs_index(tree_size, index_r).expect(range_err);
 
             let root_err =
                 "We never reach the root as per the loop's range, so this should always work";
 
-            let node_l = NodePosition::from_abs_index(tree_size, index).expect(root_err);
-            let node_r = NodePosition::from_abs_index(tree_size, index + 1).expect(root_err);
+            assert!(!node_l.node_kind().is_root(), "{}", root_err);
+            assert!(!node_r.node_kind().is_root(), "{}", root_err);
 
-            if node_l.is_left().expect(root_err) && node_r.is_right().expect(root_err) {
+            if node_l.node_kind().is_left() && node_r.node_kind().is_right() {
                 let parent = node_l.parent().expect("Cannot be root because of loop range");
-                let hash = MerkleTree::hash_pair(&result[&index], &result[&(index + 1)]);
+                let hash = MerkleTree::hash_pair(&result[&index_l], &result[&index_r]);
 
                 result.insert(parent.abs_index(), hash);
             }
@@ -293,7 +299,7 @@ impl MultiProofHashes {
                 .expect("At level zero, leave index be valid");
 
             // In this loop we move up the tree, combining the hashes of the current node with its sibling
-            while !curr_node_pos.is_root() {
+            while !curr_node_pos.node_kind().is_root() {
                 let err_msg = "We can never be at root yet as we checked in the loop entry";
 
                 let sibling_index =
@@ -306,7 +312,8 @@ impl MultiProofHashes {
                         ))
                     }
                 };
-                let parent_hash = if curr_node_pos.is_left().expect(err_msg) {
+                assert!(!curr_node_pos.node_kind().is_root(), "{}", err_msg);
+                let parent_hash = if curr_node_pos.node_kind().is_left() {
                     MerkleTree::hash_pair(&hash, &sibling)
                 } else {
                     MerkleTree::hash_pair(&sibling, &hash)
@@ -317,7 +324,7 @@ impl MultiProofHashes {
                 hash = parent_hash;
 
                 // If the next iteration is going to be the root, check if the root hash is correct and exit the inner loop
-                if curr_node_pos.is_root() {
+                if curr_node_pos.node_kind().is_root() {
                     result = match result {
                         Some(r) => Some(r | (parent_hash == root)),
                         None => Some(parent_hash == root),

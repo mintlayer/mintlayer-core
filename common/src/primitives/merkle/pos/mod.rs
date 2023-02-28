@@ -13,7 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod node_kind;
+
 use std::num::NonZeroUsize;
+
+use self::node_kind::NodeKind;
 
 use super::tree::tree_size::TreeSize;
 
@@ -91,28 +95,16 @@ impl NodePosition {
         (level, self.abs_index() - level_start)
     }
 
-    /// Returns true if the node is a left child of its parent.
-    /// Returns None if the node is the root.
-    pub fn is_left(&self) -> Option<bool> {
-        if self.is_root() {
-            None
-        } else {
-            Some(self.absolute_index % 2 == 0)
+    pub fn node_kind(&self) -> NodeKind {
+        if self.abs_index() == self.tree_size.get() - 1 {
+            return node_kind::NodeKind::Root;
         }
-    }
 
-    /// Returns true if the node is a right child of its parent.
-    /// Returns None if the node is the root.
-    pub fn is_right(&self) -> Option<bool> {
-        if self.is_root() {
-            None
+        if self.abs_index() % 2 == 0 {
+            node_kind::NodeKind::LeftChild
         } else {
-            Some(self.absolute_index % 2 == 1)
+            node_kind::NodeKind::RightChild
         }
-    }
-
-    pub fn is_root(&self) -> bool {
-        self.absolute_index == self.tree_size.get() - 1
     }
 
     pub fn tree_level_count(&self) -> NonZeroUsize {
@@ -141,7 +133,7 @@ impl NodePosition {
     }
 
     pub fn sibling(&self) -> Option<Self> {
-        if self.is_root() {
+        if self.node_kind().is_root() {
             return None;
         }
 
