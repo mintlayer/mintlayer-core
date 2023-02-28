@@ -19,7 +19,6 @@ pub use detail::tx_verification_strategy::*;
 pub use interface::chainstate_interface;
 use interface::chainstate_interface_impl;
 pub use interface::chainstate_interface_impl_delegation;
-pub use interface::mock::MockChainstateInterfaceMock;
 
 pub mod rpc;
 

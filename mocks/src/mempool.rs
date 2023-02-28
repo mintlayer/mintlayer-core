@@ -15,16 +15,16 @@
 
 #![allow(clippy::unwrap_used)]
 
-use crate::error::Error;
-use crate::tx_accumulator::TransactionAccumulator;
-use crate::MempoolEvent;
 use common::chain::{SignedTransaction, Transaction};
 use common::primitives::Id;
+use mempool::error::Error;
+use mempool::tx_accumulator::TransactionAccumulator;
+use mempool::MempoolEvent;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
 use subsystem::{CallRequest, ShutdownRequest};
 
-use super::mempool_interface::{MempoolInterface, MempoolSubsystemInterface};
+use mempool::{MempoolInterface, MempoolSubsystemInterface};
 
 #[derive(Clone)]
 pub struct MempoolInterfaceMock {

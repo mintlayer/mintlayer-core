@@ -30,8 +30,8 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
-use crate::ChainstateConfig;
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
+use chainstate::ChainstateConfig;
+use chainstate::{BlockSource, ChainstateError, ChainstateEvent, Locator};
 use chainstate_types::BlockIndex;
 use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
@@ -40,7 +40,7 @@ use common::chain::ChainConfig;
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
-use super::chainstate_interface::ChainstateInterface;
+use chainstate::chainstate_interface::ChainstateInterface;
 
 mockall::mock! {
     pub ChainstateInterfaceMock {}

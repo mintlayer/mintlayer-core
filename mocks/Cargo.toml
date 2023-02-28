@@ -1,0 +1,23 @@
+[package]
+name = "mocks"
+license.workspace =true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chainstate = { path = "../chainstate/" }
+chainstate-types = { path = "../chainstate/types" }
+common = { path = "../common/" }
+mempool = { path = "../mempool/" }
+subsystem = { path = "../subsystem/" }
+utils = { path = "../utils/" }
+utxo = { path = "../utxo/" }
+
+async-trait.workspace = true
+mockall = "0.11"
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+
+[dev-dependencies]

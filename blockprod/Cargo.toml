@@ -11,6 +11,7 @@ rust-version.workspace = true
 chainstate = { path = "../chainstate/" }
 common = { path = "../common/" }
 crypto = { path = "../crypto/" }
+mocks = { path = "../mocks/" }
 mempool = { path = "../mempool/" }
 subsystem = { path = "../subsystem/" }
 logging = {path = '../logging'}

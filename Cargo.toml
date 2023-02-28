@@ -21,6 +21,7 @@ members = [
   "dns_server",                   # DNS-server.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
+  "mocks",                        # Mock implementations of our traits (used for testing)
   "node",                         # Node executable.
   "p2p",                          # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",       # P2p backend agnostic tests.

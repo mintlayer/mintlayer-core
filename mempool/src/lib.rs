@@ -22,7 +22,6 @@ use common::{
 pub use interface::{
     mempool_interface::{MempoolInterface, MempoolSubsystemInterface},
     mempool_interface_impl::make_mempool,
-    mock::MempoolInterfaceMock,
 };
 
 use crate::{error::Error as MempoolError, get_memory_usage::GetMemoryUsage};

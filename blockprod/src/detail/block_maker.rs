@@ -191,14 +191,15 @@ mod tests {
     use crate::tests::setup_blockprod_test;
     use chainstate_types::{BlockIndex, BlockPreconnectData, ConsensusExtraData};
     use crypto::random::make_pseudo_rng;
-    use mempool::{MempoolInterface, MempoolInterfaceMock, MempoolSubsystemInterface};
+    use mempool::{MempoolInterface, MempoolSubsystemInterface};
+    use mocks::{MempoolInterfaceMock, MockChainstateInterfaceMock};
     use std::sync::atomic::Ordering::Relaxed;
     use subsystem::CallRequest;
 
     use chainstate::{
         chainstate_interface::ChainstateInterface,
         BlockError::{self, PrevBlockNotFound},
-        {ChainstateError, MockChainstateInterfaceMock},
+        ChainstateError,
     };
 
     use common::{
