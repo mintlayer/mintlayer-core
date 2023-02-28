@@ -145,9 +145,13 @@ impl NodePosition {
             return None;
         }
 
+        // We use xor to get the sibling index because the sibling is always the opposite bit.
+        // Practically we add one to the absolute index to get the sibling if it's a left, and subtract one if it's a right.
+        let absolute_index = self.absolute_index ^ 1;
+
         Some(Self {
             tree_size: self.tree_size,
-            absolute_index: self.absolute_index ^ 1,
+            absolute_index,
         })
     }
 
