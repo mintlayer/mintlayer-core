@@ -129,16 +129,14 @@ impl SingleProofHashes {
             return None;
         }
 
-        let mut hash = leaf;
-
-        for (index, sibling) in self.branch.iter().enumerate() {
+        let hash = self.branch.iter().enumerate().fold(leaf, |prev_hash, (index, sibling)| {
             let node_in_level_index = self.leaf_index_in_level >> index;
-            hash = if node_in_level_index % 2 == 0 {
-                MerkleTree::hash_pair(&hash, sibling)
+            if node_in_level_index % 2 == 0 {
+                MerkleTree::hash_pair(&prev_hash, sibling)
             } else {
-                MerkleTree::hash_pair(sibling, &hash)
-            };
-        }
+                MerkleTree::hash_pair(sibling, &prev_hash)
+            }
+        });
 
         Some(hash == root)
     }
