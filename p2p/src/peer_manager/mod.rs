@@ -14,10 +14,6 @@
 // limitations under the License.
 
 //! Peer manager
-//!
-//! TODO
-//!
-//!
 
 pub mod global_ip;
 pub mod peer_context;
