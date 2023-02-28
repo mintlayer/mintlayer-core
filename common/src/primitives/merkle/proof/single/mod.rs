@@ -130,27 +130,17 @@ impl SingleProofHashes {
         }
 
         let mut hash = leaf;
-        let mut proof_index = 0;
-        let mut curr_leaf_index = self.leaf_index_in_level as usize;
 
-        loop {
-            let sibling = self.branch[proof_index];
-            let parent_hash = if curr_leaf_index % 2 == 0 {
-                MerkleTree::hash_pair(&hash, &sibling)
+        for (index, sibling) in self.branch.iter().enumerate() {
+            let node_in_level_index = self.leaf_index_in_level >> index;
+            hash = if node_in_level_index % 2 == 0 {
+                MerkleTree::hash_pair(&hash, sibling)
             } else {
-                MerkleTree::hash_pair(&sibling, &hash)
+                MerkleTree::hash_pair(sibling, &hash)
             };
-
-            // move to the next level
-            hash = parent_hash;
-            proof_index += 1;
-            curr_leaf_index /= 2;
-
-            // the last hash in the proof is the one right before root, hence hashing will result in root's hash
-            if proof_index >= self.branch.len() {
-                return Some(parent_hash == root);
-            }
         }
+
+        Some(hash == root)
     }
 }
 
