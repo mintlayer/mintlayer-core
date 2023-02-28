@@ -18,6 +18,8 @@ use std::{
     num::NonZeroUsize,
 };
 
+use itertools::Itertools;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TreeSize(usize);
 
@@ -76,6 +78,12 @@ impl TreeSize {
         // to get leading ones, we shift the tree size, right then left, by the level we need (see the table above)
         let level_start = (self.0 >> level_from_top) << level_from_top;
         Some(level_start)
+    }
+
+    /// Creates an iterator that returns the indices of the nodes of the tree, from left to right, as pairs.
+    /// Root isn't included in this iterator
+    pub fn iter_pairs_indices(&self) -> impl Iterator<Item = (usize, usize)> {
+        (0..self.get() - 1).tuple_windows::<(usize, usize)>().step_by(2)
     }
 }
 
@@ -335,5 +343,59 @@ mod tests {
             TreeSize::try_from(huge_tree_size).unwrap_err(),
             TreeSizeError::HugeTreeUnsupported(huge_tree_size)
         );
+    }
+
+    #[test]
+    fn iter_non_root_indices() {
+        let t1 = TreeSize::try_from(1).unwrap();
+        assert_eq!(t1.iter_pairs_indices().count(), 0);
+
+        let t3 = TreeSize::try_from(3).unwrap();
+        assert_eq!(t3.iter_pairs_indices().collect::<Vec<_>>(), vec![(0, 1)]);
+
+        let t7 = TreeSize::try_from(7).unwrap();
+        assert_eq!(
+            t7.iter_pairs_indices().collect::<Vec<_>>(),
+            vec![(0, 1), (2, 3), (4, 5)]
+        );
+
+        let t15 = TreeSize::try_from(15).unwrap();
+        assert_eq!(
+            t15.iter_pairs_indices().collect::<Vec<_>>(),
+            vec![(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10, 11), (12, 13)]
+        );
+
+        let t31 = TreeSize::try_from(31).unwrap();
+        assert_eq!(
+            t31.iter_pairs_indices().collect::<Vec<_>>(),
+            vec![
+                (0, 1),
+                (2, 3),
+                (4, 5),
+                (6, 7),
+                (8, 9),
+                (10, 11),
+                (12, 13),
+                (14, 15),
+                (16, 17),
+                (18, 19),
+                (20, 21),
+                (22, 23),
+                (24, 25),
+                (26, 27),
+                (28, 29),
+            ]
+        );
+
+        // Exhaustive... without this taking way too long
+        for i in 1..10 as usize {
+            let tree_size = TreeSize::try_from((1 << i) - 1).unwrap();
+            assert_eq!(TreeSize::try_from((1 << i) - 1), Ok(TreeSize((1 << i) - 1)));
+            assert_eq!(tree_size.iter_pairs_indices().count(), tree_size.get() / 2);
+            assert_eq!(
+                tree_size.iter_pairs_indices().collect::<Vec<_>>(),
+                (0..tree_size.get() / 2).map(|i| (i * 2, i * 2 + 1)).collect::<Vec<_>>()
+            );
+        }
     }
 }

@@ -218,9 +218,7 @@ impl MultiProofHashes {
     ) -> BTreeMap<usize, H256> {
         let mut result =
             input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, H256>>();
-        for (index_l, index_r) in
-            (0..tree_size.get() - 1).tuple_windows::<(usize, usize)>().step_by(2)
-        {
+        for (index_l, index_r) in tree_size.iter_pairs_indices() {
             if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
             }
