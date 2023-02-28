@@ -459,10 +459,11 @@ where
 
         if let Err(accept_err) = &accept_res {
             log::warn!("connection rejected for peer {peer_id}: {accept_err}");
-            let disconnect_res = self.peer_connectivity_handle.disconnect(peer_id);
-            if let Err(err) = disconnect_res {
-                log::error!("disconnect failed unexpectedly: {err}");
-            }
+            // Disconnect should always succeed unless the node is shutting down.
+            // Calling expect here is fine because PeerManager will stop before the backend.
+            self.peer_connectivity_handle
+                .disconnect(peer_id)
+                .expect("disconnect failed unexpectedly");
 
             if role == Role::Outbound {
                 self.peerdb.report_outbound_failure(address.clone(), accept_err);
