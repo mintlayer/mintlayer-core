@@ -388,7 +388,7 @@ mod tests {
         );
 
         // Exhaustive... without this taking way too long
-        for i in 1..10 as usize {
+        for i in 1..10_usize {
             let tree_size = TreeSize::try_from((1 << i) - 1).unwrap();
             assert_eq!(TreeSize::try_from((1 << i) - 1), Ok(TreeSize((1 << i) - 1)));
             assert_eq!(tree_size.iter_pairs_indices().count(), tree_size.get() / 2);
