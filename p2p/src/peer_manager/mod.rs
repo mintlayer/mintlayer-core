@@ -608,6 +608,8 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) {
+        self.peerdb.heartbeat();
+
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
         let connected_outbound = self
             .peers

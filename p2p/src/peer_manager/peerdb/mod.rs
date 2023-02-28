@@ -43,7 +43,7 @@ use logging::log;
 use crate::{config, error::P2pError, net::AsBannableAddress};
 
 use self::{
-    address_data::AddressData,
+    address_data::{AddressData, AddressStateTransitionTo},
     storage::{PeerDbStorage, PeerDbStorageWrite},
     storage_load::LoadedStorage,
 };
@@ -92,17 +92,18 @@ impl<
             })
             .collect::<Result<BTreeSet<_>, _>>()?;
 
+        let now = time_getter.get_instant();
         let addresses = loaded_storage
             .known_addresses
             .union(&added_nodes)
             .map(|addr| {
                 (
                     addr.clone(),
-                    AddressData {
-                        was_reachable: loaded_storage.known_addresses.contains(addr),
-                        user_added: added_nodes.contains(addr).into(),
-                        fail_count: 0,
-                    },
+                    AddressData::new(
+                        loaded_storage.known_addresses.contains(addr),
+                        added_nodes.contains(addr),
+                        now,
+                    ),
                 )
             })
             .collect();
@@ -133,22 +134,32 @@ impl<
             .saturating_sub(pending_outbound.len())
             .saturating_sub(connected_outbound.len());
 
+        // TODO(PR): Ignore banned addresses
         self.addresses
-            .keys()
-            .filter(|addr| !pending_outbound.contains(addr) && !connected_outbound.contains(addr))
-            .cloned()
+            .iter()
+            .filter(|(addr, address_data)| {
+                address_data.connect_now(self.time_getter.get_instant())
+                    && !pending_outbound.contains(addr)
+                    && !connected_outbound.contains(addr)
+            })
+            .map(|(addr, _address_data)| addr.clone())
             .choose_multiple(&mut make_pseudo_rng(), count)
+    }
+
+    pub fn heartbeat(&mut self) {
+        let now = self.time_getter.get_instant();
+        self.addresses.retain(|_addr, address_data| address_data.retain(now));
     }
 
     /// Add new peer addresses
     pub fn peer_discovered(&mut self, address: A) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
             log::debug!("new address discovered: {}", address.to_string());
-            entry.insert(AddressData {
-                was_reachable: false,
-                user_added: false.into(),
-                fail_count: 0,
-            });
+            entry.insert(AddressData::new(
+                false,
+                false,
+                self.time_getter.get_instant(),
+            ));
         }
     }
 
@@ -157,9 +168,7 @@ impl<
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
     pub fn report_outbound_failure(&mut self, address: A, _error: &P2pError) {
-        if let Some(address) = self.addresses.get_mut(&address) {
-            address.fail_count += 1;
-        }
+        self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
     }
 
     /// Mark peer as connected
@@ -167,23 +176,40 @@ impl<
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
     pub fn outbound_peer_connected(&mut self, address: A) {
-        if let Some(address_data) = self.addresses.get_mut(&address) {
-            if !address_data.was_reachable {
-                address_data.was_reachable = true;
-
-                storage::update_db(&self.storage, |tx| {
-                    tx.add_known_address(&address.to_string())
-                })
-                .expect("adding address expected to succeed (peer_connected)");
-            }
-        }
+        self.change_address_state(address, AddressStateTransitionTo::Connected);
     }
 
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn outbound_peer_disconnected(&mut self, _address: A) {
-        // TODO(PR)
+    pub fn outbound_peer_disconnected(&mut self, address: A) {
+        self.change_address_state(address, AddressStateTransitionTo::Disconnected);
+    }
+
+    pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
+        if let Some(address_data) = self.addresses.get_mut(&address) {
+            let is_persistent_old = address_data.is_persistent();
+
+            address_data.transition_to(transition, self.time_getter.get_instant());
+
+            let is_persistent_new = address_data.is_persistent();
+
+            match (is_persistent_old, is_persistent_new) {
+                (false, true) => {
+                    storage::update_db(&self.storage, |tx| {
+                        tx.add_known_address(&address.to_string())
+                    })
+                    .expect("adding address expected to succeed (peer_connected)");
+                }
+                (true, false) => {
+                    storage::update_db(&self.storage, |tx| {
+                        tx.del_known_address(&address.to_string())
+                    })
+                    .expect("adding address expected to succeed (peer_connected)");
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Checks if the given address is banned
