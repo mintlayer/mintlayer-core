@@ -61,6 +61,7 @@ use self::{
 };
 
 /// Maximum number of outbound connections the [`PeerManager`] is allowed to have open
+/// This value is constant because users should not change this.
 const MAX_OUTBOUND_CONNECTIONS: usize = 8;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
@@ -158,6 +159,8 @@ where
         version == self.chain_config.version()
     }
 
+    /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
+    /// Private and local IPs are allowed if `allow_discover_private_ips` is true.
     fn is_peer_address_valid(&self, address: &PeerAddress) -> bool {
         <T::Address as TransportAddress>::from_peer_address(
             address,
@@ -213,6 +216,7 @@ where
     }
 
     /// Send address announcement to the selected peer (if the address is new)
+    /// `peer_id` must be from the connected peer.
     fn announce_address(&mut self, peer_id: PeerId, address: T::Address) {
         let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
         if !peer.announced_addresses.contains(&address) {
@@ -253,7 +257,7 @@ where
         }
     }
 
-    /// Attempt to establish an outbound connection
+    /// Try to initiate a new outbound connection
     ///
     /// This function doesn't block on the call but sends a command to the
     /// networking backend which then reports at some point in the future
@@ -263,7 +267,6 @@ where
             !self.pending_outbound_connects.contains_key(&address),
             P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
-
         ensure!(
             !self.is_address_connected(&address),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
@@ -280,21 +283,22 @@ where
         Ok(())
     }
 
-    /// Establish an outbound connection
+    /// Initiate a new outbound connection or send error to `response` if it's not possible
     fn connect(
         &mut self,
         address: T::Address,
         response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
         log::debug!("try to establish outbound connection to peer at address {address:?}");
-
         let res = self.try_connect(address.clone());
 
         match res {
             Ok(()) => {
-                self.pending_outbound_connects.insert(address, response);
+                let old_value = self.pending_outbound_connects.insert(address, response);
+                assert!(old_value.is_none());
             }
             Err(e) => {
+                log::debug!("outbound connection to {address:?} failed: {e}");
                 if let Some(response) = response {
                     response.send(Err(e));
                 }
@@ -302,6 +306,7 @@ where
         }
     }
 
+    // Try to disconnect a connected peer
     fn try_disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         ensure!(
             !self.pending_disconnects.contains_key(&peer_id),
@@ -329,14 +334,15 @@ where
         response: Option<oneshot_nofail::Sender<crate::Result<()>>>,
     ) {
         log::debug!("disconnect peer {peer_id}");
-
         let res = self.try_disconnect(peer_id);
 
         match res {
             Ok(()) => {
-                self.pending_disconnects.insert(peer_id, response);
+                let old_value = self.pending_disconnects.insert(peer_id, response);
+                assert!(old_value.is_none());
             }
             Err(e) => {
+                log::debug!("disconnecting new peer {peer_id} failed: {e}");
                 if let Some(response) = response {
                     response.send(Err(e));
                 }
@@ -344,12 +350,14 @@ where
         }
     }
 
+    /// Check if the (inbound or outbound) peer connection can be accepted
     fn validate_connection(
         &mut self,
         address: &T::Address,
         role: Role,
         info: &PeerInfo,
     ) -> crate::Result<()> {
+        // TODO: Allow only one connection per IP address
         ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -377,7 +385,9 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
         // If the maximum number of inbound connections is reached,
-        // the connection cannot be accepted even if it's valid.
+        // the new inbound connection cannot be accepted even if it's valid.
+        // Outbound peer count is not checked because the node initiates new connections
+        // only when needed or from RPC requests.
         ensure!(
             self.inbound_peer_count() < *self.p2p_config.max_inbound_connections
                 || role != Role::Inbound,
@@ -387,7 +397,7 @@ where
         Ok(())
     }
 
-    /// Handle connection established event
+    /// Try accept new connection
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
@@ -403,7 +413,7 @@ where
 
         self.validate_connection(&address, role, &info)?;
 
-        log::info!("peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}",);
+        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}",);
 
         if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
@@ -458,7 +468,8 @@ where
         let accept_res = self.try_accept_connection(address.clone(), role, info, receiver_address);
 
         if let Err(accept_err) = &accept_res {
-            log::warn!("connection rejected for peer {peer_id}: {accept_err}");
+            log::debug!("connection rejected for peer {peer_id}: {accept_err}");
+
             // Disconnect should always succeed unless the node is shutting down.
             // Calling expect here is fine because PeerManager will stop before the backend.
             self.peer_connectivity_handle
@@ -551,7 +562,7 @@ where
         }
     }
 
-    /// Fill PeerDb with addresses from DNS seed servers
+    /// Fill PeerDb with addresses from the DNS seed servers
     async fn reload_dns_seed(&mut self) {
         log::debug!("Resolve DNS seed...");
         let results = futures::future::join_all(
@@ -829,17 +840,17 @@ where
     }
 
     /// Get the number of active peers
-    pub fn active_peer_count(&self) -> usize {
+    fn active_peer_count(&self) -> usize {
         self.peers.len()
     }
 
     /// Returns short info about all connected peers
-    pub fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
+    fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
         self.peers.values().map(Into::into).collect()
     }
 
     /// Checks if the peer is in active state
-    pub fn is_peer_connected(&self, peer_id: PeerId) -> bool {
+    fn is_peer_connected(&self, peer_id: PeerId) -> bool {
         self.peers.get(&peer_id).is_some()
     }
 

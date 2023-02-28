@@ -17,21 +17,31 @@ use std::time::{Duration, Instant};
 
 use utils::const_value::ConstValue;
 
-/// When the server drops the unreachable node address. Used for negative caching.
+/// When the node drops the unreachable node address. Used for negative caching.
 pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
-/// Such a long time is useful if the server itself has prolonged connectivity problems.
+/// Such a long time is useful if the node itself has prolonged connectivity problems.
 pub const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 
 pub enum AddressState {
     Connected {},
+
     Disconnected {
+        /// Whether the address was reachable at least once.
+        /// Addresses that were once reachable are stored in the DB.
         was_reachable: bool,
+
+        /// The number of consecutive failed connection attempts.
+        /// New connection attempts are made after a progressive backoff time.
         fail_count: u32,
+
+        /// Last time the peer disconnected
         disconnected_at: Instant,
     },
+
     Unreachable {
+        /// At which time the address would be removed from memory
         erase_after: Instant,
     },
 }
@@ -113,6 +123,7 @@ impl AddressData {
         }
     }
 
+    /// Returns true if the address should be stored in the DB
     pub fn is_persistent(&self) -> bool {
         match self.state {
             AddressState::Connected {} => true,

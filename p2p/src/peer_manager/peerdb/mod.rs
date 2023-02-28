@@ -135,6 +135,7 @@ impl<
             .saturating_sub(connected_outbound.len());
 
         // TODO: Ignore banned addresses
+        // TODO: Allow only one connection per IP address
         self.addresses
             .iter()
             .filter(|(addr, address_data)| {
@@ -146,6 +147,7 @@ impl<
             .choose_multiple(&mut make_pseudo_rng(), count)
     }
 
+    /// Perform the PeerDb maintenance
     pub fn heartbeat(&mut self) {
         let now = self.time_getter.get_instant();
         self.addresses.retain(|_addr, address_data| address_data.retain(now));
