@@ -39,6 +39,7 @@ use std::{
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
+use tokio::time::Instant;
 
 use crate::{config, error::P2pError, net::AsBannableAddress};
 
@@ -92,7 +93,7 @@ where
             })
             .collect::<Result<BTreeSet<_>, _>>()?;
 
-        let now = time_getter.get_instant();
+        let now = Instant::now();
         let addresses = loaded_storage
             .known_addresses
             .union(&added_nodes)
@@ -139,7 +140,7 @@ where
         self.addresses
             .iter()
             .filter(|(addr, address_data)| {
-                address_data.connect_now(self.time_getter.get_instant())
+                address_data.connect_now(Instant::now())
                     && !pending_outbound.contains(addr)
                     && !connected_outbound.contains(addr)
             })
@@ -149,7 +150,7 @@ where
 
     /// Perform the PeerDb maintenance
     pub fn heartbeat(&mut self) {
-        let now = self.time_getter.get_instant();
+        let now = Instant::now();
         self.addresses.retain(|_addr, address_data| address_data.retain(now));
     }
 
@@ -157,11 +158,7 @@ where
     pub fn peer_discovered(&mut self, address: A) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
             log::debug!("new address discovered: {}", address.to_string());
-            entry.insert(AddressData::new(
-                false,
-                false,
-                self.time_getter.get_instant(),
-            ));
+            entry.insert(AddressData::new(false, false, Instant::now()));
         }
     }
 
@@ -192,7 +189,7 @@ where
         if let Some(address_data) = self.addresses.get_mut(&address) {
             let is_persistent_old = address_data.is_persistent();
 
-            address_data.transition_to(transition, self.time_getter.get_instant());
+            address_data.transition_to(transition, Instant::now());
 
             let is_persistent_new = address_data.is_persistent();
 

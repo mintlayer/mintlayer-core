@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use tokio::time::Instant;
 use utils::const_value::ConstValue;
 
 /// When the node drops the unreachable node address. Used for negative caching.
