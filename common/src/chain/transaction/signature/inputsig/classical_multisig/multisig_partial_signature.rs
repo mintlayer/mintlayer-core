@@ -246,7 +246,7 @@ mod tests {
             let mut signatures_map =
                 signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
             signatures_map.shuffle(&mut rng);
-            let tampered_pair_ref = &mut signatures_map.choose_mut(&mut rng).unwrap();
+            let tampered_pair_ref = signatures_map.choose_mut(&mut rng).unwrap();
             let tampered_index = tampered_pair_ref.0;
             let tampered_signature = priv_keys[tampered_index as usize]
                 .sign_message(&H256::random_using(&mut rng).encode())
@@ -299,7 +299,7 @@ mod tests {
             let mut signatures_map =
                 signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
             signatures_map.shuffle(&mut rng);
-            let tampered_pair_ref = &mut signatures_map.choose_mut(&mut rng).unwrap();
+            let tampered_pair_ref = signatures_map.choose_mut(&mut rng).unwrap();
             let wrong_signature = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr)
                 .0
                 .sign_message(&H256::random_using(&mut rng).encode())
