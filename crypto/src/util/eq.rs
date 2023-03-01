@@ -82,7 +82,12 @@ pub mod test {
 
         let data1: Vec<u8> = (0..data1_len).map(|_| rng.gen::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
-        let data3: Vec<u8> = (0..data3_len).map(|_| rng.gen::<u8>()).collect();
+        let data3: Vec<u8> = loop {
+            let result = (0..data3_len).map(|_| rng.gen::<u8>()).collect();
+            if result != data1 {
+                break result;
+            }
+        };
         assert_eq!(data1.len(), data1_len);
         assert_eq!(data2.len(), data1_len);
         assert_eq!(data3.len(), data3_len);
@@ -107,7 +112,12 @@ pub mod test {
 
         let data1: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
         let data2: Vec<u8> = data1.clone();
-        let data3: Vec<u8> = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+        let data3: Vec<u8> = loop {
+            let result = (0..data_len).map(|_| rng.gen::<u8>()).collect();
+            if result != data1 {
+                break result;
+            }
+        };
         assert_eq!(data1.len(), data_len);
         assert_eq!(data2.len(), data_len);
         assert_eq!(data3.len(), data_len);
