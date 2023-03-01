@@ -82,7 +82,7 @@ impl MerkleTree {
     ) -> Result<Self, MerkleTreeFormError> {
         let pad_f = |i: &H256| default_hash(i);
 
-        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
+        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter().fuse(), pad_f);
 
         let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
 

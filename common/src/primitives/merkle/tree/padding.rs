@@ -13,18 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::FusedIterator;
+
 /// An iterator that pads the leaves of a Merkle tree with incremental padding,
 /// i.e. the padding function is applied to the last value of the iterator,
 /// iteratively, until the next power of two is reached.
 /// An empty iterator will return no values.
-pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T>, F: Fn(&T) -> T> {
+pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> {
     leaves: I,
     padding_function: F,
     last_value: Option<T>,
     current_index: usize,
 }
 
-impl<T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
+impl<T, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
     pub fn new(leaves: I, padding_function: F) -> Self {
         IncrementalPaddingIterator {
             leaves,
@@ -35,7 +37,7 @@ impl<T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, 
     }
 }
 
-impl<T: Copy, I: Iterator<Item = T>, F: Fn(&T) -> T> Iterator
+impl<T: Copy, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
     for IncrementalPaddingIterator<T, I, F>
 {
     type Item = T;
