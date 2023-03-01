@@ -227,7 +227,7 @@ mod tests {
             }
         });
 
-        mock_mempool_subsystem.call_mut({
+        mock_mempool_subsystem.call({
             let shutdown = manager.make_shutdown_trigger();
             move |_| shutdown.initiate()
         });
@@ -370,7 +370,7 @@ mod tests {
     async fn attempt_submit_new_block_subsystem_error() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
-        chainstate.call_mut({
+        chainstate.call({
             let shutdown = manager.make_shutdown_trigger();
             move |_| shutdown.initiate()
         });

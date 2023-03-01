@@ -379,7 +379,7 @@ mod tests {
 
         let get_subscriber_count = {
             let chainstate = chainstate.clone();
-            move || chainstate.call_mut(|this| this.subscribers().len())
+            move || chainstate.call(|this| this.subscribers().len())
         };
 
         tokio::spawn(async move {
