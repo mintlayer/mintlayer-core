@@ -185,3 +185,466 @@ impl BlockMaker {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::setup_blockprod_test;
+    use chainstate_types::{BlockIndex, BlockPreconnectData, ConsensusExtraData};
+    use crypto::random::make_pseudo_rng;
+    use mempool::{MempoolInterface, MempoolSubsystemInterface};
+    use mocks::{MempoolInterfaceMock, MockChainstateInterfaceMock};
+    use std::sync::atomic::Ordering::Relaxed;
+    use subsystem::CallRequest;
+
+    use chainstate::{
+        chainstate_interface::ChainstateInterface,
+        BlockError::{self, PrevBlockNotFound},
+        ChainstateError,
+    };
+
+    use common::{
+        chain::{
+            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+            Block,
+        },
+        primitives::{BlockHeight, Id, H256},
+        time_getter::TimeGetter,
+        Uint256,
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn collect_transactions_subsystem_error() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+        let mock_mempool = MempoolInterfaceMock::new();
+
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call: CallRequest<dyn MempoolInterface>, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
+
+        mock_mempool_subsystem.call({
+            let shutdown = manager.make_shutdown_trigger();
+            move |_| shutdown.initiate()
+        });
+
+        // shutdown straight after startup, *then* call collect_transactions()
+        manager.main().await;
+
+        // spawn rather than adding a subsystem as manager is moved into main() above
+        tokio::spawn(async move {
+            let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+            let block_maker = BlockMaker::new(
+                chain_config,
+                chainstate.clone(),
+                mock_mempool_subsystem,
+                Default::default(),
+                Id::new(H256::random_using(&mut make_pseudo_rng())),
+                BlockHeight::one(),
+                rx_builder,
+            );
+
+            let accumulator = block_maker.collect_transactions().await;
+
+            assert!(
+                !mock_mempool.collect_txs_called.load(Relaxed),
+                "Expected collect_tx() to not be called"
+            );
+
+            assert!(
+                matches!(
+                    accumulator,
+                    Err(BlockProductionError::SubsystemCallError(_))
+                ),
+                "Expected a subsystem error"
+            );
+        })
+        .await
+        .expect("Subsystem error thread failed");
+    }
+
+    #[tokio::test]
+    async fn collect_transactions_collect_txs_failed() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+        let mock_mempool = MempoolInterfaceMock::new();
+        mock_mempool.collect_txs_should_error.store(true, Relaxed);
+
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let block_maker = BlockMaker::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mock_mempool_subsystem,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let accumulator = block_maker.collect_transactions().await;
+
+                assert!(
+                    mock_mempool.collect_txs_called.load(Relaxed),
+                    "Expected collect_tx() to be called"
+                );
+
+                assert!(
+                    matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
+                    "Expected collect_tx() to fail"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn collect_transactions_succeeded() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+        let mock_mempool = MempoolInterfaceMock::new();
+
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let block_maker = BlockMaker::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mock_mempool_subsystem,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let accumulator = block_maker.collect_transactions().await;
+
+                assert!(
+                    mock_mempool.collect_txs_called.load(Relaxed),
+                    "Expected collect_tx() to be called"
+                );
+
+                assert!(
+                    accumulator.is_ok(),
+                    "Expected collect_transactions() to succeed"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    //
+    // Skipping unit tests as we're about rework make_block()
+    //
+    // #[test]
+    // fn make_block() {}
+    //
+
+    #[tokio::test]
+    async fn attempt_submit_new_block_subsystem_error() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        chainstate.call({
+            let shutdown = manager.make_shutdown_trigger();
+            move |_| shutdown.initiate()
+        });
+
+        // shutdown straight after startup, *then* call attempt_submit_new_block()
+        manager.main().await;
+
+        // spawn rather than adding a subsystem as manager is moved into main() above
+        tokio::spawn(async move {
+            let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+            let mut block_maker = BlockMaker::new(
+                chain_config.clone(),
+                chainstate,
+                mempool,
+                Default::default(),
+                Id::new(H256::random_using(&mut make_pseudo_rng())),
+                BlockHeight::one(),
+                rx_builder,
+            );
+
+            let block = Block::new(
+                vec![],
+                chain_config.genesis_block_id(),
+                BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .expect("Error creating test block");
+
+            let submit_result = block_maker.attempt_submit_new_block(block).await;
+
+            assert!(
+                matches!(
+                    submit_result,
+                    Err(BlockProductionError::SubsystemCallError(_))
+                ),
+                "Expected a subsystem error"
+            );
+        })
+        .await
+        .expect("Subsystem error thread failed");
+    }
+
+    #[tokio::test]
+    async fn attempt_submit_new_block_preliminary_block_check_failed() {
+        let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
+
+        let mock_chainstate: Box<dyn ChainstateInterface> = {
+            let mut mock_chainstate = MockChainstateInterfaceMock::new();
+
+            mock_chainstate
+                .expect_preliminary_block_check()
+                .times(1)
+                .returning(|_| Err(ChainstateError::ProcessBlockError(PrevBlockNotFound)));
+
+            Box::new(mock_chainstate)
+        };
+
+        let mock_chainstate_subsystem = manager.add_subsystem("mock-chainstate", mock_chainstate);
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let mut block_maker = BlockMaker::new(
+                    chain_config.clone(),
+                    mock_chainstate_subsystem,
+                    mempool,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let block = Block::new(
+                    vec![],
+                    chain_config.genesis_block_id(),
+                    BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .expect("Error creating test block");
+
+                let submit_result = block_maker.attempt_submit_new_block(block).await;
+
+                assert!(
+                    matches!(submit_result, Ok(BlockSubmitResult::Failed)),
+                    "Expected preliminary_block_check() to fail"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn attempt_submit_new_block_process_block_failed() {
+        let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
+
+        let mock_chainstate: Box<dyn ChainstateInterface> = {
+            let mut mock_chainstate = MockChainstateInterfaceMock::new();
+
+            mock_chainstate.expect_preliminary_block_check().times(1).returning(Ok);
+
+            mock_chainstate.expect_process_block().times(1).returning(|_, _| {
+                Err(ChainstateError::ProcessBlockError(
+                    BlockError::InvariantErrorInvalidTip,
+                ))
+            });
+
+            Box::new(mock_chainstate)
+        };
+
+        let mock_chainstate_subsystem = manager.add_subsystem("mock-chainstate", mock_chainstate);
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let mut block_maker = BlockMaker::new(
+                    chain_config.clone(),
+                    mock_chainstate_subsystem,
+                    mempool,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let block = Block::new(
+                    vec![],
+                    chain_config.genesis_block_id(),
+                    BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .expect("Error creating test block");
+
+                let submit_result = block_maker.attempt_submit_new_block(block).await;
+
+                assert!(
+                    matches!(submit_result, Ok(BlockSubmitResult::Failed)),
+                    "Expected process_block() to fail"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn attempt_submit_new_block_process_block_no_index() {
+        let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
+
+        let mock_chainstate: Box<dyn ChainstateInterface> = {
+            let mut mock_chainstate = MockChainstateInterfaceMock::new();
+
+            mock_chainstate.expect_preliminary_block_check().times(1).returning(Ok);
+            mock_chainstate.expect_process_block().times(1).returning(|_, _| Ok(None));
+
+            Box::new(mock_chainstate)
+        };
+
+        let mock_chainstate_subsystem = manager.add_subsystem("mock-chainstate", mock_chainstate);
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let mut block_maker = BlockMaker::new(
+                    chain_config.clone(),
+                    mock_chainstate_subsystem,
+                    mempool,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let block = Block::new(
+                    vec![],
+                    chain_config.genesis_block_id(),
+                    BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .expect("Error creating test block");
+
+                let submit_result = block_maker.attempt_submit_new_block(block).await;
+
+                assert!(
+                    matches!(submit_result, Ok(BlockSubmitResult::Success)),
+                    "Expected attempt_submit_new_block() to succeed"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn attempt_submit_new_block_process_block_with_index() {
+        let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
+
+        let mock_chainstate: Box<dyn ChainstateInterface> = {
+            let mut mock_chainstate = MockChainstateInterfaceMock::new();
+
+            mock_chainstate.expect_preliminary_block_check().times(1).returning(Ok);
+
+            mock_chainstate.expect_process_block().times(1).returning({
+                let chain_config = chain_config.clone();
+                move |block, _| {
+                    let block_index = BlockIndex::new(
+                        &block,
+                        Uint256::ZERO,
+                        chain_config.genesis_block_id(),
+                        BlockHeight::one(),
+                        BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                        BlockPreconnectData::new(ConsensusExtraData::None),
+                    );
+
+                    Ok(Some(block_index))
+                }
+            });
+
+            Box::new(mock_chainstate)
+        };
+
+        let mock_chainstate_subsystem = manager.add_subsystem("mock-chainstate", mock_chainstate);
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let (_tx_builder, rx_builder) = crossbeam_channel::unbounded();
+
+                let mut block_maker = BlockMaker::new(
+                    chain_config.clone(),
+                    mock_chainstate_subsystem,
+                    mempool,
+                    Default::default(),
+                    Id::new(H256::random_using(&mut make_pseudo_rng())),
+                    BlockHeight::one(),
+                    rx_builder,
+                );
+
+                let block = Block::new(
+                    vec![],
+                    chain_config.genesis_block_id(),
+                    BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
+                    ConsensusData::None,
+                    BlockReward::new(Vec::new()),
+                )
+                .expect("Error creating test block");
+
+                let submit_result = block_maker.attempt_submit_new_block(block).await;
+
+                assert!(
+                    matches!(submit_result, Ok(BlockSubmitResult::Success)),
+                    "Expected attempt_submit_new_block() to succeed"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    //
+    // Skipping unit tests as we're about rework run()
+    //
+    // #[tokio::test]
+    // async fn run() {}
+    //
+}

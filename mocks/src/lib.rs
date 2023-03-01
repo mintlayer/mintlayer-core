@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod chainstate_interface;
-pub mod chainstate_interface_impl;
-pub mod chainstate_interface_impl_delegation;
+mod chainstate;
+mod mempool;
+
+pub use crate::chainstate::MockChainstateInterfaceMock;
+pub use crate::mempool::MempoolInterfaceMock;
