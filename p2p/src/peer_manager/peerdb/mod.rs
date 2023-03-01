@@ -16,8 +16,7 @@
 //! Peer database
 //!
 //! The peer database stores:
-//! - connected peers
-//! - available (discovered) addresses
+//! - all outbound peer addresses
 //! - banned addresses
 //!
 //! Connected peers are those peers that the [`crate::peer_manager::PeerManager`] has an active
@@ -25,188 +24,227 @@
 //! used by [`crate::peer_manager::PeerManager::heartbeat()`] to establish new outbound connections
 //! if the actual number of active connection is less than the desired number of connections.
 
+pub mod address_data;
 pub mod storage;
 pub mod storage_impl;
+mod storage_load;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
 use common::time_getter::TimeGetter;
-use crypto::random::{make_pseudo_rng, SliceRandom};
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
+use logging::log;
+use tokio::time::Instant;
 
-use crate::{
-    config,
-    error::{ConversionError, P2pError},
-    net::{AsBannableAddress, NetworkingService},
+use crate::{config, error::P2pError, net::AsBannableAddress};
+
+use self::{
+    address_data::{AddressData, AddressStateTransitionTo},
+    storage::{PeerDbStorage, PeerDbStorageWrite},
+    storage_load::LoadedStorage,
 };
 
-use self::storage::{
-    PeerDbStorage, PeerDbStorageRead, PeerDbStorageWrite, PeerDbTransactionRo, PeerDbTransactionRw,
-};
+use super::MAX_OUTBOUND_CONNECTIONS;
 
-pub struct PeerDb<T: NetworkingService, S> {
+pub struct PeerDb<A, B, S> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,
 
-    /// Set of currently connected addresses
-    connected_addresses: BTreeSet<T::Address>,
-
-    /// Set of all known addresses
-    known_addresses: BTreeSet<T::Address>,
+    /// Map of all outbound peer addresses
+    addresses: BTreeMap<A, AddressData>,
 
     /// Banned addresses along with the duration of the ban.
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
     /// when `current_time > ban_duration`.
-    banned_addresses: BTreeMap<T::BannableAddress, Duration>,
+    banned_addresses: BTreeMap<B, Duration>,
 
     time_getter: TimeGetter,
 
     storage: S,
 }
 
-impl<T: NetworkingService, S: PeerDbStorage> PeerDb<T, S> {
+impl<A, B, S> PeerDb<A, B, S>
+where
+    A: Ord + FromStr + ToString + Clone + AsBannableAddress<BannableAddress = B>,
+    B: Ord + FromStr + ToString,
+    S: PeerDbStorage,
+{
     pub fn new(
         p2p_config: Arc<config::P2pConfig>,
         time_getter: TimeGetter,
         storage: S,
     ) -> crate::Result<Self> {
+        // Node won't start if DB loading fails!
+        let loaded_storage = LoadedStorage::<A, B>::load_storage(&storage)?;
+
         let added_nodes = p2p_config
             .added_nodes
             .iter()
             .map(|addr| {
-                addr.parse::<T::Address>().map_err(|_err| {
-                    P2pError::ConversionError(ConversionError::InvalidAddress(addr.clone()))
+                addr.parse::<A>().map_err(|_err| {
+                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
                 })
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<BTreeSet<_>, _>>()?;
 
-        // Node won't start if DB loading fails!
-        let tx = storage.transaction_ro()?;
-        let stored_known_addresses = tx.get_known_addresses()?;
-        let stored_banned_addresses = tx.get_banned_addresses()?;
-        tx.close();
-
-        let stored_known_addresses_iter =
-            stored_known_addresses.iter().filter_map(|address| address.parse().ok());
-        // TODO: We need to handle added nodes differently from ordinary nodes.
-        // There are peers that we want to persistently have, and others that we want to just give a "shot" at connecting at.
-        let known_addresses = stored_known_addresses_iter.chain(added_nodes.into_iter()).collect();
-
-        let banned_addresses = stored_banned_addresses
-            .iter()
-            .filter_map(|(address, duration)| {
-                address.parse().ok().map(|address| (address, *duration))
+        let now = Instant::now();
+        let addresses = loaded_storage
+            .known_addresses
+            .union(&added_nodes)
+            .map(|addr| {
+                (
+                    addr.clone(),
+                    AddressData::new(
+                        loaded_storage.known_addresses.contains(addr),
+                        added_nodes.contains(addr),
+                        now,
+                    ),
+                )
             })
             .collect();
 
         Ok(Self {
-            connected_addresses: Default::default(),
-            known_addresses,
-            banned_addresses,
+            addresses,
+            banned_addresses: loaded_storage.banned_addresses,
             p2p_config,
             time_getter,
             storage,
         })
     }
 
-    /// Get the number of idle (available) addresses
-    pub fn available_addresses_count(&self) -> usize {
-        self.known_addresses.len()
-    }
-
-    /// Checks if the given address is already connected.
-    pub fn is_address_connected(&self, address: &T::Address) -> bool {
-        self.connected_addresses.contains(address)
-    }
-
-    /// Selects requested count of peer addresses from the DB randomly.
+    /// Iterator of all known addresses.
     ///
     /// Result could be shared with remote peers over network.
-    pub fn random_known_addresses(&self, count: usize) -> Vec<T::Address> {
-        // TODO: Use something more efficient (without iterating over the all addresses first)
-        let all_addresses = self.known_addresses.iter().cloned().collect::<Vec<_>>();
-        all_addresses
+    pub fn known_addresses(&self) -> impl Iterator<Item = &A> {
+        self.addresses.keys()
+    }
+
+    /// Selects peer addresses for outbound connections
+    pub fn select_new_outbound_addresses(
+        &self,
+        pending_outbound: &BTreeSet<A>,
+        connected_outbound: &BTreeSet<A>,
+    ) -> Vec<A> {
+        let count = MAX_OUTBOUND_CONNECTIONS
+            .saturating_sub(pending_outbound.len())
+            .saturating_sub(connected_outbound.len());
+
+        // TODO: Ignore banned addresses
+        // TODO: Allow only one connection per IP address
+        // TODO: Always try to connect to user-added addresses without considering `MAX_OUTBOUND_CONNECTIONS`
+        self.addresses
+            .iter()
+            .filter(|(addr, address_data)| {
+                address_data.connect_now(Instant::now())
+                    && !pending_outbound.contains(addr)
+                    && !connected_outbound.contains(addr)
+            })
+            .map(|(addr, _address_data)| addr.clone())
             .choose_multiple(&mut make_pseudo_rng(), count)
-            .cloned()
-            .collect::<Vec<_>>()
     }
 
-    /// Checks if the given address is banned.
-    pub fn is_address_banned(&mut self, address: &T::BannableAddress) -> crate::Result<bool> {
-        if let Some(banned_till) = self.banned_addresses.get(address) {
-            // Check if the ban has expired.
-            let now = self.time_getter.get_time();
-            if now > *banned_till {
-                self.banned_addresses.remove(address);
-                let mut tx = self.storage.transaction_rw()?;
-                tx.del_banned_address(&address.to_string())?;
-                tx.commit()?;
-            } else {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
-    /// Get socket address of the next best peer (TODO: in terms of peer score).
-    // TODO: Rewrite this.
-    pub fn get_best_peer_addr(&mut self) -> Option<T::Address> {
-        self.random_known_addresses(1).into_iter().next()
+    /// Perform the PeerDb maintenance
+    pub fn heartbeat(&mut self) {
+        let now = Instant::now();
+        self.addresses.retain(|_addr, address_data| address_data.retain(now));
     }
 
     /// Add new peer addresses
-    pub fn peer_discovered(&mut self, address: &T::Address) -> crate::Result<()> {
-        self.known_addresses.insert(address.clone());
-
-        let mut tx = self.storage.transaction_rw()?;
-        tx.add_known_address(&address.to_string())?;
-        tx.commit()?;
-        Ok(())
+    pub fn peer_discovered(&mut self, address: A) {
+        if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
+            log::debug!("new address discovered: {}", address.to_string());
+            entry.insert(AddressData::new(false, false, Instant::now()));
+        }
     }
 
     /// Report outbound connection failure
     ///
     /// When [`crate::peer_manager::PeerManager::heartbeat()`] has initiated an outbound connection
     /// and the connection is refused, it's reported back to the `PeerDb` so it marks the address as unreachable.
-    pub fn report_outbound_failure(&mut self, _address: T::Address) {
-        // TODO: implement
+    pub fn report_outbound_failure(&mut self, address: A, _error: &P2pError) {
+        self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
     }
 
     /// Mark peer as connected
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
     /// it informs the `PeerDb` about it.
-    pub fn peer_connected(&mut self, address: T::Address) {
-        let is_inserted = self.connected_addresses.insert(address);
-        assert!(is_inserted);
+    pub fn outbound_peer_connected(&mut self, address: A) {
+        self.change_address_state(address, AddressStateTransitionTo::Connected);
     }
 
     /// Handle peer disconnection event
     ///
     /// Close the connection to an active peer.
-    pub fn peer_disconnected(&mut self, address: T::Address) {
-        let is_removed = self.connected_addresses.remove(&address);
-        assert!(is_removed);
+    pub fn outbound_peer_disconnected(&mut self, address: A) {
+        self.change_address_state(address, AddressStateTransitionTo::Disconnected);
     }
 
-    /// Changes the peer state to `Peer::Banned` and bans it for 24 hours.
-    pub fn ban_peer(&mut self, address: &T::Address) -> crate::Result<()> {
+    pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
+        if let Some(address_data) = self.addresses.get_mut(&address) {
+            let is_persistent_old = address_data.is_persistent();
+
+            address_data.transition_to(transition, Instant::now());
+
+            let is_persistent_new = address_data.is_persistent();
+
+            match (is_persistent_old, is_persistent_new) {
+                (false, true) => {
+                    storage::update_db(&self.storage, |tx| {
+                        tx.add_known_address(&address.to_string())
+                    })
+                    .expect("adding address expected to succeed (peer_connected)");
+                }
+                (true, false) => {
+                    storage::update_db(&self.storage, |tx| {
+                        tx.del_known_address(&address.to_string())
+                    })
+                    .expect("adding address expected to succeed (peer_connected)");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Checks if the given address is banned
+    pub fn is_address_banned(&mut self, address: &B) -> bool {
+        if let Some(banned_till) = self.banned_addresses.get(address) {
+            // Check if the ban has expired
+            let now = self.time_getter.get_time();
+            if now <= *banned_till {
+                return true;
+            }
+
+            self.banned_addresses.remove(address);
+
+            storage::update_db(&self.storage, |tx| {
+                tx.del_banned_address(&address.to_string())
+            })
+            .expect("removing banned address is expected to succeed (is_address_banned)");
+        }
+
+        false
+    }
+
+    /// Changes the address state to banned
+    pub fn ban_peer(&mut self, address: &A) {
         let bannable_address = address.as_bannable();
         let ban_till = self.time_getter.get_time() + *self.p2p_config.ban_duration;
-        let mut tx = self.storage.transaction_rw()?;
-        tx.add_banned_address(&bannable_address.to_string(), ban_till)?;
-        tx.commit()?;
-        self.banned_addresses.insert(bannable_address, ban_till);
-        Ok(())
-    }
 
-    #[cfg(feature = "testing_utils")]
-    pub fn get_storage_mut(&mut self) -> &mut S {
-        &mut self.storage
+        storage::update_db(&self.storage, |tx| {
+            tx.add_banned_address(&bannable_address.to_string(), ban_till)
+        })
+        .expect("adding banned address is expected to succeed (ban_peer)");
+
+        self.banned_addresses.insert(bannable_address, ban_till);
     }
 }
+
+#[cfg(test)]
+mod tests;

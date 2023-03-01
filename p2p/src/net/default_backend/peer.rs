@@ -222,8 +222,7 @@ where
                                 types::PeerEvent::MessageReceived {
                                     message
                                 },
-                            ))
-                            .map_err(P2pError::from)?;
+                            ))?;
                     }
                 }
             }

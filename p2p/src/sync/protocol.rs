@@ -353,7 +353,8 @@ where
             // Fatal errors, simply propagate them to stop the sync manager.
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
-            | P2pError::StorageFailure(_)) => Err(e),
+            | P2pError::StorageFailure(_)
+            | P2pError::InvalidStorageState(_)) => Err(e),
         }
     }
 }

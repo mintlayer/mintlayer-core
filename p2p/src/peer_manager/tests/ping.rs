@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use common::chain::config;
 
@@ -30,7 +30,7 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::PeerManager,
-    testing_utils::{peerdb_inmemory_store, P2pTestTimeGetter},
+    testing_utils::{peerdb_inmemory_store, P2pTokioTestTimeGetter},
     types::peer_id::PeerId,
 };
 
@@ -39,7 +39,21 @@ async fn ping_timeout() {
     type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
 
     let chain_config = Arc::new(config::create_mainnet());
-    let p2p_config: Arc<P2pConfig> = Arc::new(Default::default());
+    let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        added_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Duration::from_secs(1).into(),
+        ping_timeout: Duration::from_secs(5).into(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+    });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
 
@@ -47,7 +61,7 @@ async fn ping_timeout() {
     let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
     let (sync_tx, _sync_rx) = tokio::sync::mpsc::unbounded_channel();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
@@ -86,7 +100,7 @@ async fn ping_timeout() {
         .unwrap();
 
     // Receive ping requests and send responses normally
-    for _ in 0..30 {
+    for _ in 0..5 {
         time_getter.advance_time(ping_check_period).await;
 
         let event = cmd_rx.recv().await.unwrap();

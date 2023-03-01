@@ -127,6 +127,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let P2pConfigFile {
         bind_addresses,
         added_nodes,
+        max_inbound_connections,
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,
@@ -137,6 +138,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
 
     let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
     let added_nodes = options.p2p_add_node.clone().or(added_nodes);
+    let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
     let ping_check_period = options.p2p_ping_check_period.or(ping_check_period);
     let ping_timeout = options.p2p_ping_timeout.or(ping_timeout);
@@ -147,6 +149,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     P2pConfigFile {
         bind_addresses,
         added_nodes,
+        max_inbound_connections,
         ban_threshold,
         ban_duration,
         outbound_connection_timeout,

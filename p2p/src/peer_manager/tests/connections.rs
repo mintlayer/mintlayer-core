@@ -22,11 +22,11 @@ use std::{
 use tokio::time::timeout;
 
 use crate::{
-    config::P2pConfig,
+    config::{MaxInboundConnections, P2pConfig},
     net::types::Role,
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
-        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTestTimeGetter,
+        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTokioTestTimeGetter,
         TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
@@ -124,10 +124,10 @@ where
     });
 
     // "discover" the other networking service
-    pm1.peerdb.peer_discovered(&addr).unwrap();
-    pm1.heartbeat().unwrap();
+    pm1.peerdb.peer_discovered(addr);
+    pm1.heartbeat().await;
 
-    assert_eq!(pm1.pending_connects.len(), 1);
+    assert_eq!(pm1.pending_outbound_connects.len(), 1);
     assert!(std::matches!(
         pm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
@@ -260,10 +260,7 @@ where
         &mut pm2.peer_connectivity_handle,
     )
     .await;
-    assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
-        Ok(())
-    );
+    pm2.try_accept_connection(address, Role::Inbound, peer_info, None).unwrap();
 }
 
 #[tokio::test]
@@ -316,7 +313,7 @@ where
     .await;
 
     assert_eq!(
-        pm2.accept_inbound_connection(address, peer_info, None),
+        pm2.try_accept_connection(address, Role::Inbound, peer_info, None),
         Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
             [1, 2, 3, 4],
             *config::create_mainnet().magic_bytes(),
@@ -420,12 +417,9 @@ where
     let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
-        pm1.accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
+        pm1.try_accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
     }
-    assert_eq!(
-        pm1.active_peer_count(),
-        peer_manager::MAX_ACTIVE_CONNECTIONS
-    );
+    assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
     let (_address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -448,7 +442,7 @@ where
 #[tokio::test]
 async fn inbound_connection_too_many_peers_tcp() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
@@ -475,7 +469,7 @@ async fn inbound_connection_too_many_peers_tcp() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_channels() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("{}", index + 10000).parse().expect("valid address"),
@@ -502,7 +496,7 @@ async fn inbound_connection_too_many_peers_channels() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_noise() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
                 format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
@@ -673,13 +667,14 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -710,6 +705,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses,
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -774,12 +770,13 @@ where
 {
     let chain_config = Arc::new(config::create_mainnet());
 
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
 
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -811,6 +808,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses.clone(),
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),
@@ -835,6 +833,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         added_nodes: bind_addresses,
+        max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
         outbound_connection_timeout: Default::default(),

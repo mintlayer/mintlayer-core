@@ -230,11 +230,11 @@ pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory>
     PeerDbStorageImpl::new(storage).unwrap()
 }
 
-pub struct P2pTestTimeGetter {
+pub struct P2pBasicTestTimeGetter {
     current_time_millis: Arc<AtomicU64>,
 }
 
-impl P2pTestTimeGetter {
+impl P2pBasicTestTimeGetter {
     pub fn new() -> Self {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -252,10 +252,30 @@ impl P2pTestTimeGetter {
         }))
     }
 
-    pub async fn advance_time(&self, duration: Duration) {
-        tokio::time::pause();
+    pub fn advance_time(&self, duration: Duration) {
         self.current_time_millis
             .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
+    }
+}
+
+pub struct P2pTokioTestTimeGetter {
+    time_getter: P2pBasicTestTimeGetter,
+}
+
+impl P2pTokioTestTimeGetter {
+    pub fn new() -> Self {
+        Self {
+            time_getter: P2pBasicTestTimeGetter::new(),
+        }
+    }
+
+    pub fn get_time_getter(&self) -> TimeGetter {
+        self.time_getter.get_time_getter()
+    }
+
+    pub async fn advance_time(&self, duration: Duration) {
+        tokio::time::pause();
+        self.time_getter.advance_time(duration);
         tokio::time::advance(duration).await;
         tokio::time::resume();
     }

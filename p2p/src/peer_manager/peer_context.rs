@@ -45,6 +45,11 @@ pub struct PeerContext<A> {
     /// Sent ping details
     pub sent_ping: Option<SentPing>,
 
+    /// Whether an address list request was sent and no response was received.
+    ///
+    /// It is used to score peers that send unsolicited address list responses.
+    pub expect_addr_list_response: bool,
+
     /// All addresses that were announced to or from some peer.
     /// Used to prevent infinity loops while broadcasting addresses.
     // TODO: Use bloom filter (like it's done in Bitcoin Core).

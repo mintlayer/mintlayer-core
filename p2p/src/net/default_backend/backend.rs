@@ -263,14 +263,20 @@ where
                 },
                 // Accept a new peer connection.
                 res = self.socket.accept() => {
-                    let (stream, address) = res.map_err(|_| P2pError::DialError(DialError::AcceptFailed))?;
-
-                    self.create_pending_peer(
-                        stream,
-                        PeerId::new(),
-                        PeerRole::Inbound,
-                        address,
-                    )?;
+                    match res {
+                        Ok((stream, address)) => {
+                            self.create_pending_peer(
+                                stream,
+                                PeerId::new(),
+                                PeerRole::Inbound,
+                                address,
+                            )?;
+                        },
+                        Err(err) => {
+                            // Just log the error and let the node continue working
+                            log::error!("Accepting a new connection failed unexpectedly: {err}")
+                        },
+                    }
                 }
             }
         }
@@ -507,10 +513,6 @@ where
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
                 message: PeerManagerMessage::AddrListResponse(r),
-            })?,
-            Message::AnnounceAddrResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
-                peer,
-                message: PeerManagerMessage::AnnounceAddrResponse(r),
             })?,
             Message::PingResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,

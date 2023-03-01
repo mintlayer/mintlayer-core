@@ -43,8 +43,6 @@ pub enum ProtocolError {
     DisconnectedHeaders,
     #[error("Received a message ({0}) that wasn't expected")]
     UnexpectedMessage(&'static str),
-    #[error("Unknown request identifier")]
-    UnknownRequestId,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
@@ -82,8 +80,6 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
-    #[error("Accept failed")]
-    AcceptFailed,
 }
 
 /// Conversion errors
@@ -119,6 +115,8 @@ pub enum P2pError {
     NoiseHandshakeError(String),
     #[error("The configuration value is invalid: {0}")]
     InvalidConfigurationValue(String),
+    #[error("The storage state is invalid: {0}")]
+    InvalidStorageState(String),
 }
 
 impl From<std::io::Error> for P2pError {
@@ -172,6 +170,7 @@ impl BanScore for P2pError {
             // Could be a noise protocol violation but also a network error, do not ban peer
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
+            P2pError::InvalidStorageState(_) => 0,
         }
     }
 }
@@ -189,7 +188,6 @@ impl BanScore for ProtocolError {
             ProtocolError::UnknownBlockRequested => 20,
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnexpectedMessage(_) => 20,
-            ProtocolError::UnknownRequestId => 20,
         }
     }
 }

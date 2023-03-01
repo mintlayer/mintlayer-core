@@ -81,6 +81,10 @@ pub struct RunOptions {
     #[clap(long, value_name = "NODE")]
     pub p2p_add_node: Option<Vec<String>>,
 
+    /// Maximum allowed number of inbound connections.
+    #[clap(long)]
+    pub p2p_max_inbound_connections: Option<usize>,
+
     /// The p2p score threshold after which a peer is baned.
     #[clap(long)]
     pub p2p_ban_threshold: Option<u32>,

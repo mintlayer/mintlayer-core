@@ -61,11 +61,11 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
+    pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    assert_eq!(pm2.adjust_peer_score(peer_id, 1000), Ok(()));
+    pm2.adjust_peer_score(peer_id, 1000);
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
+    assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -108,11 +108,11 @@ where
     )
     .await;
     let peer_id = peer_info.peer_id;
-    pm2.accept_inbound_connection(address, peer_info, None).unwrap();
+    pm2.accept_connection(address, Role::Inbound, peer_info, None);
 
-    assert_eq!(pm2.adjust_peer_score(peer_id, 1000), Ok(()));
+    pm2.adjust_peer_score(peer_id, 1000);
     let addr1 = pm1.peer_connectivity_handle.local_addresses()[0].clone().as_bannable();
-    assert!(pm2.peerdb.is_address_banned(&addr1).unwrap());
+    assert!(pm2.peerdb.is_address_banned(&addr1));
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     assert!(std::matches!(
         event,
@@ -163,25 +163,25 @@ where
     )
     .await;
     let peer_id = peer_info1.peer_id;
-    pm2.accept_inbound_connection(address, peer_info1, None).unwrap();
+    pm2.accept_connection(address, Role::Inbound, peer_info1, None);
 
     let remote_addr = pm1.peer_connectivity_handle.local_addresses()[0].clone();
 
-    assert_eq!(pm2.adjust_peer_score(peer_id, 10), Ok(()));
-    assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
+    pm2.adjust_peer_score(peer_id, 10);
+    assert!(!pm2.peerdb.is_address_banned(&remote_addr.as_bannable()));
 
-    assert_eq!(pm2.adjust_peer_score(peer_id, 90), Ok(()));
-    assert!(pm2.peerdb.is_address_banned(&remote_addr.as_bannable()).unwrap());
+    pm2.adjust_peer_score(peer_id, 90);
+    assert!(pm2.peerdb.is_address_banned(&remote_addr.as_bannable()));
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     match &event {
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. }) => {}
         _ => panic!("unexpected event: {event:?}"),
     }
-    pm2.handle_connectivity_event_result(event).unwrap();
+    pm2.handle_connectivity_event(event.unwrap());
 
     let (tx, rx) = oneshot_nofail::channel();
-    pm2.connect(remote_addr, Some(tx)).unwrap();
+    pm2.connect(remote_addr, Some(tx));
     let res = rx.await.unwrap();
     match res {
         Err(P2pError::PeerError(PeerError::BannedAddress(_))) => {}
@@ -220,7 +220,7 @@ where
         make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
-    let res = peer_manager.accept_connection(
+    let res = peer_manager.try_accept_connection(
         B::new(),
         Role::Outbound,
         net::types::PeerInfo {
@@ -232,12 +232,13 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert!(res.is_err());
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // invalid version
-    let res = peer_manager.accept_connection(
-        B::new(),
+    let address = B::new();
+    let res = peer_manager.try_accept_connection(
+        address,
         Role::Outbound,
         net::types::PeerInfo {
             peer_id,
@@ -248,12 +249,12 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert!(res.is_err());
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // valid connection
     let address = B::new();
-    let res = peer_manager.accept_connection(
+    let res = peer_manager.try_accept_connection(
         address.clone(),
         Role::Outbound,
         net::types::PeerInfo {
@@ -266,9 +267,8 @@ where
         None,
     );
     assert!(res.is_ok());
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
     assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]
@@ -313,8 +313,9 @@ where
         make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
 
     // invalid magic bytes
-    let res = peer_manager.accept_inbound_connection(
+    let res = peer_manager.try_accept_connection(
         B::new(),
+        Role::Inbound,
         net::types::PeerInfo {
             peer_id,
             network: [1, 2, 3, 4],
@@ -324,12 +325,13 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    assert!(res.is_err());
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // invalid version
-    let res = peer_manager.accept_inbound_connection(
+    peer_manager.accept_connection(
         B::new(),
+        Role::Inbound,
         net::types::PeerInfo {
             peer_id,
             network: *config.magic_bytes(),
@@ -339,26 +341,28 @@ where
         },
         None,
     );
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
     assert!(!peer_manager.is_peer_connected(peer_id));
 
     // valid connection
     let address = B::new();
-    let res = peer_manager.accept_inbound_connection(
-        address.clone(),
-        net::types::PeerInfo {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(0, 1, 0),
-            agent: None,
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
-        },
-        None,
-    );
-    assert!(res.is_ok());
-    assert_eq!(peer_manager.handle_result(Some(peer_id), res), Ok(()));
+    peer_manager
+        .try_accept_connection(
+            address.clone(),
+            Role::Inbound,
+            net::types::PeerInfo {
+                peer_id,
+                network: *config.magic_bytes(),
+                version: SemVer::new(0, 1, 0),
+                agent: None,
+                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
+                    .into_iter()
+                    .collect(),
+            },
+            None,
+        )
+        .unwrap();
     assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()).unwrap());
+    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
 }
 
 #[tokio::test]

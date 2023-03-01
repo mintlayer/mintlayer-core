@@ -35,7 +35,7 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
-    testing_utils::P2pTestTimeGetter,
+    testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
 };
 use tokio::sync::mpsc;
@@ -203,7 +203,7 @@ pub fn test_crawler(
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
     mpsc::UnboundedReceiver<DnsServerCommand>,
-    P2pTestTimeGetter,
+    P2pTokioTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let add_node = add_node.iter().map(ToString::to_string).collect();
@@ -242,7 +242,7 @@ pub fn test_crawler(
     )
     .unwrap();
 
-    let time_getter = P2pTestTimeGetter::new();
+    let time_getter = P2pTokioTestTimeGetter::new();
 
     (crawler, state, dns_server_cmd_rx, time_getter)
 }
@@ -254,7 +254,7 @@ pub async fn advance_time(
         MockNetworkingService,
         DnsServerStorageImpl<storage::inmemory::InMemory>,
     >,
-    time_getter: &P2pTestTimeGetter,
+    time_getter: &P2pTokioTestTimeGetter,
     step: Duration,
     count: u32,
 ) {
