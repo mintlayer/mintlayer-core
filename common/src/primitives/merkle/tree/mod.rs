@@ -57,18 +57,10 @@ impl MerkleTree {
         H256::from(hasher.finalize())
     }
 
-    /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
-    /// Incremental padding means that the padding is created by hashing the last element of the list,
-    /// and then hashing the result with the next element of the list, and so on.
-    pub fn from_leaves(
+    fn create_tree_from_leaves(
         leaves: impl IntoIterator<Item = H256>,
-    ) -> Result<Self, MerkleTreeFormError> {
-        let mut tree = Vec::new();
-        let pad_f = |i: &H256| default_hash(i);
-
-        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
-
-        tree.extend(padded_leaves_iter);
+    ) -> Result<Vec<H256>, MerkleTreeFormError> {
+        let mut tree = leaves.into_iter().collect::<Vec<_>>();
         if tree.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(tree.len()));
         }
@@ -78,6 +70,22 @@ impl MerkleTree {
             let el = Self::hash_pair(&tree[i * 2], &tree[i * 2 + 1]);
             tree.push(el);
         }
+
+        Ok(tree)
+    }
+
+    /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
+    /// Incremental padding means that the padding is created by hashing the last element of the list,
+    /// and then hashing the result with the next element of the list, and so on.
+    pub fn from_leaves(
+        leaves: impl IntoIterator<Item = H256>,
+    ) -> Result<Self, MerkleTreeFormError> {
+        let pad_f = |i: &H256| default_hash(i);
+
+        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
+
+        let tree = Self::create_tree_from_leaves(padded_leaves_iter)?;
+
         TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
         let res = Self { tree };
         Ok(res)
