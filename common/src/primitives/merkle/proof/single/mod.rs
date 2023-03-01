@@ -120,7 +120,8 @@ impl SingleProofHashes {
     }
 
     /// Verifies that the given leaf can produce the root's hash.
-    /// Returns None if the proof is empty (the tree has only one node).
+    /// Returns None if the proof is empty (the tree has only one node),
+    /// as this function then boils down to `leaf == root`, which is trivial.
     /// This choice, to return None, is a security measure to prevent a malicious user from
     /// circumventing verification by providing a proof of a single node.
     pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
