@@ -23,20 +23,20 @@ use crate::{
             sighashtype::{self, SigHashType},
             signature_hash, TransactionSigError,
         },
-        Destination, Transaction,
+        ChainConfig, Destination, Transaction,
     },
     primitives::H256,
 };
 
 use super::{
-    authorize_classical_multisig::{
-        verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
-    },
     authorize_pubkey_spend::{
         sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
         sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
+    },
+    classical_multisig::authorize_classical_multisig::{
+        verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
     },
 };
 
@@ -66,6 +66,7 @@ impl StandardInputSignature {
 
     pub fn verify_signature(
         &self,
+        chain_config: &ChainConfig,
         outpoint_destination: &Destination,
         sighash: &H256,
     ) -> Result<(), TransactionSigError> {
@@ -88,7 +89,7 @@ impl StandardInputSignature {
             Destination::ClassicMultisig(c) => {
                 let sig_components =
                     AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
-                verify_classical_multisig_spending(c, &sig_components, sighash)?
+                verify_classical_multisig_spending(chain_config, c, &sig_components, sighash)?
             }
         }
         Ok(())
@@ -170,7 +171,10 @@ impl Encode for StandardInputSignature {
 mod test {
     use crate::{
         address::pubkeyhash::PublicKeyHash,
-        chain::transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        chain::{
+            config::create_mainnet,
+            transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        },
     };
 
     use super::*;
@@ -241,6 +245,8 @@ mod test {
     fn produce_and_verify(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
+        let chain_config = create_mainnet();
+
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let outpoints = [
@@ -262,7 +268,7 @@ mod test {
 
             let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
             witness
-                .verify_signature(&destination, &sighash)
+                .verify_signature(&chain_config, &destination, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
         }
     }

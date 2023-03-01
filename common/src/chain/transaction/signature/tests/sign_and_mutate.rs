@@ -20,6 +20,7 @@ use test_utils::random::Seed;
 use super::utils::*;
 use crate::{
     chain::{
+        config::create_mainnet,
         signature::{
             sighashtype::{OutputsMode, SigHashType},
             tests::{
@@ -30,7 +31,7 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
@@ -48,6 +49,8 @@ const INVALID_INPUT: usize = 1235466;
 #[case(Seed::from_entropy())]
 fn test_mutate_tx_internal_data(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = create_mainnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
 
@@ -76,10 +79,16 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
             Ok(signed_tx) => {
                 // Test flags change.
                 let updated_tx = change_flags(&mut rng, &signed_tx, 1234567890);
-                assert_eq!(verify_signed_tx(&updated_tx, &destination), expected);
+                assert_eq!(
+                    verify_signed_tx(&chain_config, &updated_tx, &destination),
+                    expected
+                );
                 // Test locktime change.
                 let updated_tx = change_locktime(&mut rng, &signed_tx, 1234567890);
-                assert_eq!(verify_signed_tx(&updated_tx, &destination), expected)
+                assert_eq!(
+                    verify_signed_tx(&chain_config, &updated_tx, &destination),
+                    expected
+                )
             }
             // Not implemented.
             Err(TransactionSigError::Unsupported) => {
@@ -102,64 +111,102 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
 fn modify_and_verify(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, true);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, true);
-        check_mutate_output(&tx, &destination, true);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, false);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, true);
-        check_mutate_output(&tx, &destination, true);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, true);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, false);
-        check_mutate_output(&tx, &destination, false);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, false);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, false);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, false);
-        check_mutate_output(&tx, &destination, false);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, false);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, true);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, false);
-        check_mutate_output(&tx, &destination, true);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 
     {
         let sighash_type =
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let tx = sign_mutate_then_verify(&mut rng, &private_key, sighash_type, &destination);
-        check_insert_input(&mut rng, &tx, &destination, false);
-        check_mutate_input(&mut rng, &tx, &destination, true);
-        check_insert_output(&mut rng, &tx, &destination, false);
-        check_mutate_output(&tx, &destination, true);
+        let tx = sign_mutate_then_verify(
+            &chain_config,
+            &mut rng,
+            &private_key,
+            sighash_type,
+            &destination,
+        );
+        check_insert_input(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_input(&chain_config, &mut rng, &tx, &destination, true);
+        check_insert_output(&chain_config, &mut rng, &tx, &destination, false);
+        check_mutate_output(&chain_config, &tx, &destination, true);
     }
 }
 
@@ -171,10 +218,13 @@ fn modify_and_verify(#[case] seed: Seed) {
 fn mutate_all(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -197,6 +247,7 @@ fn mutate_all(#[case] seed: Seed) {
         remove_last_output,
     ];
     check_mutations(
+        &chain_config,
         &mut rng,
         &tx,
         &destination,
@@ -212,10 +263,13 @@ fn mutate_all(#[case] seed: Seed) {
 fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -233,6 +287,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         remove_last_output,
     ];
     check_mutations(
+        &chain_config,
         &mut rng,
         &tx,
         &destination,
@@ -243,13 +298,20 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     {
         let tx = mutate_input(&mut rng, &tx);
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&chain_config, &destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
     }
 
     let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
-    check_mutations(&mut rng, &tx, &destination, mutations, Ok(()));
+    check_mutations(
+        &chain_config,
+        &mut rng,
+        &tx,
+        &destination,
+        mutations,
+        Ok(()),
+    );
 }
 
 #[rstest]
@@ -258,10 +320,13 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
 fn mutate_none(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -279,6 +344,7 @@ fn mutate_none(#[case] seed: Seed) {
         remove_last_input,
     ];
     check_mutations(
+        &chain_config,
         &mut rng,
         &tx,
         &destination,
@@ -293,7 +359,14 @@ fn mutate_none(#[case] seed: Seed) {
         remove_middle_output,
         remove_last_output,
     ];
-    check_mutations(&mut rng, &tx, &destination, mutations, Ok(()));
+    check_mutations(
+        &chain_config,
+        &mut rng,
+        &tx,
+        &destination,
+        mutations,
+        Ok(()),
+    );
 }
 
 #[rstest]
@@ -302,11 +375,14 @@ fn mutate_none(#[case] seed: Seed) {
 fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -321,11 +397,14 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         let inputs = tx.inputs().len();
 
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&chain_config, &destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs {
-            assert_eq!(verify_signature(&destination, &tx, input), Ok(()));
+            assert_eq!(
+                verify_signature(&chain_config, &destination, &tx, input),
+                Ok(())
+            );
         }
     }
 
@@ -340,7 +419,14 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         remove_middle_output,
         remove_last_output,
     ];
-    check_mutations(&mut rng, &tx, &destination, mutations, Ok(()));
+    check_mutations(
+        &chain_config,
+        &mut rng,
+        &tx,
+        &destination,
+        mutations,
+        Ok(()),
+    );
 }
 
 #[rstest]
@@ -349,10 +435,13 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
 fn mutate_single(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -378,12 +467,12 @@ fn mutate_single(#[case] seed: Seed) {
         // result in the different error.
         for input in 0..inputs - 1 {
             assert_eq!(
-                verify_signature(&destination, &tx, input),
+                verify_signature(&chain_config, &destination, &tx, input),
                 Err(TransactionSigError::SignatureVerificationFailed)
             );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
@@ -396,10 +485,13 @@ fn mutate_single(#[case] seed: Seed) {
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
-            assert_eq!(verify_signature(&destination, &tx, input), Ok(()));
+            assert_eq!(
+                verify_signature(&chain_config, &destination, &tx, input),
+                Ok(())
+            );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
@@ -410,14 +502,17 @@ fn mutate_single(#[case] seed: Seed) {
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&chain_config, &destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs - 1 {
-            assert_eq!(verify_signature(&destination, &tx, input), Ok(()));
+            assert_eq!(
+                verify_signature(&chain_config, &destination, &tx, input),
+                Ok(())
+            );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
@@ -429,11 +524,14 @@ fn mutate_single(#[case] seed: Seed) {
 fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
+    let chain_config = create_mainnet();
+
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
     let tx = generate_and_sign_tx(
+        &chain_config,
         &mut rng,
         &destination,
         INPUTS,
@@ -452,13 +550,13 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
             assert_eq!(
-                verify_signature(&destination, &tx, input),
+                verify_signature(&chain_config, &destination, &tx, input),
                 Ok(()),
                 "{input}"
             );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs))
         );
     }
@@ -469,18 +567,18 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         let inputs = tx.inputs().len();
 
         assert_eq!(
-            verify_signature(&destination, &tx, 0),
+            verify_signature(&chain_config, &destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs - 1 {
             assert_eq!(
-                verify_signature(&destination, &tx, input),
+                verify_signature(&chain_config, &destination, &tx, input),
                 Ok(()),
                 "## {input}"
             );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
@@ -494,19 +592,20 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
             assert_eq!(
-                verify_signature(&destination, &tx, input),
+                verify_signature(&chain_config, &destination, &tx, input),
                 Err(TransactionSigError::SignatureVerificationFailed),
                 "{input}"
             );
         }
         assert_eq!(
-            verify_signature(&destination, &tx, inputs),
+            verify_signature(&chain_config, &destination, &tx, inputs),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 }
 
 fn check_mutations<M, R>(
+    chain_config: &ChainConfig,
     rng: &mut R,
     tx: &SignedTransaction,
     destination: &Destination,
@@ -522,14 +621,17 @@ fn check_mutations<M, R>(
         let inputs = tx.inputs().len();
 
         assert_eq!(
-            verify_signature(destination, &tx, INVALID_INPUT),
+            verify_signature(chain_config, destination, &tx, INVALID_INPUT),
             Err(TransactionSigError::InvalidSignatureIndex(
                 INVALID_INPUT,
                 inputs
             ))
         );
         for input in 0..inputs {
-            assert_eq!(verify_signature(destination, &tx, input), expected);
+            assert_eq!(
+                verify_signature(chain_config, destination, &tx, input),
+                expected
+            );
         }
     }
 }

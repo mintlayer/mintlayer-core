@@ -24,6 +24,7 @@ use super::utils::*;
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
+        config::create_mainnet,
         signature::{
             sighashtype::{OutputsMode, SigHashType},
             TransactionSigError,
@@ -41,6 +42,8 @@ use crate::{
 #[case(Seed::from_entropy())]
 fn sign_and_verify_all_and_none(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = create_mainnet();
 
     let test_data = [(0, 31), (31, 0), (20, 3), (3, 20)];
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
@@ -62,7 +65,8 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
             assert_eq!(signed_tx, Err(TransactionSigError::Unsupported));
         } else {
             let signed_tx = signed_tx.expect("{sighash_type:?} {destination:?}");
-            verify_signed_tx(&signed_tx, &destination).expect("{sighash_type:?} {destination:?}")
+            verify_signed_tx(&chain_config, &signed_tx, &destination)
+                .expect("{sighash_type:?} {destination:?}")
         }
     }
 }
@@ -74,6 +78,8 @@ fn sign_and_verify_all_and_none(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn sign_and_verify_single(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = create_mainnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let test_data = [
@@ -232,7 +238,7 @@ fn sign_and_verify_single(#[case] seed: Seed) {
     for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs, outputs).unwrap();
         match sign_whole_tx(tx, &private_key, sighash_type, &destination) {
-            Ok(signed_tx) => verify_signed_tx(&signed_tx, &destination)
+            Ok(signed_tx) => verify_signed_tx(&chain_config, &signed_tx, &destination)
                 .expect("{sighash_type:X?}, {destination:?}"),
             Err(err) => assert_eq!(Err(err), expected, "{sighash_type:X?}, {destination:?}"),
         }

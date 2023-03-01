@@ -13,10 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod authorize_classical_multisig;
 pub mod authorize_pubkey_spend;
 pub mod authorize_pubkeyhash_spend;
-pub mod multisig_partial_signature;
+pub mod classical_multisig;
 pub mod standard_signature;
 
 use serialization::{Decode, Encode};

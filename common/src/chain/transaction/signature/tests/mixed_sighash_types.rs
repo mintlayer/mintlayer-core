@@ -20,6 +20,7 @@ use rstest::rstest;
 use test_utils::random::Seed;
 
 use super::utils::*;
+use crate::chain::config::create_mainnet;
 use crate::chain::{signature::inputsig::InputWitness, Destination};
 
 // Create a transaction with a different signature hash type for every input.
@@ -30,6 +31,8 @@ use crate::chain::{signature::inputsig::InputWitness, Destination};
 #[case(Seed::from_entropy())]
 fn mixed_sighash_types(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = create_mainnet();
 
     let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
@@ -65,6 +68,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
 
         let signed_tx = tx.with_signatures(sigs).unwrap();
 
-        verify_signed_tx(&signed_tx, &destination).expect("Signature verification failed")
+        verify_signed_tx(&chain_config, &signed_tx, &destination)
+            .expect("Signature verification failed")
     }
 }

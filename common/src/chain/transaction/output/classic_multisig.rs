@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU32;
+use std::num::NonZeroU8;
 
 use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
@@ -25,8 +25,7 @@ use crate::chain::ChainConfig;
 /// of the blockchain. An invalid object can still be constructed with deserialization.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ClassicMultisigChallenge {
-    #[codec(compact)]
-    min_required_signatures: u32,
+    min_required_signatures: u8,
     public_keys: Vec<PublicKey>,
 }
 
@@ -37,7 +36,7 @@ pub enum ClassicMultisigChallengeError {
     #[error("Too many public keys, more than allowed: {0} > {1}")]
     TooManyPublicKeys(usize, usize),
     #[error("More required signatures than public keys: {0} > {1}")]
-    MoreRequiredSignaturesThanPublicKeys(u32, usize),
+    MoreRequiredSignaturesThanPublicKeys(u8, usize),
     #[error("Public keys vector is empty")]
     EmptyPublicKeys,
     #[error("Minimum required signatures is 0")]
@@ -47,7 +46,7 @@ pub enum ClassicMultisigChallengeError {
 impl ClassicMultisigChallenge {
     pub fn new(
         chain_config: &ChainConfig,
-        min_required_signatures: NonZeroU32,
+        min_required_signatures: NonZeroU8,
         public_keys: Vec<PublicKey>,
     ) -> Result<Self, ClassicMultisigChallengeError> {
         let res = Self {
@@ -88,7 +87,7 @@ impl ClassicMultisigChallenge {
         Ok(())
     }
 
-    pub fn min_required_signatures(&self) -> u32 {
+    pub fn min_required_signatures(&self) -> u8 {
         self.min_required_signatures
     }
 
