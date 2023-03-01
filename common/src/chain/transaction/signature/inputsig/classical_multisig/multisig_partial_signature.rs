@@ -140,6 +140,7 @@ pub enum PartiallySignedMultisigState {
 }
 
 #[must_use]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SigsVerifyResult {
     /// The challenge is structurally valid, and all signatures have been added.
     CompleteAndValid,
@@ -147,4 +148,76 @@ pub enum SigsVerifyResult {
     Incomplete,
     /// The challenge is structurally invalid but the signatures are invalid.
     Invalid,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::random::SliceRandom;
+    use rstest::rstest;
+
+    use crate::chain::config::create_mainnet;
+    use crate::primitives::H256;
+    use serialization::Encode;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
+
+    #[rstest]
+    #[case(Seed::from_entropy())]
+    fn signature_count(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let chain_config = &create_mainnet();
+        let min_required_signatures = 2.try_into().unwrap();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..3)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(chain_config, min_required_signatures, pub_keys).unwrap();
+        challenge.is_valid(chain_config).unwrap();
+
+        let message = H256::random_using(&mut rng);
+        let message_bytes = message.encode();
+
+        let signatures_map = priv_keys
+            .iter()
+            .enumerate()
+            .map(|(index, priv_key)| {
+                let signature = priv_key.sign_message(&message.encode()).unwrap();
+                (index as u8, signature)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        for i in 0..priv_keys.len() {
+            let mut signatures_map =
+                signatures_map.clone().into_iter().take(i).collect::<Vec<(_, _)>>();
+            signatures_map.shuffle(&mut rng);
+            let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
+
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+
+            let sigs = PartiallySignedMultisigChallenge::from_partial(
+                chain_config,
+                &challenge,
+                &message_bytes,
+                &auth,
+            )
+            .unwrap();
+
+            if i + 1 == priv_keys.len() {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::CompleteAndValid
+                );
+            } else {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::Incomplete
+                );
+            }
+        }
+    }
 }
