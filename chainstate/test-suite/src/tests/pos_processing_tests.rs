@@ -18,6 +18,7 @@ use std::num::NonZeroU64;
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
 };
+use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -49,8 +50,8 @@ use crypto::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-// It's important to have short epoch length, so that genesis and th first block can seal
-// an epoch, which is required for PoS validation to work.
+// It's important to have short epoch length, so that genesis and the first block can seal
+// an epoch with pool, which is required for PoS validation to work.
 const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
     Some(v) => v,
     None => panic!("epoch length cannot be 0"),
@@ -451,7 +452,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2.
-// Try to crete block_2 with PoS data that has refer to invalid pool id.:
+// Try to crete block_2 with PoS data that has refer to invalid pool id.
 // Check that processing of the block fails.
 #[rstest]
 #[trace]
@@ -525,14 +526,75 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         .unwrap();
 }
 
+// Create a chain genesis <- block_1, where block_1 has valid StakePool output.
+// PoS consensus activates on height 2 and an epoch is sealed at height 2.
+// Try to crete block_2 with PoS data that has refer to staked pool.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+        ),
+    ];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let chain_config = ConfigBuilder::test_chain()
+        .net_upgrades(net_upgrades)
+        .epoch_length(NonZeroU64::new(3).unwrap()) // stake pool won't be sealed at height 1
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let pos_data = create_pos_data(
+        &mut tf,
+        stake_pool_outpoint,
+        &vrf_sk,
+        initial_randomness,
+        initial_randomness,
+        pool_id,
+        0,
+    );
+
+    let res = tf
+        .make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .build_and_process()
+        .unwrap_err();
+
+    assert_eq!(
+        res,
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                ConsensusPoSError::PoolBalanceNotFound(pool_id)
+            ))
+        ))
+    );
+}
+
 // Create a chain:
 //
-// genesis <- block_1(StakePool) <- block_2(SpendStakePool) <- block_3(SpendStakePool).
+// genesis <- block_1(StakePool) <- block_2(SpendStakePool) <- block_3(SpendStakePool) <- block_4(SpendStakePool).
 //
-// PoS consensus activates on height 2.
+// PoS consensus activates for block_2 and on. Epoch length is 2.
 // block_1 has valid StakePool output.
-// block_2 has kernel input from block_1 and SpendStakePool as an output.
-// block_3 has kernel input from block_2 and SpendStakePool as an output.
+// block_2 has kernel input from block_1 and SpendStakePool as an output. Initial randomness is used.
+// block_3 has kernel input from block_2 and SpendStakePool as an output. Randomness of prev block
+// and initial randomness are used.
+// block_4 has kernel input from block_3 and SpendStakePool as an output. Randomness of prev block
+// and randomness of sealed epoch are used.
 // Check that the chain is valid.
 #[rstest]
 #[trace]
@@ -569,6 +631,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
         initial_randomness,
         initial_randomness,
         pool_id,
@@ -597,15 +660,48 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         0,
     );
     let prev_block_randomness = get_best_block_randomness(&tf);
-    let sealed_epoch_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pos_data = create_pos_data(
         &mut tf,
         block_2_reward_outpoint,
         &vrf_sk,
-        sealed_epoch_randomness,
+        // no epoch is sealed yet so use initial randomness
+        initial_randomness,
         prev_block_randomness.value(),
         pool_id,
         1,
+    );
+    let consensus_data = ConsensusData::PoS(pos_data);
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::SpendStakePool(
+            Box::new(stake_pool_data.clone()),
+            OutputTimeLock::ForBlockCount(reward_maturity as u64),
+        ),
+    );
+    tf.make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_reward(vec![reward_output])
+        .build_and_process()
+        .unwrap();
+
+    // prepare and process block_4 with SpendStakePool -> SpendStakePool kernel
+    let block_3_reward_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
+        0,
+    );
+
+    // both sealed epoch and pre block randomness can be used
+    let sealed_epoch_randomness =
+        tf.storage.transaction_ro().unwrap().get_epoch_data(1).unwrap().unwrap();
+    let prev_block_randomness = get_best_block_randomness(&tf);
+    let pos_data = create_pos_data(
+        &mut tf,
+        block_3_reward_outpoint,
+        &vrf_sk,
+        sealed_epoch_randomness.randomness(),
+        prev_block_randomness.value(),
+        pool_id,
+        2,
     );
     let consensus_data = ConsensusData::PoS(pos_data);
     let reward_output = TxOutput::new(
@@ -625,11 +721,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn process_arbitrary_number_of_blocks(#[case] seed: Seed) {
+fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let blocks_count = 10usize;
-    let epoch_length = rng.gen_range(1..=(blocks_count + 2)); // blocks_count + genesis
-    let sealed_epoch_distance = rng.gen_range(0..blocks_count); // FIXME
 
     let upgrades = vec![
         (
@@ -644,48 +737,60 @@ fn process_arbitrary_number_of_blocks(#[case] seed: Seed) {
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
     let chain_config = ConfigBuilder::test_chain()
         .net_upgrades(net_upgrades)
-        .epoch_length(NonZeroU64::new(epoch_length as u64).unwrap())
-        .sealed_epoch_distance_from_tip(sealed_epoch_distance)
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     // create initial chain: genesis <- block_1
     let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
+    let altered_stake_pool_data = StakePoolData::new(
+        stake_pool_data.owner().clone(),
+        Some(stake_pool_data.staker().clone()),
+        stake_pool_data.vrf_public_key().clone(),
+        stake_pool_data.decommission_key().clone(),
+        stake_pool_data.margin_ratio_per_thousand() + 1,
+        *stake_pool_data.cost_per_epoch(),
+    );
     let (stake_pool_outpoint, pool_id) =
-        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
-    for _ in 0..blocks_count {
-        let block_2_reward_outpoint = OutPoint::new(
-            OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
-            0,
-        );
-        let prev_block_randomness = get_best_block_randomness(&tf);
-        let sealed_epoch_randomness = tf.chainstate.get_chain_config().initial_randomness();
-        let pos_data = create_pos_data(
-            &mut tf,
-            block_2_reward_outpoint,
-            &vrf_sk,
-            sealed_epoch_randomness,
-            prev_block_randomness.value(),
-            pool_id,
-            1,
-        );
+    // prepare and process block_2 with StakePool -> SpendStakePool kernel
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let pos_data = create_pos_data(
+        &mut tf,
+        stake_pool_outpoint,
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        initial_randomness,
+        initial_randomness,
+        pool_id,
+        1,
+    );
+    let consensus_data = ConsensusData::PoS(pos_data);
+    let reward_maturity: i64 = consensus_data
+        .reward_maturity_distance(&tf.chainstate.get_chain_config())
+        .into();
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::SpendStakePool(
+            Box::new(altered_stake_pool_data),
+            OutputTimeLock::ForBlockCount(reward_maturity as u64),
+        ),
+    );
+    let res = tf
+        .make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_reward(vec![reward_output])
+        .build_and_process()
+        .unwrap_err();
 
-        let consensus_data = ConsensusData::PoS(pos_data);
-        let reward_maturity: i64 = consensus_data
-            .reward_maturity_distance(&tf.chainstate.get_chain_config())
-            .into();
-        let reward_output = TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::SpendStakePool(
-                Box::new(stake_pool_data),
-                OutputTimeLock::ForBlockCount(reward_maturity as u64),
-            ),
-        );
-        tf.make_block_builder()
-            .with_consensus_data(consensus_data)
-            .with_reward(vec![reward_output])
-            .build_and_process()
-            .unwrap();
-    }
+    assert_eq!(
+        res,
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            chainstate::ConnectTransactionError::PoSError(
+                chainstate::PoSError::StakePoolDataMismatch
+            )
+        ))
+    );
 }

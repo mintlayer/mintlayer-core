@@ -23,7 +23,7 @@ use common::{
         config::EpochIndex,
         ChainConfig, OutputPurpose, TxOutput,
     },
-    primitives::{Idable, H256},
+    primitives::{BlockHeight, Idable, H256},
     Uint256, Uint512,
 };
 use pos_accounting::PoSAccountingView;
@@ -86,25 +86,32 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
 fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     current_epoch_index: EpochIndex,
+    current_height: BlockHeight,
     block_index_handle: &H,
 ) -> Result<H256, ConsensusPoSError> {
     let sealed_epoch_distance_from_tip = chain_config.sealed_epoch_distance_from_tip() as u64;
-    let random_seed = if current_epoch_index >= sealed_epoch_distance_from_tip {
-        let sealed_epoch_index = current_epoch_index
-            .checked_sub(sealed_epoch_distance_from_tip)
-            .expect("must've been already checked for underflow");
-        let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
-        match epoch_data {
-            Some(d) => d.randomness(),
-            None => {
-                // TODO: no epoch_data means either that no epoch was created yet or
-                // that the data is actually missing
-                chain_config.initial_randomness()
+    let sealed_epoch_index = if chain_config.is_last_block_in_epoch(&current_height) {
+        current_epoch_index.checked_sub(sealed_epoch_distance_from_tip)
+    } else {
+        // if current epoch is not full it must be ignored, increasing the distance to the sealed epoch
+        current_epoch_index.checked_sub(sealed_epoch_distance_from_tip + 1)
+    };
+
+    let random_seed = match sealed_epoch_index {
+        Some(sealed_epoch_index) => {
+            let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
+            match epoch_data {
+                Some(d) => d.randomness(),
+                None => {
+                    // TODO: no epoch_data means either that no epoch was created yet or
+                    // that the data is actually missing
+                    chain_config.initial_randomness()
+                }
             }
         }
-    } else {
-        chain_config.initial_randomness()
+        None => chain_config.initial_randomness(),
     };
+
     Ok(random_seed)
 }
 
@@ -127,13 +134,18 @@ where
 
     let kernel_output = get_kernel_output(pos_data, utxos_view)?;
 
-    let epoch_index =
-        chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
+    let current_height = prev_block_index.block_height().next_height();
+    let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
 
-    let random_seed = randomness_of_sealed_epoch(chain_config, epoch_index, block_index_handle)?;
+    let random_seed = randomness_of_sealed_epoch(
+        chain_config,
+        current_epoch_index,
+        current_height,
+        block_index_handle,
+    )?;
 
     check_stake_kernel_hash(
-        epoch_index,
+        current_epoch_index,
         &random_seed,
         pos_data,
         &kernel_output,

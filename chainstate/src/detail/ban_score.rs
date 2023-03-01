@@ -109,6 +109,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
+            ConnectTransactionError::PoSError(_) => 100,
         }
     }
 }
@@ -279,10 +280,10 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::NoKernel => 100,
             ConsensusPoSError::MultipleKernels => 100,
             ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
-            ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
+            ConsensusPoSError::PrevBlockIndexNotFound(_) => 0,
             ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
-            ConsensusPoSError::PoolBalanceNotFound(_) => 0,
+            ConsensusPoSError::PoolBalanceNotFound(_) => 100,
             ConsensusPoSError::PoSAccountingError(err) => err.ban_score(),
         }
     }

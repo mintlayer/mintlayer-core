@@ -38,7 +38,7 @@ use self::{
     amounts_map::AmountsMap,
     cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
-    error::{ConnectTransactionError, TokensError},
+    error::{ConnectTransactionError, PoSError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -54,7 +54,7 @@ use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
     chain::{
-        block::{timestamp::BlockTimestamp, BlockRewardTransactable},
+        block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
@@ -360,12 +360,70 @@ where
         Ok(())
     }
 
+    fn check_staked_outputs_in_reward(
+        &self,
+        block: &WithId<Block>,
+    ) -> Result<(), ConnectTransactionError> {
+        match block.consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => Ok(()),
+            ConsensusData::PoS(_) => {
+                let block_reward_transactable = block.block_reward_transactable();
+
+                let kernel_input =
+                    match block_reward_transactable.inputs().ok_or(PoSError::NoKernel)? {
+                        [] => Err(PoSError::NoKernel),
+                        [kernel_input] => Ok(kernel_input),
+                        _ => Err(PoSError::MultipleKernels),
+                    }?;
+
+                let kernel_output = self
+                    .utxo_cache
+                    .utxo(kernel_input.outpoint())
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+
+                let kernel_stake_pool_data = match kernel_output.output().purpose() {
+                    OutputPurpose::Transfer(_)
+                    | OutputPurpose::LockThenTransfer(_, _)
+                    | OutputPurpose::Burn => Err(PoSError::InvalidKernelPurpose),
+                    OutputPurpose::StakePool(d) => Ok(d.as_ref()),
+                    OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
+                }?;
+
+                let reward_output = match block_reward_transactable
+                    .outputs()
+                    .ok_or(PoSError::NoBlockRewardOutputs)?
+                {
+                    [] => Err(PoSError::NoBlockRewardOutputs),
+                    [output] => Ok(output),
+                    _ => Err(PoSError::MultipleBlockRewardOutputs),
+                }?;
+
+                let reward_stake_pool_data = match reward_output.purpose() {
+                    OutputPurpose::Transfer(_)
+                    | OutputPurpose::LockThenTransfer(_, _)
+                    | OutputPurpose::Burn
+                    | OutputPurpose::StakePool(_) => Err(PoSError::InvalidBlockRewardPurpose),
+                    OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
+                }?;
+
+                ensure!(
+                    kernel_stake_pool_data == reward_stake_pool_data,
+                    PoSError::StakePoolDataMismatch
+                );
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn check_block_reward(
         &self,
         block: &WithId<Block>,
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
+        self.check_staked_outputs_in_reward(block)?;
+
         let block_reward_transactable = block.block_reward_transactable();
 
         let inputs = block_reward_transactable.inputs();
@@ -652,12 +710,6 @@ where
         self.token_issuance_cache
             .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
 
-        // check output purposes
-        {
-            // StakePool/SpendStakePool inputs not allowed to Transfer
-            //
-        }
-
         // check for attempted money printing
         let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
 
@@ -672,6 +724,13 @@ where
 
         // verify input signatures
         self.verify_signatures(tx)?;
+
+        // check output purposes
+        {
+            // SpendStakePool cannot be used in tx
+            // StakePool/SpendStakePool inputs not allowed to Transfer
+            // StakePoolData cannot change
+        }
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 

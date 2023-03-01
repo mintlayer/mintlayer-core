@@ -21,6 +21,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         tokens::{OutputValue, TokenData, TokenTransfer},
         OutPointSourceId, TxInput, TxOutput,
     },
@@ -430,5 +431,216 @@ fn stake_pool_overspend(#[case] seed: Seed) {
                 )
             ))
         );
+    });
+}
+
+// StakePool -> SpendStakePool in transaction is forbidden
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let stake_pool_data = StakePoolData::new(
+            anyonecanspend_address(),
+            None,
+            vrf_pub_key,
+            pub_key,
+            0,
+            Amount::ZERO,
+        );
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::StakePool(Box::new(stake_pool_data.clone())),
+            ))
+            .build();
+        let tx1_id = tx1.transaction().get_id();
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
+                OutputPurpose::SpendStakePool(
+                    Box::new(stake_pool_data),
+                    OutputTimeLock::ForBlockCount(0),
+                ),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+    });
+}
+
+// StakePool -> Transfer is forbidden
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let stake_pool_data = StakePoolData::new(
+            anyonecanspend_address(),
+            None,
+            vrf_pub_key,
+            pub_key,
+            0,
+            Amount::ZERO,
+        );
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::StakePool(Box::new(stake_pool_data.clone())),
+            ))
+            .build();
+        let tx1_id = tx1.transaction().get_id();
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+    });
+}
+
+// SpendStakePool -> Transfer is forbidden
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let stake_pool_data = StakePoolData::new(
+            anyonecanspend_address(),
+            None,
+            vrf_pub_key,
+            pub_key,
+            0,
+            Amount::ZERO,
+        );
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::StakePool(Box::new(stake_pool_data.clone())),
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let spend_stake_output = TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(rng.gen_range(50_000..100_000))),
+            OutputPurpose::SpendStakePool(
+                Box::new(stake_pool_data),
+                OutputTimeLock::ForBlockCount(0),
+            ),
+        );
+        let block2_index = tf
+            .make_block_builder()
+            .with_reward(vec![spend_stake_output])
+            .build_and_process()
+            .unwrap()
+            .unwrap();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward((*block2_index.block_id()).into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..50_000))),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+    });
+}
+
+// Coin input -> SpendStakePool is forbidden
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+                    0,
+                ),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                OutputPurpose::SpendStakePool(
+                    Box::new(StakePoolData::new(
+                        anyonecanspend_address(),
+                        None,
+                        vrf_pub_key,
+                        pub_key,
+                        0,
+                        Amount::ZERO,
+                    )),
+                    OutputTimeLock::ForBlockCount(0),
+                ),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
     });
 }
