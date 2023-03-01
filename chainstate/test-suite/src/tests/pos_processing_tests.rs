@@ -17,6 +17,7 @@ use std::num::NonZeroU64;
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
+    ConnectTransactionError, SpendStakeError,
 };
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
@@ -205,7 +206,7 @@ fn pos_basic(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
 
     // skip block reward output
     let res = tf
@@ -216,9 +217,7 @@ fn pos_basic(#[case] seed: Seed) {
     assert_eq!(
         res,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            chainstate::ConnectTransactionError::PoSError(
-                chainstate::PoSError::NoBlockRewardOutputs
-            )
+            ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs)
         ))
     );
 
@@ -278,7 +277,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
 
     let res = tf
         .make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .build_and_process()
         .unwrap_err();
 
@@ -358,7 +357,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
         let res = tf
             .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .build_and_process()
             .unwrap_err();
 
@@ -382,7 +381,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
         let res = tf
             .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .build_and_process()
             .unwrap_err();
 
@@ -409,14 +408,14 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
-            vrf_data.clone(), // FIXME:: should be vrf_data_from_sealed_epoch
             vrf_data,
+            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
         let res = tf
             .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .build_and_process()
             .unwrap_err();
 
@@ -431,14 +430,14 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
-            vrf_data.clone(), //FIXME
             vrf_data,
+            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
         let res = tf
             .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .build_and_process()
             .unwrap_err();
 
@@ -453,14 +452,14 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![stake_pool_outpoint.clone().into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
-            vrf_data.clone(), // FIXME:: should be vrf_data_from_sealed_epoch
             vrf_data,
+            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
         let res = tf
             .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
             .build_and_process()
             .unwrap_err();
 
@@ -473,12 +472,12 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![stake_pool_outpoint.into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
-            valid_vrf_data.clone(), //FIXME:: fix
+            valid_vrf_data.clone(),
             valid_vrf_data,
             Compact::from(difficulty),
         );
 
-        let consensus_data = ConsensusData::PoS(pos_data);
+        let consensus_data = ConsensusData::PoS(Box::new(pos_data));
         let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
@@ -534,7 +533,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 
     let res = tf
         .make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .build_and_process()
         .unwrap_err();
 
@@ -558,7 +557,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         1,
     );
 
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
@@ -611,7 +610,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
 
     let res = tf
         .make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .build_and_process()
         .unwrap_err();
 
@@ -678,7 +677,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_maturity: i64 = consensus_data
         .reward_maturity_distance(&tf.chainstate.get_chain_config())
         .into();
@@ -711,7 +710,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
         OutputPurpose::SpendStakePool(
@@ -744,7 +743,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         2,
     );
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
         OutputPurpose::SpendStakePool(
@@ -808,7 +807,7 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(pos_data);
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_maturity: i64 = consensus_data
         .reward_maturity_distance(&tf.chainstate.get_chain_config())
         .into();
@@ -829,9 +828,66 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
     assert_eq!(
         res,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            chainstate::ConnectTransactionError::PoSError(
-                chainstate::PoSError::StakePoolDataMismatch
-            )
+            ConnectTransactionError::SpendStakeError(SpendStakeError::StakePoolDataMismatch)
+        ))
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn stake_pool_as_reward_output(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+        ),
+    ];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let chain_config = ConfigBuilder::test_chain()
+        .net_upgrades(net_upgrades)
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let pos_data = create_pos_data(
+        &mut tf,
+        stake_pool_outpoint,
+        &vrf_sk,
+        initial_randomness,
+        initial_randomness,
+        pool_id,
+        1,
+    );
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
+
+    // valid case
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::StakePool(Box::new(stake_pool_data)),
+    );
+    let block = tf
+        .make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_reward(vec![reward_output])
+        .build();
+    let block_id = block.get_id();
+    assert_eq!(
+        tf.process_block(block, chainstate::BlockSource::Local).unwrap_err(),
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::InvalidBlockRewardOutputType(block_id)
         ))
     );
 }

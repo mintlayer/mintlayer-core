@@ -252,7 +252,7 @@ where
         Vec::new(),
         Id::new(H256([0x04; 32])),
         BlockTimestamp::from_int_seconds(1337u64),
-        ConsensusData::PoS(pos),
+        ConsensusData::PoS(Box::new(pos)),
         BlockReward::new(Vec::new()),
     )
     .unwrap();

@@ -27,7 +27,7 @@ pub use crate::{
     detail::{
         ban_score, calculate_median_time_past, is_rfc3986_valid_symbol, BlockError, BlockSource,
         CheckBlockError, CheckBlockTransactionsError, ConnectTransactionError, InitializationError,
-        Locator, OrphanCheckError, PoSError, TokensError, TransactionVerifierStorageError,
+        Locator, OrphanCheckError, SpendStakeError, TokensError, TransactionVerifierStorageError,
         TxIndexError,
     },
 };

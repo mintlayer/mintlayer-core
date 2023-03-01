@@ -97,8 +97,8 @@ pub enum ConnectTransactionError {
     MissingPoSAccountingUndo(Id<Transaction>),
     #[error("No token outputs are allowed in PoS accounting operations {0}")]
     TokenOutputInPoSAccountingOperation(Id<Transaction>),
-    #[error("PoS specific error")]
-    PoSError(#[from] PoSError),
+    #[error("Error during stake spending")]
+    SpendStakeError(#[from] SpendStakeError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -213,19 +213,19 @@ pub enum TokensError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum PoSError {
+pub enum SpendStakeError {
     #[error("Kernel inputs are empty")]
     NoKernel,
     #[error("Only one kernel allowed")]
     MultipleKernels,
     #[error("Invalid purpose used in kernel")]
     InvalidKernelPurpose,
-    #[error("Stake pool data in kernel doesn't match data in block reward output")]
-    StakePoolDataMismatch,
     #[error("Block reward output has no outputs")]
     NoBlockRewardOutputs,
     #[error("Block reward output has multiple outputs")]
     MultipleBlockRewardOutputs,
     #[error("Invalid purpose used in block reward")]
     InvalidBlockRewardPurpose,
+    #[error("Stake pool data in kernel doesn't match data in block reward output")]
+    StakePoolDataMismatch,
 }

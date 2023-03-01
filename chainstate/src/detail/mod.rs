@@ -34,7 +34,7 @@ pub use error::{
 };
 
 pub use transaction_verifier::{
-    error::{ConnectTransactionError, PoSError, TokensError, TxIndexError},
+    error::{ConnectTransactionError, SpendStakeError, TokensError, TxIndexError},
     storage::TransactionVerifierStorageError,
 };
 use tx_verifier::transaction_verifier;

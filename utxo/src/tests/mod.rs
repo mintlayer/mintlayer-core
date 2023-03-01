@@ -660,14 +660,14 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoS(PoSData::new(
+        ConsensusData::PoS(Box::new(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data.clone(),
             vrf_data,
             Compact(1),
-        )),
+        ))),
         BlockReward::new(outputs),
     )
     .unwrap();
@@ -759,14 +759,14 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoS(PoSData::new(
+        ConsensusData::PoS(Box::new(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data.clone(),
             vrf_data,
             Compact(1),
-        )),
+        ))),
         BlockReward::new(outputs),
     )
     .unwrap();
@@ -814,14 +814,14 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoS(PoSData::new(
+        ConsensusData::PoS(Box::new(PoSData::new(
             inputs,
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data.clone(),
             vrf_data,
             Compact(1),
-        )),
+        ))),
         BlockReward::new(outputs),
     )
     .unwrap();

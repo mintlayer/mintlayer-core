@@ -437,7 +437,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         block.get_id(),
                     ))
                 }
-                // FIXME: single output?
                 OutputPurpose::SpendStakePool(_, tl) => timelock_check_fn(tl)?,
                 OutputPurpose::Burn => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(

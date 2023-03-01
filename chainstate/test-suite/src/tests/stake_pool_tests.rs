@@ -524,7 +524,7 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
             )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(stake_pool_data.clone())),
+                OutputPurpose::StakePool(Box::new(stake_pool_data)),
             ))
             .build();
         let tx1_id = tx1.transaction().get_id();
@@ -623,7 +623,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
     });
 }
 
-// Coin input -> SpendStakePool is forbidden
+// Transfer -> SpendStakePool is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

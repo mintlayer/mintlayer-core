@@ -110,7 +110,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
-            ConnectTransactionError::PoSError(_) => 100,
+            ConnectTransactionError::SpendStakeError(_) => 100,
         }
     }
 }

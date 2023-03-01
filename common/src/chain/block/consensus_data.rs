@@ -27,7 +27,7 @@ pub enum ConsensusData {
     #[codec(index = 1)]
     PoW(PoWData),
     #[codec(index = 2)]
-    PoS(PoSData),
+    PoS(Box<PoSData>),
 }
 
 impl ConsensusData {
@@ -68,7 +68,7 @@ pub struct PoSData {
     /// It represents random seed generated based on the randomness of the previous block.
     vrf_data_from_prev_block: VRFReturn,
 
-    target: Compact, // TODO: do we really need to store it?
+    target: Compact,
 }
 
 impl PoSData {

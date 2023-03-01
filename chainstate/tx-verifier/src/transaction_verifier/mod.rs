@@ -38,7 +38,7 @@ use self::{
     amounts_map::AmountsMap,
     cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
-    error::{ConnectTransactionError, PoSError, TokensError},
+    error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -370,10 +370,10 @@ where
                 let block_reward_transactable = block.block_reward_transactable();
 
                 let kernel_input =
-                    match block_reward_transactable.inputs().ok_or(PoSError::NoKernel)? {
-                        [] => Err(PoSError::NoKernel),
+                    match block_reward_transactable.inputs().ok_or(SpendStakeError::NoKernel)? {
+                        [] => Err(SpendStakeError::NoKernel),
                         [kernel_input] => Ok(kernel_input),
-                        _ => Err(PoSError::MultipleKernels),
+                        _ => Err(SpendStakeError::MultipleKernels),
                     }?;
 
                 let kernel_output = self
@@ -384,31 +384,33 @@ where
                 let kernel_stake_pool_data = match kernel_output.output().purpose() {
                     OutputPurpose::Transfer(_)
                     | OutputPurpose::LockThenTransfer(_, _)
-                    | OutputPurpose::Burn => Err(PoSError::InvalidKernelPurpose),
+                    | OutputPurpose::Burn => Err(SpendStakeError::InvalidKernelPurpose),
                     OutputPurpose::StakePool(d) => Ok(d.as_ref()),
                     OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
                 }?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
-                    .ok_or(PoSError::NoBlockRewardOutputs)?
+                    .ok_or(SpendStakeError::NoBlockRewardOutputs)?
                 {
-                    [] => Err(PoSError::NoBlockRewardOutputs),
+                    [] => Err(SpendStakeError::NoBlockRewardOutputs),
                     [output] => Ok(output),
-                    _ => Err(PoSError::MultipleBlockRewardOutputs),
+                    _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
 
                 let reward_stake_pool_data = match reward_output.purpose() {
                     OutputPurpose::Transfer(_)
                     | OutputPurpose::LockThenTransfer(_, _)
                     | OutputPurpose::Burn
-                    | OutputPurpose::StakePool(_) => Err(PoSError::InvalidBlockRewardPurpose),
+                    | OutputPurpose::StakePool(_) => {
+                        Err(SpendStakeError::InvalidBlockRewardPurpose)
+                    }
                     OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
                 }?;
 
                 ensure!(
                     kernel_stake_pool_data == reward_stake_pool_data,
-                    PoSError::StakePoolDataMismatch
+                    SpendStakeError::StakePoolDataMismatch
                 );
 
                 Ok(())
