@@ -1,14 +1,14 @@
 use crate::primitives::H256;
 
-pub struct IncrementalPaddingIterator<T: Iterator<Item = H256>, F: Fn(&H256) -> H256> {
-    leaves: T,
+pub struct IncrementalPaddingIterator<I: Iterator<Item = H256>, F: Fn(&H256) -> H256> {
+    leaves: I,
     padding_function: F,
     last_value: H256,
     current_index: usize,
 }
 
-impl<'a, T: Iterator<Item = H256>, F: Fn(&H256) -> H256> IncrementalPaddingIterator<T, F> {
-    pub fn new(leaves: T, padding_function: F) -> Self {
+impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> IncrementalPaddingIterator<I, F> {
+    pub fn new(leaves: I, padding_function: F) -> Self {
         IncrementalPaddingIterator {
             leaves,
             padding_function,
@@ -18,8 +18,8 @@ impl<'a, T: Iterator<Item = H256>, F: Fn(&H256) -> H256> IncrementalPaddingItera
     }
 }
 
-impl<'a, T: Iterator<Item = H256>, F: Fn(&H256) -> H256> Iterator
-    for IncrementalPaddingIterator<T, F>
+impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> Iterator
+    for IncrementalPaddingIterator<I, F>
 {
     type Item = H256;
 
