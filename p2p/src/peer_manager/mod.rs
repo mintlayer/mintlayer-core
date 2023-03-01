@@ -29,7 +29,11 @@ use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use tokio::{sync::mpsc, time::Instant};
 
 use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
+use common::{
+    chain::{config::ChainType, ChainConfig},
+    primitives::semver::SemVer,
+    time_getter::TimeGetter,
+};
 use logging::log;
 use utils::ensure;
 
@@ -77,7 +81,9 @@ const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 
 /// Hardcoded seed DNS hostnames
 // TODO: Replace with actual values
-const DNS_SEEDS: [&str; 2] = ["seed.mintlayer.org", "seed2.mintlayer.org"];
+const DNS_SEEDS_MAINNET: [&str; 0] = [];
+const DNS_SEEDS_TESTNET: [&str; 1] = ["seed-testnet.mintlayer.org"];
+
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
 
@@ -568,9 +574,15 @@ where
 
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn reload_dns_seed(&mut self) {
+        let dns_seed = match self.chain_config.chain_type() {
+            ChainType::Mainnet => DNS_SEEDS_MAINNET.as_slice(),
+            ChainType::Testnet => DNS_SEEDS_TESTNET.as_slice(),
+            ChainType::Regtest | ChainType::Signet => &[],
+        };
+
         log::debug!("Resolve DNS seed...");
         let results = futures::future::join_all(
-            DNS_SEEDS
+            dns_seed
                 .iter()
                 .map(|host| tokio::net::lookup_host((*host, self.chain_config.p2p_port()))),
         )
