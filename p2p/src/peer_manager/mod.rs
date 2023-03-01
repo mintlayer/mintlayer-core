@@ -640,21 +640,12 @@ where
         self.peerdb.heartbeat();
 
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
-        let connected_outbound = self
-            .peers
-            .values()
-            .filter_map(|peer| {
-                if peer.role == Role::Outbound {
-                    Some(peer.address.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let connected_outbound_count =
+            self.peers.values().filter(|peer| peer.role == Role::Outbound).count();
 
         let new_addresses = self
             .peerdb
-            .select_new_outbound_addresses(&pending_outbound, &connected_outbound);
+            .select_new_outbound_addresses(&pending_outbound, connected_outbound_count);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
@@ -664,12 +655,15 @@ where
         {
             self.reload_dns_seed().await;
             self.peerdb
-                .select_new_outbound_addresses(&pending_outbound, &connected_outbound)
+                .select_new_outbound_addresses(&pending_outbound, connected_outbound_count)
         } else {
             new_addresses
         };
 
-        for address in new_addresses {
+        let user_added_addresses =
+            self.peerdb.select_user_added_outbound_addresses(&pending_outbound);
+
+        for address in new_addresses.into_iter().chain(user_added_addresses.into_iter()) {
             self.connect(address, None);
         }
     }

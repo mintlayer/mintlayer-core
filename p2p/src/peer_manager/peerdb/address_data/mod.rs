@@ -71,6 +71,10 @@ impl AddressData {
         }
     }
 
+    pub fn user_added(&self) -> bool {
+        *self.user_added
+    }
+
     /// Returns true when it is time to attempt a new outbound connection
     pub fn connect_now(&self, now: Instant) -> bool {
         match self.state {

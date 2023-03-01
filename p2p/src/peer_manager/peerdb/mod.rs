@@ -58,6 +58,11 @@ pub struct PeerDb<A, B, S> {
     /// Map of all outbound peer addresses
     addresses: BTreeMap<A, AddressData>,
 
+    /// Set of addresses that have the `user_flag` set.
+    /// Used as an optimization to not iterate over the entire `addresses` map.
+    /// Every listed address must exist in the `addresses` map.
+    added_nodes: BTreeSet<A>,
+
     /// Banned addresses along with the duration of the ban.
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
@@ -112,6 +117,7 @@ where
         Ok(Self {
             addresses,
             banned_addresses: loaded_storage.banned_addresses,
+            added_nodes,
             p2p_config,
             time_getter,
             storage,
@@ -125,28 +131,51 @@ where
         self.addresses.keys()
     }
 
-    /// Selects peer addresses for outbound connections
+    /// Selects peer addresses for outbound connections (except user-added)
     pub fn select_new_outbound_addresses(
         &self,
         pending_outbound: &BTreeSet<A>,
-        connected_outbound: &BTreeSet<A>,
+        connected_outbound_count: usize,
     ) -> Vec<A> {
+        let now = Instant::now();
         let count = MAX_OUTBOUND_CONNECTIONS
             .saturating_sub(pending_outbound.len())
-            .saturating_sub(connected_outbound.len());
+            .saturating_sub(connected_outbound_count);
 
         // TODO: Ignore banned addresses
         // TODO: Allow only one connection per IP address
-        // TODO: Always try to connect to user-added addresses without considering `MAX_OUTBOUND_CONNECTIONS`
         self.addresses
             .iter()
-            .filter(|(addr, address_data)| {
-                address_data.connect_now(Instant::now())
+            .filter_map(|(addr, address_data)| {
+                if address_data.connect_now(now)
                     && !pending_outbound.contains(addr)
-                    && !connected_outbound.contains(addr)
+                    && !address_data.user_added()
+                {
+                    Some(addr.clone())
+                } else {
+                    None
+                }
             })
-            .map(|(addr, _address_data)| addr.clone())
             .choose_multiple(&mut make_pseudo_rng(), count)
+    }
+
+    /// Selects user-added peer addresses for outbound connections
+    pub fn select_user_added_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
+        let now = Instant::now();
+        self.added_nodes
+            .iter()
+            .filter_map(|addr| {
+                let address_data = self
+                    .addresses
+                    .get(addr)
+                    .expect("added nodes must always be in the addresses map");
+                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
+                    Some(addr.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Perform the PeerDb maintenance
