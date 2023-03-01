@@ -251,7 +251,23 @@ where
             None => return,
         };
 
+        let whitelisted_node = match peer.role {
+            Role::Inbound => {
+                // TODO: Add whitelisted IPs option and check it here
+                false
+            }
+            Role::Outbound => self.peerdb.is_user_added_node(&peer.address),
+        };
+
+        if whitelisted_node {
+            log::info!(
+                "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
+            );
+            return;
+        }
+
         peer.score = peer.score.saturating_add(score);
+
         log::info!(
             "Adjusting peer score for peer {peer_id}, adjustment {score}, new score {}",
             peer.score
@@ -398,6 +414,7 @@ where
         // the new inbound connection cannot be accepted even if it's valid.
         // Outbound peer count is not checked because the node initiates new connections
         // only when needed or from RPC requests.
+        // TODO: Always allow connections from the whitelisted IPs
         ensure!(
             self.inbound_peer_count() < *self.p2p_config.max_inbound_connections
                 || role != Role::Inbound,

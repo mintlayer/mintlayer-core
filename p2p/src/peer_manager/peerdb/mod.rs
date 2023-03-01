@@ -269,6 +269,10 @@ where
         false
     }
 
+    pub fn is_user_added_node(&self, address: &A) -> bool {
+        self.added_nodes.contains(address)
+    }
+
     /// Changes the address state to banned
     pub fn ban_peer(&mut self, address: &A) {
         let bannable_address = address.as_bannable();
