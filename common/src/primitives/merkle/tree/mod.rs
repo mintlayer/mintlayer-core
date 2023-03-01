@@ -66,9 +66,9 @@ impl MerkleTree {
         let mut tree = Vec::new();
         let pad_f = |i: &H256| default_hash(i);
 
-        let padded_leaves = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
+        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
 
-        tree.extend(padded_leaves);
+        tree.extend(padded_leaves_iter);
         if tree.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(tree.len()));
         }
