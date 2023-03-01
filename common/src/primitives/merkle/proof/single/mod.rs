@@ -53,18 +53,13 @@ impl<'a> SingleProofNodes<'a> {
             ),
         )?;
 
-        let mut proof = vec![];
+        let proof: Vec<_> = leaf.into_iter_parents().map_while(|n| n.sibling()).collect();
 
-        // once we reach root we stop
-        for node in leaf.into_iter_parents() {
-            if node.is_root() {
-                break;
-            }
-            // We push siblings of parents because they're what we need to calculate the root, upwards.
-            let err_msg = "In this loop, this cannot be root, so sibling must exist";
-            let sibling = node.sibling().expect(err_msg);
-            proof.push(sibling);
-        }
+        assert_eq!(
+            proof.len(),
+            tree.level_count().get() - 1,
+            "This happens only if the we fail to find a sibling, which is only for root. In the loop, this cannot happen, so siblings must exist"
+        );
 
         let result = Self {
             leaf,
