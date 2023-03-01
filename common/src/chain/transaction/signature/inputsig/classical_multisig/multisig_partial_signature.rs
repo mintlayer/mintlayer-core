@@ -47,11 +47,11 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
     }
 
     pub fn challenge(&self) -> &ClassicMultisigChallenge {
-        &self.challenge
+        self.challenge
     }
 
     pub fn signatures(&self) -> &AuthorizedClassicalMultisigSpend {
-        &self.signatures
+        self.signatures
     }
 
     pub fn missing_signatures_count(&self) -> i32 {
@@ -94,7 +94,6 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
         }
     }
 
-    #[must_use]
     pub fn verify_signatures(
         &self,
         chain_config: &ChainConfig,
@@ -107,7 +106,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
 
         let verification_result = self.signatures.iter().all(|(index, signature)| {
             let public_key = &self.challenge.public_keys()[index as usize];
-            public_key.verify_message(signature, &self.message)
+            public_key.verify_message(signature, self.message)
         });
 
         if self.signatures().available_signatures_count()
