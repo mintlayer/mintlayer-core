@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod padding;
 pub mod tree_size;
 
 use std::num::NonZeroUsize;
@@ -24,7 +25,7 @@ use crate::primitives::{
     H256,
 };
 
-use self::tree_size::TreeSize;
+use self::{padding::IncrementalPaddingIterator, tree_size::TreeSize};
 
 use super::{pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 
@@ -49,23 +50,6 @@ pub struct MerkleTree {
 }
 
 impl MerkleTree {
-    fn create_merkletree_padding(elements: &[H256]) -> Vec<H256> {
-        let orig_size = elements.len();
-        let pow2_size = orig_size.next_power_of_two();
-
-        assert!(pow2_size >= orig_size);
-
-        let mut padding = Vec::with_capacity(pow2_size - orig_size);
-        for _idx in orig_size..pow2_size {
-            let to_hash = padding
-                .last()
-                .unwrap_or_else(|| elements.last().expect("We already checked it's not empty"));
-            let to_push = default_hash(to_hash);
-            padding.push(to_push);
-        }
-        padding
-    }
-
     pub(super) fn hash_pair(left: &H256, right: &H256) -> H256 {
         let mut hasher = DefaultHashAlgoStream::new();
         hasher.write(left.as_bytes());
@@ -76,15 +60,20 @@ impl MerkleTree {
     /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
     /// Incremental padding means that the padding is created by hashing the last element of the list,
     /// and then hashing the result with the next element of the list, and so on.
-    pub fn from_leaves(leaves: Vec<H256>) -> Result<Self, MerkleTreeFormError> {
-        if leaves.is_empty() {
-            return Err(MerkleTreeFormError::TooSmall(leaves.len()));
+    pub fn from_leaves(
+        leaves: impl IntoIterator<Item = H256>,
+    ) -> Result<Self, MerkleTreeFormError> {
+        let mut tree = Vec::new();
+        let pad_f = |i: &H256| default_hash(i);
+
+        let padded_leaves = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
+
+        tree.extend(padded_leaves);
+        if tree.is_empty() {
+            return Err(MerkleTreeFormError::TooSmall(tree.len()));
         }
-        let padding = Self::create_merkletree_padding(&leaves);
-        let leaves = leaves.into_iter().chain(padding).collect::<Vec<_>>();
-        let steps = leaves.len() - 1;
-        let mut tree = Vec::with_capacity(2 * leaves.len() - 1);
-        tree.extend(leaves.into_iter());
+        let steps = tree.len() - 1;
+        tree.reserve(steps); // reserve another tree.len() - 1 elements (the rest of the tree after the leaves)
         for i in 0..steps {
             let el = Self::hash_pair(&tree[i * 2], &tree[i * 2 + 1]);
             tree.push(el);
