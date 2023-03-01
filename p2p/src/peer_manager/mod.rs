@@ -256,7 +256,7 @@ where
                 // TODO: Add whitelisted IPs option and check it here
                 false
             }
-            Role::Outbound => self.peerdb.is_user_added_node(&peer.address),
+            Role::Outbound => self.peerdb.is_reserved_node(&peer.address),
         };
 
         if whitelisted_node {
@@ -679,10 +679,9 @@ where
             new_addresses
         };
 
-        let user_added_addresses =
-            self.peerdb.select_user_added_outbound_addresses(&pending_outbound);
+        let reserved_addresses = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
 
-        for address in new_addresses.into_iter().chain(user_added_addresses.into_iter()) {
+        for address in new_addresses.into_iter().chain(reserved_addresses.into_iter()) {
             self.connect(address, None);
         }
     }

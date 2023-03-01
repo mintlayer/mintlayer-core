@@ -77,9 +77,9 @@ pub struct RunOptions {
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<Vec<String>>,
 
-    /// Optional list of initial node addresses to connect.
+    /// Optional list of reserved node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_add_node: Option<Vec<String>>,
+    pub p2p_reserved_node: Option<Vec<String>>,
 
     /// Maximum allowed number of inbound connections.
     #[clap(long)]

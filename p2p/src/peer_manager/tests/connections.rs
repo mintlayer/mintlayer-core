@@ -660,8 +660,8 @@ async fn connection_timeout_rpc_notified_noise() {
     .await;
 }
 
-// verify that peer connection is made when valid add_node parameter is used
-async fn connection_add_node<A, T>()
+// verify that peer connection is made when valid reserved_node parameter is used
+async fn connection_reserved_node<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
@@ -673,7 +673,7 @@ where
     // Start first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
-        added_nodes: Default::default(),
+        reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -701,10 +701,10 @@ where
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
 
-    // Start second peer manager and let it know about first manager via added_nodes
+    // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
-        added_nodes: bind_addresses,
+        reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -746,18 +746,20 @@ where
 }
 
 #[tokio::test]
-async fn connection_add_node_tcp() {
-    connection_add_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
+async fn connection_reserved_node_tcp() {
+    connection_reserved_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>()
+        .await;
 }
 
 #[tokio::test]
-async fn connection_add_node_noise() {
-    connection_add_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
+async fn connection_reserved_node_noise() {
+    connection_reserved_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>()
+        .await;
 }
 
 #[tokio::test]
-async fn connection_add_node_channel() {
-    connection_add_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
+async fn connection_reserved_node_channel() {
+    connection_reserved_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>()
         .await;
 }
 
@@ -775,7 +777,7 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
-        added_nodes: Default::default(),
+        reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -804,10 +806,10 @@ where
     let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
 
-    // Start the second peer manager and let it know about the first peer using added_nodes
+    // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
-        added_nodes: bind_addresses.clone(),
+        reserved_nodes: bind_addresses.clone(),
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -829,10 +831,10 @@ where
     )
     .await;
 
-    // Start the third peer manager and let it know about the first peer using added_nodes
+    // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
-        added_nodes: bind_addresses,
+        reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),

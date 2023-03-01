@@ -57,23 +57,23 @@ pub enum AddressStateTransitionTo {
 pub struct AddressData {
     state: AddressState,
 
-    user_added: ConstValue<bool>,
+    reserved: ConstValue<bool>,
 }
 
 impl AddressData {
-    pub fn new(was_reachable: bool, user_added: bool, now: Instant) -> Self {
+    pub fn new(was_reachable: bool, reserved: bool, now: Instant) -> Self {
         AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
                 fail_count: 0,
                 disconnected_at: now,
             },
-            user_added: user_added.into(),
+            reserved: reserved.into(),
         }
     }
 
-    pub fn user_added(&self) -> bool {
-        *self.user_added
+    pub fn reserved(&self) -> bool {
+        *self.reserved
     }
 
     /// Returns true when it is time to attempt a new outbound connection
@@ -87,8 +87,8 @@ impl AddressData {
                 was_reachable,
             } => {
                 let age = now.duration_since(disconnected_at);
-                if *self.user_added {
-                    // Try to connect to the user added nodes more often
+                if *self.reserved {
+                    // Try to connect to the user reserved nodes more often
                     let age = now - disconnected_at;
                     match fail_count {
                         0 => true,
@@ -176,7 +176,7 @@ impl AddressData {
                     disconnected_at: _,
                     was_reachable,
                 } => {
-                    if *self.user_added {
+                    if *self.reserved {
                         AddressState::Disconnected {
                             fail_count: fail_count + 1,
                             disconnected_at: now,

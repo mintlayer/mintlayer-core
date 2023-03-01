@@ -129,13 +129,13 @@ fn randomized(#[case] seed: Seed) {
         })
         .collect::<Vec<_>>();
 
-    let added_count = rng.gen_range(0..5);
-    let added_nodes = nodes.choose_multiple(&mut rng, added_count).cloned().collect();
+    let reserved_count = rng.gen_range(0..5);
+    let reserved_nodes = nodes.choose_multiple(&mut rng, reserved_count).cloned().collect();
 
     let loaded_count = rng.gen_range(0..10);
     let loaded_nodes = nodes.choose_multiple(&mut rng, loaded_count).cloned().collect();
 
-    let mut crawler = test_crawler(loaded_nodes, added_nodes);
+    let mut crawler = test_crawler(loaded_nodes, reserved_nodes);
 
     for _ in 0..rng.gen_range(0..100000) {
         crawler.timer(Duration::from_secs(rng.gen_range(0..100)), &mut rng);
@@ -253,7 +253,7 @@ fn long_offline(#[case] seed: Seed) {
     );
     assert!(crawler.persistent.contains(&loaded_node));
 
-    // Reachable and added nodes are offline for two month
+    // Reachable and reserved nodes are offline for two month
     for _ in 0..24 * 60 {
         crawler.timer(Duration::from_secs(3600), &mut rng);
         for address in crawler.pending_connects.clone() {

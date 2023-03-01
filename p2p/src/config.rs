@@ -67,7 +67,7 @@ pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<String>,
     /// Optional list of initial node addresses, could be used to specify boot nodes for example.
-    pub added_nodes: Vec<String>,
+    pub reserved_nodes: Vec<String>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: MaxInboundConnections,
     /// The score threshold after which a peer is banned.
