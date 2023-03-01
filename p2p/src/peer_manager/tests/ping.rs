@@ -41,6 +41,7 @@ async fn ping_timeout() {
     let chain_config = Arc::new(config::create_mainnet());
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),

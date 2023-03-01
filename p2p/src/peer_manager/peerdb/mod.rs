@@ -88,6 +88,15 @@ where
         // Node won't start if DB loading fails!
         let loaded_storage = LoadedStorage::<A, B>::load_storage(&storage)?;
 
+        let boot_nodes = p2p_config
+            .boot_nodes
+            .iter()
+            .map(|addr| {
+                addr.parse::<A>().map_err(|_err| {
+                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
+                })
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
         let reserved_nodes = p2p_config
             .reserved_nodes
             .iter()
@@ -101,7 +110,9 @@ where
         let now = Instant::now();
         let addresses = loaded_storage
             .known_addresses
-            .union(&reserved_nodes)
+            .iter()
+            .chain(boot_nodes.iter())
+            .chain(reserved_nodes.iter())
             .map(|addr| {
                 (
                     addr.clone(),

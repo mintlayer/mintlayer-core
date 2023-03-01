@@ -66,7 +66,12 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<String>,
-    /// Optional list of initial node addresses, could be used to specify boot nodes for example.
+    /// Optional list of initial node addresses.
+    /// Boot node addresses are added to PeerDb as regular discovered addresses.
+    pub boot_nodes: Vec<String>,
+    /// Optional list of reserved node addresses.
+    /// PeerManager will try to maintain persistent connections to the reserved nodes.
+    /// Ban scores are not adjusted for the reserved nodes.
     pub reserved_nodes: Vec<String>,
     /// Maximum allowed number of inbound connections.
     pub max_inbound_connections: MaxInboundConnections,

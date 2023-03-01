@@ -126,6 +126,7 @@ fn chainstate_config(
 fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let P2pConfigFile {
         bind_addresses,
+        boot_nodes,
         reserved_nodes,
         max_inbound_connections,
         ban_threshold,
@@ -137,6 +138,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     } = config;
 
     let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
+    let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);
     let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
     let ban_threshold = options.p2p_ban_threshold.or(ban_threshold);
@@ -148,6 +150,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
 
     P2pConfigFile {
         bind_addresses,
+        boot_nodes,
         reserved_nodes,
         max_inbound_connections,
         ban_threshold,
