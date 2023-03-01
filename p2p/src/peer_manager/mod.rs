@@ -659,8 +659,14 @@ where
         self.peerdb.heartbeat();
 
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
-        let connected_outbound_count =
-            self.peers.values().filter(|peer| peer.role == Role::Outbound).count();
+        let connected_outbound_count = self
+            .peers
+            .values()
+            .filter(|peer| {
+                // Do not take into account reserved nodes
+                peer.role == Role::Outbound && !self.peerdb.is_reserved_node(&peer.address)
+            })
+            .count();
 
         let new_addresses = self
             .peerdb
