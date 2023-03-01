@@ -25,9 +25,9 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
     },
-    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey, PublicKey},
@@ -41,30 +41,28 @@ fn make_tx_with_stake_pool_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     amount_to_stake: Amount,
+    amount_to_transfer: Amount,
     pub_key: &PublicKey,
 ) -> (SignedTransaction, PoolId) {
     let outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-    make_tx_with_stake_pool(rng, outpoint_id, amount_to_stake, pub_key)
-}
-
-fn make_tx_with_stake_pool_from_tx(
-    rng: &mut (impl Rng + CryptoRng),
-    tx_id: Id<Transaction>,
-    amount_to_stake: Amount,
-    pub_key: &PublicKey,
-) -> (SignedTransaction, PoolId) {
-    let outpoint_id = OutPointSourceId::Transaction(tx_id);
-    make_tx_with_stake_pool(rng, outpoint_id, amount_to_stake, pub_key)
+    make_tx_with_stake_pool(
+        rng,
+        OutPoint::new(outpoint_id, 0),
+        amount_to_stake,
+        amount_to_transfer,
+        pub_key,
+    )
 }
 
 fn make_tx_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
-    outpoint_id: OutPointSourceId,
+    outpoint: OutPoint,
     amount_to_stake: Amount,
+    amount_to_transfer: Amount,
     pub_key: &PublicKey,
 ) -> (SignedTransaction, PoolId) {
     let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let tx_output = TxOutput::new(
+    let stake_output = TxOutput::new(
         OutputValue::Coin(amount_to_stake),
         OutputPurpose::StakePool(Box::new(StakePoolData::new(
             anyonecanspend_address(),
@@ -76,14 +74,17 @@ fn make_tx_with_stake_pool(
         ))),
     );
 
-    let input0_outpoint = OutPoint::new(outpoint_id, 0);
+    let transfer_output = TxOutput::new(
+        OutputValue::Coin(amount_to_transfer),
+        OutputPurpose::Transfer(anyonecanspend_address()),
+    );
+
+    let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
     let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::new(input0_outpoint.tx_id(), input0_outpoint.output_index()),
-            empty_witness(rng),
-        )
-        .add_output(tx_output)
+        .add_input(outpoint.into(), empty_witness(rng))
+        .add_output(transfer_output)
+        .add_output(stake_output)
         .build();
     (tx, pool_id)
 }
@@ -100,8 +101,13 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let amount_to_stake = Amount::from_atoms(100);
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let (tx, pool_id) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
+        let (tx, pool_id) = make_tx_with_stake_pool_from_genesis(
+            &mut rng,
+            &mut tf,
+            amount_to_stake,
+            Amount::from_atoms(1),
+            &pub_key,
+        );
         let tx_utxo_outpoint =
             OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
 
@@ -161,13 +167,19 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let expected_epoch_index = 0;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
+            Amount::from_atoms(300),
+            &pub_key,
+        );
+
+        let (tx2, pool_id2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
             &pub_key,
         );
 
@@ -276,13 +288,19 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
+            Amount::from_atoms(300),
+            &pub_key,
+        );
+
+        let (tx2, pool_id2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
             &pub_key,
         );
 
@@ -404,13 +422,19 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
+            Amount::from_atoms(300),
+            &pub_key,
+        );
+
+        let (tx2, pool_id2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
             &pub_key,
         );
 
@@ -543,8 +567,13 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
+        let (tx1, pool_id1) = make_tx_with_stake_pool_from_genesis(
+            &mut rng,
+            &mut tf,
+            amount_to_stake,
+            Amount::from_atoms(1),
+            &pub_key,
+        );
 
         let block1_index = tf
             .make_block_builder()

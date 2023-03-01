@@ -134,6 +134,23 @@ fn create_pos_data(
     )
 }
 
+fn create_reward_output(
+    tf: &TestFramework,
+    consensus_data: &ConsensusData,
+    stake_pool_data: StakePoolData,
+) -> TxOutput {
+    let reward_maturity: i64 = consensus_data
+        .reward_maturity_distance(&tf.chainstate.get_chain_config())
+        .into();
+    TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::SpendStakePool(
+            Box::new(stake_pool_data),
+            OutputTimeLock::ForBlockCount(reward_maturity as u64),
+        ),
+    )
+}
+
 fn get_best_block_randomness(tf: &TestFramework) -> PoSRandomness {
     match tf.chainstate.get_best_block_index().unwrap() {
         chainstate_types::GenBlockIndex::Block(bi) => {
@@ -176,7 +193,7 @@ fn pos_basic(#[case] seed: Seed) {
 
     let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
     let (stake_pool_outpoint, pool_id) =
-        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pos_data = create_pos_data(
@@ -188,9 +205,28 @@ fn pos_basic(#[case] seed: Seed) {
         pool_id,
         1,
     );
+    let consensus_data = ConsensusData::PoS(pos_data);
 
+    // skip block reward output
+    let res = tf
+        .make_block_builder()
+        .with_consensus_data(consensus_data.clone())
+        .build_and_process()
+        .unwrap_err();
+    assert_eq!(
+        res,
+        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+            chainstate::ConnectTransactionError::PoSError(
+                chainstate::PoSError::NoBlockRewardOutputs
+            )
+        ))
+    );
+
+    // valid case
+    let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
     tf.make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .with_consensus_data(consensus_data)
+        .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
 }
@@ -288,7 +324,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
     let (stake_pool_outpoint, pool_id) =
-        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
 
     let expected_error = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
         CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
@@ -442,10 +478,12 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             Compact::from(difficulty),
         );
 
+        let consensus_data = ConsensusData::PoS(pos_data);
+        let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
         tf.make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(pos_data))
+            .with_consensus_data(consensus_data)
+            .with_reward(vec![reward_output])
             .build_and_process()
-            .unwrap()
             .unwrap();
     }
 }
@@ -480,7 +518,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 
     let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
     let (stake_pool_outpoint, expected_pool_id) =
-        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
 
     let random_pool_id: PoolId = H256::random_using(&mut rng).into();
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
@@ -520,8 +558,11 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         1,
     );
 
+    let consensus_data = ConsensusData::PoS(pos_data);
+    let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
     tf.make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(pos_data))
+        .with_consensus_data(consensus_data)
+        .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
 }

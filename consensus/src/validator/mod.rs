@@ -168,9 +168,11 @@ where
     P: PoSAccountingView,
 {
     match header.consensus_data() {
-        ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
-            "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
-        )),
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            Err(ConsensusVerificationError::ConsensusTypeMismatch(
+                "Chain configuration says we are PoS but block consensus data is not PoS.".into(),
+            ))
+        }
         ConsensusData::PoS(pos_data) => check_proof_of_stake(
             chain_config,
             header,

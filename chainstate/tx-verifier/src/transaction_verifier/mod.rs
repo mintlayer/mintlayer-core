@@ -360,7 +360,7 @@ where
         Ok(())
     }
 
-    fn check_staked_outputs_in_reward(
+    fn check_stake_outputs_in_reward(
         &self,
         block: &WithId<Block>,
     ) -> Result<(), ConnectTransactionError> {
@@ -422,7 +422,7 @@ where
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
-        self.check_staked_outputs_in_reward(block)?;
+        self.check_stake_outputs_in_reward(block)?;
 
         let block_reward_transactable = block.block_reward_transactable();
 
@@ -614,6 +614,41 @@ where
         let input0_getter =
             || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
 
+        let attempt_to_spend_stake = tx
+            .inputs()
+            .iter()
+            .map(|i| {
+                self.utxo_cache
+                    .utxo(i.outpoint())
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .iter()
+            .any(|utxo| match utxo.output().purpose() {
+                OutputPurpose::Transfer(_)
+                | OutputPurpose::LockThenTransfer(_, _)
+                | OutputPurpose::Burn => false,
+                OutputPurpose::StakePool(_) | OutputPurpose::SpendStakePool(_, _) => true,
+            });
+        ensure!(
+            !attempt_to_spend_stake,
+            ConnectTransactionError::AttemptToSpendStakedCoins
+        );
+
+        let attempt_to_use_spend_stake_pool =
+            tx.outputs().iter().any(|output| match output.purpose() {
+                OutputPurpose::Transfer(_)
+                | OutputPurpose::LockThenTransfer(_, _)
+                | OutputPurpose::Burn
+                | OutputPurpose::StakePool(_) => false,
+                OutputPurpose::SpendStakePool(_, _) => true,
+            });
+
+        ensure!(
+            !attempt_to_use_spend_stake_pool,
+            ConnectTransactionError::AttemptToSpendStakedCoins
+        );
+
         let tx_undo = tx
             .outputs()
             .iter()
@@ -724,13 +759,6 @@ where
 
         // verify input signatures
         self.verify_signatures(tx)?;
-
-        // check output purposes
-        {
-            // SpendStakePool cannot be used in tx
-            // StakePool/SpendStakePool inputs not allowed to Transfer
-            // StakePoolData cannot change
-        }
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 

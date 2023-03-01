@@ -484,7 +484,13 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendStakedCoins
+            ))
+        );
     });
 }
 
@@ -535,7 +541,13 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendStakedCoins
+            ))
+        );
     });
 }
 
@@ -601,7 +613,13 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
-        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendStakedCoins
+            ))
+        );
     });
 }
 
@@ -641,6 +659,12 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
             ))
             .build();
 
-        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
+        let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToSpendStakedCoins
+            ))
+        );
     });
 }
