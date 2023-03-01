@@ -28,11 +28,6 @@ use self::tree_size::TreeSize;
 
 use super::{pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 
-pub enum AdjacentLeavesIndices {
-    Alone(usize),
-    Together(usize, usize),
-}
-
 /// Merkle tree in the form of a vector, where the bottom leaves first, from left to right, and the root is
 /// the last element.
 /// Definitions:
