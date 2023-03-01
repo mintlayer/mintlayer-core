@@ -284,6 +284,8 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
+        self.peerdb.outbound_peer_connecting(address.clone());
+
         self.peer_connectivity_handle.connect(address)?;
 
         Ok(())

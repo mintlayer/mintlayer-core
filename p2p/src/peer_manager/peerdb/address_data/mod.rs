@@ -48,6 +48,7 @@ pub enum AddressState {
 }
 
 pub enum AddressStateTransitionTo {
+    Connecting,
     Connected,
     Disconnected,
     ConnectionFailed,
@@ -198,6 +199,26 @@ impl AddressData {
                 AddressState::Unreachable { erase_after: _ } => {
                     unreachable!()
                 }
+            },
+
+            AddressStateTransitionTo::Connecting => match self.state {
+                AddressState::Connected {} => unreachable!(),
+                AddressState::Disconnected {
+                    fail_count,
+                    disconnected_at,
+                    was_reachable,
+                } => AddressState::Disconnected {
+                    fail_count,
+                    disconnected_at,
+                    was_reachable,
+                },
+                // The user might request to connect to the node that was in the `Unreachable` state.
+                // Switch state to `Disconnected` as we don't expect `Unreachable` node to become `Connected`.
+                AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
+                    fail_count: 0,
+                    disconnected_at: now,
+                    was_reachable: false,
+                },
             },
         }
     }

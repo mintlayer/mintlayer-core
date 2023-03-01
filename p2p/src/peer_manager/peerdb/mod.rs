@@ -200,6 +200,14 @@ where
         self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
     }
 
+    /// Add new peer addresses if it's not known.
+    pub fn outbound_peer_connecting(&mut self, address: A) {
+        // Make sure the address is known (if the user requested to connect to the new address via RPC)
+        self.peer_discovered(address.clone());
+        // Update address state
+        self.change_address_state(address, AddressStateTransitionTo::Connecting);
+    }
+
     /// Mark peer as connected
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
