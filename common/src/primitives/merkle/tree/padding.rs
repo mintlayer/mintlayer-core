@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// An iterator that pads the leaves of a Merkle tree with incremental padding,
+/// i.e. the padding function is applied to the last value of the iterator,
+/// iteratively, until the next power of two is reached.
+/// An empty iterator will return no values.
 pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T>, F: Fn(&T) -> T> {
     leaves: I,
     padding_function: F,
