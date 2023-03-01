@@ -57,10 +57,10 @@ impl MerkleTree {
         H256::from(hasher.finalize())
     }
 
-    fn create_tree_from_leaves(
-        leaves: impl IntoIterator<Item = H256>,
+    fn create_tree_from_padded_leaves(
+        padded_leaves: impl IntoIterator<Item = H256>,
     ) -> Result<Vec<H256>, MerkleTreeFormError> {
-        let mut tree = leaves.into_iter().collect::<Vec<_>>();
+        let mut tree = padded_leaves.into_iter().collect::<Vec<_>>();
         if tree.is_empty() {
             return Err(MerkleTreeFormError::TooSmall(tree.len()));
         }
@@ -84,7 +84,7 @@ impl MerkleTree {
 
         let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter(), pad_f);
 
-        let tree = Self::create_tree_from_leaves(padded_leaves_iter)?;
+        let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
 
         TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
         let res = Self { tree };
