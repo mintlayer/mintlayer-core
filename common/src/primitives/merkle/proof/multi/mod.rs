@@ -24,7 +24,7 @@ use itertools::Itertools;
 
 use crate::primitives::{
     merkle::{
-        pos::NodePosition,
+        pos::{node_kind::NodeKind, NodePosition},
         tree::{tree_size::TreeSize, MerkleTree, Node},
         MerkleProofVerificationError, MerkleTreeProofExtractionError,
     },
@@ -310,11 +310,10 @@ impl MultiProofHashes {
                         ))
                     }
                 };
-                assert!(!curr_node_pos.node_kind().is_root(), "{}", err_msg);
-                let parent_hash = if curr_node_pos.node_kind().is_left() {
-                    MerkleTree::hash_pair(&hash, &sibling)
-                } else {
-                    MerkleTree::hash_pair(&sibling, &hash)
+                let parent_hash = match curr_node_pos.node_kind() {
+                    NodeKind::Root => panic!("{}", err_msg),
+                    NodeKind::LeftChild => MerkleTree::hash_pair(&hash, &sibling),
+                    NodeKind::RightChild => MerkleTree::hash_pair(&sibling, &hash),
                 };
 
                 // move to the next level
