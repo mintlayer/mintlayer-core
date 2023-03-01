@@ -1,29 +1,27 @@
-use crate::primitives::H256;
-
-pub struct IncrementalPaddingIterator<I: Iterator<Item = H256>, F: Fn(&H256) -> H256> {
+pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T>, F: Fn(&T) -> T> {
     leaves: I,
     padding_function: F,
-    last_value: H256,
+    last_value: Option<T>,
     current_index: usize,
 }
 
-impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> IncrementalPaddingIterator<I, F> {
+impl<'a, T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
     pub fn new(leaves: I, padding_function: F) -> Self {
         IncrementalPaddingIterator {
             leaves,
             padding_function,
-            last_value: H256::zero(),
+            last_value: None,
             current_index: 0,
         }
     }
 }
 
-impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> Iterator
-    for IncrementalPaddingIterator<I, F>
+impl<'a, T: Copy, I: Iterator<Item = T>, F: Fn(&T) -> T> Iterator
+    for IncrementalPaddingIterator<T, I, F>
 {
-    type Item = H256;
+    type Item = T;
 
-    fn next(&mut self) -> Option<H256> {
+    fn next(&mut self) -> Option<T> {
         match self.leaves.next() {
             None => {
                 // index == 0 means that we have no leaves at all;
@@ -33,15 +31,15 @@ impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> Iterator
                 {
                     None
                 } else {
-                    let res = (self.padding_function)(&self.last_value);
+                    let res = (self.padding_function)(&self.last_value.expect("Never at zero"));
                     self.current_index = self.current_index + 1;
-                    self.last_value = res;
+                    self.last_value = Some(res);
                     Some(res)
                 }
             }
             Some(leaf) => {
                 self.current_index = self.current_index + 1;
-                self.last_value = leaf.clone();
+                self.last_value = Some(leaf);
                 Some(leaf)
             }
         }
@@ -51,6 +49,7 @@ impl<'a, I: Iterator<Item = H256>, F: Fn(&H256) -> H256> Iterator
 #[cfg(test)]
 mod tests {
     use crate::primitives::id::default_hash;
+    use crate::primitives::H256;
 
     use super::*;
 
