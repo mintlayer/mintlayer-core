@@ -29,8 +29,6 @@ pub struct ClassicMultisigChallenge {
     public_keys: Vec<PublicKey>,
 }
 
-// TODO(PR): add a check in consensus that the number of public keys is not too large
-
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ClassicMultisigChallengeError {
     #[error("Too many public keys, more than allowed: {0} > {1}")]

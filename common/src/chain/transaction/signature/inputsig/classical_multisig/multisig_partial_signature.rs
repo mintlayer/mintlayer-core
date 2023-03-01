@@ -153,9 +153,10 @@ pub enum SigsVerifyResult {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::num::NonZeroU8;
 
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::SliceRandom;
+    use crypto::random::{Rng, SliceRandom};
     use rstest::rstest;
 
     use crate::chain::config::create_mainnet;
@@ -166,12 +167,16 @@ mod tests {
     use super::*;
 
     #[rstest]
+    #[trace]
     #[case(Seed::from_entropy())]
-    fn signature_count(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
+    fn signature_validity(#[case] seed: Seed) {
         let chain_config = &create_mainnet();
-        let min_required_signatures = 2.try_into().unwrap();
-        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..3)
+
+        let mut rng = make_seedable_rng(seed);
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
             .into_iter()
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
@@ -191,9 +196,10 @@ mod tests {
             })
             .collect::<BTreeMap<_, _>>();
 
-        for i in 0..priv_keys.len() {
+        // Valid cases with incomplete and complete signatures
+        for sig_count in 0..priv_keys.len() {
             let mut signatures_map =
-                signatures_map.clone().into_iter().take(i).collect::<Vec<(_, _)>>();
+                signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
             signatures_map.shuffle(&mut rng);
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
@@ -204,13 +210,134 @@ mod tests {
                 &challenge,
                 &message_bytes,
                 &auth,
-            )
-            .unwrap();
+            );
 
-            if i + 1 == priv_keys.len() {
+            let sigs = match sigs {
+                Ok(sigs) => {
+                    assert!(sig_count as u8 <= challenge.min_required_signatures());
+                    sigs
+                }
+                Err(err) => {
+                    assert!(
+                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                            sig_count,
+                            challenge.min_required_signatures() as usize
+                        )
+                    );
+                    continue;
+                }
+            };
+
+            if sig_count as u8 == challenge.min_required_signatures() {
                 assert_eq!(
                     sigs.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::CompleteAndValid
+                );
+            } else {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::Incomplete
+                );
+            }
+        }
+
+        // Tampered with sigs
+        for sig_count in 1..priv_keys.len() {
+            let mut signatures_map =
+                signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
+            signatures_map.shuffle(&mut rng);
+            let tampered_pair_ref = &mut signatures_map.choose_mut(&mut rng).unwrap();
+            let tampered_index = tampered_pair_ref.0;
+            let tampered_signature = priv_keys[tampered_index as usize]
+                .sign_message(&H256::random_using(&mut rng).encode())
+                .unwrap();
+            // replace the signatures with a tampered one
+            tampered_pair_ref.1 = tampered_signature;
+
+            let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
+
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+
+            let sigs = PartiallySignedMultisigChallenge::from_partial(
+                chain_config,
+                &challenge,
+                &message_bytes,
+                &auth,
+            );
+
+            let sigs = match sigs {
+                Ok(sigs) => {
+                    assert!(sig_count as u8 <= challenge.min_required_signatures());
+                    sigs
+                }
+                Err(err) => {
+                    assert!(
+                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                            sig_count,
+                            challenge.min_required_signatures() as usize
+                        )
+                    );
+                    continue;
+                }
+            };
+
+            if sig_count as u8 == challenge.min_required_signatures() {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::Invalid
+                );
+            } else {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::Incomplete
+                );
+            }
+        }
+
+        // Sign with wrong key
+        for sig_count in 1..priv_keys.len() {
+            let mut signatures_map =
+                signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
+            signatures_map.shuffle(&mut rng);
+            let tampered_pair_ref = &mut signatures_map.choose_mut(&mut rng).unwrap();
+            let wrong_signature = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr)
+                .0
+                .sign_message(&H256::random_using(&mut rng).encode())
+                .unwrap();
+            // replace the signatures with a tampered one
+            tampered_pair_ref.1 = wrong_signature;
+
+            let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
+
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+
+            let sigs = PartiallySignedMultisigChallenge::from_partial(
+                chain_config,
+                &challenge,
+                &message_bytes,
+                &auth,
+            );
+
+            let sigs = match sigs {
+                Ok(sigs) => {
+                    assert!(sig_count as u8 <= challenge.min_required_signatures());
+                    sigs
+                }
+                Err(err) => {
+                    assert!(
+                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                            sig_count,
+                            challenge.min_required_signatures() as usize
+                        )
+                    );
+                    continue;
+                }
+            };
+
+            if sig_count as u8 == challenge.min_required_signatures() {
+                assert_eq!(
+                    sigs.verify_signatures(chain_config).unwrap(),
+                    SigsVerifyResult::Invalid
                 );
             } else {
                 assert_eq!(
