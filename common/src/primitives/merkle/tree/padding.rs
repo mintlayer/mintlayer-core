@@ -1,3 +1,18 @@
+// Copyright (c) 2021-2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T>, F: Fn(&T) -> T> {
     leaves: I,
     padding_function: F,
@@ -5,7 +20,7 @@ pub struct IncrementalPaddingIterator<T, I: Iterator<Item = T>, F: Fn(&T) -> T> 
     current_index: usize,
 }
 
-impl<'a, T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
+impl<T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T, I, F> {
     pub fn new(leaves: I, padding_function: F) -> Self {
         IncrementalPaddingIterator {
             leaves,
@@ -16,7 +31,7 @@ impl<'a, T, I: Iterator<Item = T>, F: Fn(&T) -> T> IncrementalPaddingIterator<T,
     }
 }
 
-impl<'a, T: Copy, I: Iterator<Item = T>, F: Fn(&T) -> T> Iterator
+impl<T: Copy, I: Iterator<Item = T>, F: Fn(&T) -> T> Iterator
     for IncrementalPaddingIterator<T, I, F>
 {
     type Item = T;
@@ -32,13 +47,13 @@ impl<'a, T: Copy, I: Iterator<Item = T>, F: Fn(&T) -> T> Iterator
                     None
                 } else {
                     let res = (self.padding_function)(&self.last_value.expect("Never at zero"));
-                    self.current_index = self.current_index + 1;
+                    self.current_index += 1;
                     self.last_value = Some(res);
                     Some(res)
                 }
             }
             Some(leaf) => {
-                self.current_index = self.current_index + 1;
+                self.current_index += 1;
                 self.last_value = Some(leaf);
                 Some(leaf)
             }
@@ -73,7 +88,7 @@ mod tests {
             let leaves = &leaves_with_inc_padding(i)[0..i];
 
             let vec =
-                IncrementalPaddingIterator::new(leaves.to_vec().into_iter(), f).collect::<Vec<_>>();
+                IncrementalPaddingIterator::new(leaves.iter().copied(), f).collect::<Vec<_>>();
             assert_eq!(vec, all_leaves);
         }
     }
