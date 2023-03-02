@@ -158,6 +158,10 @@ impl AddressData {
         matches!(self.state, AddressState::Connected { .. })
     }
 
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self.state, AddressState::Unreachable { .. })
+    }
+
     pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Instant) {
         self.state = match transition {
             AddressStateTransitionTo::Connected => match self.state {

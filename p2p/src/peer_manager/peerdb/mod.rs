@@ -58,7 +58,7 @@ pub struct PeerDb<A, B, S> {
     /// Map of all outbound peer addresses
     addresses: BTreeMap<A, AddressData>,
 
-    /// Set of addresses that have the `reserved` set.
+    /// Set of addresses that have the `reserved` flag set.
     /// Used as an optimization to not iterate over the entire `addresses` map.
     /// Every listed address must exist in the `addresses` map.
     reserved_nodes: BTreeSet<A>,
@@ -265,6 +265,20 @@ where
         }
     }
 
+    pub fn is_reserved_node(&self, address: &A) -> bool {
+        self.reserved_nodes.contains(address)
+    }
+
+    pub fn add_reserved_node(&mut self, address: A) {
+        self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
+        self.reserved_nodes.insert(address);
+    }
+
+    pub fn remove_reserved_node(&mut self, address: A) {
+        self.change_address_state(address.clone(), AddressStateTransitionTo::UnsetReserved);
+        self.reserved_nodes.remove(&address);
+    }
+
     /// Checks if the given address is banned
     pub fn is_address_banned(&mut self, address: &B) -> bool {
         if let Some(banned_till) = self.banned_addresses.get(address) {
@@ -283,20 +297,6 @@ where
         }
 
         false
-    }
-
-    pub fn is_reserved_node(&self, address: &A) -> bool {
-        self.reserved_nodes.contains(address)
-    }
-
-    pub fn add_reserved_node(&mut self, address: A) {
-        self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
-        self.reserved_nodes.insert(address);
-    }
-
-    pub fn remove_reserved_node(&mut self, address: A) {
-        self.change_address_state(address.clone(), AddressStateTransitionTo::UnsetReserved);
-        self.reserved_nodes.remove(&address);
     }
 
     /// Changes the address state to banned
