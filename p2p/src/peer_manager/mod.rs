@@ -296,7 +296,8 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address),
+            !self.peerdb.is_address_banned(&bannable_address)
+                || self.peerdb.is_reserved_node(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -838,7 +839,9 @@ where
                 response.send(peers);
             }
             PeerManagerEvent::AddReserved(address) => {
-                self.peerdb.add_reserved_node(address);
+                self.peerdb.add_reserved_node(address.clone());
+                // Initiate new outbound connection without waiting for `heartbeat`
+                self.connect(address, None);
             }
             PeerManagerEvent::RemoveReserved(address) => {
                 self.peerdb.remove_reserved_node(address);
