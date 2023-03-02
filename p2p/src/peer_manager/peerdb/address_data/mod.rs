@@ -18,11 +18,11 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 /// When the node drops the unreachable node address. Used for negative caching.
-pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
+const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the node itself has prolonged connectivity problems.
-pub const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
+const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 
 pub enum AddressState {
     Connected {},
@@ -46,14 +46,24 @@ pub enum AddressState {
     },
 }
 
+#[derive(Copy, Clone, Debug)]
+// Update `ALL_TRANSITIONS` if a new transition is added!
 pub enum AddressStateTransitionTo {
     Connected,
     Disconnected,
     ConnectionFailed,
-    Connecting,
     SetReserved,
     UnsetReserved,
 }
+
+#[cfg(test)]
+pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
+    AddressStateTransitionTo::Connected,
+    AddressStateTransitionTo::Disconnected,
+    AddressStateTransitionTo::ConnectionFailed,
+    AddressStateTransitionTo::SetReserved,
+    AddressStateTransitionTo::UnsetReserved,
+];
 
 pub struct AddressData {
     state: AddressState,
@@ -144,6 +154,10 @@ impl AddressData {
         }
     }
 
+    pub fn is_connected(&self) -> bool {
+        matches!(self.state, AddressState::Connected { .. })
+    }
+
     pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Instant) {
         self.state = match transition {
             AddressStateTransitionTo::Connected => match self.state {
@@ -153,7 +167,10 @@ impl AddressData {
                     disconnected_at: _,
                     was_reachable: _,
                 } => AddressState::Connected {},
-                AddressState::Unreachable { erase_after: _ } => unreachable!(),
+                AddressState::Unreachable { erase_after: _ } => {
+                    // Connection to an `Unreachable` node may be requested by RPC at any moment
+                    AddressState::Connected {}
+                }
             },
 
             AddressStateTransitionTo::Disconnected => match self.state {
@@ -197,29 +214,10 @@ impl AddressData {
                         }
                     }
                 }
-                AddressState::Unreachable { erase_after: _ } => {
-                    unreachable!()
+                AddressState::Unreachable { erase_after } => {
+                    // Connection to an `Unreachable` node may be requested by RPC at any moment
+                    AddressState::Unreachable { erase_after }
                 }
-            },
-
-            AddressStateTransitionTo::Connecting => match self.state {
-                AddressState::Connected {} => unreachable!(),
-                AddressState::Disconnected {
-                    fail_count,
-                    disconnected_at,
-                    was_reachable,
-                } => AddressState::Disconnected {
-                    fail_count,
-                    disconnected_at,
-                    was_reachable,
-                },
-                // The user might request to connect to the node that was in the `Unreachable` state.
-                // Switch state to `Disconnected` as we don't expect `Unreachable` node to become `Connected`.
-                AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
-                    fail_count: 0,
-                    disconnected_at: now,
-                    was_reachable: false,
-                },
             },
 
             AddressStateTransitionTo::SetReserved => {
@@ -237,6 +235,7 @@ impl AddressData {
                         fail_count,
                         disconnected_at,
                     },
+                    // Reserved nodes should not be in the `Unreachable` state
                     AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
                         fail_count: 0,
                         disconnected_at: now,
@@ -268,3 +267,6 @@ impl AddressData {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

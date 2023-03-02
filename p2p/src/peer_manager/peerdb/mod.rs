@@ -211,14 +211,6 @@ where
         self.change_address_state(address, AddressStateTransitionTo::ConnectionFailed);
     }
 
-    /// Add new peer addresses if it's not known.
-    pub fn outbound_peer_connecting(&mut self, address: A) {
-        // Make sure the address is known (if the user requested to connect to the new address via RPC)
-        self.peer_discovered(address.clone());
-        // Update address state
-        self.change_address_state(address, AddressStateTransitionTo::Connecting);
-    }
-
     /// Mark peer as connected
     ///
     /// After `PeerManager` has established either an inbound or an outbound connection,
@@ -235,28 +227,41 @@ where
     }
 
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
-        if let Some(address_data) = self.addresses.get_mut(&address) {
-            let is_persistent_old = address_data.is_persistent();
+        let now = Instant::now();
 
-            address_data.transition_to(transition, Instant::now());
+        // Make sure the address always exists.
+        // It's needed because unknown addresses may be reported after RPC connect requests.
+        let address_data = self
+            .addresses
+            .entry(address.clone())
+            .or_insert_with(|| AddressData::new(false, false, now));
 
-            let is_persistent_new = address_data.is_persistent();
+        let is_persistent_old = address_data.is_persistent();
 
-            match (is_persistent_old, is_persistent_new) {
-                (false, true) => {
-                    storage::update_db(&self.storage, |tx| {
-                        tx.add_known_address(&address.to_string())
-                    })
-                    .expect("adding address expected to succeed (peer_connected)");
-                }
-                (true, false) => {
-                    storage::update_db(&self.storage, |tx| {
-                        tx.del_known_address(&address.to_string())
-                    })
-                    .expect("adding address expected to succeed (peer_connected)");
-                }
-                _ => {}
+        log::debug!(
+            "update address {} state to {:?}",
+            address.to_string(),
+            transition,
+        );
+
+        address_data.transition_to(transition, now);
+
+        let is_persistent_new = address_data.is_persistent();
+
+        match (is_persistent_old, is_persistent_new) {
+            (false, true) => {
+                storage::update_db(&self.storage, |tx| {
+                    tx.add_known_address(&address.to_string())
+                })
+                .expect("adding address expected to succeed (peer_connected)");
             }
+            (true, false) => {
+                storage::update_db(&self.storage, |tx| {
+                    tx.del_known_address(&address.to_string())
+                })
+                .expect("adding address expected to succeed (peer_connected)");
+            }
+            _ => {}
         }
     }
 
@@ -285,9 +290,8 @@ where
     }
 
     pub fn add_reserved_node(&mut self, address: A) {
-        self.peer_discovered(address.clone());
         self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
-        self.reserved_nodes.insert(address.clone());
+        self.reserved_nodes.insert(address);
     }
 
     pub fn remove_reserved_node(&mut self, address: A) {
