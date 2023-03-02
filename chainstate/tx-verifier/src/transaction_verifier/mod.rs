@@ -386,7 +386,7 @@ where
                     | OutputPurpose::LockThenTransfer(_, _)
                     | OutputPurpose::Burn => Err(SpendStakeError::InvalidKernelPurpose),
                     OutputPurpose::StakePool(d) => Ok(d.as_ref()),
-                    OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
+                    OutputPurpose::SpendStakePool(d) => Ok(d.as_ref()),
                 }?;
 
                 let reward_output = match block_reward_transactable
@@ -405,7 +405,7 @@ where
                     | OutputPurpose::StakePool(_) => {
                         Err(SpendStakeError::InvalidBlockRewardPurpose)
                     }
-                    OutputPurpose::SpendStakePool(d, _) => Ok(d.as_ref()),
+                    OutputPurpose::SpendStakePool(d) => Ok(d.as_ref()),
                 }?;
 
                 ensure!(
@@ -482,11 +482,11 @@ where
         use common::chain::timelock::OutputTimeLock;
 
         let timelock = match output.purpose() {
-            OutputPurpose::Transfer(_) => return Ok(()),
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::Burn
+            | OutputPurpose::StakePool(_)
+            | OutputPurpose::SpendStakePool(_) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
-            OutputPurpose::Burn => return Ok(()),
-            OutputPurpose::StakePool(_) => return Ok(()),
-            OutputPurpose::SpendStakePool(_, tl) => tl,
         };
 
         let source_block_height = source_block_index.block_height();
@@ -630,7 +630,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn => false,
-                OutputPurpose::StakePool(_) | OutputPurpose::SpendStakePool(_, _) => true,
+                OutputPurpose::StakePool(_) | OutputPurpose::SpendStakePool(_) => true,
             });
         ensure!(
             !attempt_to_spend_stake,
@@ -643,7 +643,7 @@ where
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
                 | OutputPurpose::StakePool(_) => false,
-                OutputPurpose::SpendStakePool(_, _) => true,
+                OutputPurpose::SpendStakePool(_) => true,
             });
 
         ensure!(
@@ -659,7 +659,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
-                | OutputPurpose::SpendStakePool(_, _) => None,
+                | OutputPurpose::SpendStakePool(_) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -731,7 +731,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn
-            | OutputPurpose::SpendStakePool(_, _) => Ok(()),
+            | OutputPurpose::SpendStakePool(_) => Ok(()),
         })
     }
 

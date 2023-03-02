@@ -389,56 +389,45 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         let required = block.consensus_data().reward_maturity_distance(self.chain_config);
-        let timelock_check_fn = |tl: &OutputTimeLock| -> Result<(), CheckBlockError> {
-            match tl {
-                OutputTimeLock::UntilHeight(_) => Err(
-                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
-                ),
-                OutputTimeLock::UntilTime(_) => Err(
-                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
-                ),
-                OutputTimeLock::ForBlockCount(c) => {
-                    let cs: i64 = (*c)
-                        .try_into()
-                        .map_err(|_| {
-                            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
-                                block.get_id(),
-                                *c,
-                            )
-                        })
-                        .log_err()?;
-                    let given = BlockDistance::new(cs);
-                    if given < required {
-                        Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
-                            block.get_id(),
-                            given,
-                            required,
-                        ))
-                    } else {
-                        Ok(())
-                    }
-                }
-                OutputTimeLock::ForSeconds(_) => Err(
-                    CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
-                ),
-            }
-        };
 
         for output in block.block_reward().outputs() {
             match output.purpose() {
-                OutputPurpose::Transfer(_) => {
-                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
-                        block.get_id(),
-                    ))
-                }
-                OutputPurpose::LockThenTransfer(_, tl) => timelock_check_fn(tl)?,
-                OutputPurpose::StakePool(_) => {
-                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
-                        block.get_id(),
-                    ))
-                }
-                OutputPurpose::SpendStakePool(_, tl) => timelock_check_fn(tl)?,
-                OutputPurpose::Burn => {
+                OutputPurpose::LockThenTransfer(_, tl) => {
+                    match tl {
+                        OutputTimeLock::UntilHeight(_) => Err(
+                            CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                        ),
+                        OutputTimeLock::UntilTime(_) => Err(
+                            CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                        ),
+                        OutputTimeLock::ForBlockCount(c) => {
+                            let cs: i64 = (*c)
+                                .try_into()
+                                .map_err(|_| {
+                                    CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
+                                        block.get_id(),
+                                        *c,
+                                    )
+                                })
+                                .log_err()?;
+                            let given = BlockDistance::new(cs);
+                            if given < required {
+                                Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
+                                    block.get_id(),
+                                    given,
+                                    required,
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        }
+                        OutputTimeLock::ForSeconds(_) => Err(
+                            CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+                        ),
+                    }
+                }?,
+                OutputPurpose::SpendStakePool(_) => { /*do nothing*/ }
+                OutputPurpose::Transfer(_) | OutputPurpose::StakePool(_) | OutputPurpose::Burn => {
                     return Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))

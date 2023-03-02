@@ -33,7 +33,6 @@ use common::{
         config::{Builder as ConfigBuilder, EpochIndex},
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
-        timelock::OutputTimeLock,
         tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, OutputPurpose, PoolId, TxInput,
         TxOutput, UpgradeVersion,
@@ -135,23 +134,6 @@ fn create_pos_data(
     )
 }
 
-fn create_reward_output(
-    tf: &TestFramework,
-    consensus_data: &ConsensusData,
-    stake_pool_data: StakePoolData,
-) -> TxOutput {
-    let reward_maturity: i64 = consensus_data
-        .reward_maturity_distance(&tf.chainstate.get_chain_config())
-        .into();
-    TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(
-            Box::new(stake_pool_data),
-            OutputTimeLock::ForBlockCount(reward_maturity as u64),
-        ),
-    )
-}
-
 fn get_best_block_randomness(tf: &TestFramework) -> PoSRandomness {
     match tf.chainstate.get_best_block_index().unwrap() {
         chainstate_types::GenBlockIndex::Block(bi) => {
@@ -222,7 +204,10 @@ fn pos_basic(#[case] seed: Seed) {
     );
 
     // valid case
-    let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+    );
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
         .with_reward(vec![reward_output])
@@ -478,7 +463,10 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         );
 
         let consensus_data = ConsensusData::PoS(Box::new(pos_data));
-        let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
+        let reward_output = TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+        );
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
             .with_reward(vec![reward_output])
@@ -557,10 +545,12 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         1,
     );
 
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
-    let reward_output = create_reward_output(&tf, &consensus_data, stake_pool_data);
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+    );
     tf.make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
@@ -677,19 +667,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
-    let reward_maturity: i64 = consensus_data
-        .reward_maturity_distance(&tf.chainstate.get_chain_config())
-        .into();
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(
-            Box::new(stake_pool_data.clone()),
-            OutputTimeLock::ForBlockCount(reward_maturity as u64),
-        ),
+        OutputPurpose::SpendStakePool(Box::new(stake_pool_data.clone())),
     );
     tf.make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
@@ -710,16 +693,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(
-            Box::new(stake_pool_data.clone()),
-            OutputTimeLock::ForBlockCount(reward_maturity as u64),
-        ),
+        OutputPurpose::SpendStakePool(Box::new(stake_pool_data.clone())),
     );
     tf.make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
@@ -743,16 +722,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         pool_id,
         2,
     );
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(
-            Box::new(stake_pool_data),
-            OutputTimeLock::ForBlockCount(reward_maturity as u64),
-        ),
+        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
     );
     tf.make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
@@ -807,20 +782,13 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
-    let reward_maturity: i64 = consensus_data
-        .reward_maturity_distance(&tf.chainstate.get_chain_config())
-        .into();
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(
-            Box::new(altered_stake_pool_data),
-            OutputTimeLock::ForBlockCount(reward_maturity as u64),
-        ),
+        OutputPurpose::SpendStakePool(Box::new(altered_stake_pool_data)),
     );
     let res = tf
         .make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap_err();
@@ -871,7 +839,6 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         pool_id,
         1,
     );
-    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
 
     // valid case
     let reward_output = TxOutput::new(
@@ -880,7 +847,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
     );
     let block = tf
         .make_block_builder()
-        .with_consensus_data(consensus_data)
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
         .build();
     let block_id = block.get_id();

@@ -21,7 +21,6 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         stakelock::StakePoolData,
-        timelock::OutputTimeLock,
         tokens::{OutputValue, TokenData, TokenTransfer},
         OutPointSourceId, TxInput, TxOutput,
     },
@@ -477,10 +476,7 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
             )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
-                OutputPurpose::SpendStakePool(
-                    Box::new(stake_pool_data),
-                    OutputTimeLock::ForBlockCount(0),
-                ),
+                OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
             ))
             .build();
 
@@ -588,10 +584,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
 
         let spend_stake_output = TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(50_000..100_000))),
-            OutputPurpose::SpendStakePool(
-                Box::new(stake_pool_data),
-                OutputTimeLock::ForBlockCount(0),
-            ),
+            OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
         );
         let block2_index = tf
             .make_block_builder()
@@ -645,17 +638,14 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
             )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::SpendStakePool(
-                    Box::new(StakePoolData::new(
-                        anyonecanspend_address(),
-                        None,
-                        vrf_pub_key,
-                        pub_key,
-                        0,
-                        Amount::ZERO,
-                    )),
-                    OutputTimeLock::ForBlockCount(0),
-                ),
+                OutputPurpose::SpendStakePool(Box::new(StakePoolData::new(
+                    anyonecanspend_address(),
+                    None,
+                    vrf_pub_key,
+                    pub_key,
+                    0,
+                    Amount::ZERO,
+                ))),
             ))
             .build();
 
