@@ -26,8 +26,9 @@ use crate::{
     net::types::Role,
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
-        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTokioTestTimeGetter,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        connect_and_accept_services, connect_services, get_connectivity_event,
+        peerdb_inmemory_store, P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -370,7 +371,7 @@ where
     )
     .await;
 
-    let (_address, peer_info, _) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -421,7 +422,7 @@ where
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
-    let (_address, peer_info, _) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -600,20 +601,17 @@ async fn connection_timeout_rpc_notified<T>(
     .await
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
     let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
         rx,
-        tx_sync,
         Default::default(),
         peerdb_inmemory_store(),
     )
     .unwrap();
 
-    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });

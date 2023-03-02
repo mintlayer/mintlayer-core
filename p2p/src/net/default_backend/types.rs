@@ -33,6 +33,9 @@ pub enum Command<A> {
     Connect {
         address: A,
     },
+    Accept {
+        peer_id: PeerId,
+    },
     Disconnect {
         peer_id: PeerId,
     },
@@ -75,6 +78,7 @@ pub enum PeerEvent {
 #[derive(Debug)]
 pub enum Event {
     Disconnect,
+    Accepted,
     SendMessage(Box<Message>),
 }
 

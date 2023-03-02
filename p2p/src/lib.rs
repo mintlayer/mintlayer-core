@@ -45,7 +45,7 @@ use logging::log;
 use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
-    event::{PeerManagerEvent, SyncEvent},
+    event::PeerManagerEvent,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -62,9 +62,6 @@ struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
     /// A sender for the peer manager events.
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
-
-    /// TX channel for sending syncing/pubsub events
-    pub _tx_sync: mpsc::UnboundedSender<SyncEvent>,
 }
 
 impl<T> P2p<T>
@@ -104,19 +101,17 @@ where
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
-        let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-        let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
             rx_peer_manager,
-            tx_p2p_sync,
             time_getter,
             peerdb_storage,
         )?;
         tokio::spawn(async move {
+            // TODO: Shutdown p2p if PeerManager unexpectedly quits
             peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
         });
 
@@ -126,12 +121,12 @@ where
             let chain_config = Arc::clone(&chain_config);
 
             tokio::spawn(async move {
+                // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     sync,
                     chainstate_handle,
-                    rx_p2p_sync,
                     tx_peer_manager,
                 )
                 .run()
@@ -140,10 +135,7 @@ where
             });
         }
 
-        Ok(Self {
-            tx_peer_manager,
-            _tx_sync,
-        })
+        Ok(Self { tx_peer_manager })
     }
 }
 

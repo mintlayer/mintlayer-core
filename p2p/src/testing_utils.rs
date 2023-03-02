@@ -191,6 +191,23 @@ where
     (address, peer_info1, peer_info2)
 }
 
+/// Can be used in tests only, will panic in case of errors
+pub async fn connect_and_accept_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) -> (T::Address, PeerInfo, PeerInfo)
+where
+    T: NetworkingService + Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let (address, peer_info1, peer_info2) = connect_services::<T>(conn1, conn2).await;
+
+    conn1.accept(peer_info2.peer_id).unwrap();
+    conn2.accept(peer_info1.peer_id).unwrap();
+
+    (address, peer_info1, peer_info2)
+}
+
 /// Returns first event that is accepted by predicate or panics on timeout.
 pub async fn filter_connectivity_event<T, F>(
     conn: &mut T::ConnectivityHandle,

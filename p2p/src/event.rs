@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::block::Block;
-
 use crate::{
     interface::types::ConnectedPeer, net::NetworkingService, types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -45,19 +43,4 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     AddReserved(T::Address),
 
     RemoveReserved(T::Address),
-}
-
-#[derive(Debug)]
-pub enum SyncEvent {
-    /// Publish a block to the network
-    PublishBlock(Block),
-}
-
-#[derive(Debug)]
-pub enum SyncControlEvent {
-    /// Peer connected
-    Connected(PeerId),
-
-    /// Peer disconnected
-    Disconnected(PeerId),
 }

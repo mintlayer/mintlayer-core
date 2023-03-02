@@ -57,16 +57,12 @@ where
     .await
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
-
-    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
 
     let peer_manager = PeerManager::<T, _>::new(
         chain_config,
         p2p_config,
         conn,
         rx,
-        tx_sync,
         time_getter,
         peerdb_inmemory_store(),
     )

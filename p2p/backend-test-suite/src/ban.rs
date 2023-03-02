@@ -30,7 +30,7 @@ use p2p::{
     message::{Announcement, HeaderListResponse, SyncMessage},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
-    testing_utils::{connect_services, TestTransportMaker},
+    testing_utils::{connect_and_accept_services, TestTransportMaker},
 };
 
 tests![invalid_pubsub_block,];
@@ -45,7 +45,6 @@ where
     N::ConnectivityHandle: ConnectivityService<N>,
     N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
-    let (_tx_sync, rx_sync) = mpsc::unbounded_channel();
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(P2pConfig::default());
@@ -65,7 +64,6 @@ where
         Arc::clone(&p2p_config),
         sync1,
         handle.clone(),
-        rx_sync,
         tx_peer_manager,
     );
 
@@ -78,7 +76,8 @@ where
     .await
     .unwrap();
 
-    let (_address, _peer_info1, peer_info2) = connect_services::<N>(&mut conn1, &mut conn2).await;
+    let (_address, _peer_info1, peer_info2) =
+        connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     // Create a block with an invalid timestamp.
     let block = Block::new(
@@ -90,13 +89,14 @@ where
     )
     .unwrap();
 
-    tokio::spawn(async move {
-        sync1.register_peer(peer_info2.peer_id).await.unwrap();
-        sync1.run().await
-    });
+    tokio::spawn(async move { sync1.run().await });
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
+        match sync2.poll_next().await.unwrap() {
+            SyncingEvent::Connected { .. } => {}
+            e => panic!("Unexpected event type: {e:?}"),
+        };
         let peer = match sync2.poll_next().await.unwrap() {
             SyncingEvent::Message {
                 peer,
@@ -110,7 +110,6 @@ where
                 SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
             .unwrap();
-
         sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
     });
 

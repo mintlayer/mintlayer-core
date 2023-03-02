@@ -41,7 +41,7 @@ use utils::tap_error_log::LogError;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    event::{PeerManagerEvent, SyncControlEvent},
+    event::PeerManagerEvent,
     message::{Announcement, BlockListRequest, BlockResponse, HeaderListRequest, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     sync::peer_context::PeerContext,
@@ -66,9 +66,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A handle for sending/receiving syncing events.
     messaging_handle: T::SyncingMessagingHandle,
-
-    /// A receiver for connect/disconnect events.
-    peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent>,
 
     /// A sender for the peer manager events.
     peer_manager_sender: mpsc::UnboundedSender<PeerManagerEvent<T>>,
@@ -102,14 +99,12 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        peer_event_receiver: mpsc::UnboundedReceiver<SyncControlEvent>,
         peer_manager_sender: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         Self {
             _chain_config: chain_config,
             p2p_config,
             messaging_handle,
-            peer_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             peers: Default::default(),
@@ -129,6 +124,12 @@ where
         loop {
             tokio::select! {
                 event = self.messaging_handle.poll_next() => match event? {
+                    SyncingEvent::Connected { peer_id } => {
+                        self.register_peer(peer_id).await?;
+                    },
+                    SyncingEvent::Disconnected { peer_id } => {
+                        self.unregister_peer(peer_id);
+                    },
                     SyncingEvent::Message { peer, message } => {
                         let res = self.handle_message(peer, message).await;
                         self.handle_result(peer, res).await?;
@@ -137,10 +138,6 @@ where
                         let res = self.handle_announcement(peer, *announcement).await;
                         self.handle_result(peer, res).await?;
                     }
-                },
-                event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await?,
-                    SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
                 },
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
@@ -176,11 +173,10 @@ where
         Ok(receiver)
     }
 
-    // TODO: This shouldn't be public.
     /// Registers the connected peer by creating a context for it.
     ///
     /// The `HeaderListRequest` message is sent to newly connected peers.
-    pub async fn register_peer(&mut self, peer: PeerId) -> Result<()> {
+    async fn register_peer(&mut self, peer: PeerId) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 
         self.request_headers(peer).await?;

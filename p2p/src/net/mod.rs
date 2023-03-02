@@ -99,6 +99,9 @@ where
     /// `address` - socket address of the peer
     fn connect(&mut self, address: T::Address) -> crate::Result<()>;
 
+    /// Accept the peer as valid and allow reading of network messages
+    fn accept(&mut self, peer_id: PeerId) -> crate::Result<()>;
+
     /// Disconnect active connection
     ///
     /// # Arguments

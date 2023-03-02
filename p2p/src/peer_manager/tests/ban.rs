@@ -18,9 +18,9 @@ use std::sync::Arc;
 use crate::{
     net::types::Role,
     testing_utils::{
-        connect_services, get_connectivity_event, RandomAddressMaker, TestChannelAddressMaker,
-        TestTcpAddressMaker, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-        TestTransportTcp,
+        connect_and_accept_services, connect_services, get_connectivity_event, RandomAddressMaker,
+        TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -417,7 +417,7 @@ where
     )
     .await;
 
-    let (_address, peer_info, _) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
