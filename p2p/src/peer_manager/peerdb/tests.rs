@@ -62,6 +62,9 @@ fn unban_peer() {
 
     time_getter.advance_time(Duration::from_secs(120));
 
+    // Banned addresses updated in the `heartbeat` function
+    peerdb.heartbeat();
+
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 0);

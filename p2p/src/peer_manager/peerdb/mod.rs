@@ -153,7 +153,6 @@ where
             .saturating_sub(pending_outbound.len())
             .saturating_sub(connected_outbound_count);
 
-        // TODO: Ignore banned addresses
         // TODO: Allow only one connection per IP address
         self.addresses
             .iter()
@@ -161,6 +160,7 @@ where
                 if address_data.connect_now(now)
                     && !pending_outbound.contains(addr)
                     && !address_data.reserved()
+                    && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
                     Some(addr.clone())
                 } else {
@@ -193,6 +193,20 @@ where
     pub fn heartbeat(&mut self) {
         let now = Instant::now();
         self.addresses.retain(|_addr, address_data| address_data.retain(now));
+
+        let now = self.time_getter.get_time();
+        self.banned_addresses.retain(|address, banned_till| {
+            let banned = now <= *banned_till;
+
+            if !banned {
+                storage::update_db(&self.storage, |tx| {
+                    tx.del_banned_address(&address.to_string())
+                })
+                .expect("removing banned address is expected to succeed");
+            }
+
+            banned
+        });
     }
 
     /// Add new peer addresses
@@ -280,23 +294,8 @@ where
     }
 
     /// Checks if the given address is banned
-    pub fn is_address_banned(&mut self, address: &B) -> bool {
-        if let Some(banned_till) = self.banned_addresses.get(address) {
-            // Check if the ban has expired
-            let now = self.time_getter.get_time();
-            if now <= *banned_till {
-                return true;
-            }
-
-            self.banned_addresses.remove(address);
-
-            storage::update_db(&self.storage, |tx| {
-                tx.del_banned_address(&address.to_string())
-            })
-            .expect("removing banned address is expected to succeed (is_address_banned)");
-        }
-
-        false
+    pub fn is_address_banned(&self, address: &B) -> bool {
+        self.banned_addresses.contains_key(&address)
     }
 
     /// Changes the address state to banned

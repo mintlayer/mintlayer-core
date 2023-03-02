@@ -438,7 +438,7 @@ where
 
         self.validate_connection(&address, role, &info)?;
 
-        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}",);
+        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
 
         if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
@@ -654,6 +654,7 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) {
+        // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
