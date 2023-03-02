@@ -459,6 +459,7 @@ where
             },
         )?;
 
+        // TODO: subsidy shouldn't be added for PoS
         let max_allowed_outputs_total =
             amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
                 .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
