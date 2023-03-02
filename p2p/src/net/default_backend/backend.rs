@@ -250,7 +250,7 @@ where
 
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
-                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
+                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
@@ -523,63 +523,49 @@ where
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: Command<T::Address>) -> crate::Result<()> {
-        // All handlings are separated to two parts:
+    fn handle_command(&mut self, command: Command<T::Address>) {
+        // All handlings can be separated to two parts:
         // - Async (can't take mutable reference to self because they are run concurrently).
         // - Sync (take mutable reference to self because they are run sequentially).
         // Because the second part depends on result of the first part boxed closures are used.
 
-        let backend_task: BackendTask<T> = match command {
+        match command {
             Command::Connect { address } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
                     self.transport.connect(address.clone()),
                 );
 
-                async move {
+                let backend_task: BackendTask<T> = async move {
                     let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
                     boxed_cb(move |this| this.handle_connect_res(address, connection_res))
                 }
-                .boxed()
+                .boxed();
+
+                self.command_queue.push(backend_task);
             }
-            Command::Disconnect { peer_id } => async move {
-                boxed_cb(move |this: &mut Self| {
-                    let res = this.disconnect_peer(peer_id);
-                    if let Err(e) = res {
-                        log::debug!("Failed to disconnect peer {peer_id}: {e}")
-                    }
-                    Ok(())
-                })
+            Command::Disconnect { peer_id } => {
+                let res = self.disconnect_peer(peer_id);
+                if let Err(e) = res {
+                    log::debug!("Failed to disconnect peer {peer_id}: {e}");
+                }
             }
-            .boxed(),
-            Command::SendMessage { peer, message } => async move {
-                boxed_cb(move |this| {
-                    let res = this.send_message(peer, message);
-                    if let Err(e) = res {
-                        log::debug!("Failed to send request to peer {peer}: {e}")
-                    }
-                    Ok(())
-                })
+            Command::SendMessage { peer, message } => {
+                let res = self.send_message(peer, message);
+                if let Err(e) = res {
+                    log::debug!("Failed to send request to peer {peer}: {e}")
+                }
             }
-            .boxed(),
-            Command::AnnounceData { topic, message } => async move {
-                boxed_cb(move |this| {
-                    let res = this.announce_data(topic, message);
-                    if let Err(e) = res {
-                        log::error!("Failed to send announce data: {e}")
-                    }
-                    Ok(())
-                })
+            Command::AnnounceData { topic, message } => {
+                let res = self.announce_data(topic, message);
+                if let Err(e) = res {
+                    log::error!("Failed to send announce data: {e}")
+                }
             }
-            .boxed(),
         };
-
-        self.command_queue.push(backend_task);
-
-        Ok(())
     }
 }
 
