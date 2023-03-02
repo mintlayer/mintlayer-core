@@ -295,7 +295,7 @@ where
 
     /// Checks if the given address is banned
     pub fn is_address_banned(&self, address: &B) -> bool {
-        self.banned_addresses.contains_key(&address)
+        self.banned_addresses.contains_key(address)
     }
 
     /// Changes the address state to banned
