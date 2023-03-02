@@ -284,6 +284,17 @@ where
         self.reserved_nodes.contains(address)
     }
 
+    pub fn add_reserved_node(&mut self, address: A) {
+        self.peer_discovered(address.clone());
+        self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
+        self.reserved_nodes.insert(address.clone());
+    }
+
+    pub fn remove_reserved_node(&mut self, address: A) {
+        self.change_address_state(address.clone(), AddressStateTransitionTo::UnsetReserved);
+        self.reserved_nodes.remove(&address);
+    }
+
     /// Changes the address state to banned
     pub fn ban_peer(&mut self, address: &A) {
         let bannable_address = address.as_bannable();

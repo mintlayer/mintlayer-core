@@ -42,4 +42,12 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         self.deref().get_connected_peers().await
     }
+
+    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+        self.deref_mut().add_reserved_node(addr).await
+    }
+
+    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+        self.deref_mut().remove_reserved_node(addr).await
+    }
 }

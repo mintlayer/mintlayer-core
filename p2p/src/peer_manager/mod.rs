@@ -838,6 +838,12 @@ where
                 let peers = self.get_connected_peers();
                 response.send(peers);
             }
+            PeerManagerEvent::AddReserved(address) => {
+                self.peerdb.add_reserved_node(address);
+            }
+            PeerManagerEvent::RemoveReserved(address) => {
+                self.peerdb.remove_reserved_node(address);
+            }
         }
     }
 

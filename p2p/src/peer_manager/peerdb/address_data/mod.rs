@@ -16,7 +16,6 @@
 use std::time::Duration;
 
 use tokio::time::Instant;
-use utils::const_value::ConstValue;
 
 /// When the node drops the unreachable node address. Used for negative caching.
 pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
@@ -48,16 +47,18 @@ pub enum AddressState {
 }
 
 pub enum AddressStateTransitionTo {
-    Connecting,
     Connected,
     Disconnected,
     ConnectionFailed,
+    Connecting,
+    SetReserved,
+    UnsetReserved,
 }
 
 pub struct AddressData {
     state: AddressState,
 
-    reserved: ConstValue<bool>,
+    reserved: bool,
 }
 
 impl AddressData {
@@ -68,12 +69,12 @@ impl AddressData {
                 fail_count: 0,
                 disconnected_at: now,
             },
-            reserved: reserved.into(),
+            reserved,
         }
     }
 
     pub fn reserved(&self) -> bool {
-        *self.reserved
+        self.reserved
     }
 
     /// Returns true when it is time to attempt a new outbound connection
@@ -87,7 +88,7 @@ impl AddressData {
                 was_reachable,
             } => {
                 let age = now.duration_since(disconnected_at);
-                if *self.reserved {
+                if self.reserved {
                     // Try to connect to the user reserved nodes more often
                     let age = now - disconnected_at;
                     match fail_count {
@@ -176,7 +177,7 @@ impl AddressData {
                     disconnected_at: _,
                     was_reachable,
                 } => {
-                    if *self.reserved {
+                    if self.reserved {
                         AddressState::Disconnected {
                             fail_count: fail_count + 1,
                             disconnected_at: now,
@@ -220,6 +221,50 @@ impl AddressData {
                     was_reachable: false,
                 },
             },
+
+            AddressStateTransitionTo::SetReserved => {
+                self.reserved = true;
+
+                // Change to Disconnected if currently Unreachable
+                match self.state {
+                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    } => AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    },
+                    AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
+                        fail_count: 0,
+                        disconnected_at: now,
+                        was_reachable: false,
+                    },
+                }
+            }
+
+            AddressStateTransitionTo::UnsetReserved => {
+                self.reserved = false;
+
+                // Do not change the state
+                match self.state {
+                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    } => AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    },
+                    AddressState::Unreachable { erase_after } => {
+                        AddressState::Unreachable { erase_after }
+                    }
+                }
+            }
         }
     }
 }
