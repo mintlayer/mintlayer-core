@@ -33,7 +33,7 @@ use crate::primitives::{
 
 use self::ordered_node::NodeWithAbsOrder;
 
-use super::single::SingleProofNodes;
+use super::{single::SingleProofNodes, verify_result::ProofVerifyResult};
 
 /// Merkle proofs for multiple leaves.
 /// An object that contains the information required to prove that multiple leaves are in a Merkle tree.
@@ -252,7 +252,7 @@ impl MultiProofHashes {
         &self,
         leaves: BTreeMap<usize, H256>,
         root: H256,
-    ) -> Result<Option<bool>, MerkleProofVerificationError> {
+    ) -> Result<ProofVerifyResult, MerkleProofVerificationError> {
         // in case it's a single-node tree, we don't need to verify or hash anything
 
         if leaves.is_empty() {
@@ -286,7 +286,7 @@ impl MultiProofHashes {
         let all_nodes = MultiProofHashes::calculate_missing_nodes(tree_size, all_nodes);
 
         // Result is Option<bool> because it must pass through the loop inside at least once; otherwise nothing is checked
-        let mut result = None;
+        let mut result = ProofVerifyResult::PassedTrivially;
 
         // Verify the root for every leaf we got
         // Note: This can be made more efficient by marking "hashed" nodes and skipping them,
@@ -322,11 +322,7 @@ impl MultiProofHashes {
 
                 // If the next iteration is going to be the root, check if the root hash is correct and exit the inner loop
                 if curr_node_pos.node_kind().is_root() {
-                    result = match result {
-                        Some(r) => Some(r | (parent_hash == root)),
-                        None => Some(parent_hash == root),
-                    };
-
+                    result = result.or(parent_hash == root);
                     break;
                 }
             }

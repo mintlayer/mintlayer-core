@@ -570,7 +570,11 @@ fn multi_proof_verification(
         let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
         let leaves_hashes_map = indices_to_map(&leaves_indices);
         assert!(
-            multi_proof.into_values().verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+            multi_proof
+                .into_values()
+                .verify(leaves_hashes_map, t.root())
+                .unwrap()
+                .passed_decisively(),
             "Failed for indices: {:?}",
             leaves_indices
         );
@@ -591,9 +595,12 @@ fn multi_proof_verification_one_leaf() {
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
     let leaves_hashes_map = indices_to_map(&leaves_indices);
 
-    assert_eq!(
-        multi_proof.into_values().verify(leaves_hashes_map, t.root()).unwrap(),
-        None,
+    assert!(
+        multi_proof
+            .into_values()
+            .verify(leaves_hashes_map, t.root())
+            .unwrap()
+            .passed_trivially(),
         "Failed for indices: {:?}",
         leaves_indices
     );
@@ -657,7 +664,7 @@ fn multi_proof_verification_tampered_nodes(
 
             let leaves_hashes_map = indices_to_map(&leaves_indices);
             assert!(
-                !multi_proof.verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+                multi_proof.verify(leaves_hashes_map, t.root()).unwrap().failed(),
                 "Failed for indices: {:?}",
                 leaves_indices
             );
@@ -723,7 +730,7 @@ fn multi_proof_verification_tampered_leaves(
             leaves_hashes_map.insert(*leaf_idx, H256::random_using(&mut rng));
 
             assert!(
-                !multi_proof.verify(leaves_hashes_map, t.root()).unwrap().unwrap(),
+                multi_proof.verify(leaves_hashes_map, t.root()).unwrap().failed(),
                 "Failed for indices: {:?}",
                 leaves_indices
             );
@@ -852,7 +859,7 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
 
         // The verification can result now in an error (due to missing nodes) or in a valid result (due to bad hashing order)
         assert!(
-            verify_result.is_err() || !verify_result.unwrap().unwrap(),
+            verify_result.is_err() || !verify_result.unwrap().passed_decisively(),
             "Failed for indices: {:?}",
             leaves_indices
         );

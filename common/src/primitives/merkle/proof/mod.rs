@@ -15,3 +15,4 @@
 
 pub mod multi;
 pub mod single;
+pub mod verify_result;

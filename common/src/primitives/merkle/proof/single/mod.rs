@@ -15,9 +15,12 @@
 
 use crate::primitives::H256;
 
-use super::super::{
-    tree::{MerkleTree, Node},
-    MerkleTreeProofExtractionError,
+use super::{
+    super::{
+        tree::{MerkleTree, Node},
+        MerkleTreeProofExtractionError,
+    },
+    verify_result::ProofVerifyResult,
 };
 
 /// A proof for a single leaf in a Merkle tree. The proof contains the leaf and the branch of the tree.
@@ -115,14 +118,13 @@ impl SingleProofHashes {
     }
 
     /// Verifies that the given leaf can produce the root's hash.
-    /// Returns None if the proof is empty (the tree has only one node),
-    /// as this function then boils down to `leaf == root`, which is trivial.
-    /// This choice, to return None, is a security measure to prevent a malicious user from
-    /// circumventing verification by providing a proof of a single node.
-    pub fn verify(&self, leaf: H256, root: H256) -> Option<bool> {
+    pub fn verify(&self, leaf: H256, root: H256) -> ProofVerifyResult {
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
-            return None;
+            match leaf == root {
+                true => return ProofVerifyResult::PassedTrivially,
+                false => return ProofVerifyResult::Failed,
+            }
         }
 
         let hash = self.branch.iter().enumerate().fold(leaf, |prev_hash, (index, sibling)| {
@@ -134,7 +136,10 @@ impl SingleProofHashes {
             }
         });
 
-        Some(hash == root)
+        match hash == root {
+            true => ProofVerifyResult::PassedDecisively,
+            false => ProofVerifyResult::Failed,
+        }
     }
 }
 

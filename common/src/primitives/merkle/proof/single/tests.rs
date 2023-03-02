@@ -37,7 +37,7 @@ fn single_proof_one_leaf() {
     let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(p0.branch().len(), 0);
 
-    assert!(p0.into_values().verify(leaves[leaf_index], t.root()).is_none());
+    assert!(p0.into_values().verify(leaves[leaf_index], t.root()).passed_trivially());
 }
 
 #[rstest]
@@ -86,7 +86,7 @@ fn single_proof_eight_leaves(
         branch
     );
 
-    assert!(p.into_values().verify(leaves[leaf_index], t.root()).unwrap());
+    assert!(p.into_values().verify(leaves[leaf_index], t.root()).passed_decisively());
 }
 
 #[rstest]
@@ -115,7 +115,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
         for node_index in 0..proof.branch.len() {
             let mut p = proof.clone();
             p.branch[node_index] = H256::random_using(&mut rng);
-            assert!(!p.verify(leaves[leaf_index], t.root()).unwrap());
+            assert!(p.verify(leaves[leaf_index], t.root()).failed());
         }
     }
 }
@@ -143,6 +143,6 @@ fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_c
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
 
         // Use a botched leaf
-        assert!(!proof.verify(H256::random_using(&mut rng), t.root()).unwrap());
+        assert!(proof.verify(H256::random_using(&mut rng), t.root()).failed());
     }
 }
