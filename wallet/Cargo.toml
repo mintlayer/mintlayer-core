@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 common = {path = '../common'}
+crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 serialization = { path = "../serialization" }
 storage = { path = '../storage', features = ['inmemory'] }
@@ -16,7 +17,11 @@ utxo = { path = '../utxo' }
 wallet-storage = {path = './storage'}
 wallet-types = {path = './types'}
 
+bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"]}
+zeroize = "1.5"
 thiserror.workspace = true
 
 [dev-dependencies]
+test-utils = { path = "../test-utils" }
+
 tempfile = "3.3"
