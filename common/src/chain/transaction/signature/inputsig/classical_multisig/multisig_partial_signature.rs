@@ -156,7 +156,7 @@ mod tests {
     use std::num::NonZeroU8;
 
     use crypto::key::{KeyKind, PrivateKey, Signature};
-    use crypto::random::{Rng, SliceRandom};
+    use crypto::random::{CryptoRng, Rng, SliceRandom};
     use rstest::rstest;
 
     use crate::chain::config::create_mainnet;
@@ -166,14 +166,61 @@ mod tests {
 
     use super::*;
 
-    fn test_valid_challenge(
-        rng: &mut impl Rng,
-        chain_config: &ChainConfig,
-        signatures_map: &BTreeMap<u8, Signature>,
-        challenge: &ClassicMultisigChallenge,
-        message_bytes: &[u8],
-        priv_keys: &[PrivateKey],
-    ) {
+    struct TestChallengeData {
+        chain_config: ChainConfig,
+        challenge: ClassicMultisigChallenge,
+        message_bytes: Vec<u8>,
+        priv_keys: Vec<PrivateKey>,
+        signatures_map: BTreeMap<u8, Signature>,
+    }
+
+    impl TestChallengeData {
+        fn new_random(rng: &mut (impl Rng + CryptoRng)) -> Self {
+            let chain_config = create_mainnet();
+
+            let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+            let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+            let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
+            let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+                .into_iter()
+                .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
+                .unzip();
+            let challenge =
+                ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                    .unwrap();
+            challenge.is_valid(&chain_config).unwrap();
+
+            let message = H256::random_using(rng);
+            let message_bytes = message.encode();
+
+            let signatures_map = priv_keys
+                .iter()
+                .enumerate()
+                .map(|(index, priv_key)| {
+                    let signature = priv_key.sign_message(&message.encode()).unwrap();
+                    (index as u8, signature)
+                })
+                .collect::<BTreeMap<_, _>>();
+
+            Self {
+                chain_config,
+                challenge,
+                message_bytes,
+                priv_keys,
+                signatures_map,
+            }
+        }
+    }
+
+    fn valid_challenge(rng: &mut impl Rng, data: &TestChallengeData) {
+        let TestChallengeData {
+            chain_config,
+            challenge,
+            message_bytes,
+            priv_keys,
+            signatures_map,
+        } = data;
+
         // Valid cases with incomplete and complete signatures
         for sig_count in 0..priv_keys.len() {
             let mut signatures_map =
@@ -220,54 +267,23 @@ mod tests {
         }
     }
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn signature_validity(#[case] seed: Seed) {
-        let chain_config = &create_mainnet();
-
-        let mut rng = make_seedable_rng(seed);
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
-        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
-        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
-            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
-            .unzip();
-        let challenge =
-            ClassicMultisigChallenge::new(chain_config, min_required_signatures, pub_keys).unwrap();
-        challenge.is_valid(chain_config).unwrap();
-
-        let message = H256::random_using(&mut rng);
-        let message_bytes = message.encode();
-
-        let signatures_map = priv_keys
-            .iter()
-            .enumerate()
-            .map(|(index, priv_key)| {
-                let signature = priv_key.sign_message(&message.encode()).unwrap();
-                (index as u8, signature)
-            })
-            .collect::<BTreeMap<_, _>>();
-
-        test_valid_challenge(
-            &mut rng,
+    fn tampered_sigs(rng: &mut impl Rng, data: &TestChallengeData) {
+        let TestChallengeData {
             chain_config,
-            &signatures_map,
-            &challenge,
-            &message_bytes,
-            &priv_keys,
-        );
+            challenge,
+            message_bytes,
+            priv_keys,
+            signatures_map,
+        } = data;
 
-        // Tampered with sigs
         for sig_count in 1..priv_keys.len() {
             let mut signatures_map =
                 signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
-            signatures_map.shuffle(&mut rng);
-            let tampered_pair_ref = signatures_map.choose_mut(&mut rng).unwrap();
+            signatures_map.shuffle(rng);
+            let tampered_pair_ref = signatures_map.choose_mut(rng).unwrap();
             let tampered_index = tampered_pair_ref.0;
             let tampered_signature = priv_keys[tampered_index as usize]
-                .sign_message(&H256::random_using(&mut rng).encode())
+                .sign_message(&H256::random_using(rng).encode())
                 .unwrap();
             // replace the signatures with a tampered one
             tampered_pair_ref.1 = tampered_signature;
@@ -311,16 +327,25 @@ mod tests {
                 );
             }
         }
+    }
 
-        // Sign with wrong key
+    fn wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
+        let TestChallengeData {
+            chain_config,
+            challenge,
+            message_bytes,
+            priv_keys,
+            signatures_map,
+        } = data;
+
         for sig_count in 1..priv_keys.len() {
             let mut signatures_map =
                 signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
-            signatures_map.shuffle(&mut rng);
-            let tampered_pair_ref = signatures_map.choose_mut(&mut rng).unwrap();
-            let wrong_signature = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr)
+            signatures_map.shuffle(rng);
+            let tampered_pair_ref = signatures_map.choose_mut(rng).unwrap();
+            let wrong_signature = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr)
                 .0
-                .sign_message(&H256::random_using(&mut rng).encode())
+                .sign_message(&H256::random_using(rng).encode())
                 .unwrap();
             // replace the signatures with a tampered one
             tampered_pair_ref.1 = wrong_signature;
@@ -364,5 +389,18 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn signature_validity(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let data = TestChallengeData::new_random(&mut rng);
+
+        valid_challenge(&mut rng, &data);
+        tampered_sigs(&mut rng, &data);
+        wrong_key(&mut rng, &data);
     }
 }
