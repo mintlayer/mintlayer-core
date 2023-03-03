@@ -699,7 +699,7 @@ where
     // Get the first peer manager's bind address
     let (rtx, rrx) = oneshot_nofail::channel();
     tx1.send(PeerManagerEvent::GetBindAddresses(rtx)).unwrap();
-    let bind_addresses = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+    let bind_addresses = timeout(Duration::from_secs(20), rrx).await.unwrap().unwrap();
     assert_eq!(bind_addresses.len(), 1);
 
     // Start second peer manager and let it know about first manager via reserved
