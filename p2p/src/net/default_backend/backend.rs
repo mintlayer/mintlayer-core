@@ -29,6 +29,7 @@ use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use serialization::{Decode, Encode};
+use utils::set_flag::SetFlag;
 
 use crate::{
     config::P2pConfig,
@@ -60,7 +61,7 @@ struct PeerContext {
     tx: mpsc::UnboundedSender<Event>,
 
     /// True if the peer was accepted by PeerManager and SyncManager was notified
-    was_accepted: bool,
+    was_accepted: SetFlag,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -180,8 +181,8 @@ where
 
         peer.tx.send(Event::Accepted).map_err(P2pError::from)?;
 
-        assert!(!peer.was_accepted);
-        peer.was_accepted = true;
+        assert!(!*peer.was_accepted);
+        peer.was_accepted.set();
 
         Self::send_sync_event(&self.sync_tx, SyncingEvent::Connected { peer_id });
 
@@ -406,7 +407,7 @@ where
             PeerContext {
                 subscriptions,
                 tx,
-                was_accepted: false,
+                was_accepted: Default::default(),
             },
         );
 
@@ -423,7 +424,7 @@ where
             .remove(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if peer.was_accepted {
+        if *peer.was_accepted {
             Self::send_sync_event(&self.sync_tx, SyncingEvent::Disconnected { peer_id });
         }
 
