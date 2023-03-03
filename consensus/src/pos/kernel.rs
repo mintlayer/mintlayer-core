@@ -13,16 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{block::consensus_data::PoSData, TxOutput};
+use common::chain::{TxInput, TxOutput};
 use utxo::UtxosView;
 
 use crate::pos::error::ConsensusPoSError;
 
 pub fn get_kernel_output<U: UtxosView>(
-    pos_data: &PoSData,
+    kernel_inputs: &[TxInput],
     utxos_view: &U,
 ) -> Result<TxOutput, ConsensusPoSError> {
-    match pos_data.kernel_inputs() {
+    match kernel_inputs {
         [] => Err(ConsensusPoSError::NoKernel),
         [kernel_input] => {
             let kernel_outpoint = kernel_input.outpoint();

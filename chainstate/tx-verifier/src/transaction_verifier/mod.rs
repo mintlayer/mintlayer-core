@@ -63,6 +63,7 @@ use common::{
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
+use consensus::ConsensusPoSError;
 use pos_accounting::{
     PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
     PoSAccountingView,
@@ -369,24 +370,23 @@ where
             ConsensusData::PoS(_) => {
                 let block_reward_transactable = block.block_reward_transactable();
 
-                let kernel_input =
-                    match block_reward_transactable.inputs().ok_or(SpendStakeError::NoKernel)? {
-                        [] => Err(SpendStakeError::NoKernel),
-                        [kernel_input] => Ok(kernel_input),
-                        _ => Err(SpendStakeError::MultipleKernels),
-                    }?;
+                let kernel_output = consensus::get_kernel_output(
+                    block_reward_transactable.inputs().ok_or(
+                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
+                    )?,
+                    &self.utxo_cache,
+                )
+                .map_err(SpendStakeError::ConsensusPoSError)?;
 
-                let kernel_output = self
-                    .utxo_cache
-                    .utxo(kernel_input.outpoint())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-                let kernel_stake_pool_data = match kernel_output.output().purpose() {
+                let kernel_stake_pool_data = match kernel_output.purpose() {
                     OutputPurpose::Transfer(_)
                     | OutputPurpose::LockThenTransfer(_, _)
-                    | OutputPurpose::Burn => Err(SpendStakeError::InvalidKernelPurpose),
-                    OutputPurpose::StakePool(d) => Ok(d.as_ref()),
-                    OutputPurpose::SpendStakePool(d) => Ok(d.as_ref()),
+                    | OutputPurpose::Burn => Err(SpendStakeError::ConsensusPoSError(
+                        ConsensusPoSError::InvalidOutputPurposeInStakeKernel(block.get_id()),
+                    )),
+                    OutputPurpose::StakePool(d) | OutputPurpose::SpendStakePool(d) => {
+                        Ok(d.as_ref())
+                    }
                 }?;
 
                 let reward_output = match block_reward_transactable

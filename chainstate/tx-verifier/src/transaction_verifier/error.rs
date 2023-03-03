@@ -214,12 +214,6 @@ pub enum TokensError {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum SpendStakeError {
-    #[error("Kernel inputs are empty")]
-    NoKernel,
-    #[error("Only one kernel allowed")]
-    MultipleKernels,
-    #[error("Invalid purpose used in kernel")]
-    InvalidKernelPurpose,
     #[error("Block reward output has no outputs")]
     NoBlockRewardOutputs,
     #[error("Block reward output has multiple outputs")]
@@ -228,4 +222,6 @@ pub enum SpendStakeError {
     InvalidBlockRewardPurpose,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
+    #[error("Consensus PoS error")]
+    ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }

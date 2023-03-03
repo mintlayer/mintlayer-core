@@ -88,7 +88,7 @@ fn compute_current_randomness<U: UtxosView>(
     utxos_view: &U,
 ) -> Result<PoSRandomness, ExtraConsensusDataError> {
     let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
-    let kernel_output = get_kernel_output(pos_data, utxos_view)
+    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)
         .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
     let current_randomness = PoSRandomness::from_block(
         chain_config,

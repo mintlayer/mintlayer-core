@@ -136,7 +136,7 @@ where
     let current_height = prev_block_index.block_height().next_height();
     let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
 
-    let kernel_output = get_kernel_output(pos_data, utxos_view)?;
+    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
     check_stake_kernel_hash(
         current_epoch_index,

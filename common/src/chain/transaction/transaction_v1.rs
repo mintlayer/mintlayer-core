@@ -57,11 +57,11 @@ impl TransactionV1 {
         self.flags
     }
 
-    pub fn inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &[TxInput] {
         &self.inputs
     }
 
-    pub fn outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &[TxOutput] {
         &self.outputs
     }
 

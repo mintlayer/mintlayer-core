@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 common = {path = '../../common'}
+consensus = {path = '../../consensus'}
 chainstate-storage = {path = '../storage'}
 chainstate-types = {path = '../types'}
 crypto = {path = '../../crypto'}

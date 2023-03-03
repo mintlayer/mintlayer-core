@@ -61,11 +61,11 @@ impl SignedTransaction {
         self.transaction.flags()
     }
 
-    pub fn inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &[TxInput] {
         self.transaction.inputs()
     }
 
-    pub fn outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &[TxOutput] {
         self.transaction.outputs()
     }
 

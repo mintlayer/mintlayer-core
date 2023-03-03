@@ -103,13 +103,13 @@ impl Transaction {
         }
     }
 
-    pub fn inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &[TxInput] {
         match &self {
             Transaction::V1(tx) => tx.inputs(),
         }
     }
 
-    pub fn outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &[TxOutput] {
         match &self {
             Transaction::V1(tx) => tx.outputs(),
         }

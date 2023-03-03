@@ -3871,6 +3871,7 @@ dependencies = [
  "chainstate-storage",
  "chainstate-types",
  "common",
+ "consensus",
  "crypto",
  "fallible-iterator",
  "mockall",
