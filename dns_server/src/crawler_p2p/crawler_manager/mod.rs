@@ -55,7 +55,7 @@ const STORAGE_VERSION: u32 = 1;
 #[derive(Clone)]
 pub struct CrawlerManagerConfig {
     /// Manually specified list of nodes to connect to
-    pub add_node: Vec<String>,
+    pub reserved_nodes: Vec<String>,
 
     /// Default p2p port on which nodes normally accept inbound connections;
     /// the DNS server has no way to communicate port numbers,
@@ -106,15 +106,15 @@ where
         let loaded_addresses: BTreeSet<N::Address> = Self::load_storage(&storage)?;
 
         // Addresses listed as reachable from the command line
-        let added_addresses: BTreeSet<N::Address> = config
-            .add_node
+        let reserved_addresses: BTreeSet<N::Address> = config
+            .reserved_nodes
             .iter()
             .map(|addr| addr.parse())
             .collect::<Result<BTreeSet<N::Address>, _>>()?;
 
         assert!(conn.local_addresses().is_empty());
 
-        let crawler = Crawler::new(chain_config, loaded_addresses, added_addresses);
+        let crawler = Crawler::new(chain_config, loaded_addresses, reserved_addresses);
 
         Ok(Self {
             last_crawler_timer,

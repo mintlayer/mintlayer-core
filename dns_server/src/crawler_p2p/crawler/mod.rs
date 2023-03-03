@@ -95,12 +95,12 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         loaded_addresses: BTreeSet<A>,
-        added_addresses: BTreeSet<A>,
+        reserved_addresses: BTreeSet<A>,
     ) -> Self {
         let now = Duration::ZERO;
 
         let addresses = loaded_addresses
-            .union(&added_addresses)
+            .union(&reserved_addresses)
             .map(|addr| {
                 (
                     addr.clone(),
@@ -110,7 +110,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
                             was_reachable: loaded_addresses.contains(addr),
                             disconnected_at: now,
                         },
-                        user_added: added_addresses.contains(addr).into(),
+                        reserved: reserved_addresses.contains(addr).into(),
                     },
                 )
             })
@@ -174,7 +174,7 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
                     was_reachable: false,
                     disconnected_at: self.now,
                 },
-                user_added: false.into(),
+                reserved: false.into(),
             });
         }
     }

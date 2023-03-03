@@ -18,7 +18,8 @@ use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "p2p")]
 trait P2pRpc {
-    /// Connect to remote node
+    /// Try to connect to a remote node (just once).
+    /// For persistent connections `add_reserved_node` should be used.
     #[method(name = "connect")]
     async fn connect(&self, addr: String) -> rpc::Result<()>;
 
@@ -37,6 +38,16 @@ trait P2pRpc {
     /// Get details of connected peers
     #[method(name = "get_connected_peers")]
     async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>>;
+
+    /// Add the address to the reserved nodes list.
+    /// The node will try to keep connections open to all reserved peers.
+    #[method(name = "add_reserved_node")]
+    async fn add_reserved_node(&self, addr: String) -> rpc::Result<()>;
+
+    /// Remove the address from the reserved nodes list.
+    /// Existing connection to the peer is not closed.
+    #[method(name = "remove_reserved_node")]
+    async fn remove_reserved_node(&self, addr: String) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -63,6 +74,16 @@ impl P2pRpcServer for super::P2pHandle {
 
     async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>> {
         let res = self.call_async(|this| Box::pin(this.get_connected_peers())).await;
+        handle_error(res)
+    }
+
+    async fn add_reserved_node(&self, addr: String) -> rpc::Result<()> {
+        let res = self.call_async_mut(|this| Box::pin(this.add_reserved_node(addr))).await;
+        handle_error(res)
+    }
+
+    async fn remove_reserved_node(&self, addr: String) -> rpc::Result<()> {
+        let res = self.call_async_mut(move |this| Box::pin(this.remove_reserved_node(addr))).await;
         handle_error(res)
     }
 }

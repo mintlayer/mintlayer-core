@@ -86,8 +86,8 @@ pub struct AddressData {
     /// Connection state
     pub state: AddressState,
 
-    /// Whether the address was added from the command line
-    pub user_added: ConstValue<bool>,
+    /// Whether the address was specified from the command line as reserved_node
+    pub reserved: ConstValue<bool>,
 }
 
 impl AddressState {
@@ -215,8 +215,8 @@ impl AddressData {
                 disconnected_at,
             } => {
                 let age = now - disconnected_at;
-                if *self.user_added {
-                    // Try to connect to the user added nodes more often
+                if *self.reserved {
+                    // Try to connect to the reserved nodes more often
                     let age = now - disconnected_at;
                     match fail_count {
                         0 => true,
@@ -292,7 +292,7 @@ impl AddressData {
                         || matches!(self.state, AddressState::Disconnecting { .. })
                 );
 
-                self.state = match (*self.user_added, self.state.was_reachable()) {
+                self.state = match (*self.reserved, self.state.was_reachable()) {
                     (false, true) if self.state.fail_count() + 1 >= PURGE_REACHABLE_FAIL_COUNT => {
                         AddressState::Unreachable {
                             fail_count: self.state.fail_count() + 1,

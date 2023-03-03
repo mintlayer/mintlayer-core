@@ -41,6 +41,10 @@ pub enum PeerManagerEvent<T: NetworkingService> {
     ///
     /// The peer is banned if the new score exceeds the threshold (`P2pConfig::ban_threshold`).
     AdjustPeerScore(PeerId, u32, oneshot_nofail::Sender<crate::Result<()>>),
+
+    AddReserved(T::Address),
+
+    RemoveReserved(T::Address),
 }
 
 #[derive(Debug)]

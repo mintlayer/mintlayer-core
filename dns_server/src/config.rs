@@ -37,9 +37,9 @@ pub struct DnsServerConfig {
     #[clap(long, default_values_t = vec!["[::]:53".to_string()])]
     pub bind_addr: Vec<String>,
 
-    /// Initial node address to connect. Can be specified multiple times.
+    /// Reserved node address to connect. Can be specified multiple times.
     #[clap(long)]
-    pub add_node: Vec<String>,
+    pub reserved_node: Vec<String>,
 
     /// Hostname of the DNS seed
     #[clap(long)]
