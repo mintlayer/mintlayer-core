@@ -155,7 +155,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::num::NonZeroU8;
 
-    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::key::{KeyKind, PrivateKey, Signature};
     use crypto::random::{Rng, SliceRandom};
     use rstest::rstest;
 
@@ -166,41 +166,19 @@ mod tests {
 
     use super::*;
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn signature_validity(#[case] seed: Seed) {
-        let chain_config = &create_mainnet();
-
-        let mut rng = make_seedable_rng(seed);
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
-        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-        let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
-        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
-            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
-            .unzip();
-        let challenge =
-            ClassicMultisigChallenge::new(chain_config, min_required_signatures, pub_keys).unwrap();
-        challenge.is_valid(chain_config).unwrap();
-
-        let message = H256::random_using(&mut rng);
-        let message_bytes = message.encode();
-
-        let signatures_map = priv_keys
-            .iter()
-            .enumerate()
-            .map(|(index, priv_key)| {
-                let signature = priv_key.sign_message(&message.encode()).unwrap();
-                (index as u8, signature)
-            })
-            .collect::<BTreeMap<_, _>>();
-
+    fn test_valid_challenge(
+        rng: &mut impl Rng,
+        chain_config: &ChainConfig,
+        signatures_map: &BTreeMap<u8, Signature>,
+        challenge: &ClassicMultisigChallenge,
+        message_bytes: &[u8],
+        priv_keys: &[PrivateKey],
+    ) {
         // Valid cases with incomplete and complete signatures
         for sig_count in 0..priv_keys.len() {
             let mut signatures_map =
                 signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
-            signatures_map.shuffle(&mut rng);
+            signatures_map.shuffle(rng);
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
             let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
@@ -240,6 +218,46 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn signature_validity(#[case] seed: Seed) {
+        let chain_config = &create_mainnet();
+
+        let mut rng = make_seedable_rng(seed);
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(chain_config, min_required_signatures, pub_keys).unwrap();
+        challenge.is_valid(chain_config).unwrap();
+
+        let message = H256::random_using(&mut rng);
+        let message_bytes = message.encode();
+
+        let signatures_map = priv_keys
+            .iter()
+            .enumerate()
+            .map(|(index, priv_key)| {
+                let signature = priv_key.sign_message(&message.encode()).unwrap();
+                (index as u8, signature)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        test_valid_challenge(
+            &mut rng,
+            chain_config,
+            &signatures_map,
+            &challenge,
+            &message_bytes,
+            &priv_keys,
+        );
 
         // Tampered with sigs
         for sig_count in 1..priv_keys.len() {
