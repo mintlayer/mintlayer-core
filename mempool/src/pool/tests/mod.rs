@@ -41,7 +41,10 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{make_seedable_rng, Seed},
+};
 
 mod expiry;
 mod replacement;
@@ -642,7 +645,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx1_parents,
         entry_1_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
     let tx2_parents = BTreeSet::default();
@@ -652,7 +655,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx2_parents,
         entry_2_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
 
@@ -664,7 +667,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx3_parents,
         tx3_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
 
@@ -678,7 +681,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx4_parents,
         tx4_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
     let entry5 = TxMempoolEntry::new(
@@ -686,7 +689,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx5_parents,
         tx5_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
 
@@ -701,7 +704,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx6_parents,
         tx6_ancestors,
-        time::get(),
+        time::get_system_time(),
     )
     .unwrap();
 
@@ -905,10 +908,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
 async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
     let mock_time = Arc::new(AtomicU64::new(0));
-    let mock_time_clone = Arc::clone(&mock_time);
-    let mock_clock = TimeGetter::new(Arc::new(move || {
-        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
-    }));
+    let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let mut mock_usage = MockGetMemoryUsage::new();
     // Add parent
     // Add first child

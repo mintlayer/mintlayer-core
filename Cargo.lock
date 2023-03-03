@@ -618,6 +618,7 @@ dependencies = [
  "hex",
  "itertools",
  "logging",
+ "once_cell",
  "parity-scale-codec",
  "proptest",
  "rstest",

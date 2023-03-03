@@ -24,6 +24,7 @@ static_assertions.workspace = true
 thiserror.workspace = true
 hex.workspace = true
 itertools.workspace = true
+once_cell.workspace = true
 
 # for fixed_hash
 arbitrary = "1.1"

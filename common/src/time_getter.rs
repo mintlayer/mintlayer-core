@@ -13,33 +13,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::time;
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-pub type TimeGetterFn = dyn Fn() -> Duration + Send + Sync;
+use crate::primitives::time;
+
+pub trait TimeGetterFn: Send + Sync {
+    fn system_time(&self) -> Duration;
+
+    fn instant(&self) -> Instant;
+}
 
 /// A function wrapper that contains the function that will be used to get the current time in chainstate
 #[derive(Clone)]
 pub struct TimeGetter {
-    f: Arc<TimeGetterFn>,
+    f: Arc<dyn TimeGetterFn>,
 }
 
 impl TimeGetter {
-    pub fn new(f: Arc<TimeGetterFn>) -> Self {
+    pub fn new(f: Arc<dyn TimeGetterFn>) -> Self {
         Self { f }
     }
 
     pub fn get_time(&self) -> Duration {
-        (self.f)()
+        self.f.system_time()
     }
 
-    pub fn getter(&self) -> &TimeGetterFn {
+    pub fn get_instant(&self) -> Instant {
+        self.f.instant()
+    }
+
+    pub fn getter(&self) -> &dyn TimeGetterFn {
         &*self.f
     }
 }
 
 impl Default for TimeGetter {
     fn default() -> Self {
-        Self::new(Arc::new(time::get))
+        Self::new(Arc::new(DefaultTimeGetterFn::new()))
+    }
+}
+
+struct DefaultTimeGetterFn;
+
+impl DefaultTimeGetterFn {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl TimeGetterFn for DefaultTimeGetterFn {
+    fn system_time(&self) -> Duration {
+        time::get_system_time()
+    }
+
+    fn instant(&self) -> Instant {
+        time::get_instant_time()
     }
 }
