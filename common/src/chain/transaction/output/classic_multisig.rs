@@ -93,3 +93,119 @@ impl ClassicMultisigChallenge {
         &self.public_keys
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use super::*;
+    use crate::chain::config::create_mainnet;
+
+    #[test]
+    fn zero_pub_keys() {
+        let chain_config = create_mainnet();
+
+        // Notice that we circumvent the constructor because this struct can be decoded from data
+        let res = ClassicMultisigChallenge {
+            min_required_signatures: 1,
+            public_keys: vec![],
+        };
+
+        assert_eq!(
+            res.is_valid(&chain_config).unwrap_err(),
+            ClassicMultisigChallengeError::EmptyPublicKeys
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn min_required_signatures_is_zero(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+
+        // Notice that we circumvent the constructor because this struct can be decoded from data
+        let res = ClassicMultisigChallenge {
+            min_required_signatures: 0,
+            public_keys: vec![PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1],
+        };
+
+        assert_eq!(
+            res.is_valid(&chain_config).unwrap_err(),
+            ClassicMultisigChallengeError::MinRequiredSignaturesIsZero
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn more_required_signatures_than_public_keys(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+
+        let pub_key_count = 1 + rng.gen::<u8>() % 10;
+
+        let min_required_signatures = pub_key_count + 1;
+
+        let public_keys = (0..pub_key_count)
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1)
+            .collect::<Vec<_>>();
+
+        // Notice that we circumvent the constructor because this struct can be decoded from data
+        let res = ClassicMultisigChallenge {
+            min_required_signatures,
+            public_keys,
+        };
+
+        assert_eq!(
+            res.is_valid(&chain_config).unwrap_err(),
+            ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
+                pub_key_count as u8 + 1,
+                res.public_keys.len()
+            )
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn too_many_public_keys(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+
+        let pub_key_count = 1 + chain_config.max_classic_multisig_public_keys_count() as u8;
+
+        let min_required_signatures_rand = 1 + rng.gen::<u8>() % pub_key_count;
+
+        let min_required_signatures = if min_required_signatures_rand == 0 {
+            // if the minimum number of signatures is by chance zero, we set it to 1
+            1
+        } else {
+            min_required_signatures_rand
+        };
+
+        let public_keys = (0..pub_key_count)
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1)
+            .collect::<Vec<_>>();
+
+        // Notice that we circumvent the constructor because this struct can be decoded from data
+        let res = ClassicMultisigChallenge {
+            min_required_signatures,
+            public_keys,
+        };
+
+        assert_eq!(
+            res.is_valid(&chain_config).unwrap_err(),
+            ClassicMultisigChallengeError::TooManyPublicKeys(
+                res.public_keys.len(),
+                chain_config.max_classic_multisig_public_keys_count()
+            )
+        );
+    }
+}
