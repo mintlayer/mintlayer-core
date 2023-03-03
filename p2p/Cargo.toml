@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [features]
 default = []
-testing_utils = ["tokio/test-util"]
+testing_utils = ["dep:test-utils", "tokio/test-util"]
 
 [dependencies]
 common = { path = "../common/" }
@@ -20,6 +20,7 @@ serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 storage = { path = "../storage" }
+test-utils = { path = "../test-utils", optional = true }
 
 async-trait.workspace = true
 bytes = "1.1"
@@ -30,7 +31,7 @@ sscanf = "0.4"
 thiserror.workspace = true
 void = "1.0"
 tap = "1.0"
-once_cell = "1.13"
+once_cell.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }

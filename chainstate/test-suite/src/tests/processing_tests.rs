@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::{sync::atomic::Ordering, time::Duration};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
@@ -40,7 +40,6 @@ use common::{
         OutputPurpose, OutputSpentState, TxInput, TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable},
-    time_getter::TimeGetter,
     Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
@@ -50,6 +49,7 @@ use crypto::{
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use rstest::rstest;
+use test_utils::mock_time_getter::mocked_time_getter_seconds;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxoSource;
 
@@ -1027,10 +1027,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
         let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
             config.genesis_block().timestamp().as_int_seconds(),
         ));
-        let chainstate_current_time = Arc::clone(&current_time);
-        let time_getter = TimeGetter::new(Arc::new(move || {
-            Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
-        }));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(config)
             .with_time_getter(time_getter)

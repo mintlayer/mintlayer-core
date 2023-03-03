@@ -110,7 +110,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.time_getter.getter(),
+            &self.time_getter,
         ))
     }
 
@@ -123,7 +123,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
             &self.chainstate_config,
             &self.tx_verification_strategy,
             db_tx,
-            self.time_getter.getter(),
+            &self.time_getter,
         ))
     }
 

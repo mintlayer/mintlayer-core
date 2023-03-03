@@ -33,7 +33,7 @@ use common::{
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
-    time_getter::TimeGetterFn,
+    time_getter::TimeGetter,
     Uint256,
 };
 use consensus::compute_extra_consensus_data;
@@ -63,7 +63,7 @@ pub struct ChainstateRef<'a, S, V> {
     chainstate_config: &'a ChainstateConfig,
     tx_verification_strategy: &'a V,
     db_tx: S,
-    time_getter: &'a TimeGetterFn,
+    time_getter: &'a TimeGetter,
 }
 
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockIndexHandle
@@ -116,7 +116,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         chainstate_config: &'a ChainstateConfig,
         tx_verification_strategy: &'a V,
         db_tx: S,
-        time_getter: &'a TimeGetterFn,
+        time_getter: &'a TimeGetter,
     ) -> ChainstateRef<'a, S, V> {
         ChainstateRef {
             chain_config,
@@ -132,7 +132,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         chainstate_config: &'a ChainstateConfig,
         tx_verification_strategy: &'a V,
         db_tx: S,
-        time_getter: &'a TimeGetterFn,
+        time_getter: &'a TimeGetter,
     ) -> ChainstateRef<'a, S, V> {
         ChainstateRef {
             chain_config,
@@ -153,7 +153,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     pub fn current_time(&self) -> std::time::Duration {
-        (self.time_getter)()
+        self.time_getter.get_time()
     }
 
     pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {

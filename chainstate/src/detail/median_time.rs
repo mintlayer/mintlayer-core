@@ -46,7 +46,8 @@ mod test {
         detail::tx_verification_strategy::DefaultTransactionVerificationStrategy, BlockSource,
         Chainstate, ChainstateConfig,
     };
-    use common::time_getter::TimeGetter;
+    use common::primitives::time;
+    use test_utils::mock_time_getter::mocked_time_getter_seconds;
 
     use super::*;
     use chainstate_storage::inmemory::Store;
@@ -58,12 +59,9 @@ mod test {
             },
             config::create_unit_test_config,
         },
-        primitives::{time, Idable},
+        primitives::Idable,
     };
-    use std::{
-        sync::{atomic::Ordering, Arc},
-        time::Duration,
-    };
+    use std::sync::{atomic::Ordering, Arc};
 
     fn make_block(prev_block: Id<GenBlock>, time: BlockTimestampInternalType) -> Block {
         Block::new(
@@ -115,7 +113,7 @@ mod test {
             let blocks = chain_blocks(
                 block_count,
                 chainstate.chain_config.genesis_block_id(),
-                time::get().as_secs(),
+                time::get_system_time().as_secs(),
             );
 
             for block in &blocks {
@@ -173,10 +171,7 @@ mod test {
                 chain_config.genesis_block().timestamp().as_int_seconds(),
             ));
 
-            let chainstate_current_time = Arc::clone(&current_time);
-            let time_getter = TimeGetter::new(Arc::new(move || {
-                Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
-            }));
+            let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
 
             let storage = Store::new_empty().unwrap();
             let chainstate_config = ChainstateConfig::new();
