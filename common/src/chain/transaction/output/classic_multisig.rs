@@ -165,7 +165,7 @@ mod tests {
         assert_eq!(
             res.is_valid(&chain_config).unwrap_err(),
             ClassicMultisigChallengeError::MoreRequiredSignaturesThanPublicKeys(
-                pub_key_count as u8 + 1,
+                pub_key_count + 1,
                 res.public_keys.len()
             )
         );

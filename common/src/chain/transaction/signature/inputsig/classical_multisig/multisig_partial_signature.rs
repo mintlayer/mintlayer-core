@@ -161,7 +161,7 @@ mod tests {
 
     use crate::chain::config::create_mainnet;
     use crate::primitives::H256;
-    use serialization::Encode;
+    use serialization::{Decode, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -180,7 +180,7 @@ mod tests {
 
             let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
             let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
-            let total_parties = (rng.gen::<u8>() % 10) + min_required_signatures.get();
+            let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
             let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
                 .into_iter()
                 .map(|_| PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr))
@@ -212,7 +212,7 @@ mod tests {
         }
     }
 
-    fn valid_challenge(rng: &mut impl Rng, data: &TestChallengeData) {
+    fn check_valid_auth(rng: &mut impl Rng, data: &TestChallengeData) {
         let TestChallengeData {
             chain_config,
             challenge,
@@ -267,7 +267,47 @@ mod tests {
         }
     }
 
-    fn tampered_sigs(rng: &mut impl Rng, data: &TestChallengeData) {
+    fn check_invalid_challenge(
+        rng: &mut impl Rng,
+        data: &TestChallengeData,
+        expected_challenge_error: ClassicMultisigChallengeError,
+    ) {
+        let TestChallengeData {
+            chain_config,
+            challenge,
+            message_bytes,
+            priv_keys,
+            signatures_map,
+        } = data;
+
+        // Valid cases with incomplete and complete signatures
+        for sig_count in 0..priv_keys.len() {
+            let mut signatures_map =
+                signatures_map.clone().into_iter().take(sig_count).collect::<Vec<(_, _)>>();
+            signatures_map.shuffle(rng);
+            let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
+
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+
+            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
+                chain_config,
+                challenge,
+                message_bytes,
+                &auth,
+            );
+
+            let error = signed_challenge.unwrap_err();
+            match error {
+                PartiallySignedMultisigStructureError::Overconstrained(_, _) => unreachable!(),
+                PartiallySignedMultisigStructureError::InvalidChallenge(c) => {
+                    assert_eq!(c, expected_challenge_error)
+                }
+                PartiallySignedMultisigStructureError::InvalidSignatureIndex => unreachable!(),
+            }
+        }
+    }
+
+    fn check_tampered_sigs(rng: &mut impl Rng, data: &TestChallengeData) {
         let TestChallengeData {
             chain_config,
             challenge,
@@ -329,7 +369,7 @@ mod tests {
         }
     }
 
-    fn wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
+    fn check_wrong_key(rng: &mut (impl Rng + CryptoRng), data: &TestChallengeData) {
         let TestChallengeData {
             chain_config,
             challenge,
@@ -394,13 +434,40 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn signature_validity(#[case] seed: Seed) {
+    fn signature_validity_and_completeness(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let data = TestChallengeData::new_random(&mut rng);
 
-        valid_challenge(&mut rng, &data);
-        tampered_sigs(&mut rng, &data);
-        wrong_key(&mut rng, &data);
+        check_valid_auth(&mut rng, &data);
+        check_tampered_sigs(&mut rng, &data);
+        check_wrong_key(&mut rng, &data);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn invalid_challenge(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let mut data = TestChallengeData::new_random(&mut rng);
+
+        // We set the minimum required signatures to 0, which is invalid.
+        // Hence, we use an invalid challenge, and expect the verification to fail.
+        let mut encoded = data.challenge.encode();
+        encoded[0] = 0;
+        data.challenge = ClassicMultisigChallenge::decode(&mut encoded.as_slice()).unwrap();
+        assert_eq!(data.challenge.min_required_signatures(), 0);
+
+        assert_eq!(
+            data.challenge.is_valid(&data.chain_config).unwrap_err(),
+            ClassicMultisigChallengeError::MinRequiredSignaturesIsZero
+        );
+
+        check_invalid_challenge(
+            &mut rng,
+            &data,
+            ClassicMultisigChallengeError::MinRequiredSignaturesIsZero,
+        );
     }
 }
