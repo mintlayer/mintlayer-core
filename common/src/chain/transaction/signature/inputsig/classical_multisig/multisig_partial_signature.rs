@@ -230,14 +230,14 @@ mod tests {
 
             let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
 
-            let sigs = PartiallySignedMultisigChallenge::from_partial(
+            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
                 challenge,
                 message_bytes,
                 &auth,
             );
 
-            let sigs = match sigs {
+            let signed_challenge = match signed_challenge {
                 Ok(sigs) => {
                     assert!(sig_count as u8 <= challenge.min_required_signatures());
                     sigs
@@ -255,12 +255,12 @@ mod tests {
 
             if sig_count as u8 == challenge.min_required_signatures() {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::CompleteAndValid
                 );
             } else {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::Incomplete
                 );
             }
@@ -292,14 +292,14 @@ mod tests {
 
             let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
 
-            let sigs = PartiallySignedMultisigChallenge::from_partial(
+            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
                 challenge,
                 message_bytes,
                 &auth,
             );
 
-            let sigs = match sigs {
+            let signed_challenge = match signed_challenge {
                 Ok(sigs) => {
                     assert!(sig_count as u8 <= challenge.min_required_signatures());
                     sigs
@@ -317,12 +317,12 @@ mod tests {
 
             if sig_count as u8 == challenge.min_required_signatures() {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::Invalid
                 );
             } else {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::Incomplete
                 );
             }
@@ -354,14 +354,14 @@ mod tests {
 
             let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
 
-            let sigs = PartiallySignedMultisigChallenge::from_partial(
+            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
                 challenge,
                 message_bytes,
                 &auth,
             );
 
-            let sigs = match sigs {
+            let signed_challenge = match signed_challenge {
                 Ok(sigs) => {
                     assert!(sig_count as u8 <= challenge.min_required_signatures());
                     sigs
@@ -379,12 +379,12 @@ mod tests {
 
             if sig_count as u8 == challenge.min_required_signatures() {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::Invalid
                 );
             } else {
                 assert_eq!(
-                    sigs.verify_signatures(chain_config).unwrap(),
+                    signed_challenge.verify_signatures(chain_config).unwrap(),
                     SigsVerifyResult::Incomplete
                 );
             }
