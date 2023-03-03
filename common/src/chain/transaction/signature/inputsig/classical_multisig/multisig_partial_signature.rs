@@ -232,8 +232,8 @@ mod tests {
 
             let sigs = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
-                &challenge,
-                &message_bytes,
+                challenge,
+                message_bytes,
                 &auth,
             );
 
@@ -294,8 +294,8 @@ mod tests {
 
             let sigs = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
-                &challenge,
-                &message_bytes,
+                challenge,
+                message_bytes,
                 &auth,
             );
 
@@ -356,8 +356,8 @@ mod tests {
 
             let sigs = PartiallySignedMultisigChallenge::from_partial(
                 chain_config,
-                &challenge,
-                &message_bytes,
+                challenge,
+                message_bytes,
                 &auth,
             );
 
