@@ -17,7 +17,6 @@
 
 use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
-use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
@@ -134,10 +133,9 @@ impl Options {
     /// Constructs an instance by parsing the given arguments.
     ///
     /// The data directory is created as a side-effect of the invocation.
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
-        let options: Options = clap::Parser::try_parse_from(args)?;
-
-        Ok(options)
+    /// Process is terminated on error.
+    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
+        clap::Parser::parse_from(args)
     }
 
     /// Returns the data directory

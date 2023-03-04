@@ -16,7 +16,7 @@
 //! Top-level node binary
 
 async fn run() -> anyhow::Result<()> {
-    let opts = node::Options::from_args(std::env::args_os())?;
+    let opts = node::Options::from_args(std::env::args_os());
     logging::init_logging::<&std::path::Path>(None);
     logging::log::info!("Command line options: {opts:?}");
     node::run(opts).await
