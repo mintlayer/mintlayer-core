@@ -25,14 +25,15 @@ use crate::{
 };
 
 use self::inputsig::{
-    classical_multisig::multisig_partial_signature::PartiallySignedMultisigStructureError,
-    standard_signature::StandardInputSignature, InputWitness,
+    classical_multisig::{
+        authorize_classical_multisig::ClassicalMultisigSigningError,
+        multisig_partial_signature::PartiallySignedMultisigStructureError,
+    },
+    standard_signature::StandardInputSignature,
+    InputWitness,
 };
 
-use super::{
-    classic_multisig::ClassicMultisigChallengeError, signed_transaction::SignedTransaction,
-    Destination, Transaction, TxOutput,
-};
+use super::{signed_transaction::SignedTransaction, Destination, Transaction, TxOutput};
 
 pub mod inputsig;
 pub mod sighashtype;
@@ -85,16 +86,8 @@ pub enum TransactionSigError {
     IncompleteClassicalMultisigSignature,
     #[error("Invalid classical multisig signature(s)")]
     InvalidClassicalMultisigSignature,
-    #[error("Invalid classical multisig key index: {0} (must be in range 0..{1})")]
-    InvalidClassicalMultisigKeyIndex(u8, usize),
-    #[error("Attempted to sign a classical multisig with invalid challenge")]
-    AttemptedToSignClassicalMultisigWithInvalidChallenge(ClassicMultisigChallengeError),
-    #[error("Attempted to sign a classical multisig with pre-existing invalid signature(s)")]
-    AttemptedToSignClassicalMultisigWithInvalidSignature,
-    #[error("Attempted to sign a classical multisig that is already complete")]
-    AttemptedToSignAlreadyCompleteClassicalMultisig,
-    #[error("Attempted to add a classical multisig with an index that already exists")]
-    ClassicalMultisigIndexAlreadyExists(u8),
+    #[error("Producing classical multisig signing failed: {0}")]
+    ClassicalMultisigSigningFailed(#[from] ClassicalMultisigSigningError),
     #[error("Unsupported yet!")]
     Unsupported,
 }

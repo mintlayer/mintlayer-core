@@ -20,7 +20,7 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
-        classic_multisig::ClassicMultisigChallenge,
+        classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
         signature::{
             inputsig::classical_multisig::multisig_partial_signature::PartiallySignedMultisigChallenge,
             TransactionSigError,
@@ -29,6 +29,8 @@ use crate::{
     },
     primitives::H256,
 };
+
+use super::multisig_partial_signature::PartiallySignedMultisigStructureError;
 
 pub enum ClassicalMultisigCompletion {
     Complete(AuthorizedClassicalMultisigSpend),
@@ -111,6 +113,26 @@ pub fn verify_classical_multisig_spending(
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum ClassicalMultisigSigningError {
+    #[error("Attempted to sign a classical multisig with invalid challenge")]
+    AttemptedToSignClassicalMultisigWithInvalidChallenge(ClassicMultisigChallengeError),
+    #[error("Attempted to add a classical multisig with an index that already exists")]
+    ClassicalMultisigIndexAlreadyExists(u8),
+    #[error("Attempted to sign a classical multisig that is already complete")]
+    AttemptedToSignAlreadyCompleteClassicalMultisig,
+    #[error("Invalid classical multisig key index: {0} (must be in range 0..{1})")]
+    InvalidClassicalMultisigKeyIndex(u8, usize),
+    #[error("Attempted to sign a classical multisig with pre-existing invalid signature(s)")]
+    AttemptedToSignClassicalMultisigWithInvalidSignature,
+    #[error("Private key does not match with spender public key")]
+    SpendeePrivatePublicKeyMismatch,
+    #[error("Producing signature failed!")]
+    ProducingSignatureFailed(crypto::key::SignatureError),
+    #[error("Invalid classical multisig challenge")]
+    InvalidClassicalMultisig(#[from] PartiallySignedMultisigStructureError),
+}
+
 /// Given a challenge, a private key, a sighash, and a set of current signatures, sign the challenge
 /// at the given index. Classical multisig signatures are put in a map, where the key is the index,
 /// and the value is the signature. Every call to this function adds one signature.
@@ -126,19 +148,19 @@ pub fn sign_classical_multisig_spending(
     challenge: &ClassicMultisigChallenge,
     sighash: &H256,
     current_signatures: AuthorizedClassicalMultisigSpend,
-) -> Result<ClassicalMultisigCompletion, TransactionSigError> {
+) -> Result<ClassicalMultisigCompletion, ClassicalMultisigSigningError> {
     // ensure the challenge is valid before signing it
     if let Err(ch_err) = challenge.is_valid(chain_config) {
         return Err(
-            TransactionSigError::AttemptedToSignClassicalMultisigWithInvalidChallenge(ch_err),
+            ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidChallenge(
+                ch_err,
+            ),
         );
     }
 
     // Ensure the signature doesn't already exist
     if current_signatures.signatures().get(&key_index).is_some() {
-        return Err(TransactionSigError::ClassicalMultisigIndexAlreadyExists(
-            key_index,
-        ));
+        return Err(ClassicalMultisigSigningError::ClassicalMultisigIndexAlreadyExists(key_index));
     }
 
     let msg = sighash.encode();
@@ -154,35 +176,37 @@ pub fn sign_classical_multisig_spending(
         // ensure the current signatures are valid before signing it
         match verifier.verify_signatures(chain_config)? {
             super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
-                return Err(TransactionSigError::AttemptedToSignAlreadyCompleteClassicalMultisig)
-            }
-            super::multisig_partial_signature::SigsVerifyResult::Incomplete => (),
-            super::multisig_partial_signature::SigsVerifyResult::Invalid => {
                 return Err(
-                    TransactionSigError::AttemptedToSignClassicalMultisigWithInvalidSignature,
+                    ClassicalMultisigSigningError::AttemptedToSignAlreadyCompleteClassicalMultisig,
                 )
             }
+            super::multisig_partial_signature::SigsVerifyResult::Incomplete => (),
+            super::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(
+                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidSignature,
+            ),
         }
     }
 
     let spendee_pubkey = match challenge.public_keys().get(key_index as usize) {
         Some(k) => k,
         None => {
-            return Err(TransactionSigError::InvalidClassicalMultisigKeyIndex(
-                key_index,
-                challenge.public_keys().len(),
-            ))
+            return Err(
+                ClassicalMultisigSigningError::InvalidClassicalMultisigKeyIndex(
+                    key_index,
+                    challenge.public_keys().len(),
+                ),
+            )
         }
     };
 
     // Ensure the given private key matches the public key at the given index
     let calculated_public_key = crypto::key::PublicKey::from_private_key(private_key);
     if *spendee_pubkey != calculated_public_key {
-        return Err(TransactionSigError::SpendeePrivatePublicKeyMismatch);
+        return Err(ClassicalMultisigSigningError::SpendeePrivatePublicKeyMismatch);
     }
     let signature = private_key
         .sign_message(&msg)
-        .map_err(TransactionSigError::ProducingSignatureFailed)?;
+        .map_err(ClassicalMultisigSigningError::ProducingSignatureFailed)?;
 
     let mut current_signatures = current_signatures;
 
@@ -293,7 +317,7 @@ mod tests {
                         unreachable!("The signatures should be complete at this point");
                     }
                     Err(e) => match e {
-                        TransactionSigError::AttemptedToSignAlreadyCompleteClassicalMultisig => {
+                        ClassicalMultisigSigningError::AttemptedToSignAlreadyCompleteClassicalMultisig => {
                             current_signatures
                         }
                         _ => panic!("Unexpected error: {:?}", e),
