@@ -468,10 +468,10 @@ where
                     match pending_peer.peer_role {
                         PeerRole::Inbound => {
                             // Just log the error
-                            log::debug!("inbound pending connection closed unexpectedly");
+                            log::warn!("inbound pending connection closed unexpectedly");
                         }
                         PeerRole::Outbound { handshake_nonce: _ } => {
-                            log::debug!("outbound pending connection closed unexpectedly");
+                            log::warn!("outbound pending connection closed unexpectedly");
 
                             self.conn_tx
                                 .send(ConnectivityEvent::ConnectionError {
