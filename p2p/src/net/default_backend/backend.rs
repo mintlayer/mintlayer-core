@@ -464,7 +464,26 @@ where
             PeerEvent::MessageReceived { message } => self.handle_message(peer_id, message),
 
             PeerEvent::ConnectionClosed => {
-                self.pending.remove(&peer_id);
+                if let Some(pending_peer) = self.pending.remove(&peer_id) {
+                    match pending_peer.peer_role {
+                        PeerRole::Inbound => {
+                            // Just log the error
+                            log::debug!("inbound pending connection closed unexpectedly");
+                        }
+                        PeerRole::Outbound { handshake_nonce: _ } => {
+                            log::debug!("outbound pending connection closed unexpectedly");
+
+                            self.conn_tx
+                                .send(ConnectivityEvent::ConnectionError {
+                                    address: pending_peer.address,
+                                    error: P2pError::DialError(
+                                        DialError::ConnectionRefusedOrTimedOut,
+                                    ),
+                                })
+                                .map_err(P2pError::from)?;
+                        }
+                    }
+                }
 
                 // If the peer was previously disconnected by us, the `peers' will be empty.
                 // `ConnectionClosed` should be ignored in such case.
