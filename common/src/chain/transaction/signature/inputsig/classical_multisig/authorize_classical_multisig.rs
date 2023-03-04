@@ -135,13 +135,10 @@ pub fn sign_classical_multisig_spending(
     }
 
     // Ensure the signature doesn't already exist
-    match current_signatures.signatures().get(&key_index) {
-        Some(_) => {
-            return Err(TransactionSigError::ClassicalMultisigIndexAlreadyExists(
-                key_index,
-            ))
-        }
-        None => (),
+    if current_signatures.signatures().get(&key_index).is_some() {
+        return Err(TransactionSigError::ClassicalMultisigIndexAlreadyExists(
+            key_index,
+        ));
     }
 
     let msg = sighash.encode();
