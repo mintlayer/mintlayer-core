@@ -118,7 +118,10 @@ impl StandardInputSignature {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
                 return Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
             }
-            Destination::ClassicMultisig(_) => todo!(),
+            Destination::ClassicMultisig(_) => return Err(
+                // This function doesn't support this kind of signature
+                TransactionSigError::AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
+            ),
         };
         Ok(Self {
             sighash_type,

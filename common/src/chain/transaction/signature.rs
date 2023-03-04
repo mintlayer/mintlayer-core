@@ -72,6 +72,8 @@ pub enum TransactionSigError {
     AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
     #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
     AttemptedToProduceSignatureForAnyoneCanSpend,
+    #[error("Classical multisig signature attempted in uni-party function")]
+    AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
     #[error("Number of signatures does not match number of inputs")]
     InvalidWitnessCount,
     #[error("Invalid classical multisig challenge")]
