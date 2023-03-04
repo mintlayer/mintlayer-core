@@ -210,3 +210,99 @@ pub fn sign_classical_multisig_spending(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::num::NonZeroU8;
+
+    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::random::{Rng, SliceRandom};
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    use crate::chain::config::create_mainnet;
+
+    use super::*;
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn basic(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                .unwrap();
+        challenge.is_valid(&chain_config).unwrap();
+
+        let sighash = H256::random_using(&mut rng);
+
+        let mut indices_to_sign: Vec<_> = (0..total_parties).collect();
+        indices_to_sign.shuffle(&mut rng);
+
+        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty();
+
+        // Keep signing and adding signatures, and expect to start failing when we reach the required number of signatures
+        while let Some(key_index) = indices_to_sign.pop() {
+            let private_key = &priv_keys[key_index as usize];
+
+            let res = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            );
+
+            // When testing valid cases, depending on the number of already-done signatures, we have 3 possible results:
+            // 1. We add a signature and the result is still incomplete
+            // 2. We add a signature and the result is complete
+            // 3. We add a signature, but we can't because the required signatures are already reached
+            current_signatures = if total_parties as usize - indices_to_sign.len()
+                < min_required_signatures.get() as usize
+            {
+                match res {
+                    Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                        unreachable!("The signatures should be incomplete at this point");
+                    }
+                    Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => sigs,
+                    Err(e) => panic!("Unexpected error: {:?}", e),
+                }
+            } else if total_parties as usize - indices_to_sign.len()
+                == min_required_signatures.get() as usize
+            {
+                match res {
+                    Ok(ClassicalMultisigCompletion::Complete(sigs)) => sigs,
+                    Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
+                        unreachable!("The signatures should be complete at this point");
+                    }
+                    Err(e) => panic!("Unexpected error: {:?}", e),
+                }
+            } else {
+                match res {
+                    Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                        unreachable!("The signatures should be complete at this point, so signing more shouldn't be possible");
+                    }
+                    Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
+                        unreachable!("The signatures should be complete at this point");
+                    }
+                    Err(e) => match e {
+                        TransactionSigError::AttemptedToSignAlreadyCompleteClassicalMultisig => {
+                            current_signatures
+                        }
+                        _ => panic!("Unexpected error: {:?}", e),
+                    },
+                }
+            };
+        }
+    }
+}
