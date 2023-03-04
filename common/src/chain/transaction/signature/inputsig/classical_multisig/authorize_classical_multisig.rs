@@ -218,6 +218,7 @@ mod tests {
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{Rng, SliceRandom};
     use rstest::rstest;
+    use std::cmp::Ordering;
     use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::chain::config::create_mainnet;
@@ -267,28 +268,24 @@ mod tests {
             // 1. We add a signature and the result is still incomplete
             // 2. We add a signature and the result is complete
             // 3. We add a signature, but we can't because the required signatures are already reached
-            current_signatures = if total_parties as usize - indices_to_sign.len()
-                < min_required_signatures.get() as usize
+            current_signatures = match (total_parties as usize - indices_to_sign.len())
+                .cmp(&(min_required_signatures.get() as usize))
             {
-                match res {
+                Ordering::Less => match res {
                     Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
                         unreachable!("The signatures should be incomplete at this point");
                     }
                     Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => sigs,
                     Err(e) => panic!("Unexpected error: {:?}", e),
-                }
-            } else if total_parties as usize - indices_to_sign.len()
-                == min_required_signatures.get() as usize
-            {
-                match res {
+                },
+                Ordering::Equal => match res {
                     Ok(ClassicalMultisigCompletion::Complete(sigs)) => sigs,
                     Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point");
                     }
                     Err(e) => panic!("Unexpected error: {:?}", e),
-                }
-            } else {
-                match res {
+                },
+                Ordering::Greater => match res {
                     Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point, so signing more shouldn't be possible");
                     }
@@ -301,7 +298,7 @@ mod tests {
                         }
                         _ => panic!("Unexpected error: {:?}", e),
                     },
-                }
+                },
             };
         }
     }
