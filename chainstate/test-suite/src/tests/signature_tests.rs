@@ -77,7 +77,7 @@ fn signed_tx(#[case] seed: Seed) {
                 .build()
                 .transaction()
                 .clone();
-            let input_sign = StandardInputSignature::produce_signature_for_input(
+            let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
                 Destination::PublicKey(public_key),

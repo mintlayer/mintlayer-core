@@ -95,7 +95,7 @@ impl StandardInputSignature {
         Ok(())
     }
 
-    pub fn produce_signature_for_input(
+    pub fn produce_uniparty_signature_for_input(
         private_key: &crypto::key::PrivateKey,
         sighash_type: sighashtype::SigHashType,
         outpoint_destination: Destination,
@@ -201,7 +201,7 @@ mod test {
         for sighash_type in sig_hash_types() {
             assert_eq!(
                 Err(TransactionSigError::PublicKeyToAddressMismatch),
-                StandardInputSignature::produce_signature_for_input(
+                StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
                     destination.clone(),
@@ -227,7 +227,7 @@ mod test {
         for sighash_type in sig_hash_types() {
             assert_eq!(
                 Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
-                StandardInputSignature::produce_signature_for_input(
+                StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
                     destination.clone(),
@@ -257,7 +257,7 @@ mod test {
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
             let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),

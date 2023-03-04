@@ -144,7 +144,7 @@ pub fn make_signature(
     sighash_type: SigHashType,
     outpoint_dest: Destination,
 ) -> Result<StandardInputSignature, TransactionSigError> {
-    let input_sig = StandardInputSignature::produce_signature_for_input(
+    let input_sig = StandardInputSignature::produce_uniparty_signature_for_input(
         private_key,
         sighash_type,
         outpoint_dest,
