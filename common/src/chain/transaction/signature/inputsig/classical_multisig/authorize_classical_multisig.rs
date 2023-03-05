@@ -39,6 +39,19 @@ pub enum ClassicalMultisigCompletion {
     Incomplete(AuthorizedClassicalMultisigSpend),
 }
 
+impl ClassicalMultisigCompletion {
+    pub fn take(self) -> AuthorizedClassicalMultisigSpend {
+        match self {
+            Self::Complete(spend) => spend,
+            Self::Incomplete(spend) => spend,
+        }
+    }
+
+    pub fn is_complete(&self) -> bool {
+        matches!(self, Self::Complete(_))
+    }
+}
+
 /// A witness that represents the authorization to spend a classical multisig output.
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedClassicalMultisigSpend {
@@ -549,7 +562,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
-        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 2; // minimum is two, so that multiple signatures are required
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
         let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
@@ -602,6 +615,41 @@ mod tests {
                 ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidChallenge(
                     ClassicMultisigChallengeError::MinRequiredSignaturesIsZero
                 )
+            );
+        }
+
+        // Signing the same signature multiple times should fail
+        {
+            let key_index = rng.gen::<u8>() % total_parties;
+            let private_key = &priv_keys[key_index as usize];
+
+            let sign_result = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap();
+
+            // Min required signatures is 2+, so this is always true
+            assert!(!sign_result.is_complete());
+
+            // Now we sign again, with the same index, and this should fail
+            let sign_err = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                sign_result.take(),
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                sign_err,
+                ClassicalMultisigSigningError::ClassicalMultisigIndexAlreadyExists(key_index)
             );
         }
     }
