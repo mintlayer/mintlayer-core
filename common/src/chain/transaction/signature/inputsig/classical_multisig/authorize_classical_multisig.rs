@@ -348,7 +348,7 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn challenge_hash_mismatch(#[case] seed: Seed) {
+    fn tamper_with_data(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
@@ -421,21 +421,58 @@ mod tests {
         )
         .unwrap();
 
-        // Tamper with the challenge hash
-        let mut wrong_hash_vec = correct_challenge_hash;
-        let wrong_hash_vec = wrong_hash_vec.as_mut();
-        wrong_hash_vec[0] = wrong_hash_vec[0].wrapping_add(1);
-        let wrong_challenge_hash = PublicKeyHash::try_from(wrong_hash_vec.to_vec()).unwrap();
+        {
+            // Tamper with the challenge hash
+            let mut wrong_hash_vec = correct_challenge_hash;
+            let wrong_hash_vec = wrong_hash_vec.as_mut();
+            wrong_hash_vec[0] = wrong_hash_vec[0].wrapping_add(1);
+            let wrong_challenge_hash = PublicKeyHash::try_from(wrong_hash_vec.to_vec()).unwrap();
 
-        assert_eq!(
-            verify_classical_multisig_spending(
-                &chain_config,
-                &wrong_challenge_hash,
-                &current_signatures,
-                &sighash,
-            )
-            .unwrap_err(),
-            TransactionSigError::ClassicalMultisigWitnessHashMismatch
-        );
+            assert_eq!(
+                verify_classical_multisig_spending(
+                    &chain_config,
+                    &wrong_challenge_hash,
+                    &current_signatures,
+                    &sighash,
+                )
+                .unwrap_err(),
+                TransactionSigError::ClassicalMultisigWitnessHashMismatch
+            );
+        }
+
+        {
+            // Tamper with a signature, by signing using a new random private key
+            let current_signatures = current_signatures;
+            let mut available_key_indexes =
+                current_signatures.signatures().keys().collect::<Vec<_>>();
+            available_key_indexes.shuffle(&mut rng);
+            let tampered_with_key_index = available_key_indexes[0];
+            let (new_random_private_key, _) =
+                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let mut signatures = current_signatures.signatures().clone();
+
+            signatures.insert(
+                *tampered_with_key_index,
+                new_random_private_key.sign_message(&sighash.encode()).unwrap(),
+            );
+
+            let current_signatures = AuthorizedClassicalMultisigSpend::new(
+                signatures,
+                current_signatures.challenge().clone(),
+            );
+
+            // Verify and expect to fail
+            let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+            assert_eq!(
+                verify_classical_multisig_spending(
+                    &chain_config,
+                    &correct_challenge_hash,
+                    &current_signatures,
+                    &sighash,
+                )
+                .unwrap_err(),
+                TransactionSigError::InvalidClassicalMultisigSignature
+            );
+        }
     }
 }
