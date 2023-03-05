@@ -33,6 +33,7 @@ use crate::{
 
 use super::multisig_partial_signature::PartiallySignedMultisigStructureError;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClassicalMultisigCompletion {
     Complete(AuthorizedClassicalMultisigSpend),
     Incomplete(AuthorizedClassicalMultisigSpend),
@@ -537,6 +538,70 @@ mod tests {
                 )
                 .unwrap_err(),
                 TransactionSigError::InvalidClassicalMultisigSignature
+            );
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn signing_errors(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                .unwrap();
+        challenge.is_valid(&chain_config).unwrap();
+
+        let sighash = H256::random_using(&mut rng);
+
+        // We create only the required signatures count
+        let mut indices_to_sign: Vec<_> = (0..total_parties).collect();
+        indices_to_sign.shuffle(&mut rng);
+        let indices_to_sign =
+            indices_to_sign.into_iter().take(min_required_signatures.get() as usize);
+        assert_eq!(
+            indices_to_sign.len(),
+            min_required_signatures.get() as usize
+        );
+
+        // Keep signing and adding signatures until it's complete
+        let current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+        // Signatures should fail if the challenge is not valid
+        // Tamper with challenge serialization, make it invalid, and try to use it
+        {
+            let mut encoded_challenge = challenge.encode();
+            encoded_challenge[0] = 0; // tamper with the challenge, first byte is min_required_signatures
+            let invalid_challenge =
+                ClassicMultisigChallenge::decode(&mut encoded_challenge.as_slice()).unwrap();
+
+            let key_index = rng.gen::<u8>() % total_parties;
+            let private_key = &priv_keys[key_index as usize];
+
+            let sign_err = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &invalid_challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                sign_err,
+                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidChallenge(
+                    ClassicMultisigChallengeError::MinRequiredSignaturesIsZero
+                )
             );
         }
     }
