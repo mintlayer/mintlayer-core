@@ -91,7 +91,7 @@ where
     .unwrap();
 
     tokio::spawn(async move {
-        sync1.register_peer(peer_info2.peer_id).await.unwrap();
+        sync1.register_peer(peer_info2.peer_id).unwrap();
         sync1.run().await
     });
 

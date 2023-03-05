@@ -30,8 +30,8 @@ use common::chain::{config::create_mainnet, ChainConfig};
 use p2p_test_utils::start_chainstate;
 
 use crate::{
-    net::default_backend::transport::TcpTransportSocket,
-    sync::{Announcement, BlockSyncManager, SyncControlEvent, SyncMessage, SyncingEvent},
+    net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    sync::{Announcement, BlockSyncManager, SyncControlEvent, SyncMessage},
     types::peer_id::PeerId,
     NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
 };

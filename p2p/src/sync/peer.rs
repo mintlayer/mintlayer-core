@@ -13,36 +13,112 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::mem;
+use std::{mem, sync::Arc};
 
-use itertools::Itertools;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use void::Void;
 
+use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
     chain::{block::BlockHeader, Block},
-    primitives::{Id, Idable},
+    primitives::Id,
 };
 use logging::log;
+use utils::const_value::ConstValue;
 
 use crate::{
+    config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::{Announcement, HeaderListResponse},
-    sync::{BlockSyncManager, SyncMessage},
+    message::{Announcement, HeaderListRequest, HeaderListResponse, SyncMessage},
+    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    NetworkingService, PeerManagerEvent, Result, SyncingMessagingService,
+    PeerManagerEvent, Result,
 };
 
-impl<T> BlockSyncManager<T>
+/// TODO: FIXME: a peer context and corresponding message processing logic.
+pub struct Peer<T: NetworkingService> {
+    id: ConstValue<PeerId>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    messaging_handle: T::SyncingMessagingHandle,
+    peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    receiver: UnboundedReceiver<SyncingEvent>,
+}
+
+impl<T> Peer<T>
 where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    pub(super) async fn handle_message(
-        &mut self,
-        peer: PeerId,
-        message: SyncMessage,
-    ) -> Result<()> {
+    pub fn new(
+        id: PeerId,
+        p2p_config: Arc<P2pConfig>,
+        chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        messaging_handle: T::SyncingMessagingHandle,
+        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        receiver: UnboundedReceiver<SyncingEvent>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            p2p_config,
+            chainstate_handle,
+            messaging_handle,
+            peer_manager_sender,
+            receiver,
+        }
+    }
+
+    pub fn id(&self) -> PeerId {
+        *self.id
+    }
+
+    pub async fn run(&mut self) -> Result<Void> {
+        self.request_headers(*self.id).await?;
+
+        loop {
+            tokio::select! {
+                event = self.receiver.recv() => {
+                    let event = event.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_event(event).await?;
+                },
+
+                // TODO: FIXME: Send blocks.
+            }
+        }
+    }
+
+    /// Sends a header list request to the given peer.
+    async fn request_headers(&mut self, peer: PeerId) -> Result<()> {
+        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
+        debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
+
+        self.messaging_handle
+            .send_message(
+                peer,
+                SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+            )
+            .map(|_| ())
+    }
+
+    async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
+        match event {
+            SyncingEvent::Message { peer, message } => {
+                debug_assert_eq!(peer, *self.id);
+                let res = self.handle_message(peer, message).await;
+                self.handle_result(peer, res).await?;
+            }
+            SyncingEvent::Announcement { peer, announcement } => {
+                debug_assert_eq!(peer, *self.id);
+                let res = self.handle_announcement(peer, *announcement).await;
+                self.handle_result(peer, res).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn handle_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         match message {
             SyncMessage::HeaderListRequest(r) => {
                 self.handle_header_request(peer, r.into_locator()).await
@@ -72,6 +148,7 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
+        // TODO: FIXME: Atomic? SetFlag?..
         if self.is_initial_block_download {
             // TODO: Check if a peer has permissions to ask for headers during the initial block download.
             log::debug!("Ignoring headers request because the node is in initial block download");
@@ -261,7 +338,7 @@ where
         Ok(())
     }
 
-    pub(super) async fn handle_announcement(
+    async fn handle_announcement(
         &mut self,
         peer: PeerId,
         announcement: Announcement,
@@ -271,33 +348,36 @@ where
         }
     }
 
+    // TODO: FIXME:
     async fn handle_block_announcement(&mut self, peer: PeerId, header: BlockHeader) -> Result<()> {
         log::debug!("Block announcement from peer {peer}: {header:?}");
 
-        let peer_state = self
-            .peers
-            .get_mut(&peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        if !peer_state.requested_blocks.is_empty() {
-            // We will download this block as part of syncing anyway.
-            return Ok(());
-        }
-
-        let prev_id = *header.prev_block_id();
-        if self
-            .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&prev_id))
-            .await??
-            .is_none()
-        {
-            // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
-            self.request_headers(peer).await?;
-            return Ok(());
-        }
-
-        let header_ = header.clone();
-        self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
-        self.request_blocks(peer, vec![header])
+        todo!();
+        todo!()
+        // let peer_state = self
+        //     .peers
+        //     .get_mut(&peer)
+        //     .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        // if !peer_state.requested_blocks.is_empty() {
+        //     // We will download this block as part of syncing anyway.
+        //     return Ok(());
+        // }
+        //
+        // let prev_id = *header.prev_block_id();
+        // if self
+        //     .chainstate_handle
+        //     .call(move |c| c.get_gen_block_index(&prev_id))
+        //     .await??
+        //     .is_none()
+        // {
+        //     // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
+        //     self.request_headers(peer).await?;
+        //     return Ok(());
+        // }
+        //
+        // let header_ = header.clone();
+        // self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
+        // self.request_blocks(peer, vec![header])
     }
 
     /// Handles a result of message processing.
