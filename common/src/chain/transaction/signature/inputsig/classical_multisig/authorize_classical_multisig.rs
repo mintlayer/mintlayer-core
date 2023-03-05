@@ -652,5 +652,52 @@ mod tests {
                 ClassicalMultisigSigningError::ClassicalMultisigIndexAlreadyExists(key_index)
             );
         }
+
+        // Making the signatures structurally invalid should make signing fail
+        {
+            let key_index = rng.gen::<u8>() % total_parties;
+            let private_key = &priv_keys[key_index as usize];
+
+            let sign_result = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap();
+
+            // Min required signatures is 2+, so this is always true
+            assert!(!sign_result.is_complete());
+
+            // Tamper with the signatures, and make the key_index invalid (very high),
+            // now the signatures are "structurally invalid"
+            let current_signatures = sign_result.take();
+            let sig = current_signatures.signatures()[&key_index].clone();
+            let new_sigs = vec![(total_parties, sig)].into_iter().collect::<BTreeMap<_, _>>();
+            let tampered_with_signatures = AuthorizedClassicalMultisigSpend::new(
+                new_sigs,
+                current_signatures.challenge().clone(),
+            );
+
+            // Now we sign again, and because the index of the signature is outside of range, this should fail
+            let sign_err = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                tampered_with_signatures,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                sign_err,
+                ClassicalMultisigSigningError::InvalidClassicalMultisig(
+                    PartiallySignedMultisigStructureError::InvalidSignatureIndex
+                )
+            );
+        }
     }
 }
