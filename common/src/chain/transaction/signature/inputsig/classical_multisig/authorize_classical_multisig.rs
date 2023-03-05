@@ -300,6 +300,7 @@ mod tests {
             // 1. We add a signature and the result is still incomplete
             // 2. We add a signature and the result is complete
             // 3. We add a signature, but we can't because the required signatures are already reached
+            // In each case, we test the verification of signatures and the expected outcome
             current_signatures = match (total_parties as usize - indices_to_sign.len())
                 .cmp(&(min_required_signatures.get() as usize))
             {
@@ -307,11 +308,37 @@ mod tests {
                     Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
                         unreachable!("The signatures should be incomplete at this point");
                     }
-                    Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => sigs,
+                    Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => {
+                        {
+                            // complete verification should pass
+                            let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+                            assert_eq!(verify_classical_multisig_spending(
+                                &chain_config,
+                                &correct_challenge_hash,
+                                &sigs,
+                                &sighash,
+                            )
+                            .unwrap_err(), TransactionSigError::IncompleteClassicalMultisigSignature);
+                        }
+                        sigs
+                    },
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 },
                 Ordering::Equal => match res {
-                    Ok(ClassicalMultisigCompletion::Complete(sigs)) => sigs,
+                    Ok(ClassicalMultisigCompletion::Complete(sigs)) => {
+                        {
+                            // complete verification should pass
+                            let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+                            verify_classical_multisig_spending(
+                                &chain_config,
+                                &correct_challenge_hash,
+                                &sigs,
+                                &sighash,
+                            )
+                            .unwrap();
+                        }
+                        sigs
+                    },
                     Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point");
                     }
@@ -326,6 +353,17 @@ mod tests {
                     }
                     Err(e) => match e {
                         ClassicalMultisigSigningError::AttemptedToSignAlreadyCompleteClassicalMultisig => {
+                            {
+                                // complete verification should pass. We try to sign, but nothing should change
+                                let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+                                verify_classical_multisig_spending(
+                                    &chain_config,
+                                    &correct_challenge_hash,
+                                    &current_signatures,
+                                    &sighash,
+                                )
+                                .unwrap();
+                            }
                             current_signatures
                         }
                         _ => panic!("Unexpected error: {:?}", e),
@@ -399,6 +437,21 @@ mod tests {
                         current_signatures.signatures().len()
                             < min_required_signatures.get() as usize
                     );
+
+                    {
+                        // incomplete signatures should fail to verify with a specific error
+                        let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+                        assert_eq!(
+                            verify_classical_multisig_spending(
+                                &chain_config,
+                                &correct_challenge_hash,
+                                &current_signatures,
+                                &sighash,
+                            )
+                            .unwrap_err(),
+                            TransactionSigError::IncompleteClassicalMultisigSignature
+                        );
+                    }
                 }
                 ClassicalMultisigCompletion::Complete(sigs) => {
                     current_signatures = sigs;
@@ -407,6 +460,18 @@ mod tests {
                         current_signatures.signatures().len(),
                         min_required_signatures.get() as usize
                     );
+
+                    {
+                        // complete verification should pass
+                        let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+                        verify_classical_multisig_spending(
+                            &chain_config,
+                            &correct_challenge_hash,
+                            &current_signatures,
+                            &sighash,
+                        )
+                        .unwrap();
+                    }
                 }
             };
         }
