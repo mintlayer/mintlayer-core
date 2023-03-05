@@ -81,7 +81,7 @@ mockall::mock! {
             &self,
             id: &Id<GenBlock>,
         ) -> Result<Option<GenBlockIndex>, ChainstateError>;
-        fn get_chain_config(&self) -> Arc<ChainConfig>;
+        fn get_chain_config(&self) -> &Arc<ChainConfig>;
         fn get_best_block_index(&self) -> Result<chainstate_types::GenBlockIndex, ChainstateError>;
         fn get_chainstate_config(&self) -> ChainstateConfig;
         fn wait_for_all_events(&self);

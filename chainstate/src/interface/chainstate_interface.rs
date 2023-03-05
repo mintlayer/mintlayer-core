@@ -87,7 +87,7 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Option<GenBlockIndex>, ChainstateError>;
     fn get_best_block_index(&self) -> Result<GenBlockIndex, ChainstateError>;
 
-    fn get_chain_config(&self) -> Arc<ChainConfig>;
+    fn get_chain_config(&self) -> &Arc<ChainConfig>;
     fn get_chainstate_config(&self) -> ChainstateConfig;
     fn wait_for_all_events(&self);
     fn get_mainchain_tx_index(

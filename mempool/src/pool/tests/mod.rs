@@ -941,7 +941,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let chainstate = tf.chainstate();
-    let config = chainstate.get_chain_config();
+    let config = chainstate.get_chain_config().clone();
     let chainstate_interface = start_chainstate(chainstate).await;
 
     let num_inputs = 1;
@@ -950,7 +950,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // the trimming process
     log::debug!("parent_id: {}", parent_id.get());
     log::debug!("before adding parent");
-    let mut mempool = Mempool::new(config, chainstate_interface, mock_clock, mock_usage);
+    let mut mempool = Mempool::new(config.clone(), chainstate_interface, mock_clock, mock_usage);
     mempool.add_transaction(parent).await?;
     log::debug!("after adding parent");
 
@@ -1537,7 +1537,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chainstate = tf.chainstate();
-    let config = chainstate.get_chain_config();
+    let config = chainstate.get_chain_config().clone();
     let chainstate_handle = start_chainstate(chainstate).await;
 
     let mut mempool = Mempool::new(config, chainstate_handle, Default::default(), mock_usage);

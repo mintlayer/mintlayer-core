@@ -147,7 +147,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 ))),
             ))
             .add_output(TxOutput::new(
-                random_token_issuance(tf.chainstate.get_chain_config(), &mut rng).into(),
+                random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .add_output(TxOutput::new(
@@ -173,7 +173,8 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         // create a tx with coins utxo and token issuance utxo
-        let token_issuance_data = random_token_issuance(tf.chainstate.get_chain_config(), &mut rng);
+        let token_issuance_data =
+            random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng);
         let amount_to_issue = token_issuance_data.amount_to_issue;
         let tx0 = TransactionBuilder::new()
             .add_input(
@@ -255,7 +256,8 @@ fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let token_issuance_data = random_token_issuance(tf.chainstate.get_chain_config(), &mut rng);
+        let token_issuance_data =
+            random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng);
         let amount_to_issue = token_issuance_data.amount_to_issue;
 
         // create a tx with coins utxo and token issuance utxo
