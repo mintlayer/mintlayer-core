@@ -744,7 +744,7 @@ mod tests {
                 private_key,
                 &challenge,
                 &sighash,
-                current_signatures.clone(),
+                current_signatures,
             )
             .unwrap();
 
