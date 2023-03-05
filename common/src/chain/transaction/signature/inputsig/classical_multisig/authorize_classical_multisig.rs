@@ -156,7 +156,7 @@ pub enum ClassicalMultisigSigningError {
     SpendeePrivatePublicKeyMismatch,
     #[error("Producing signature failed!")]
     ProducingSignatureFailed(crypto::key::SignatureError),
-    #[error("Invalid classical multisig challenge")]
+    #[error("Invalid classical multisig authorization: {0}")]
     InvalidClassicalMultisig(#[from] PartiallySignedMultisigStructureError),
 }
 
