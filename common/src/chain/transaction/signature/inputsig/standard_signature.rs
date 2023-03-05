@@ -35,8 +35,11 @@ use super::{
     authorize_pubkeyhash_spend::{
         sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
     },
-    classical_multisig::authorize_classical_multisig::{
-        verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+    classical_multisig::{
+        authorize_classical_multisig::{
+            verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+        },
+        multisig_partial_signature::PartiallySignedMultisigChallenge,
     },
 };
 
@@ -123,6 +126,35 @@ impl StandardInputSignature {
                 TransactionSigError::AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
             ),
         };
+        Ok(Self {
+            sighash_type,
+            raw_signature: serialized_sig,
+        })
+    }
+
+    pub fn produce_classical_multisig_signature_for_input(
+        chain_config: &ChainConfig,
+        authorization: &AuthorizedClassicalMultisigSpend,
+        sighash_type: sighashtype::SigHashType,
+        tx: &Transaction,
+        input_num: usize,
+    ) -> Result<Self, TransactionSigError> {
+        let sighash = signature_hash(sighash_type, tx, input_num)?;
+        let message = sighash.encode();
+
+        let verifier =
+            PartiallySignedMultisigChallenge::from_partial(chain_config, &message, authorization)?;
+
+        let verification_result = verifier.verify_signatures(chain_config)?;
+
+        match verification_result {
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => (),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(TransactionSigError::IncompleteClassicalMultisigAuthorization),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(TransactionSigError::InvalidClassicalMultisigAuthorization),
+        }
+
+        let serialized_sig = authorization.encode();
+
         Ok(Self {
             sighash_type,
             raw_signature: serialized_sig,
