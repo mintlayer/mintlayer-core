@@ -26,20 +26,16 @@ pub struct PartiallySignedMultisigChallenge<'a> {
     signatures: &'a AuthorizedClassicalMultisigSpend,
     /// The message that is being signed.
     message: &'a [u8],
-    /// The challenge that is being signed.
-    challenge: &'a ClassicMultisigChallenge,
 }
 
 impl<'a> PartiallySignedMultisigChallenge<'a> {
     pub fn from_partial(
         chain_config: &ChainConfig,
-        challenge: &'a ClassicMultisigChallenge,
         message: &'a [u8],
         signatures: &'a AuthorizedClassicalMultisigSpend,
     ) -> Result<Self, PartiallySignedMultisigStructureError> {
         let result = PartiallySignedMultisigChallenge {
             signatures,
-            challenge,
             message,
         };
         result.check_structurally_valid(chain_config)?;
@@ -47,7 +43,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
     }
 
     pub fn challenge(&self) -> &ClassicMultisigChallenge {
-        self.challenge
+        self.signatures.challenge()
     }
 
     pub fn signatures(&self) -> &AuthorizedClassicalMultisigSpend {
@@ -55,7 +51,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
     }
 
     pub fn missing_signatures_count(&self) -> i32 {
-        self.challenge.min_required_signatures() as i32
+        self.signatures.challenge().min_required_signatures() as i32
             - self.signatures.available_signatures_count() as i32
     }
 
@@ -64,14 +60,14 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
         &self,
         chain_config: &ChainConfig,
     ) -> Result<PartiallySignedMultisigState, PartiallySignedMultisigStructureError> {
-        if let Err(err) = self.challenge.is_valid(chain_config) {
+        if let Err(err) = self.signatures.challenge().is_valid(chain_config) {
             return Err(PartiallySignedMultisigStructureError::InvalidChallenge(err));
         }
 
         if self
             .signatures
             .public_key_indices()
-            .any(|index| index as usize >= self.challenge.public_keys().len())
+            .any(|index| index as usize >= self.signatures.challenge().public_keys().len())
         {
             return Err(PartiallySignedMultisigStructureError::InvalidSignatureIndex);
         }
@@ -81,7 +77,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
             std::cmp::Ordering::Less => {
                 Err(PartiallySignedMultisigStructureError::Overconstrained(
                     self.signatures.available_signatures_count(),
-                    self.challenge.min_required_signatures() as usize,
+                    self.signatures.challenge().min_required_signatures() as usize,
                 ))
             }
             std::cmp::Ordering::Equal => Ok(PartiallySignedMultisigState::Complete(
@@ -89,7 +85,7 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
             )),
             std::cmp::Ordering::Greater => Ok(PartiallySignedMultisigState::Incomplete(
                 self.signatures.available_signatures_count(),
-                self.challenge.min_required_signatures() as usize,
+                self.signatures.challenge().min_required_signatures() as usize,
             )),
         }
     }
@@ -105,12 +101,12 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
         }
 
         let verification_result = self.signatures.iter().all(|(index, signature)| {
-            let public_key = &self.challenge.public_keys()[index as usize];
+            let public_key = &self.signatures.challenge().public_keys()[index as usize];
             public_key.verify_message(signature, self.message)
         });
 
         if self.signatures().available_signatures_count()
-            < self.challenge.min_required_signatures() as usize
+            < self.signatures.challenge().min_required_signatures() as usize
         {
             return Ok(SigsVerifyResult::Incomplete);
         }
@@ -228,14 +224,10 @@ mod tests {
             signatures_map.shuffle(rng);
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
-            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map, challenge.clone());
 
-            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
-                chain_config,
-                challenge,
-                message_bytes,
-                &auth,
-            );
+            let signed_challenge =
+                PartiallySignedMultisigChallenge::from_partial(chain_config, message_bytes, &auth);
 
             let signed_challenge = match signed_challenge {
                 Ok(sigs) => {
@@ -287,14 +279,10 @@ mod tests {
             signatures_map.shuffle(rng);
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
-            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map, challenge.clone());
 
-            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
-                chain_config,
-                challenge,
-                message_bytes,
-                &auth,
-            );
+            let signed_challenge =
+                PartiallySignedMultisigChallenge::from_partial(chain_config, message_bytes, &auth);
 
             let error = signed_challenge.unwrap_err();
             match error {
@@ -330,14 +318,10 @@ mod tests {
 
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
-            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map, challenge.clone());
 
-            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
-                chain_config,
-                challenge,
-                message_bytes,
-                &auth,
-            );
+            let signed_challenge =
+                PartiallySignedMultisigChallenge::from_partial(chain_config, message_bytes, &auth);
 
             let signed_challenge = match signed_challenge {
                 Ok(sigs) => {
@@ -392,14 +376,10 @@ mod tests {
 
             let signatures_map = signatures_map.into_iter().collect::<BTreeMap<_, _>>();
 
-            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map);
+            let auth = AuthorizedClassicalMultisigSpend::new(signatures_map, challenge.clone());
 
-            let signed_challenge = PartiallySignedMultisigChallenge::from_partial(
-                chain_config,
-                challenge,
-                message_bytes,
-                &auth,
-            );
+            let signed_challenge =
+                PartiallySignedMultisigChallenge::from_partial(chain_config, message_bytes, &auth);
 
             let signed_challenge = match signed_challenge {
                 Ok(sigs) => {

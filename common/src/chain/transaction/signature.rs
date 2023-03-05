@@ -86,6 +86,8 @@ pub enum TransactionSigError {
     IncompleteClassicalMultisigSignature,
     #[error("Invalid classical multisig signature(s)")]
     InvalidClassicalMultisigSignature,
+    #[error("The hash provided does not match the hash in the witness")]
+    ClassicalMultisigWitnessHashMismatch,
     #[error("Producing classical multisig signing failed: {0}")]
     ClassicalMultisigSigningFailed(#[from] ClassicalMultisigSigningError),
     #[error("Unsupported yet!")]

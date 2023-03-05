@@ -17,9 +17,7 @@ use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, prim
 use script::Script;
 use serialization::{Decode, Encode};
 
-use self::{
-    classic_multisig::ClassicMultisigChallenge, stakelock::StakePoolData, timelock::OutputTimeLock,
-};
+use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
 pub mod classic_multisig;
 pub mod stakelock;
@@ -36,7 +34,7 @@ pub enum Destination {
     #[codec(index = 3)]
     ScriptHash(Id<Script>),
     #[codec(index = 4)]
-    ClassicMultisig(ClassicMultisigChallenge),
+    ClassicMultisig(PublicKeyHash),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

@@ -86,10 +86,10 @@ impl StandardInputSignature {
                     TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
             }
-            Destination::ClassicMultisig(c) => {
+            Destination::ClassicMultisig(h) => {
                 let sig_components =
                     AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
-                verify_classical_multisig_spending(chain_config, c, &sig_components, sighash)?
+                verify_classical_multisig_spending(chain_config, h, &sig_components, sighash)?
             }
         }
         Ok(())

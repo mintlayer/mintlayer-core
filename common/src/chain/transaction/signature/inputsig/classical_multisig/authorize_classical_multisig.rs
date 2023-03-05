@@ -19,6 +19,7 @@ use crypto::key::Signature;
 use serialization::{Decode, Encode};
 
 use crate::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         classic_multisig::{ClassicMultisigChallenge, ClassicMultisigChallengeError},
         signature::{
@@ -37,15 +38,18 @@ pub enum ClassicalMultisigCompletion {
     Incomplete(AuthorizedClassicalMultisigSpend),
 }
 
+/// A witness that represents the authorization to spend a classical multisig output.
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedClassicalMultisigSpend {
     signatures: BTreeMap<u8, Signature>,
+    challenge: ClassicMultisigChallenge,
 }
 
 impl AuthorizedClassicalMultisigSpend {
-    pub fn new_empty() -> Self {
+    pub fn new_empty(challenge: ClassicMultisigChallenge) -> Self {
         Self {
             signatures: BTreeMap::new(),
+            challenge,
         }
     }
 
@@ -59,6 +63,10 @@ impl AuthorizedClassicalMultisigSpend {
 
     pub fn signatures(&self) -> &BTreeMap<u8, Signature> {
         &self.signatures
+    }
+
+    pub fn challenge(&self) -> &ClassicMultisigChallenge {
+        &self.challenge
     }
 
     pub fn public_key_indices(&self) -> impl Iterator<Item = u8> + '_ {
@@ -83,24 +91,29 @@ impl AuthorizedClassicalMultisigSpend {
         Ok(decoded)
     }
 
-    pub fn new(signatures: BTreeMap<u8, Signature>) -> Self {
-        Self { signatures }
+    pub fn new(signatures: BTreeMap<u8, Signature>, challenge: ClassicMultisigChallenge) -> Self {
+        Self {
+            signatures,
+            challenge,
+        }
     }
 }
 
 pub fn verify_classical_multisig_spending(
     chain_config: &ChainConfig,
-    spendee_challenge: &ClassicMultisigChallenge,
+    challenge_hash: &PublicKeyHash,
     spender_signature: &AuthorizedClassicalMultisigSpend,
     sighash: &H256,
 ) -> Result<(), TransactionSigError> {
     let msg = sighash.encode();
-    let verifier = PartiallySignedMultisigChallenge::from_partial(
-        chain_config,
-        spendee_challenge,
-        &msg,
-        spender_signature,
-    )?;
+
+    let expected_hash: PublicKeyHash = spender_signature.challenge().into();
+    if expected_hash != *challenge_hash {
+        return Err(TransactionSigError::ClassicalMultisigWitnessHashMismatch);
+    }
+
+    let verifier =
+        PartiallySignedMultisigChallenge::from_partial(chain_config, &msg, spender_signature)?;
 
     match verifier.verify_signatures(chain_config)? {
         super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => Ok(()),
@@ -168,7 +181,6 @@ pub fn sign_classical_multisig_spending(
     {
         let verifier = PartiallySignedMultisigChallenge::from_partial(
             chain_config,
-            challenge,
             &msg,
             &current_signatures,
         )?;
@@ -213,12 +225,8 @@ pub fn sign_classical_multisig_spending(
     current_signatures.add_signature(key_index, signature);
 
     // Check the signatures status again after adding that last signature
-    let verifier = PartiallySignedMultisigChallenge::from_partial(
-        chain_config,
-        challenge,
-        &msg,
-        &current_signatures,
-    )?;
+    let verifier =
+        PartiallySignedMultisigChallenge::from_partial(chain_config, &msg, &current_signatures)?;
 
     match verifier.verify_signatures(chain_config)? {
         super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
@@ -252,7 +260,7 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn basic(#[case] seed: Seed) {
+    fn gradual_signing(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let chain_config = create_mainnet();
@@ -273,7 +281,7 @@ mod tests {
         let mut indices_to_sign: Vec<_> = (0..total_parties).collect();
         indices_to_sign.shuffle(&mut rng);
 
-        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty();
+        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
 
         // Keep signing and adding signatures, and expect to start failing when we reach the required number of signatures
         while let Some(key_index) = indices_to_sign.pop() {
@@ -325,5 +333,109 @@ mod tests {
                 },
             };
         }
+
+        // Verify signatures with the correct hash
+        let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+        verify_classical_multisig_spending(
+            &chain_config,
+            &correct_challenge_hash,
+            &current_signatures,
+            &sighash,
+        )
+        .unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn challenge_hash_mismatch(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                .unwrap();
+        challenge.is_valid(&chain_config).unwrap();
+
+        let sighash = H256::random_using(&mut rng);
+
+        // We create only the required signatures count
+        let mut indices_to_sign: Vec<_> = (0..total_parties).collect();
+        indices_to_sign.shuffle(&mut rng);
+        let indices_to_sign =
+            indices_to_sign.into_iter().take(min_required_signatures.get() as usize);
+        assert_eq!(
+            indices_to_sign.len(),
+            min_required_signatures.get() as usize
+        );
+
+        // Keep signing and adding signatures until it's complete
+        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+        for key_index in indices_to_sign {
+            let private_key = &priv_keys[key_index as usize];
+
+            let sign_res = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap();
+
+            match sign_res {
+                ClassicalMultisigCompletion::Incomplete(sigs) => {
+                    current_signatures = sigs;
+                    // We still have to sign more
+                    assert!(
+                        current_signatures.signatures().len()
+                            < min_required_signatures.get() as usize
+                    );
+                }
+                ClassicalMultisigCompletion::Complete(sigs) => {
+                    current_signatures = sigs;
+                    // We're done signing
+                    assert_eq!(
+                        current_signatures.signatures().len(),
+                        min_required_signatures.get() as usize
+                    );
+                }
+            };
+        }
+
+        // Verify signatures with the correct hash
+        let correct_challenge_hash: PublicKeyHash = (&challenge).into();
+        verify_classical_multisig_spending(
+            &chain_config,
+            &correct_challenge_hash,
+            &current_signatures,
+            &sighash,
+        )
+        .unwrap();
+
+        // Tamper with the challenge hash
+        let mut wrong_hash_vec = correct_challenge_hash;
+        let wrong_hash_vec = wrong_hash_vec.as_mut();
+        wrong_hash_vec[0] = wrong_hash_vec[0].wrapping_add(1);
+        let wrong_challenge_hash = PublicKeyHash::try_from(wrong_hash_vec.to_vec()).unwrap();
+
+        assert_eq!(
+            verify_classical_multisig_spending(
+                &chain_config,
+                &wrong_challenge_hash,
+                &current_signatures,
+                &sighash,
+            )
+            .unwrap_err(),
+            TransactionSigError::ClassicalMultisigWitnessHashMismatch
+        );
     }
 }
