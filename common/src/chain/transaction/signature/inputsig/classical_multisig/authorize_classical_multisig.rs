@@ -151,9 +151,9 @@ pub enum ClassicalMultisigSigningError {
     #[error("Invalid classical multisig key index: {0} (must be in range 0..{1})")]
     InvalidClassicalMultisigKeyIndex(u8, usize),
     #[error("Attempted to sign a classical multisig with pre-existing invalid signature(s)")]
-    AttemptedToSignClassicalMultisigWithInvalidSignature,
-    #[error("Private key does not match with spender public key")]
-    SpendeePrivatePublicKeyMismatch,
+    AttemptedToSignClassicalMultisigWithInvalidSignatureFromBefore,
+    #[error("Private key does not match with spender public key in the challenge")]
+    SpendeePrivateChallengePublicKeyMismatch,
     #[error("Producing signature failed!")]
     ProducingSignatureFailed(crypto::key::SignatureError),
     #[error("Invalid classical multisig authorization: {0}")]
@@ -208,7 +208,7 @@ pub fn sign_classical_multisig_spending(
             }
             super::multisig_partial_signature::SigsVerifyResult::Incomplete => (),
             super::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(
-                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidSignature,
+                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidSignatureFromBefore,
             ),
         }
     }
@@ -228,7 +228,7 @@ pub fn sign_classical_multisig_spending(
     // Ensure the given private key matches the public key at the given index
     let calculated_public_key = crypto::key::PublicKey::from_private_key(private_key);
     if *spendee_pubkey != calculated_public_key {
-        return Err(ClassicalMultisigSigningError::SpendeePrivatePublicKeyMismatch);
+        return Err(ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch);
     }
     let signature = private_key
         .sign_message(&msg)
@@ -697,6 +697,28 @@ mod tests {
                 ClassicalMultisigSigningError::InvalidClassicalMultisig(
                     PartiallySignedMultisigStructureError::InvalidSignatureIndex
                 )
+            );
+        }
+
+        // Signing with a private key that doesn't match the public key in the challenge should fail
+        {
+            let key_index = rng.gen::<u8>() % total_parties;
+
+            let (new_random_private_key, _) =
+                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+            let sign_err = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                &new_random_private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap_err();
+            assert_eq!(
+                sign_err,
+                ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch
             );
         }
     }
