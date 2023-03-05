@@ -151,7 +151,7 @@ pub enum ClassicalMultisigSigningError {
     #[error("Invalid classical multisig key index: {0} (must be in range 0..{1})")]
     InvalidClassicalMultisigKeyIndex(u8, usize),
     #[error("Attempted to sign a classical multisig with pre-existing invalid signature(s)")]
-    AttemptedToSignClassicalMultisigWithInvalidSignatureFromBefore,
+    AttemptedToSignClassicalMultisigWithPreExistingInvalidSignature,
     #[error("Private key does not match with spender public key in the challenge")]
     SpendeePrivateChallengePublicKeyMismatch,
     #[error("Producing signature failed!")]
@@ -208,7 +208,7 @@ pub fn sign_classical_multisig_spending(
             }
             super::multisig_partial_signature::SigsVerifyResult::Incomplete => (),
             super::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(
-                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithInvalidSignatureFromBefore,
+                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithPreExistingInvalidSignature,
             ),
         }
     }
@@ -719,6 +719,69 @@ mod tests {
             assert_eq!(
                 sign_err,
                 ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch
+            );
+        }
+
+        // Attempt to add signature to a set of signatures that have an invalid signature
+        {
+            // we need to be able to sign with at least 2 keys, so that we can botch the first signature
+            assert!(min_required_signatures.get() > 1);
+            let key_index = rng.gen::<u8>() % total_parties;
+            let private_key = &priv_keys[key_index as usize];
+
+            // Second key index to attempt to sign with
+            let second_key_index = loop {
+                let index = rng.gen::<u8>() % total_parties;
+                if index != key_index {
+                    break index;
+                }
+            };
+            let second_private_key = &priv_keys[second_key_index as usize];
+
+            let sign_result = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap();
+
+            // Min required signatures is 2+, so this is always true
+            assert!(!sign_result.is_complete());
+
+            // Tamper with the signatures, and change the signature we did to be one with a new,
+            // random private key.
+            // Now signature verification (that happens before signing) should fail
+            let current_signatures = sign_result.take();
+            let (new_random_private_key, _) =
+                PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let sig = new_random_private_key.sign_message(&sighash.encode()).unwrap();
+            let new_sigs = vec![(key_index, sig)].into_iter().collect::<BTreeMap<_, _>>();
+            let tampered_with_signatures = AuthorizedClassicalMultisigSpend::new(
+                new_sigs,
+                current_signatures.challenge().clone(),
+            );
+
+            assert!(current_signatures.challenge() == tampered_with_signatures.challenge());
+            assert!(current_signatures.signatures() != tampered_with_signatures.signatures());
+            assert!(current_signatures != tampered_with_signatures);
+
+            // Now we sign again, and because the signature from before is invalid, this should fail
+            let sign_err = sign_classical_multisig_spending(
+                &chain_config,
+                second_key_index,
+                second_private_key,
+                &challenge,
+                &sighash,
+                tampered_with_signatures,
+            )
+            .unwrap_err();
+
+            assert_eq!(
+                sign_err,
+                ClassicalMultisigSigningError::AttemptedToSignClassicalMultisigWithPreExistingInvalidSignature
             );
         }
     }

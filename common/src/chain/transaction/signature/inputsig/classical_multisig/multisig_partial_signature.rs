@@ -96,14 +96,14 @@ impl<'a> PartiallySignedMultisigChallenge<'a> {
     ) -> Result<SigsVerifyResult, PartiallySignedMultisigStructureError> {
         self.check_structurally_valid(chain_config)?;
 
-        if self.signatures.is_empty() {
-            return Ok(SigsVerifyResult::Incomplete);
-        }
-
         let verification_result = self.signatures.iter().all(|(index, signature)| {
             let public_key = &self.signatures.challenge().public_keys()[index as usize];
             public_key.verify_message(signature, self.message)
         });
+
+        if !verification_result {
+            return Ok(SigsVerifyResult::Invalid);
+        }
 
         if self.signatures().available_signatures_count()
             < self.signatures.challenge().min_required_signatures() as usize
@@ -339,17 +339,10 @@ mod tests {
                 }
             };
 
-            if sig_count as u8 == challenge.min_required_signatures() {
-                assert_eq!(
-                    signed_challenge.verify_signatures(chain_config).unwrap(),
-                    SigsVerifyResult::Invalid
-                );
-            } else {
-                assert_eq!(
-                    signed_challenge.verify_signatures(chain_config).unwrap(),
-                    SigsVerifyResult::Incomplete
-                );
-            }
+            assert_eq!(
+                signed_challenge.verify_signatures(chain_config).unwrap(),
+                SigsVerifyResult::Invalid
+            );
         }
     }
 
@@ -397,17 +390,10 @@ mod tests {
                 }
             };
 
-            if sig_count as u8 == challenge.min_required_signatures() {
-                assert_eq!(
-                    signed_challenge.verify_signatures(chain_config).unwrap(),
-                    SigsVerifyResult::Invalid
-                );
-            } else {
-                assert_eq!(
-                    signed_challenge.verify_signatures(chain_config).unwrap(),
-                    SigsVerifyResult::Incomplete
-                );
-            }
+            assert_eq!(
+                signed_challenge.verify_signatures(chain_config).unwrap(),
+                SigsVerifyResult::Invalid
+            );
         }
     }
 
