@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,21 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Top-level node runner as a library
+use common::chain::config::ChainType;
 
-mod config_files;
-mod mock_time;
-mod options;
-mod regtest_options;
-mod rpc;
-mod runner;
-
-pub type Error = anyhow::Error;
-
-pub use config_files::{NodeConfigFile, NodeTypeConfigFile, StorageBackendConfigFile};
-pub use options::{Command, Options, RunOptions};
-pub use runner::{initialize, run};
-
-pub fn init_logging(_opts: &Options) {
-    logging::init_logging::<&std::path::Path>(None)
+pub fn set_mock_time(chain_type: ChainType, time: u64) -> Result<(), crate::Error> {
+    anyhow::ensure!(
+        chain_type == ChainType::Regtest,
+        "Mock time allowed on regtest chain only"
+    );
+    anyhow::ensure!(time != 0, "Mock time cannot be 0");
+    common::primitives::time::set(common::primitives::time::duration_from_int(time))?;
+    Ok(())
 }

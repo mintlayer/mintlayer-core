@@ -18,12 +18,12 @@ use std::time::{Duration, Instant, SystemTime};
 
 use once_cell::sync::Lazy;
 
-fn duration_to_int(d: &Duration) -> Result<u64, Box<dyn std::error::Error>> {
+pub fn duration_to_int(d: &Duration) -> Result<u64, std::num::TryFromIntError> {
     let r = d.as_millis().try_into()?;
     Ok(r)
 }
 
-fn duration_from_int(v: u64) -> Duration {
+pub fn duration_from_int(v: u64) -> Duration {
     Duration::from_millis(v)
 }
 
@@ -50,7 +50,7 @@ pub fn reset() {
 }
 
 /// Set current time as a Duration since SystemTime::UNIX_EPOCH
-pub fn set(now: Duration) -> Result<(), Box<dyn std::error::Error>> {
+pub fn set(now: Duration) -> Result<(), std::num::TryFromIntError> {
     TIME_SOURCE.store(duration_to_int(&now)?, Ordering::SeqCst);
     Ok(())
 }

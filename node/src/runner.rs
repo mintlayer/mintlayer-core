@@ -40,6 +40,7 @@ use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServ
 
 use crate::{
     config_files::NodeConfigFile,
+    mock_time::set_mock_time,
     options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
 };
@@ -102,7 +103,7 @@ pub async fn initialize(
     let _block_prod = manager.add_subsystem(
         "blockprod",
         blockprod::make_blockproduction(
-            chain_config,
+            Arc::clone(&chain_config),
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
@@ -118,7 +119,10 @@ pub async fn initialize(
         let _rpc = manager.add_subsystem(
             "rpc",
             rpc::Builder::new(rpc_config.into())
-                .register(crate::rpc::init(manager.make_shutdown_trigger()))
+                .register(crate::rpc::init(
+                    manager.make_shutdown_trigger(),
+                    *chain_config.chain_type(),
+                ))
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())
                 .register(p2p.clone().into_rpc())
@@ -201,6 +205,10 @@ async fn start(
     run_options: &RunOptions,
     chain_config: ChainConfig,
 ) -> Result<()> {
+    if let Some(mock_time) = run_options.mock_time {
+        set_mock_time(*chain_config.chain_type(), mock_time)?;
+    }
+
     let node_config =
         NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
 

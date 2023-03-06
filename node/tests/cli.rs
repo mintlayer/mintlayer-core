@@ -115,6 +115,7 @@ fn read_config_override_values() {
     let options = RunOptions {
         storage_backend: Some(backend_type.clone()),
         node_type: Some(node_type),
+        mock_time: None,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
         tx_index_enabled: Some(false),
