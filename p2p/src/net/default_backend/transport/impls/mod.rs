@@ -14,5 +14,6 @@
 // limitations under the License.
 
 pub mod channel;
+pub mod socks5;
 pub mod stream_adapter;
 pub mod tcp;

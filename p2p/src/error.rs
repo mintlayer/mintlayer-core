@@ -80,6 +80,8 @@ pub enum DialError {
     ConnectionRefusedOrTimedOut,
     #[error("I/O error: `{0:?}`")]
     IoError(std::io::ErrorKind),
+    #[error("Proxy error: {0}")]
+    ProxyError(String),
 }
 
 /// Conversion errors
@@ -117,6 +119,12 @@ pub enum P2pError {
     InvalidConfigurationValue(String),
     #[error("The storage state is invalid: {0}")]
     InvalidStorageState(String),
+}
+
+impl From<DialError> for P2pError {
+    fn from(e: DialError) -> P2pError {
+        P2pError::DialError(e)
+    }
 }
 
 impl From<std::io::Error> for P2pError {

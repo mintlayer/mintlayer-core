@@ -38,6 +38,7 @@ tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
 snowstorm = "0.4.0"
 serde.workspace = true
 socket2 = { version = "0.5", features = ["all"] }
+tokio-socks = { version = "0.5.1" }
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../chainstate/test-framework" }

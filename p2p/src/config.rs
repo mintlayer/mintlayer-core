@@ -66,6 +66,8 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<String>,
+    /// SOCKS5 proxy.
+    pub socks5_proxy: Option<String>,
     /// Optional list of initial node addresses.
     /// Boot node addresses are added to PeerDb as regular discovered addresses.
     pub boot_nodes: Vec<String>,

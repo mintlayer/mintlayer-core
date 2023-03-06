@@ -673,6 +673,7 @@ where
     // Start first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -705,6 +706,7 @@ where
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
@@ -779,6 +781,7 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -812,6 +815,7 @@ where
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses.clone(),
         max_inbound_connections: Default::default(),
@@ -838,6 +842,7 @@ where
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),

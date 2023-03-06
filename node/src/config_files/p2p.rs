@@ -54,6 +54,8 @@ impl FromStr for NodeTypeConfigFile {
 pub struct P2pConfigFile {
     /// Address to bind P2P to.
     pub bind_addresses: Option<Vec<String>>,
+    /// SOCKS5 proxy.
+    pub socks5_proxy: Option<String>,
     /// Optional list of boot node addresses to connect.
     pub boot_nodes: Option<Vec<String>>,
     /// Optional list of reserved node addresses to connect.
@@ -78,6 +80,7 @@ impl From<P2pConfigFile> for P2pConfig {
     fn from(c: P2pConfigFile) -> Self {
         P2pConfig {
             bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
+            socks5_proxy: c.socks5_proxy.clone(),
             boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
             reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
             max_inbound_connections: c.max_inbound_connections.into(),
