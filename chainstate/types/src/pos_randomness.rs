@@ -71,7 +71,7 @@ impl PoSRandomness {
                 ));
             }
             OutputPurpose::StakePool(d) => d.as_ref(),
-            OutputPurpose::SpendStakePool(d) => d.as_ref(),
+            OutputPurpose::ProduceBlockFromStake(d) => d.as_ref(),
         };
 
         let hash_pos: H256 = verify_vrf_and_get_vrf_output(

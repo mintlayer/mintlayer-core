@@ -51,7 +51,7 @@ pub enum OutputPurpose {
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
-    SpendStakePool(Box<StakePoolData>),
+    ProduceBlockFromStake(Box<StakePoolData>),
 }
 
 impl OutputPurpose {
@@ -61,7 +61,7 @@ impl OutputPurpose {
             OutputPurpose::LockThenTransfer(d, _) => Some(d),
             OutputPurpose::Burn => None,
             OutputPurpose::StakePool(d) => Some(d.staker()),
-            OutputPurpose::SpendStakePool(d) => Some(d.staker()),
+            OutputPurpose::ProduceBlockFromStake(d) => Some(d.staker()),
         }
     }
 
@@ -70,7 +70,7 @@ impl OutputPurpose {
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::StakePool(_)
-            | OutputPurpose::SpendStakePool(_) => false,
+            | OutputPurpose::ProduceBlockFromStake(_) => false,
             OutputPurpose::Burn => true,
         }
     }
@@ -100,7 +100,7 @@ impl TxOutput {
             OutputPurpose::Transfer(_)
             | OutputPurpose::Burn
             | OutputPurpose::StakePool(_)
-            | OutputPurpose::SpendStakePool(_) => false,
+            | OutputPurpose::ProduceBlockFromStake(_) => false,
             OutputPurpose::LockThenTransfer(_, _) => true,
         }
     }

@@ -384,7 +384,7 @@ where
                     | OutputPurpose::Burn => Err(SpendStakeError::ConsensusPoSError(
                         ConsensusPoSError::InvalidOutputPurposeInStakeKernel(block.get_id()),
                     )),
-                    OutputPurpose::StakePool(d) | OutputPurpose::SpendStakePool(d) => {
+                    OutputPurpose::StakePool(d) | OutputPurpose::ProduceBlockFromStake(d) => {
                         Ok(d.as_ref())
                     }
                 }?;
@@ -405,7 +405,7 @@ where
                     | OutputPurpose::StakePool(_) => {
                         Err(SpendStakeError::InvalidBlockRewardPurpose)
                     }
-                    OutputPurpose::SpendStakePool(d) => Ok(d.as_ref()),
+                    OutputPurpose::ProduceBlockFromStake(d) => Ok(d.as_ref()),
                 }?;
 
                 ensure!(
@@ -486,7 +486,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::Burn
             | OutputPurpose::StakePool(_)
-            | OutputPurpose::SpendStakePool(_) => return Ok(()),
+            | OutputPurpose::ProduceBlockFromStake(_) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
         };
 
@@ -631,7 +631,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn => false,
-                OutputPurpose::StakePool(_) | OutputPurpose::SpendStakePool(_) => true,
+                OutputPurpose::StakePool(_) | OutputPurpose::ProduceBlockFromStake(_) => true,
             });
         ensure!(
             !attempt_to_spend_stake,
@@ -644,7 +644,7 @@ where
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
                 | OutputPurpose::StakePool(_) => false,
-                OutputPurpose::SpendStakePool(_) => true,
+                OutputPurpose::ProduceBlockFromStake(_) => true,
             });
 
         ensure!(
@@ -660,7 +660,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
-                | OutputPurpose::SpendStakePool(_) => None,
+                | OutputPurpose::ProduceBlockFromStake(_) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -732,7 +732,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn
-            | OutputPurpose::SpendStakePool(_) => Ok(()),
+            | OutputPurpose::ProduceBlockFromStake(_) => Ok(()),
         })
     }
 

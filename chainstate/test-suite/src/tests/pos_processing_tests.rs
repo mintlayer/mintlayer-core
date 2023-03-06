@@ -206,7 +206,7 @@ fn pos_basic(#[case] seed: Seed) {
     // valid case
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
     );
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
@@ -465,7 +465,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         let consensus_data = ConsensusData::PoS(Box::new(pos_data));
         let reward_output = TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+            OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
         );
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
@@ -547,7 +547,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
     );
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -616,14 +616,14 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
 
 // Create a chain:
 //
-// genesis <- block_1(StakePool) <- block_2(SpendStakePool) <- block_3(SpendStakePool) <- block_4(SpendStakePool).
+// genesis <- block_1(StakePool) <- block_2(ProduceBlockFromStake) <- block_3(ProduceBlockFromStake) <- block_4(ProduceBlockFromStake).
 //
 // PoS consensus activates for block_2 and on. Epoch length is 2.
 // block_1 has valid StakePool output.
-// block_2 has kernel input from block_1 and SpendStakePool as an output. Initial randomness is used.
-// block_3 has kernel input from block_2 and SpendStakePool as an output. Randomness of prev block
+// block_2 has kernel input from block_1 and ProduceBlockFromStake as an output. Initial randomness is used.
+// block_3 has kernel input from block_2 and ProduceBlockFromStake as an output. Randomness of prev block
 // and initial randomness are used.
-// block_4 has kernel input from block_3 and SpendStakePool as an output. Randomness of prev block
+// block_4 has kernel input from block_3 and ProduceBlockFromStake as an output. Randomness of prev block
 // and randomness of sealed epoch are used.
 // Check that the chain is valid.
 #[rstest]
@@ -655,7 +655,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
 
-    // prepare and process block_2 with StakePool -> SpendStakePool kernel
+    // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pos_data = create_pos_data(
         &mut tf,
@@ -669,7 +669,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     );
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(stake_pool_data.clone())),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data.clone())),
     );
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -677,7 +677,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .build_and_process()
         .unwrap();
 
-    // prepare and process block_3 with SpendStakePool -> SpendStakePool kernel
+    // prepare and process block_3 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_2_reward_outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
@@ -695,7 +695,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     );
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(stake_pool_data.clone())),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data.clone())),
     );
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -703,7 +703,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .build_and_process()
         .unwrap();
 
-    // prepare and process block_4 with SpendStakePool -> SpendStakePool kernel
+    // prepare and process block_4 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_3_reward_outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
@@ -724,7 +724,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     );
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
     );
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -770,7 +770,7 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
-    // prepare and process block_2 with StakePool -> SpendStakePool kernel
+    // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let pos_data = create_pos_data(
         &mut tf,
@@ -784,7 +784,7 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
     );
     let reward_output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::SpendStakePool(Box::new(altered_stake_pool_data)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(altered_stake_pool_data)),
     );
     let res = tf
         .make_block_builder()

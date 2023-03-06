@@ -433,7 +433,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
     });
 }
 
-// StakePool -> SpendStakePool in transaction is forbidden
+// StakePool -> ProduceBlockFromStake in transaction is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -476,7 +476,7 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
             )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
-                OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+                OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
             ))
             .build();
 
@@ -547,7 +547,7 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
     });
 }
 
-// SpendStakePool -> Transfer is forbidden
+// ProduceBlockFromStake -> Transfer is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -584,7 +584,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
 
         let spend_stake_output = TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(rng.gen_range(50_000..100_000))),
-            OutputPurpose::SpendStakePool(Box::new(stake_pool_data)),
+            OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
         );
         let block2_index = tf
             .make_block_builder()
@@ -616,7 +616,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
     });
 }
 
-// Transfer -> SpendStakePool is forbidden
+// Transfer -> ProduceBlockFromStake is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -638,7 +638,7 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
             )
             .add_output(TxOutput::new(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::SpendStakePool(Box::new(StakePoolData::new(
+                OutputPurpose::ProduceBlockFromStake(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
                     None,
                     vrf_pub_key,
