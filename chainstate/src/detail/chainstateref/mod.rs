@@ -143,7 +143,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         }
     }
 
-    // TODO this will go when transaction verifier is ready
     pub fn make_utxo_view(&self) -> impl UtxosView + '_ {
         UtxosDB::new(&self.db_tx)
     }
