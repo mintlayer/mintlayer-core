@@ -598,6 +598,10 @@ where
             ChainType::Regtest | ChainType::Signet => &[],
         };
 
+        if dns_seed.is_empty() {
+            return;
+        }
+
         log::debug!("Resolve DNS seed...");
         let results = futures::future::join_all(
             dns_seed

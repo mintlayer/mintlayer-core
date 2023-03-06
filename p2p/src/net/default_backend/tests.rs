@@ -22,6 +22,9 @@ use crate::{
 };
 use common::primitives::semver::SemVer;
 use std::fmt::Debug;
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
+use tokio::time::timeout;
 
 async fn connect_to_remote<A, T>()
 where
@@ -279,4 +282,56 @@ async fn self_connect_channels() {
 #[tokio::test]
 async fn self_connect_noise() {
     self_connect::<TestTransportNoise, NoiseTcpTransport>().await;
+}
+
+async fn invalid_outbound_peer_connect<A, T>()
+where
+    A: TestTransportMaker<Transport = T, Address = T::Address>,
+    T: TransportSocket + Debug,
+{
+    let transport = A::make_transport();
+    let mut listener = transport.bind(vec![A::make_address()]).await.unwrap();
+    let addr = listener.local_addresses().unwrap();
+    tokio::spawn(async move {
+        let (mut socket, _address) = listener.accept().await.unwrap();
+        let _ = socket.write_all(b"invalid message").await;
+    });
+
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let (mut conn, _) = DefaultNetworkingService::<T>::start(
+        A::make_transport(),
+        vec![],
+        Arc::clone(&config),
+        Arc::clone(&p2p_config),
+    )
+    .await
+    .unwrap();
+
+    // Try to connect to some broken peer
+    conn.connect(addr[0].clone()).unwrap();
+    // `ConnectionError` should be reported
+    let event = timeout(Duration::from_secs(60), conn.poll_next()).await.unwrap().unwrap();
+
+    match event {
+        ConnectivityEvent::ConnectionError { address, error: _ } => {
+            assert_eq!(address, addr[0]);
+        }
+        event => panic!("invalid event received: {event:?}"),
+    }
+}
+
+#[tokio::test]
+async fn invalid_outbound_peer_connect_tcp() {
+    invalid_outbound_peer_connect::<TestTransportTcp, TcpTransportSocket>().await;
+}
+
+#[tokio::test]
+async fn invalid_outbound_peer_connect_channels() {
+    invalid_outbound_peer_connect::<TestTransportChannel, MpscChannelTransport>().await;
+}
+
+#[tokio::test]
+async fn invalid_outbound_peer_connect_noise() {
+    invalid_outbound_peer_connect::<TestTransportNoise, NoiseTcpTransport>().await;
 }
