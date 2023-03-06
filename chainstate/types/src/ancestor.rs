@@ -42,6 +42,7 @@ impl<'a> From<&'a GenBlockIndex> for AncestorGetterStartingPoint<'a> {
     }
 }
 
+/// Given a starting point, whether BlockIndex or a BlockId, find the ancestor of that block at the given height.
 pub fn block_index_ancestor_getter<S, G>(
     gen_block_index_getter: G,
     db_tx: &S,
