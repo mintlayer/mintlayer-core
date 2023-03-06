@@ -16,11 +16,11 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, PoolId},
+    chain::{DelegationId, Destination, PoolId},
     primitives::{Amount, H256},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
+    key::{KeyKind, PrivateKey},
     random::{CryptoRng, Rng},
 };
 
@@ -38,21 +38,26 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
+fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Destination::PublicKey(pub_key)
+}
+
 fn create_storage_with_pool(
     rng: &mut (impl Rng + CryptoRng),
     pledged_amount: Amount,
-) -> (PoolId, PublicKey, InMemoryPoSAccounting) {
+) -> (PoolId, Destination, InMemoryPoSAccounting) {
     let pool_id = new_pool_id(rng.next_u64());
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination = new_pub_key_destination(rng);
 
     let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+        BTreeMap::from([(pool_id, PoolData::new(destination.clone(), pledged_amount))]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
     );
-    (pool_id, pub_key, storage)
+    (pool_id, destination, storage)
 }
 
 fn create_storage_with_pool_and_delegation(
@@ -61,25 +66,34 @@ fn create_storage_with_pool_and_delegation(
     delegated_amount: Amount,
 ) -> (
     PoolId,
-    PublicKey,
+    Destination,
     DelegationId,
-    PublicKey,
+    Destination,
     InMemoryPoSAccounting,
 ) {
     let pool_id = new_pool_id(rng.next_u64());
+    let destination_pool = new_pub_key_destination(rng);
     let delegation_id = new_delegation_id(rng.next_u64());
-    let (_, pub_key_pool) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let (_, pub_key_del) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination_del = new_pub_key_destination(rng);
 
     let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key_pool.clone(), pledged_amount))]),
+        BTreeMap::from([(
+            pool_id,
+            PoolData::new(destination_pool.clone(), pledged_amount),
+        )]),
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),
         BTreeMap::from([(
             delegation_id,
-            DelegationData::new(pool_id, pub_key_del.clone()),
+            DelegationData::new(pool_id, destination_del.clone()),
         )]),
     );
-    (pool_id, pub_key_pool, delegation_id, pub_key_del, storage)
+    (
+        pool_id,
+        destination_pool,
+        delegation_id,
+        destination_del,
+        storage,
+    )
 }

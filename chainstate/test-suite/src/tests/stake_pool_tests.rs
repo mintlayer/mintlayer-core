@@ -26,10 +26,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use test_utils::nft_utils::random_token_issuance;
 
 #[rstest]
@@ -40,7 +37,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -55,9 +52,8 @@ fn stake_pool_basic(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -80,7 +76,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -95,9 +91,8 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -124,7 +119,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -139,9 +134,8 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -200,7 +194,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         // stake pool with coin input and transfer tokens with token input
@@ -225,9 +219,8 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..100_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -285,7 +278,7 @@ fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         // use token input to stake pool with tokens
@@ -302,9 +295,8 @@ fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
                 .into(),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -331,7 +323,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -346,9 +338,8 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key.clone(),
-                    pub_key.clone(),
+                    destination.clone(),
                     0,
                     Amount::ZERO,
                 ))),
@@ -357,9 +348,8 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -398,7 +388,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         };
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -410,9 +400,8 @@ fn stake_pool_overspend(#[case] seed: Seed) {
                 OutputValue::Coin(genesis_overspend_amount),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),
@@ -442,13 +431,12 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
             anyonecanspend_address(),
-            None,
             vrf_pub_key,
-            pub_key,
+            destination,
             0,
             Amount::ZERO,
         );
@@ -499,13 +487,12 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
             anyonecanspend_address(),
-            None,
             vrf_pub_key,
-            pub_key,
+            destination,
             0,
             Amount::ZERO,
         );
@@ -556,13 +543,12 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
             anyonecanspend_address(),
-            None,
             vrf_pub_key,
-            pub_key,
+            destination,
             0,
             Amount::ZERO,
         );
@@ -625,7 +611,7 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
         let tx = TransactionBuilder::new()
@@ -640,9 +626,8 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::ProduceBlockFromStake(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    destination,
                     0,
                     Amount::ZERO,
                 ))),

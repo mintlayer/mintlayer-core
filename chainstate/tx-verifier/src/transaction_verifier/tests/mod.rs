@@ -40,3 +40,8 @@ fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (Out
     let utxo = Utxo::new_for_blockchain(output1, false, BlockHeight::new(1));
     (outpoint, utxo)
 }
+
+fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Destination::PublicKey(pub_key)
+}

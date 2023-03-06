@@ -17,11 +17,10 @@ use std::collections::BTreeMap;
 
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
 use common::primitives::{signed_amount::SignedAmount, Amount};
-use crypto::key::{KeyKind, PrivateKey};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::{new_delegation_id, new_pool_id};
+use super::{new_delegation_id, new_pool_id, new_pub_key_destination};
 
 use crate::{
     pool::{
@@ -41,14 +40,14 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination1 = new_pub_key_destination(&mut rng);
     let data1 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [(
                 new_pool_id(1),
                 DataDelta::new(
                     None,
-                    Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                    Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
                 ),
             )]
             .into_iter(),
@@ -79,7 +78,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
                 new_delegation_id(1),
                 DataDelta::new(
                     None,
-                    Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                    Some(DelegationData::new(new_pool_id(1), destination1.clone())),
                 ),
             )]
             .into_iter(),
@@ -87,22 +86,22 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     };
     let mut delta1 = PoSAccountingDelta::from_data(&mut db, data1);
 
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination2 = new_pub_key_destination(&mut rng);
     let data2 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
                 (
                     new_pool_id(1),
                     DataDelta::new(
-                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
-                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
+                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
                     ),
                 ),
                 (
                     new_pool_id(10),
                     DataDelta::new(
                         None,
-                        Some(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                        Some(PoolData::new(destination2.clone(), Amount::from_atoms(100))),
                     ),
                 ),
             ]
@@ -133,7 +132,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             [(
                 new_delegation_id(1),
                 DataDelta::new(
-                    Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                    Some(DelegationData::new(new_pool_id(1), destination1.clone())),
                     None,
                 ),
             )]
@@ -149,12 +148,15 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
                     new_pool_id(1),
                     DataDelta::new(
                         None,
-                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
                     ),
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::new(None, Some(PoolData::new(pub_key2, Amount::from_atoms(100)))),
+                    DataDelta::new(
+                        None,
+                        Some(PoolData::new(destination2, Amount::from_atoms(100))),
+                    ),
                 ),
             ]
             .into_iter(),
@@ -193,7 +195,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
                     new_pool_id(1),
                     DataDelta::new(
                         None,
-                        Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
+                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
                     ),
                 ),
                 (new_pool_id(10), DataDelta::new(None, None)),
@@ -224,7 +226,10 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         delegation_data: DeltaDataCollection::from_iter(
             [(
                 new_delegation_id(1),
-                DataDelta::new(None, Some(DelegationData::new(new_pool_id(1), pub_key1))),
+                DataDelta::new(
+                    None,
+                    Some(DelegationData::new(new_pool_id(1), destination1)),
+                ),
             )]
             .into_iter(),
         ),
@@ -239,13 +244,13 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination1 = new_pub_key_destination(&mut rng);
+    let destination2 = new_pub_key_destination(&mut rng);
 
     let mut storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(
             new_pool_id(1),
-            PoolData::new(pub_key1.clone(), Amount::from_atoms(100)),
+            PoolData::new(destination1.clone(), Amount::from_atoms(100)),
         )]),
         BTreeMap::from([
             (new_pool_id(3), Amount::from_atoms(300)),
@@ -261,7 +266,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
         ]),
         BTreeMap::from([(
             new_delegation_id(1),
-            DelegationData::new(new_pool_id(1), pub_key1.clone()),
+            DelegationData::new(new_pool_id(1), destination1.clone()),
         )]),
     );
     let original_storage = storage.clone();
@@ -275,15 +280,15 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                     (
                         new_pool_id(1),
                         DataDelta::new(
-                            Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(100))),
-                            Some(PoolData::new(pub_key1.clone(), Amount::from_atoms(300))),
+                            Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
+                            Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
                         ),
                     ),
                     (
                         new_pool_id(10),
                         DataDelta::new(
                             None,
-                            Some(PoolData::new(pub_key2.clone(), Amount::from_atoms(100))),
+                            Some(PoolData::new(destination2.clone(), Amount::from_atoms(100))),
                         ),
                     ),
                 ]
@@ -314,7 +319,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                 [(
                     new_delegation_id(1),
                     DataDelta::new(
-                        Some(DelegationData::new(new_pool_id(1), pub_key1.clone())),
+                        Some(DelegationData::new(new_pool_id(1), destination1.clone())),
                         None,
                     ),
                 )]
@@ -329,11 +334,11 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
         BTreeMap::from([
             (
                 new_pool_id(1),
-                PoolData::new(pub_key1, Amount::from_atoms(300)),
+                PoolData::new(destination1, Amount::from_atoms(300)),
             ),
             (
                 new_pool_id(10),
-                PoolData::new(pub_key2, Amount::from_atoms(100)),
+                PoolData::new(destination2, Amount::from_atoms(100)),
             ),
         ]),
         BTreeMap::from([(new_pool_id(4), Amount::from_atoms(450))]),

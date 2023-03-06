@@ -14,10 +14,9 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
-use crypto::key::PublicKey;
 
 use crate::{
     error::Error,
@@ -43,7 +42,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
-        decommission_key: PublicKey,
+        decommission_key: Destination,
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
@@ -88,7 +87,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
-        spend_key: PublicKey,
+        spend_key: Destination,
         input0_outpoint: &OutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
         if !self.pool_exists(target_pool)? {

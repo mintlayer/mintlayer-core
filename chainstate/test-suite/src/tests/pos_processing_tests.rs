@@ -43,7 +43,6 @@ use common::{
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::random::CryptoRng;
 use crypto::{
-    key::{KeyKind, PrivateKey},
     random::Rng,
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey},
 };
@@ -59,15 +58,14 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
 fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng)) -> (VRFPrivateKey, StakePoolData) {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination = super::new_pub_key_destination(rng);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     (
         vrf_sk,
         StakePoolData::new(
             anyonecanspend_address(),
-            None,
             vrf_pk,
-            pub_key,
+            destination,
             0,
             Amount::ZERO,
         ),
@@ -760,8 +758,7 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
     // create initial chain: genesis <- block_1
     let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
     let altered_stake_pool_data = StakePoolData::new(
-        stake_pool_data.owner().clone(),
-        Some(stake_pool_data.staker().clone()),
+        stake_pool_data.staker().clone(),
         stake_pool_data.vrf_public_key().clone(),
         stake_pool_data.decommission_key().clone(),
         stake_pool_data.margin_ratio_per_thousand() + 1,

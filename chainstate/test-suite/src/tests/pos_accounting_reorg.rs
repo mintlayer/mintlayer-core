@@ -29,10 +29,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    vrf::{VRFKeyKind, VRFPrivateKey},
-};
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use pos_accounting::PoSAccountingDeltaData;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
@@ -71,7 +68,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             let genesis_id = tf.genesis().get_id();
 
             // prepare tx_a
-            let (_, pub_key_a) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let destination_a = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_a = TransactionBuilder::new()
                 .add_input(
@@ -82,9 +79,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                     OutputPurpose::StakePool(Box::new(StakePoolData::new(
                         anyonecanspend_address(),
-                        None,
                         vrf_pub_key_a,
-                        pub_key_a,
+                        destination_a,
                         0,
                         Amount::ZERO,
                     ))),
@@ -108,7 +104,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .build();
 
             // prepare tx_c
-            let (_, pub_key_c) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+            let destination_c = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_c = TransactionBuilder::new()
                 .add_input(
@@ -122,9 +118,8 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_000))),
                     OutputPurpose::StakePool(Box::new(StakePoolData::new(
                         anyonecanspend_address(),
-                        None,
                         vrf_pub_key_c,
-                        pub_key_c,
+                        destination_c,
                         0,
                         Amount::ZERO,
                     ))),

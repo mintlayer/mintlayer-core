@@ -782,8 +782,8 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let (outpoint1, _) = create_utxo(&mut rng, 1000);
     let (outpoint2, _) = create_utxo(&mut rng, 2000);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination1 = new_pub_key_destination(&mut rng);
+    let destination2 = new_pub_key_destination(&mut rng);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -819,13 +819,13 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     let _ = verifier1
         .accounting_delta
-        .create_pool(&outpoint1, pool_balance1, pub_key1)
+        .create_pool(&outpoint1, pool_balance1, destination1)
         .unwrap();
 
     let mut verifier2 = verifier1.derive_child();
     let _ = verifier2
         .accounting_delta
-        .create_pool(&outpoint2, pool_balance2, pub_key2)
+        .create_pool(&outpoint2, pool_balance2, destination2)
         .unwrap();
 
     let consumed_verifier2 = verifier2.consume().unwrap();
@@ -845,8 +845,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let (outpoint1, _) = create_utxo(&mut rng, 1000);
     let (outpoint2, _) = create_utxo(&mut rng, 2000);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let destination1 = new_pub_key_destination(&mut rng);
+    let destination2 = new_pub_key_destination(&mut rng);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -883,7 +883,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let (_, undo) = verifier
             .accounting_delta
-            .create_pool(&outpoint1, pool_balance1, pub_key1)
+            .create_pool(&outpoint1, pool_balance1, destination1)
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -905,7 +905,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         let (_, undo) = verifier
             .accounting_delta
-            .create_pool(&outpoint2, pool_balance2, pub_key2)
+            .create_pool(&outpoint2, pool_balance2, destination2)
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));

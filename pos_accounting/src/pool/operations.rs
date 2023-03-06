@@ -15,10 +15,9 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
-use crypto::key::PublicKey;
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
@@ -82,7 +81,7 @@ pub trait PoSAccountingOperations {
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
-        decommission_key: PublicKey,
+        decommission_key: Destination,
     ) -> Result<(PoolId, PoSAccountingUndo), Error>;
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;
@@ -90,7 +89,7 @@ pub trait PoSAccountingOperations {
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
-        spend_key: PublicKey,
+        spend_key: Destination,
         input0_outpoint: &OutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error>;
 

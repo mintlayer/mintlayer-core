@@ -13,26 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::PoolId;
-use crypto::key::PublicKey;
+use common::chain::{Destination, PoolId};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct DelegationData {
-    spend_key: PublicKey,
+    spend_destination: Destination,
     source_pool: PoolId,
 }
 
 impl DelegationData {
-    pub fn new(source_pool: PoolId, spend_key: PublicKey) -> Self {
+    pub fn new(source_pool: PoolId, spend_destination: Destination) -> Self {
         Self {
-            spend_key,
+            spend_destination,
             source_pool,
         }
     }
 
-    pub fn spend_public_key(&self) -> &PublicKey {
-        &self.spend_key
+    pub fn spend_destination(&self) -> &Destination {
+        &self.spend_destination
     }
 
     pub fn source_pool(&self) -> &PoolId {

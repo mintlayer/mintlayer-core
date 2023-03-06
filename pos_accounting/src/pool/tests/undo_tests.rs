@@ -16,17 +16,16 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, OutPoint, OutPointSourceId, PoolId},
+    chain::{DelegationId, Destination, OutPoint, OutPointSourceId, PoolId},
     primitives::{Amount, Id, H256},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
-};
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::{create_storage_with_pool, create_storage_with_pool_and_delegation};
+use super::{
+    create_storage_with_pool, create_storage_with_pool_and_delegation, new_pub_key_destination,
+};
 use crate::{
     error::Error,
     pool::{
@@ -44,28 +43,28 @@ fn create_pool(
     rng: &mut (impl Rng + CryptoRng),
     op: &mut impl PoSAccountingOperations,
     pledged_amount: Amount,
-) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+) -> Result<(PoolId, Destination, PoSAccountingUndo), Error> {
+    let destination = new_pub_key_destination(rng);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );
-    op.create_pool(&outpoint, pledged_amount, pub_key.clone())
-        .map(|(id, undo)| (id, pub_key, undo))
+    op.create_pool(&outpoint, pledged_amount, destination.clone())
+        .map(|(id, undo)| (id, destination, undo))
 }
 
 fn create_delegation_id(
     rng: &mut (impl Rng + CryptoRng),
     op: &mut impl PoSAccountingOperations,
     target_pool: PoolId,
-) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
+    let destination = new_pub_key_destination(rng);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );
-    op.create_delegation_id(target_pool, pub_key.clone(), &outpoint)
-        .map(|(id, undo)| (id, pub_key, undo))
+    op.create_delegation_id(target_pool, destination.clone(), &outpoint)
+        .map(|(id, undo)| (id, destination, undo))
 }
 
 #[rstest]

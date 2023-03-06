@@ -13,26 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::Amount;
-use crypto::key::PublicKey;
+use common::{chain::Destination, primitives::Amount};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Eq, PartialEq, Clone, Encode, Decode)]
 pub struct PoolData {
-    decommission_public_key: PublicKey,
+    decommission_destination: Destination,
     pledge_amount: Amount,
 }
 
 impl PoolData {
-    pub fn new(decommission_public_key: PublicKey, pledge_amount: Amount) -> Self {
+    pub fn new(decommission_destination: Destination, pledge_amount: Amount) -> Self {
         Self {
-            decommission_public_key,
+            decommission_destination,
             pledge_amount,
         }
     }
 
-    pub fn decommission_key(&self) -> &PublicKey {
-        &self.decommission_public_key
+    pub fn decommission_destination(&self) -> &Destination {
+        &self.decommission_destination
     }
 
     pub fn pledge_amount(&self) -> Amount {
