@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{mem, sync::Arc};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    mem,
+    sync::Arc,
+};
 
+use itertools::Itertools;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use void::Void;
 
@@ -22,7 +27,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
     chain::{block::BlockHeader, Block},
-    primitives::Id,
+    primitives::{Id, Idable},
 };
 use logging::log;
 use utils::const_value::ConstValue;
@@ -30,7 +35,10 @@ use utils::const_value::ConstValue;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    message::{Announcement, HeaderListRequest, HeaderListResponse, SyncMessage},
+    message::{
+        Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
+        SyncMessage,
+    },
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -42,9 +50,16 @@ pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-    messaging_handle: T::SyncingMessagingHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-    receiver: UnboundedReceiver<SyncingEvent>,
+    message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    events_receiver: UnboundedReceiver<SyncingEvent>,
+    /// A list of headers received via the `HeaderListResponse` message that we haven't yet
+    /// requested the blocks for.
+    known_headers: Vec<BlockHeader>,
+    /// A list of blocks that we requested from this peer.
+    requested_blocks: BTreeSet<Id<Block>>,
+    /// A queue of the blocks requested this peer.
+    blocks_queue: VecDeque<Id<Block>>,
 }
 
 impl<T> Peer<T>
@@ -56,89 +71,88 @@ where
         id: PeerId,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-        messaging_handle: T::SyncingMessagingHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-        receiver: UnboundedReceiver<SyncingEvent>,
+        message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+        events_receiver: UnboundedReceiver<SyncingEvent>,
     ) -> Self {
         Self {
             id: id.into(),
             p2p_config,
             chainstate_handle,
-            messaging_handle,
             peer_manager_sender,
-            receiver,
+            message_sender,
+            events_receiver,
+            known_headers: Vec::new(),
+            requested_blocks: BTreeSet::new(),
+            blocks_queue: VecDeque::new(),
         }
     }
 
+    /// Returns an identifier of the peer associated with this task.
     pub fn id(&self) -> PeerId {
         *self.id
     }
 
     pub async fn run(&mut self) -> Result<Void> {
-        self.request_headers(*self.id).await?;
+        self.request_headers().await?;
 
         loop {
             tokio::select! {
-                event = self.receiver.recv() => {
+                event = self.events_receiver.recv() => {
                     let event = event.ok_or(P2pError::ChannelClosed)?;
                     self.handle_event(event).await?;
                 },
 
-                // TODO: FIXME: Send blocks.
+                block = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
+                    let res = self.send_block(block).await;
+                    self.handle_result(res).await?;
+                }
             }
         }
     }
 
-    /// Sends a header list request to the given peer.
-    async fn request_headers(&mut self, peer: PeerId) -> Result<()> {
+    async fn request_headers(&mut self) -> Result<()> {
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
-        self.messaging_handle
-            .send_message(
-                peer,
+        self.message_sender
+            .send((
+                self.id(),
                 SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-            )
-            .map(|_| ())
+            ))
+            .map_err(Into::into)
     }
 
     async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
         match event {
             SyncingEvent::Message { peer, message } => {
                 debug_assert_eq!(peer, *self.id);
-                let res = self.handle_message(peer, message).await;
-                self.handle_result(peer, res).await?;
+                let res = self.handle_message(message).await;
+                self.handle_result(res).await?;
             }
             SyncingEvent::Announcement { peer, announcement } => {
                 debug_assert_eq!(peer, *self.id);
-                let res = self.handle_announcement(peer, *announcement).await;
-                self.handle_result(peer, res).await?;
+                let res = self.handle_announcement(*announcement).await;
+                self.handle_result(res).await?;
             }
         }
         Ok(())
     }
 
-    async fn handle_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
+    async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
         match message {
-            SyncMessage::HeaderListRequest(r) => {
-                self.handle_header_request(peer, r.into_locator()).await
-            }
-            SyncMessage::BlockListRequest(r) => {
-                self.handle_block_request(peer, r.into_block_ids()).await
-            }
+            SyncMessage::HeaderListRequest(r) => self.handle_header_request(r.into_locator()).await,
+            SyncMessage::BlockListRequest(r) => self.handle_block_request(r.into_block_ids()).await,
             SyncMessage::HeaderListResponse(r) => {
-                self.handle_header_response(peer, r.into_headers()).await
+                self.handle_header_response(r.into_headers()).await
             }
-            SyncMessage::BlockResponse(r) => self.handle_block_response(peer, r.into_block()).await,
+            SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
         }
     }
 
     /// Processes a header request by sending requested data to the peer.
-    async fn handle_header_request(&mut self, peer: PeerId, locator: Locator) -> Result<()> {
-        log::debug!("Headers request from peer {peer}");
-
-        // Check that the peer is connected.
-        self.peers.get(&peer).ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+    async fn handle_header_request(&mut self, locator: Locator) -> Result<()> {
+        log::debug!("Headers request from peer {}", self.id());
 
         if locator.len() > *self.p2p_config.msg_max_locator_count {
             return Err(P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(
@@ -148,50 +162,41 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        // TODO: FIXME: Atomic? SetFlag?..
-        if self.is_initial_block_download {
-            // TODO: Check if a peer has permissions to ask for headers during the initial block download.
-            log::debug!("Ignoring headers request because the node is in initial block download");
-            return Ok(());
-        }
+        // TODO: FIXME:
+        // if self.is_initial_block_download {
+        //     // TODO: Check if a peer has permissions to ask for headers during the initial block download.
+        //     log::debug!("Ignoring headers request because the node is in initial block download");
+        //     return Ok(());
+        // }
 
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
         debug_assert!(headers.len() <= limit);
-        self.messaging_handle.send_message(
-            peer,
+        self.message_sender.send((
+            self.id(),
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-        )?;
+        ))?;
 
         Ok(())
     }
 
     /// Processes the blocks request.
-    async fn handle_block_request(
-        &mut self,
-        peer: PeerId,
-        block_ids: Vec<Id<Block>>,
-    ) -> Result<()> {
-        log::debug!("Blocks request from peer {peer}");
-
-        let peer_state = self
-            .peers
-            .get_mut(&peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        if self.is_initial_block_download {
-            log::debug!("Ignoring blocks request because the node is in initial block download");
-            return Ok(());
-        }
+    async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
+        log::debug!("Blocks request from peer {}", self.id());
+        // // TODO: FIXME:
+        // if self.is_initial_block_download {
+        //     log::debug!("Ignoring blocks request because the node is in initial block download");
+        //     return Ok(());
+        // }
 
         // Check that a peer doesn't exceed the blocks limit.
         self.p2p_config
             .max_request_blocks_count
             .checked_sub(block_ids.len())
-            .and_then(|n| n.checked_sub(peer_state.num_blocks_to_send))
+            .and_then(|n| n.checked_sub(self.blocks_queue.len()))
             .ok_or(P2pError::ProtocolError(
                 ProtocolError::BlocksRequestLimitExceeded(
-                    block_ids.len() + peer_state.num_blocks_to_send,
+                    block_ids.len() + self.blocks_queue.len(),
                     *self.p2p_config.max_request_blocks_count,
                 ),
             ))?;
@@ -210,24 +215,15 @@ where
             })
             .await??;
 
-        peer_state.num_blocks_to_send += block_ids.len();
-        self.blocks_queue.extend(block_ids.into_iter().map(|id| (peer, id)));
+        self.blocks_queue.extend(block_ids.into_iter());
 
         Ok(())
     }
 
-    async fn handle_header_response(
-        &mut self,
-        peer: PeerId,
-        headers: Vec<BlockHeader>,
-    ) -> Result<()> {
-        log::debug!("Headers response from peer {peer}");
+    async fn handle_header_response(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
+        log::debug!("Headers response from peer {}", self.id());
 
-        let peer_state = self
-            .peers
-            .get_mut(&peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        if !peer_state.known_headers.is_empty() {
+        if !self.known_headers.is_empty() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "headers response",
             )));
@@ -280,7 +276,7 @@ where
         if headers.is_empty() {
             // A peer can have more headers if we have received the maximum amount of them.
             if is_max_headers {
-                self.request_headers(peer).await?;
+                self.request_headers().await?;
             }
             return Ok(());
         }
@@ -295,17 +291,13 @@ where
             .call(|c| c.preliminary_header_check(first_header))
             .await??;
 
-        self.request_blocks(peer, headers)
+        self.request_blocks(headers)
     }
 
-    async fn handle_block_response(&mut self, peer: PeerId, block: Block) -> Result<()> {
-        log::debug!("Block ({}) from peer {peer}", block.get_id());
+    async fn handle_block_response(&mut self, block: Block) -> Result<()> {
+        log::debug!("Block ({}) from peer {}", block.get_id(), self.id());
 
-        let peer_state = self
-            .peers
-            .get_mut(&peer)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        if peer_state.requested_blocks.take(&block.get_id()).is_none() {
+        if self.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "block response",
             )));
@@ -323,61 +315,50 @@ where
             Err(e) => Err(e),
         }?;
 
-        if peer_state.requested_blocks.is_empty() {
-            if peer_state.known_headers.is_empty() {
+        if self.requested_blocks.is_empty() {
+            if self.known_headers.is_empty() {
                 // Request more headers.
-                self.request_headers(peer).await?;
+                self.request_headers().await?;
             } else {
                 // Download remaining blocks.
                 let mut headers = Vec::new();
-                mem::swap(&mut headers, &mut peer_state.known_headers);
-                self.request_blocks(peer, headers)?;
+                mem::swap(&mut headers, &mut self.known_headers);
+                self.request_blocks(headers)?;
             }
         }
 
         Ok(())
     }
 
-    async fn handle_announcement(
-        &mut self,
-        peer: PeerId,
-        announcement: Announcement,
-    ) -> Result<()> {
+    async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
         match announcement {
-            Announcement::Block(header) => self.handle_block_announcement(peer, header).await,
+            Announcement::Block(header) => self.handle_block_announcement(header).await,
         }
     }
 
-    // TODO: FIXME:
-    async fn handle_block_announcement(&mut self, peer: PeerId, header: BlockHeader) -> Result<()> {
-        log::debug!("Block announcement from peer {peer}: {header:?}");
+    async fn handle_block_announcement(&mut self, header: BlockHeader) -> Result<()> {
+        log::debug!("Block announcement from peer {}: {header:?}", self.id());
 
-        todo!();
-        todo!()
-        // let peer_state = self
-        //     .peers
-        //     .get_mut(&peer)
-        //     .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        // if !peer_state.requested_blocks.is_empty() {
-        //     // We will download this block as part of syncing anyway.
-        //     return Ok(());
-        // }
-        //
-        // let prev_id = *header.prev_block_id();
-        // if self
-        //     .chainstate_handle
-        //     .call(move |c| c.get_gen_block_index(&prev_id))
-        //     .await??
-        //     .is_none()
-        // {
-        //     // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
-        //     self.request_headers(peer).await?;
-        //     return Ok(());
-        // }
-        //
-        // let header_ = header.clone();
-        // self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
-        // self.request_blocks(peer, vec![header])
+        if !self.requested_blocks.is_empty() {
+            // We will download this block as part of syncing anyway.
+            return Ok(());
+        }
+
+        let prev_id = *header.prev_block_id();
+        if self
+            .chainstate_handle
+            .call(move |c| c.get_gen_block_index(&prev_id))
+            .await??
+            .is_none()
+        {
+            // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
+            self.request_headers().await?;
+            return Ok(());
+        }
+
+        let header_ = header.clone();
+        self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
+        self.request_blocks(vec![header])
     }
 
     /// Handles a result of message processing.
@@ -388,7 +369,7 @@ where
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
-    pub async fn handle_result(&mut self, peer: PeerId, result: Result<()>) -> Result<()> {
+    pub async fn handle_result(&mut self, result: Result<()>) -> Result<()> {
         let error = match result {
             Ok(()) => return Ok(()),
             Err(e) => e,
@@ -401,14 +382,14 @@ where
                 BlockError::CheckBlockFailed(_),
             ))) => {
                 log::info!(
-                    "Adjusting the '{peer}' peer score by {}: {:?}",
+                    "Adjusting the '{}' peer score by {}: {e:?}",
+                    self.id(),
                     e.ban_score(),
-                    e
                 );
 
                 let (sender, receiver) = oneshot_nofail::channel();
                 self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                    peer,
+                    self.id(),
                     e.ban_score(),
                     sender,
                 ))?;
@@ -436,5 +417,37 @@ where
             | P2pError::StorageFailure(_)
             | P2pError::InvalidStorageState(_)) => Err(e),
         }
+    }
+
+    /// Sends a block list request to the given peer.
+    ///
+    /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
+    /// headers are stored in the peer context.
+    fn request_blocks(&mut self, mut headers: Vec<BlockHeader>) -> Result<()> {
+        debug_assert!(self.known_headers.is_empty());
+        if headers.len() > *self.p2p_config.max_request_blocks_count {
+            self.known_headers = headers.split_off(*self.p2p_config.max_request_blocks_count);
+        }
+
+        let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
+        self.message_sender.send((
+            self.id(),
+            SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
+        ))?;
+        self.requested_blocks.extend(block_ids);
+
+        Ok(())
+    }
+
+    async fn send_block(&mut self, block: Id<Block>) -> Result<()> {
+        let block = self.chainstate_handle.call(move |c| c.get_block(block)).await??.ok_or(
+            P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
+        )?;
+        self.message_sender
+            .send((
+                self.id(),
+                SyncMessage::BlockResponse(BlockResponse::new(block)),
+            ))
+            .map_err(Into::into)
     }
 }

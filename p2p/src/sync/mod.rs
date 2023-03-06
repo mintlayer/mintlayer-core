@@ -16,8 +16,6 @@
 //! This module is responsible for both initial syncing and further blocks processing (the reaction
 //! to block announcement from peers and the announcement of blocks produced by this node).
 
-// TODO: FIXME:
-// mod peer_context;
 mod peer;
 
 use std::{collections::HashMap, sync::Arc};
@@ -37,7 +35,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     event::{PeerManagerEvent, SyncControlEvent},
-    message::Announcement,
+    message::{Announcement, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     sync::peer::Peer,
     types::peer_id::PeerId,
@@ -70,12 +68,15 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A mapping from a peer identifier to the channel.
     peers: HashMap<PeerId, UnboundedSender<SyncingEvent>>,
+
+    peer_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    peer_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
 }
 
 /// Syncing manager
 impl<T> BlockSyncManager<T>
 where
-    T: NetworkingService,
+    T: NetworkingService + 'static,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     /// Creates a new sync manager instance.
@@ -87,6 +88,8 @@ where
         peer_event_receiver: UnboundedReceiver<SyncControlEvent>,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
+        let (peer_sender, peer_receiver) = mpsc::unbounded_channel();
+
         Self {
             _chain_config: chain_config,
             p2p_config,
@@ -96,6 +99,8 @@ where
             chainstate_handle,
             is_initial_block_download: true,
             peers: Default::default(),
+            peer_sender,
+            peer_receiver,
         }
     }
 
@@ -120,6 +125,11 @@ where
                     self.handle_new_tip(block_id).await?;
                 },
 
+                message = self.peer_receiver.recv() => {
+                    let (peer, message) = message.ok_or(P2pError::ChannelClosed)?;
+                    self.messaging_handle.send_message(peer, message)?;
+                },
+
                 event = self.messaging_handle.poll_next() => {
                     self.handle_peer_event(event?)?;
                 },
@@ -127,7 +137,7 @@ where
         }
     }
 
-    /// Returns a receiver for the chainstate `NewTip` events.
+    /// Returns the receiver for the chainstate `NewTip` events.
     async fn subscribe_to_new_tip(&mut self) -> Result<UnboundedReceiver<Id<Block>>> {
         let (sender, receiver) = mpsc::unbounded_channel();
 
@@ -163,13 +173,17 @@ where
             .map(|_| Err::<(), _>(P2pError::PeerError(PeerError::PeerAlreadyExists)))
             .transpose()?;
 
+        let peer_sender = self.peer_sender.clone();
+        let peer_manager_sender = self.peer_manager_sender.clone();
+        let chainstate_handle = self.chainstate_handle.clone();
+        let p2p_config = Arc::clone(&self.p2p_config);
         tokio::spawn(async move {
             let mut peer = Peer::<T>::new(
                 peer,
-                Arc::clone(&self.p2p_config),
-                self.chainstate_handle,
-                self.messaging_handle,
-                self.peer_manager_sender,
+                p2p_config,
+                chainstate_handle,
+                peer_manager_sender,
+                peer_sender,
                 receiver,
             );
             if let Err(e) = peer.run().await {
