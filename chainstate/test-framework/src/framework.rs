@@ -159,7 +159,7 @@ impl TestFramework {
     /// Returns the list of outputs from the selected block.
     #[track_caller]
     pub fn outputs_from_genblock(&self, id: Id<GenBlock>) -> BlockOutputs {
-        match id.classify(&self.chainstate.get_chain_config()) {
+        match id.classify(self.chainstate.get_chain_config()) {
             GenBlockId::Genesis(_) => {
                 outputs_from_genesis(self.chainstate.get_chain_config().genesis_block())
             }
