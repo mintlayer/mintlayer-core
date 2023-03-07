@@ -220,7 +220,7 @@ where
             );
         }
 
-        if self.is_initial_block_download.load(Ordering::Relaxed) {
+        if self.is_initial_block_download.load(Ordering::SeqCst) {
             return Ok(());
         }
 
