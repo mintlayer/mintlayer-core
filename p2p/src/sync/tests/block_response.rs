@@ -25,6 +25,7 @@ use test_utils::random::Seed;
 use crate::{
     error::ProtocolError,
     message::{Announcement, BlockListRequest, BlockResponse, HeaderListResponse, SyncMessage},
+    net::types::SyncingEvent,
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
@@ -137,16 +138,33 @@ async fn valid_response(#[case] seed: Seed) {
             SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
         );
 
-        assert_eq!(
-            handle.announcement().await,
-            Announcement::Block(block.header().clone())
-        );
-
         // A peer would request headers after the last block.
-        if i == num_blocks - 1 {
-            let (sent_to, message) = handle.message().await;
-            assert_eq!(peer, sent_to);
-            assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+        if i < num_blocks - 1 {
+            assert_eq!(
+                handle.announcement().await,
+                Announcement::Block(block.header().clone())
+            );
+        } else {
+            // The order of receiving the block announcement and header list request is nondeterministic.
+            let (announcement, request) = match (handle.event().await, handle.event().await) {
+                (
+                    SyncingEvent::Announcement {
+                        peer: _,
+                        announcement,
+                    },
+                    SyncingEvent::Message { peer: _, message },
+                ) => (*announcement, message),
+                (
+                    SyncingEvent::Message { peer: _, message },
+                    SyncingEvent::Announcement {
+                        peer: _,
+                        announcement,
+                    },
+                ) => (*announcement, message),
+                (e1, e2) => panic!("Unexpected events: {e1:?} {e2:?}"),
+            };
+            assert_eq!(announcement, Announcement::Block(block.header().clone()));
+            assert!(matches!(request, SyncMessage::HeaderListRequest(_)));
         }
     }
 

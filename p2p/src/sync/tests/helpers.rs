@@ -191,7 +191,7 @@ impl SyncManagerHandle {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
     }
 
-    async fn event(&mut self) -> SyncingEvent {
+    pub async fn event(&mut self) -> SyncingEvent {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
             .expect("Failed to receive event in time")
