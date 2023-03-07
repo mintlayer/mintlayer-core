@@ -155,6 +155,10 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
         Ok(())
     }
 
+    fn accept(&mut self, _peer_id: PeerId) -> p2p::Result<()> {
+        Ok(())
+    }
+
     fn disconnect(&mut self, peer_id: PeerId) -> p2p::Result<()> {
         let address = *self
             .state

@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,16 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod config_setting;
-pub mod const_value;
-pub mod counttracker;
-pub mod ensure;
-pub mod eventhandler;
-pub mod newtype;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+use std::ops::Deref;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+/// Wrapper for the bool type that can only be set to true once
+#[derive(Default)]
+pub struct SetFlag(bool);
+
+impl SetFlag {
+    pub fn set(&mut self) {
+        self.0 = true;
+    }
+}
+
+impl Deref for SetFlag {
+    type Target = bool;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}

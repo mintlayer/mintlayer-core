@@ -45,7 +45,6 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 ///
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct SyncManagerHandle {
-    peer_event_sender: UnboundedSender<SyncControlEvent>,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
@@ -68,7 +67,6 @@ impl SyncManagerHandle {
         p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
     ) -> Self {
-        let (peer_event_sender, peer_event_receiver) = mpsc::unbounded_channel();
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
@@ -83,7 +81,6 @@ impl SyncManagerHandle {
             p2p_config,
             messaging_handle,
             chainstate,
-            peer_event_receiver,
             peer_manager_sender,
         );
 
@@ -94,7 +91,6 @@ impl SyncManagerHandle {
         });
 
         Self {
-            peer_event_sender,
             peer_manager_receiver,
             sync_event_sender: handle_sender,
             sync_event_receiver: handle_receiver,
@@ -104,7 +100,7 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
-        self.peer_event_sender.send(SyncControlEvent::Connected(peer)).unwrap();
+        self.sync_event_sender.send(SyncingEvent::Connected { peer_id: peer }).unwrap();
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -118,7 +114,9 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Disconnected` event.
     pub fn disconnect_peer(&mut self, peer: PeerId) {
-        self.peer_event_sender.send(SyncControlEvent::Disconnected(peer)).unwrap();
+        self.sync_event_sender
+            .send(SyncingEvent::Disconnected { peer_id: peer })
+            .unwrap();
     }
 
     pub fn send_message(&mut self, peer: PeerId, message: SyncMessage) {

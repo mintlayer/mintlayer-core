@@ -17,11 +17,12 @@ mod impls;
 mod message_codec;
 mod traits;
 
-use impls::{channel, stream_adapter, tcp};
+use impls::{channel, socks5, stream_adapter, tcp};
 
 pub use self::{
     channel::{ChannelListener, ChannelStream, MpscChannelTransport},
     message_codec::BufferedTranscoder,
+    socks5::Socks5TransportSocket,
     stream_adapter::{
         identity::IdentityStreamAdapter, noise::NoiseEncryptionAdapter,
         wrapped_transport::wrapped_socket::WrappedTransportSocket,
@@ -31,3 +32,5 @@ pub use self::{
 };
 
 pub type NoiseTcpTransport = WrappedTransportSocket<NoiseEncryptionAdapter, TcpTransportSocket>;
+pub type NoiseSocks5Transport =
+    WrappedTransportSocket<NoiseEncryptionAdapter, Socks5TransportSocket>;

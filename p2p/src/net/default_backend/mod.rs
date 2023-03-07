@@ -120,6 +120,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 sync_tx,
             );
 
+            // TODO: Shutdown p2p if the backend unexpectedly quits
             if let Err(err) = backend.run().await {
                 log::error!("failed to run backend: {err}");
             }
@@ -151,8 +152,14 @@ where
         self.cmd_tx.send(types::Command::Connect { address }).map_err(P2pError::from)
     }
 
+    fn accept(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        log::debug!("accept new peer, peer_id: {peer_id}");
+
+        self.cmd_tx.send(types::Command::Accept { peer_id }).map_err(P2pError::from)
+    }
+
     fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        log::debug!("close connection with remote, {peer_id}");
+        log::debug!("close connection with remote, peer_id: {peer_id}");
 
         self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
     }

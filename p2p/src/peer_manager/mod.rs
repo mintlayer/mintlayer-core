@@ -40,7 +40,7 @@ use utils::ensure;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    event::{PeerManagerEvent, SyncControlEvent},
+    event::PeerManagerEvent,
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
@@ -103,9 +103,6 @@ where
     /// RX channel for receiving control events
     rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
-    /// TX channel for sending events to SyncManager
-    tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
-
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
         HashMap<T::Address, Option<oneshot_nofail::Sender<crate::Result<()>>>>,
@@ -134,7 +131,6 @@ where
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
-        tx_sync: mpsc::UnboundedSender<SyncControlEvent>,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
@@ -148,7 +144,6 @@ where
             p2p_config,
             peer_connectivity_handle: handle,
             rx_peer_manager,
-            tx_sync,
             pending_outbound_connects: HashMap::new(),
             pending_disconnects: HashMap::new(),
             peers: BTreeMap::new(),
@@ -439,6 +434,8 @@ where
 
         self.validate_connection(&address, role, &info)?;
 
+        self.peer_connectivity_handle.accept(peer_id)?;
+
         log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
 
         if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
@@ -478,8 +475,6 @@ where
                 self.handle_outbound_receiver_address(peer_id, receiver_address);
             }
         }
-
-        Self::send_sync_message(&self.tx_sync, SyncControlEvent::Connected(peer_id));
 
         Ok(())
     }
@@ -553,8 +548,6 @@ where
                 peer.address
             );
 
-            Self::send_sync_message(&self.tx_sync, SyncControlEvent::Disconnected(peer_id));
-
             if let Some(Some(response)) = self.pending_disconnects.remove(&peer_id) {
                 response.send(Ok(()));
             }
@@ -577,16 +570,6 @@ where
         let res = peer_connectivity_handle.send_message(peer_id, message);
         if let Err(err) = res {
             log::error!("send_message failed unexpectedly: {err:?}");
-        }
-    }
-
-    fn send_sync_message(
-        tx_sync: &mpsc::UnboundedSender<SyncControlEvent>,
-        message: SyncControlEvent,
-    ) {
-        let res = tx_sync.send(message);
-        if res.is_err() {
-            log::error!("sending sync messages failed unexpectedly");
         }
     }
 

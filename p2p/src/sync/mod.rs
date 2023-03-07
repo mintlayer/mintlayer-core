@@ -40,7 +40,7 @@ use utils::tap_error_log::LogError;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
-    event::{PeerManagerEvent, SyncControlEvent},
+    event::PeerManagerEvent,
     message::{Announcement, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
     sync::peer::Peer,
@@ -59,9 +59,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A handle for sending/receiving syncing events.
     messaging_handle: T::SyncingMessagingHandle,
-
-    /// A receiver for connect/disconnect events.
-    peer_event_receiver: UnboundedReceiver<SyncControlEvent>,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -91,7 +88,6 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
-        peer_event_receiver: UnboundedReceiver<SyncControlEvent>,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         let (peer_sender, peer_receiver) = mpsc::unbounded_channel();
@@ -100,7 +96,6 @@ where
             _chain_config: chain_config,
             p2p_config,
             messaging_handle,
-            peer_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             is_initial_block_download: Arc::new(true.into()),
@@ -122,10 +117,12 @@ where
 
         loop {
             tokio::select! {
-                event = self.peer_event_receiver.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id)?,
-                    SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
-                },
+                    SyncingEvent::Connected { peer_id } => {
+                        self.register_peer(peer_id).await?;
+                    },
+                    SyncingEvent::Disconnected { peer_id } => {
+                        self.unregister_peer(peer_id);
+                    },
 
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
@@ -167,7 +164,6 @@ where
         Ok(receiver)
     }
 
-    // TODO: This shouldn't be public.
     /// Starts a task for the new peer.
     pub fn register_peer(&mut self, peer: PeerId) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");

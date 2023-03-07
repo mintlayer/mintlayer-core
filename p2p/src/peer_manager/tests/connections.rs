@@ -26,8 +26,9 @@ use crate::{
     net::types::Role,
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
-        connect_services, get_connectivity_event, peerdb_inmemory_store, P2pTokioTestTimeGetter,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        connect_and_accept_services, connect_services, get_connectivity_event,
+        peerdb_inmemory_store, P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -370,7 +371,7 @@ where
     )
     .await;
 
-    let (_address, peer_info, _) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -421,7 +422,7 @@ where
     }
     assert_eq!(pm1.inbound_peer_count(), *MaxInboundConnections::default());
 
-    let (_address, peer_info, _) = connect_services::<T>(
+    let (_address, peer_info, _) = connect_and_accept_services::<T>(
         &mut pm1.peer_connectivity_handle,
         &mut pm2.peer_connectivity_handle,
     )
@@ -600,20 +601,17 @@ async fn connection_timeout_rpc_notified<T>(
     .await
     .unwrap();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
     let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         conn,
         rx,
-        tx_sync,
         Default::default(),
         peerdb_inmemory_store(),
     )
     .unwrap();
 
-    tokio::spawn(async move { while rx_sync.recv().await.is_some() {} });
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });
@@ -673,6 +671,7 @@ where
     // Start first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -705,6 +704,7 @@ where
     // Start second peer manager and let it know about first manager via reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
@@ -779,6 +779,7 @@ where
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -812,6 +813,7 @@ where
     // Start the second peer manager and let it know about the first peer using reserved
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses.clone(),
         max_inbound_connections: Default::default(),
@@ -838,6 +840,7 @@ where
     // Start the third peer manager and let it know about the first peer using reserved
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
+        socks5_proxy: None,
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),

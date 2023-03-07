@@ -34,6 +34,7 @@ use std::{
 };
 
 use interface::p2p_interface::P2pInterface;
+use net::default_backend::transport::NoiseSocks5Transport;
 use peer_manager::peerdb::storage::PeerDbStorage;
 use tap::TapFallible;
 use tokio::sync::mpsc;
@@ -45,7 +46,7 @@ use logging::log;
 use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
-    event::{PeerManagerEvent, SyncEvent},
+    event::PeerManagerEvent,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -62,9 +63,6 @@ struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
     /// A sender for the peer manager events.
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
-
-    /// TX channel for sending syncing/pubsub events
-    pub _tx_sync: mpsc::UnboundedSender<SyncEvent>,
 }
 
 impl<T> P2p<T>
@@ -104,19 +102,17 @@ where
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
-        let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
-        let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             conn,
             rx_peer_manager,
-            tx_p2p_sync,
             time_getter,
             peerdb_storage,
         )?;
         tokio::spawn(async move {
+            // TODO: Shutdown p2p if PeerManager unexpectedly quits
             peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
         });
 
@@ -126,12 +122,12 @@ where
             let chain_config = Arc::clone(&chain_config);
 
             tokio::spawn(async move {
+                // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
                 sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     sync,
                     chainstate_handle,
-                    rx_p2p_sync,
                     tx_peer_manager,
                 )
                 .run()
@@ -140,10 +136,7 @@ where
             });
         }
 
-        Ok(Self {
-            tx_peer_manager,
-            _tx_sync,
-        })
+        Ok(Self { tx_peer_manager })
     }
 }
 
@@ -152,6 +145,7 @@ impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
 pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
+pub type P2pNetworkingServiceSocks5Proxy = DefaultNetworkingService<NoiseSocks5Transport>;
 
 pub fn make_p2p_transport() -> NoiseTcpTransport {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
@@ -159,9 +153,16 @@ pub fn make_p2p_transport() -> NoiseTcpTransport {
     NoiseTcpTransport::new(stream_adapter, base_transport)
 }
 
+pub fn make_p2p_transport_socks5_proxy(proxy: &str) -> NoiseSocks5Transport {
+    let stream_adapter = NoiseEncryptionAdapter::gen_new();
+    let base_transport = net::default_backend::transport::Socks5TransportSocket::new(proxy);
+    NoiseSocks5Transport::new(stream_adapter, base_transport)
+}
+
 fn get_p2p_bind_addresses<S: AsRef<str>>(
     bind_addresses: &[S],
     p2p_port: u16,
+    proxy_used: bool,
 ) -> Result<Vec<SocketAddr>> {
     if !bind_addresses.is_empty() {
         bind_addresses
@@ -177,12 +178,14 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
                     })
             })
             .collect::<Result<Vec<_>>>()
-    } else {
+    } else if !proxy_used {
         // Bind to default addresses if none are specified by the user
         Ok(vec![
             SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), p2p_port),
             SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), p2p_port),
         ])
+    } else {
+        Ok(Vec::new())
     }
 }
 
@@ -194,22 +197,43 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
-    let transport = make_p2p_transport();
+    let bind_addresses = get_p2p_bind_addresses(
+        &p2p_config.bind_addresses,
+        chain_config.p2p_port(),
+        p2p_config.socks5_proxy.is_some(),
+    )?;
 
-    let bind_addresses =
-        get_p2p_bind_addresses(&p2p_config.bind_addresses, chain_config.p2p_port())?;
+    if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
+        let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
-    let p2p = P2p::<P2pNetworkingService>::new(
-        transport,
-        bind_addresses,
-        chain_config,
-        p2p_config,
-        chainstate_handle,
-        mempool_handle,
-        time_getter,
-        peerdb_storage,
-    )
-    .await?;
+        let p2p = P2p::<P2pNetworkingServiceSocks5Proxy>::new(
+            transport,
+            bind_addresses,
+            chain_config,
+            p2p_config,
+            chainstate_handle,
+            mempool_handle,
+            time_getter,
+            peerdb_storage,
+        )
+        .await?;
 
-    Ok(Box::new(p2p))
+        Ok(Box::new(p2p))
+    } else {
+        let transport = make_p2p_transport();
+
+        let p2p = P2p::<P2pNetworkingService>::new(
+            transport,
+            bind_addresses,
+            chain_config,
+            p2p_config,
+            chainstate_handle,
+            mempool_handle,
+            time_getter,
+            peerdb_storage,
+        )
+        .await?;
+
+        Ok(Box::new(p2p))
+    }
 }
