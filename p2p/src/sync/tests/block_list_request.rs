@@ -24,7 +24,8 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    sync::{tests::helpers::SyncManagerHandle, BlockListRequest, BlockResponse, SyncMessage},
+    message::{BlockListRequest, BlockResponse, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };

@@ -30,7 +30,8 @@ use p2p_test_utils::chainstate_subsystem;
 use test_utils::random::Seed;
 
 use crate::{
-    sync::{tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, SyncMessage},
+    message::{Announcement, BlockListRequest, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
 };

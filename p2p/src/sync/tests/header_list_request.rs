@@ -23,7 +23,8 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    sync::{tests::helpers::SyncManagerHandle, HeaderListRequest, SyncMessage},
+    message::{HeaderListRequest, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
 };
