@@ -104,6 +104,8 @@ fn signed_tx(#[case] seed: Seed) {
     });
 }
 
+// TODO: add more tests for signatures with errors (for all kinds of output purposes)
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
