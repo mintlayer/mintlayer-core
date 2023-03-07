@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::tokens::OutputValue;
+use test_utils::mock_time_getter::mocked_time_getter_seconds;
 
 use super::*;
 use crate::SystemUsageEstimator;
@@ -24,10 +25,7 @@ use crate::SystemUsageEstimator;
 #[tokio::test]
 async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let mock_time = Arc::new(AtomicU64::new(0));
-    let mock_time_clone = Arc::clone(&mock_time);
-    let mock_clock = TimeGetter::new(Arc::new(move || {
-        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
-    }));
+    let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     logging::init_logging::<&str>(None);
 
     let mut rng = make_seedable_rng(seed);
@@ -111,10 +109,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let parent = tx_builder.build();
 
     let mock_time = Arc::new(AtomicU64::new(0));
-    let mock_time_clone = Arc::clone(&mock_time);
-    let mock_clock = TimeGetter::new(Arc::new(move || {
-        Duration::from_secs(mock_time_clone.load(Ordering::SeqCst))
-    }));
+    let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
     let chainstate = tf.chainstate();
     let config = chainstate.get_chain_config();
     let chainstate_interface = start_chainstate(chainstate).await;

@@ -98,7 +98,8 @@ fn read_config_override_values() {
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
-    let p2p_add_node = "add_node";
+    let p2p_boot_node = "boot_node";
+    let p2p_reserved_node = "reserved_node";
     let p2p_max_inbound_connections = 123;
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
@@ -117,7 +118,8 @@ fn read_config_override_values() {
         max_orphan_blocks: Some(max_orphan_blocks),
         tx_index_enabled: Some(false),
         p2p_addr: Some(vec![p2p_addr.to_owned()]),
-        p2p_add_node: Some(vec![p2p_add_node.to_owned()]),
+        p2p_boot_node: Some(vec![p2p_boot_node.to_owned()]),
+        p2p_reserved_node: Some(vec![p2p_reserved_node.to_owned()]),
         p2p_max_inbound_connections: Some(p2p_max_inbound_connections),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
@@ -153,8 +155,12 @@ fn read_config_override_values() {
         Some(vec!(p2p_addr.to_owned()))
     );
     assert_eq!(
-        config.p2p.clone().unwrap().added_nodes,
-        Some(vec!(p2p_add_node.to_owned()))
+        config.p2p.clone().unwrap().boot_nodes,
+        Some(vec!(p2p_boot_node.to_owned()))
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().reserved_nodes,
+        Some(vec!(p2p_reserved_node.to_owned()))
     );
     assert_eq!(
         config.p2p.clone().unwrap().max_inbound_connections,

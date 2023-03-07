@@ -41,7 +41,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
-        added_nodes: Vec::new(),
+        boot_nodes: Vec::new(),
+        reserved_nodes: Vec::new(),
         max_inbound_connections: Default::default(),
         ban_threshold: Default::default(),
         ban_duration: Default::default(),
@@ -73,7 +74,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     ))?;
 
     let crawler_config = CrawlerManagerConfig {
-        add_node: config.add_node.clone(),
+        reserved_nodes: config.reserved_node.clone(),
         default_p2p_port: chain_config.p2p_port(),
     };
 

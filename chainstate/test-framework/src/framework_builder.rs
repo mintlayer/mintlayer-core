@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::sync::{atomic::AtomicU64, Arc};
 
 use chainstate::{BlockError, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::{
@@ -27,10 +21,10 @@ use common::{
         config::{Builder as ChainConfigBuilder, ChainType},
         ChainConfig, Destination, NetUpgrades,
     },
-    time_getter::{TimeGetter, TimeGetterFn},
+    time_getter::TimeGetter,
 };
 use crypto::random::{CryptoRng, Rng};
-use test_utils::random::Seed;
+use test_utils::{mock_time_getter::mocked_time_getter_seconds, random::Seed};
 
 use crate::{
     tx_verification_strategy::{
@@ -122,12 +116,7 @@ impl TestFrameworkBuilder {
             self.chain_config.genesis_block().timestamp().as_int_seconds(),
         ));
 
-        let default_time_getter = {
-            let current_time = Arc::clone(&time_value);
-            let default_time_getter_fn: Arc<TimeGetterFn> =
-                Arc::new(move || Duration::from_secs(current_time.load(Ordering::SeqCst)));
-            TimeGetter::new(default_time_getter_fn)
-        };
+        let default_time_getter = mocked_time_getter_seconds(Arc::clone(&time_value));
 
         let time_getter = self.time_getter.clone().unwrap_or(default_time_getter);
 

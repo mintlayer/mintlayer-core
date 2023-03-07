@@ -17,7 +17,6 @@
 
 use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
-use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 
@@ -77,9 +76,13 @@ pub struct RunOptions {
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<Vec<String>>,
 
-    /// Optional list of initial node addresses to connect.
+    /// Optional list of boot node addresses to connect.
     #[clap(long, value_name = "NODE")]
-    pub p2p_add_node: Option<Vec<String>>,
+    pub p2p_boot_node: Option<Vec<String>>,
+
+    /// Optional list of reserved node addresses to connect.
+    #[clap(long, value_name = "NODE")]
+    pub p2p_reserved_node: Option<Vec<String>>,
 
     /// Maximum allowed number of inbound connections.
     #[clap(long)]
@@ -130,10 +133,9 @@ impl Options {
     /// Constructs an instance by parsing the given arguments.
     ///
     /// The data directory is created as a side-effect of the invocation.
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
-        let options: Options = clap::Parser::try_parse_from(args)?;
-
-        Ok(options)
+    /// Process is terminated on error.
+    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
+        clap::Parser::parse_from(args)
     }
 
     /// Returns the data directory

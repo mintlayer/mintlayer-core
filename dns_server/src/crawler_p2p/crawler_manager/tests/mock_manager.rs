@@ -198,7 +198,7 @@ impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHand
 }
 
 pub fn test_crawler(
-    add_node: Vec<SocketAddr>,
+    reserved_nodes: Vec<SocketAddr>,
 ) -> (
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
@@ -206,9 +206,9 @@ pub fn test_crawler(
     P2pTokioTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
-    let add_node = add_node.iter().map(ToString::to_string).collect();
+    let reserved_nodes = reserved_nodes.iter().map(ToString::to_string).collect();
     let crawler_config = CrawlerManagerConfig {
-        add_node,
+        reserved_nodes,
         default_p2p_port: 3031,
     };
 

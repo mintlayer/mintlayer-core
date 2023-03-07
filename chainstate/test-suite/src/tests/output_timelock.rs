@@ -13,15 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 
-use common::time_getter::TimeGetter;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, GenBlock},
@@ -41,7 +37,10 @@ use chainstate::ConnectTransactionError;
 use chainstate_test_framework::anyonecanspend_address;
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
-use test_utils::random::{make_seedable_rng, Seed};
+use test_utils::{
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{make_seedable_rng, Seed},
+};
 
 #[rstest]
 #[trace]
@@ -398,10 +397,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
 fn output_lock_until_time(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let current_time = Arc::new(AtomicU64::new(1));
-        let current_time_ = Arc::clone(&current_time);
-        let time_getter = TimeGetter::new(Arc::new(move || {
-            Duration::from_secs(current_time_.load(Ordering::SeqCst))
-        }));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
 
@@ -549,10 +545,7 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
 fn output_lock_for_seconds(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let current_time = Arc::new(AtomicU64::new(1));
-        let current_time_ = Arc::clone(&current_time);
-        let time_getter = TimeGetter::new(Arc::new(move || {
-            Duration::from_secs(current_time_.load(Ordering::SeqCst))
-        }));
+        let time_getter = mocked_time_getter_seconds(Arc::clone(&current_time));
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_time_getter(time_getter).build();
 

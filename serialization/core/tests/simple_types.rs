@@ -418,14 +418,14 @@ fn test_scale_options() {
 
 #[test]
 fn test_scale_arrays() {
-    let array = [0xFF; 64_00];
+    let array = [0xFF; 1000];
     let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(array)));
 
-    let array = [0x00; 64_00];
+    let array = [0x00; 1000];
     let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();

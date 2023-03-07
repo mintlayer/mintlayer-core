@@ -17,6 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     config::P2pConfig,
+    error::{DialError, P2pError},
     net::AsBannableAddress,
     peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
     testing_utils::{
@@ -33,7 +34,8 @@ fn unban_peer() {
     let mut peerdb = PeerDb::new(
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
-            added_nodes: Default::default(),
+            boot_nodes: Default::default(),
+            reserved_nodes: Default::default(),
             max_inbound_connections: Default::default(),
             ban_threshold: Default::default(),
             ban_duration: Duration::from_secs(60).into(),
@@ -60,7 +62,46 @@ fn unban_peer() {
 
     time_getter.advance_time(Duration::from_secs(120));
 
+    // Banned addresses updated in the `heartbeat` function
+    peerdb.heartbeat();
+
     assert!(!peerdb.is_address_banned(&address.as_bannable()));
     let banned_addresses = peerdb.storage.transaction_ro().unwrap().get_banned_addresses().unwrap();
     assert_eq!(banned_addresses.len(), 0);
+}
+
+#[test]
+fn connected_unreachable() {
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let mut peerdb =
+        PeerDb::new(Default::default(), time_getter.get_time_getter(), db_store).unwrap();
+
+    let address = TestTcpAddressMaker::new();
+    peerdb.peer_discovered(address);
+    peerdb.report_outbound_failure(
+        address,
+        &P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+    );
+    assert!(peerdb.addresses.get(&address).unwrap().is_unreachable());
+
+    // User requests connection to the currently unreachable node via RPC and connection succeeds.
+    // PeerDb should process that normally.
+    peerdb.outbound_peer_connected(address);
+    assert!(peerdb.addresses.get(&address).unwrap().is_connected());
+}
+
+#[test]
+fn connected_unknown() {
+    let db_store = peerdb_inmemory_store();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let mut peerdb =
+        PeerDb::new(Default::default(), time_getter.get_time_getter(), db_store).unwrap();
+
+    let address = TestTcpAddressMaker::new();
+
+    // User requests connection to some unknown node via RPC and connection succeeds.
+    // PeerDb should process that normally.
+    peerdb.outbound_peer_connected(address);
+    assert!(peerdb.addresses.get(&address).unwrap().is_connected());
 }

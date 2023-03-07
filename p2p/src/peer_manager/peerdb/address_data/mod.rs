@@ -16,14 +16,13 @@
 use std::time::Duration;
 
 use tokio::time::Instant;
-use utils::const_value::ConstValue;
 
 /// When the node drops the unreachable node address. Used for negative caching.
-pub const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
+const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the node itself has prolonged connectivity problems.
-pub const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
+const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
 
 pub enum AddressState {
     Connected {},
@@ -47,28 +46,45 @@ pub enum AddressState {
     },
 }
 
+#[derive(Copy, Clone, Debug)]
+// Update `ALL_TRANSITIONS` if a new transition is added!
 pub enum AddressStateTransitionTo {
     Connected,
     Disconnected,
     ConnectionFailed,
+    SetReserved,
+    UnsetReserved,
 }
+
+#[cfg(test)]
+pub const ALL_TRANSITIONS: [AddressStateTransitionTo; 5] = [
+    AddressStateTransitionTo::Connected,
+    AddressStateTransitionTo::Disconnected,
+    AddressStateTransitionTo::ConnectionFailed,
+    AddressStateTransitionTo::SetReserved,
+    AddressStateTransitionTo::UnsetReserved,
+];
 
 pub struct AddressData {
     state: AddressState,
 
-    user_added: ConstValue<bool>,
+    reserved: bool,
 }
 
 impl AddressData {
-    pub fn new(was_reachable: bool, user_added: bool, now: Instant) -> Self {
+    pub fn new(was_reachable: bool, reserved: bool, now: Instant) -> Self {
         AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
                 fail_count: 0,
                 disconnected_at: now,
             },
-            user_added: user_added.into(),
+            reserved,
         }
+    }
+
+    pub fn reserved(&self) -> bool {
+        self.reserved
     }
 
     /// Returns true when it is time to attempt a new outbound connection
@@ -82,8 +98,8 @@ impl AddressData {
                 was_reachable,
             } => {
                 let age = now.duration_since(disconnected_at);
-                if *self.user_added {
-                    // Try to connect to the user added nodes more often
+                if self.reserved {
+                    // Try to connect to the user reserved nodes more often
                     let age = now - disconnected_at;
                     match fail_count {
                         0 => true,
@@ -138,6 +154,14 @@ impl AddressData {
         }
     }
 
+    pub fn is_connected(&self) -> bool {
+        matches!(self.state, AddressState::Connected { .. })
+    }
+
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self.state, AddressState::Unreachable { .. })
+    }
+
     pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Instant) {
         self.state = match transition {
             AddressStateTransitionTo::Connected => match self.state {
@@ -147,7 +171,10 @@ impl AddressData {
                     disconnected_at: _,
                     was_reachable: _,
                 } => AddressState::Connected {},
-                AddressState::Unreachable { erase_after: _ } => unreachable!(),
+                AddressState::Unreachable { erase_after: _ } => {
+                    // Connection to an `Unreachable` node may be requested by RPC at any moment
+                    AddressState::Connected {}
+                }
             },
 
             AddressStateTransitionTo::Disconnected => match self.state {
@@ -171,7 +198,7 @@ impl AddressData {
                     disconnected_at: _,
                     was_reachable,
                 } => {
-                    if *self.user_added {
+                    if self.reserved {
                         AddressState::Disconnected {
                             fail_count: fail_count + 1,
                             disconnected_at: now,
@@ -191,10 +218,59 @@ impl AddressData {
                         }
                     }
                 }
-                AddressState::Unreachable { erase_after: _ } => {
-                    unreachable!()
+                AddressState::Unreachable { erase_after } => {
+                    // Connection to an `Unreachable` node may be requested by RPC at any moment
+                    AddressState::Unreachable { erase_after }
                 }
             },
+
+            AddressStateTransitionTo::SetReserved => {
+                self.reserved = true;
+
+                // Change to Disconnected if currently Unreachable
+                match self.state {
+                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    } => AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    },
+                    // Reserved nodes should not be in the `Unreachable` state
+                    AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
+                        fail_count: 0,
+                        disconnected_at: now,
+                        was_reachable: false,
+                    },
+                }
+            }
+
+            AddressStateTransitionTo::UnsetReserved => {
+                self.reserved = false;
+
+                // Do not change the state
+                match self.state {
+                    AddressState::Connected {} => AddressState::Connected {},
+                    AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    } => AddressState::Disconnected {
+                        was_reachable,
+                        fail_count,
+                        disconnected_at,
+                    },
+                    AddressState::Unreachable { erase_after } => {
+                        AddressState::Unreachable { erase_after }
+                    }
+                }
+            }
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

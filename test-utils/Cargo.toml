@@ -12,4 +12,5 @@ common = {path = '../common'}
 crypto = {path = '../crypto'}
 serialization = { path = '../serialization' }
 
+hex.workspace = true
 rand_chacha = "0.3.1"

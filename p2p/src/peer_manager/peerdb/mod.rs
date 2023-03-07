@@ -58,6 +58,11 @@ pub struct PeerDb<A, B, S> {
     /// Map of all outbound peer addresses
     addresses: BTreeMap<A, AddressData>,
 
+    /// Set of addresses that have the `reserved` flag set.
+    /// Used as an optimization to not iterate over the entire `addresses` map.
+    /// Every listed address must exist in the `addresses` map.
+    reserved_nodes: BTreeSet<A>,
+
     /// Banned addresses along with the duration of the ban.
     ///
     /// The duration represents the `UNIX_EPOCH + duration` time point, so the ban should end
@@ -83,8 +88,17 @@ where
         // Node won't start if DB loading fails!
         let loaded_storage = LoadedStorage::<A, B>::load_storage(&storage)?;
 
-        let added_nodes = p2p_config
-            .added_nodes
+        let boot_nodes = p2p_config
+            .boot_nodes
+            .iter()
+            .map(|addr| {
+                addr.parse::<A>().map_err(|_err| {
+                    P2pError::InvalidConfigurationValue(format!("Invalid address: {addr}"))
+                })
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        let reserved_nodes = p2p_config
+            .reserved_nodes
             .iter()
             .map(|addr| {
                 addr.parse::<A>().map_err(|_err| {
@@ -96,13 +110,15 @@ where
         let now = Instant::now();
         let addresses = loaded_storage
             .known_addresses
-            .union(&added_nodes)
+            .iter()
+            .chain(boot_nodes.iter())
+            .chain(reserved_nodes.iter())
             .map(|addr| {
                 (
                     addr.clone(),
                     AddressData::new(
                         loaded_storage.known_addresses.contains(addr),
-                        added_nodes.contains(addr),
+                        reserved_nodes.contains(addr),
                         now,
                     ),
                 )
@@ -112,6 +128,7 @@ where
         Ok(Self {
             addresses,
             banned_addresses: loaded_storage.banned_addresses,
+            reserved_nodes,
             p2p_config,
             time_getter,
             storage,
@@ -125,34 +142,71 @@ where
         self.addresses.keys()
     }
 
-    /// Selects peer addresses for outbound connections
+    /// Selects peer addresses for outbound connections (except reserved)
     pub fn select_new_outbound_addresses(
         &self,
         pending_outbound: &BTreeSet<A>,
-        connected_outbound: &BTreeSet<A>,
+        connected_outbound_count: usize,
     ) -> Vec<A> {
+        let now = Instant::now();
         let count = MAX_OUTBOUND_CONNECTIONS
             .saturating_sub(pending_outbound.len())
-            .saturating_sub(connected_outbound.len());
+            .saturating_sub(connected_outbound_count);
 
-        // TODO: Ignore banned addresses
         // TODO: Allow only one connection per IP address
-        // TODO: Always try to connect to user-added addresses without considering `MAX_OUTBOUND_CONNECTIONS`
         self.addresses
             .iter()
-            .filter(|(addr, address_data)| {
-                address_data.connect_now(Instant::now())
+            .filter_map(|(addr, address_data)| {
+                if address_data.connect_now(now)
                     && !pending_outbound.contains(addr)
-                    && !connected_outbound.contains(addr)
+                    && !address_data.reserved()
+                    && !self.banned_addresses.contains_key(&addr.as_bannable())
+                {
+                    Some(addr.clone())
+                } else {
+                    None
+                }
             })
-            .map(|(addr, _address_data)| addr.clone())
             .choose_multiple(&mut make_pseudo_rng(), count)
+    }
+
+    /// Selects reserved peer addresses for outbound connections
+    pub fn select_reserved_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
+        let now = Instant::now();
+        self.reserved_nodes
+            .iter()
+            .filter_map(|addr| {
+                let address_data = self
+                    .addresses
+                    .get(addr)
+                    .expect("reserved nodes must always be in the addresses map");
+                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
+                    Some(addr.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     /// Perform the PeerDb maintenance
     pub fn heartbeat(&mut self) {
         let now = Instant::now();
         self.addresses.retain(|_addr, address_data| address_data.retain(now));
+
+        let now = self.time_getter.get_time();
+        self.banned_addresses.retain(|address, banned_till| {
+            let banned = now <= *banned_till;
+
+            if !banned {
+                storage::update_db(&self.storage, |tx| {
+                    tx.del_banned_address(&address.to_string())
+                })
+                .expect("removing banned address is expected to succeed");
+            }
+
+            banned
+        });
     }
 
     /// Add new peer addresses
@@ -187,49 +241,61 @@ where
     }
 
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
-        if let Some(address_data) = self.addresses.get_mut(&address) {
-            let is_persistent_old = address_data.is_persistent();
+        let now = Instant::now();
 
-            address_data.transition_to(transition, Instant::now());
+        // Make sure the address always exists.
+        // It's needed because unknown addresses may be reported after RPC connect requests.
+        let address_data = self
+            .addresses
+            .entry(address.clone())
+            .or_insert_with(|| AddressData::new(false, false, now));
 
-            let is_persistent_new = address_data.is_persistent();
+        let is_persistent_old = address_data.is_persistent();
 
-            match (is_persistent_old, is_persistent_new) {
-                (false, true) => {
-                    storage::update_db(&self.storage, |tx| {
-                        tx.add_known_address(&address.to_string())
-                    })
-                    .expect("adding address expected to succeed (peer_connected)");
-                }
-                (true, false) => {
-                    storage::update_db(&self.storage, |tx| {
-                        tx.del_known_address(&address.to_string())
-                    })
-                    .expect("adding address expected to succeed (peer_connected)");
-                }
-                _ => {}
+        log::debug!(
+            "update address {} state to {:?}",
+            address.to_string(),
+            transition,
+        );
+
+        address_data.transition_to(transition, now);
+
+        let is_persistent_new = address_data.is_persistent();
+
+        match (is_persistent_old, is_persistent_new) {
+            (false, true) => {
+                storage::update_db(&self.storage, |tx| {
+                    tx.add_known_address(&address.to_string())
+                })
+                .expect("adding address expected to succeed (peer_connected)");
             }
+            (true, false) => {
+                storage::update_db(&self.storage, |tx| {
+                    tx.del_known_address(&address.to_string())
+                })
+                .expect("adding address expected to succeed (peer_connected)");
+            }
+            _ => {}
         }
     }
 
+    pub fn is_reserved_node(&self, address: &A) -> bool {
+        self.reserved_nodes.contains(address)
+    }
+
+    pub fn add_reserved_node(&mut self, address: A) {
+        self.change_address_state(address.clone(), AddressStateTransitionTo::SetReserved);
+        self.reserved_nodes.insert(address);
+    }
+
+    pub fn remove_reserved_node(&mut self, address: A) {
+        self.change_address_state(address.clone(), AddressStateTransitionTo::UnsetReserved);
+        self.reserved_nodes.remove(&address);
+    }
+
     /// Checks if the given address is banned
-    pub fn is_address_banned(&mut self, address: &B) -> bool {
-        if let Some(banned_till) = self.banned_addresses.get(address) {
-            // Check if the ban has expired
-            let now = self.time_getter.get_time();
-            if now <= *banned_till {
-                return true;
-            }
-
-            self.banned_addresses.remove(address);
-
-            storage::update_db(&self.storage, |tx| {
-                tx.del_banned_address(&address.to_string())
-            })
-            .expect("removing banned address is expected to succeed (is_address_banned)");
-        }
-
-        false
+    pub fn is_address_banned(&self, address: &B) -> bool {
+        self.banned_addresses.contains_key(address)
     }
 
     /// Changes the address state to banned

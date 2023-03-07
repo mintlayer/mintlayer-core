@@ -29,7 +29,11 @@ use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use tokio::{sync::mpsc, time::Instant};
 
 use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver::SemVer, time_getter::TimeGetter};
+use common::{
+    chain::{config::ChainType, ChainConfig},
+    primitives::semver::SemVer,
+    time_getter::TimeGetter,
+};
 use logging::log;
 use utils::ensure;
 
@@ -77,7 +81,9 @@ const PEER_ADDRESS_RESEND_COUNT: usize = 2;
 
 /// Hardcoded seed DNS hostnames
 // TODO: Replace with actual values
-const DNS_SEEDS: [&str; 2] = ["seed.mintlayer.org", "seed2.mintlayer.org"];
+const DNS_SEEDS_MAINNET: [&str; 0] = [];
+const DNS_SEEDS_TESTNET: [&str; 1] = ["seed-testnet.mintlayer.org"];
+
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
 
@@ -245,7 +251,23 @@ where
             None => return,
         };
 
+        let whitelisted_node = match peer.role {
+            Role::Inbound => {
+                // TODO: Add whitelisted IPs option and check it here
+                false
+            }
+            Role::Outbound => self.peerdb.is_reserved_node(&peer.address),
+        };
+
+        if whitelisted_node {
+            log::info!(
+                "Not adjusting peer score for the whitelisted peer {peer_id}, adjustment {score}",
+            );
+            return;
+        }
+
         peer.score = peer.score.saturating_add(score);
+
         log::info!(
             "Adjusting peer score for peer {peer_id}, adjustment {score}, new score {}",
             peer.score
@@ -274,7 +296,8 @@ where
 
         let bannable_address = address.as_bannable();
         ensure!(
-            !self.peerdb.is_address_banned(&bannable_address),
+            !self.peerdb.is_address_banned(&bannable_address)
+                || self.peerdb.is_reserved_node(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
@@ -390,6 +413,7 @@ where
         // the new inbound connection cannot be accepted even if it's valid.
         // Outbound peer count is not checked because the node initiates new connections
         // only when needed or from RPC requests.
+        // TODO: Always allow connections from the whitelisted IPs
         ensure!(
             self.inbound_peer_count() < *self.p2p_config.max_inbound_connections
                 || role != Role::Inbound,
@@ -415,7 +439,7 @@ where
 
         self.validate_connection(&address, role, &info)?;
 
-        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}",);
+        log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
 
         if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
@@ -568,9 +592,19 @@ where
 
     /// Fill PeerDb with addresses from the DNS seed servers
     async fn reload_dns_seed(&mut self) {
+        let dns_seed = match self.chain_config.chain_type() {
+            ChainType::Mainnet => DNS_SEEDS_MAINNET.as_slice(),
+            ChainType::Testnet => DNS_SEEDS_TESTNET.as_slice(),
+            ChainType::Regtest | ChainType::Signet => &[],
+        };
+
+        if dns_seed.is_empty() {
+            return;
+        }
+
         log::debug!("Resolve DNS seed...");
         let results = futures::future::join_all(
-            DNS_SEEDS
+            dns_seed
                 .iter()
                 .map(|host| tokio::net::lookup_host((*host, self.chain_config.p2p_port()))),
         )
@@ -625,24 +659,22 @@ where
     /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) {
+        // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
         let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
-        let connected_outbound = self
+        let connected_outbound_count = self
             .peers
             .values()
-            .filter_map(|peer| {
-                if peer.role == Role::Outbound {
-                    Some(peer.address.clone())
-                } else {
-                    None
-                }
+            .filter(|peer| {
+                // Do not take into account reserved nodes
+                peer.role == Role::Outbound && !self.peerdb.is_reserved_node(&peer.address)
             })
-            .collect();
+            .count();
 
         let new_addresses = self
             .peerdb
-            .select_new_outbound_addresses(&pending_outbound, &connected_outbound);
+            .select_new_outbound_addresses(&pending_outbound, connected_outbound_count);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
@@ -652,12 +684,14 @@ where
         {
             self.reload_dns_seed().await;
             self.peerdb
-                .select_new_outbound_addresses(&pending_outbound, &connected_outbound)
+                .select_new_outbound_addresses(&pending_outbound, connected_outbound_count)
         } else {
             new_addresses
         };
 
-        for address in new_addresses {
+        let reserved_addresses = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
+
+        for address in new_addresses.into_iter().chain(reserved_addresses.into_iter()) {
             self.connect(address, None);
         }
     }
@@ -807,6 +841,14 @@ where
             PeerManagerEvent::GetConnectedPeers(response) => {
                 let peers = self.get_connected_peers();
                 response.send(peers);
+            }
+            PeerManagerEvent::AddReserved(address) => {
+                self.peerdb.add_reserved_node(address.clone());
+                // Initiate new outbound connection without waiting for `heartbeat`
+                self.connect(address, None);
+            }
+            PeerManagerEvent::RemoveReserved(address) => {
+                self.peerdb.remove_reserved_node(address);
             }
         }
     }

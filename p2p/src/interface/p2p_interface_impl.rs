@@ -72,4 +72,24 @@ where
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
+
+    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+        let addr = addr
+            .parse::<T::Address>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+        self.tx_peer_manager
+            .send(PeerManagerEvent::AddReserved(addr))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        Ok(())
+    }
+
+    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
+        let addr = addr
+            .parse::<T::Address>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidAddress(addr)))?;
+        self.tx_peer_manager
+            .send(PeerManagerEvent::RemoveReserved(addr))
+            .map_err(|_| P2pError::ChannelClosed)?;
+        Ok(())
+    }
 }

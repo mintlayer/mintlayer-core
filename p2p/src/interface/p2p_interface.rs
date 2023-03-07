@@ -20,12 +20,12 @@ use super::types::ConnectedPeer;
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
     async fn connect(&mut self, addr: String) -> crate::Result<()>;
-
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()>;
 
     async fn get_peer_count(&self) -> crate::Result<usize>;
-
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>>;
-
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>>;
+
+    async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()>;
+    async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()>;
 }

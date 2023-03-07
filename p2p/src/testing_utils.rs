@@ -27,6 +27,7 @@ use std::{
 
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, Rng};
+use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
 
 use crate::{
@@ -246,10 +247,7 @@ impl P2pBasicTestTimeGetter {
     }
 
     pub fn get_time_getter(&self) -> TimeGetter {
-        let current_time = Arc::clone(&self.current_time_millis);
-        TimeGetter::new(Arc::new(move || {
-            Duration::from_millis(current_time.load(Ordering::SeqCst))
-        }))
+        mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
     }
 
     pub fn advance_time(&self, duration: Duration) {
