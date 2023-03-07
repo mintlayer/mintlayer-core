@@ -43,7 +43,7 @@ use crate::{
     event::PeerManagerEvent,
     message::{Announcement, SyncMessage},
     net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
-    sync::peer::Peer,
+    sync::peer::{Peer, PeerEvent},
     types::peer_id::PeerId,
     Result,
 };
@@ -70,7 +70,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AtomicBool>,
 
     /// A mapping from a peer identifier to the channel.
-    peers: HashMap<PeerId, UnboundedSender<SyncingEvent>>,
+    peers: HashMap<PeerId, UnboundedSender<PeerEvent>>,
 
     peer_sender: UnboundedSender<(PeerId, SyncMessage)>,
     peer_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
@@ -191,7 +191,7 @@ where
         Ok(())
     }
 
-    /// Stops the tasks of the given peer by closing the corresponding channel.
+    /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
 
@@ -226,7 +226,15 @@ where
 
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
-        let peer = match event {
+        let peer_channel = match self.peers.get(&peer) {
+            Some(c) => c,
+            None => {
+                log::warn!("Received a message from unknown peer ({peer}): {event:?}");
+                return Ok(());
+            }
+        };
+
+        let (peer, event) = match event {
             SyncingEvent::Connected { peer_id } => {
                 self.register_peer(peer_id)?;
                 return Ok(());
@@ -235,18 +243,9 @@ where
                 self.unregister_peer(peer_id);
                 return Ok(());
             }
-            SyncingEvent::Message { peer, message: _ } => peer,
-            SyncingEvent::Announcement {
-                peer,
-                announcement: _,
-            } => peer,
-        };
-
-        let peer_channel = match self.peers.get(&peer) {
-            Some(c) => c,
-            None => {
-                log::warn!("Received a message from unknown peer ({peer}): {event:?}");
-                return Ok(());
+            SyncingEvent::Message { peer, message } => (peer, PeerEvent::Message { message }),
+            SyncingEvent::Announcement { peer, announcement } => {
+                (peer, PeerEvent::Announcement { announcement })
             }
         };
 

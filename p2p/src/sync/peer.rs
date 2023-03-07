@@ -42,11 +42,17 @@ use crate::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
         SyncMessage,
     },
-    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    net::{NetworkingService, SyncingMessagingService},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent, Result,
 };
+
+#[derive(Debug)]
+pub enum PeerEvent {
+    Message { message: SyncMessage },
+    Announcement { announcement: Box<Announcement> },
+}
 
 // TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
 // TODO: Track the block availability for a peer.
@@ -60,7 +66,7 @@ pub struct Peer<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     message_sender: UnboundedSender<(PeerId, SyncMessage)>,
-    events_receiver: UnboundedReceiver<SyncingEvent>,
+    events_receiver: UnboundedReceiver<PeerEvent>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -82,7 +88,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         message_sender: UnboundedSender<(PeerId, SyncMessage)>,
-        events_receiver: UnboundedReceiver<SyncingEvent>,
+        events_receiver: UnboundedReceiver<PeerEvent>,
         is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -134,17 +140,10 @@ where
             .map_err(Into::into)
     }
 
-    async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
+    async fn handle_event(&mut self, event: PeerEvent) -> Result<()> {
         let res = match event {
-            SyncingEvent::Connected { peer_id: _ } | SyncingEvent::Disconnected { peer_id: _ } => {
-                return Ok(())
-            }
-            SyncingEvent::Message { peer, message } => {
-                debug_assert_eq!(peer, *self.id);
-                self.handle_message(message).await
-            }
-            SyncingEvent::Announcement { peer, announcement } => {
-                debug_assert_eq!(peer, *self.id);
+            PeerEvent::Message { message } => self.handle_message(message).await,
+            PeerEvent::Announcement { announcement } => {
                 self.handle_announcement(*announcement).await
             }
         };
