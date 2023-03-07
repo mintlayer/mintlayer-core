@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
-use tokio::time::Instant;
+use std::{collections::HashSet, time::Duration};
 
 use crate::{
     interface::types::ConnectedPeer,
@@ -25,7 +23,7 @@ use crate::{
 #[derive(Debug)]
 pub struct SentPing {
     pub nonce: u64,
-    pub timestamp: Instant,
+    pub timestamp: Duration,
 }
 
 #[derive(Debug)]

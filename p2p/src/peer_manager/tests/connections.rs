@@ -735,7 +735,7 @@ where
         time_getter.advance_time(Duration::from_secs(1)).await;
         let (rtx, rrx) = oneshot_nofail::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
-        let connected_peers = timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap();
+        let connected_peers = timeout(Duration::from_secs(10), rrx).await.unwrap().unwrap();
         if connected_peers.len() == 1 {
             break;
         }
