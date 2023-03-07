@@ -39,7 +39,6 @@ use std::{
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
 use logging::log;
-use tokio::time::Instant;
 
 use crate::{config, error::P2pError, net::AsBannableAddress};
 
@@ -107,7 +106,7 @@ where
             })
             .collect::<Result<BTreeSet<_>, _>>()?;
 
-        let now = Instant::now();
+        let now = time_getter.get_time();
         let addresses = loaded_storage
             .known_addresses
             .iter()
@@ -148,7 +147,7 @@ where
         pending_outbound: &BTreeSet<A>,
         connected_outbound_count: usize,
     ) -> Vec<A> {
-        let now = Instant::now();
+        let now = self.time_getter.get_time();
         let count = MAX_OUTBOUND_CONNECTIONS
             .saturating_sub(pending_outbound.len())
             .saturating_sub(connected_outbound_count);
@@ -172,7 +171,7 @@ where
 
     /// Selects reserved peer addresses for outbound connections
     pub fn select_reserved_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
-        let now = Instant::now();
+        let now = self.time_getter.get_time();
         self.reserved_nodes
             .iter()
             .filter_map(|addr| {
@@ -191,7 +190,7 @@ where
 
     /// Perform the PeerDb maintenance
     pub fn heartbeat(&mut self) {
-        let now = Instant::now();
+        let now = self.time_getter.get_time();
         self.addresses.retain(|_addr, address_data| address_data.retain(now));
 
         let now = self.time_getter.get_time();
@@ -213,7 +212,7 @@ where
     pub fn peer_discovered(&mut self, address: A) {
         if let Entry::Vacant(entry) = self.addresses.entry(address.clone()) {
             log::debug!("new address discovered: {}", address.to_string());
-            entry.insert(AddressData::new(false, false, Instant::now()));
+            entry.insert(AddressData::new(false, false, self.time_getter.get_time()));
         }
     }
 
@@ -241,7 +240,7 @@ where
     }
 
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
-        let now = Instant::now();
+        let now = self.time_getter.get_time();
 
         // Make sure the address always exists.
         // It's needed because unknown addresses may be reported after RPC connect requests.

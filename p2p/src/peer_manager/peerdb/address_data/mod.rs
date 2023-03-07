@@ -15,8 +15,6 @@
 
 use std::time::Duration;
 
-use tokio::time::Instant;
-
 /// When the node drops the unreachable node address. Used for negative caching.
 const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
@@ -37,12 +35,12 @@ pub enum AddressState {
         fail_count: u32,
 
         /// Last time the peer disconnected
-        disconnected_at: Instant,
+        disconnected_at: Duration,
     },
 
     Unreachable {
         /// At which time the address would be removed from memory
-        erase_after: Instant,
+        erase_after: Duration,
     },
 }
 
@@ -72,7 +70,7 @@ pub struct AddressData {
 }
 
 impl AddressData {
-    pub fn new(was_reachable: bool, reserved: bool, now: Instant) -> Self {
+    pub fn new(was_reachable: bool, reserved: bool, now: Duration) -> Self {
         AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
@@ -88,7 +86,7 @@ impl AddressData {
     }
 
     /// Returns true when it is time to attempt a new outbound connection
-    pub fn connect_now(&self, now: Instant) -> bool {
+    pub fn connect_now(&self, now: Duration) -> bool {
         match self.state {
             AddressState::Connected {} => false,
 
@@ -97,27 +95,25 @@ impl AddressData {
                 disconnected_at,
                 was_reachable,
             } => {
-                let age = now.duration_since(disconnected_at);
                 if self.reserved {
                     // Try to connect to the user reserved nodes more often
-                    let age = now - disconnected_at;
                     match fail_count {
                         0 => true,
-                        1 => age > Duration::from_secs(10),
-                        2 => age > Duration::from_secs(60),
-                        3 => age > Duration::from_secs(180),
-                        _ => age > Duration::from_secs(360),
+                        1 => now > disconnected_at + Duration::from_secs(10),
+                        2 => now > disconnected_at + Duration::from_secs(60),
+                        3 => now > disconnected_at + Duration::from_secs(180),
+                        _ => now > disconnected_at + Duration::from_secs(360),
                     }
                 } else if was_reachable {
                     match fail_count {
                         0 => true,
-                        1 => age > Duration::from_secs(60),
-                        2 => age > Duration::from_secs(360),
-                        3 => age > Duration::from_secs(3600),
-                        4 => age > Duration::from_secs(3 * 3600),
-                        5 => age > Duration::from_secs(6 * 3600),
-                        6 => age > Duration::from_secs(12 * 3600),
-                        _ => age > Duration::from_secs(24 * 3600),
+                        1 => now > disconnected_at + Duration::from_secs(60),
+                        2 => now > disconnected_at + Duration::from_secs(360),
+                        3 => now > disconnected_at + Duration::from_secs(3600),
+                        4 => now > disconnected_at + Duration::from_secs(3 * 3600),
+                        5 => now > disconnected_at + Duration::from_secs(6 * 3600),
+                        6 => now > disconnected_at + Duration::from_secs(12 * 3600),
+                        _ => now > disconnected_at + Duration::from_secs(24 * 3600),
                     }
                 } else {
                     fail_count == 0
@@ -129,7 +125,7 @@ impl AddressData {
     }
 
     /// Returns true if the address should be kept in memory
-    pub fn retain(&self, now: Instant) -> bool {
+    pub fn retain(&self, now: Duration) -> bool {
         match self.state {
             AddressState::Connected {} => true,
             AddressState::Disconnected {
@@ -162,7 +158,7 @@ impl AddressData {
         matches!(self.state, AddressState::Unreachable { .. })
     }
 
-    pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Instant) {
+    pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Duration) {
         self.state = match transition {
             AddressStateTransitionTo::Connected => match self.state {
                 AddressState::Connected {} => unreachable!(),
