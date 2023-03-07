@@ -264,12 +264,13 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                 .transaction()
                 .clone();
 
-            // Put all authorizations in this vector, then take the last two where the last one is fully signed,
-            // and the one before has a missing signature
-            let mut authrorizations = vec![];
-
             let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
-            let empty_authorization = authorization.clone();
+
+            // Put all authorizations in this vector (starting from the empty one),
+            // then take the last two where the last one is fully signed,
+            // and the one before has a missing signature
+            // So: Element number N has N signatures
+            let mut authrorizations = vec![authorization.clone()];
 
             let sighash =
                 signature_hash(SigHashType::try_from(SigHashType::ALL).unwrap(), &tx, 0).unwrap();
@@ -284,7 +285,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
             // Pick the authorization that is missing one signature, which is the one before the last one
             // If there's only one signature required, then we pick the empty authorization
             let authorization_missing_one_sig =
-                authrorizations.iter().rev().nth(1).unwrap_or(&empty_authorization).clone();
+                authrorizations.iter().rev().nth(1).unwrap().clone();
 
             let input_sign =
                 StandardInputSignature::produce_classical_multisig_signature_for_input(
