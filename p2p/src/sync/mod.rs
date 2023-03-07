@@ -136,7 +136,7 @@ where
         }
     }
 
-    /// Returns the receiver for the chainstate `NewTip` events.
+    /// Returns a receiver for the chainstate `NewTip` events.
     async fn subscribe_to_new_tip(&mut self) -> Result<UnboundedReceiver<Id<Block>>> {
         let (sender, receiver) = mpsc::unbounded_channel();
 

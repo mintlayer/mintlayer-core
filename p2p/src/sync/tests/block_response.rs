@@ -137,17 +137,17 @@ async fn valid_response(#[case] seed: Seed) {
             SyncMessage::BlockResponse(BlockResponse::new(block.clone())),
         );
 
+        assert_eq!(
+            handle.announcement().await,
+            Announcement::Block(block.header().clone())
+        );
+
         // A peer would request headers after the last block.
         if i == num_blocks - 1 {
             let (sent_to, message) = handle.message().await;
             assert_eq!(peer, sent_to);
             assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
         }
-
-        assert_eq!(
-            handle.announcement().await,
-            Announcement::Block(block.header().clone())
-        );
     }
 
     handle.assert_no_error().await;
