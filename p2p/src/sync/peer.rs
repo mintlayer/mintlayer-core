@@ -136,6 +136,9 @@ where
 
     async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
         let res = match event {
+            SyncingEvent::Connected { peer_id: _ } | SyncingEvent::Disconnected { peer_id: _ } => {
+                return Ok(())
+            }
             SyncingEvent::Message { peer, message } => {
                 debug_assert_eq!(peer, *self.id);
                 self.handle_message(message).await

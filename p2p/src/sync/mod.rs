@@ -117,13 +117,6 @@ where
 
         loop {
             tokio::select! {
-                    SyncingEvent::Connected { peer_id } => {
-                        self.register_peer(peer_id).await?;
-                    },
-                    SyncingEvent::Disconnected { peer_id } => {
-                        self.unregister_peer(peer_id);
-                    },
-
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
@@ -234,6 +227,14 @@ where
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
         let peer = match event {
+            SyncingEvent::Connected { peer_id } => {
+                self.register_peer(peer_id)?;
+                return Ok(());
+            }
+            SyncingEvent::Disconnected { peer_id } => {
+                self.unregister_peer(peer_id);
+                return Ok(());
+            }
             SyncingEvent::Message { peer, message: _ } => peer,
             SyncingEvent::Announcement {
                 peer,
