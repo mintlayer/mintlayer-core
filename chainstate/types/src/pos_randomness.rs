@@ -16,12 +16,10 @@
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
+        config::EpochIndex,
         Block, ChainConfig, OutputPurpose, TxOutput,
     },
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        BlockHeight, Id, Idable, H256,
-    },
+    primitives::{Id, Idable, H256},
 };
 use serialization::{Decode, Encode};
 use thiserror::Error;
@@ -47,21 +45,13 @@ impl PoSRandomness {
     }
 
     pub fn from_block(
-        chain_config: &ChainConfig,
-        block_height: &BlockHeight,
+        epoch_index: EpochIndex,
         header: &BlockHeader,
-        previous_randomness: Option<PoSRandomness>,
-        kernel_output: &TxOutput,
+        seal_randomness: &PoSRandomness,
+        stake_output: &TxOutput,
         pos_data: &PoSData,
     ) -> Result<Self, PoSRandomnessError> {
-        use crypto::hash::StreamHasher;
-
-        let prev_randomness = previous_randomness.unwrap_or_else(|| Self::at_genesis(chain_config));
-        let prev_randomness_val = prev_randomness.value();
-
-        let epoch_index = chain_config.epoch_index_from_height(block_height);
-
-        let pool_data = match kernel_output.purpose() {
+        let pool_data = match stake_output.purpose() {
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn => {
@@ -74,24 +64,19 @@ impl PoSRandomness {
             OutputPurpose::ProduceBlockFromStake(d) => d.as_ref(),
         };
 
-        let hash_pos: H256 = verify_vrf_and_get_vrf_output(
+        let hash: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
-            &prev_randomness_val,
-            pos_data.vrf_data_from_prev_block(),
+            &seal_randomness.value(),
+            pos_data.vrf_data(),
             pool_data.vrf_public_key(),
             header,
         )?;
-
-        let mut hasher = DefaultHashAlgoStream::new();
-        hash_encoded_to(&prev_randomness_val, &mut hasher);
-        hash_encoded_to(&hash_pos, &mut hasher);
-        let hash: H256 = hasher.finalize().into();
 
         Ok(Self::new(hash))
     }
 
     /// randomness at genesis
-    fn at_genesis(chain_config: &ChainConfig) -> Self {
+    pub fn at_genesis(chain_config: &ChainConfig) -> Self {
         Self {
             value: chain_config.initial_randomness(),
         }

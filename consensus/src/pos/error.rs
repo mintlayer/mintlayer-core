@@ -15,7 +15,7 @@
 
 use thiserror::Error;
 
-use chainstate_types::vrf_tools::ProofOfStakeVRFError;
+use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, PoolId},
     primitives::{Compact, Id},
@@ -39,12 +39,10 @@ pub enum ConsensusPoSError {
     BitsToTargetConversionFailed(Compact),
     #[error("Could not find the previous block index of block: {0}")]
     PrevBlockIndexNotFound(Id<Block>),
-    #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
-    InvalidOutputPurposeInStakeKernel(Id<Block>),
-    #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
     #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("PoS randomness error: `{0}`")]
+    RandomnessError(#[from] PoSRandomnessError),
 }

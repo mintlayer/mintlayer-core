@@ -381,9 +381,9 @@ where
                 let kernel_stake_pool_data = match kernel_output.purpose() {
                     OutputPurpose::Transfer(_)
                     | OutputPurpose::LockThenTransfer(_, _)
-                    | OutputPurpose::Burn => Err(SpendStakeError::ConsensusPoSError(
-                        ConsensusPoSError::InvalidOutputPurposeInStakeKernel(block.get_id()),
-                    )),
+                    | OutputPurpose::Burn => Err(
+                        ConnectTransactionError::InvalidOutputPurposeInReward(block.get_id()),
+                    ),
                     OutputPurpose::StakePool(d) | OutputPurpose::ProduceBlockFromStake(d) => {
                         Ok(d.as_ref())
                     }

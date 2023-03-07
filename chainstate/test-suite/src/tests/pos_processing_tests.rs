@@ -24,7 +24,7 @@ use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use chainstate_types::{
-    pos_randomness::{PoSRandomness, PoSRandomnessError},
+    pos_randomness::PoSRandomnessError,
     vrf_tools::{construct_transcript, ProofOfStakeVRFError},
 };
 use common::{
@@ -107,7 +107,6 @@ fn create_pos_data(
     outpoint: OutPoint,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: H256,
-    prev_block_randomness: H256,
     pool_id: PoolId,
     epoch_index: EpochIndex,
 ) -> PoSData {
@@ -118,30 +117,13 @@ fn create_pos_data(
         construct_transcript(epoch_index, &sealed_epoch_randomness, block_timestamp);
     let vrf_data_from_sealed_epoch = vrf_sk.produce_vrf_data(vrf_sealed_epoch_transcript.into());
 
-    let vrf_prev_block_transcript =
-        construct_transcript(epoch_index, &prev_block_randomness, block_timestamp);
-    let vrf_data_from_prev_block = vrf_sk.produce_vrf_data(vrf_prev_block_transcript.into());
-
     PoSData::new(
         vec![outpoint.into()],
         vec![InputWitness::NoSignature(None)],
         pool_id,
         vrf_data_from_sealed_epoch,
-        vrf_data_from_prev_block,
         Compact::from(difficulty),
     )
-}
-
-fn get_best_block_randomness(tf: &TestFramework) -> PoSRandomness {
-    match tf.chainstate.get_best_block_index().unwrap() {
-        chainstate_types::GenBlockIndex::Block(bi) => {
-            match bi.preconnect_data().consensus_extra_data() {
-                chainstate_types::ConsensusExtraData::None => unreachable!(),
-                chainstate_types::ConsensusExtraData::PoS(r) => r.clone(),
-            }
-        }
-        chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-    }
 }
 
 // Create a chain genesis <- block_1 <- block_2
@@ -181,7 +163,6 @@ fn pos_basic(#[case] seed: Seed) {
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
-        initial_randomness,
         initial_randomness,
         pool_id,
         1,
@@ -253,7 +234,6 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         OutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
         &vrf_sk,
         initial_randomness,
-        initial_randomness,
         pool_id,
         1,
     );
@@ -268,7 +248,9 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         res,
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
-                ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_)
+                ConsensusPoSError::RandomnessError(
+                    PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_)
+                )
             ))
         ))
     ));
@@ -310,9 +292,9 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
 
     let expected_error = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
         CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
-            ConsensusPoSError::VRFDataVerificationFailed(
+            ConsensusPoSError::RandomnessError(PoSRandomnessError::VRFDataVerificationFailed(
                 ProofOfStakeVRFError::VRFDataVerificationFailed(VRFError::VerificationError),
-            ),
+            )),
         )),
     ));
 
@@ -334,7 +316,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
-            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
@@ -344,40 +325,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .build_and_process()
             .unwrap_err();
 
-        assert_eq!(res, expected_error);
-    }
-
-    {
-        // invalid prev block randomness
-        let invalid_randomness = H256::random_using(&mut rng);
-        let vrf_transcript =
-            construct_transcript(valid_epoch, &invalid_randomness, valid_block_timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
-        let pos_data = PoSData::new(
-            vec![stake_pool_outpoint.clone().into()],
-            vec![InputWitness::NoSignature(None)],
-            pool_id,
-            valid_vrf_data.clone(),
-            vrf_data,
-            Compact::from(difficulty),
-        );
-
-        let res = tf
-            .make_block_builder()
-            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-            .build_and_process()
-            .unwrap_err();
-
-        let expected_error =
-            ChainstateError::ProcessBlockError(BlockError::ConsensusExtraDataError(
-                consensus::ExtraConsensusDataError::PoSRandomnessCalculationFailed(
-                    PoSRandomnessError::VRFDataVerificationFailed(
-                        ProofOfStakeVRFError::VRFDataVerificationFailed(
-                            VRFError::VerificationError,
-                        ),
-                    ),
-                ),
-            ));
         assert_eq!(res, expected_error);
     }
 
@@ -392,7 +339,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
-            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
@@ -414,7 +360,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
-            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
@@ -436,7 +381,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![InputWitness::NoSignature(None)],
             pool_id,
             vrf_data,
-            valid_vrf_data.clone(),
             Compact::from(difficulty),
         );
 
@@ -455,7 +399,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             vec![stake_pool_outpoint.into()],
             vec![InputWitness::NoSignature(None)],
             pool_id,
-            valid_vrf_data.clone(),
             valid_vrf_data,
             Compact::from(difficulty),
         );
@@ -512,7 +455,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         stake_pool_outpoint.clone(),
         &vrf_sk,
         initial_randomness,
-        initial_randomness,
         random_pool_id,
         1,
     );
@@ -537,7 +479,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
-        initial_randomness,
         initial_randomness,
         expected_pool_id,
         1,
@@ -590,7 +531,6 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
-        initial_randomness,
         initial_randomness,
         pool_id,
         0,
@@ -655,12 +595,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    println!("intial randomness : {:?}", initial_randomness);
     let pos_data = create_pos_data(
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
-        initial_randomness,
         initial_randomness,
         pool_id,
         1,
@@ -680,14 +620,12 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
-    let prev_block_randomness = get_best_block_randomness(&tf);
     let pos_data = create_pos_data(
         &mut tf,
         block_2_reward_outpoint,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         initial_randomness,
-        prev_block_randomness.value(),
         pool_id,
         1,
     );
@@ -710,13 +648,11 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     // both sealed epoch and pre block randomness can be used
     let sealed_epoch_randomness =
         tf.storage.transaction_ro().unwrap().get_epoch_data(1).unwrap().unwrap();
-    let prev_block_randomness = get_best_block_randomness(&tf);
     let pos_data = create_pos_data(
         &mut tf,
         block_3_reward_outpoint,
         &vrf_sk,
-        sealed_epoch_randomness.randomness(),
-        prev_block_randomness.value(),
+        sealed_epoch_randomness.randomness().value(),
         pool_id,
         2,
     );
@@ -775,7 +711,6 @@ fn alter_stake_data_in_block_reward(#[case] seed: Seed) {
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         initial_randomness,
-        initial_randomness,
         pool_id,
         1,
     );
@@ -831,7 +766,6 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         &mut tf,
         stake_pool_outpoint,
         &vrf_sk,
-        initial_randomness,
         initial_randomness,
         pool_id,
         1,

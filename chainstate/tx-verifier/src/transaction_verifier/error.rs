@@ -99,6 +99,8 @@ pub enum ConnectTransactionError {
     TokenOutputInPoSAccountingOperation(Id<Transaction>),
     #[error("Error during stake spending")]
     SpendStakeError(#[from] SpendStakeError),
+    #[error("Attempted to use a non-locked stake as output in block reward {0}")]
+    InvalidOutputPurposeInReward(Id<Block>),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

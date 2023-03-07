@@ -19,9 +19,8 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
-    BlockPreconnectData, ConsensusExtraData, EpochData, GenBlockIndex, GetAncestorError,
-    PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
+    GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -37,7 +36,6 @@ use common::{
     time_getter::TimeGetter,
     Uint256,
 };
-use consensus::compute_extra_consensus_data;
 use logging::log;
 use pos_accounting::PoSAccountingDB;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
@@ -871,24 +869,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
-        let utxos_db = UtxosDB::new(&self.db_tx);
-        let consensus_extra = match &prev_block_index {
-            GenBlockIndex::Block(prev_bi) => {
-                compute_extra_consensus_data(self.chain_config, prev_bi, block.header(), &utxos_db)?
-            }
-            GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
-        };
-
         let chain_trust =
             *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
-        let block_index = BlockIndex::new(
-            block,
-            chain_trust,
-            some_ancestor,
-            height,
-            time_max,
-            BlockPreconnectData::new(consensus_extra),
-        );
+        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 
@@ -905,15 +888,19 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     fn post_connect_tip(&mut self, tip_index: &BlockIndex) -> Result<(), BlockError> {
+        let tip_height = tip_index.block_height();
         epoch_seal::update_epoch_seal(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEvent::Connect(tip_index.block_height()),
+            epoch_seal::BlockStateEvent::Connect(tip_height),
         )?;
+        let tip = self
+            .get_block_from_index(tip_index)?
+            .ok_or(BlockError::BlockAtHeightNotFound(tip_height))?;
         epoch_seal::update_epoch_data(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEventWithIndex::Connect(tip_index.block_height(), tip_index),
+            epoch_seal::BlockStateEventWithIndex::Connect(tip_height, &tip),
         )
     }
 

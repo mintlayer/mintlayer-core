@@ -216,6 +216,18 @@ impl ChainConfig {
         self.is_last_block_in_epoch(height) && current_epoch_index >= sealed_epoch_distance_from_tip
     }
 
+    pub fn sealed_epoch_index(&self, height: &BlockHeight) -> Option<EpochIndex> {
+        let current_epoch_index = self.epoch_index_from_height(height);
+        let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
+
+        if self.is_last_block_in_epoch(height) {
+            current_epoch_index.checked_sub(sealed_epoch_distance_from_tip)
+        } else {
+            // If an epoch is not full it must be taken into account increasing the distance to the sealed epoch
+            current_epoch_index.checked_sub(sealed_epoch_distance_from_tip + 1)
+        }
+    }
+
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
     }

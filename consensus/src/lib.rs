@@ -22,7 +22,7 @@ pub use crate::{
     error::ConsensusVerificationError,
     pos::{error::ConsensusPoSError, kernel::get_kernel_output},
     pow::{check_proof_of_work, mine, ConsensusPoWError},
-    validator::{compute_extra_consensus_data, validate_consensus, ExtraConsensusDataError},
+    validator::validate_consensus,
 };
 
 mod error;

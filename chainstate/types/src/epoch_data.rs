@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::H256;
 use serialization::{Decode, Encode};
 
 use crate::pos_randomness::PoSRandomness;
@@ -28,7 +27,7 @@ impl EpochData {
         Self { randomness }
     }
 
-    pub fn randomness(&self) -> H256 {
-        self.randomness.value()
+    pub fn randomness(&self) -> &PoSRandomness {
+        &self.randomness
     }
 }

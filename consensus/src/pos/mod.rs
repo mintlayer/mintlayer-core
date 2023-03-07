@@ -16,14 +16,14 @@
 pub mod error;
 pub mod kernel;
 
-use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndexHandle};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
         config::EpochIndex,
-        ChainConfig, OutputPurpose, TxOutput,
+        ChainConfig, TxOutput,
     },
-    primitives::{BlockHeight, Idable, H256},
+    primitives::{BlockHeight, Idable},
     Uint256, Uint512,
 };
 use pos_accounting::PoSAccountingView;
@@ -34,7 +34,7 @@ use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
 fn check_stake_kernel_hash<P: PoSAccountingView>(
     epoch_index: EpochIndex,
-    random_seed: &H256,
+    random_seed: &PoSRandomness,
     pos_data: &PoSData,
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
@@ -44,27 +44,14 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.target()))?;
 
-    let pool_data = match kernel_output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::LockThenTransfer(_, _)
-        | OutputPurpose::Burn => {
-            // only pool outputs can be staked
-            return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
-                spender_block_header.get_id(),
-            ));
-        }
-
-        OutputPurpose::StakePool(d) => d.as_ref(),
-        OutputPurpose::ProduceBlockFromStake(d) => d.as_ref(),
-    };
-
-    let hash_pos: Uint256 = verify_vrf_and_get_vrf_output(
+    let hash_pos: Uint256 = PoSRandomness::from_block(
         epoch_index,
-        random_seed,
-        pos_data.vrf_data_from_sealed_epoch(),
-        pool_data.vrf_public_key(),
         spender_block_header,
+        random_seed,
+        kernel_output,
+        pos_data,
     )?
+    .value()
     .into();
 
     let hash_pos_arith: Uint512 = hash_pos.into();
@@ -87,30 +74,22 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     current_height: BlockHeight,
     block_index_handle: &H,
-) -> Result<H256, ConsensusPoSError> {
-    let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
-    let sealed_epoch_distance_from_tip = chain_config.sealed_epoch_distance_from_tip() as u64;
-
-    let sealed_epoch_index = if chain_config.is_last_block_in_epoch(&current_height) {
-        current_epoch_index.checked_sub(sealed_epoch_distance_from_tip)
-    } else {
-        // If an epoch is not full it must be taken into account increasing the distance to the sealed epoch
-        current_epoch_index.checked_sub(sealed_epoch_distance_from_tip + 1)
-    };
+) -> Result<PoSRandomness, ConsensusPoSError> {
+    let sealed_epoch_index = chain_config.sealed_epoch_index(&current_height);
 
     let random_seed = match sealed_epoch_index {
         Some(sealed_epoch_index) => {
             let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
             match epoch_data {
-                Some(d) => d.randomness(),
+                Some(d) => d.randomness().clone(),
                 None => {
                     // TODO: no epoch_data means either that no epoch was created yet or
                     // that the data is actually missing
-                    chain_config.initial_randomness()
+                    PoSRandomness::at_genesis(chain_config)
                 }
             }
         }
-        None => chain_config.initial_randomness(),
+        None => PoSRandomness::at_genesis(chain_config),
     };
 
     Ok(random_seed)
@@ -136,8 +115,8 @@ where
     let current_height = prev_block_index.block_height().next_height();
     let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
 
-    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
+    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
     check_stake_kernel_hash(
         current_epoch_index,
         &random_seed,

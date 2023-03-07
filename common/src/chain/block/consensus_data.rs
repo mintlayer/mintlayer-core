@@ -62,11 +62,7 @@ pub struct PoSData {
 
     /// VRF data used for calculating hash below the target.
     /// It represents random seed generated based on the randomness of the sealed epoch.
-    vrf_data_from_sealed_epoch: VRFReturn,
-
-    /// VRF data used for calculating randomness for the current block.
-    /// It represents random seed generated based on the randomness of the previous block.
-    vrf_data_from_prev_block: VRFReturn,
+    vrf_data: VRFReturn,
 
     target: Compact,
 }
@@ -76,16 +72,14 @@ impl PoSData {
         kernel_inputs: Vec<TxInput>,
         kernel_witness: Vec<InputWitness>,
         stake_pool_id: PoolId,
-        vrf_data_from_sealed_epoch: VRFReturn,
-        vrf_data_from_prev_block: VRFReturn,
+        vrf_data: VRFReturn,
         target: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
             stake_pool_id,
-            vrf_data_from_sealed_epoch,
-            vrf_data_from_prev_block,
+            vrf_data,
             target,
         }
     }
@@ -106,12 +100,8 @@ impl PoSData {
         &self.target
     }
 
-    pub fn vrf_data_from_sealed_epoch(&self) -> &VRFReturn {
-        &self.vrf_data_from_sealed_epoch
-    }
-
-    pub fn vrf_data_from_prev_block(&self) -> &VRFReturn {
-        &self.vrf_data_from_prev_block
+    pub fn vrf_data(&self) -> &VRFReturn {
+        &self.vrf_data
     }
 }
 

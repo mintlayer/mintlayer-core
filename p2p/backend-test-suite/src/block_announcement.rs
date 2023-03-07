@@ -244,7 +244,6 @@ where
         Vec::new(),
         signatures,
         H256::random_using(&mut rng).into(),
-        vrf_data.clone(),
         vrf_data,
         Compact(0),
     );

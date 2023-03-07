@@ -189,7 +189,7 @@ impl BlockMaker {
 #[cfg(test)]
 mod tests {
     use crate::tests::setup_blockprod_test;
-    use chainstate_types::{BlockIndex, BlockPreconnectData, ConsensusExtraData};
+    use chainstate_types::BlockIndex;
     use crypto::random::make_pseudo_rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
     use mocks::{MempoolInterfaceMock, MockChainstateInterfaceMock};
@@ -593,7 +593,6 @@ mod tests {
                         chain_config.genesis_block_id(),
                         BlockHeight::one(),
                         BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),
-                        BlockPreconnectData::new(ConsensusExtraData::None),
                     );
 
                     Ok(Some(block_index))
