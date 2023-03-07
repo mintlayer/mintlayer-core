@@ -181,14 +181,7 @@ mod tests {
 
         let pub_key_count = 1 + chain_config.max_classic_multisig_public_keys_count() as u8;
 
-        let min_required_signatures_rand = 1 + rng.gen::<u8>() % pub_key_count;
-
-        let min_required_signatures = if min_required_signatures_rand == 0 {
-            // if the minimum number of signatures is by chance zero, we set it to 1
-            1
-        } else {
-            min_required_signatures_rand
-        };
+        let min_required_signatures = 1 + rng.gen::<u8>() % pub_key_count;
 
         let public_keys = (0..pub_key_count)
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1)

@@ -758,7 +758,7 @@ mod tests {
             let (new_random_private_key, _) =
                 PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let sig = new_random_private_key.sign_message(&sighash.encode()).unwrap();
-            let new_sigs = vec![(key_index, sig)].into_iter().collect::<BTreeMap<_, _>>();
+            let new_sigs = BTreeMap::from([(key_index, sig)]);
             let tampered_with_signatures = AuthorizedClassicalMultisigSpend::new(
                 new_sigs,
                 current_signatures.challenge().clone(),

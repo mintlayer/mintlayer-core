@@ -172,10 +172,10 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
 
             let sighash =
                 signature_hash(SigHashType::try_from(SigHashType::ALL).unwrap(), &tx, 0).unwrap();
+            let sighash = sighash.encode();
 
             for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
-                let signature =
-                    priv_keys[*key_index as usize].sign_message(&sighash.encode()).unwrap();
+                let signature = priv_keys[*key_index as usize].sign_message(&sighash).unwrap();
                 authorization.add_signature(*key_index, signature);
             }
 
