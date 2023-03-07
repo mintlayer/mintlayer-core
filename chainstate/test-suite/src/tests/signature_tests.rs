@@ -198,3 +198,132 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             .unwrap();
     });
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let chain_config = tf.chainstate.get_chain_config().clone();
+
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 1;
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties: u8 = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                .unwrap();
+        challenge.is_valid(&chain_config).unwrap();
+
+        let destination_multisig: PublicKeyHash = (&challenge).into();
+        let destination = Destination::ClassicMultisig(destination_multisig);
+
+        let key_indexes = {
+            let mut key_indexes = (0..total_parties).collect::<Vec<_>>();
+            key_indexes.shuffle(&mut rng);
+            key_indexes
+        };
+
+        // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
+        // genesis block.
+        let tx_1 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputPurpose::Transfer(destination),
+            ))
+            .build();
+
+        // The second transaction has the signed input.
+        let tx_2 = {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(
+                        OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                        0,
+                    ),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::new(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                ))
+                .build()
+                .transaction()
+                .clone();
+
+            // Put all authorizations in this vector, then take the last two where the last one is fully signed,
+            // and the one before has a missing signature
+            let mut authrorizations = vec![];
+
+            let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
+            let empty_authorization = authorization.clone();
+
+            let sighash =
+                signature_hash(SigHashType::try_from(SigHashType::ALL).unwrap(), &tx, 0).unwrap();
+            let sighash = sighash.encode();
+
+            for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
+                let signature = priv_keys[*key_index as usize].sign_message(&sighash).unwrap();
+                authorization.add_signature(*key_index, signature);
+                authrorizations.push(authorization.clone());
+            }
+
+            // Pick the authorization that is missing one signature, which is the one before the last one
+            // If there's only one signature required, then we pick the empty authorization
+            let authorization_missing_one_sig =
+                authrorizations.iter().rev().nth(1).unwrap_or(&empty_authorization).clone();
+
+            let input_sign =
+                StandardInputSignature::produce_classical_multisig_signature_for_input(
+                    &chain_config,
+                    &authorization,
+                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    &tx,
+                    0,
+                )
+                .unwrap();
+
+            // Manually construct a StandardInputSignature with the missing signature from the authorization
+            let input_sign_with_missing_sig = StandardInputSignature::new(
+                input_sign.sighash_type(),
+                authorization_missing_one_sig.encode(),
+            );
+
+            SignedTransaction::new(
+                tx,
+                vec![InputWitness::Standard(input_sign_with_missing_sig)],
+            )
+            .expect("invalid witness count")
+        };
+
+        let process_error = tf
+            .make_block_builder()
+            .with_transactions(vec![tx_1, tx_2])
+            .build_and_process()
+            .unwrap_err();
+
+        assert_eq!(
+            process_error,
+            chainstate::ChainstateError::ProcessBlockError(
+                chainstate::BlockError::StateUpdateFailed(
+                    chainstate::ConnectTransactionError::SignatureVerificationFailed(
+                        common::chain::signature::TransactionSigError::IncompleteClassicalMultisigSignature
+                    )
+                )
+            )
+        );
+    });
+}
