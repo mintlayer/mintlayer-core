@@ -296,7 +296,12 @@ where
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::unbounded_channel();
 
-        let receiver_address = Some(address.as_peer_address());
+        // Sending the remote socket address makes no sense and can leak private information when using a proxy
+        let receiver_address = if self.p2p_config.socks5_proxy.is_some() {
+            None
+        } else {
+            Some(address.as_peer_address())
+        };
 
         self.pending.insert(
             remote_peer_id,

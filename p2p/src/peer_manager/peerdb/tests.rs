@@ -34,6 +34,7 @@ fn unban_peer() {
     let mut peerdb = PeerDb::new(
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
+            socks5_proxy: None,
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             max_inbound_connections: Default::default(),

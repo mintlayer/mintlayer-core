@@ -76,6 +76,10 @@ pub struct RunOptions {
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<Vec<String>>,
 
+    /// Connect through SOCKS5 proxy.
+    #[clap(long)]
+    pub p2p_socks5_proxy: Option<String>,
+
     /// Optional list of boot node addresses to connect.
     #[clap(long, value_name = "NODE")]
     pub p2p_boot_node: Option<Vec<String>>,
