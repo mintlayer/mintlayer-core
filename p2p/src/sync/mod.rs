@@ -18,7 +18,13 @@
 
 mod peer;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use void::Void;
@@ -64,7 +70,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
-    is_initial_block_download: bool,
+    is_initial_block_download: Arc<AtomicBool>,
 
     /// A mapping from a peer identifier to the channel.
     peers: HashMap<PeerId, UnboundedSender<SyncingEvent>>,
@@ -97,7 +103,7 @@ where
             peer_event_receiver,
             peer_manager_sender,
             chainstate_handle,
-            is_initial_block_download: true,
+            is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
             peer_sender,
             peer_receiver,
@@ -109,8 +115,10 @@ where
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
-        self.is_initial_block_download =
-            self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+        self.is_initial_block_download.store(
+            self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
+            Ordering::SeqCst,
+        );
 
         loop {
             tokio::select! {
@@ -175,6 +183,7 @@ where
         let peer_manager_sender = self.peer_manager_sender.clone();
         let chainstate_handle = self.chainstate_handle.clone();
         let p2p_config = Arc::clone(&self.p2p_config);
+        let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
         tokio::spawn(async move {
             let mut peer = Peer::<T>::new(
                 peer,
@@ -183,6 +192,7 @@ where
                 peer_manager_sender,
                 peer_sender,
                 receiver,
+                is_initial_block_download,
             );
             if let Err(e) = peer.run().await {
                 log::error!("Sync manager peer ({}) error: {e:?}", peer.id());
@@ -203,12 +213,14 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
-        if self.is_initial_block_download {
-            self.is_initial_block_download =
-                self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+        if self.is_initial_block_download.load(Ordering::SeqCst) {
+            self.is_initial_block_download.store(
+                self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
+                Ordering::SeqCst,
+            );
         }
 
-        if self.is_initial_block_download {
+        if self.is_initial_block_download.load(Ordering::Relaxed) {
             return Ok(());
         }
 

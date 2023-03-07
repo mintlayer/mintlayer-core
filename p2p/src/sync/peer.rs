@@ -16,7 +16,10 @@
 use std::{
     collections::{BTreeSet, VecDeque},
     mem,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use itertools::Itertools;
@@ -58,6 +61,7 @@ pub struct Peer<T: NetworkingService> {
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     message_sender: UnboundedSender<(PeerId, SyncMessage)>,
     events_receiver: UnboundedReceiver<SyncingEvent>,
+    is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
     known_headers: Vec<BlockHeader>,
@@ -79,6 +83,7 @@ where
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         message_sender: UnboundedSender<(PeerId, SyncMessage)>,
         events_receiver: UnboundedReceiver<SyncingEvent>,
+        is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
         Self {
             id: id.into(),
@@ -87,6 +92,7 @@ where
             peer_manager_sender,
             message_sender,
             events_receiver,
+            is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
             blocks_queue: VecDeque::new(),
@@ -165,12 +171,11 @@ where
         }
         log::trace!("locator: {locator:#?}");
 
-        // TODO: FIXME:
-        // if self.is_initial_block_download {
-        //     // TODO: Check if a peer has permissions to ask for headers during the initial block download.
-        //     log::debug!("Ignoring headers request because the node is in initial block download");
-        //     return Ok(());
-        // }
+        if self.is_initial_block_download.load(Ordering::Acquire) {
+            // TODO: Check if a peer has permissions to ask for headers during the initial block download.
+            log::debug!("Ignoring headers request because the node is in initial block download");
+            return Ok(());
+        }
 
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
@@ -187,11 +192,10 @@ where
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
         log::debug!("Blocks request from peer {}", self.id());
 
-        // // TODO: FIXME:
-        // if self.is_initial_block_download {
-        //     log::debug!("Ignoring blocks request because the node is in initial block download");
-        //     return Ok(());
-        // }
+        if self.is_initial_block_download.load(Ordering::SeqCst) {
+            log::debug!("Ignoring blocks request because the node is in initial block download");
+            return Ok(());
+        }
 
         // Check that a peer doesn't exceed the blocks limit.
         self.p2p_config
