@@ -41,7 +41,7 @@ use p2p::{
         default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
         ConnectivityService, NetworkingService, SyncingMessagingService,
     },
-    testing_utils::{connect_services, TestTransportMaker},
+    testing_utils::{connect_and_accept_services, TestTransportMaker},
 };
 
 tests![
@@ -75,7 +75,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<N>(&mut conn1, &mut conn2).await;
+    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     let block = Block::new(
         vec![],
@@ -87,6 +87,11 @@ where
     .unwrap();
     sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 
+    match sync2.poll_next().await.unwrap() {
+        SyncingEvent::Connected { peer_id: _ } => {}
+        event => panic!("Unexpected event: {event:?}"),
+    };
+
     // Poll an event from the network for server2.
     let header = match sync2.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
@@ -95,7 +100,7 @@ where
         } => match *announcement {
             Announcement::Block(block) => block,
         },
-        _ => panic!("Unexpected event"),
+        event => panic!("Unexpected event: {event:?}"),
     };
     assert_eq!(header.timestamp().as_int_seconds(), 1337u64);
     assert_eq!(&header, block.header());
@@ -110,6 +115,11 @@ where
     .unwrap();
     sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
 
+    match sync1.poll_next().await.unwrap() {
+        SyncingEvent::Connected { peer_id: _ } => {}
+        event => panic!("Unexpected event: {event:?}"),
+    };
+
     let header = match sync1.poll_next().await.unwrap() {
         SyncingEvent::Announcement {
             peer: _,
@@ -117,7 +127,7 @@ where
         } => match *announcement {
             Announcement::Block(block) => block,
         },
-        _ => panic!("Unexpected event"),
+        event => panic!("Unexpected event: {event:?}"),
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
     assert_eq!(&header, block.header());
@@ -165,7 +175,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<N>(&mut conn1, &mut conn2).await;
+    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     let block = Block::new(
         vec![],
@@ -207,7 +217,7 @@ where
     .await
     .unwrap();
 
-    connect_services::<N>(&mut conn1, &mut conn2).await;
+    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
     let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(

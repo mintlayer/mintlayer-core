@@ -201,6 +201,8 @@ where
             }
         }
 
+        let mut was_accepted = false;
+
         loop {
             tokio::select! {
                 // Sending messages should have higher priority
@@ -208,9 +210,10 @@ where
 
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
                     Event::Disconnect => return Ok(()),
+                    Event::Accepted => was_accepted = true,
                     Event::SendMessage(message) => self.socket.send(*message).await?,
                 },
-                event = self.socket.recv() => match event {
+                event = self.socket.recv(), if was_accepted => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
                         return Ok(());

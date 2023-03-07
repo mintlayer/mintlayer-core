@@ -29,6 +29,7 @@ use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
 use serialization::{Decode, Encode};
+use utils::set_flag::SetFlag;
 
 use crate::{
     config::P2pConfig,
@@ -58,6 +59,9 @@ struct PeerContext {
     /// Note that sending may fail unexpectedly if the connection is closed!
     /// Do not propagate ChannelClosed error to the higher level, handle it locally!
     tx: mpsc::UnboundedSender<Event>,
+
+    /// True if the peer was accepted by PeerManager and SyncManager was notified
+    was_accepted: SetFlag,
 }
 
 /// Pending peer data (until handshake message is received)
@@ -168,6 +172,23 @@ where
         }
     }
 
+    /// Allow peer to start reading network messages
+    fn accept_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        peer.tx.send(Event::Accepted).map_err(P2pError::from)?;
+
+        assert!(!*peer.was_accepted);
+        peer.was_accepted.set();
+
+        Self::send_sync_event(&self.sync_tx, SyncingEvent::Connected { peer_id });
+
+        Ok(())
+    }
+
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
         let peer = self
@@ -233,12 +254,15 @@ where
                 .map_err(P2pError::from)?;
         }
 
-        self.sync_tx
-            .send(SyncingEvent::Announcement {
+        Self::send_sync_event(
+            &self.sync_tx,
+            SyncingEvent::Announcement {
                 peer: peer_id,
                 announcement: Box::new(announcement),
-            })
-            .map_err(P2pError::from)
+            },
+        );
+
+        Ok(())
     }
 
     /// Runs the backend events loop.
@@ -250,7 +274,7 @@ where
 
                 // Handle commands.
                 command = self.cmd_rx.recv() => {
-                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?).await?;
+                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
@@ -383,7 +407,14 @@ where
             }
         }
 
-        self.peers.insert(peer_id, PeerContext { subscriptions, tx });
+        self.peers.insert(
+            peer_id,
+            PeerContext {
+                subscriptions,
+                tx,
+                was_accepted: Default::default(),
+            },
+        );
 
         Ok(())
     }
@@ -393,9 +424,14 @@ where
     /// Peer should not be in pending state.
     fn destroy_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
         // Make sure the peer exists so that `ConnectionClosed` is sent only once
-        self.peers
+        let peer = self
+            .peers
             .remove(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+
+        if *peer.was_accepted {
+            Self::send_sync_event(&self.sync_tx, SyncingEvent::Disconnected { peer_id });
+        }
 
         self.conn_tx
             .send(ConnectivityEvent::ConnectionClosed { peer_id })
@@ -506,14 +542,20 @@ where
             Message::Handshake(_) => {
                 log::error!("peer {peer} sent handshaking message");
             }
-            Message::HeaderListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
-                peer,
-                message: SyncMessage::HeaderListRequest(r),
-            })?,
-            Message::BlockListRequest(r) => self.sync_tx.send(SyncingEvent::Message {
-                peer,
-                message: SyncMessage::BlockListRequest(r),
-            })?,
+            Message::HeaderListRequest(r) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::HeaderListRequest(r),
+                },
+            ),
+            Message::BlockListRequest(r) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::BlockListRequest(r),
+                },
+            ),
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
                 message: PeerManagerMessage::AddrListRequest(r),
@@ -526,14 +568,20 @@ where
                 peer,
                 message: PeerManagerMessage::PingRequest(r),
             })?,
-            Message::HeaderListResponse(r) => self.sync_tx.send(SyncingEvent::Message {
-                peer,
-                message: SyncMessage::HeaderListResponse(r),
-            })?,
-            Message::BlockResponse(r) => self.sync_tx.send(SyncingEvent::Message {
-                peer,
-                message: SyncMessage::BlockResponse(r),
-            })?,
+            Message::HeaderListResponse(r) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::HeaderListResponse(r),
+                },
+            ),
+            Message::BlockResponse(r) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::BlockResponse(r),
+                },
+            ),
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
                 message: PeerManagerMessage::AddrListResponse(r),
@@ -547,63 +595,64 @@ where
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: Command<T::Address>) -> crate::Result<()> {
-        // All handlings are separated to two parts:
+    fn handle_command(&mut self, command: Command<T::Address>) {
+        // All handlings can be separated to two parts:
         // - Async (can't take mutable reference to self because they are run concurrently).
         // - Sync (take mutable reference to self because they are run sequentially).
         // Because the second part depends on result of the first part boxed closures are used.
 
-        let backend_task: BackendTask<T> = match command {
+        match command {
             Command::Connect { address } => {
                 let connection_fut = timeout(
                     *self.p2p_config.outbound_connection_timeout,
                     self.transport.connect(address.clone()),
                 );
 
-                async move {
+                let backend_task: BackendTask<T> = async move {
                     let connection_res = connection_fut.await.unwrap_or(Err(P2pError::DialError(
                         DialError::ConnectionRefusedOrTimedOut,
                     )));
 
                     boxed_cb(move |this| this.handle_connect_res(address, connection_res))
                 }
-                .boxed()
+                .boxed();
+
+                self.command_queue.push(backend_task);
             }
-            Command::Disconnect { peer_id } => async move {
-                boxed_cb(move |this: &mut Self| {
-                    let res = this.disconnect_peer(peer_id);
-                    if let Err(e) = res {
-                        log::debug!("Failed to disconnect peer {peer_id}: {e}")
-                    }
-                    Ok(())
-                })
+            Command::Accept { peer_id } => {
+                let res = self.accept_peer(peer_id);
+                if let Err(e) = res {
+                    log::debug!("Failed to accept peer {peer_id}: {e}");
+                }
             }
-            .boxed(),
-            Command::SendMessage { peer, message } => async move {
-                boxed_cb(move |this| {
-                    let res = this.send_message(peer, message);
-                    if let Err(e) = res {
-                        log::debug!("Failed to send request to peer {peer}: {e}")
-                    }
-                    Ok(())
-                })
+            Command::Disconnect { peer_id } => {
+                let res = self.disconnect_peer(peer_id);
+                if let Err(e) = res {
+                    log::debug!("Failed to disconnect peer {peer_id}: {e}");
+                }
             }
-            .boxed(),
-            Command::AnnounceData { topic, message } => async move {
-                boxed_cb(move |this| {
-                    let res = this.announce_data(topic, message);
-                    if let Err(e) = res {
-                        log::error!("Failed to send announce data: {e}")
-                    }
-                    Ok(())
-                })
+            Command::SendMessage { peer, message } => {
+                let res = self.send_message(peer, message);
+                if let Err(e) = res {
+                    log::debug!("Failed to send request to peer {peer}: {e}")
+                }
             }
-            .boxed(),
+            Command::AnnounceData { topic, message } => {
+                let res = self.announce_data(topic, message);
+                if let Err(e) = res {
+                    log::error!("Failed to send announce data: {e}")
+                }
+            }
         };
+    }
 
-        self.command_queue.push(backend_task);
-
-        Ok(())
+    fn send_sync_event(sync_tx: &mpsc::UnboundedSender<SyncingEvent>, event: SyncingEvent) {
+        // SyncManager should always be active and so sending to a closed `conn_tx` is not a backend's problem, just log the error.
+        // NOTE: `sync_tx` is not connected in some PeerManager tests.
+        let res = sync_tx.send(event);
+        if res.is_err() {
+            log::error!("sending sync event from the backend failed unexpectedly");
+        }
     }
 }
 

@@ -21,7 +21,7 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    connect_services, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+    connect_and_accept_services, TestTransportChannel, TestTransportMaker, TestTransportNoise,
     TestTransportTcp,
 };
 use p2p::{
@@ -77,9 +77,9 @@ where
     };
 
     // Connect peers into a partial mesh.
-    connect_services::<S>(&mut conn1, &mut peer1.0).await;
-    connect_services::<S>(&mut peer1.0, &mut peer2.0).await;
-    connect_services::<S>(&mut peer2.0, &mut peer3.0).await;
+    connect_and_accept_services::<S>(&mut conn1, &mut peer1.0).await;
+    connect_and_accept_services::<S>(&mut peer1.0, &mut peer2.0).await;
+    connect_and_accept_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
     sync1
         .make_announcement(Announcement::Block(
