@@ -206,7 +206,7 @@ where
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
 
-        if self.peers.remove(&peer).is_some() {
+        if self.peers.remove(&peer).is_none() {
             log::warn!("Unregistering unknown peer: {peer}");
         }
     }
