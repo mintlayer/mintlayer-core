@@ -121,7 +121,7 @@ pub async fn initialize(
             rpc::Builder::new(rpc_config.into())
                 .register(crate::rpc::init(
                     manager.make_shutdown_trigger(),
-                    *chain_config.chain_type(),
+                    chain_config,
                 ))
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())

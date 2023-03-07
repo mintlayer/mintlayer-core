@@ -15,7 +15,9 @@
 
 //! Node RPC methods
 
-use common::chain::config::ChainType;
+use std::sync::Arc;
+
+use chainstate_launcher::ChainConfig;
 use subsystem::manager::ShutdownTrigger;
 
 #[rpc::rpc(server, namespace = "node")]
@@ -34,14 +36,14 @@ trait NodeRpc {
 
 struct NodeRpc {
     shutdown_trigger: ShutdownTrigger,
-    chain_type: ChainType,
+    chain_config: Arc<ChainConfig>,
 }
 
 impl NodeRpc {
-    fn new(shutdown_trigger: ShutdownTrigger, chain_type: ChainType) -> Self {
+    fn new(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> Self {
         Self {
             shutdown_trigger,
-            chain_type,
+            chain_config,
         }
     }
 }
@@ -57,11 +59,11 @@ impl NodeRpcServer for NodeRpc {
     }
 
     fn set_mock_time(&self, time: u64) -> rpc::Result<()> {
-        crate::mock_time::set_mock_time(self.chain_type, time)?;
+        crate::mock_time::set_mock_time(*self.chain_config.chain_type(), time)?;
         Ok(())
     }
 }
 
-pub fn init(shutdown_trigger: ShutdownTrigger, chain_type: ChainType) -> rpc::Methods {
-    NodeRpc::new(shutdown_trigger, chain_type).into_rpc().into()
+pub fn init(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> rpc::Methods {
+    NodeRpc::new(shutdown_trigger, chain_config).into_rpc().into()
 }

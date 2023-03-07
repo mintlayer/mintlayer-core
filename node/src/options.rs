@@ -62,6 +62,7 @@ pub struct RunOptions {
 
     /// Mock time.
     #[clap(long)]
+    #[arg(hide = true)]
     pub mock_time: Option<u64>,
 
     /// The number of maximum attempts to process a block.
