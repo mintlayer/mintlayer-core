@@ -226,14 +226,6 @@ where
 
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
-        let peer_channel = match self.peers.get(&peer) {
-            Some(c) => c,
-            None => {
-                log::warn!("Received a message from unknown peer ({peer}): {event:?}");
-                return Ok(());
-            }
-        };
-
         let (peer, event) = match event {
             SyncingEvent::Connected { peer_id } => {
                 self.register_peer(peer_id)?;
@@ -246,6 +238,14 @@ where
             SyncingEvent::Message { peer, message } => (peer, PeerEvent::Message { message }),
             SyncingEvent::Announcement { peer, announcement } => {
                 (peer, PeerEvent::Announcement { announcement })
+            }
+        };
+
+        let peer_channel = match self.peers.get(&peer) {
+            Some(c) => c,
+            None => {
+                log::warn!("Received a message from unknown peer ({peer}): {event:?}");
+                return Ok(());
             }
         };
 
