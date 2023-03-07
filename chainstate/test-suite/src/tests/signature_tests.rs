@@ -67,23 +67,24 @@ fn signed_tx(#[case] seed: Seed) {
             ))
             .build();
 
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
+            ))
+            .build()
+            .transaction()
+            .clone();
+
         // The second transaction has the signed input.
         let tx_2 = {
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(
-                        OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                        0,
-                    ),
-                    InputWitness::NoSignature(None),
-                )
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(100)),
-                    OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
-                ))
-                .build()
-                .transaction()
-                .clone();
             let input_sign = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
@@ -150,24 +151,23 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             ))
             .build();
 
-        // The second transaction has the signed input.
-        let tx_2 = {
-            let tx = TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(
-                        OutPointSourceId::Transaction(tx_1.transaction().get_id()),
-                        0,
-                    ),
-                    InputWitness::NoSignature(None),
-                )
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(100)),
-                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-                ))
-                .build()
-                .transaction()
-                .clone();
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx_1.transaction().get_id()),
+                    0,
+                ),
+                InputWitness::NoSignature(None),
+            )
+            .add_output(TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ))
+            .build()
+            .transaction()
+            .clone();
 
+        let authorization = {
             let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
 
             let sighash =
@@ -179,6 +179,11 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 authorization.add_signature(*key_index, signature);
             }
 
+            authorization
+        };
+
+        // The second transaction has the signed input.
+        let tx_2 = {
             let input_sign =
                 StandardInputSignature::produce_classical_multisig_signature_for_input(
                     &chain_config,
