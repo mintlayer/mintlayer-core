@@ -125,6 +125,7 @@ where
                     self.handle_new_tip(block_id).await?;
                 },
 
+                // Resend messages from peers to the backend.
                 message = self.peer_receiver.recv() => {
                     let (peer, message) = message.ok_or(P2pError::ChannelClosed)?;
                     self.messaging_handle.send_message(peer, message)?;
@@ -159,10 +160,7 @@ where
     }
 
     // TODO: This shouldn't be public.
-    // TODO: FIXME: Update the description.
-    /// Registers the connected peer by creating a context for it.
-    ///
-    /// The `HeaderListRequest` message is sent to newly connected peers.
+    /// Starts a task for the new peer.
     pub fn register_peer(&mut self, peer: PeerId) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 

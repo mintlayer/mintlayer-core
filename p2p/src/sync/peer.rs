@@ -45,7 +45,12 @@ use crate::{
     PeerManagerEvent, Result,
 };
 
-/// TODO: FIXME: a peer context and corresponding message processing logic.
+// TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
+// TODO: Track the block availability for a peer.
+// TODO: Track the best known block for a peer and take into account the chain work when syncing.
+/// A peer context.
+///
+/// Syncing logic runs in a separate task for each peer.
 pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
@@ -124,19 +129,17 @@ where
     }
 
     async fn handle_event(&mut self, event: SyncingEvent) -> Result<()> {
-        match event {
+        let res = match event {
             SyncingEvent::Message { peer, message } => {
                 debug_assert_eq!(peer, *self.id);
-                let res = self.handle_message(message).await;
-                self.handle_result(res).await?;
+                self.handle_message(message).await
             }
             SyncingEvent::Announcement { peer, announcement } => {
                 debug_assert_eq!(peer, *self.id);
-                let res = self.handle_announcement(*announcement).await;
-                self.handle_result(res).await?;
+                self.handle_announcement(*announcement).await
             }
-        }
-        Ok(())
+        };
+        self.handle_result(res).await
     }
 
     async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
@@ -183,6 +186,7 @@ where
     /// Processes the blocks request.
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
         log::debug!("Blocks request from peer {}", self.id());
+
         // // TODO: FIXME:
         // if self.is_initial_block_download {
         //     log::debug!("Ignoring blocks request because the node is in initial block download");
@@ -419,7 +423,7 @@ where
         }
     }
 
-    /// Sends a block list request to the given peer.
+    /// Sends a block list request.
     ///
     /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
     /// headers are stored in the peer context.
