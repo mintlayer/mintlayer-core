@@ -22,6 +22,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::{JoinError, JoinHandle},
     time,
 };
 
@@ -49,6 +50,7 @@ pub struct SyncManagerHandle {
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
+    sync_manager_handle: JoinHandle<()>,
 }
 
 impl SyncManagerHandle {
@@ -85,7 +87,7 @@ impl SyncManagerHandle {
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        tokio::spawn(async move {
+        let sync_manager_handle = tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
             error_sender.send(e).unwrap();
         });
@@ -95,6 +97,7 @@ impl SyncManagerHandle {
             sync_event_sender: handle_sender,
             sync_event_receiver: handle_receiver,
             error_receiver,
+            sync_manager_handle,
         }
     }
 
@@ -196,6 +199,11 @@ impl SyncManagerHandle {
             .await
             .expect("Failed to receive event in time")
             .unwrap()
+    }
+
+    /// Awaits on the sync manager join handle and returns an error.
+    pub async fn join_error(self) -> JoinError {
+        self.sync_manager_handle.await.unwrap_err()
     }
 }
 

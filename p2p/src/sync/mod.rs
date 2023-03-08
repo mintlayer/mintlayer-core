@@ -194,10 +194,7 @@ where
     /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
-
-        if self.peers.remove(&peer).is_none() {
-            log::warn!("Unregistering unknown peer: {peer}");
-        }
+        self.peers.remove(&peer).expect(&format!("Unregistering unknown peer: {peer}"));
     }
 
     /// Announces the header of a new block to peers.

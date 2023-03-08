@@ -434,6 +434,10 @@ where
     /// headers are stored in the peer context.
     fn request_blocks(&mut self, mut headers: Vec<BlockHeader>) -> Result<()> {
         debug_assert!(self.known_headers.is_empty());
+
+        // Remove already requested blocks.
+        headers.retain(|h| !self.requested_blocks.contains(&h.get_id()));
+
         if headers.len() > *self.p2p_config.max_request_blocks_count {
             self.known_headers = headers.split_off(*self.p2p_config.max_request_blocks_count);
         }
