@@ -220,7 +220,7 @@ where
 
         // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
-        let best_known_block = self.best_known_block.clone().unwrap_or(0.into());
+        let best_known_block = self.best_known_block.unwrap_or(0.into());
         self.chainstate_handle
             .call(move |c| {
                 for id in ids {
