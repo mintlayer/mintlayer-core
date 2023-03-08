@@ -111,6 +111,8 @@ where
     }
 
     pub async fn run(&mut self) -> Result<Void> {
+        // TODO: Improve the initial header exchange. See the
+        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
         self.request_headers().await?;
 
         loop {
@@ -120,15 +122,16 @@ where
                     self.handle_event(event).await?;
                 },
 
-                block = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
-                    let res = self.send_block(block).await;
-                    self.handle_result(res).await?;
+                block_to_send_to_peer = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
+                    self.send_block(block_to_send_to_peer).await?;
                 }
             }
         }
     }
 
     async fn request_headers(&mut self) -> Result<()> {
+        // TODO: Improve the initial header exchange. See the
+        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
@@ -453,9 +456,12 @@ where
     }
 
     async fn send_block(&mut self, block: Id<Block>) -> Result<()> {
-        let block = self.chainstate_handle.call(move |c| c.get_block(block)).await??.ok_or(
-            P2pError::ProtocolError(ProtocolError::UnknownBlockRequested),
-        )?;
+        let block = self
+            .chainstate_handle
+            .call(move |c| c.get_block(block))
+            .await??
+            // All requested blocks are already checked while processing `BlockListRequest`.
+            .unwrap_or_else(|| panic!("Unknown block requested: {block}"));
         self.message_sender
             .send((
                 self.id(),
