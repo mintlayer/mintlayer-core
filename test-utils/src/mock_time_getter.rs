@@ -19,15 +19,13 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-// NOTE: `get_instant` won't work correctly if the counter goes backwards
 pub fn mocked_time_getter_seconds(seconds: Arc<AtomicU64>) -> TimeGetter {
     TimeGetter::new(Arc::new(MockedMsecTimeGetterFn::new(seconds, 1000)))
 }
 
-// NOTE: `get_instant` won't work correctly if the counter goes backwards
 pub fn mocked_time_getter_milliseconds(milliseconds: Arc<AtomicU64>) -> TimeGetter {
     TimeGetter::new(Arc::new(MockedMsecTimeGetterFn::new(milliseconds, 1)))
 }
@@ -35,26 +33,17 @@ pub fn mocked_time_getter_milliseconds(milliseconds: Arc<AtomicU64>) -> TimeGett
 struct MockedMsecTimeGetterFn {
     count: Arc<AtomicU64>,
     multiplier: u64,
-    started_at: Instant,
 }
 
 impl MockedMsecTimeGetterFn {
     fn new(count: Arc<AtomicU64>, multiplier: u64) -> Self {
-        Self {
-            count,
-            multiplier,
-            started_at: Instant::now(),
-        }
+        Self { count, multiplier }
     }
 }
 
 impl TimeGetterFn for MockedMsecTimeGetterFn {
-    fn system_time(&self) -> Duration {
+    fn get_time(&self) -> Duration {
         Duration::from_millis(self.multiplier * self.count.load(Ordering::SeqCst))
-    }
-
-    fn instant(&self) -> Instant {
-        self.started_at + self.system_time()
     }
 }
 
@@ -71,13 +60,8 @@ mod test {
         let seconds = Arc::new(AtomicU64::new(12345));
         let time_getter = mocked_time_getter_seconds(Arc::clone(&seconds));
         let time = time_getter.get_time();
-        let instant = time_getter.get_instant();
         seconds.fetch_add(123, Ordering::SeqCst);
         assert_eq!(time_getter.get_time() - time, Duration::from_secs(123));
-        assert_eq!(
-            time_getter.get_instant().duration_since(instant),
-            Duration::from_secs(123)
-        );
     }
 
     #[test]
@@ -85,12 +69,7 @@ mod test {
         let milliseconds = Arc::new(AtomicU64::new(12345));
         let time_getter = mocked_time_getter_milliseconds(Arc::clone(&milliseconds));
         let time = time_getter.get_time();
-        let instant = time_getter.get_instant();
         milliseconds.fetch_add(123, Ordering::SeqCst);
         assert_eq!(time_getter.get_time() - time, Duration::from_millis(123));
-        assert_eq!(
-            time_getter.get_instant().duration_since(instant),
-            Duration::from_millis(123)
-        );
     }
 }

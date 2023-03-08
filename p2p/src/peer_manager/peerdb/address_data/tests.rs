@@ -27,7 +27,7 @@ use super::*;
 #[case(Seed::from_entropy())]
 fn randomized(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let started_at = Instant::now();
+    let started_at = Duration::ZERO;
 
     let weights = [100, 100, 100, 10, 10];
     assert_eq!(weights.len(), ALL_TRANSITIONS.len());

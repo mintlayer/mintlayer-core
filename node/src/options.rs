@@ -60,6 +60,11 @@ pub struct RunOptions {
     #[clap(long)]
     pub node_type: Option<NodeTypeConfigFile>,
 
+    /// Mock time.
+    #[clap(long)]
+    #[arg(hide = true)]
+    pub mock_time: Option<u64>,
+
     /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,

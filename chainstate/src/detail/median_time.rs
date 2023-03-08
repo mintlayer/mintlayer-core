@@ -113,7 +113,7 @@ mod test {
             let blocks = chain_blocks(
                 block_count,
                 chainstate.chain_config.genesis_block_id(),
-                time::get_system_time().as_secs(),
+                time::get_time().as_secs(),
             );
 
             for block in &blocks {

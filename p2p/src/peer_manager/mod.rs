@@ -26,7 +26,7 @@ use std::{
 };
 
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
-use tokio::{sync::mpsc, time::Instant};
+use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -97,6 +97,8 @@ where
     /// P2P configuration.
     p2p_config: Arc<P2pConfig>,
 
+    time_getter: TimeGetter,
+
     /// Handle for sending/receiving connectivity events
     peer_connectivity_handle: T::ConnectivityHandle,
 
@@ -134,7 +136,8 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
-        let peerdb = peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter, peerdb_storage)?;
+        let peerdb =
+            peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
         utils::ensure!(
             !p2p_config.ping_timeout.is_zero(),
             P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
@@ -142,6 +145,7 @@ where
         Ok(PeerManager {
             chain_config,
             p2p_config,
+            time_getter,
             peer_connectivity_handle: handle,
             rx_peer_manager,
             pending_outbound_connects: HashMap::new(),
@@ -893,13 +897,13 @@ where
 
     /// Sends ping requests and disconnects peers that do not respond in time
     fn ping_check(&mut self) {
-        let now = Instant::now();
+        let now = self.time_getter.get_time();
         let mut dead_peers = Vec::new();
         for (peer_id, peer) in self.peers.iter_mut() {
             // If a ping has already been sent, wait for a reply first, do not send another ping request!
             match &peer.sent_ping {
                 Some(sent_ping) => {
-                    if now.duration_since(sent_ping.timestamp) >= *self.p2p_config.ping_timeout {
+                    if now >= sent_ping.timestamp + *self.p2p_config.ping_timeout {
                         log::info!("ping check: dead peer detected: {peer_id}");
                         dead_peers.push(*peer_id);
                     } else {
@@ -953,7 +957,7 @@ where
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
-        let mut last_heartbeat = Instant::now();
+        let mut last_heartbeat = self.time_getter.get_time();
 
         loop {
             tokio::select! {
@@ -970,8 +974,8 @@ where
             }
 
             // Finally, update the peer manager state
-            let now = Instant::now();
-            if now.duration_since(last_heartbeat) >= PEER_MGR_HEARTBEAT_INTERVAL_MIN {
+            let now = self.time_getter.get_time();
+            if now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN {
                 self.heartbeat().await;
                 last_heartbeat = now;
             }

@@ -377,7 +377,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     current_best: &best_block_index,
                 },
                 &spend_locked_tx,
-                &BlockTimestamp::from_duration_since_epoch(time::get_system_time()),
+                &BlockTimestamp::from_duration_since_epoch(time::get_time()),
             )
             .unwrap();
     });

@@ -15,6 +15,9 @@
 
 //! Node RPC methods
 
+use std::sync::Arc;
+
+use chainstate_launcher::ChainConfig;
 use subsystem::manager::ShutdownTrigger;
 
 #[rpc::rpc(server, namespace = "node")]
@@ -26,15 +29,22 @@ trait NodeRpc {
     /// Get node software version
     #[method(name = "version")]
     fn version(&self) -> rpc::Result<String>;
+
+    #[method(name = "set_mock_time")]
+    fn set_mock_time(&self, time: u64) -> rpc::Result<()>;
 }
 
 struct NodeRpc {
     shutdown_trigger: ShutdownTrigger,
+    chain_config: Arc<ChainConfig>,
 }
 
 impl NodeRpc {
-    fn new(shutdown_trigger: ShutdownTrigger) -> Self {
-        Self { shutdown_trigger }
+    fn new(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> Self {
+        Self {
+            shutdown_trigger,
+            chain_config,
+        }
     }
 }
 
@@ -47,8 +57,13 @@ impl NodeRpcServer for NodeRpc {
     fn version(&self) -> rpc::Result<String> {
         Ok(env!("CARGO_PKG_VERSION").into())
     }
+
+    fn set_mock_time(&self, time: u64) -> rpc::Result<()> {
+        crate::mock_time::set_mock_time(*self.chain_config.chain_type(), time)?;
+        Ok(())
+    }
 }
 
-pub fn init(shutdown_trigger: ShutdownTrigger) -> rpc::Methods {
-    NodeRpc::new(shutdown_trigger).into_rpc().into()
+pub fn init(shutdown_trigger: ShutdownTrigger, chain_config: Arc<ChainConfig>) -> rpc::Methods {
+    NodeRpc::new(shutdown_trigger, chain_config).into_rpc().into()
 }

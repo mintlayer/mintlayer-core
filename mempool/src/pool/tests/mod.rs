@@ -645,7 +645,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx1_parents,
         entry_1_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
     let tx2_parents = BTreeSet::default();
@@ -655,7 +655,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx2_parents,
         entry_2_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
 
@@ -667,7 +667,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx3_parents,
         tx3_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
 
@@ -681,7 +681,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx4_parents,
         tx4_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
     let entry5 = TxMempoolEntry::new(
@@ -689,7 +689,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx5_parents,
         tx5_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
 
@@ -704,7 +704,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         fee,
         tx6_parents,
         tx6_ancestors,
-        time::get_system_time(),
+        time::get_time(),
     )
     .unwrap();
 
