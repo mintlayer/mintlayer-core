@@ -30,7 +30,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
     chain::{block::BlockHeader, Block},
-    primitives::{Id, Idable},
+    primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
 use utils::const_value::ConstValue;
@@ -75,6 +75,8 @@ pub struct Peer<T: NetworkingService> {
     requested_blocks: BTreeSet<Id<Block>>,
     /// A queue of the blocks requested this peer.
     blocks_queue: VecDeque<Id<Block>>,
+    /// The height of the best known block of a peer.
+    best_known_block: Option<BlockHeight>,
 }
 
 impl<T> Peer<T>
@@ -102,6 +104,7 @@ where
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
             blocks_queue: VecDeque::new(),
+            best_known_block: None,
         }
     }
 
@@ -215,14 +218,21 @@ where
             ))?;
         log::trace!("Requested block ids: {block_ids:#?}");
 
-        // Check that all blocks are known.
+        // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
+        let best_known_block = self.best_known_block.clone().unwrap_or(0.into());
         self.chainstate_handle
             .call(move |c| {
                 for id in ids {
-                    c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
+                    let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
                         ProtocolError::UnknownBlockRequested,
                     ))?;
+
+                    if index.block_height() <= best_known_block {
+                        return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                            "Peer requested already known block",
+                        )));
+                    }
                 }
                 Result::<_>::Ok(())
             })
@@ -455,13 +465,20 @@ where
         Ok(())
     }
 
-    async fn send_block(&mut self, block: Id<Block>) -> Result<()> {
-        let block = self
+    async fn send_block(&mut self, id: Id<Block>) -> Result<()> {
+        let (block, height) = self
             .chainstate_handle
-            .call(move |c| c.get_block(block))
-            .await??
-            // All requested blocks are already checked while processing `BlockListRequest`.
-            .unwrap_or_else(|| panic!("Unknown block requested: {block}"));
+            .call(move |c| {
+                let height = c.get_block_height_in_main_chain(&id.into());
+                let block = c.get_block(id);
+                (block, height)
+            })
+            .await?;
+        // All requested blocks are already checked while processing `BlockListRequest`.
+        let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
+        let height = height?;
+        self.best_known_block = height;
+
         self.message_sender
             .send((
                 self.id(),
