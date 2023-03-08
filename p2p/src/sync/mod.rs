@@ -194,7 +194,9 @@ where
     /// Stops the task of the given peer by closing the corresponding channel.
     fn unregister_peer(&mut self, peer: PeerId) {
         log::debug!("Unregister peer {peer} from sync manager");
-        self.peers.remove(&peer).expect(&format!("Unregistering unknown peer: {peer}"));
+        self.peers
+            .remove(&peer)
+            .unwrap_or_else(|| panic!("Unregistering unknown peer: {peer}"));
     }
 
     /// Announces the header of a new block to peers.
@@ -238,9 +240,10 @@ where
             }
         };
 
-        let peer_channel = self.peers.get(&peer).expect(&format!(
-            "Received a message from unknown peer ({peer}): {event:?}"
-        ));
+        let peer_channel = self
+            .peers
+            .get(&peer)
+            .unwrap_or_else(|| panic!("Received a message from unknown peer ({peer}): {event:?}"));
 
         if let Err(e) = peer_channel.send(event) {
             log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");
