@@ -548,6 +548,13 @@ where
     }
 
     fn handle_message(&mut self, peer: PeerId, message: Message) -> crate::Result<()> {
+        // Do not process remaining messages if the peer has been forcibly disconnected (for example, after being banned).
+        // Without this check, the backend might send messages to the sync and peer managers after sending the disconnect notification.
+        if !self.peers.contains_key(&peer) {
+            log::debug!("ignore received messaged from a disconnected peer");
+            return Ok(());
+        }
+
         match message {
             Message::Handshake(_) => {
                 log::error!("peer {peer} sent handshaking message");
