@@ -112,7 +112,7 @@ where
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
         self.is_initial_block_download.store(
             self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
-            Ordering::SeqCst,
+            Ordering::Release,
         );
 
         loop {
@@ -205,7 +205,7 @@ where
         if self.is_initial_block_download.load(Ordering::SeqCst) {
             self.is_initial_block_download.store(
                 self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
-                Ordering::SeqCst,
+                Ordering::Release,
             );
         }
 
@@ -249,7 +249,11 @@ where
             }
         };
 
-        peer_channel.send(event).map_err(Into::into)
+        if let Err(e) = peer_channel.send(event) {
+            log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");
+            self.unregister_peer(peer);
+        }
+        Ok(())
     }
 }
 

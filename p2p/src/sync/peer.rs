@@ -374,8 +374,7 @@ where
     /// Handles a result of message processing.
     ///
     /// There are three possible types of errors:
-    /// - Fatal errors will be propagated by this function effectively stopping the sync manager
-    ///   and the whole p2p subsystem.
+    /// - Fatal errors will be propagated by this function effectively stopping the peer event loop.
     /// - Non-fatal errors aren't propagated, but the peer score will be increased by the
     ///   "ban score" value of the given error.
     /// - Ignored errors aren't propagated and don't affect the peer score.
