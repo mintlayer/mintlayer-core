@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use super::{
-    cached_operation::CachedInputsOperation,
+    cached_inputs_operation::CachedInputsOperation,
     storage::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,

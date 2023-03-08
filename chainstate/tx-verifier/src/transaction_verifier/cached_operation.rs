@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,53 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{error::TxIndexError, CachedOperation};
-use common::chain::{Spender, TxMainChainIndex};
-
-pub type CachedInputsOperation = CachedOperation<TxMainChainIndex>;
-
-impl CachedInputsOperation {
-    pub fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), TxIndexError> {
-        // spend the output
-        match self {
-            CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.spend(output_index, spender).map_err(TxIndexError::from)?
-            }
-            CachedInputsOperation::Erase => {
-                return Err(TxIndexError::MissingOutputOrSpentOutputErasedOnConnect)
-            }
-        }
-
-        self.mark_as_write();
-
-        Ok(())
-    }
-
-    pub fn unspend(&mut self, output_index: u32) -> Result<(), TxIndexError> {
-        // unspend the output
-        match self {
-            CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.unspend(output_index).map_err(TxIndexError::from)?
-            }
-            CachedInputsOperation::Erase => {
-                return Err(TxIndexError::MissingOutputOrSpentOutputErasedOnDisconnect)
-            }
-        }
-
-        self.mark_as_write();
-
-        Ok(())
-    }
-
-    fn mark_as_write(&mut self) {
-        // replace &mut self with a new value (must be done like this because it's unsafe)
-        let replacer_func = |self_| match self_ {
-            CachedInputsOperation::Write(tx_index) => CachedInputsOperation::Write(tx_index),
-            CachedInputsOperation::Read(tx_index) => CachedInputsOperation::Write(tx_index),
-            CachedInputsOperation::Erase => unreachable!(),
-        };
-        replace_with::replace_with_or_abort(self, replacer_func);
-    }
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CachedOperation<T> {
+    Write(T),
+    Read(T),
+    Erase,
 }
-
-// TODO: tests
