@@ -56,8 +56,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.assert_panic("Received a message from unknown peer").await;
 }
 
 #[rstest::rstest]

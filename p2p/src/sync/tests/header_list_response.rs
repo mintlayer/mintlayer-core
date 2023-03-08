@@ -41,8 +41,7 @@ async fn nonexistent_peer() {
         SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
     );
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.assert_panic("Received a message from unknown peer").await;
 }
 
 #[rstest::rstest]

@@ -61,8 +61,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.assert_panic("Received a message from unknown peer").await;
 }
 
 // The header list request is sent if the parent of the announced block is unknown.

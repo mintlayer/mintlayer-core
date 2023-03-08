@@ -238,13 +238,9 @@ where
             }
         };
 
-        let peer_channel = match self.peers.get(&peer) {
-            Some(c) => c,
-            None => {
-                log::warn!("Received a message from unknown peer ({peer}): {event:?}");
-                return Ok(());
-            }
-        };
+        let peer_channel = self.peers.get(&peer).expect(&format!(
+            "Received a message from unknown peer ({peer}): {event:?}"
+        ));
 
         if let Err(e) = peer_channel.send(event) {
             log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");

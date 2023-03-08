@@ -48,11 +48,7 @@ async fn disconnect_nonexistent_peer() {
     let peer = PeerId::new();
     handle.disconnect_peer(peer);
 
-    let panic = handle.join_error().await.into_panic();
-    assert!(panic
-        .downcast_ref::<String>()
-        .unwrap()
-        .starts_with("Unregistering unknown peer:"));
+    handle.assert_panic("Unregistering unknown peer:").await;
 }
 
 #[tokio::test]

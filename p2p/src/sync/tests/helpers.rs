@@ -22,7 +22,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    task::{JoinError, JoinHandle},
+    task::JoinHandle,
     time,
 };
 
@@ -201,9 +201,11 @@ impl SyncManagerHandle {
             .unwrap()
     }
 
-    /// Awaits on the sync manager join handle and returns an error.
-    pub async fn join_error(self) -> JoinError {
-        self.sync_manager_handle.await.unwrap_err()
+    /// Awaits on the sync manager join handle and asserts that the panic message starts with the
+    /// given string.
+    pub async fn assert_panic(self, starts_with: &str) {
+        let panic = self.sync_manager_handle.await.unwrap_err().into_panic();
+        assert!(panic.downcast_ref::<String>().unwrap().starts_with(starts_with));
     }
 }
 
