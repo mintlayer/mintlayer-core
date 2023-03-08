@@ -77,7 +77,6 @@ pub enum PeerEvent {
 /// Events sent by the default_backend backend to peers
 #[derive(Debug)]
 pub enum Event {
-    Disconnect,
     Accepted,
     SendMessage(Box<Message>),
 }

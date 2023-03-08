@@ -52,6 +52,8 @@ use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 
 /// Active peer data
 struct PeerContext {
+    handle: tokio::task::JoinHandle<()>,
+
     subscriptions: BTreeSet<PubSubTopic>,
 
     /// Channel used to send messages to the peer's event loop.
@@ -66,6 +68,8 @@ struct PeerContext {
 
 /// Pending peer data (until handshake message is received)
 struct PendingPeerContext<A> {
+    handle: tokio::task::JoinHandle<()>,
+
     address: A,
 
     peer_role: PeerRole,
@@ -191,12 +195,10 @@ where
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        let peer = self
+        let _peer = self
             .peers
             .get(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        peer.tx.send(Event::Disconnect).map_err(P2pError::from)?;
 
         self.destroy_peer(peer_id)
     }
@@ -318,7 +320,7 @@ where
         peer_role: PeerRole,
         address: T::Address,
     ) -> crate::Result<()> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (peer_tx, peer_rx) = mpsc::unbounded_channel();
 
         // Sending the remote socket address makes no sense and can leak private information when using a proxy
         let receiver_address = if self.p2p_config.socks5_proxy.is_some() {
@@ -327,20 +329,11 @@ where
             Some(address.as_peer_address())
         };
 
-        self.pending.insert(
-            remote_peer_id,
-            PendingPeerContext {
-                address,
-                peer_role,
-                tx,
-            },
-        );
-
-        let tx = self.peer_chan.0.clone();
+        let backend_tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
         let p2p_config = Arc::clone(&self.p2p_config);
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
                 remote_peer_id,
                 peer_role,
@@ -348,14 +341,24 @@ where
                 p2p_config,
                 socket,
                 receiver_address,
-                tx,
-                rx,
+                backend_tx,
+                peer_rx,
             );
             let run_res = peer.run().await;
             if let Err(err) = run_res {
                 log::error!("peer {remote_peer_id} failed: {err}");
             }
         });
+
+        self.pending.insert(
+            remote_peer_id,
+            PendingPeerContext {
+                handle,
+                address,
+                peer_role,
+                tx: peer_tx,
+            },
+        );
 
         Ok(())
     }
@@ -371,6 +374,7 @@ where
         receiver_address: Option<PeerAddress>,
     ) -> crate::Result<()> {
         let PendingPeerContext {
+            handle,
             address,
             peer_role,
             tx,
@@ -410,6 +414,7 @@ where
         self.peers.insert(
             peer_id,
             PeerContext {
+                handle,
                 subscriptions,
                 tx,
                 was_accepted: Default::default(),
@@ -432,6 +437,11 @@ where
         if *peer.was_accepted {
             Self::send_sync_event(&self.sync_tx, SyncingEvent::Disconnected { peer_id });
         }
+
+        // Terminate the peer's event loop as soon as possible.
+        // It's needed to free used resources if the peer is blocked at some await point
+        // (for example, trying to send something big over a slow network connection)
+        peer.handle.abort();
 
         self.conn_tx
             .send(ConnectivityEvent::ConnectionClosed { peer_id })
