@@ -32,7 +32,7 @@ pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, InitializationError, OrphanCheckError,
 };
-// TODO: ConnectTransactionError used in unit tests to check block processing results. We have to find more appropriate place for this error.
+
 pub use transaction_verifier::{
     error::{ConnectTransactionError, TokensError, TxIndexError},
     storage::TransactionVerifierStorageError,
