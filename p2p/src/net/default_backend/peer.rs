@@ -209,7 +209,6 @@ where
                 biased;
 
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    Event::Disconnect => return Ok(()),
                     Event::Accepted => was_accepted = true,
                     Event::SendMessage(message) => self.socket.send(*message).await?,
                 },

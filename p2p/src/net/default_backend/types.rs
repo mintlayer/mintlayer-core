@@ -77,7 +77,6 @@ pub enum PeerEvent {
 /// Events sent by the default_backend backend to peers
 #[derive(Debug)]
 pub enum Event {
-    Disconnect,
     Accepted,
     SendMessage(Box<Message>),
 }
@@ -109,17 +108,32 @@ pub enum HandshakeMessage {
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Clone)]
 pub enum Message {
+    #[codec(index = 0)]
     Handshake(HandshakeMessage),
-    HeaderListRequest(HeaderListRequest),
-    BlockListRequest(BlockListRequest),
-    AddrListRequest(AddrListRequest),
-    AnnounceAddrRequest(AnnounceAddrRequest),
+
+    #[codec(index = 1)]
     PingRequest(PingRequest),
-    HeaderListResponse(HeaderListResponse),
-    BlockResponse(BlockResponse),
-    AddrListResponse(AddrListResponse),
+    #[codec(index = 2)]
     PingResponse(PingResponse),
+
+    #[codec(index = 3)]
     Announcement(Box<Announcement>),
+
+    #[codec(index = 4)]
+    HeaderListRequest(HeaderListRequest),
+    #[codec(index = 5)]
+    HeaderListResponse(HeaderListResponse),
+    #[codec(index = 6)]
+    BlockListRequest(BlockListRequest),
+    #[codec(index = 7)]
+    BlockResponse(BlockResponse),
+
+    #[codec(index = 8)]
+    AnnounceAddrRequest(AnnounceAddrRequest),
+    #[codec(index = 9)]
+    AddrListRequest(AddrListRequest),
+    #[codec(index = 10)]
+    AddrListResponse(AddrListResponse),
 }
 
 impl From<PeerManagerMessage> for Message {
