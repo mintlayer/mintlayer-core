@@ -201,14 +201,15 @@ where
 
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
-        if self.is_initial_block_download.load(Ordering::SeqCst) {
-            self.is_initial_block_download.store(
-                self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
-                Ordering::Release,
-            );
-        }
+        let is_initial_block_download = if self.is_initial_block_download.load(Ordering::Relaxed) {
+            let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+            self.is_initial_block_download.store(is_ibd, Ordering::Release);
+            is_ibd
+        } else {
+            false
+        };
 
-        if self.is_initial_block_download.load(Ordering::SeqCst) {
+        if is_initial_block_download {
             return Ok(());
         }
 

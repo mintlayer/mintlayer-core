@@ -194,7 +194,7 @@ where
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
         log::debug!("Blocks request from peer {}", self.id());
 
-        if self.is_initial_block_download.load(Ordering::SeqCst) {
+        if self.is_initial_block_download.load(Ordering::Acquire) {
             log::debug!("Ignoring blocks request because the node is in initial block download");
             return Ok(());
         }
