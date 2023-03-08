@@ -338,9 +338,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
         let mut result = Vec::new();
         let mut block_index = new_tip_block_index.clone();
-        // TODO: looping like this isn't efficient. We should use some new common ancestor
-        //       function that uses the some_ancestor member to quickly roll back in history
-        //       to find the closest ancestor that's in the mainchain
         while !self.is_block_in_main_chain(&(*block_index.block_id()).into()).log_err()? {
             result.push(block_index.clone());
             block_index = match self.get_previous_block_index(&block_index).log_err()? {
