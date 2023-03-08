@@ -41,6 +41,7 @@ use crate::{
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -61,7 +62,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
 
-    handle.assert_panic("Received a message from unknown peer").await;
+    handle.resume_panic().await;
 }
 
 // The header list request is sent if the parent of the announced block is unknown.

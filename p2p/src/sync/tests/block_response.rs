@@ -36,6 +36,7 @@ use crate::{
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -56,7 +57,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
-    handle.assert_panic("Received a message from unknown peer").await;
+    handle.resume_panic().await;
 }
 
 #[rstest::rstest]

@@ -42,13 +42,14 @@ async fn connect_peer_twice() {
 }
 
 #[tokio::test]
+#[should_panic = "Unregistering unknown peer:"]
 async fn disconnect_nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.disconnect_peer(peer);
 
-    handle.assert_panic("Unregistering unknown peer:").await;
+    handle.resume_panic().await;
 }
 
 #[tokio::test]

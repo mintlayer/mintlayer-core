@@ -29,8 +29,8 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-// Messages from unknown peers are ignored.
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -41,7 +41,7 @@ async fn nonexistent_peer() {
         SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
     );
 
-    handle.assert_panic("Received a message from unknown peer").await;
+    handle.resume_panic().await;
 }
 
 #[rstest::rstest]
