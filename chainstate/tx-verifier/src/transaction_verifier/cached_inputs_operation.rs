@@ -85,7 +85,7 @@ mod tests {
     fn test_spend_from_read(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let output_count = rng.gen::<u32>() % 100;
+        let output_count = 1 + rng.gen::<u32>() % 100;
         let index = rng.gen::<u32>() % output_count;
 
         let tx_index = make_tx_index(output_count);
@@ -115,7 +115,7 @@ mod tests {
     fn test_spend_from_write(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let output_count = rng.gen::<u32>() % 100;
+        let output_count = 1 + rng.gen::<u32>() % 100;
         let index = rng.gen::<u32>() % output_count;
 
         let tx_index = make_tx_index(output_count);
