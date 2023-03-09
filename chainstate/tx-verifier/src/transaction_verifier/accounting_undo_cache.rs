@@ -22,7 +22,9 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use pos_accounting::{AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo};
+use pos_accounting::{
+    AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError, AccountingTxUndo,
+};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct AccountingBlockUndoEntry {
@@ -96,6 +98,17 @@ impl AccountingBlockUndoCache {
         block_undo
             .take_tx_undo(tx_id)
             .ok_or(ConnectTransactionError::MissingPoSAccountingUndo(*tx_id))
+    }
+
+    pub fn take_block_reward_undo<F>(
+        &mut self,
+        tx_source: &TransactionSource,
+        fetcher_func: F,
+    ) -> Result<Option<AccountingBlockRewardUndo>, ConnectTransactionError>
+    where
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
+    {
+        Ok(self.fetch_block_undo(tx_source, fetcher_func)?.take_reward_undos())
     }
 
     pub fn get_or_create_block_undo(

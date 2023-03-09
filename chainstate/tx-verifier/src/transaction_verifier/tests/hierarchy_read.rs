@@ -553,8 +553,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo =
-            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
+        let block_undo = AccountingBlockUndo::new(
+            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+            None,
+        );
 
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(
@@ -575,8 +577,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
-        let block_undo =
-            AccountingBlockUndo::new(BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]));
+        let block_undo = AccountingBlockUndo::new(
+            BTreeMap::from([(tx_id, AccountingTxUndo::new(vec![undo]))]),
+            None,
+        );
 
         verifier.accounting_block_undo =
             AccountingBlockUndoCache::new_for_test(BTreeMap::from([(

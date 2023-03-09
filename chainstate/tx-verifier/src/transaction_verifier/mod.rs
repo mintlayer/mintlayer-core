@@ -65,8 +65,8 @@ use common::{
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView,
+    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
@@ -459,10 +459,15 @@ where
             },
         )?;
 
-        // TODO: subsidy shouldn't be added for PoS
-        let max_allowed_outputs_total =
-            amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
-                .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
+        let max_allowed_outputs_total = match block.header().consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => {
+                amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
+            }
+            ConsensusData::PoS(_) => {
+                amount_sum!(inputs_total, total_fees.0)
+            }
+        }
+        .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_outputs_total {
             return Err(ConnectTransactionError::AttemptToPrintMoney(
@@ -841,6 +846,22 @@ where
             tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
         }
 
+        // add subsidy to the pool balance
+        match block_index.block_header().consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+            ConsensusData::PoS(pos_data) => {
+                let block_subsidy =
+                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                let undo = self
+                    .accounting_delta
+                    .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
+
+                self.accounting_block_undo
+                    .get_or_create_block_undo(&TransactionSource::Chain(block_id))
+                    .set_reward_undo(AccountingBlockRewardUndo::new(vec![undo]));
+            }
+        };
+
         Ok(())
     }
 
@@ -993,17 +1014,34 @@ where
                     reward_undo,
                 )?;
 
-                let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
-
                 if let (Some(inputs), Some(tx_index_cache)) =
                     (reward_transactable.inputs(), self.tx_index_cache.as_mut())
                 {
                     // pre-cache all inputs
+                    let tx_index_fetcher =
+                        |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
                     tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // unspend inputs
                     tx_index_cache.unspend_tx_index_inputs(inputs)?;
+                }
+
+                match block.header().consensus_data() {
+                    ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+                    ConsensusData::PoS(_) => {
+                        let block_undo_fetcher =
+                            |id: Id<Block>| self.storage.get_accounting_undo(id);
+                        let reward_undo = self.accounting_block_undo.take_block_reward_undo(
+                            &TransactionSource::Chain(block.get_id()),
+                            block_undo_fetcher,
+                        )?;
+                        if let Some(reward_undo) = reward_undo {
+                            reward_undo
+                                .into_inner()
+                                .into_iter()
+                                .try_for_each(|undo| self.accounting_delta.undo(undo))?;
+                        }
+                    }
                 }
             }
         }

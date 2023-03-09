@@ -25,8 +25,8 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
-            SpendFromShareUndo,
+            DelegationDataUndo, IncreasePoolBalanceUndo, PoSAccountingOperations,
+            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -82,6 +82,21 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             pool_id,
             data_undo: PoolDataUndo::Data(Box::new(pool_data)),
         }))
+    }
+
+    fn increase_pool_balance(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<PoSAccountingUndo, Error> {
+        self.add_balance_to_pool(pool_id, amount_to_add)?;
+
+        Ok(PoSAccountingUndo::IncreasePoolBalance(
+            IncreasePoolBalanceUndo {
+                pool_id,
+                amount_to_add,
+            },
+        ))
     }
 
     fn create_delegation_id(
@@ -167,6 +182,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
+            PoSAccountingUndo::IncreasePoolBalance(undo) => self.undo_increase_pool_balance(undo),
         }
     }
 }
@@ -277,6 +293,15 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         self.add_balance_to_pool(pool_id, undo_data.amount)?;
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
+
+        Ok(())
+    }
+
+    fn undo_increase_pool_balance(
+        &mut self,
+        undo_data: IncreasePoolBalanceUndo,
+    ) -> Result<(), Error> {
+        self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_to_add)?;
 
         Ok(())
     }

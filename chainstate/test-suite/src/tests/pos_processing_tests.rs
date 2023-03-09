@@ -19,7 +19,7 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
     ConnectTransactionError, SpendStakeError,
 };
-use chainstate_storage::{BlockchainStorageRead, Transactional};
+use chainstate_storage::{BlockchainStorageRead, TipStorageTag, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -46,6 +46,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFError, VRFKeyKind, VRFPrivateKey},
 };
+use pos_accounting::PoSAccountingStorageRead;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -192,6 +193,14 @@ fn pos_basic(#[case] seed: Seed) {
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
+
+    let res_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
+    let initially_staked = Amount::from_atoms(1);
+    assert_eq!((subsidy + initially_staked).unwrap(), res_pool_balance);
 }
 
 // PoS consensus activates on height 1.
@@ -595,7 +604,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    println!("intial randomness : {:?}", initial_randomness);
     let pos_data = create_pos_data(
         &mut tf,
         stake_pool_outpoint,
@@ -665,6 +673,18 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_reward(vec![reward_output])
         .build_and_process()
         .unwrap();
+
+    let res_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let total_subsidy =
+        tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
+    let initially_staked = Amount::from_atoms(1);
+    assert_eq!(
+        (total_subsidy.unwrap() + initially_staked).unwrap(),
+        res_pool_balance
+    );
 }
 
 #[rstest]
@@ -787,5 +807,128 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::InvalidBlockRewardOutputType(block_id)
         ))
+    );
+}
+
+// Produce `genesis -> a -> b` chain, then a parallel `genesis -> a -> c -> d` that should trigger a reorg.
+// Block `a` has stake pool output. Also at block 'a' PoS activates.
+// Blocks `b`, `c`, `d` have produce block from stake outputs.
+// Check that after reorg pool balance doesn't include reward from block `a`
+//
+// TODO: enable when "verify inputs unspent" is supported
+#[ignore]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_pool_balance_after_reorg(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+        ),
+    ];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let chain_config = ConfigBuilder::test_chain()
+        .net_upgrades(net_upgrades)
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .build();
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    // create initial chain: genesis <- block_a
+    let (vrf_sk, stake_pool_data) = create_stake_pool_data(&mut rng);
+    let (stake_pool_outpoint, pool_id) =
+        add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data.clone());
+    let block_a_id = tf.best_block_id();
+
+    // prepare and process block_b with StakePool -> ProduceBlockFromStake kernel
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let pos_data = create_pos_data(
+        &mut tf,
+        stake_pool_outpoint,
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        initial_randomness,
+        pool_id,
+        1,
+    );
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data.clone())),
+    );
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![reward_output])
+        .build_and_process()
+        .unwrap();
+
+    // prepare and process block_c with ProduceBlockFromStake -> ProduceBlockFromStake kernel
+    let block_a_reward_outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_a_id), 0);
+    let pos_data = create_pos_data(
+        &mut tf,
+        block_a_reward_outpoint,
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        initial_randomness,
+        pool_id,
+        1,
+    );
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data.clone())),
+    );
+    let block_c_index = tf
+        .make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![reward_output])
+        .with_parent(block_a_id)
+        .build_and_process()
+        .unwrap()
+        .unwrap();
+
+    // prepare and process block_d with ProduceBlockFromStake -> ProduceBlockFromStake kernel
+    let block_3_reward_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward((*block_c_index.block_id()).into()),
+        0,
+    );
+
+    // both sealed epoch and pre block randomness can be used
+    let sealed_epoch_randomness =
+        tf.storage.transaction_ro().unwrap().get_epoch_data(1).unwrap().unwrap();
+    let pos_data = create_pos_data(
+        &mut tf,
+        block_3_reward_outpoint,
+        &vrf_sk,
+        sealed_epoch_randomness.randomness().value(),
+        pool_id,
+        2,
+    );
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::ProduceBlockFromStake(Box::new(stake_pool_data)),
+    );
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![reward_output])
+        .with_parent((*block_c_index.block_id()).into())
+        .build_and_process()
+        .unwrap();
+
+    let res_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let total_subsidy =
+        tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
+    let initially_staked = Amount::from_atoms(1);
+    assert_eq!(
+        (total_subsidy.unwrap() + initially_staked).unwrap(),
+        res_pool_balance
     );
 }
