@@ -15,6 +15,7 @@
 
 use std::{
     net::{IpAddr, SocketAddr},
+    panic,
     sync::Arc,
     time::Duration,
 };
@@ -22,6 +23,7 @@ use std::{
 use async_trait::async_trait;
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
     time,
 };
 
@@ -30,8 +32,8 @@ use common::chain::{config::create_mainnet, ChainConfig};
 use p2p_test_utils::start_chainstate;
 
 use crate::{
-    net::default_backend::transport::TcpTransportSocket,
-    sync::{Announcement, BlockSyncManager, SyncMessage, SyncingEvent},
+    net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    sync::{Announcement, BlockSyncManager, SyncMessage},
     types::peer_id::PeerId,
     NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
 };
@@ -49,6 +51,7 @@ pub struct SyncManagerHandle {
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
+    sync_manager_handle: JoinHandle<()>,
 }
 
 impl SyncManagerHandle {
@@ -85,7 +88,7 @@ impl SyncManagerHandle {
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        tokio::spawn(async move {
+        let sync_manager_handle = tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
             error_sender.send(e).unwrap();
         });
@@ -95,6 +98,7 @@ impl SyncManagerHandle {
             sync_event_sender: handle_sender,
             sync_event_receiver: handle_receiver,
             error_receiver,
+            sync_manager_handle,
         }
     }
 
@@ -191,11 +195,16 @@ impl SyncManagerHandle {
         time::timeout(SHORT_TIMEOUT, self.sync_event_receiver.recv()).await.unwrap_err();
     }
 
-    async fn event(&mut self) -> SyncingEvent {
+    pub async fn event(&mut self) -> SyncingEvent {
         time::timeout(LONG_TIMEOUT, self.sync_event_receiver.recv())
             .await
             .expect("Failed to receive event in time")
             .unwrap()
+    }
+
+    /// Awaits on the sync manager join handle and rethrows the panic.
+    pub async fn resume_panic(self) {
+        panic::resume_unwind(self.sync_manager_handle.await.unwrap_err().into_panic());
     }
 }
 

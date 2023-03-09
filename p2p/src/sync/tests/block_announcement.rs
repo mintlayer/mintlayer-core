@@ -30,7 +30,8 @@ use p2p_test_utils::chainstate_subsystem;
 use test_utils::random::Seed;
 
 use crate::{
-    sync::{tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, SyncMessage},
+    message::{Announcement, BlockListRequest, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
 };
@@ -40,6 +41,7 @@ use crate::{
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -60,8 +62,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.make_announcement(peer, Announcement::Block(block.header().clone()));
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.resume_panic().await;
 }
 
 // The header list request is sent if the parent of the announced block is unknown.

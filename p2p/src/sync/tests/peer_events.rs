@@ -41,14 +41,15 @@ async fn connect_peer_twice() {
     );
 }
 
-// Disconnecting an unknown or nonexistent peer isn't an error.
 #[tokio::test]
+#[should_panic = "Unregistering unknown peer:"]
 async fn disconnect_nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
     let peer = PeerId::new();
     handle.disconnect_peer(peer);
-    handle.assert_no_error().await;
+
+    handle.resume_panic().await;
 }
 
 #[tokio::test]

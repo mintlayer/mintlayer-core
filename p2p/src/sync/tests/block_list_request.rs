@@ -24,13 +24,14 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    sync::{tests::helpers::SyncManagerHandle, BlockListRequest, BlockResponse, SyncMessage},
+    message::{BlockListRequest, BlockResponse, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
 };
 
-// Messages from unknown peers are ignored.
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -41,8 +42,7 @@ async fn nonexistent_peer() {
         SyncMessage::BlockListRequest(BlockListRequest::new(Vec::new())),
     );
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.resume_panic().await;
 }
 
 #[rstest::rstest]
@@ -173,4 +173,60 @@ async fn valid_request(#[case] seed: Seed) {
 
     handle.assert_no_error().await;
     handle.assert_no_peer_manager_event().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn request_same_block_twice(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    // Process a block to finish the initial block download.
+    let block = tf.make_block_builder().build();
+    tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
+    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+
+    let p2p_config = Arc::new(P2pConfig::default());
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(chain_config)
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_chainstate(chainstate)
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    handle.send_message(
+        peer,
+        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
+    );
+
+    let (sent_to, message) = handle.message().await;
+    assert_eq!(peer, sent_to);
+    assert_eq!(
+        message,
+        SyncMessage::BlockResponse(BlockResponse::new(block.clone()))
+    );
+
+    handle.assert_no_error().await;
+    handle.assert_no_peer_manager_event().await;
+
+    // Request the same block twice.
+    handle.send_message(
+        peer,
+        SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()])),
+    );
+
+    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    assert_eq!(peer, adjusted_peer);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
+    );
 }

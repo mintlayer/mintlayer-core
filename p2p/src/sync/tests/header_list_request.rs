@@ -23,13 +23,14 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    sync::{tests::helpers::SyncManagerHandle, HeaderListRequest, SyncMessage},
+    message::{HeaderListRequest, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
 };
 
-// Messages from unknown peers are ignored.
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
 
@@ -39,8 +40,7 @@ async fn nonexistent_peer() {
         SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(Vec::new()))),
     );
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.resume_panic().await;
 }
 
 #[rstest::rstest]

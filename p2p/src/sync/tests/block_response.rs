@@ -24,11 +24,9 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    message::HeaderListResponse,
-    sync::{
-        tests::helpers::SyncManagerHandle, Announcement, BlockListRequest, BlockResponse,
-        SyncMessage,
-    },
+    message::{Announcement, BlockListRequest, BlockResponse, HeaderListResponse, SyncMessage},
+    net::types::SyncingEvent,
+    sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
 };
@@ -38,6 +36,7 @@ use crate::{
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test]
+#[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -58,8 +57,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     handle.send_message(peer, SyncMessage::BlockResponse(BlockResponse::new(block)));
 
-    handle.assert_no_error().await;
-    handle.assert_no_peer_manager_event().await;
+    handle.resume_panic().await;
 }
 
 #[rstest::rstest]
@@ -141,16 +139,33 @@ async fn valid_response(#[case] seed: Seed) {
         );
 
         // A peer would request headers after the last block.
-        if i == num_blocks - 1 {
-            let (sent_to, message) = handle.message().await;
-            assert_eq!(peer, sent_to);
-            assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+        if i < num_blocks - 1 {
+            assert_eq!(
+                handle.announcement().await,
+                Announcement::Block(block.header().clone())
+            );
+        } else {
+            // The order of receiving the block announcement and header list request is nondeterministic.
+            let (announcement, request) = match (handle.event().await, handle.event().await) {
+                (
+                    SyncingEvent::Announcement {
+                        peer: _,
+                        announcement,
+                    },
+                    SyncingEvent::Message { peer: _, message },
+                ) => (*announcement, message),
+                (
+                    SyncingEvent::Message { peer: _, message },
+                    SyncingEvent::Announcement {
+                        peer: _,
+                        announcement,
+                    },
+                ) => (*announcement, message),
+                (e1, e2) => panic!("Unexpected events: {e1:?} {e2:?}"),
+            };
+            assert_eq!(announcement, Announcement::Block(block.header().clone()));
+            assert!(matches!(request, SyncMessage::HeaderListRequest(_)));
         }
-
-        assert_eq!(
-            handle.announcement().await,
-            Announcement::Block(block.header().clone())
-        );
     }
 
     handle.assert_no_error().await;
