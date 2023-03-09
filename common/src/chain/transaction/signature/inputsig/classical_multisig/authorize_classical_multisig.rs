@@ -34,12 +34,12 @@ use crate::{
 use super::multisig_partial_signature::PartiallySignedMultisigStructureError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClassicalMultisigCompletion {
+pub enum ClassicalMultisigCompletionStatus {
     Complete(AuthorizedClassicalMultisigSpend),
     Incomplete(AuthorizedClassicalMultisigSpend),
 }
 
-impl ClassicalMultisigCompletion {
+impl ClassicalMultisigCompletionStatus {
     pub fn take(self) -> AuthorizedClassicalMultisigSpend {
         match self {
             Self::Complete(spend) => spend,
@@ -177,7 +177,7 @@ pub fn sign_classical_multisig_spending(
     challenge: &ClassicMultisigChallenge,
     sighash: &H256,
     current_signatures: AuthorizedClassicalMultisigSpend,
-) -> Result<ClassicalMultisigCompletion, ClassicalMultisigSigningError> {
+) -> Result<ClassicalMultisigCompletionStatus, ClassicalMultisigSigningError> {
     // ensure the challenge is valid before signing it
     if let Err(ch_err) = challenge.is_valid(chain_config) {
         return Err(
@@ -246,10 +246,10 @@ pub fn sign_classical_multisig_spending(
 
     match verifier.verify_signatures(chain_config)? {
         super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
-            Ok(ClassicalMultisigCompletion::Complete(current_signatures))
+            Ok(ClassicalMultisigCompletionStatus::Complete(current_signatures))
         }
         super::multisig_partial_signature::SigsVerifyResult::Incomplete => {
-            Ok(ClassicalMultisigCompletion::Incomplete(current_signatures))
+            Ok(ClassicalMultisigCompletionStatus::Incomplete(current_signatures))
         }
         super::multisig_partial_signature::SigsVerifyResult::Invalid => {
             unreachable!(
@@ -321,10 +321,10 @@ mod tests {
                 .cmp(&(min_required_signatures.get() as usize))
             {
                 Ordering::Less => match res {
-                    Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Complete(_sigs)) => {
                         unreachable!("The signatures should be incomplete at this point");
                     }
-                    Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Incomplete(sigs)) => {
                         {
                             // complete verification should pass
                             let correct_challenge_hash: PublicKeyHash = (&challenge).into();
@@ -341,7 +341,7 @@ mod tests {
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 },
                 Ordering::Equal => match res {
-                    Ok(ClassicalMultisigCompletion::Complete(sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Complete(sigs)) => {
                         {
                             // complete verification should pass
                             let correct_challenge_hash: PublicKeyHash = (&challenge).into();
@@ -355,16 +355,16 @@ mod tests {
                         }
                         sigs
                     },
-                    Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Incomplete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point");
                     }
                     Err(e) => panic!("Unexpected error: {:?}", e),
                 },
                 Ordering::Greater => match res {
-                    Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Complete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point, so signing more shouldn't be possible");
                     }
-                    Ok(ClassicalMultisigCompletion::Incomplete(_sigs)) => {
+                    Ok(ClassicalMultisigCompletionStatus::Incomplete(_sigs)) => {
                         unreachable!("The signatures should be complete at this point");
                     }
                     Err(e) => match e {
@@ -456,10 +456,10 @@ mod tests {
             );
 
             current_signatures = match res {
-                Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                Ok(ClassicalMultisigCompletionStatus::Complete(_sigs)) => {
                     unreachable!("The signatures should be incomplete at this point")
                 }
-                Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => sigs,
+                Ok(ClassicalMultisigCompletionStatus::Incomplete(sigs)) => sigs,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             };
         }
@@ -585,7 +585,7 @@ mod tests {
             .unwrap();
 
             match sign_res {
-                ClassicalMultisigCompletion::Incomplete(sigs) => {
+                ClassicalMultisigCompletionStatus::Incomplete(sigs) => {
                     current_signatures = sigs;
                     // We still have to sign more
                     assert!(
@@ -608,7 +608,7 @@ mod tests {
                         );
                     }
                 }
-                ClassicalMultisigCompletion::Complete(sigs) => {
+                ClassicalMultisigCompletionStatus::Complete(sigs) => {
                     current_signatures = sigs;
                     // We're done signing
                     assert_eq!(
