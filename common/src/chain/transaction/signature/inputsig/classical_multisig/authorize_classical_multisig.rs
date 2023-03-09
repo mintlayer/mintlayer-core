@@ -284,7 +284,6 @@ mod tests {
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
         let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
         let challenge =
@@ -410,7 +409,6 @@ mod tests {
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
         let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
         let challenge =
@@ -549,7 +547,6 @@ mod tests {
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
         let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
         let challenge =
@@ -707,7 +704,6 @@ mod tests {
         let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
         let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
         let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
-            .into_iter()
             .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
             .unzip();
         let challenge =
