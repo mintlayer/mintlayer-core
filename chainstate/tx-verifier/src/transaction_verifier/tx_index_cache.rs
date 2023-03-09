@@ -18,7 +18,7 @@ use std::collections::btree_map::Entry;
 use super::{
     error::{ConnectTransactionError, TxIndexError},
     storage::TransactionVerifierStorageError,
-    {cached_operation::CachedInputsOperation, BlockTransactableRef},
+    {cached_inputs_operation::CachedInputsOperation, BlockTransactableRef},
 };
 use common::{
     chain::{signature::Signable, OutPointSourceId, Spender, TxInput, TxMainChainIndex},

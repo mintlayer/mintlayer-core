@@ -15,7 +15,7 @@
 
 mod accounting_undo_cache;
 mod amounts_map;
-mod cached_operation;
+mod cached_inputs_operation;
 mod token_issuance_cache;
 mod tx_index_cache;
 mod utils;
@@ -28,12 +28,15 @@ pub mod hierarchy;
 mod optional_tx_index_cache;
 pub mod storage;
 
+mod cached_operation;
+pub use cached_operation::CachedOperation;
+
 use std::collections::BTreeMap;
 
 use self::{
     accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
     amounts_map::AmountsMap,
-    cached_operation::CachedInputsOperation,
+    cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
@@ -72,13 +75,6 @@ use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum CachedOperation<T> {
-    Write(T),
-    Read(T),
-    Erase,
-}
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -936,7 +932,5 @@ where
 #[cfg(test)]
 mod tests;
 
-// TODO: write tests for CachedInputs that covers all possible mutations
 // TODO: write tests for block rewards
-// TODO: test attempting to spend the block reward at the same block
 // TODO: test that total_block_reward = total_tx_fees + consensus_block_reward
