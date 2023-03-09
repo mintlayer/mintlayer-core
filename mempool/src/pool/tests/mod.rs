@@ -626,7 +626,6 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     // Input different flag values just to make the hashes of these dummy transactions
     // different
     let txs = (1..=6)
-        .into_iter()
         .map(|i| {
             SignedTransaction::new(
                 Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {i}")),

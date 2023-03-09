@@ -223,7 +223,6 @@ fn generate_random_bytes(rng: &mut impl Rng, length: usize) -> Vec<u8> {
 
 fn generate_random_invalid_witness(count: usize, rng: &mut impl Rng) -> Vec<InputWitness> {
     (0..count)
-        .into_iter()
         .map(|_| {
             let witness_size = rng.next_u32();
             let witness_size = 1 + witness_size % 1000;
@@ -257,16 +256,12 @@ fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput 
 fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> Transaction {
     let inputs = {
         let input_count = 1 + (rng.next_u32() as usize) % 10;
-        (0..input_count)
-            .into_iter()
-            .map(|_| generate_random_invalid_input(rng))
-            .collect::<Vec<_>>()
+        (0..input_count).map(|_| generate_random_invalid_input(rng)).collect::<Vec<_>>()
     };
 
     let outputs = {
         let output_count = 1 + (rng.next_u32() as usize) % 10;
         (0..output_count)
-            .into_iter()
             .map(|_| generate_random_invalid_output(rng))
             .collect::<Vec<_>>()
     };
@@ -281,7 +276,6 @@ fn generate_random_invalid_block(rng: &mut (impl Rng + CryptoRng)) -> Block {
     let transactions = {
         let transaction_count = rng.next_u32() % 20;
         (0..transaction_count)
-            .into_iter()
             .map(|_| generate_random_invalid_transaction(rng))
             .collect::<Vec<_>>()
     };

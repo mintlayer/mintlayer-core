@@ -55,10 +55,9 @@ fn dummy_output() -> TxOutput {
 }
 
 pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
-    let witnesses: Vec<InputWitness> =
-        (0..num_inputs).into_iter().map(|_| dummy_witness()).collect();
-    let inputs = (0..num_inputs).into_iter().map(|_| dummy_input()).collect();
-    let outputs = (0..num_outputs).into_iter().map(|_| dummy_output()).collect();
+    let witnesses: Vec<InputWitness> = (0..num_inputs).map(|_| dummy_witness()).collect();
+    let inputs = (0..num_inputs).map(|_| dummy_input()).collect();
+    let outputs = (0..num_outputs).map(|_| dummy_output()).collect();
     let flags = 0;
     let locktime = 0;
     let size = SignedTransaction::new(

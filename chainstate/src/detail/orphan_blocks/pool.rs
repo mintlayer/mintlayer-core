@@ -171,7 +171,7 @@ mod tests {
         use crypto::random::Rng;
 
         pub fn gen_random_blocks(rng: &mut impl Rng, count: u32) -> Vec<Block> {
-            (0..count).into_iter().map(|_| gen_random_block(rng)).collect::<Vec<_>>()
+            (0..count).map(|_| gen_random_block(rng)).collect::<Vec<_>>()
         }
 
         pub fn gen_random_block(rng: &mut impl Rng) -> Block {
@@ -202,7 +202,7 @@ mod tests {
         ) -> Vec<Block> {
             let mut blocks = vec![gen_block_from_id(rng, prev_block_id)];
 
-            (1..count).into_iter().for_each(|_| {
+            (1..count).for_each(|_| {
                 let prev_block_id = blocks.last().map(|block| block.get_id());
                 blocks.push(gen_block_from_id(rng, prev_block_id.map(Into::into)));
             });
@@ -222,10 +222,7 @@ mod tests {
             let prev_block_id =
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into());
 
-            (0..count)
-                .into_iter()
-                .map(|_| gen_block_from_id(rng, Some(prev_block_id.into())))
-                .collect()
+            (0..count).map(|_| gen_block_from_id(rng, Some(prev_block_id.into()))).collect()
         }
     }
 

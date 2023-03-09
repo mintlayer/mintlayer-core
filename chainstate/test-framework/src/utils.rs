@@ -136,7 +136,6 @@ pub fn create_multiple_utxo_data(
             } else {
                 // spend the coin with multiple outputs
                 (0..num_outputs)
-                    .into_iter()
                     .map(|_| {
                         let new_value = Amount::from_atoms(output_value.into_atoms() / num_outputs);
                         debug_assert!(new_value >= Amount::from_atoms(1));
@@ -170,7 +169,6 @@ pub fn create_multiple_utxo_data(
                     if transfer.amount.into_atoms() >= num_outputs {
                         // transfer with multiple outputs
                         (0..num_outputs)
-                            .into_iter()
                             .map(|_| {
                                 let amount =
                                     Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);

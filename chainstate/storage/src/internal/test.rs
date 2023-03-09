@@ -280,7 +280,6 @@ pub fn create_rand_block_undo(
 ) -> UtxosBlockUndo {
     let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
     let reward_utxos = (0..utxo_rng)
-        .into_iter()
         .enumerate()
         .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
         .collect();
@@ -291,7 +290,6 @@ pub fn create_rand_block_undo(
     for _ in 0..undo_rng {
         let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
         let tx_utxos = (0..utxo_rng)
-            .into_iter()
             .enumerate()
             .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
             .collect();

@@ -219,7 +219,7 @@ where
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
-    let signature = (0..ANNOUNCEMENT_MAX_SIZE).into_iter().map(|_| 0).collect::<Vec<u8>>();
+    let signature = (0..ANNOUNCEMENT_MAX_SIZE).map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
