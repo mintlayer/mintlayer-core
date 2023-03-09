@@ -55,7 +55,9 @@ impl ClassicalMultisigCompletion {
 /// A witness that represents the authorization to spend a classical multisig output.
 #[derive(Debug, Clone, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedClassicalMultisigSpend {
+    /// The signatures, where the key is the index of the public key in the challenge, against which the signature is to be verified.
     signatures: BTreeMap<u8, Signature>,
+    /// The challenge that was used to create this witness.
     challenge: ClassicMultisigChallenge,
 }
 
@@ -395,6 +397,145 @@ mod tests {
             &sighash,
         )
         .unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn one_signer_signing_in_place_of_another(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let chain_config = create_mainnet();
+        let min_required_signatures = (rng.gen::<u8>() % 10) + 2; // we need at least 2 signatures for this test
+        let min_required_signatures: NonZeroU8 = min_required_signatures.try_into().unwrap();
+        let total_parties = (rng.gen::<u8>() % 5) + min_required_signatures.get();
+        let (priv_keys, pub_keys): (Vec<_>, Vec<_>) = (0..total_parties)
+            .into_iter()
+            .map(|_| PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr))
+            .unzip();
+        let challenge =
+            ClassicMultisigChallenge::new(&chain_config, min_required_signatures, pub_keys)
+                .unwrap();
+        challenge.is_valid(&chain_config).unwrap();
+
+        let sighash = H256::random_using(&mut rng);
+
+        let mut indices_to_sign: Vec<_> = (0..total_parties).collect();
+        indices_to_sign.shuffle(&mut rng);
+        let indices_to_sign = indices_to_sign
+            .into_iter()
+            .take(min_required_signatures.get() as usize)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            indices_to_sign.len(),
+            min_required_signatures.get() as usize
+        );
+
+        let mut current_signatures = AuthorizedClassicalMultisigSpend::new_empty(challenge.clone());
+
+        // We take the first index as the impersonator, the one who tries to sign for another
+        let impersonator_index = indices_to_sign[0];
+
+        // We take the last index as the impersonated, the one who is being signed for
+        let impersonated_index = *indices_to_sign.last().unwrap();
+
+        // We truncate the last index for the loop
+        let indices_to_sign_without_impersonated =
+            indices_to_sign[0..min_required_signatures.get() as usize - 1].to_vec();
+
+        for key_index in indices_to_sign_without_impersonated {
+            let private_key = &priv_keys[key_index as usize];
+
+            let res = sign_classical_multisig_spending(
+                &chain_config,
+                key_index,
+                private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            );
+
+            current_signatures = match res {
+                Ok(ClassicalMultisigCompletion::Complete(_sigs)) => {
+                    unreachable!("The signatures should be incomplete at this point")
+                }
+                Ok(ClassicalMultisigCompletion::Incomplete(sigs)) => sigs,
+                Err(e) => panic!("Unexpected error: {:?}", e),
+            };
+        }
+
+        {
+            // Now we try to sign for the impersonated index with the impersonator's private key
+            let impersonator_private_key = &priv_keys[impersonator_index as usize];
+            let impersonation_signing_result = sign_classical_multisig_spending(
+                &chain_config,
+                impersonated_index,
+                impersonator_private_key,
+                &challenge,
+                &sighash,
+                current_signatures.clone(),
+            )
+            .unwrap_err();
+            assert_eq!(
+                impersonation_signing_result,
+                ClassicalMultisigSigningError::SpendeePrivateChallengePublicKeyMismatch
+            );
+        }
+
+        // Now we sign properly, but we tamper with the authorization data
+        {
+            let impersonator_private_key = &priv_keys[impersonated_index as usize];
+            let proper_signing_result = sign_classical_multisig_spending(
+                &chain_config,
+                impersonated_index,
+                impersonator_private_key,
+                &challenge,
+                &sighash,
+                current_signatures,
+            )
+            .unwrap();
+            assert!(proper_signing_result.is_complete());
+
+            let valid_authorization = proper_signing_result.take();
+
+            let mut signatures = valid_authorization.signatures().clone();
+
+            let signature_to_replace = signatures[&impersonated_index].clone();
+
+            // We tamper with the authorization data, where we make a signer sign for another
+            let insertion_result =
+                signatures.insert(impersonated_index, signatures[&impersonator_index].clone());
+
+            // The insertion replaced the impersonated signature with the impersonator's one. Let's verify that
+            assert_eq!(insertion_result, Some(signature_to_replace));
+
+            let authorization_with_impersonation =
+                AuthorizedClassicalMultisigSpend::new(signatures, challenge);
+
+            let challenge = valid_authorization.challenge();
+            let correct_challenge_hash: PublicKeyHash = challenge.into();
+
+            // Verification with the impersonation should fail
+            assert_eq!(
+                verify_classical_multisig_spending(
+                    &chain_config,
+                    &correct_challenge_hash,
+                    &authorization_with_impersonation,
+                    &sighash,
+                )
+                .unwrap_err(),
+                TransactionSigError::InvalidClassicalMultisigSignature
+            );
+
+            // Original authorization without the impersonation should still be valid
+            verify_classical_multisig_spending(
+                &chain_config,
+                &correct_challenge_hash,
+                &valid_authorization,
+                &sighash,
+            )
+            .unwrap()
+        }
     }
 
     #[rstest]
