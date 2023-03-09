@@ -28,7 +28,7 @@ impl SliceEqualityCheckMethod {
         if b.is_empty() {
             return a.is_empty();
         }
-        let accumulated = (0..a.len()).into_iter().fold(a.len() ^ b.len(), |accumulated, idx| {
+        let accumulated = (0..a.len()).fold(a.len() ^ b.len(), |accumulated, idx| {
             let step: usize = (a[idx] ^ b[idx % b.len()]).into();
             accumulated | step
         });

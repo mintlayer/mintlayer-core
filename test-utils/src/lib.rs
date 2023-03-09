@@ -52,7 +52,6 @@ pub fn gen_text_with_non_ascii(c: u8, rng: &mut impl Rng, max_len: usize) -> Vec
     let text_len = 1 + rng.gen::<usize>() % max_len;
     let random_index_to_replace = rng.gen::<usize>() % text_len;
     let token_ticker: Vec<u8> = (0..text_len)
-        .into_iter()
         .map(|idx| {
             if idx != random_index_to_replace {
                 rng.sample(crypto::random::distributions::Alphanumeric)

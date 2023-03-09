@@ -79,7 +79,6 @@ fn verify_no_signature(#[case] seed: Seed) {
     {
         let tx = generate_unsigned_tx(&mut rng, &destination, 3, 3).unwrap();
         let witnesses = (0..tx.inputs().len())
-            .into_iter()
             .map(|_| InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])))
             .collect_vec();
         let signed_tx = tx.with_signatures(witnesses).unwrap();
@@ -108,7 +107,6 @@ fn verify_invalid_signature(#[case] seed: Seed) {
     {
         let tx = generate_unsigned_tx(&mut rng, &destination, 3, 3).unwrap();
         let witnesses = (0..tx.inputs().len())
-            .into_iter()
             .map(|_| {
                 InputWitness::Standard(StandardInputSignature::new(
                     sighash_type,

@@ -40,7 +40,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
         let type_name = ident.to_string();
 
-        let gen_params = generics.type_params().into_iter().cloned().map(|t| {
+        let gen_params = generics.type_params().cloned().map(|t| {
             let ident = t.ident;
             quote!(#ident::typename_str().as_ref())
         });
@@ -54,7 +54,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
         // We create the where-clause for the implementation, where we create an iterator that we expand in the quote.
         // The iterator is simply of token streams that look like this (A: TypeName, B: TypeName, ...) for every generic parameter.
-        let where_clause_params = generics.type_params().into_iter().cloned().map(|t| {
+        let where_clause_params = generics.type_params().cloned().map(|t| {
             let ident = t.ident;
             quote!(#ident: TypeName)
         });

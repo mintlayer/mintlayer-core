@@ -97,7 +97,6 @@ mod test {
         threads_count: usize,
     ) -> Vec<JoinHandle<()>> {
         (0..threads_count)
-            .into_iter()
             .map(|_| {
                 let count = blocker.count_one();
                 std::thread::spawn(move || {

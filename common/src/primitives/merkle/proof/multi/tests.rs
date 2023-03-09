@@ -551,7 +551,6 @@ fn multi_proof_verification(
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
-        .into_iter()
         .take(max_test_cases.unwrap_or(usize::MAX))
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);
@@ -636,7 +635,6 @@ fn multi_proof_verification_tampered_nodes(
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
-        .into_iter()
         .take(max_test_cases.unwrap_or(usize::MAX))
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);
@@ -702,7 +700,6 @@ fn multi_proof_verification_tampered_leaves(
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
-        .into_iter()
         .take(max_test_cases.unwrap_or(usize::MAX))
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);
@@ -768,7 +765,6 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
-        .into_iter()
         .take(max_test_cases.unwrap_or(usize::MAX))
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);
@@ -831,7 +827,6 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
-        .into_iter()
         .take(max_test_cases.unwrap_or(usize::MAX))
         .collect::<Vec<_>>();
     cases.shuffle(&mut rng);

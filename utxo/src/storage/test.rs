@@ -46,7 +46,6 @@ fn create_transactions(
     // create the multiple transactions based on the inputs.
     inputs
         .chunks(input_size)
-        .into_iter()
         .map(|inputs| {
             let outputs = if max_num_of_outputs > 1 {
                 let rnd = rng.gen_range(1..max_num_of_outputs);
@@ -58,10 +57,7 @@ fn create_transactions(
             SignedTransaction::new(
                 Transaction::new(0x00, inputs.to_vec(), outputs, 0)
                     .expect("should create a transaction successfully"),
-                (0..inputs.len())
-                    .into_iter()
-                    .map(|_| InputWitness::NoSignature(None))
-                    .collect::<Vec<_>>(),
+                (0..inputs.len()).map(|_| InputWitness::NoSignature(None)).collect::<Vec<_>>(),
             )
         })
         .collect::<Result<Vec<_>, _>>()
@@ -288,7 +284,6 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
     let db = UtxosDB::new(&db_impl);
 
     let tx_inputs: Vec<TxInput> = (0..rng.gen_range(num_of_txs..20))
-        .into_iter()
         .map(|i| {
             let id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
             let id = OutPointSourceId::BlockReward(id);
