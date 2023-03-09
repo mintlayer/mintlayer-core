@@ -932,7 +932,5 @@ where
 #[cfg(test)]
 mod tests;
 
-// TODO: write tests for CachedInputs that covers all possible mutations
 // TODO: write tests for block rewards
-// TODO: test attempting to spend the block reward at the same block
 // TODO: test that total_block_reward = total_tx_fees + consensus_block_reward
