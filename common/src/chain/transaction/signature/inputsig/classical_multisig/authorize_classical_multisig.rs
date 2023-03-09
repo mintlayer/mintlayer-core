@@ -245,12 +245,12 @@ pub fn sign_classical_multisig_spending(
         PartiallySignedMultisigChallenge::from_partial(chain_config, &msg, &current_signatures)?;
 
     match verifier.verify_signatures(chain_config)? {
-        super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => {
-            Ok(ClassicalMultisigCompletionStatus::Complete(current_signatures))
-        }
-        super::multisig_partial_signature::SigsVerifyResult::Incomplete => {
-            Ok(ClassicalMultisigCompletionStatus::Incomplete(current_signatures))
-        }
+        super::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => Ok(
+            ClassicalMultisigCompletionStatus::Complete(current_signatures),
+        ),
+        super::multisig_partial_signature::SigsVerifyResult::Incomplete => Ok(
+            ClassicalMultisigCompletionStatus::Incomplete(current_signatures),
+        ),
         super::multisig_partial_signature::SigsVerifyResult::Invalid => {
             unreachable!(
                 "We checked the signatures then added a signature, so this should be unreachable"
