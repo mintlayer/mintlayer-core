@@ -23,6 +23,7 @@ thiserror.workspace = true
 mockall = "0.11.0"
 parking_lot = "0.12"
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+hex.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = '../chainstate/storage' }

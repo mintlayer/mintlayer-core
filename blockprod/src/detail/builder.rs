@@ -185,12 +185,10 @@ impl PerpetualBlockBuilder {
         let subscribe_func = Arc::new(move |mempool_event: MempoolEvent| match mempool_event {
             MempoolEvent::NewTip(block_id, block_height) => {
                 if let Err(e) = tx.send((block_id, block_height)) {
-                    log::error!(
-                            "Block production failed to receive event from mempool - channel closed: {:?}",
-                            e
-                        )
+                    log::error!("Block production failed to receive event from mempool - channel closed: {e:?}")
                 }
             }
+            MempoolEvent::NewTransaction(_) => {}
         });
 
         self.mempool_handle
@@ -337,6 +335,7 @@ mod tests {
                             tx.send(true).expect("Error sending new tip confirmation");
                         }
                     }
+                    MempoolEvent::NewTransaction(_) => {}
                 }))
             }
         });
