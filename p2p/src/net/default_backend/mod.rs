@@ -206,6 +206,7 @@ impl<S: NetworkingService, T: TransportSocket> SyncingMessagingService<S>
 
         let topic = match &announcement {
             Announcement::Block(_) => PubSubTopic::Blocks,
+            Announcement::Transaction(_) => PubSubTopic::Transactions,
         };
 
         self.cmd_tx

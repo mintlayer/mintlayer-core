@@ -35,6 +35,7 @@ use common::{
     primitives::Id,
 };
 use logging::log;
+use mempool::MempoolHandle;
 use utils::tap_error_log::LogError;
 
 use crate::{
@@ -63,8 +64,8 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
 
-    /// A handle to the chainstate subsystem.
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
 
     /// A cached result of the `ChainstateInterface::is_initial_block_download` call.
     is_initial_block_download: Arc<AtomicBool>,
@@ -88,6 +89,7 @@ where
         p2p_config: Arc<P2pConfig>,
         messaging_handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
         let (peer_sender, peer_receiver) = mpsc::unbounded_channel();
@@ -98,6 +100,7 @@ where
             messaging_handle,
             peer_manager_sender,
             chainstate_handle,
+            mempool_handle,
             is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
             peer_sender,
@@ -171,6 +174,7 @@ where
         let peer_sender = self.peer_sender.clone();
         let peer_manager_sender = self.peer_manager_sender.clone();
         let chainstate_handle = self.chainstate_handle.clone();
+        let mempool_handle = self.mempool_handle.clone();
         let p2p_config = Arc::clone(&self.p2p_config);
         let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
         tokio::spawn(async move {
@@ -178,6 +182,7 @@ where
                 peer,
                 p2p_config,
                 chainstate_handle,
+                mempool_handle,
                 peer_manager_sender,
                 peer_sender,
                 receiver,

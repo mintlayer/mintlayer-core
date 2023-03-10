@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ban_score::BanScore;
-use common::primitives::semver::SemVer;
 use thiserror::Error;
+
+use chainstate::{ban_score::BanScore, ChainstateError};
+use common::primitives::semver::SemVer;
+use mempool::error::Error as MempoolError;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
 /// and the peer getting banned.
@@ -108,7 +110,7 @@ pub enum P2pError {
     #[error("SubsystemFailure")]
     SubsystemFailure,
     #[error("ConsensusError: `{0}`")]
-    ChainstateError(chainstate::ChainstateError),
+    ChainstateError(ChainstateError),
     #[error("DatabaseFailure")]
     StorageFailure(#[from] storage::Error),
     #[error("Failed to convert data `{0}`")]
@@ -119,6 +121,8 @@ pub enum P2pError {
     InvalidConfigurationValue(String),
     #[error("The storage state is invalid: {0}")]
     InvalidStorageState(String),
+    #[error("Mempool error: `{0}`")]
+    MempoolError(#[from] MempoolError),
 }
 
 impl From<DialError> for P2pError {
@@ -157,8 +161,8 @@ impl From<subsystem::subsystem::CallError> for P2pError {
     }
 }
 
-impl From<chainstate::ChainstateError> for P2pError {
-    fn from(e: chainstate::ChainstateError) -> P2pError {
+impl From<ChainstateError> for P2pError {
+    fn from(e: ChainstateError) -> P2pError {
         P2pError::ChainstateError(e)
     }
 }
@@ -179,6 +183,7 @@ impl BanScore for P2pError {
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
+            P2pError::MempoolError(_) => 20,
         }
     }
 }

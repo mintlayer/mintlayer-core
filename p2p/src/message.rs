@@ -15,7 +15,10 @@
 
 use chainstate::Locator;
 use common::{
-    chain::block::{Block, BlockHeader},
+    chain::{
+        block::{Block, BlockHeader},
+        SignedTransaction,
+    },
     primitives::Id,
 };
 use serialization::{Decode, Encode};
@@ -144,4 +147,6 @@ pub struct PingResponse {
 pub enum Announcement {
     #[codec(index = 0)]
     Block(BlockHeader),
+    #[codec(index = 1)]
+    Transaction(SignedTransaction),
 }

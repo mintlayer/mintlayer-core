@@ -81,10 +81,10 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        _mempool_handle: mempool::MempoolHandle,
+        mempool_handle: mempool::MempoolHandle,
         time_getter: TimeGetter,
         peerdb_storage: S,
-    ) -> crate::Result<Self> {
+    ) -> Result<Self> {
         let (conn, sync) = T::start(
             transport,
             bind_addresses,
@@ -128,6 +128,7 @@ where
                     p2p_config,
                     sync,
                     chainstate_handle,
+                    mempool_handle,
                     tx_peer_manager,
                 )
                 .run()

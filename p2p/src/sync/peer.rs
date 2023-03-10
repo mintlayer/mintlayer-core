@@ -29,10 +29,11 @@ use void::Void;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
-    chain::{block::BlockHeader, Block},
+    chain::{block::BlockHeader, Block, SignedTransaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
+use mempool::{error::Error as MempoolError, MempoolHandle};
 use utils::const_value::ConstValue;
 
 use crate::{
@@ -64,6 +65,7 @@ pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     message_sender: UnboundedSender<(PeerId, SyncMessage)>,
     events_receiver: UnboundedReceiver<PeerEvent>,
@@ -88,6 +90,7 @@ where
         id: PeerId,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         message_sender: UnboundedSender<(PeerId, SyncMessage)>,
         events_receiver: UnboundedReceiver<PeerEvent>,
@@ -97,6 +100,7 @@ where
             id: id.into(),
             p2p_config,
             chainstate_handle,
+            mempool_handle,
             peer_manager_sender,
             message_sender,
             events_receiver,
@@ -356,6 +360,7 @@ where
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
         match announcement {
             Announcement::Block(header) => self.handle_block_announcement(header).await,
+            Announcement::Transaction(tx) => self.handle_transaction_announcement(tx).await,
         }
     }
 
@@ -384,6 +389,13 @@ where
         self.request_blocks(vec![header])
     }
 
+    async fn handle_transaction_announcement(&mut self, tx: SignedTransaction) -> Result<()> {
+        self.mempool_handle
+            .call_async_mut(|m| m.add_transaction(tx))
+            .await?
+            .map_err(Into::into)
+    }
+
     /// Handles a result of message processing.
     ///
     /// There are three possible types of errors:
@@ -400,6 +412,7 @@ where
         match error {
             // A protocol error - increase the ban score of a peer.
             e @ (P2pError::ProtocolError(_)
+            | P2pError::MempoolError(MempoolError::TxValidationError(_))
             | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(_),
             ))) => {
@@ -424,6 +437,10 @@ where
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+            P2pError::MempoolError(MempoolError::MempoolFull) => {
+                log::warn!("Mempool is full");
+                Ok(())
+            }
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.
             e @ (P2pError::DialError(_)
@@ -437,7 +454,8 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)
+            | P2pError::MempoolError(_)) => Err(e),
         }
     }
 
