@@ -13,12 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{OutPoint, Transaction};
-use common::primitives::Id;
+use std::collections::BTreeMap;
+
+use common::address::Address;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
-use wallet_types::WalletTx;
+use wallet_types::{
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
+    KeyType, WalletTx,
+};
 
 use crate::{
     schema::{self as db, Schema},
@@ -63,12 +67,67 @@ macro_rules! impl_read_ops {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
             }
 
-            fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+            fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>> {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
 
-            fn get_transaction(&self, id: &Id<Transaction>) -> crate::Result<Option<WalletTx>> {
+            /// Collect and return all utxos from the storage
+            fn read_utxo_set(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>> {
+                self.0
+                    .get::<db::DBUtxo, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
+            }
+
+            fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>> {
                 self.read::<db::DBTxs, _, _>(id)
+            }
+
+            fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>> {
+                self.read::<db::DBAccounts, _, _>(id)
+            }
+
+            fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>> {
+                self.read::<db::DBAddresses, _, _>(id)
+            }
+
+            fn read_addresses(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountAddressId, Address>> {
+                self.0
+                    .get::<db::DBAddresses, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
+            }
+
+            fn get_key(&self, id: &KeyId) -> crate::Result<Option<KeyContent>> {
+                self.read::<db::DBKeys, _, _>(id)
+            }
+
+            /// Collect and return all keys from the storage
+            fn get_key_by_type(
+                &self,
+                key_type: &KeyType,
+            ) -> crate::Result<BTreeMap<KeyId, KeyContent>> {
+                self.0
+                    .get::<db::DBKeys, _>()
+                    .prefix_iter_decoded(key_type)
+                    .map(Iterator::collect)
+            }
+
+            /// Collect and return all transactions from the storage
+            fn read_transactions(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountTxId, WalletTx>> {
+                self.0
+                    .get::<db::DBTxs, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
             }
         }
 
@@ -105,20 +164,44 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.write_value::<well_known::StoreVersion>(&version)
     }
 
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+    fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> crate::Result<()> {
         self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
+    fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()> {
         self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 
-    fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> crate::Result<()> {
+    fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {
         self.write::<db::DBTxs, _, _, _>(id, tx)
     }
 
-    fn del_transaction(&mut self, id: &Id<Transaction>) -> crate::Result<()> {
+    fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()> {
         self.0.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
+        self.write::<db::DBAccounts, _, _, _>(id, tx)
+    }
+
+    fn del_account(&mut self, id: &AccountId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccounts, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> crate::Result<()> {
+        self.write::<db::DBAddresses, _, _, _>(id, address)
+    }
+
+    fn del_address(&mut self, id: &AccountAddressId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_key(&mut self, id: &KeyId, tx: &KeyContent) -> crate::Result<()> {
+        self.write::<db::DBKeys, _, _, _>(id, tx)
+    }
+
+    fn del_key(&mut self, id: &KeyId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBKeys, _>().del(id).map_err(Into::into)
     }
 }
 

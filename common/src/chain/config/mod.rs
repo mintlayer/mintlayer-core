@@ -30,6 +30,7 @@ use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
+use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -43,6 +44,12 @@ const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
         None => panic!("epoch length cannot be 0"),
     };
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
+
+pub const BIP44_PATH: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(44).0);
+pub const MINTLAYER_COIN_TYPE: ChildNumber =
+    ChildNumber::from_hardened(U31::from_u32_with_msb(0x4D4C).0);
+pub const MINTLAYER_COIN_TYPE_TEST: ChildNumber =
+    ChildNumber::from_hardened(U31::from_u32_with_msb(0x01).0);
 
 pub type EpochIndex = u64;
 
@@ -90,12 +97,20 @@ impl ChainType {
             ChainType::Signet => 33031,
         }
     }
+
+    const fn default_bip44_coin_type(&self) -> ChildNumber {
+        match self {
+            ChainType::Mainnet => MINTLAYER_COIN_TYPE,
+            ChainType::Testnet | ChainType::Regtest | ChainType::Signet => MINTLAYER_COIN_TYPE_TEST,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
+    bip44_coin_type: ChildNumber,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
@@ -129,6 +144,10 @@ pub struct ChainConfig {
 impl ChainConfig {
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
+    }
+
+    pub fn bip44_coin_type(&self) -> ChildNumber {
+        self.bip44_coin_type
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {

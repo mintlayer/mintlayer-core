@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod account;
 mod key_chain;
 pub mod wallet;
 
-pub use crate::wallet::{Wallet, WalletError};
+pub use crate::account::Account;
+pub use crate::wallet::{Wallet, WalletError, WalletResult};

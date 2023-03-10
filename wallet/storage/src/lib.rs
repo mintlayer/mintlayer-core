@@ -19,12 +19,15 @@ mod internal;
 mod is_transaction_seal;
 pub mod schema;
 
+use common::address::Address;
 pub use internal::{Store, StoreTxRo, StoreTxRw};
+use std::collections::BTreeMap;
 
-use common::chain::{OutPoint, Transaction};
-use common::primitives::Id;
 use utxo::Utxo;
-use wallet_types::WalletTx;
+use wallet_types::{
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
+    KeyType, WalletTx,
+};
 
 /// Possibly failing result of wallet storage query
 pub type Result<T> = storage::Result<T>;
@@ -34,18 +37,32 @@ pub type Error = storage::Error;
 pub trait WalletStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>>;
-    fn get_transaction(&self, id: &Id<Transaction>) -> Result<Option<WalletTx>>;
+    fn get_utxo(&self, outpoint: &AccountOutPointId) -> Result<Option<Utxo>>;
+    fn read_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
+    fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
+    fn read_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
+    fn get_account(&self, id: &AccountId) -> Result<Option<AccountInfo>>;
+    fn get_address(&self, id: &AccountAddressId) -> Result<Option<Address>>;
+    fn read_addresses(&self, account_id: &AccountId)
+        -> Result<BTreeMap<AccountAddressId, Address>>;
+    fn get_key(&self, id: &KeyId) -> Result<Option<KeyContent>>;
+    fn get_key_by_type(&self, key_type: &KeyType) -> Result<BTreeMap<KeyId, KeyContent>>;
 }
 
 /// Modifying operations on persistent wallet data
 pub trait WalletStorageWrite: WalletStorageRead {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<()>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<()>;
-    fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> Result<()>;
-    fn del_transaction(&mut self, id: &Id<Transaction>) -> Result<()>;
+    fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> Result<()>;
+    fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> Result<()>;
+    fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> Result<()>;
+    fn del_transaction(&mut self, id: &AccountTxId) -> Result<()>;
+    fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
+    fn del_account(&mut self, id: &AccountId) -> Result<()>;
+    fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> Result<()>;
+    fn del_address(&mut self, id: &AccountAddressId) -> Result<()>;
+    fn set_key(&mut self, id: &KeyId, content: &KeyContent) -> Result<()>;
+    fn del_key(&mut self, id: &KeyId) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

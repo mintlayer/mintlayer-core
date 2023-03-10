@@ -16,8 +16,9 @@
 use super::*;
 use crate::DefaultBackend;
 use common::chain::tokens::OutputValue;
-use common::chain::{Destination, OutPointSourceId, TxOutput};
+use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
 use common::primitives::{Amount, Id, H256};
+use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
 use rstest::rstest;
@@ -26,7 +27,8 @@ use test_utils::random::{make_seedable_rng, Seed};
 #[test]
 fn storage_get_default_version_in_tx() {
     utils::concurrency::model(|| {
-        let store = Store::new(DefaultBackend::new_in_memory()).unwrap();
+        let mut store = Store::new(DefaultBackend::new_in_memory()).unwrap();
+        store.set_storage_version(1).unwrap();
         let vtx = store.transaction_ro().unwrap().get_storage_version().unwrap();
         let vst = store.get_storage_version().unwrap();
         assert_eq!(vtx, 1, "Default storage version wrong");
@@ -42,6 +44,11 @@ fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut db_interface = Store::new(DefaultBackend::new_in_memory()).unwrap();
 
+    // generate an account id
+    let account_id = AccountId::new_from_xpub(
+        &ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr).1,
+    );
+
     // generate a utxo and outpoint
     let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let output = TxOutput::Transfer(
@@ -54,8 +61,10 @@ fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
         0,
     );
 
-    assert!(db_interface.set_utxo(&outpoint, utxo.clone()).is_ok());
-    assert_eq!(db_interface.get_utxo(&outpoint), Ok(Some(utxo)));
-    assert!(db_interface.del_utxo(&outpoint).is_ok());
-    assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
+    let account_outpoint_id = AccountOutPointId::new(account_id, outpoint);
+
+    assert!(db_interface.set_utxo(&account_outpoint_id, utxo.clone()).is_ok());
+    assert_eq!(db_interface.get_utxo(&account_outpoint_id), Ok(Some(utxo)));
+    assert!(db_interface.del_utxo(&account_outpoint_id).is_ok());
+    assert_eq!(db_interface.get_utxo(&account_outpoint_id), Ok(None));
 }

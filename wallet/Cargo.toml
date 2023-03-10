@@ -18,10 +18,12 @@ wallet-storage = {path = './storage'}
 wallet-types = {path = './types'}
 
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
-zeroize = "1.5"
+parity-scale-codec.workspace = true
 thiserror.workspace = true
+zeroize = "1.5"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
+rstest = "0.16"
 tempfile = "3.3"
