@@ -121,7 +121,7 @@ impl<B: Backend> KeyChain<B> {
 
         let address = Address::from_public_key(
             &self.chain_config,
-            &ExtendedPublicKey::from_private_key(&key).public_key(),
+            &ExtendedPublicKey::from_private_key(&key).into_public_key(),
         )?;
 
         // TODO save address
@@ -162,25 +162,39 @@ mod tests {
             (
                 KeyPurpose::ReceiveFunds,
                 "m/0'/0'/0'/0'",
+                "80000000800000008000000080000000",
                 "04feff4263658459430aea33cb851b830a0235db1611d3279624f40c7c2c0135",
-                "1ac0ee91fe1ff500f4b21579cda6ded3b10a2f9162d571b4c8873454f3593326",
+                "031ac0ee91fe1ff500f4b21579cda6ded3b10a2f9162d571b4c8873454f3593326",
                 "4fddb29b630431422b3a534e0028e053eb212ab10a5f1db3ba5cbc4e81ff3294",
             ),
             (
                 KeyPurpose::Change,
                 "m/0'/0'/1'/0'",
+                "80000000800000008000000180000000",
                 "404dafb8e79d3110e816be00e020a91ef1754ab6b2ada14ec87a26f87e86e19e",
-                "305f803928705f620e6a05dce2e4a6f8c03d1dc0757008096bf689160f394641",
+                "03305f803928705f620e6a05dce2e4a6f8c03d1dc0757008096bf689160f394641",
                 "04e13b373ed3d5753657d375feec032187cdada01e5df83cc8fddd29c1f15755",
             ),
         ];
 
-        for (purpose, _hd_path, secret, public, chaincode) in test_vec {
+        for (purpose, path_str, path_encoded_str, secret, public, chaincode) in test_vec {
             let sk = key_chain.get_new_key(purpose).unwrap();
             let pk = ExtendedPublicKey::from_private_key(&sk);
-            // TODO assert that the hd_path is correct
-            assert_encoded_eq(&sk, format!("00{chaincode}{secret}").as_str());
-            assert_encoded_eq(&pk, format!("00{chaincode}{public}").as_str());
+            let pk2 = ExtendedPublicKey::from_private_key(&sk);
+            assert_eq!(pk2.get_derivation_path().to_string(), path_str.to_string());
+            assert_eq!(pk, pk2);
+            let path = DerivationPath::from_str(path_str).unwrap();
+            assert_eq!(sk.get_derivation_path(), path);
+            assert_eq!(pk.get_derivation_path(), path);
+            let path_len = path.len();
+            assert_encoded_eq(
+                &sk,
+                format!("00{path_len:02x}{path_encoded_str}{chaincode}{secret}").as_str(),
+            );
+            assert_encoded_eq(
+                &pk,
+                format!("00{path_len:02x}{path_encoded_str}{chaincode}{public}").as_str(),
+            );
         }
     }
 }

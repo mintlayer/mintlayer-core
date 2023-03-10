@@ -16,29 +16,71 @@
 use super::child_number::ChildNumber;
 use super::derivable::DerivationError;
 use core::fmt;
+use serialization::{Decode, Encode, Error, Input, Output};
 use std::fmt::Formatter;
 use std::str::FromStr;
 
 const PREFIX: &str = "m";
 const SEPARATOR: &str = "/";
+/// The typical path size in BIP44 is 5 and we add this path limit
+/// in order to support SLIP32 key serialization
+const MAX_PATH_SIZE: usize = u8::MAX as usize;
 
 /// BIP-32 compatible derivation path
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct DerivationPath(Vec<ChildNumber>);
 
 impl DerivationPath {
-    pub fn push(&mut self, num: ChildNumber) {
-        self.0.push(num);
+    pub fn empty() -> Self {
+        DerivationPath(vec![])
     }
 
-    pub fn pop(&mut self) -> Option<ChildNumber> {
-        self.0.pop()
+    pub fn into_vec(self) -> Vec<ChildNumber> {
+        self.0
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
-impl From<Vec<ChildNumber>> for DerivationPath {
-    fn from(path: Vec<ChildNumber>) -> Self {
-        DerivationPath(path)
+impl Encode for DerivationPath {
+    fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+        let size = self.0.len();
+        debug_assert!(size <= MAX_PATH_SIZE);
+        let size = size as u8;
+        dest.push_byte(size);
+        for num in &self.0 {
+            dest.write(&num.into_encoded_be_bytes());
+        }
+    }
+}
+
+impl Decode for DerivationPath {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+        let size = input.read_byte()?;
+        let mut path = Vec::with_capacity(size as usize);
+
+        for _ in 0..size {
+            path.push(<ChildNumber>::decode(input)?);
+        }
+        Ok(DerivationPath(path))
+    }
+}
+
+impl TryFrom<Vec<ChildNumber>> for DerivationPath {
+    type Error = DerivationError;
+
+    fn try_from(path: Vec<ChildNumber>) -> Result<Self, Self::Error> {
+        if path.len() <= MAX_PATH_SIZE {
+            Ok(DerivationPath(path))
+        } else {
+            Err(DerivationError::PathTooLong)
+        }
     }
 }
 
@@ -64,7 +106,7 @@ impl FromStr for DerivationPath {
         }
         // Parse the rest of the parts to ChildNumber
         let path: Result<Vec<ChildNumber>, DerivationError> = parts.map(str::parse).collect();
-        Ok(path?.into())
+        path?.try_into()
     }
 }
 
@@ -82,6 +124,7 @@ impl fmt::Display for DerivationPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_utils::{assert_encoded_eq, decode_from_hex};
 
     #[test]
     fn parse_derivation_path() {
@@ -92,10 +135,6 @@ mod tests {
         assert_eq!(
             DerivationPath::from_str("m/"),
             Err(DerivationError::InvalidChildNumberFormat)
-        );
-        assert_eq!(
-            DerivationPath::from_str("m/42"),
-            Err(DerivationError::UnsupportedDerivationType)
         );
         assert_eq!(
             DerivationPath::from_str("m/h"),
@@ -171,10 +210,10 @@ mod tests {
             DerivationPath::from_str("m").unwrap()
         );
         // assert_eq!(DerivationPath::master(), DerivationPath::default());
-        assert_eq!(DerivationPath::from_str("m"), Ok(vec![].into()));
+        assert_eq!(DerivationPath::from_str("m"), Ok(DerivationPath::empty()));
         assert_eq!(
             DerivationPath::from_str("m/0'"),
-            Ok(vec![ChildNumber::from_hardened(0.try_into().unwrap())].into())
+            Ok(vec![ChildNumber::from_hardened(0.try_into().unwrap())].try_into().unwrap())
         );
         assert_eq!(
             DerivationPath::from_str("m/0h/1'/2'"),
@@ -183,7 +222,8 @@ mod tests {
                 ChildNumber::from_hardened(1.try_into().unwrap()),
                 ChildNumber::from_hardened(2.try_into().unwrap()),
             ]
-            .into())
+            .try_into()
+            .unwrap())
         );
         assert_eq!(
             DerivationPath::from_str("m/0'/1'/2h/2h"),
@@ -193,22 +233,29 @@ mod tests {
                 ChildNumber::from_hardened(2.try_into().unwrap()),
                 ChildNumber::from_hardened(2.try_into().unwrap()),
             ]
-            .into())
+            .try_into()
+            .unwrap())
         );
         assert_eq!(
-            DerivationPath::from_str("m/0'/1'/2'/2'/1000000000'"),
+            DerivationPath::from_str("m/0'/1'/2/2'/1000000000"),
             Ok(vec![
                 ChildNumber::from_hardened(0.try_into().unwrap()),
                 ChildNumber::from_hardened(1.try_into().unwrap()),
+                ChildNumber::from_normal(2.try_into().unwrap()),
                 ChildNumber::from_hardened(2.try_into().unwrap()),
-                ChildNumber::from_hardened(2.try_into().unwrap()),
-                ChildNumber::from_hardened(1000000000.try_into().unwrap()),
+                ChildNumber::from_normal(1000000000.try_into().unwrap()),
             ]
-            .into())
+            .try_into()
+            .unwrap())
         );
         assert_eq!(
-            DerivationPath::from_str("m/2147483647'"),
-            Ok(vec![ChildNumber::from_hardened(2147483647.try_into().unwrap())].into())
+            DerivationPath::from_str("m/2147483647/2147483647'"),
+            Ok(vec![
+                ChildNumber::from_normal(2147483647.try_into().unwrap()),
+                ChildNumber::from_hardened(2147483647.try_into().unwrap())
+            ]
+            .try_into()
+            .unwrap())
         );
         assert_eq!(
             DerivationPath::from_str("m/2147483648'"),
@@ -217,16 +264,48 @@ mod tests {
     }
 
     #[test]
+    fn max_size() {
+        let path = vec![ChildNumber::ZERO; MAX_PATH_SIZE].to_vec();
+        assert!(DerivationPath::try_from(path).is_ok());
+        let path = vec![ChildNumber::ZERO; MAX_PATH_SIZE + 1].to_vec();
+        assert!(DerivationPath::try_from(path).is_err());
+    }
+
+    #[test]
     fn push_pop_path() {
         let path_1_2 = DerivationPath::from_str("m/1'/2'").unwrap();
-        let mut path = path_1_2.clone();
+        let mut path = path_1_2.clone().into_vec();
         let index_3 = ChildNumber::from_hardened(3.try_into().unwrap());
         path.push(index_3);
-        assert_eq!(path, DerivationPath::from_str("m/1'/2'/3'").unwrap());
+        assert_eq!(
+            path,
+            DerivationPath::from_str("m/1'/2'/3'").unwrap().into_vec()
+        );
         assert_eq!(path.pop(), Some(index_3));
-        assert_eq!(path, path_1_2);
+        assert_eq!(path, path_1_2.into_vec());
         path.pop();
         path.pop();
         assert_eq!(path.pop(), None);
+    }
+
+    #[test]
+    fn serialization() {
+        let path_string = "m/44'/2'/0'/1/255";
+        let path_encoded_hex = "058000002c800000028000000000000001000000ff";
+        let path = DerivationPath::from_str(path_string).unwrap();
+        // Assert encoding
+        assert_encoded_eq(&path, path_encoded_hex);
+        // Assert decoding
+        let decoded_path: DerivationPath = decode_from_hex(path_encoded_hex);
+        assert_eq!(path_string, decoded_path.to_string());
+        assert_eq!(path, decoded_path);
+    }
+
+    #[test]
+    fn len_and_is_empty_() {
+        let path_string = "m/1/2/3";
+        let path = DerivationPath::from_str(path_string).unwrap();
+        assert_eq!(path.len(), 3);
+        assert!(DerivationPath::empty().is_empty());
     }
 }

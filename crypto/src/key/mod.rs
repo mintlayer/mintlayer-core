@@ -22,6 +22,7 @@ pub mod signature;
 
 use serialization::{Decode, Encode};
 
+use crate::key::hdkd::derivation_path::DerivationPath;
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use crate::key::Signature::{RistrettoSchnorr, Secp256k1Schnorr};
@@ -116,12 +117,17 @@ impl PrivateKey {
     }
 }
 
+// TODO remove this trait impl once RistrettoSchnorr is removed as well
 impl Derivable for PrivateKey {
     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
         match self.key {
             PrivateKeyHolder::Secp256k1Schnorr(_) => Err(DerivationError::UnsupportedKeyType),
             PrivateKeyHolder::RistrettoSchnorr(key) => Ok(key.derive_child(num)?.into()),
         }
+    }
+
+    fn get_derivation_path(&self) -> DerivationPath {
+        DerivationPath::empty()
     }
 }
 

@@ -129,7 +129,7 @@ mod test {
 
         // we signed the message above and stored the encoded data. Now it has to work from decoded data
         let sig_hex = "003c002dd5ea8f05240394eb109b8e9b52716db2720cebbc5dd66394afdf761d2ef76dc8a292d3a44e4d9f1f8fd8e17dc404e317082f5a2ce8adafde01e766aaa6";
-        let pk_hex = "00dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
+        let pk_hex = "0002dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659";
         let sk_hex = "00b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef";
 
         let sig_bin: Vec<u8> = FromHex::from_hex(sig_hex).unwrap();

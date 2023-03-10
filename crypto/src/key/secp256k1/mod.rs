@@ -58,7 +58,7 @@ impl From<secp256k1::SecretKey> for Secp256k1PrivateKey {
 impl Secp256k1PrivateKey {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (Secp256k1PrivateKey, Secp256k1PublicKey) {
         let secret = secp256k1::SecretKey::new(rng);
-        let public = secret.x_only_public_key(secp256k1::SECP256K1).0;
+        let public = secret.public_key(secp256k1::SECP256K1);
         (
             Secp256k1PrivateKey::from_native(secret),
             Secp256k1PublicKey::from_native(public),
@@ -98,7 +98,7 @@ impl Secp256k1PrivateKey {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Secp256k1PublicKey {
-    pubkey_data: secp256k1::XOnlyPublicKey,
+    pubkey_data: secp256k1::PublicKey,
 }
 
 impl Encode for Secp256k1PublicKey {
@@ -109,42 +109,42 @@ impl Encode for Secp256k1PublicKey {
 
 impl Decode for Secp256k1PublicKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let v = <[u8; secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE]>::decode(input)?;
-        secp256k1::XOnlyPublicKey::from_slice(&v)
+        let v = <[u8; secp256k1::constants::PUBLIC_KEY_SIZE]>::decode(input)?;
+        secp256k1::PublicKey::from_slice(&v)
             .map(|r| Secp256k1PublicKey { pubkey_data: r })
             .map_err(|_| serialization::Error::from("Public Key deserialization failed"))
     }
 }
 
-impl From<secp256k1::XOnlyPublicKey> for Secp256k1PublicKey {
-    fn from(pk: secp256k1::XOnlyPublicKey) -> Self {
+impl From<secp256k1::PublicKey> for Secp256k1PublicKey {
+    fn from(pk: secp256k1::PublicKey) -> Self {
         Self { pubkey_data: pk }
     }
 }
 
 impl Secp256k1PublicKey {
-    pub fn as_bytes(&self) -> [u8; secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE] {
+    pub fn as_bytes(&self) -> [u8; secp256k1::constants::PUBLIC_KEY_SIZE] {
         self.pubkey_data.serialize()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Secp256k1KeyError> {
-        secp256k1::XOnlyPublicKey::from_slice(bytes)
+        secp256k1::PublicKey::from_slice(bytes)
             .map(|r| Secp256k1PublicKey { pubkey_data: r })
             .map_err(|_| Secp256k1KeyError::InvalidData)
     }
 
-    pub fn as_native(&self) -> &secp256k1::XOnlyPublicKey {
+    pub fn as_native(&self) -> &secp256k1::PublicKey {
         &self.pubkey_data
     }
 
-    pub fn from_native(native: secp256k1::XOnlyPublicKey) -> Self {
+    pub fn from_native(native: secp256k1::PublicKey) -> Self {
         Self {
             pubkey_data: native,
         }
     }
 
     pub fn from_private_key(private_key: &Secp256k1PrivateKey) -> Self {
-        Self::from_native(private_key.data.x_only_public_key(secp256k1::SECP256K1).0)
+        Self::from_native(private_key.data.public_key(secp256k1::SECP256K1))
     }
 
     pub(crate) fn verify_message(
@@ -166,7 +166,11 @@ impl Secp256k1PublicKey {
         msg_hashed: &secp256k1::Message,
     ) -> bool {
         secp256k1::SECP256K1
-            .verify_schnorr(signature, msg_hashed, &self.pubkey_data)
+            .verify_schnorr(
+                signature,
+                msg_hashed,
+                &self.pubkey_data.x_only_public_key().0,
+            )
             .is_ok()
     }
 }
@@ -176,6 +180,7 @@ mod test {
     use super::*;
     use crate::random::make_true_rng;
     use hex::ToHex;
+    use secp256k1::SECP256K1;
     use serialization::DecodeAll;
     use serialization::Encode;
 
@@ -201,7 +206,7 @@ mod test {
         {
             let pk_bytes = pk.as_bytes();
             let pk_short = &pk_bytes[..pk_bytes.len() - 1];
-            assert_eq!(pk_short.len(), 31);
+            assert_eq!(pk_short.len(), 32);
             let pk_again = Secp256k1PublicKey::from_bytes(pk_short);
             assert!(pk_again.is_err());
         }
@@ -224,19 +229,19 @@ mod test {
         let sk_pk_hex = vec![
             (
                 "0000000000000000000000000000000000000000000000000000000000000003",
-                "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+                "02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
             ),
             (
                 "b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef",
-                "dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
+                "02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659",
             ),
             (
                 "c90fdaa22168c234c4c6628b80dc1cd129024e088a67cc74020bbea63b14e5c9",
-                "dd308afec5777e13121fa72b9cc1b7cc0139715309b086c960e18fd969774eb8",
+                "02dd308afec5777e13121fa72b9cc1b7cc0139715309b086c960e18fd969774eb8",
             ),
             (
                 "0b432b2677937381aef05bb02a66ecd012773062cf3fa2549e44f58ed2401710",
-                "25d1dff95105f5253c4022f628a996ad3a0d95fbf21d468a1b33f8c160d8f517",
+                "0325d1dff95105f5253c4022f628a996ad3a0d95fbf21d468a1b33f8c160d8f517",
             ),
         ];
 
@@ -244,8 +249,7 @@ mod test {
             let sk = Secp256k1PrivateKey::from_bytes(&hex::decode(sk_hex).unwrap()).unwrap();
             let pk = Secp256k1PublicKey::from_bytes(&hex::decode(pk_hex).unwrap()).unwrap();
 
-            let secp = secp256k1::Secp256k1::new();
-            assert_eq!(pk.as_native(), &sk.as_native().x_only_public_key(&secp).0);
+            assert_eq!(pk.as_native(), &sk.as_native().public_key(SECP256K1));
 
             let sk_encoded = sk.encode();
             let pk_encoded = pk.encode();
@@ -306,19 +310,19 @@ mod test {
     #[test]
     fn signature_verification() {
         let test_vec = vec![
-            ("f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9", "0000000000000000000000000000000000000000000000000000000000000000", "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0", true),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6896bd60eeae296db48a229ff71dfe071bde413e6d43f917dc8dcf8c78de33418906d11ac976abccb20b091292bff4ea897efcb639ea871cfa95f6de339e4b0a", true),
-            ("dd308afec5777e13121fa72b9cc1b7cc0139715309b086c960e18fd969774eb8", "7e2d58d8b3bcdf1abadec7829054f90dda9805aab56c77333024b9d0a508b75c", "5831aaeed7b44bb74e5eab94ba9d4294c49bcf2a60728d8b4c200f50dd313c1bab745879a5ad954a72c45a91c3a51d3c7adea98d82f8481e0e1e03674a6f3fb7", true),
-            ("25d1dff95105f5253c4022f628a996ad3a0d95fbf21d468a1b33f8c160d8f517", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7eb0509757e246f19449885651611cb965ecc1a187dd51b64fda1edc9637d5ec97582b9cb13db3933705b32ba982af5af25fd78881ebb32771fc5922efc66ea3", true),
-            ("d69c3509bb99e412e68b0fe8544e72837dfa30746d8be2aa65975f29d22dc7b9", "4df3c3f68fcc83b27e9d42c90431a72499f17875c81a599b566c9889b9696703", "00000000000000000000003b78ce563f89a0ed9414f5aa28ad0d96d6795f9c6376afb1548af603b3eb45c9f8207dee1060cb71c04e80f593060b07d28308d7f4", true),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a14602975563cc27944640ac607cd107ae10923d9ef7a73c643e166be5ebeafa34b1ac553e2", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "1fa62e331edbc21c394792d2ab1100a7b432b013df3f6ff4f99fcb33e0e1515f28890b3edb6e7189b630448b515ce4f8622a954cfe545735aaea5134fccdb2bd", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6cff5c3ba86c69ea4b7376f31a9bcb4f74c1976089b2d9963da2e5543e177769961764b3aa9b2ffcb6ef947b6887a226e8d7c93e00c5ed0c1834ff0d0c2e6da6", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "0000000000000000000000000000000000000000000000000000000000000000123dda8328af9c23a94c1feecfd123ba4fb73476f0d594dcb65c6425bd186051", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "00000000000000000000000000000000000000000000000000000000000000017615fbaf5ae28864013c099742deadb4dba87f11ac6754f93780d5a1837cf197", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "4a298dacae57395a15d0795ddbfd1dcb564da82b0f269bc70a74f8220429ba1d69e89b4c5564d00349106b8497785dd7d1d713a8ae82b32fa79d5f7fc407d39b", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f69e89b4c5564d00349106b8497785dd7d1d713a8ae82b32fa79d5f7fc407d39b", false),
-            ("dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6cff5c3ba86c69ea4b7376f31a9bcb4f74c1976089b2d9963da2e5543e177769fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", false),
+            ("02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9", "0000000000000000000000000000000000000000000000000000000000000000", "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca821525f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0", true),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6896bd60eeae296db48a229ff71dfe071bde413e6d43f917dc8dcf8c78de33418906d11ac976abccb20b091292bff4ea897efcb639ea871cfa95f6de339e4b0a", true),
+            ("02dd308afec5777e13121fa72b9cc1b7cc0139715309b086c960e18fd969774eb8", "7e2d58d8b3bcdf1abadec7829054f90dda9805aab56c77333024b9d0a508b75c", "5831aaeed7b44bb74e5eab94ba9d4294c49bcf2a60728d8b4c200f50dd313c1bab745879a5ad954a72c45a91c3a51d3c7adea98d82f8481e0e1e03674a6f3fb7", true),
+            ("0325d1dff95105f5253c4022f628a996ad3a0d95fbf21d468a1b33f8c160d8f517", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "7eb0509757e246f19449885651611cb965ecc1a187dd51b64fda1edc9637d5ec97582b9cb13db3933705b32ba982af5af25fd78881ebb32771fc5922efc66ea3", true),
+            ("02d69c3509bb99e412e68b0fe8544e72837dfa30746d8be2aa65975f29d22dc7b9", "4df3c3f68fcc83b27e9d42c90431a72499f17875c81a599b566c9889b9696703", "00000000000000000000003b78ce563f89a0ed9414f5aa28ad0d96d6795f9c6376afb1548af603b3eb45c9f8207dee1060cb71c04e80f593060b07d28308d7f4", true),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a14602975563cc27944640ac607cd107ae10923d9ef7a73c643e166be5ebeafa34b1ac553e2", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "1fa62e331edbc21c394792d2ab1100a7b432b013df3f6ff4f99fcb33e0e1515f28890b3edb6e7189b630448b515ce4f8622a954cfe545735aaea5134fccdb2bd", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6cff5c3ba86c69ea4b7376f31a9bcb4f74c1976089b2d9963da2e5543e177769961764b3aa9b2ffcb6ef947b6887a226e8d7c93e00c5ed0c1834ff0d0c2e6da6", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "0000000000000000000000000000000000000000000000000000000000000000123dda8328af9c23a94c1feecfd123ba4fb73476f0d594dcb65c6425bd186051", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "00000000000000000000000000000000000000000000000000000000000000017615fbaf5ae28864013c099742deadb4dba87f11ac6754f93780d5a1837cf197", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "4a298dacae57395a15d0795ddbfd1dcb564da82b0f269bc70a74f8220429ba1d69e89b4c5564d00349106b8497785dd7d1d713a8ae82b32fa79d5f7fc407d39b", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f69e89b4c5564d00349106b8497785dd7d1d713a8ae82b32fa79d5f7fc407d39b", false),
+            ("02dff1d77f2a671c5f36183726db2341be58feae1da2deced843240f7b502ba659", "243f6a8885a308d313198a2e03707344a4093822299f31d0082efa98ec4e6c89", "6cff5c3ba86c69ea4b7376f31a9bcb4f74c1976089b2d9963da2e5543e177769fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", false),
         ];
 
         for (pk, msg_hash, sig, is_valid) in test_vec {

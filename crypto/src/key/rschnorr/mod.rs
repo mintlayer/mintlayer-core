@@ -15,6 +15,7 @@
 
 mod internal;
 
+use crate::key::hdkd::derivation_path::DerivationPath;
 use crate::random::{CryptoRng, Rng};
 use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
@@ -148,6 +149,10 @@ impl Derivable for MLRistrettoPrivateKey {
         let mini_key = self.as_native().hard_derive_mini_secret_key(Some(chaincode.into()), b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
         Ok(key)
+    }
+
+    fn get_derivation_path(&self) -> DerivationPath {
+        DerivationPath::empty()
     }
 }
 
