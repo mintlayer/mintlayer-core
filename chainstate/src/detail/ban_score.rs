@@ -255,6 +255,7 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
+            ConsensusPoWError::InvalidTargetBits(_) => 100,
         }
     }
 }

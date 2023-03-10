@@ -37,7 +37,7 @@ use crate::{
     pow::check_pow_consensus,
 };
 
-/// Checks if the given block identified by the header contains the correct consensus data.  
+/// Checks if the given block identified by the header contains the correct consensus data.
 pub fn validate_consensus<H, U, P>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
@@ -135,10 +135,14 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
                 "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
             ))
         }
-        ConsensusData::PoW(_) => {
-            check_pow_consensus(chain_config, header, pow_status, block_index_handle)
-                .map_err(Into::into)
-        }
+        ConsensusData::PoW(pow_data) => check_pow_consensus(
+            chain_config,
+            header,
+            pow_data,
+            pow_status,
+            block_index_handle,
+        )
+        .map_err(Into::into),
     }
 }
 
