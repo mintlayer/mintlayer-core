@@ -105,7 +105,7 @@ fn decomission_unknown_pool(#[case] seed: Seed) {
     }
 }
 
-// Create pool in db -> decomission pool in delta -> undo in delta -> merge -> merge
+// Create pool in db -> decommission pool in delta -> undo in delta -> merge -> merge
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -134,7 +134,7 @@ fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
     assert_eq!(storage, expected_storage);
 }
 
-// Create pool in db -> decomission pool in delta -> merge -> undo in delta -> merge
+// Create pool in db -> decommission pool in delta -> merge -> undo in delta -> merge
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

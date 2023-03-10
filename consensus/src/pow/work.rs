@@ -49,11 +49,18 @@ pub fn check_proof_of_work(
 pub fn check_pow_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
+    block_pow_data: &PoWData,
     pow_status: &PoWStatus,
     block_index_handle: &H,
 ) -> Result<(), ConsensusPoWError> {
     let work_required =
         calculate_work_required(chain_config, header, pow_status, block_index_handle)?;
+
+    // TODO: add test for a block with invalid target
+    if work_required != block_pow_data.bits() {
+        return Err(ConsensusPoWError::InvalidTargetBits(block_pow_data.bits()));
+    }
+
     if check_proof_of_work(header.block_id().get(), work_required)? {
         Ok(())
     } else {
