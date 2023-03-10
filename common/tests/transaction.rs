@@ -75,7 +75,7 @@ fn transaction_id_snapshots() {
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0x6e05b8807d81956bda8ed231cfe4ffeb50f193af6bd3d441185470905486145f
+        0x1205cd5f2da893cc6b48946309c5c5e5f2d97ecc475b47e3f7ffff0db0b126e0
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -89,7 +89,7 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0x425ca11b436a48b832e35475fa808fa9de0f8513ce9b4dd9cef39fccb2342c71
+        0xed07c7ea4e6e70715dc0a02883966eea60c33d5aa83f50fe5c87bc3b54e4e775
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

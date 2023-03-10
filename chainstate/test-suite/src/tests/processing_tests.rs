@@ -297,7 +297,7 @@ fn orphans_chains(#[case] seed: Seed) {
         );
         let current_best = tf
             .best_block_id()
-            .classify(&tf.chainstate.get_chain_config())
+            .classify(tf.chainstate.get_chain_config())
             .chain_block_id()
             .unwrap();
         assert_eq!(

@@ -52,7 +52,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                random_nft_issuance(chain_config, &mut rng).into(),
+                random_nft_issuance(chain_config.clone(), &mut rng).into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .add_output(TxOutput::new(
@@ -151,7 +151,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::new(
-                random_nft_issuance(chain_config, &mut rng).into(),
+                random_nft_issuance(chain_config.clone(), &mut rng).into(),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ))
             .add_output(TxOutput::new(

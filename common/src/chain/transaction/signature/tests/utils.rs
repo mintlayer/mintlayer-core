@@ -25,13 +25,14 @@ use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{
         signature::{
-            inputsig::{InputWitness, StandardInputSignature},
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
+        ChainConfig, Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput,
+        TxOutput,
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
@@ -119,6 +120,7 @@ pub fn sign_whole_tx(
 }
 
 pub fn generate_and_sign_tx(
+    chain_config: &ChainConfig,
     rng: &mut impl Rng,
     destination: &Destination,
     inputs: usize,
@@ -128,7 +130,10 @@ pub fn generate_and_sign_tx(
 ) -> Result<SignedTransaction, TransactionCreationError> {
     let tx = generate_unsigned_tx(rng, destination, inputs, outputs).unwrap();
     let signed_tx = sign_whole_tx(tx, private_key, sighash_type, destination).unwrap();
-    assert_eq!(verify_signed_tx(&signed_tx, destination), Ok(()));
+    assert_eq!(
+        verify_signed_tx(chain_config, &signed_tx, destination),
+        Ok(())
+    );
     Ok(signed_tx)
 }
 
@@ -139,7 +144,7 @@ pub fn make_signature(
     sighash_type: SigHashType,
     outpoint_dest: Destination,
 ) -> Result<StandardInputSignature, TransactionSigError> {
-    let input_sig = StandardInputSignature::produce_signature_for_input(
+    let input_sig = StandardInputSignature::produce_uniparty_signature_for_input(
         private_key,
         sighash_type,
         outpoint_dest,
@@ -150,11 +155,12 @@ pub fn make_signature(
 }
 
 pub fn verify_signed_tx(
+    chain_config: &ChainConfig,
     tx: &SignedTransaction,
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.inputs().len() {
-        verify_signature(destination, tx, i)?
+        verify_signature(chain_config, destination, tx, i)?
     }
     Ok(())
 }

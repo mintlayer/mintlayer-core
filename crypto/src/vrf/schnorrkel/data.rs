@@ -97,7 +97,7 @@ impl SchnorrkelVRFReturn {
         self.proof.to_bytes()
     }
 
-    /// to create the output, we need the input as well as per Ouroborous Praos Theorem 2 (information taken from Schnorrkel repo)
+    /// to create the output, we need the input as well as per Ouroboros Praos Theorem 2 (information taken from Schnorrkel repo)
     /// Hence, we use this step to restore VRFInOut from the transcript + preout + public key
     ///
     /// We commit both the input and output to provide the 2Hash-DH

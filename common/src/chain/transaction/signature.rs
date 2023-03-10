@@ -17,14 +17,21 @@ use crypto::hash::StreamHasher;
 use serialization::Encode;
 
 use crate::{
-    chain::TxInput,
+    chain::{ChainConfig, TxInput},
     primitives::{
         id::{hash_encoded_to, DefaultHashAlgoStream},
         H256,
     },
 };
 
-use self::inputsig::{InputWitness, StandardInputSignature};
+use self::inputsig::{
+    classical_multisig::{
+        authorize_classical_multisig::ClassicalMultisigSigningError,
+        multisig_partial_signature::PartiallySignedMultisigStructureError,
+    },
+    standard_signature::StandardInputSignature,
+    InputWitness,
+};
 
 use super::{signed_transaction::SignedTransaction, Destination, Transaction, TxOutput};
 
@@ -69,8 +76,24 @@ pub enum TransactionSigError {
     AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
     #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
     AttemptedToProduceSignatureForAnyoneCanSpend,
+    #[error("Classical multisig signature attempted in uni-party function")]
+    AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
     #[error("Number of signatures does not match number of inputs")]
     InvalidWitnessCount,
+    #[error("Invalid classical multisig challenge")]
+    InvalidClassicalMultisig(#[from] PartiallySignedMultisigStructureError),
+    #[error("Incomplete classical multisig signature(s)")]
+    IncompleteClassicalMultisigSignature,
+    #[error("Invalid classical multisig signature(s)")]
+    InvalidClassicalMultisigSignature,
+    #[error("The hash provided does not match the hash in the witness")]
+    ClassicalMultisigWitnessHashMismatch,
+    #[error("Producing classical multisig signing failed: {0}")]
+    ClassicalMultisigSigningFailed(#[from] ClassicalMultisigSigningError),
+    #[error("Standard signature creation failed. Invalid classical multisig authorization")]
+    InvalidClassicalMultisigAuthorization,
+    #[error("Standard signature creation failed. Incomplete classical multisig authorization")]
+    IncompleteClassicalMultisigAuthorization,
     #[error("Unsupported yet!")]
     Unsupported,
 }
@@ -294,17 +317,19 @@ pub fn signature_hash<T: Signable>(
 }
 
 fn verify_standard_input_signature<T: Transactable>(
+    chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
     tx: &T,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
-    witness.verify_signature(outpoint_destination, &sighash)?;
+    witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
     Ok(())
 }
 
 pub fn verify_signature<T: Transactable>(
+    chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
     input_num: usize,
@@ -318,14 +343,21 @@ pub fn verify_signature<T: Transactable>(
 
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {
+            Destination::Address(_)
+            | Destination::PublicKey(_)
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => {
                 return Err(TransactionSigError::SignatureNotFound)
             }
             Destination::AnyoneCanSpend => {}
         },
-        inputsig::InputWitness::Standard(witness) => {
-            verify_standard_input_signature(outpoint_destination, witness, tx, input_num)?
-        }
+        inputsig::InputWitness::Standard(witness) => verify_standard_input_signature(
+            chain_config,
+            outpoint_destination,
+            witness,
+            tx,
+            input_num,
+        )?,
     }
     Ok(())
 }

@@ -18,16 +18,14 @@ use crypto::random::{CryptoRng, Rng};
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use crate::chain::signed_transaction::SignedTransaction;
 use crate::chain::tokens::OutputValue;
 use crate::chain::OutputPurpose;
 use crate::{
     chain::{
         block::{BlockReward, ConsensusData},
-        signature::{
-            inputsig::{InputWitness, StandardInputSignature},
-            sighashtype::SigHashType,
-        },
+        signature::{inputsig::InputWitness, sighashtype::SigHashType},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, H256},

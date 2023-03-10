@@ -23,7 +23,7 @@ use common::{
             Block, BlockReward,
         },
         signature::{
-            inputsig::{InputWitness, StandardInputSignature},
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighashtype,
         },
     },

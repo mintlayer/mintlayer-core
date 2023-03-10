@@ -214,8 +214,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_chain_config(&self) -> Arc<ChainConfig> {
-        Arc::clone(self.chainstate.chain_config())
+    fn get_chain_config(&self) -> &Arc<ChainConfig> {
+        self.chainstate.chain_config()
     }
 
     fn get_chainstate_config(&self) -> ChainstateConfig {

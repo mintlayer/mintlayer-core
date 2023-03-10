@@ -105,7 +105,7 @@ mod test {
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
-            let res = StandardInputSignature::produce_signature_for_input(
+            let res = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
@@ -129,7 +129,7 @@ mod test {
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
@@ -160,7 +160,7 @@ mod test {
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
@@ -199,7 +199,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
@@ -230,7 +230,7 @@ mod test {
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),

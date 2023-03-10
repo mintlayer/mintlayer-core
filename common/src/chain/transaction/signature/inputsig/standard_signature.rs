@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,39 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod authorize_pubkey_spend;
-mod authorize_pubkeyhash_spend;
-
 use std::io::BufWriter;
 
 use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
-    chain::{Destination, Transaction},
+    chain::{
+        signature::{
+            sighashtype::{self, SigHashType},
+            signature_hash, TransactionSigError,
+        },
+        ChainConfig, Destination, Transaction,
+    },
     primitives::H256,
 };
 
-use self::{
+use super::{
     authorize_pubkey_spend::{
         sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
     },
     authorize_pubkeyhash_spend::{
         sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
     },
+    classical_multisig::{
+        authorize_classical_multisig::{
+            verify_classical_multisig_spending, AuthorizedClassicalMultisigSpend,
+        },
+        multisig_partial_signature::PartiallySignedMultisigChallenge,
+    },
 };
-
-use super::{
-    sighashtype::{self, SigHashType},
-    signature_hash, TransactionSigError,
-};
-
-#[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum InputWitness {
-    #[codec(index = 0)]
-    NoSignature(Option<Vec<u8>>),
-    #[codec(index = 1)]
-    Standard(StandardInputSignature),
-}
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct StandardInputSignature {
@@ -73,6 +69,7 @@ impl StandardInputSignature {
 
     pub fn verify_signature(
         &self,
+        chain_config: &ChainConfig,
         outpoint_destination: &Destination,
         sighash: &H256,
     ) -> Result<(), TransactionSigError> {
@@ -92,11 +89,16 @@ impl StandardInputSignature {
                     TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
                 );
             }
+            Destination::ClassicMultisig(h) => {
+                let sig_components =
+                    AuthorizedClassicalMultisigSpend::from_data(&self.raw_signature)?;
+                verify_classical_multisig_spending(chain_config, h, &sig_components, sighash)?
+            }
         }
         Ok(())
     }
 
-    pub fn produce_signature_for_input(
+    pub fn produce_uniparty_signature_for_input(
         private_key: &crypto::key::PrivateKey,
         sighash_type: sighashtype::SigHashType,
         outpoint_destination: Destination,
@@ -119,7 +121,40 @@ impl StandardInputSignature {
                 // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
                 return Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
             }
+            Destination::ClassicMultisig(_) => return Err(
+                // This function doesn't support this kind of signature
+                TransactionSigError::AttemptedToProduceClassicalMultisigSignatureForAnyoneCanSpend,
+            ),
         };
+        Ok(Self {
+            sighash_type,
+            raw_signature: serialized_sig,
+        })
+    }
+
+    pub fn produce_classical_multisig_signature_for_input(
+        chain_config: &ChainConfig,
+        authorization: &AuthorizedClassicalMultisigSpend,
+        sighash_type: sighashtype::SigHashType,
+        tx: &Transaction,
+        input_num: usize,
+    ) -> Result<Self, TransactionSigError> {
+        let sighash = signature_hash(sighash_type, tx, input_num)?;
+        let message = sighash.encode();
+
+        let verifier =
+            PartiallySignedMultisigChallenge::from_partial(chain_config, &message, authorization)?;
+
+        let verification_result = verifier.verify_signatures(chain_config)?;
+
+        match verification_result {
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::CompleteAndValid => (),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Incomplete => return Err(TransactionSigError::IncompleteClassicalMultisigAuthorization),
+            super::classical_multisig::multisig_partial_signature::SigsVerifyResult::Invalid => return Err(TransactionSigError::InvalidClassicalMultisigAuthorization),
+        }
+
+        let serialized_sig = authorization.encode();
+
         Ok(Self {
             sighash_type,
             raw_signature: serialized_sig,
@@ -171,10 +206,15 @@ impl Encode for StandardInputSignature {
 mod test {
     use crate::{
         address::pubkeyhash::PublicKeyHash,
-        chain::transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        chain::{
+            config::create_mainnet,
+            transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        },
     };
 
     use super::*;
+    use crate::chain::signature::{signature_hash, TransactionSigError};
+    use crate::chain::Destination;
     use crypto::key::{KeyKind, PrivateKey};
     use itertools::Itertools;
     use rstest::rstest;
@@ -196,7 +236,7 @@ mod test {
         for sighash_type in sig_hash_types() {
             assert_eq!(
                 Err(TransactionSigError::PublicKeyToAddressMismatch),
-                StandardInputSignature::produce_signature_for_input(
+                StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
                     destination.clone(),
@@ -222,7 +262,7 @@ mod test {
         for sighash_type in sig_hash_types() {
             assert_eq!(
                 Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
-                StandardInputSignature::produce_signature_for_input(
+                StandardInputSignature::produce_uniparty_signature_for_input(
                     &private_key,
                     sighash_type,
                     destination.clone(),
@@ -240,6 +280,8 @@ mod test {
     fn produce_and_verify(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
+        let chain_config = create_mainnet();
+
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
         let outpoints = [
@@ -250,7 +292,7 @@ mod test {
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
             let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
-            let witness = StandardInputSignature::produce_signature_for_input(
+            let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
@@ -261,7 +303,7 @@ mod test {
 
             let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
             witness
-                .verify_signature(&destination, &sighash)
+                .verify_signature(&chain_config, &destination, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
         }
     }

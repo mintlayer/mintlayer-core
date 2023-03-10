@@ -17,7 +17,10 @@ use crypto::key::PublicKey;
 use generic_array::sequence::Split;
 use serialization::{Decode, Encode};
 
-use crate::{construct_fixed_hash, primitives::id::DefaultHashAlgo};
+use crate::{
+    chain::classic_multisig::ClassicMultisigChallenge, construct_fixed_hash,
+    primitives::id::DefaultHashAlgo,
+};
 
 #[derive(thiserror::Error, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PublicKeyHashError {
@@ -35,6 +38,13 @@ construct_fixed_hash! {
 impl From<&PublicKey> for PublicKeyHash {
     fn from(pk: &PublicKey) -> Self {
         let hash = crypto::hash::hash::<DefaultHashAlgo, _>(pk.encode()).split().0.into();
+        Self(hash)
+    }
+}
+
+impl From<&ClassicMultisigChallenge> for PublicKeyHash {
+    fn from(challenge: &ClassicMultisigChallenge) -> Self {
+        let hash = crypto::hash::hash::<DefaultHashAlgo, _>(challenge.encode()).split().0.into();
         Self(hash)
     }
 }

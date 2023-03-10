@@ -136,7 +136,7 @@ impl<
         self.deref().get_best_block_index()
     }
 
-    fn get_chain_config(&self) -> Arc<ChainConfig> {
+    fn get_chain_config(&self) -> &Arc<ChainConfig> {
         self.deref().get_chain_config()
     }
 

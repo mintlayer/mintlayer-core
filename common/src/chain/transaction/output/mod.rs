@@ -19,19 +19,22 @@ use serialization::{Decode, Encode};
 
 use self::{stakelock::StakePoolData, timelock::OutputTimeLock};
 
+pub mod classic_multisig;
 pub mod stakelock;
 pub mod timelock;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {
     #[codec(index = 0)]
-    Address(PublicKeyHash), // Address type to be added
-    #[codec(index = 1)]
-    PublicKey(crypto::key::PublicKey), // Key type to be added
-    #[codec(index = 2)]
-    ScriptHash(Id<Script>),
-    #[codec(index = 3)]
     AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
+    #[codec(index = 1)]
+    Address(PublicKeyHash),
+    #[codec(index = 2)]
+    PublicKey(crypto::key::PublicKey),
+    #[codec(index = 3)]
+    ScriptHash(Id<Script>),
+    #[codec(index = 4)]
+    ClassicMultisig(PublicKeyHash),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
