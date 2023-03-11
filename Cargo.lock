@@ -1871,6 +1871,7 @@ dependencies = [
  "chainstate-test-framework",
  "common",
  "crypto",
+ "hex",
  "jsonrpsee",
  "logging",
  "mockall",

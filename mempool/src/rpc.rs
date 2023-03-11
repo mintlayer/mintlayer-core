@@ -15,14 +15,24 @@
 
 //! Mempool subsystem RPC handler
 
+use common::chain::SignedTransaction;
+use serialization::Decode;
+
 #[rpc::rpc(server, namespace = "mempool")]
 trait MempoolRpc {
-    #[method(name = "dummy")]
-    fn dummy(&self) -> rpc::Result<String>;
+    /// Submits a transaction to the mempool.
+    #[method(name = "submit_transaction")]
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
 }
 
+#[async_trait::async_trait]
 impl MempoolRpcServer for super::MempoolHandle {
-    fn dummy(&self) -> rpc::Result<String> {
-        Ok("dummy".to_string())
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
+        let tx = hex::decode(tx_hex).map_err(rpc::Error::to_call_error)?;
+        let tx = SignedTransaction::decode(&mut &tx[..]).map_err(rpc::Error::to_call_error)?;
+        self.call_async_mut(|m| m.add_transaction(tx))
+            .await
+            .map_err(rpc::Error::to_call_error)?
+            .map_err(rpc::Error::to_call_error)
     }
 }

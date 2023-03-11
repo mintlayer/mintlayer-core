@@ -16,7 +16,7 @@
 #![deny(clippy::clone_on_ref_ptr)]
 
 use common::{
-    chain::Block,
+    chain::{Block, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 pub use interface::{
@@ -39,6 +39,7 @@ pub mod tx_accumulator;
 #[derive(Debug, Clone)]
 pub enum MempoolEvent {
     NewTip(Id<Block>, BlockHeight),
+    NewTransaction(SignedTransaction),
 }
 
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
