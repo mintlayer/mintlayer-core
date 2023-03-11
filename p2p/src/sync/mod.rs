@@ -226,7 +226,7 @@ where
             .expect("A new tip block unavailable")
             .header()
             .clone();
-        self.messaging_handle.make_announcement(Announcement::Block(header))
+        self.messaging_handle.make_announcement(Announcement::Block(Box::new(header)))
     }
 
     /// Sends an event to the corresponding peer.

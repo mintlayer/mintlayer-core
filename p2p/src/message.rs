@@ -146,7 +146,7 @@ pub struct PingResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Announcement {
     #[codec(index = 0)]
-    Block(BlockHeader),
+    Block(Box<BlockHeader>),
     #[codec(index = 1)]
     Transaction(SignedTransaction),
 }

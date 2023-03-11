@@ -86,6 +86,7 @@ where
     T: NetworkingService,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: PeerId,
         p2p_config: Arc<P2pConfig>,
@@ -359,7 +360,7 @@ where
 
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
         match announcement {
-            Announcement::Block(header) => self.handle_block_announcement(header).await,
+            Announcement::Block(header) => self.handle_block_announcement(*header).await,
             Announcement::Transaction(tx) => self.handle_transaction_announcement(tx).await,
         }
     }
