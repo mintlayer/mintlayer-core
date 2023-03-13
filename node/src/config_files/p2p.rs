@@ -56,6 +56,8 @@ pub struct P2pConfigFile {
     pub bind_addresses: Option<Vec<String>>,
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
+    /// Disable p2p encryption (for tests only).
+    pub disable_noise: Option<bool>,
     /// Optional list of boot node addresses to connect.
     pub boot_nodes: Option<Vec<String>>,
     /// Optional list of reserved node addresses to connect.
@@ -81,6 +83,7 @@ impl From<P2pConfigFile> for P2pConfig {
         P2pConfig {
             bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
             socks5_proxy: c.socks5_proxy.clone(),
+            disable_noise: c.disable_noise,
             boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
             reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
             max_inbound_connections: c.max_inbound_connections.into(),

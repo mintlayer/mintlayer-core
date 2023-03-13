@@ -35,6 +35,7 @@ fn unban_peer() {
         Arc::new(P2pConfig {
             bind_addresses: Default::default(),
             socks5_proxy: None,
+            disable_noise: Default::default(),
             boot_nodes: Default::default(),
             reserved_nodes: Default::default(),
             max_inbound_connections: Default::default(),

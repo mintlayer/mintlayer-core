@@ -144,6 +144,7 @@ where
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Vec::new(),
         reserved_nodes: Vec::new(),
         max_inbound_connections: Default::default(),
