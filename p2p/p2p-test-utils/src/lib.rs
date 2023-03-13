@@ -28,7 +28,7 @@ use common::{
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 
-pub async fn start_subsystems(
+pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
@@ -43,11 +43,12 @@ pub async fn start_subsystems(
         Default::default(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate).await
+    start_subsystems_with_chainstate(chainstate, chain_config)
 }
 
-pub async fn start_subsystems_with_chainstate(
+pub fn start_subsystems_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
+    chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     MempoolHandle,
@@ -57,7 +58,7 @@ pub async fn start_subsystems_with_chainstate(
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
     let mempool = mempool::make_mempool(
-        chainstate.call(|c| Arc::clone(c.get_chain_config())).await.unwrap(),
+        chain_config,
         chainstate.clone(),
         Default::default(),
         mempool::SystemUsageEstimator {},

@@ -43,6 +43,7 @@ use crate::{
 #[tokio::test]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
+    // TODO: FIXME:
     todo!();
     // let mut rng = test_utils::random::make_seedable_rng(seed);
     //
@@ -65,3 +66,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
     //
     // handle.resume_panic().await;
 }
+
+// TODO: FIXME:
+//  - Invalid transaction
+//  - valid transaction

@@ -50,7 +50,8 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -79,7 +80,8 @@ async fn unknown_prev_block(#[case] seed: Seed) {
         .build();
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -138,6 +140,7 @@ async fn invalid_timestamp() {
 // The peer ban score is increased if it sends an invalid header.
 #[tokio::test]
 async fn invalid_consensus_data() {
+    println!("FIXME 0");
     let chain_config = Arc::new(
         ChainConfigBuilder::new(ChainType::Mainnet)
             // Enable consensus, so blocks with `ConsensusData::None` would be rejected.
@@ -148,9 +151,11 @@ async fn invalid_consensus_data() {
         .with_chain_config(Arc::clone(&chain_config))
         .build()
         .await;
+    println!("FIXME 1");
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
+    println!("FIXME 2");
 
     let block = Block::new(
         Vec::new(),
@@ -161,8 +166,10 @@ async fn invalid_consensus_data() {
     )
     .unwrap();
     handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    println!("FIXME 3");
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    println!("FIXME 4");
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
@@ -173,7 +180,9 @@ async fn invalid_consensus_data() {
         ))
         .ban_score()
     );
-    //handle.assert_no_event().await;
+    println!("FIXME 5");
+    handle.assert_no_event().await;
+    println!("FIXME 6");
     handle.assert_no_error().await;
 }
 
@@ -189,7 +198,8 @@ async fn valid_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)

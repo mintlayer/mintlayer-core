@@ -55,7 +55,8 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -94,7 +95,8 @@ async fn valid_request(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)

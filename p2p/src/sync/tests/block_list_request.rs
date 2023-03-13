@@ -59,7 +59,8 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()
@@ -103,7 +104,8 @@ async fn unknown_blocks(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let unknown_blocks = create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -145,7 +147,8 @@ async fn valid_request(#[case] seed: Seed) {
     for block in blocks.clone() {
         tf.process_block(block, BlockSource::Local).unwrap().unwrap();
     }
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -189,7 +192,8 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()

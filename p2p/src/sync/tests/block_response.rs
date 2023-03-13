@@ -45,7 +45,8 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -72,7 +73,8 @@ async fn unrequested_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -107,7 +109,8 @@ async fn valid_response(#[case] seed: Seed) {
         .build();
     let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(&mut tf, num_blocks);
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)

@@ -56,7 +56,8 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()
@@ -104,7 +105,8 @@ async fn unordered_headers(#[case] seed: Seed) {
         .filter(|(i, _)| *i != 1)
         .map(|(_, b)| b.header().clone())
         .collect();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -145,7 +147,8 @@ async fn disconnected_headers(#[case] seed: Seed) {
         .skip(1)
         .map(|b| b.header().clone())
         .collect();
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -182,7 +185,8 @@ async fn valid_headers(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let blocks = create_n_blocks(&mut tf, 3);
-    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
