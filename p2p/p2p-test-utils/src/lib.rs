@@ -26,32 +26,50 @@ use common::{
     chain::{config::ChainConfig, Block},
     primitives::Idable,
 };
+use mempool::{MempoolHandle, MempoolSubsystemInterface};
 
-pub async fn start_chainstate(
+pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
-) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
-    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
-    chainstate_subsystem(
-        make_chainstate(
-            chain_config,
-            ChainstateConfig::new(),
-            storage,
-            DefaultTransactionVerificationStrategy::new(),
-            None,
-            Default::default(),
-        )
-        .unwrap(),
+) -> (
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    MempoolHandle,
+) {
+    let chainstate = make_chainstate(
+        Arc::clone(&chain_config),
+        ChainstateConfig::new(),
+        chainstate_storage::inmemory::Store::new_empty().unwrap(),
+        DefaultTransactionVerificationStrategy::new(),
+        None,
+        Default::default(),
     )
-    .await
+    .unwrap();
+    start_subsystems_with_chainstate(chainstate).await
 }
 
-pub async fn chainstate_subsystem(
+pub async fn start_subsystems_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
-) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
+) -> (
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    MempoolHandle,
+) {
     let mut manager = subsystem::Manager::new("p2p-test-manager");
-    let handle = manager.add_subsystem("p2p-test-chainstate", chainstate);
+
+    let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
+
+    let mempool = mempool::make_mempool(
+        chainstate.call(|c| Arc::clone(c.get_chain_config())).await.unwrap(),
+        chainstate.clone(),
+        Default::default(),
+        mempool::SystemUsageEstimator {},
+    );
+    let mempool = manager
+        .add_subsystem_with_custom_eventloop("p2p-test-mempool", move |call, shutdn| {
+            mempool.run(call, shutdn)
+        });
+
     tokio::spawn(async move { manager.main().await });
-    handle
+
+    (chainstate, mempool)
 }
 
 pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {

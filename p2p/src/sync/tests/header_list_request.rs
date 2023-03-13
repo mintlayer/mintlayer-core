@@ -18,7 +18,7 @@ use std::{iter, sync::Arc};
 use chainstate::{ban_score::BanScore, Locator};
 use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
-use p2p_test_utils::chainstate_subsystem;
+use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -55,11 +55,11 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -94,11 +94,11 @@ async fn valid_request(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 

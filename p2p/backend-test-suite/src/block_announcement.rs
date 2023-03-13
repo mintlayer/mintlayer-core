@@ -85,7 +85,9 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    sync1
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 
     match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected { peer_id: _ } => {}
@@ -98,7 +100,8 @@ where
             peer: _,
             announcement,
         } => match *announcement {
-            Announcement::Block(block) => block,
+            Announcement::Block(h) => *h,
+            a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
     };
@@ -113,7 +116,9 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    sync2
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 
     match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected { peer_id: _ } => {}
@@ -125,7 +130,8 @@ where
             peer: _,
             announcement,
         } => match *announcement {
-            Announcement::Block(block) => block,
+            Announcement::Block(h) => *h,
+            a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
     };
@@ -185,7 +191,9 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    sync1
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 }
 
 async fn block_announcement_too_big_message<T, N, A>()
@@ -241,7 +249,7 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    let message = Announcement::Block(block.header().clone());
+    let message = Announcement::Block(Box::new(block.header().clone()));
     let encoded_size = message.encode().len();
 
     assert_eq!(

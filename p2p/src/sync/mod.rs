@@ -31,11 +31,11 @@ use void::Void;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
-    chain::{block::Block, config::ChainConfig},
+    chain::{block::Block, config::ChainConfig, SignedTransaction},
     primitives::Id,
 };
 use logging::log;
-use mempool::MempoolHandle;
+use mempool::{MempoolEvent, MempoolHandle};
 use utils::tap_error_log::LogError;
 
 use crate::{
@@ -118,12 +118,19 @@ where
             Ordering::Release,
         );
 
+        let mut transaction_receiver = self.subscribe_to_transaction().await?;
+
         loop {
             tokio::select! {
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
+                },
+
+                tx = transaction_receiver.recv() => {
+                    let tx = tx.ok_or(P2pError::ChannelClosed)?;
+                    self.messaging_handle.make_announcement(Announcement::Transaction(tx))?;
                 },
 
                 // Resend messages from peers to the backend.
@@ -156,6 +163,23 @@ where
             .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
+
+        Ok(receiver)
+    }
+
+    async fn subscribe_to_transaction(&mut self) -> Result<UnboundedReceiver<SignedTransaction>> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+
+        let subscribe_func = Arc::new(move |event: MempoolEvent| match event {
+            MempoolEvent::NewTip(_, _) => {}
+            MempoolEvent::NewTransaction(tx) => {
+                let _ = sender.send(tx).log_err_pfx("Transaction receiver closed");
+            }
+        });
+
+        self.mempool_handle
+            .call_async_mut(|m| m.subscribe_to_events(subscribe_func))
+            .await??;
 
         Ok(receiver)
     }

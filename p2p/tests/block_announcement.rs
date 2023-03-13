@@ -82,7 +82,7 @@ where
     connect_and_accept_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
     sync1
-        .make_announcement(Announcement::Block(
+        .make_announcement(Announcement::Block(Box::new(
             Block::new(
                 vec![],
                 Id::new(H256([0x03; 32])),
@@ -93,7 +93,7 @@ where
             .unwrap()
             .header()
             .clone(),
-        ))
+        )))
         .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.

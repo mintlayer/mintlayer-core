@@ -19,7 +19,7 @@ use chainstate::{ban_score::BanScore, BlockSource};
 use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use crypto::random::Rng;
-use p2p_test_utils::{chainstate_subsystem, create_n_blocks};
+use p2p_test_utils::{create_n_blocks, start_subsystems_with_chainstate};
 use test_utils::random::Seed;
 
 use crate::{
@@ -59,13 +59,13 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -103,11 +103,11 @@ async fn unknown_blocks(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let unknown_blocks = create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -145,11 +145,11 @@ async fn valid_request(#[case] seed: Seed) {
     for block in blocks.clone() {
         tf.process_block(block, BlockSource::Local).unwrap().unwrap();
     }
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -189,13 +189,13 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
 
     let p2p_config = Arc::new(P2pConfig::default());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 

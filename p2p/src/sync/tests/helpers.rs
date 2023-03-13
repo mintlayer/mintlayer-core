@@ -29,7 +29,8 @@ use tokio::{
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{config::create_mainnet, ChainConfig};
-use p2p_test_utils::start_chainstate;
+use mempool::MempoolHandle;
+use p2p_test_utils::start_subsystems;
 
 use crate::{
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
@@ -69,6 +70,7 @@ impl SyncManagerHandle {
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool: MempoolHandle,
     ) -> Self {
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
@@ -84,6 +86,7 @@ impl SyncManagerHandle {
             p2p_config,
             messaging_handle,
             chainstate,
+            mempool,
             peer_manager_sender,
         );
 
@@ -211,7 +214,10 @@ impl SyncManagerHandle {
 pub struct SyncManagerHandleBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    chainstate: Option<subsystem::Handle<Box<dyn ChainstateInterface>>>,
+    subsystems: Option<(
+        subsystem::Handle<Box<dyn ChainstateInterface>>,
+        MempoolHandle,
+    )>,
 }
 
 impl SyncManagerHandleBuilder {
@@ -219,7 +225,7 @@ impl SyncManagerHandleBuilder {
         Self {
             chain_config: Arc::new(create_mainnet()),
             p2p_config: Arc::new(P2pConfig::default()),
-            chainstate: None,
+            subsystems: None,
         }
     }
 
@@ -228,11 +234,12 @@ impl SyncManagerHandleBuilder {
         self
     }
 
-    pub fn with_chainstate(
+    pub fn with_subsystems(
         mut self,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool: MempoolHandle,
     ) -> Self {
-        self.chainstate = Some(chainstate);
+        self.subsystems = Some((chainstate, mempool));
         self
     }
 
@@ -242,12 +249,18 @@ impl SyncManagerHandleBuilder {
     }
 
     pub async fn build(self) -> SyncManagerHandle {
-        let chainstate = match self.chainstate {
-            Some(chainstate) => chainstate,
-            None => start_chainstate(Arc::clone(&self.chain_config)).await,
+        let (chainstate, mempool) = match self.subsystems {
+            Some((c, m)) => (c, m),
+            None => start_subsystems(Arc::clone(&self.chain_config)).await,
         };
 
-        SyncManagerHandle::start_with_params(self.chain_config, self.p2p_config, chainstate).await
+        SyncManagerHandle::start_with_params(
+            self.chain_config,
+            self.p2p_config,
+            chainstate,
+            mempool,
+        )
+        .await
     }
 }
 
