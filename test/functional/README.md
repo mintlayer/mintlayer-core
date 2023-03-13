@@ -118,9 +118,6 @@ contains the list of test framework `p2p` objects connected to itself
 node.p2ps[0].sync_with_ping()
 ```
 
-More examples can be found in [p2p_unrequested_blocks.py](p2p_unrequested_blocks.py),
-[p2p_compactblocks.py](p2p_compactblocks.py).
-
 #### Prototyping tests
 
 The [`TestShell`](test-shell.md) class exposes the BitcoinTestFramework
