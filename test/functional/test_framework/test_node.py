@@ -579,7 +579,7 @@ class TestNode():
                     assert_msg += "with expected error " + expected_msg
                 self._raise_assertion_error(assert_msg)
 
-    def add_p2p_connection(self, p2p_conn, *, wait_for_verack=True, **kwargs):
+    def add_p2p_connection(self, p2p_conn, *, wait_for_handshake=True, **kwargs):
         """Add an inbound p2p connection to the node.
 
         This method adds the p2p connection to the self.p2ps list and also
@@ -589,28 +589,22 @@ class TestNode():
         if 'dstaddr' not in kwargs:
             kwargs['dstaddr'] = '127.0.0.1'
 
+        peer_count_old = len(self.p2p_get_connected_peers())
         p2p_conn.peer_connect(**kwargs, net=self.chain, timeout_factor=self.timeout_factor)()
         self.p2ps.append(p2p_conn)
         p2p_conn.wait_until(lambda: p2p_conn.is_connected, check_connected=False)
-        if wait_for_verack:
-            # Wait for the node to send us the version and verack
-            p2p_conn.wait_for_verack()
-            # At this point we have sent our version message and received the version and verack, however the full node
-            # has not yet received the verack from us (in reply to their version). So, the connection is not yet fully
-            # established (fSuccessfullyConnected).
-            #
-            # This shouldn't lead to any issues when sending messages, since the verack will be in-flight before the
-            # message we send. However, it might lead to races where we are expecting to receive a message. E.g. a
-            # transaction that will be added to the mempool as soon as we return here.
-            #
-            # So syncing here is redundant when we only want to send a message, but the cost is low (a few milliseconds)
-            # in comparison to the upside of making tests less fragile and unexpected intermittent errors less likely.
+        if wait_for_handshake:
+            # Wait for the node to send us the handshake
+            p2p_conn.wait_for_handshake()
+
+            # This ensures that PeerManager has accepted the peer
             p2p_conn.sync_with_ping()
 
-            # Consistency check that the Bitcoin Core has received our user agent string. This checks the
-            # node's newest peer. It could be racy if another Bitcoin Core node has connected since we opened
-            # our connection, but we don't expect that to happen.
-            assert_equal(self.getpeerinfo()[-1]['subver'], P2P_SUBVERSION)
+            # TODO: Add user agent check? We don't send the user agent yet
+            #assert_equal(self.p2p_get_connected_peers()[-1]['subver'], P2P_SUBVERSION)
+
+            peer_count_new = len(self.p2p_get_connected_peers())
+            assert_equal(peer_count_old + 1, peer_count_new)
 
         return p2p_conn
 
@@ -636,7 +630,7 @@ class TestNode():
             p2p_conn.wait_for_connect()
             self.p2ps.append(p2p_conn)
 
-            p2p_conn.wait_for_verack()
+            p2p_conn.wait_for_handshake()
             p2p_conn.sync_with_ping()
 
         return p2p_conn

@@ -60,7 +60,7 @@ pub struct RunOptions {
     #[clap(long)]
     pub node_type: Option<NodeTypeConfigFile>,
 
-    /// Mock time.
+    /// Mock time used to initialize the node time at startup, in seconds.
     #[clap(long)]
     #[arg(hide = true)]
     pub mock_time: Option<u64>,
