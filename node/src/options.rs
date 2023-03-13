@@ -117,7 +117,7 @@ pub struct RunOptions {
 
     /// After what time a peer is detected as dead and is disconnected (in seconds).
     #[clap(long)]
-    pub p2p_ping_timeout: Option<u64>,
+    pub p2p_ping_timeout: Option<NonZeroU64>,
 
     /// A maximum tip age in seconds.
     ///

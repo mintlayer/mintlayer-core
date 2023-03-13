@@ -106,7 +106,7 @@ fn read_config_override_values() {
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let p2p_ping_check_period = 30;
-    let p2p_ping_timeout = 60;
+    let p2p_ping_timeout = NonZeroU64::new(60).unwrap();
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;

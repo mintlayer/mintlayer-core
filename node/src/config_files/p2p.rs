@@ -73,7 +73,7 @@ pub struct P2pConfigFile {
     /// How often send ping requests to peers.
     pub ping_check_period: Option<u64>,
     /// When a peer is detected as dead and disconnected.
-    pub ping_timeout: Option<u64>,
+    pub ping_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }
@@ -94,7 +94,7 @@ impl From<P2pConfigFile> for P2pConfig {
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             ping_check_period: c.ping_check_period.map(Duration::from_secs).into(),
-            ping_timeout: c.ping_timeout.map(Duration::from_secs).into(),
+            ping_timeout: c.ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
             node_type: c.node_type.map(Into::into).into(),
             allow_discover_private_ips: Default::default(),
             msg_header_count_limit: Default::default(),

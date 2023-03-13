@@ -138,10 +138,8 @@ where
     ) -> crate::Result<Self> {
         let peerdb =
             peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
-        ensure!(
-            !p2p_config.ping_timeout.is_zero(),
-            P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
-        );
+        assert!(!p2p_config.outbound_connection_timeout.is_zero());
+        assert!(!p2p_config.ping_timeout.is_zero());
         Ok(PeerManager {
             chain_config,
             p2p_config,
