@@ -34,7 +34,7 @@ pub enum PoSRandomnessError {
     VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
 }
 
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone, Copy)]
 pub struct PoSRandomness {
     value: H256,
 }

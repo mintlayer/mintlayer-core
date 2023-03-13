@@ -94,7 +94,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         Ok(PoSAccountingUndo::IncreasePoolBalance(
             IncreasePoolBalanceUndo {
                 pool_id,
-                amount_to_add,
+                amount_added: amount_to_add,
             },
         ))
     }
@@ -301,7 +301,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         &mut self,
         undo_data: IncreasePoolBalanceUndo,
     ) -> Result<(), Error> {
-        self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_to_add)?;
+        self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_added)?;
 
         Ok(())
     }

@@ -64,7 +64,7 @@ pub struct PoSData {
     /// It represents random seed generated based on the randomness of the sealed epoch.
     vrf_data: VRFReturn,
 
-    target: Compact,
+    compact_target: Compact,
 }
 
 impl PoSData {
@@ -73,14 +73,14 @@ impl PoSData {
         kernel_witness: Vec<InputWitness>,
         stake_pool_id: PoolId,
         vrf_data: VRFReturn,
-        target: Compact,
+        compact_target: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
             stake_pool_id,
             vrf_data,
-            target,
+            compact_target,
         }
     }
 
@@ -96,8 +96,8 @@ impl PoSData {
         &self.stake_pool_id
     }
 
-    pub fn target(&self) -> &Compact {
-        &self.target
+    pub fn compact_target(&self) -> &Compact {
+        &self.compact_target
     }
 
     pub fn vrf_data(&self) -> &VRFReturn {

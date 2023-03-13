@@ -362,6 +362,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
+        // TODO(Gosha):
+        // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
+        // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
         consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
@@ -705,8 +708,16 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // Connect the new chain
         for block_index in new_chain {
-            self.connect_tip(&block_index).log_err()?;
-            self.post_connect_tip(&block_index).log_err()?;
+            let block: WithId<Block> = self
+                .get_block_from_index(&block_index)
+                .log_err()?
+                .ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
+                    *block_index.block_id(),
+                ))?
+                .into();
+
+            self.connect_tip(&block_index, &block).log_err()?;
+            self.post_connect_tip(&block_index, block.as_ref()).log_err()?;
         }
 
         Ok(())
@@ -757,19 +768,19 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     // Connect new block
-    fn connect_tip(&mut self, new_tip_block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn connect_tip(
+        &mut self,
+        new_tip_block_index: &BlockIndex,
+        new_tip: &WithId<Block>,
+    ) -> Result<(), BlockError> {
         let best_block_id =
             self.get_best_block_id().map_err(BlockError::BestBlockLoadError).log_err()?;
         utils::ensure!(
             &best_block_id == new_tip_block_index.prev_block_id(),
             BlockError::InvariantErrorInvalidTip,
         );
-        let block = self
-            .get_block_from_index(new_tip_block_index)
-            .log_err()?
-            .expect("Inconsistent DB");
 
-        self.connect_transactions(new_tip_block_index, &block.into()).log_err()?;
+        self.connect_transactions(new_tip_block_index, new_tip).log_err()?;
 
         self.db_tx
             .set_block_id_at_height(
@@ -887,20 +898,17 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(block_index)
     }
 
-    fn post_connect_tip(&mut self, tip_index: &BlockIndex) -> Result<(), BlockError> {
+    fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {
         let tip_height = tip_index.block_height();
         epoch_seal::update_epoch_seal(
             &mut self.db_tx,
             self.chain_config,
             epoch_seal::BlockStateEvent::Connect(tip_height),
         )?;
-        let tip = self
-            .get_block_from_index(tip_index)?
-            .ok_or(BlockError::BlockAtHeightNotFound(tip_height))?;
         epoch_seal::update_epoch_data(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEventWithIndex::Connect(tip_height, &tip),
+            epoch_seal::BlockStateEventWithIndex::Connect(tip_height, tip),
         )
     }
 

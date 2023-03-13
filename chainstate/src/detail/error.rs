@@ -66,6 +66,8 @@ pub enum BlockError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS randomness error: `{0}`")]
     RandomnessError(#[from] PoSRandomnessError),
+    #[error("Inconsistent db, block not found after connect: {0}")]
+    InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

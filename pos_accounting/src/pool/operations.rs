@@ -67,7 +67,7 @@ pub struct SpendFromShareUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct IncreasePoolBalanceUndo {
     pub(crate) pool_id: PoolId,
-    pub(crate) amount_to_add: Amount,
+    pub(crate) amount_added: Amount,
 }
 
 #[must_use]

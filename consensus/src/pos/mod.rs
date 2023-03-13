@@ -40,9 +40,9 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
     spender_block_header: &BlockHeader,
     pos_accounting_view: &P,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = (*pos_data.target())
+    let target: Uint256 = (*pos_data.compact_target())
         .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.target()))?;
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.compact_target()))?;
 
     let hash_pos: Uint256 = PoSRandomness::from_block(
         epoch_index,
@@ -81,7 +81,7 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
         Some(sealed_epoch_index) => {
             let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
             match epoch_data {
-                Some(d) => d.randomness().clone(),
+                Some(d) => *d.randomness(),
                 None => {
                     // TODO: no epoch_data means either that no epoch was created yet or
                     // that the data is actually missing

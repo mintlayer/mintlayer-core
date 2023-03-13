@@ -614,20 +614,13 @@ where
         Ok(())
     }
 
-    fn connect_pos_accounting_outputs(
-        &mut self,
-        tx_source: TransactionSource,
-        tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
-        let input0_getter =
-            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
-
+    fn check_spend_stake_attempt(&self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
         let attempt_to_spend_stake = tx
             .inputs()
             .iter()
-            .map(|i| {
+            .map(|input| {
                 self.utxo_cache
-                    .utxo(i.outpoint())
+                    .utxo(input.outpoint())
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)
             })
             .collect::<Result<Vec<_>, _>>()?
@@ -642,8 +635,14 @@ where
             !attempt_to_spend_stake,
             ConnectTransactionError::AttemptToSpendStakedCoins
         );
+        Ok(())
+    }
 
-        let attempt_to_use_spend_stake_pool =
+    fn check_no_produce_block_outputs_in_tx(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let attempt_to_use_probuce_block =
             tx.outputs().iter().any(|output| match output.purpose() {
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
@@ -653,9 +652,22 @@ where
             });
 
         ensure!(
-            !attempt_to_use_spend_stake_pool,
-            ConnectTransactionError::AttemptToSpendStakedCoins
+            !attempt_to_use_probuce_block,
+            ConnectTransactionError::AttemptToUseProduceBlockOutputInTx
         );
+        Ok(())
+    }
+
+    fn connect_pos_accounting_outputs(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+    ) -> Result<(), ConnectTransactionError> {
+        let input0_getter =
+            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
+
+        self.check_spend_stake_attempt(tx)?;
+        self.check_no_produce_block_outputs_in_tx(tx)?;
 
         let tx_undo = tx
             .outputs()

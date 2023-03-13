@@ -54,6 +54,7 @@ impl BanScore for BlockError {
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::RandomnessError(err) => err.ban_score(),
+            BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
         }
     }
 }
@@ -104,6 +105,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
             ConnectTransactionError::AttemptToSpendStakedCoins => 100,
+            ConnectTransactionError::AttemptToUseProduceBlockOutputInTx => 100,
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,

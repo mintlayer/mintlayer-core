@@ -606,7 +606,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
+fn use_produce_block_output_in_tx(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
@@ -638,7 +638,7 @@ fn spend_stake_pool_output_without_staked_pool(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendStakedCoins
+                ConnectTransactionError::AttemptToUseProduceBlockOutputInTx
             ))
         );
     });

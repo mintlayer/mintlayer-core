@@ -148,7 +148,7 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
                     .flatten()
                     .map_or_else(
                         || PoSRandomness::at_genesis(chain_config),
-                        |d| d.randomness().clone(),
+                        |d| *d.randomness(),
                     );
 
                 let epoch_index = chain_config.epoch_index_from_height(&tip_height);

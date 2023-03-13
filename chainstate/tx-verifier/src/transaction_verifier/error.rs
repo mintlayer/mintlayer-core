@@ -91,6 +91,8 @@ pub enum ConnectTransactionError {
     AttemptToSpendBurnedAmount,
     #[error("Attempt to spend staked coins in a transaction")]
     AttemptToSpendStakedCoins,
+    #[error("Attempt to use ProduceBlock output in a transaction")]
+    AttemptToUseProduceBlockOutputInTx,
     #[error("PoS accounting error")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
