@@ -20,14 +20,25 @@ mod ping;
 use std::{sync::Arc, time::Duration};
 
 use common::time_getter::TimeGetter;
-use tokio::{sync::mpsc::UnboundedSender, time::timeout};
+use crypto::random::Rng;
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    time::timeout,
+};
 
 use crate::{
     event::PeerManagerEvent,
+    expect_recv,
     interface::types::ConnectedPeer,
-    net::{ConnectivityService, NetworkingService},
+    message::{PeerManagerMessage, PingRequest, PingResponse},
+    net::{
+        default_backend::types::{Command, Message},
+        types::ConnectivityEvent,
+        ConnectivityService, NetworkingService,
+    },
     peer_manager::PeerManager,
     testing_utils::peerdb_inmemory_store,
+    types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2pConfig,
 };
