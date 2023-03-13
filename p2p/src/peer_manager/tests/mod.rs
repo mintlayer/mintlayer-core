@@ -129,3 +129,38 @@ async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
     tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
     timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
 }
+
+/// Send some message to PeerManager and ensure it's processed
+async fn send_and_sync<T: NetworkingService>(
+    peer: PeerId,
+    message: PeerManagerMessage,
+    conn_tx: &UnboundedSender<ConnectivityEvent<T::Address>>,
+    cmd_rx: &mut UnboundedReceiver<Command<T::Address>>,
+) {
+    conn_tx.send(ConnectivityEvent::Message { peer, message }).unwrap();
+
+    let sent_nonce = crypto::random::make_pseudo_rng().gen();
+    conn_tx
+        .send(ConnectivityEvent::Message {
+            peer,
+            message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }),
+        })
+        .unwrap();
+
+    let event = expect_recv!(cmd_rx);
+    match event {
+        Command::SendMessage {
+            peer,
+            message: Message::PingResponse(PingResponse { nonce }),
+        } => {
+            conn_tx
+                .send(ConnectivityEvent::Message {
+                    peer,
+                    message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
+                })
+                .unwrap();
+            assert_eq!(nonce, sent_nonce);
+        }
+        _ => panic!("unexpected event: {event:?}"),
+    }
+}
