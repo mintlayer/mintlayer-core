@@ -82,14 +82,14 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MpscChannelTransport;
 
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
         MpscChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {
-        0
+        "0.0.0.0:0".parse().unwrap()
     }
 }
 
@@ -144,11 +144,10 @@ impl RandomAddressMaker for TestTcpAddressMaker {
 pub struct TestChannelAddressMaker {}
 
 impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn new() -> Self::Address {
-        let mut rng = make_pseudo_rng();
-        rng.gen()
+        TestTcpAddressMaker::new()
     }
 }
 
