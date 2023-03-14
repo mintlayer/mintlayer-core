@@ -473,7 +473,7 @@ async fn inbound_connection_too_many_peers_channels() {
     let peers = (0..*MaxInboundConnections::default())
         .map(|index| {
             (
-                format!("{}", index + 10000).parse().expect("valid address"),
+                format!("127.0.0.1:{}", index + 10000).parse().expect("valid address"),
                 PeerInfo {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
@@ -566,7 +566,7 @@ async fn connection_timeout_channels() {
     connection_timeout::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        65_535,
+        TestTransportChannel::make_address(),
     )
     .await;
 }
@@ -643,7 +643,7 @@ async fn connection_timeout_rpc_notified_channels() {
     connection_timeout_rpc_notified::<DefaultNetworkingService<MpscChannelTransport>>(
         TestTransportChannel::make_transport(),
         TestTransportChannel::make_address(),
-        9999,
+        TestTransportChannel::make_address(),
     )
     .await;
 }
@@ -672,6 +672,7 @@ where
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -705,6 +706,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
@@ -765,8 +767,11 @@ async fn connection_reserved_node_channel() {
         .await;
 }
 
-// Verify that peers announce own addresses and are discovered by other peers
-async fn discovered_node<A, T>(expected_count: usize)
+// Verify that peers announce own addresses and are discovered by other peers.
+// All listening addresses are discovered and multiple connections are made:
+// For example, A makes outbound connections to B and C and accepts connections from B and C.
+// So there will be 4 connections reported for A.
+async fn discovered_node<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
     T: NetworkingService + 'static + std::fmt::Debug,
@@ -780,6 +785,7 @@ where
     let p2p_config_1 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -814,6 +820,7 @@ where
     let p2p_config_2 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses.clone(),
         max_inbound_connections: Default::default(),
@@ -841,6 +848,7 @@ where
     let p2p_config_3 = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: bind_addresses,
         max_inbound_connections: Default::default(),
@@ -872,9 +880,10 @@ where
         let connected_peers_2 = get_connected_peers(&tx2).await.len();
         let connected_peers_3 = get_connected_peers(&tx3).await.len();
 
-        if connected_peers_1 == expected_count
-            && connected_peers_2 == expected_count
-            && connected_peers_3 == expected_count
+        const EXPECTED_COUNT: usize = 4;
+        if connected_peers_1 == EXPECTED_COUNT
+            && connected_peers_2 == EXPECTED_COUNT
+            && connected_peers_3 == EXPECTED_COUNT
         {
             break;
         }
@@ -886,29 +895,22 @@ where
 
         assert!(
             Instant::now().duration_since(started_at) < Duration::from_secs(10),
-            "Unexpected peer counts: {connected_peers_1}, {connected_peers_2}, {connected_peers_3}, expected: {expected_count}"
+            "Unexpected peer counts: {connected_peers_1}, {connected_peers_2}, {connected_peers_3}, expected: {EXPECTED_COUNT}"
         );
     }
 }
 
 #[tokio::test]
 async fn discovered_node_tcp() {
-    // With TCP all listening addresses are discovered and multiple connections are made:
-    // For example, A makes outbound connections to B and C and accepts connections from B and C.
-    // There will be 4 connections reported for A.
-    discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>(4).await;
+    discovered_node::<TestTransportTcp, DefaultNetworkingService<TcpTransportSocket>>().await;
 }
 
 #[tokio::test]
 async fn discovered_node_noise() {
-    // Same as with TCP
-    discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>(4).await;
+    discovered_node::<TestTransportNoise, DefaultNetworkingService<NoiseTcpTransport>>().await;
 }
 
 #[tokio::test]
 async fn discovered_node_channel() {
-    // With TestTransport peers made lower total connection count because there is only one "port" available.
-    // So when peer A connects to peer B, peer B won't open connection to A.
-    discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>(2)
-        .await;
+    discovered_node::<TestTransportChannel, DefaultNetworkingService<MpscChannelTransport>>().await;
 }

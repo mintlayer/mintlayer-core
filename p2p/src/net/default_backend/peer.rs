@@ -19,6 +19,7 @@ use tokio::{sync::mpsc, time::timeout};
 
 use common::chain::ChainConfig;
 use logging::log;
+use utils::set_flag::SetFlag;
 
 use crate::{
     config::P2pConfig,
@@ -201,7 +202,7 @@ where
             }
         }
 
-        let mut was_accepted = false;
+        let mut was_accepted = SetFlag::default();
 
         loop {
             tokio::select! {
@@ -209,10 +210,10 @@ where
                 biased;
 
                 event = self.rx.recv() => match event.ok_or(P2pError::ChannelClosed)? {
-                    Event::Accepted => was_accepted = true,
+                    Event::Accepted => was_accepted.set(),
                     Event::SendMessage(message) => self.socket.send(*message).await?,
                 },
-                event = self.socket.recv(), if was_accepted => match event {
+                event = self.socket.recv(), if *was_accepted => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
                         return Ok(());

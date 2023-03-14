@@ -15,10 +15,7 @@
 
 use std::{collections::HashSet, time::Duration};
 
-use crate::{
-    interface::types::ConnectedPeer,
-    net::types::{self, Role},
-};
+use crate::net::types::{self, Role};
 
 #[derive(Debug)]
 pub struct SentPing {
@@ -43,6 +40,12 @@ pub struct PeerContext<A> {
     /// Sent ping details
     pub sent_ping: Option<SentPing>,
 
+    /// Last ping time
+    pub ping_last: Option<Duration>,
+
+    /// Min ping time
+    pub ping_min: Option<Duration>,
+
     /// Whether an address list request was sent and no response was received.
     ///
     /// It is used to score peers that send unsolicited address list responses.
@@ -52,15 +55,4 @@ pub struct PeerContext<A> {
     /// Used to prevent infinity loops while broadcasting addresses.
     // TODO: Use bloom filter (like it's done in Bitcoin Core).
     pub announced_addresses: HashSet<A>,
-}
-
-impl<T: ToString> From<&PeerContext<T>> for ConnectedPeer {
-    fn from(context: &PeerContext<T>) -> Self {
-        ConnectedPeer {
-            peer_id: context.info.peer_id,
-            address: context.address.to_string(),
-            inbound: context.role == Role::Inbound,
-            ban_score: context.score,
-        }
-    }
 }

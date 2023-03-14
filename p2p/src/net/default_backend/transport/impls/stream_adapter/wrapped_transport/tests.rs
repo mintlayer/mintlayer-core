@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use std::{
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -195,7 +196,8 @@ async fn test_bind_port_closed() {
     );
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 
-    let listener = transport.bind(vec![0]).await.unwrap();
+    let address: SocketAddr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
+    let listener = transport.bind(vec![address]).await.unwrap();
     assert!(*transport.base_transport.port_open.lock().unwrap());
 
     drop(listener);

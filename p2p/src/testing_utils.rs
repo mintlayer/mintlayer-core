@@ -82,14 +82,14 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MpscChannelTransport;
 
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
         MpscChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {
-        0
+        "0.0.0.0:0".parse().unwrap()
     }
 }
 
@@ -144,11 +144,10 @@ impl RandomAddressMaker for TestTcpAddressMaker {
 pub struct TestChannelAddressMaker {}
 
 impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn new() -> Self::Address {
-        let mut rng = make_pseudo_rng();
-        rng.gen()
+        TestTcpAddressMaker::new()
     }
 }
 
@@ -294,4 +293,15 @@ impl P2pTokioTestTimeGetter {
         tokio::time::advance(duration).await;
         tokio::time::resume();
     }
+}
+
+/// Receive a message from the tokio channel.
+/// Panics if the channel is closed or no message received in 10 seconds.
+#[macro_export]
+macro_rules! expect_recv {
+    // Implemented as a macro until #[track_caller] works correctly with async functions
+    // (needed to print the caller location if unwraps fail)
+    ($x:expr) => {
+        tokio::time::timeout(Duration::from_secs(10), $x.recv()).await.unwrap().unwrap()
+    };
 }

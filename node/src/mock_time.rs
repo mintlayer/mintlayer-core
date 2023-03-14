@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common::chain::config::ChainType;
 
+/// Sets mock time (seconds since UNIX epoch)
 pub fn set_mock_time(chain_type: ChainType, time: u64) -> Result<(), crate::Error> {
     anyhow::ensure!(
         chain_type == ChainType::Regtest,
         "Mock time allowed on regtest chain only"
     );
-    common::primitives::time::set(common::primitives::time::duration_from_int(time))?;
+    common::primitives::time::set(Duration::from_secs(time))?;
     Ok(())
 }

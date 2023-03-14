@@ -15,8 +15,9 @@
 
 use std::{
     collections::BTreeMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::{
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicU16, AtomicU32, Ordering},
         Mutex,
     },
 };
@@ -34,108 +35,106 @@ use tokio::{
 
 use crate::{
     error::DialError,
-    net::{
-        default_backend::transport::{
-            traits::TransportAddress, PeerStream, TransportListener, TransportSocket,
-        },
-        AsBannableAddress,
-    },
-    types::peer_address::{PeerAddress, PeerAddressIp4},
+    net::default_backend::transport::{PeerStream, TransportListener, TransportSocket},
     P2pError, Result,
 };
-
-type Address = u32;
-
-impl TransportAddress for Address {
-    fn as_peer_address(&self) -> PeerAddress {
-        PeerAddress::Ip4(PeerAddressIp4 {
-            // Address of the first "host" will be 0.0.0.1
-            ip: std::net::Ipv4Addr::from(*self).into(),
-            // There is only one "port" in MpscChannelTransport per "host", use arbitrary value
-            port: 10000,
-        })
-    }
-
-    fn from_peer_address(address: &PeerAddress, _allow_private_ips: bool) -> Option<Self> {
-        match address {
-            PeerAddress::Ip4(socket) => Some(std::net::Ipv4Addr::from(socket.ip).into()),
-            PeerAddress::Ip6(_) => None,
-        }
-    }
-}
-
-/// Zero address has special meaning: bind to a free address.
-const ZERO_ADDRESS: Address = 0;
 
 // How much bytes is allowed for write (without reading on the other side).
 const MAX_BUF_SIZE: usize = 10 * 1024 * 1024;
 
-type IncomingConnection = (Address, Sender<DuplexStream>);
+type IncomingConnection = (SocketAddr, Sender<DuplexStream>);
 
-static CONNECTIONS: Lazy<Mutex<BTreeMap<Address, UnboundedSender<IncomingConnection>>>> =
+static CONNECTIONS: Lazy<Mutex<BTreeMap<SocketAddr, UnboundedSender<IncomingConnection>>>> =
     Lazy::new(Default::default);
 
-static NEXT_ADDRESS: AtomicU32 = AtomicU32::new(1);
+static NEXT_IP_ADDRESS: AtomicU32 = AtomicU32::new(1);
 
-/// Creating new transport is like attaching new "host" to the network.
-/// New unique address is registered for the new "host".
-/// Unlike TCP only one active bind is allowed at any moment to keep things simple
-/// (so there is only one port per host).
+/// Creating a new transport is like adding a new "host" to the network with a new unique IPv4 address.
+///
+/// Connections work the same way as with TCP:
+/// - Trying to bind to port 0 results in a new unused port being selected.
+/// - New outbound connection gets a new unused port, which is used as the local socket address.
 ///
 /// This transport should only be used in tests.
 #[derive(Debug)]
 pub struct MpscChannelTransport {
-    local_address: Address,
+    local_address: IpAddr,
+    last_port: AtomicU16,
 }
 
 impl MpscChannelTransport {
     pub fn new() -> Self {
-        let local_address = NEXT_ADDRESS.fetch_add(1, Ordering::Relaxed);
-        MpscChannelTransport { local_address }
+        let local_address: Ipv4Addr = NEXT_IP_ADDRESS.fetch_add(1, Ordering::Relaxed).into();
+        MpscChannelTransport {
+            local_address: local_address.into(),
+            last_port: 1024.into(),
+        }
+    }
+
+    fn new_port(&self) -> u16 {
+        let port = self.last_port.fetch_add(1, Ordering::Relaxed);
+        assert!(port != 0);
+        port
     }
 }
 
 #[async_trait]
 impl TransportSocket for MpscChannelTransport {
-    type Address = Address;
-    type BannableAddress = Address;
+    type Address = SocketAddr;
+    type BannableAddress = IpAddr;
     type Listener = ChannelListener;
     type Stream = ChannelStream;
 
-    async fn bind(&self, addresses: Vec<Self::Address>) -> Result<Self::Listener> {
-        // It's not possible to bind to random address
-        for address in addresses.iter() {
-            if *address != ZERO_ADDRESS && *address != self.local_address {
+    async fn bind(&self, mut addresses: Vec<Self::Address>) -> Result<Self::Listener> {
+        let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
+
+        for address in addresses.iter_mut() {
+            if address.ip().is_unspecified() {
+                address.set_ip(self.local_address);
+            }
+
+            if address.port() == 0 {
+                address.set_port(self.new_port());
+            }
+
+            // It's not possible to bind to a random address
+            if address.ip() != self.local_address {
                 return Err(P2pError::DialError(DialError::IoError(
                     std::io::ErrorKind::AddrNotAvailable,
                 )));
             };
-        }
 
-        let mut connections = CONNECTIONS.lock().expect("Connections mutex is poisoned");
-
-        if connections.contains_key(&self.local_address) {
-            return Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::AddrInUse,
-            )));
+            // It's not possible to bind to the used address
+            if connections.contains_key(address) {
+                return Err(P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::AddrInUse,
+                )));
+            }
         }
 
         let (sender, receiver) = unbounded_channel();
 
-        let old_entry = connections.insert(self.local_address, sender);
-        assert!(old_entry.is_none());
+        for address in addresses.iter() {
+            let old_entry = connections.insert(*address, sender.clone());
+            assert!(old_entry.is_none());
+        }
 
         Ok(Self::Listener {
-            address: self.local_address,
+            addresses,
             receiver,
         })
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
-        // A connection can only be established to a known address.
-        assert_ne!(ZERO_ADDRESS, address);
+    fn connect(
+        &self,
+        mut address: Self::Address,
+    ) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+        if address.ip().is_unspecified() {
+            address.set_ip(self.local_address);
+        }
 
-        let local_address = self.local_address;
+        let port = self.new_port();
+        let local_address = SocketAddr::new(self.local_address, port);
 
         Box::pin(async move {
             let server_sender = CONNECTIONS
@@ -158,13 +157,13 @@ impl TransportSocket for MpscChannelTransport {
 }
 
 pub struct ChannelListener {
-    address: Address,
+    addresses: Vec<SocketAddr>,
     receiver: UnboundedReceiver<IncomingConnection>,
 }
 
 #[async_trait]
-impl TransportListener<ChannelStream, Address> for ChannelListener {
-    async fn accept(&mut self) -> Result<(ChannelStream, Address)> {
+impl TransportListener<ChannelStream, SocketAddr> for ChannelListener {
+    async fn accept(&mut self) -> Result<(ChannelStream, SocketAddr)> {
         let (remote_address, response_sender) =
             self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;
 
@@ -175,16 +174,18 @@ impl TransportListener<ChannelStream, Address> for ChannelListener {
         Ok((server, remote_address))
     }
 
-    fn local_addresses(&self) -> Result<Vec<Address>> {
-        Ok(vec![self.address])
+    fn local_addresses(&self) -> Result<Vec<SocketAddr>> {
+        Ok(self.addresses.clone())
     }
 }
 
 impl Drop for ChannelListener {
     fn drop(&mut self) {
-        let old_entry =
-            CONNECTIONS.lock().expect("Connections mutex is poisoned").remove(&self.address);
-        assert!(old_entry.is_some());
+        for address in self.addresses.iter() {
+            let old_entry =
+                CONNECTIONS.lock().expect("Connections mutex is poisoned").remove(address);
+            assert!(old_entry.is_some());
+        }
     }
 }
 
@@ -192,16 +193,10 @@ pub type ChannelStream = DuplexStream;
 
 impl PeerStream for ChannelStream {}
 
-impl AsBannableAddress for Address {
-    type BannableAddress = Address;
-
-    fn as_bannable(&self) -> Self::BannableAddress {
-        *self
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddrV4;
+
     use super::*;
     use crate::{
         message::BlockListRequest,
@@ -211,7 +206,7 @@ mod tests {
     #[tokio::test]
     async fn send_recv() {
         let transport = MpscChannelTransport::new();
-        let address = ZERO_ADDRESS;
+        let address: SocketAddr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
         let mut server = transport.bind(vec![address]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
 

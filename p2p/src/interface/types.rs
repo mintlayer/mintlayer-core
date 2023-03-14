@@ -26,4 +26,13 @@ pub struct ConnectedPeer {
     pub inbound: bool,
 
     pub ban_score: u32,
+
+    /// Time spent waiting for a current ping response, in milliseconds
+    pub ping_wait: Option<u64>,
+
+    /// Last time for a ping roundtrip, in milliseconds
+    pub ping_last: Option<u64>,
+
+    /// Min time for a ping roundtrip, in milliseconds
+    pub ping_min: Option<u64>,
 }

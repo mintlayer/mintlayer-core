@@ -195,8 +195,7 @@ where
 
     /// Disconnect remote peer by id. Might fail if the peer is already disconnected.
     fn disconnect_peer(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        let _peer = self
-            .peers
+        self.peers
             .get(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
