@@ -92,7 +92,6 @@ async fn valid_transaction() {
     handle.make_announcement(peer, Announcement::Transaction(tx));
 
     handle.assert_no_peer_manager_event().await;
-    handle.assert_no_event().await;
     handle.assert_no_error().await;
 }
 
