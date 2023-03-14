@@ -56,7 +56,7 @@ where
 {
     assert!(
         exe_name.as_ref().is_relative(),
-        "Path provided for executable must be relative; {} was provided",
+        "Path provided for executable must be relative; '{}' was provided",
         exe_name.as_ref().display()
     );
     let path_env_var = env::var_os("PATH").expect("PATH env var not found");
@@ -66,6 +66,28 @@ where
             full_path.is_file().then_some(full_path)
         })
         .next()
+}
+
+fn find_python_exe() -> PathBuf {
+    let possible_python_execs = ["python3", "python"];
+
+    let python_exe = {
+        let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
+        possible_python_execs
+            .into_iter()
+            .filter_map(|exe| get_executable_from_path_env_var(format!("{exe}{file_suffix}")))
+            .next()
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to find any of the executables {:?} in PATH",
+                    possible_python_execs
+                )
+            })
+    };
+
+    println!("Found python executable in path: {}", python_exe.display());
+
+    python_exe
 }
 
 fn do_run(runner_args: &[OsString]) -> Result<(), Failed> {
@@ -93,22 +115,7 @@ ENABLE_BITCOIND=true
     );
     std::fs::write(&config_file_path, config_str).map_err(Error::ConfigFile)?;
 
-    let possible_python_execs = ["python3", "python"];
-    let python_exe = {
-        let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
-        possible_python_execs
-            .into_iter()
-            .filter_map(|exe| get_executable_from_path_env_var(format!("{exe}{file_suffix}")))
-            .next()
-            .unwrap_or_else(|| {
-                panic!(
-                    "Unable to find any of the executables {:?} in PATH",
-                    possible_python_execs
-                )
-            })
-    };
-
-    println!("Found python executable in path: {}", python_exe.display());
+    let python_exe = find_python_exe();
 
     // Run the tests and get result
     let status = Command::new(python_exe)
