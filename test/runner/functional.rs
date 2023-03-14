@@ -50,7 +50,7 @@ impl std::fmt::Debug for Error {
     }
 }
 
-fn get_executable_from_path_env_var<P>(exe_name: P) -> Option<PathBuf>
+fn get_executable_path_from_path_env_var<P>(exe_name: P) -> Option<PathBuf>
 where
     P: AsRef<Path>,
 {
@@ -71,19 +71,18 @@ where
 fn find_python_exe() -> PathBuf {
     let possible_python_execs = ["python3", "python"];
 
-    let python_exe = {
-        let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
-        possible_python_execs
-            .into_iter()
-            .filter_map(|exe| get_executable_from_path_env_var(format!("{exe}{file_suffix}")))
-            .next()
-            .unwrap_or_else(|| {
-                panic!(
-                    "Unable to find any of the executables {:?} in PATH",
-                    possible_python_execs
-                )
-            })
-    };
+    let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
+
+    let python_exe = possible_python_execs
+        .into_iter()
+        .filter_map(|exe| get_executable_path_from_path_env_var(format!("{exe}{file_suffix}")))
+        .next()
+        .unwrap_or_else(|| {
+            panic!(
+                "Unable to find any of the executables {:?} in PATH",
+                possible_python_execs
+            )
+        });
 
     println!("Found python executable in path: {}", python_exe.display());
 
