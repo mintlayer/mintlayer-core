@@ -24,7 +24,7 @@ const PREFIX: &str = "m";
 const SEPARATOR: &str = "/";
 /// The typical path size in BIP44 is 5 and we add this path limit
 /// in order to support SLIP32 key serialization
-const MAX_PATH_SIZE: usize = u8::MAX as usize;
+pub const MAX_PATH_SIZE: usize = u8::MAX as usize;
 
 /// BIP-32 compatible derivation path
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]

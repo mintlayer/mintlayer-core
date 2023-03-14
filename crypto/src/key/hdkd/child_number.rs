@@ -57,6 +57,13 @@ impl ChildNumber {
         }
     }
 
+    /// Get the index without the hardened bit set
+    pub fn get_index(&self) -> u32 {
+        match self.0 {
+            DerivationType::Normal(i) | DerivationType::Hardened(i) => i.into(),
+        }
+    }
+
     /// Return a BIP32-like child number index that has the hardened bit set if needed
     pub fn into_encoded_index(self) -> u32 {
         match self.0 {
@@ -144,5 +151,66 @@ impl fmt::Display for ChildNumber {
             }
             DerivationType::Normal(index) => fmt::Display::fmt(&index, f),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::key::hdkd::child_number::ChildNumber;
+    use crate::key::hdkd::u31;
+    use crate::key::hdkd::u31::U31;
+    use rstest::rstest;
+    use serialization::{DecodeAll, Encode};
+    use std::str::FromStr;
+
+    fn examine_child_number(num: ChildNumber, encoded_num: u32, is_hardened: bool) {
+        assert_eq!(num.is_normal(), !is_hardened);
+        assert_eq!(num.is_hardened(), is_hardened);
+        assert_eq!(num.into_encoded_index(), encoded_num);
+        assert_eq!(num.into_encoded_be_bytes(), encoded_num.to_be_bytes());
+        assert_eq!(
+            num,
+            ChildNumber::decode_all(&mut num.encode().as_slice()).unwrap()
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(0, false)]
+    #[case(1, false)]
+    #[case(1234567, false)]
+    #[case(u32::MAX & (!0x80000000 - 1), false)]
+    #[case(u32::MAX & !0x80000000, false)]
+    #[case(u32::MAX & (!0x80000000 + 1), true)]
+    #[case(u32::MAX - 1, true)]
+    #[case(u32::MAX, true)]
+    fn create_child_number(#[case] encoded_num: u32, #[case] is_hardened: bool) {
+        let num = ChildNumber::from_index_with_hardened_bit(encoded_num);
+        examine_child_number(num, encoded_num, is_hardened);
+
+        // Check to string and from string parsing
+        // <child_number>' form
+        let num_str_expected = format!("{}{}", num.get_index(), if is_hardened { "'" } else { "" });
+        let num_str = format!("{num}");
+        assert_eq!(num_str, num_str_expected);
+        let parsed_num = ChildNumber::from_str(&num_str).unwrap();
+        assert_eq!(parsed_num, num);
+        examine_child_number(parsed_num, encoded_num, is_hardened);
+
+        // <child_number>h form
+        let num_str_expected = format!("{}{}", num.get_index(), if is_hardened { "h" } else { "" });
+        let num_str = format!("{num:#}");
+        assert_eq!(num_str, num_str_expected);
+        let parsed_num = ChildNumber::from_str(&num_str).unwrap();
+        assert_eq!(parsed_num, num);
+        examine_child_number(parsed_num, encoded_num, is_hardened);
+
+        // Check explicit normal child
+        let normal = ChildNumber::from_normal(U31::from_u32_with_msb(encoded_num).0);
+        examine_child_number(normal, encoded_num & !u31::MSB_BIT, false);
+
+        // Check explicit hardened child
+        let hardened = ChildNumber::from_hardened(U31::from_u32_with_msb(encoded_num).0);
+        examine_child_number(hardened, encoded_num | u31::MSB_BIT, true);
     }
 }

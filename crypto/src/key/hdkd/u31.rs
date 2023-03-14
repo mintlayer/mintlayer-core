@@ -17,7 +17,7 @@ use std::{fmt::Display, str::FromStr};
 
 use super::derivable::DerivationError;
 
-const MSB_BIT: u32 = 0x80000000;
+pub const MSB_BIT: u32 = 0x80000000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct U31(u32);
