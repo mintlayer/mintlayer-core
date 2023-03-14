@@ -100,10 +100,12 @@ ENABLE_BITCOIND=true
             .into_iter()
             .filter_map(|exe| get_executable_from_path_env_var(format!("{exe}{file_suffix}")))
             .next()
-            .expect(&format!(
-                "Unable to find any of the executables {:?} in PATH",
-                possible_python_execs
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unable to find any of the executables {:?} in PATH",
+                    possible_python_execs
+                )
+            })
     };
 
     println!("Found python executable in path: {}", python_exe.display());
