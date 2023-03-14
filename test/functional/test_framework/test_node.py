@@ -198,6 +198,8 @@ class TestNode():
         # Add a new stdout and stderr file each time bitcoind is started
         if stderr is None:
             stderr = tempfile.NamedTemporaryFile(dir=self.stderr_dir, delete=False)
+            # Save the temporary file name to be able grep the log later
+            self.stderr_file = stderr.name
         if stdout is None:
             stdout = tempfile.NamedTemporaryFile(dir=self.stdout_dir, delete=False)
         self.stderr = stderr
@@ -386,7 +388,10 @@ class TestNode():
 
     @property
     def debug_log_path(self) -> Path:
-        return self.chain_path / 'debug.log'
+        # Bitcoin Core stores logs in a separate file
+        # return self.chain_path / 'debug.log'
+        # Mintlayer output logs to stderr
+        return self.stderr_file
 
     def debug_log_bytes(self) -> int:
         with open(self.debug_log_path, encoding='utf-8') as dl:
