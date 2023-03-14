@@ -26,7 +26,7 @@ use common::{
     primitives::H256,
 };
 use mockall::predicate::eq;
-use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView, PoolData};
+use pos_accounting::{AccountingBlockUndo, AccountingTxUndo, PoSAccountingView};
 use rstest::rstest;
 use test_utils::random::Seed;
 use utxo::{UtxosBlockUndo, UtxosStorageRead, UtxosTxUndoWithSources};
@@ -493,9 +493,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
 
-    let pool_data0 = PoolData::new(destination0, pool_balance0);
-    let pool_data1 = PoolData::new(destination1.clone(), pool_balance1);
-    let pool_data2 = PoolData::new(destination2.clone(), pool_balance2);
+    let pool_data0 = create_pool_data(&mut rng, destination0, pool_balance0);
+    let pool_data1 = create_pool_data(&mut rng, destination1, pool_balance1);
+    let pool_data2 = create_pool_data(&mut rng, destination2, pool_balance2);
 
     let pool_id_0 = pos_accounting::make_pool_id(&outpoint0);
     let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
@@ -549,7 +549,14 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let (_, undo) = verifier
             .accounting_delta
-            .create_pool(&outpoint1, pool_balance1, destination1)
+            .create_pool(
+                &outpoint1,
+                pool_balance1,
+                pool_data1.decommission_destination().clone(),
+                pool_data1.vrf_public_key().clone(),
+                pool_data1.margin_ratio_per_thousand(),
+                pool_data1.cost_per_epoch(),
+            )
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -573,7 +580,14 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         let (_, undo) = verifier
             .accounting_delta
-            .create_pool(&outpoint2, pool_balance2, destination2)
+            .create_pool(
+                &outpoint2,
+                pool_balance2,
+                pool_data2.decommission_destination().clone(),
+                pool_data2.vrf_public_key().clone(),
+                pool_data2.margin_ratio_per_thousand(),
+                pool_data2.cost_per_epoch(),
+            )
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));

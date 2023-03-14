@@ -57,6 +57,7 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
+        stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
         TxMainChainIndex, TxOutput,
@@ -361,6 +362,34 @@ where
         Ok(())
     }
 
+    fn get_stake_pool_data_from_output(
+        &self,
+        output: &TxOutput,
+        block_id: Id<Block>,
+    ) -> Result<StakePoolData, ConnectTransactionError> {
+        match output.purpose() {
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::LockThenTransfer(_, _)
+            | OutputPurpose::Burn => Err(ConnectTransactionError::InvalidOutputPurposeInReward(
+                block_id,
+            )),
+            OutputPurpose::StakePool(d) => Ok(d.as_ref().clone()),
+            OutputPurpose::ProduceBlockFromStake(d, pool_id) => {
+                let pool_data = self
+                    .accounting_delta
+                    .get_pool_data(*pool_id)?
+                    .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
+                Ok(StakePoolData::new(
+                    d.clone(),
+                    pool_data.vrf_public_key().clone(),
+                    pool_data.decommission_destination().clone(),
+                    pool_data.margin_ratio_per_thousand(),
+                    pool_data.cost_per_epoch(),
+                ))
+            }
+        }
+    }
+
     fn check_stake_outputs_in_reward(
         &self,
         block: &WithId<Block>,
@@ -377,17 +406,8 @@ where
                     &self.utxo_cache,
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
-
-                let kernel_stake_pool_data = match kernel_output.purpose() {
-                    OutputPurpose::Transfer(_)
-                    | OutputPurpose::LockThenTransfer(_, _)
-                    | OutputPurpose::Burn => Err(
-                        ConnectTransactionError::InvalidOutputPurposeInReward(block.get_id()),
-                    ),
-                    OutputPurpose::StakePool(d) | OutputPurpose::ProduceBlockFromStake(d) => {
-                        Ok(d.as_ref())
-                    }
-                }?;
+                let kernel_stake_pool_data =
+                    self.get_stake_pool_data_from_output(&kernel_output, block.get_id())?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -397,16 +417,8 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
-
-                let reward_stake_pool_data = match reward_output.purpose() {
-                    OutputPurpose::Transfer(_)
-                    | OutputPurpose::LockThenTransfer(_, _)
-                    | OutputPurpose::Burn
-                    | OutputPurpose::StakePool(_) => {
-                        Err(SpendStakeError::InvalidBlockRewardPurpose)
-                    }
-                    OutputPurpose::ProduceBlockFromStake(d) => Ok(d.as_ref()),
-                }?;
+                let reward_stake_pool_data =
+                    self.get_stake_pool_data_from_output(reward_output, block.get_id())?;
 
                 ensure!(
                     kernel_stake_pool_data == reward_stake_pool_data,
@@ -491,7 +503,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::Burn
             | OutputPurpose::StakePool(_)
-            | OutputPurpose::ProduceBlockFromStake(_) => return Ok(()),
+            | OutputPurpose::ProduceBlockFromStake(_, _) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
         };
 
@@ -629,7 +641,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn => false,
-                OutputPurpose::StakePool(_) | OutputPurpose::ProduceBlockFromStake(_) => true,
+                OutputPurpose::StakePool(_) | OutputPurpose::ProduceBlockFromStake(_, _) => true,
             });
         ensure!(
             !attempt_to_spend_stake,
@@ -648,7 +660,7 @@ where
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
                 | OutputPurpose::StakePool(_) => false,
-                OutputPurpose::ProduceBlockFromStake(_) => true,
+                OutputPurpose::ProduceBlockFromStake(_, _) => true,
             });
 
         ensure!(
@@ -677,7 +689,7 @@ where
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
                 | OutputPurpose::Burn
-                | OutputPurpose::ProduceBlockFromStake(_) => None,
+                | OutputPurpose::ProduceBlockFromStake(_, _) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -694,6 +706,9 @@ where
                             input0.outpoint(),
                             delegation_amount,
                             pool_data.decommission_key().clone(),
+                            pool_data.vrf_public_key().clone(),
+                            pool_data.margin_ratio_per_thousand(),
+                            pool_data.cost_per_epoch(),
                         )
                         .map_err(ConnectTransactionError::PoSAccountingError)?;
                     let new_delta_data = temp_delta.consume();
@@ -749,7 +764,7 @@ where
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
             | OutputPurpose::Burn
-            | OutputPurpose::ProduceBlockFromStake(_) => Ok(()),
+            | OutputPurpose::ProduceBlockFromStake(_, _) => Ok(()),
         })
     }
 

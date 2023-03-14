@@ -20,13 +20,12 @@ use common::primitives::{signed_amount::SignedAmount, Amount};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::{new_delegation_id, new_pool_id, new_pub_key_destination};
+use super::{create_pool_data, new_delegation_id, new_pool_id, new_pub_key_destination};
 
 use crate::{
     pool::{
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, PoSAccountingDelta},
-        pool_data::PoolData,
         storage::PoSAccountingDB,
     },
     storage::in_memory::InMemoryPoSAccounting,
@@ -41,14 +40,12 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let mut db = PoSAccountingDB::new(&mut storage);
 
     let destination1 = new_pub_key_destination(&mut rng);
+    let pool_data1 = create_pool_data(&mut rng, destination1.clone(), Amount::from_atoms(100));
     let data1 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [(
                 new_pool_id(1),
-                DataDelta::new(
-                    None,
-                    Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
-                ),
+                DataDelta::new(None, Some(pool_data1.clone())),
             )]
             .into_iter(),
         ),
@@ -87,22 +84,19 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let mut delta1 = PoSAccountingDelta::from_data(&mut db, data1);
 
     let destination2 = new_pub_key_destination(&mut rng);
+    let pool_data1_increased =
+        create_pool_data(&mut rng, destination1.clone(), Amount::from_atoms(300));
+    let pool_data2 = create_pool_data(&mut rng, destination2, Amount::from_atoms(100));
     let data2 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
                 (
                     new_pool_id(1),
-                    DataDelta::new(
-                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
-                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
-                    ),
+                    DataDelta::new(Some(pool_data1.clone()), Some(pool_data1_increased.clone())),
                 ),
                 (
                     new_pool_id(10),
-                    DataDelta::new(
-                        None,
-                        Some(PoolData::new(destination2.clone(), Amount::from_atoms(100))),
-                    ),
+                    DataDelta::new(None, Some(pool_data2.clone())),
                 ),
             ]
             .into_iter(),
@@ -146,18 +140,9 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             [
                 (
                     new_pool_id(1),
-                    DataDelta::new(
-                        None,
-                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
-                    ),
+                    DataDelta::new(None, Some(pool_data1_increased)),
                 ),
-                (
-                    new_pool_id(10),
-                    DataDelta::new(
-                        None,
-                        Some(PoolData::new(destination2, Amount::from_atoms(100))),
-                    ),
-                ),
+                (new_pool_id(10), DataDelta::new(None, Some(pool_data2))),
             ]
             .into_iter(),
         ),
@@ -191,13 +176,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let expected_data_after_undo = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
-                (
-                    new_pool_id(1),
-                    DataDelta::new(
-                        None,
-                        Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
-                    ),
-                ),
+                (new_pool_id(1), DataDelta::new(None, Some(pool_data1))),
                 (new_pool_id(10), DataDelta::new(None, None)),
             ]
             .into_iter(),
@@ -246,12 +225,13 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let destination1 = new_pub_key_destination(&mut rng);
     let destination2 = new_pub_key_destination(&mut rng);
+    let pool_data1 = create_pool_data(&mut rng, destination1.clone(), Amount::from_atoms(100));
+    let pool_data1_increased =
+        create_pool_data(&mut rng, destination1.clone(), Amount::from_atoms(300));
+    let pool_data2 = create_pool_data(&mut rng, destination2, Amount::from_atoms(100));
 
     let mut storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(
-            new_pool_id(1),
-            PoolData::new(destination1.clone(), Amount::from_atoms(100)),
-        )]),
+        BTreeMap::from([(new_pool_id(1), pool_data1.clone())]),
         BTreeMap::from([
             (new_pool_id(3), Amount::from_atoms(300)),
             (new_pool_id(4), Amount::from_atoms(400)),
@@ -279,17 +259,11 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                 [
                     (
                         new_pool_id(1),
-                        DataDelta::new(
-                            Some(PoolData::new(destination1.clone(), Amount::from_atoms(100))),
-                            Some(PoolData::new(destination1.clone(), Amount::from_atoms(300))),
-                        ),
+                        DataDelta::new(Some(pool_data1), Some(pool_data1_increased.clone())),
                     ),
                     (
                         new_pool_id(10),
-                        DataDelta::new(
-                            None,
-                            Some(PoolData::new(destination2.clone(), Amount::from_atoms(100))),
-                        ),
+                        DataDelta::new(None, Some(pool_data2.clone())),
                     ),
                 ]
                 .into_iter(),
@@ -319,7 +293,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                 [(
                     new_delegation_id(1),
                     DataDelta::new(
-                        Some(DelegationData::new(new_pool_id(1), destination1.clone())),
+                        Some(DelegationData::new(new_pool_id(1), destination1)),
                         None,
                     ),
                 )]
@@ -331,16 +305,7 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
     };
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([
-            (
-                new_pool_id(1),
-                PoolData::new(destination1, Amount::from_atoms(300)),
-            ),
-            (
-                new_pool_id(10),
-                PoolData::new(destination2, Amount::from_atoms(100)),
-            ),
-        ]),
+        BTreeMap::from([(new_pool_id(1), pool_data1_increased), (new_pool_id(10), pool_data2)]),
         BTreeMap::from([(new_pool_id(4), Amount::from_atoms(450))]),
         BTreeMap::from([(
             (new_pool_id(5), new_delegation_id(6)),

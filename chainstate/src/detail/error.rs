@@ -22,13 +22,13 @@ use super::{
 };
 use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
-    chain::{Block, GenBlock, Transaction},
+    chain::{Block, GenBlock, PoolId, Transaction},
     primitives::{BlockDistance, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
 use thiserror::Error;
-use tx_verifier::transaction_verifier::error::TxIndexError;
+use tx_verifier::transaction_verifier::error::{SpendStakeError, TxIndexError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -68,6 +68,10 @@ pub enum BlockError {
     RandomnessError(#[from] PoSRandomnessError),
     #[error("Inconsistent db, block not found after connect: {0}")]
     InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
+    #[error("Error during stake spending")]
+    SpendStakeError(#[from] SpendStakeError),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

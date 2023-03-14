@@ -24,15 +24,13 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use super::{
-    create_storage_with_pool, create_storage_with_pool_and_delegation, new_delegation_id,
-    new_pool_id, new_pub_key_destination,
+    create_pool, create_pool_data, create_storage_with_pool,
+    create_storage_with_pool_and_delegation, new_delegation_id, new_pool_id,
+    new_pub_key_destination,
 };
 
 use crate::{
-    pool::{
-        delta::PoSAccountingDelta, pool_data::PoolData, storage::PoSAccountingDB,
-        view::FlushablePoSAccountingView,
-    },
+    pool::{delta::PoSAccountingDelta, storage::PoSAccountingDB, view::FlushablePoSAccountingView},
     storage::in_memory::InMemoryPoSAccounting,
     Error, PoSAccountingOperations,
 };
@@ -50,15 +48,33 @@ fn create_pool_twice(#[case] seed: Seed) {
         0,
     );
     let destination = new_pub_key_destination(&mut rng);
+    let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
 
     let mut db = PoSAccountingDB::new(&mut storage);
-    let _ = db.create_pool(&outpoint, pledge_amount, destination.clone()).unwrap();
+    let _ = db
+        .create_pool(
+            &outpoint,
+            pledge_amount,
+            pool_data.decommission_destination().clone(),
+            pool_data.vrf_public_key().clone(),
+            pool_data.margin_ratio_per_thousand(),
+            pool_data.cost_per_epoch(),
+        )
+        .unwrap();
 
     // using db
     {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
-            db.create_pool(&outpoint, pledge_amount, destination.clone()).unwrap_err(),
+            db.create_pool(
+                &outpoint,
+                pledge_amount,
+                pool_data.decommission_destination().clone(),
+                pool_data.vrf_public_key().clone(),
+                pool_data.margin_ratio_per_thousand(),
+                pool_data.cost_per_epoch(),
+            )
+            .unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }
@@ -68,7 +84,16 @@ fn create_pool_twice(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta.create_pool(&outpoint, pledge_amount, destination).unwrap_err(),
+            delta
+                .create_pool(
+                    &outpoint,
+                    pledge_amount,
+                    pool_data.decommission_destination().clone(),
+                    pool_data.vrf_public_key().clone(),
+                    pool_data.margin_ratio_per_thousand(),
+                    pool_data.cost_per_epoch(),
+                )
+                .unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }
@@ -109,7 +134,7 @@ fn decommission_unknown_pool(#[case] seed: Seed) {
 fn create_pool_decommission_pool_undo_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledge_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
+    let (pool_id, pool_data, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
 
     let mut db = PoSAccountingDB::new(&mut storage);
     let mut delta1 = PoSAccountingDelta::new(&db);
@@ -122,7 +147,7 @@ fn create_pool_decommission_pool_undo_merge(#[case] seed: Seed) {
     db.batch_write_delta(delta1.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledge_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -138,7 +163,7 @@ fn create_pool_decommission_pool_undo_merge(#[case] seed: Seed) {
 fn create_pool_decommission_pool_merge_undo_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledge_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
+    let (pool_id, pool_data, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
 
     let mut db = PoSAccountingDB::new(&mut storage);
     let mut delta1 = PoSAccountingDelta::new(&db);
@@ -154,7 +179,7 @@ fn create_pool_decommission_pool_merge_undo_merge(#[case] seed: Seed) {
         db.batch_write_delta(delta2.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledge_amount))]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, pledge_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -172,13 +197,8 @@ fn create_pool_undo_decommission_pool_merge(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);
 
-    let destination = new_pub_key_destination(&mut rng);
-    let outpoint = OutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
-        0,
-    );
     let pledge_amount = Amount::from_atoms(100);
-    let (pool_id, undo) = db.create_pool(&outpoint, pledge_amount, destination).unwrap();
+    let (pool_id, _, undo) = create_pool(&mut rng, &mut db, pledge_amount).unwrap();
     db.undo(undo).unwrap();
 
     let mut delta = PoSAccountingDelta::new(&db);

@@ -64,7 +64,7 @@ impl StakePoolData {
         self.margin_ratio_per_thousand
     }
 
-    pub fn cost_per_epoch(&self) -> &Amount {
-        &self.cost_per_epoch
+    pub fn cost_per_epoch(&self) -> Amount {
+        self.cost_per_epoch
     }
 }

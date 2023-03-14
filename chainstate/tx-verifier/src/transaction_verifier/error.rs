@@ -19,7 +19,7 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        OutPointSourceId, PoolId, SpendError, Spender, Transaction, TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -103,6 +103,8 @@ pub enum ConnectTransactionError {
     SpendStakeError(#[from] SpendStakeError),
     #[error("Attempted to use a non-locked stake as output in block reward {0}")]
     InvalidOutputPurposeInReward(Id<Block>),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

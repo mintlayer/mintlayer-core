@@ -18,6 +18,7 @@ use common::{
     chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
+use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
@@ -89,6 +90,9 @@ pub trait PoSAccountingOperations {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: Destination,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
     ) -> Result<(PoolId, PoSAccountingUndo), Error>;
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;

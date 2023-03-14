@@ -427,7 +427,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 OutputPurpose::LockThenTransfer(_, tl) => {
                     self.check_block_reward_timelock(block, tl)
                 }
-                OutputPurpose::ProduceBlockFromStake(_) => {
+                OutputPurpose::ProduceBlockFromStake(_, _) => {
                     // The output can be reused in block reward right away
                     Ok(())
                 }

@@ -41,6 +41,8 @@ pub enum ConsensusPoSError {
     PrevBlockIndexNotFound(Id<Block>),
     #[error("Balance for pool {0} not found")]
     PoolBalanceNotFound(PoolId),
+    #[error("Balance for pool {0} not found")]
+    PoolDataNotFound(PoolId),
     #[error("PoS accounting error: `{0}`")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS randomness error: `{0}`")]

@@ -17,6 +17,7 @@ use common::{
     chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
+use crypto::vrf::VRFPublicKey;
 
 use crate::{
     error::Error,
@@ -43,6 +44,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: Destination,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
@@ -55,7 +59,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolDataAlreadyExists);
         }
-        let pool_data = PoolData::new(decommission_key, pledge_amount);
+        let pool_data = PoolData::new(
+            decommission_key,
+            pledge_amount,
+            vrf_public_key,
+            margin_ratio_per_thousand,
+            cost_per_epoch,
+        );
 
         self.store.set_pool_balance(pool_id, pledge_amount)?;
         self.store.set_pool_data(pool_id, &pool_data)?;

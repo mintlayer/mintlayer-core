@@ -17,10 +17,11 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
         config::EpochIndex,
-        Block, ChainConfig, OutputPurpose, TxOutput,
+        Block, ChainConfig,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{Id, H256},
 };
+use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
@@ -48,27 +49,14 @@ impl PoSRandomness {
         epoch_index: EpochIndex,
         header: &BlockHeader,
         seal_randomness: &PoSRandomness,
-        stake_output: &TxOutput,
         pos_data: &PoSData,
+        vrf_pub_key: &VRFPublicKey,
     ) -> Result<Self, PoSRandomnessError> {
-        let pool_data = match stake_output.purpose() {
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn => {
-                // only pool outputs can be staked
-                return Err(PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
-                    header.get_id(),
-                ));
-            }
-            OutputPurpose::StakePool(d) => d.as_ref(),
-            OutputPurpose::ProduceBlockFromStake(d) => d.as_ref(),
-        };
-
         let hash: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
             &seal_randomness.value(),
             pos_data.vrf_data(),
-            pool_data.vrf_public_key(),
+            vrf_pub_key,
             header,
         )?;
 

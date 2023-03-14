@@ -13,14 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::{BlockchainStorageWrite, SealedStorageTag};
+use chainstate_storage::{
+    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag,
+};
 use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
 use common::{
-    chain::{block::ConsensusData, Block, ChainConfig},
+    chain::{
+        block::{consensus_data::PoSData, ConsensusData},
+        Block, ChainConfig, OutputPurpose,
+    },
     primitives::BlockHeight,
 };
-use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB};
-use tx_verifier::transaction_verifier::error::{ConnectTransactionError, SpendStakeError};
+use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingView};
+use tx_verifier::transaction_verifier::error::SpendStakeError;
 use utils::tap_error_log::LogError;
 
 use crate::BlockError;
@@ -123,6 +128,59 @@ pub enum BlockStateEventWithIndex<'a> {
     Disconnect(BlockHeight),
 }
 
+fn create_randomness_from_block<S: BlockchainStorageRead>(
+    db_tx: &S,
+    chain_config: &ChainConfig,
+    block: &Block,
+    block_height: &BlockHeight,
+    pos_data: &PoSData,
+) -> Result<PoSRandomness, BlockError> {
+    let reward_output = block
+        .block_reward()
+        .outputs()
+        .get(0)
+        .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
+
+    let vrf_pub_key = match reward_output.purpose() {
+        OutputPurpose::Transfer(_)
+        | OutputPurpose::LockThenTransfer(_, _)
+        | OutputPurpose::Burn => {
+            // only pool outputs can be staked
+            return Err(BlockError::SpendStakeError(
+                SpendStakeError::InvalidBlockRewardPurpose,
+            ));
+        }
+        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+            let pos_view = PoSAccountingDB::<_, TipStorageTag>::new(db_tx);
+            let pool_data = pos_view
+                .get_pool_data(*pool_id)?
+                .ok_or(BlockError::PoolDataNotFound(*pool_id))?;
+            pool_data.vrf_public_key().clone()
+        }
+    };
+
+    let sealed_epoch_randomness = chain_config
+        .sealed_epoch_index(block_height)
+        .map(|index| db_tx.get_epoch_data(index))
+        .transpose()?
+        .flatten()
+        .map_or_else(
+            || PoSRandomness::at_genesis(chain_config),
+            |d| *d.randomness(),
+        );
+
+    let epoch_index = chain_config.epoch_index_from_height(block_height);
+    PoSRandomness::from_block(
+        epoch_index,
+        block.header(),
+        &sealed_epoch_randomness,
+        pos_data,
+        &vrf_pub_key,
+    )
+    .map_err(BlockError::RandomnessError)
+}
+
 /// Every epoch has data associated with it.
 /// On every block change check whether this data should be updated.
 pub fn update_epoch_data<S: BlockchainStorageWrite>(
@@ -133,39 +191,26 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
     match block_op {
         BlockStateEventWithIndex::Connect(tip_height, block) => {
             if chain_config.is_last_block_in_epoch(&tip_height) {
-                // Consider the randomness of the last block to be the randomness of the epoch
-                let pos_data = match block.header().consensus_data() {
+                match block.header().consensus_data() {
                     ConsensusData::None | ConsensusData::PoW(_) => return Ok(()),
-                    ConsensusData::PoS(data) => data.as_ref(),
+                    ConsensusData::PoS(pos_data) => {
+                        // Consider the randomness of the last block to be the randomness of the epoch
+                        let epoch_randomness = create_randomness_from_block(
+                            db_tx,
+                            chain_config,
+                            block,
+                            &tip_height,
+                            pos_data.as_ref(),
+                        )?;
+
+                        db_tx
+                            .set_epoch_data(
+                                chain_config.epoch_index_from_height(&tip_height),
+                                &EpochData::new(epoch_randomness),
+                            )
+                            .log_err()?;
+                    }
                 };
-                let reward_output = block.block_reward().outputs().get(0).ok_or(
-                    ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs),
-                )?;
-                let sealed_epoch_randomness = chain_config
-                    .sealed_epoch_index(&tip_height)
-                    .map(|index| db_tx.get_epoch_data(index))
-                    .transpose()?
-                    .flatten()
-                    .map_or_else(
-                        || PoSRandomness::at_genesis(chain_config),
-                        |d| *d.randomness(),
-                    );
-
-                let epoch_index = chain_config.epoch_index_from_height(&tip_height);
-                let epoch_randomness = PoSRandomness::from_block(
-                    epoch_index,
-                    block.header(),
-                    &sealed_epoch_randomness,
-                    reward_output,
-                    pos_data,
-                )?;
-
-                db_tx
-                    .set_epoch_data(
-                        chain_config.epoch_index_from_height(&tip_height),
-                        &EpochData::new(epoch_randomness),
-                    )
-                    .log_err()?;
             }
         }
         BlockStateEventWithIndex::Disconnect(tip_height) => {

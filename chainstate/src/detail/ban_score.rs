@@ -55,6 +55,8 @@ impl BanScore for BlockError {
             BlockError::PoSAccountingError(err) => err.ban_score(),
             BlockError::RandomnessError(err) => err.ban_score(),
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
+            BlockError::SpendStakeError(_) => 100,
+            BlockError::PoolDataNotFound(_) => 0,
         }
     }
 }
@@ -112,6 +114,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::InvalidOutputPurposeInReward(_) => 100,
+            ConnectTransactionError::PoolDataNotFound(_) => 0,
         }
     }
 }
@@ -286,6 +289,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::PoolBalanceNotFound(_) => 100,
             ConsensusPoSError::PoSAccountingError(err) => err.ban_score(),
             ConsensusPoSError::RandomnessError(err) => err.ban_score(),
+            ConsensusPoSError::PoolDataNotFound(_) => 0,
         }
     }
 }

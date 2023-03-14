@@ -18,6 +18,7 @@ use common::{
     chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
+use crypto::vrf::VRFPublicKey;
 
 use crate::{
     error::Error,
@@ -42,6 +43,9 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
         decommission_key: Destination,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
@@ -56,10 +60,18 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
-        let undo_data = self.data.pool_data.merge_delta_data_element(
-            pool_id,
-            DataDelta::new(None, Some(PoolData::new(decommission_key, pledge_amount))),
-        )?;
+
+        let pool_data = PoolData::new(
+            decommission_key,
+            pledge_amount,
+            vrf_public_key,
+            margin_ratio_per_thousand,
+            cost_per_epoch,
+        );
+        let undo_data = self
+            .data
+            .pool_data
+            .merge_delta_data_element(pool_id, DataDelta::new(None, Some(pool_data)))?;
 
         Ok((
             pool_id,

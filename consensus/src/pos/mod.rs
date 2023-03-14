@@ -16,12 +16,15 @@
 pub mod error;
 pub mod kernel;
 
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndexHandle};
+use chainstate_types::{
+    pos_randomness::{PoSRandomness, PoSRandomnessError},
+    BlockIndexHandle,
+};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
         config::EpochIndex,
-        ChainConfig, TxOutput,
+        ChainConfig, OutputPurpose, TxOutput,
     },
     primitives::{BlockHeight, Idable},
     Uint256, Uint512,
@@ -44,12 +47,32 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.compact_target()))?;
 
+    let vrf_pub_key = match kernel_output.purpose() {
+        OutputPurpose::Transfer(_)
+        | OutputPurpose::LockThenTransfer(_, _)
+        | OutputPurpose::Burn => {
+            // only pool outputs can be staked
+            return Err(ConsensusPoSError::RandomnessError(
+                PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
+                    spender_block_header.get_id(),
+                ),
+            ));
+        }
+        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+            let pool_data = pos_accounting_view
+                .get_pool_data(*pool_id)?
+                .ok_or(ConsensusPoSError::PoolDataNotFound(*pool_id))?;
+            pool_data.vrf_public_key().clone()
+        }
+    };
+
     let hash_pos: Uint256 = PoSRandomness::from_block(
         epoch_index,
         spender_block_header,
         random_seed,
-        kernel_output,
         pos_data,
+        &vrf_pub_key,
     )?
     .value()
     .into();
