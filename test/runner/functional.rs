@@ -60,12 +60,10 @@ where
         exe_name.as_ref().display()
     );
     let path_env_var = env::var_os("PATH").expect("PATH env var not found");
-    env::split_paths(&path_env_var)
-        .filter_map(|dir| {
-            let full_path = dir.join(&exe_name);
-            full_path.is_file().then_some(full_path)
-        })
-        .next()
+    env::split_paths(&path_env_var).find_map(|dir| {
+        let full_path = dir.join(&exe_name);
+        full_path.is_file().then_some(full_path)
+    })
 }
 
 fn find_python_exe() -> PathBuf {
@@ -75,8 +73,7 @@ fn find_python_exe() -> PathBuf {
 
     let python_exe = possible_python_execs
         .into_iter()
-        .filter_map(|exe| get_executable_path_from_path_env_var(format!("{exe}{file_suffix}")))
-        .next()
+        .find_map(|exe| get_executable_path_from_path_env_var(format!("{exe}{file_suffix}")))
         .unwrap_or_else(|| {
             panic!(
                 "Unable to find any of the executables {:?} in PATH",
