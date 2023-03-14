@@ -33,7 +33,10 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
-use mempool::{error::Error as MempoolError, MempoolHandle};
+use mempool::{
+    error::{Error as MempoolError, TxValidationError},
+    MempoolHandle,
+};
 use utils::const_value::ConstValue;
 
 use crate::{
@@ -411,6 +414,14 @@ where
         };
 
         match error {
+            // Due to the fact that p2p is split into several tasks, it is possible to send a
+            // request/response after a peer is disconnected, but before receiving the disconnect
+            // event. Therefore this error can be safely ignored.
+            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+            P2pError::MempoolError(
+                MempoolError::MempoolFull
+                | MempoolError::TxValidationError(TxValidationError::TransactionAlreadyInMempool),
+            ) => Ok(()),
             // A protocol error - increase the ban score of a peer.
             e @ (P2pError::ProtocolError(_)
             | P2pError::MempoolError(MempoolError::TxValidationError(_))
@@ -433,14 +444,6 @@ where
                     P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
                     e => Err(e),
                 })
-            }
-            // Due to the fact that p2p is split into several tasks, it is possible to send a
-            // request/response after a peer is disconnected, but before receiving the disconnect
-            // event. Therefore this error can be safely ignored.
-            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            P2pError::MempoolError(MempoolError::MempoolFull) => {
-                log::warn!("Mempool is full");
-                Ok(())
             }
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.
