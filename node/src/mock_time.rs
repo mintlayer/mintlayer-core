@@ -24,7 +24,7 @@ pub fn set_mock_time(chain_type: ChainType, time: u64) -> Result<(), crate::Erro
         chain_type == ChainType::Regtest,
         "Mock time allowed on regtest chain only"
     );
-    log::debug!("set mock time to {time}");
+    log::info!("set mock time to {time}");
     common::primitives::time::set(Duration::from_secs(time))?;
     Ok(())
 }

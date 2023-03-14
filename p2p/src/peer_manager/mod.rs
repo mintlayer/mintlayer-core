@@ -809,10 +809,10 @@ where
                     peer.ping_min = Some(ping_time_min);
                 } else {
                     log::debug!(
-                        "wrong nonce in ping response: {}, expected: {} from peer {}",
+                        "wrong nonce in ping response from peer {}, received: {}, expected: {}",
+                        peer_id,
                         nonce,
                         sent_ping.nonce,
-                        peer_id,
                     );
                 }
             } else {
