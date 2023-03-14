@@ -31,7 +31,6 @@ use crate::{
     P2pError,
 };
 
-// Messages from unknown peers are ignored.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]

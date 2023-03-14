@@ -36,7 +36,6 @@ use crate::{
     P2pError,
 };
 
-// Announcements from unknown peers are ignored.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -140,7 +139,6 @@ async fn invalid_timestamp() {
 // The peer ban score is increased if it sends an invalid header.
 #[tokio::test]
 async fn invalid_consensus_data() {
-    println!("FIXME 0");
     let chain_config = Arc::new(
         ChainConfigBuilder::new(ChainType::Mainnet)
             // Enable consensus, so blocks with `ConsensusData::None` would be rejected.
@@ -151,11 +149,9 @@ async fn invalid_consensus_data() {
         .with_chain_config(Arc::clone(&chain_config))
         .build()
         .await;
-    println!("FIXME 1");
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
-    println!("FIXME 2");
 
     let block = Block::new(
         Vec::new(),
@@ -166,10 +162,8 @@ async fn invalid_consensus_data() {
     )
     .unwrap();
     handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
-    println!("FIXME 3");
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
-    println!("FIXME 4");
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
@@ -180,9 +174,7 @@ async fn invalid_consensus_data() {
         ))
         .ban_score()
     );
-    println!("FIXME 5");
     handle.assert_no_event().await;
-    println!("FIXME 6");
     handle.assert_no_error().await;
 }
 

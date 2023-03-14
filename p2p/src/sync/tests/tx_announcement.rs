@@ -15,58 +15,116 @@
 
 use std::sync::Arc;
 
-use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
-use chainstate_test_framework::TestFramework;
+use chainstate::ban_score::BanScore;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        config::{create_unit_test_config, Builder as ChainConfigBuilder, ChainType},
-        Block, NetUpgrades,
+        config::create_unit_test_config, signature::inputsig::InputWitness, tokens::OutputValue,
+        OutPointSourceId, OutputPurpose, SignedTransaction, Transaction, TxInput, TxOutput,
     },
-    primitives::Idable,
+    primitives::Amount,
 };
-use consensus::ConsensusVerificationError;
-use p2p_test_utils::start_subsystems_with_chainstate;
-use test_utils::random::Seed;
+use mempool::error::{Error as MempoolError, TxValidationError};
+use p2p_test_utils::start_subsystems;
 
 use crate::{
-    message::{Announcement, BlockListRequest, SyncMessage},
-    sync::tests::helpers::SyncManagerHandle,
-    types::peer_id::PeerId,
+    message::Announcement, sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId,
     P2pError,
 };
 
-// Announcements from unknown peers are ignored.
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 #[tokio::test]
 #[should_panic = "Received a message from unknown peer"]
-async fn nonexistent_peer(#[case] seed: Seed) {
-    // TODO: FIXME:
-    todo!();
-    // let mut rng = test_utils::random::make_seedable_rng(seed);
-    //
-    // let chain_config = Arc::new(create_unit_test_config());
-    // let mut tf = TestFramework::builder(&mut rng)
-    //     .with_chain_config(chain_config.as_ref().clone())
-    //     .build();
-    // let block = tf.make_block_builder().build();
-    // let (chainstate, mempool) = start_subsystems_with_chainstate(tf.into_chainstate()).await;
-    //
-    // let mut handle = SyncManagerHandle::builder()
-    //     .with_chain_config(chain_config)
-    //     .with_subsystems(chainstate, mempool)
-    //     .build()
-    //     .await;
-    //
-    // let peer = PeerId::new();
-    //
-    // handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
-    //
-    // handle.resume_panic().await;
+async fn nonexistent_peer() {
+    let mut handle = SyncManagerHandle::builder().build().await;
+
+    let peer = PeerId::new();
+
+    let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+    let tx = SignedTransaction::new(tx.clone(), vec![]).unwrap();
+    handle.make_announcement(peer, Announcement::Transaction(tx));
+
+    handle.resume_panic().await;
 }
 
-// TODO: FIXME:
-//  - Invalid transaction
-//  - valid transaction
+#[tokio::test]
+async fn invalid_transaction() {
+    let mut handle = SyncManagerHandle::builder().build().await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+    let tx = SignedTransaction::new(tx.clone(), vec![]).unwrap();
+    handle.make_announcement(peer, Announcement::Transaction(tx));
+
+    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    assert_eq!(peer, adjusted_peer);
+    assert_eq!(
+        score,
+        P2pError::MempoolError(MempoolError::TxValidationError(TxValidationError::NoInputs))
+            .ban_score()
+    );
+    handle.assert_no_event().await;
+}
+
+#[tokio::test]
+async fn valid_transaction() {
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let tx = Transaction::new(
+        0x00,
+        vec![TxInput::new(OutPointSourceId::from(chain_config.genesis_block_id()), 0)],
+        vec![TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::Burn,
+        )],
+        0x01,
+    )
+    .unwrap();
+    let tx = SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).unwrap();
+
+    handle.make_announcement(peer, Announcement::Transaction(tx));
+
+    handle.assert_no_peer_manager_event().await;
+    handle.assert_no_event().await;
+    handle.assert_no_error().await;
+}
+
+#[tokio::test]
+async fn tx_from_mempool() {
+    let chain_config = Arc::new(create_unit_test_config());
+    let (chainstate, mempool) = start_subsystems(Arc::clone(&chain_config));
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_subsystems(chainstate, mempool.clone())
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    let tx = Transaction::new(
+        0x00,
+        vec![TxInput::new(OutPointSourceId::from(chain_config.genesis_block_id()), 0)],
+        vec![TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::Burn,
+        )],
+        0x01,
+    )
+    .unwrap();
+    let tx = SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).unwrap();
+    let tx_ = tx.clone();
+    mempool.call_async_mut(|m| m.add_transaction(tx_)).await.unwrap().unwrap();
+
+    assert_eq!(Announcement::Transaction(tx), handle.announcement().await);
+
+    handle.assert_no_peer_manager_event().await;
+    handle.assert_no_error().await;
+}

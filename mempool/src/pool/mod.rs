@@ -636,8 +636,9 @@ where
     pub async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx).await?;
         self.store.drop_conflicts(conflicts);
-        self.finalize_tx(tx).await?;
+        self.finalize_tx(tx.clone()).await?;
         self.store.assert_valid();
+        self.events_controller.broadcast(MempoolEvent::NewTransaction(tx));
         Ok(())
     }
 
