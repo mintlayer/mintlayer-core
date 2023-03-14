@@ -189,16 +189,16 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
     block_op: BlockStateEventWithIndex<'_>,
 ) -> Result<(), BlockError> {
     match block_op {
-        BlockStateEventWithIndex::Connect(tip_height, block) => {
+        BlockStateEventWithIndex::Connect(tip_height, tip) => {
             if chain_config.is_last_block_in_epoch(&tip_height) {
-                match block.header().consensus_data() {
+                match tip.header().consensus_data() {
                     ConsensusData::None | ConsensusData::PoW(_) => return Ok(()),
                     ConsensusData::PoS(pos_data) => {
                         // Consider the randomness of the last block to be the randomness of the epoch
                         let epoch_randomness = create_randomness_from_block(
                             db_tx,
                             chain_config,
-                            block,
+                            tip,
                             &tip_height,
                             pos_data.as_ref(),
                         )?;

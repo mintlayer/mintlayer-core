@@ -860,7 +860,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
 // Blocks `b`, `c`, `d` have produce block from stake outputs.
 // Check that after reorg pool balance doesn't include reward from block `a`
 //
-// TODO: enable when "verify inputs unspent" is supported
+// TODO: enable when mintlayer/mintlayer-core/issues/752 is implemented
 #[ignore]
 #[rstest]
 #[trace]

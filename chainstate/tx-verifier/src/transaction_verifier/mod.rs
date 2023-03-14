@@ -471,15 +471,9 @@ where
             },
         )?;
 
-        let max_allowed_outputs_total = match block.header().consensus_data() {
-            ConsensusData::None | ConsensusData::PoW(_) => {
-                amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
-            }
-            ConsensusData::PoS(_) => {
-                amount_sum!(inputs_total, total_fees.0)
-            }
-        }
-        .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
+        let max_allowed_outputs_total =
+            amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
+                .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_outputs_total {
             return Err(ConnectTransactionError::AttemptToPrintMoney(
