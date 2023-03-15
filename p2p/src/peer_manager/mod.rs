@@ -995,6 +995,7 @@ where
         self.heartbeat().await;
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
+        let mut last_time = self.time_getter.get_time();
 
         let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
         let mut last_ping_check = self.time_getter.get_time();
@@ -1018,8 +1019,23 @@ where
                 _ = periodic_interval.tick() => {}
             }
 
-            // Finally, update the peer manager state
+            // Update the peer manager state as needed
+
+            // Changing the clock time can cause various problems, log such events to make it easier to find the source of the problems
             let now = self.time_getter.get_time();
+            if now < last_time {
+                log::warn!(
+                    "Backward time adjustment detected ({} seconds)",
+                    last_time.checked_sub(now).unwrap_or_default().as_secs_f64()
+                );
+            } else if now > last_time + Duration::from_secs(60) {
+                log::warn!(
+                    "Forward time jump detected ({} seconds)",
+                    now.checked_sub(last_time).unwrap_or_default().as_secs_f64()
+                );
+            }
+            last_time = now;
+
             if (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN && heartbeat_call_needed)
                 || (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX)
             {
