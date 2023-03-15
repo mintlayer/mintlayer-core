@@ -22,7 +22,6 @@ pub mod signature;
 
 use serialization::{Decode, Encode};
 
-use crate::key::hdkd::derivation_path::DerivationPath;
 use crate::key::rschnorr::{MLRistrettoPrivateKey, MLRistrettoPublicKey, RistrettoSignatureError};
 use crate::key::secp256k1::{Secp256k1PrivateKey, Secp256k1PublicKey};
 use crate::key::Signature::{RistrettoSchnorr, Secp256k1Schnorr};
@@ -30,8 +29,6 @@ use crate::random::make_true_rng;
 use crate::random::{CryptoRng, Rng};
 pub use signature::Signature;
 
-use self::hdkd::child_number::ChildNumber;
-use self::hdkd::derivable::{Derivable, DerivationError};
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -118,18 +115,18 @@ impl PrivateKey {
 }
 
 // TODO remove this trait impl once RistrettoSchnorr is removed as well
-impl Derivable for PrivateKey {
-    fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
-        match self.key {
-            PrivateKeyHolder::Secp256k1Schnorr(_) => Err(DerivationError::UnsupportedKeyType),
-            PrivateKeyHolder::RistrettoSchnorr(key) => Ok(key.derive_child(num)?.into()),
-        }
-    }
-
-    fn get_derivation_path(&self) -> DerivationPath {
-        DerivationPath::empty()
-    }
-}
+// impl Derivable for PrivateKey {
+//     fn derive_child(self, num: ChildNumber) -> Result<Self, DerivationError> {
+//         match self.key {
+//             PrivateKeyHolder::Secp256k1Schnorr(_) => Err(DerivationError::UnsupportedKeyType),
+//             PrivateKeyHolder::RistrettoSchnorr(key) => Ok(key.derive_child(num)?.into()),
+//         }
+//     }
+//
+//     fn get_derivation_path(&self) -> DerivationPath {
+//         DerivationPath::empty()
+//     }
+// }
 
 impl From<Secp256k1PrivateKey> for PrivateKey {
     fn from(sk: Secp256k1PrivateKey) -> Self {
@@ -200,9 +197,7 @@ impl From<Secp256k1PublicKey> for PublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::key::hdkd::derivation_path::DerivationPath;
     use rstest::rstest;
-    use std::str::FromStr;
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
 
@@ -232,19 +227,20 @@ mod test {
         assert!(pk.verify_message(&sig, &msg));
     }
 
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn derive_ristretto(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-        let (sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-        let sk1 = sk
-            .clone()
-            .derive_child(ChildNumber::from_hardened(123.try_into().unwrap()))
-            .unwrap();
-        let sk2 = sk1.derive_child(ChildNumber::from_hardened(456.try_into().unwrap())).unwrap();
-        let sk3 = sk2.derive_child(ChildNumber::from_hardened(789.try_into().unwrap())).unwrap();
-        let sk4 = sk.derive_path(&DerivationPath::from_str("m/123h/456h/789h").unwrap()).unwrap();
-        assert_eq!(sk3, sk4);
-    }
+    // TODO remove this once RistrettoSchnorr is removed as well
+    // #[rstest]
+    // #[trace]
+    // #[case(Seed::from_entropy())]
+    // fn derive_ristretto(#[case] seed: Seed) {
+    //     let mut rng = make_seedable_rng(seed);
+    //     let (sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    //     let sk1 = sk
+    //         .clone()
+    //         .derive_child(ChildNumber::from_hardened(123.try_into().unwrap()))
+    //         .unwrap();
+    //     let sk2 = sk1.derive_child(ChildNumber::from_hardened(456.try_into().unwrap())).unwrap();
+    //     let sk3 = sk2.derive_child(ChildNumber::from_hardened(789.try_into().unwrap())).unwrap();
+    //     let sk4 = sk.derive_path(&DerivationPath::from_str("m/123h/456h/789h").unwrap()).unwrap();
+    //     assert_eq!(sk3, sk4);
+    // }
 }

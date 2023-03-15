@@ -146,7 +146,7 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
             .into();
 
         let derivation_path = {
-            let mut child_path = self.derivation_path.into_vec();
+            let mut child_path = self.derivation_path.as_vec().clone();
             child_path.push(num);
             child_path.try_into()?
         };
@@ -158,8 +158,8 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
         })
     }
 
-    fn get_derivation_path(&self) -> DerivationPath {
-        self.derivation_path.clone()
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self.derivation_path
     }
 }
 
@@ -213,7 +213,7 @@ impl Derivable for Secp256k1ExtendedPublicKey {
             .into();
 
         let derivation_path = {
-            let mut child_path = self.get_derivation_path().into_vec();
+            let mut child_path = self.derivation_path.as_vec().clone();
             child_path.push(num);
             child_path.try_into()?
         };
@@ -225,8 +225,8 @@ impl Derivable for Secp256k1ExtendedPublicKey {
         })
     }
 
-    fn get_derivation_path(&self) -> DerivationPath {
-        self.derivation_path.clone()
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self.derivation_path
     }
 }
 

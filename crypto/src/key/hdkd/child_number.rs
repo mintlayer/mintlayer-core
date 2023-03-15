@@ -87,7 +87,7 @@ impl ChildNumber {
         !self.is_hardened()
     }
 
-    pub fn plus_one(&self) -> Result<Self, DerivationError> {
+    pub fn increment(&self) -> Result<Self, DerivationError> {
         match self.0 {
             DerivationType::Normal(i) => Ok(ChildNumber(DerivationType::Normal(i.plus_one()?))),
             DerivationType::Hardened(i) => Ok(ChildNumber(DerivationType::Hardened(i.plus_one()?))),
@@ -159,9 +159,12 @@ mod test {
     use crate::key::hdkd::child_number::ChildNumber;
     use crate::key::hdkd::u31;
     use crate::key::hdkd::u31::U31;
+    use rand::RngCore;
     use rstest::rstest;
     use serialization::{DecodeAll, Encode};
     use std::str::FromStr;
+    use test_utils::random::make_seedable_rng;
+    use test_utils::random::Seed;
 
     fn examine_child_number(num: ChildNumber, encoded_num: u32, is_hardened: bool) {
         assert_eq!(num.is_normal(), !is_hardened);
@@ -185,6 +188,25 @@ mod test {
     #[case(u32::MAX - 1, true)]
     #[case(u32::MAX, true)]
     fn create_child_number(#[case] encoded_num: u32, #[case] is_hardened: bool) {
+        test_create_child_number(encoded_num, is_hardened)
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn create_child_number_random(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let encoded_num: u32 = rng.next_u32() | u31::MSB_BIT;
+        let is_hardened: bool = true;
+        test_create_child_number(encoded_num, is_hardened);
+
+        let encoded_num: u32 = encoded_num & !u31::MSB_BIT;
+        let is_hardened: bool = false;
+        test_create_child_number(encoded_num, is_hardened);
+    }
+
+    fn test_create_child_number(encoded_num: u32, is_hardened: bool) {
         let num = ChildNumber::from_index_with_hardened_bit(encoded_num);
         examine_child_number(num, encoded_num, is_hardened);
 

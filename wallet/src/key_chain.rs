@@ -184,8 +184,8 @@ mod tests {
             assert_eq!(pk2.get_derivation_path().to_string(), path_str.to_string());
             assert_eq!(pk, pk2);
             let path = DerivationPath::from_str(path_str).unwrap();
-            assert_eq!(sk.get_derivation_path(), path);
-            assert_eq!(pk.get_derivation_path(), path);
+            assert_eq!(sk.get_derivation_path(), &path);
+            assert_eq!(pk.get_derivation_path(), &path);
             let path_len = path.len();
             assert_encoded_eq(
                 &sk,

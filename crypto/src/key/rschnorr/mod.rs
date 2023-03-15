@@ -41,6 +41,7 @@ pub enum RistrettoSignatureError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MLRistrettoPrivateKey {
     key_data: schnorrkel::SecretKey,
+    _empty_derivation_path: DerivationPath,
 }
 
 impl Encode for MLRistrettoPrivateKey {
@@ -83,7 +84,10 @@ impl Decode for MLRistrettoPrivateKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let mut v = Vec::decode(input)?;
         let result = schnorrkel::SecretKey::from_ed25519_bytes(&v)
-            .map(|r| MLRistrettoPrivateKey { key_data: r })
+            .map(|r| MLRistrettoPrivateKey {
+                key_data: r,
+                _empty_derivation_path: DerivationPath::empty(),
+            })
             .map_err(|_| serialization::Error::from("Private Key deserialization failed"));
         v.zeroize();
         result
@@ -121,7 +125,10 @@ impl MLRistrettoPrivateKey {
     }
 
     pub fn from_native(native: schnorrkel::SecretKey) -> Self {
-        Self { key_data: native }
+        Self {
+            key_data: native,
+            _empty_derivation_path: DerivationPath::empty(),
+        }
     }
 
     pub(crate) fn sign_message(
@@ -151,8 +158,8 @@ impl Derivable for MLRistrettoPrivateKey {
         Ok(key)
     }
 
-    fn get_derivation_path(&self) -> DerivationPath {
-        DerivationPath::empty()
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self._empty_derivation_path
     }
 }
 

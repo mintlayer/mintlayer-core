@@ -27,16 +27,20 @@ const SEPARATOR: &str = "/";
 pub const MAX_PATH_SIZE: usize = u8::MAX as usize;
 
 /// BIP-32 compatible derivation path
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub struct DerivationPath(Vec<ChildNumber>);
 
 impl DerivationPath {
     pub fn empty() -> Self {
-        DerivationPath(vec![])
+        Self::default()
     }
 
     pub fn into_vec(self) -> Vec<ChildNumber> {
         self.0
+    }
+
+    pub fn as_vec(&self) -> &Vec<ChildNumber> {
+        &self.0
     }
 
     pub fn len(&self) -> usize {

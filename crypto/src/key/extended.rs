@@ -142,7 +142,7 @@ impl Derivable for ExtendedPrivateKey {
         }
     }
 
-    fn get_derivation_path(&self) -> DerivationPath {
+    fn get_derivation_path(&self) -> &DerivationPath {
         match self.key {
             ExtendedPrivateKeyHolder::Secp256k1Schnorr(ref key) => key.get_derivation_path(),
         }
@@ -161,7 +161,7 @@ impl Derivable for ExtendedPublicKey {
         }
     }
 
-    fn get_derivation_path(&self) -> DerivationPath {
+    fn get_derivation_path(&self) -> &DerivationPath {
         match self.pub_key {
             ExtendedPublicKeyHolder::Secp256k1Schnorr(ref pub_key) => pub_key.get_derivation_path(),
         }
