@@ -788,8 +788,8 @@ where
         );
     }
 
-    fn handle_ping_response(&mut self, peer: PeerId, nonce: u64) {
-        if let Some(peer) = self.peers.get_mut(&peer) {
+    fn handle_ping_response(&mut self, peer_id: PeerId, nonce: u64) {
+        if let Some(peer) = self.peers.get_mut(&peer_id) {
             if let Some(sent_ping) = peer.sent_ping.as_mut() {
                 if sent_ping.nonce == nonce {
                     // Correct reply received, clear pending request and update ping times
@@ -809,13 +809,14 @@ where
                     peer.ping_min = Some(ping_time_min);
                 } else {
                     log::debug!(
-                        "wrong nonce in ping response: {}, expected: {}",
+                        "wrong nonce in ping response from peer {}, received: {}, expected: {}",
+                        peer_id,
                         nonce,
-                        sent_ping.nonce
+                        sent_ping.nonce,
                     );
                 }
             } else {
-                log::debug!("unexpected ping response received");
+                log::debug!("unexpected ping response received from peer {}", peer_id);
             }
         }
     }
