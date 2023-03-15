@@ -29,6 +29,7 @@ use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
+use crate::primitives::user_agent::UserAgent;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
@@ -94,6 +95,7 @@ pub struct ChainConfig {
     genesis_block: Arc<WithId<Genesis>>,
     max_future_block_time_offset: Duration,
     version: SemVer,
+    user_agent: UserAgent,
     target_block_spacing: Duration,
     coin_decimals: u8,
     emission_schedule: EmissionSchedule,
@@ -140,6 +142,10 @@ impl ChainConfig {
 
     pub fn version(&self) -> &SemVer {
         &self.version
+    }
+
+    pub fn user_agent(&self) -> &UserAgent {
+        &self.user_agent
     }
 
     pub fn chain_type(&self) -> &ChainType {

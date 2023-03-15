@@ -24,6 +24,7 @@ pub mod merkle;
 pub mod semver;
 pub mod signed_amount;
 pub mod time;
+pub mod user_agent;
 pub mod version_tag;
 
 pub use amount::Amount;

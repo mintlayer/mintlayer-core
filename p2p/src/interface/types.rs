@@ -27,6 +27,10 @@ pub struct ConnectedPeer {
 
     pub ban_score: u32,
 
+    pub user_agent: String,
+
+    pub version: String,
+
     /// Time spent waiting for a current ping response, in milliseconds
     pub ping_wait: Option<u64>,
 

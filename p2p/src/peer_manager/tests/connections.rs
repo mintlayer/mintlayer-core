@@ -451,7 +451,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: config.user_agent().clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -478,7 +478,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: config.user_agent().clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -505,7 +505,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: config.user_agent().clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),

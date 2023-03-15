@@ -15,7 +15,7 @@
 
 use std::collections::BTreeSet;
 
-use common::primitives::semver::SemVer;
+use common::primitives::{semver::SemVer, user_agent::UserAgent};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -59,6 +59,7 @@ pub enum PeerEvent {
     PeerInfoReceived {
         network: [u8; 4],
         version: SemVer,
+        user_agent: UserAgent,
         subscriptions: BTreeSet<PubSubTopic>,
         receiver_address: Option<PeerAddress>,
 
@@ -89,6 +90,7 @@ pub enum HandshakeMessage {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
+        user_agent: String,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -100,6 +102,7 @@ pub enum HandshakeMessage {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
+        user_agent: String,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,

@@ -130,7 +130,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 peer_id,
                 network: *node.chain_config.magic_bytes(),
                 version: SemVer::new(1, 2, 3),
-                agent: None,
+                user_agent: node.chain_config.user_agent().clone(),
                 subscriptions: BTreeSet::new(),
             };
             let old = self.state.connected.lock().unwrap().insert(address, peer_id);

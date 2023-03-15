@@ -911,6 +911,8 @@ where
                 address: context.address.to_string(),
                 inbound: context.role == Role::Inbound,
                 ban_score: context.score,
+                user_agent: context.info.user_agent.as_ref().to_owned(),
+                version: context.info.version.to_string(),
                 ping_wait: context.sent_ping.as_ref().map(|sent_ping| {
                     duration_to_int(&now.checked_sub(sent_ping.timestamp).unwrap_or_default())
                         .expect("valid timestamp expected (ping_wait)")

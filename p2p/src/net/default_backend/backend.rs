@@ -498,6 +498,7 @@ where
                 subscriptions,
                 receiver_address,
                 handshake_nonce,
+                user_agent,
             } => self.create_peer(
                 peer_id,
                 handshake_nonce,
@@ -505,7 +506,7 @@ where
                     peer_id,
                     network,
                     version,
-                    agent: None,
+                    user_agent,
                     subscriptions,
                 },
                 receiver_address,

@@ -94,7 +94,7 @@ async fn ping_timeout() {
                 peer_id: PeerId::new(),
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                agent: None,
+                user_agent: chain_config.user_agent().clone(),
                 subscriptions: Default::default(),
             },
             receiver_address: None,

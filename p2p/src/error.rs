@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate::ban_score::BanScore;
-use common::primitives::semver::SemVer;
+use common::primitives::{semver::SemVer, user_agent::UserAgentError};
 use thiserror::Error;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
@@ -27,6 +27,8 @@ pub enum ProtocolError {
     InvalidVersion(SemVer, SemVer),
     // TODO: This error is very generic and probably should be replaced with several different ones,
     // because it has a ban score of 100 and in many cases it is too harsh.
+    #[error("Invalid user agent: {0}")]
+    InvalidUserAgent(#[from] UserAgentError),
     #[error("Peer sent an invalid message")]
     InvalidMessage,
     #[error("Peer is unresponsive")]
@@ -188,6 +190,7 @@ impl BanScore for ProtocolError {
         match self {
             ProtocolError::DifferentNetwork(_, _) => 100,
             ProtocolError::InvalidVersion(_, _) => 100,
+            ProtocolError::InvalidUserAgent(_) => 100,
             ProtocolError::InvalidMessage => 100,
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
