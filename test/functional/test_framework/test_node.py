@@ -24,7 +24,7 @@ from pathlib import Path
 
 from .authproxy import JSONRPCException
 from .descriptors import descsum_create
-from .p2p import P2P_SUBVERSION
+from .p2p import P2P_USER_AGENT
 from .util import (
     MAX_NODES,
     assert_equal,
@@ -605,8 +605,7 @@ class TestNode():
             # This ensures that PeerManager has accepted the peer
             p2p_conn.sync_with_ping()
 
-            # TODO: Add user agent check? We don't send the user agent yet
-            #assert_equal(self.p2p_get_connected_peers()[-1]['subver'], P2P_SUBVERSION)
+            assert_equal(self.p2p_get_connected_peers()[-1]['user_agent'], P2P_USER_AGENT)
 
             peer_count_new = len(self.p2p_get_connected_peers())
             assert_equal(peer_count_old + 1, peer_count_new)
@@ -642,7 +641,7 @@ class TestNode():
 
     def num_test_p2p_connections(self):
         """Return number of test framework p2p connections to the node."""
-        return len([peer for peer in self.getpeerinfo() if peer['subver'] == P2P_SUBVERSION])
+        return len([peer for peer in self.getpeerinfo() if peer['user_agent'] == P2P_USER_AGENT])
 
     def disconnect_p2ps(self):
         """Close all p2p connections to the node."""

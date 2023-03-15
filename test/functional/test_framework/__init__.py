@@ -66,6 +66,7 @@ def init_p2p_types():
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
                     ["subscriptions", "BTreeSet<PubSubTopic>"],
+                    ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                     ["handshake_nonce", "u64"],
                 ]
@@ -77,6 +78,7 @@ def init_p2p_types():
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
                     ["subscriptions", "BTreeSet<PubSubTopic>"],
+                    ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                 ]
             },
