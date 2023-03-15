@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     chain::{
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        Transaction, TxOutput,
+        OutputPurpose, Transaction, TxOutput,
     },
     primitives::Amount,
 };
@@ -30,6 +30,58 @@ use super::{
     token_issuance_cache::CoinOrTokenId,
     Fee,
 };
+
+fn is_valid_input_for_tx(output: &TxOutput) -> bool {
+    match output.purpose() {
+        OutputPurpose::Transfer(_) | OutputPurpose::LockThenTransfer(_, _) => true,
+        OutputPurpose::Burn
+        | OutputPurpose::StakePool(_)
+        | OutputPurpose::ProduceBlockFromStake(_, _) => false,
+    }
+}
+
+fn is_valid_output_for_tx(output: &TxOutput) -> bool {
+    match output.purpose() {
+        OutputPurpose::Transfer(_)
+        | OutputPurpose::LockThenTransfer(_, _)
+        | OutputPurpose::Burn
+        | OutputPurpose::StakePool(_) => true,
+        OutputPurpose::ProduceBlockFromStake(_, _) => false,
+    }
+}
+
+pub fn check_inputs_can_be_spent(
+    utxo_view: &impl utxo::UtxosView,
+    tx: &Transaction,
+) -> Result<(), ConnectTransactionError> {
+    let can_be_spent = tx
+        .inputs()
+        .iter()
+        .map(|input| {
+            utxo_view
+                .utxo(input.outpoint())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        })
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .all(|utxo| is_valid_input_for_tx(utxo.output()));
+
+    utils::ensure!(
+        can_be_spent,
+        ConnectTransactionError::AttemptToSpendInvalidOutputType
+    );
+    Ok(())
+}
+
+pub fn check_outputs_are_valid(tx: &Transaction) -> Result<(), ConnectTransactionError> {
+    let are_outputs_valid = tx.outputs().iter().all(is_valid_output_for_tx);
+
+    utils::ensure!(
+        are_outputs_valid,
+        ConnectTransactionError::AttemptToUseInvalidOutputInTx
+    );
+    Ok(())
+}
 
 pub fn get_total_fee(
     inputs_total_map: &BTreeMap<CoinOrTokenId, Amount>,

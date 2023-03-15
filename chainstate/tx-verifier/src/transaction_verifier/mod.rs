@@ -620,50 +620,6 @@ where
         Ok(())
     }
 
-    fn check_spend_stake_attempt(&self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
-        let attempt_to_spend_stake = tx
-            .inputs()
-            .iter()
-            .map(|input| {
-                self.utxo_cache
-                    .utxo(input.outpoint())
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-            })
-            .collect::<Result<Vec<_>, _>>()?
-            .iter()
-            .any(|utxo| match utxo.output().purpose() {
-                OutputPurpose::Transfer(_)
-                | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn => false,
-                OutputPurpose::StakePool(_) | OutputPurpose::ProduceBlockFromStake(_, _) => true,
-            });
-        ensure!(
-            !attempt_to_spend_stake,
-            ConnectTransactionError::AttemptToSpendStakedCoins
-        );
-        Ok(())
-    }
-
-    fn check_no_produce_block_outputs_in_tx(
-        &self,
-        tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
-        let attempt_to_use_probuce_block =
-            tx.outputs().iter().any(|output| match output.purpose() {
-                OutputPurpose::Transfer(_)
-                | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn
-                | OutputPurpose::StakePool(_) => false,
-                OutputPurpose::ProduceBlockFromStake(_, _) => true,
-            });
-
-        ensure!(
-            !attempt_to_use_probuce_block,
-            ConnectTransactionError::AttemptToUseProduceBlockOutputInTx
-        );
-        Ok(())
-    }
-
     fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
@@ -671,9 +627,6 @@ where
     ) -> Result<(), ConnectTransactionError> {
         let input0_getter =
             || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
-
-        self.check_spend_stake_attempt(tx)?;
-        self.check_no_produce_block_outputs_in_tx(tx)?;
 
         let tx_undo = tx
             .outputs()
@@ -769,6 +722,9 @@ where
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
+
+        utils::check_inputs_can_be_spent(&self.utxo_cache, tx.transaction())?;
+        utils::check_outputs_are_valid(tx.transaction())?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache
