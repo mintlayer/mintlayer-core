@@ -205,11 +205,14 @@ mod test {
             .unwrap();
         let sk2 = sk1.derive_child(ChildNumber::from_hardened(2.try_into().unwrap())).unwrap();
         let sk3 = sk2.derive_child(ChildNumber::from_hardened(3.try_into().unwrap())).unwrap();
-        let sk3_alt = sk.derive_path(&DerivationPath::from_str("m/1h/2h/3h").unwrap()).unwrap();
+        let sk3_alt = sk
+            .derive_absolute_path(&DerivationPath::from_str("m/1h/2h/3h").unwrap())
+            .unwrap();
         assert_eq!(sk3, sk3_alt);
         let sk4 = sk3.derive_child(ChildNumber::from_normal(4.try_into().unwrap())).unwrap();
-        let sk4_alt =
-            sk3_alt.derive_path(&DerivationPath::from_str("m/1h/2h/3h/4").unwrap()).unwrap();
+        let sk4_alt = sk3_alt
+            .derive_absolute_path(&DerivationPath::from_str("m/1h/2h/3h/4").unwrap())
+            .unwrap();
         assert_eq!(sk4, sk4_alt);
     }
 

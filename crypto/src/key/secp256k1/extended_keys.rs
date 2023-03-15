@@ -278,7 +278,7 @@ mod test {
 
         let path = DerivationPath::from_str(path).unwrap();
         assert_encoded_eq(&path, path_encoded);
-        let sk = master_key.derive_path(&path).unwrap();
+        let sk = master_key.derive_absolute_path(&path).unwrap();
         let pk = Secp256k1ExtendedPublicKey::from_private_key(&sk);
         assert_eq!(sk.chain_code, pk.chain_code);
         assert_encoded_eq(&sk, format!("{path_encoded}{chaincode}{secret}").as_str());
@@ -304,7 +304,7 @@ mod test {
         let master_pub_key = Secp256k1ExtendedPublicKey::from_private_key(&master_key);
 
         let path = DerivationPath::from_str(path).unwrap();
-        let pk = master_pub_key.derive_path(&path);
+        let pk = master_pub_key.derive_absolute_path(&path);
         if !is_success {
             let hard_num = *path.into_iter().find(|&n| n.is_hardened()).unwrap();
             assert_eq!(

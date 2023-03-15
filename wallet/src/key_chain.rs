@@ -137,7 +137,7 @@ impl<B: Backend> KeyChain<B> {
             KeyPurpose::Change => DerivationPath::from_str("m/0'/0'/1'/0'")?,
         };
         // TODO get key from a precalculated pool
-        let new_key = self.master_key.clone().derive_path(&hd_path)?;
+        let new_key = self.master_key.clone().derive_absolute_path(&hd_path)?;
         Ok(new_key)
     }
 }
