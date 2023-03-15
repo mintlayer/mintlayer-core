@@ -33,13 +33,15 @@ use zeroize::Zeroize;
 // Create alias for HMAC-SHA512
 type HmacSha512 = Hmac<Sha512>;
 
+/// The extended private key that can derive child private keys
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Secp256k1ExtendedPrivateKey {
-    /// The derivation path that was used to derive this key
+    /// The absolute derivation path that was used to derive this key
     pub derivation_path: DerivationPath,
-    /// Chain code
+    /// The chain code is used in BIP32 in conjunction with the private key to allow derivation
+    /// of child keys
     pub chain_code: ChainCode,
-    /// Private key
+    /// The actual private key that implements the rest of the cryptographic functions  
     pub private_key: Secp256k1PrivateKey,
 }
 
@@ -163,13 +165,15 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
     }
 }
 
+/// The extended public key that can derive child public keys
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
 pub struct Secp256k1ExtendedPublicKey {
-    /// The derivation path that was used to derive this key
+    /// The absolute derivation path that was used to derive this key
     pub derivation_path: DerivationPath,
-    /// Chain code
+    /// The chain code is used in BIP32 in conjunction with the public key to allow derivation
+    /// of child public keys
     pub chain_code: ChainCode,
-    /// Public key
+    /// The actual public key that implements the rest of the cryptographic functions
     pub public_key: Secp256k1PublicKey,
 }
 
