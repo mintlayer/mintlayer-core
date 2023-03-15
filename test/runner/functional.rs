@@ -119,7 +119,7 @@ ENABLE_BITCOIND=true
         .env("MINTLAYER_NODE", NODE_BINARY)
         .env(
             "RUST_LOG",
-            &env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+            &env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
         )
         // Pass command-line arguments
         .arg(runner_path)
