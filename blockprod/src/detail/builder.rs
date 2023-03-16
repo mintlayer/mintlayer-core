@@ -191,7 +191,6 @@ impl PerpetualBlockBuilder {
                         )
                 }
             }
-            MempoolEvent::NewTransaction(_) => {}
         });
 
         self.mempool_handle
@@ -338,7 +337,6 @@ mod tests {
                             tx.send(true).expect("Error sending new tip confirmation");
                         }
                     }
-                    MempoolEvent::NewTransaction(_) => {}
                 }))
             }
         });

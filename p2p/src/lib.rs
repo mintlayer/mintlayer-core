@@ -42,6 +42,7 @@ use tokio::sync::mpsc;
 use chainstate::chainstate_interface;
 use common::{chain::ChainConfig, time_getter::TimeGetter};
 use logging::log;
+use mempool::MempoolHandle;
 
 use crate::{
     config::P2pConfig,
@@ -63,13 +64,14 @@ struct P2p<T: NetworkingService> {
     // TODO: add abstraction for channels
     /// A sender for the peer manager events.
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
+    mempool_handle: MempoolHandle,
 }
 
 impl<T> P2p<T>
 where
     T: 'static + NetworkingService + Send,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService,
 {
     /// Start the P2P subsystem
     ///
@@ -81,7 +83,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        mempool_handle: mempool::MempoolHandle,
+        mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
@@ -120,6 +122,7 @@ where
             let chainstate_handle = chainstate_handle.clone();
             let tx_peer_manager = tx_peer_manager.clone();
             let chain_config = Arc::clone(&chain_config);
+            let mempool_handle_ = mempool_handle.clone();
 
             tokio::spawn(async move {
                 // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
@@ -128,7 +131,7 @@ where
                     p2p_config,
                     sync,
                     chainstate_handle,
-                    mempool_handle,
+                    mempool_handle_,
                     tx_peer_manager,
                 )
                 .run()
@@ -137,7 +140,10 @@ where
             });
         }
 
-        Ok(Self { tx_peer_manager })
+        Ok(Self {
+            tx_peer_manager,
+            mempool_handle,
+        })
     }
 }
 

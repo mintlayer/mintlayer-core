@@ -638,7 +638,6 @@ where
         self.store.drop_conflicts(conflicts);
         self.finalize_tx(tx.clone()).await?;
         self.store.assert_valid();
-        self.events_controller.broadcast(MempoolEvent::NewTransaction(tx));
         Ok(())
     }
 

@@ -126,10 +126,7 @@ where
 /// [SyncingMessagingService] provides an interface for sending and receiving block
 /// and header requests with a remote peer.
 #[async_trait]
-pub trait SyncingMessagingService<T>
-where
-    T: NetworkingService,
-{
+pub trait SyncingMessagingService {
     /// Sends a message to the peer.
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
 

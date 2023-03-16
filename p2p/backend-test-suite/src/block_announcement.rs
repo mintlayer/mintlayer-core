@@ -54,7 +54,7 @@ async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
@@ -143,7 +143,7 @@ async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
@@ -200,7 +200,7 @@ async fn block_announcement_too_big_message<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     // TODO: Use seedable random.

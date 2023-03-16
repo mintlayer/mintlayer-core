@@ -38,7 +38,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService + Debug,
     A: RandomAddressMaker<Address = N::Address>,
 {
     logging::init_logging::<&str>(None);
@@ -52,7 +52,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService + Debug,
     A: RandomAddressMaker<Address = N::Address>,
 {
     std::iter::empty()

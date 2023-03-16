@@ -183,7 +183,7 @@ where
 }
 
 #[async_trait]
-impl<S: NetworkingService, T: TransportSocket> SyncingMessagingService<S>
+impl<S: NetworkingService, T: TransportSocket> SyncingMessagingService
     for SyncingMessagingHandle<S, T>
 {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()> {

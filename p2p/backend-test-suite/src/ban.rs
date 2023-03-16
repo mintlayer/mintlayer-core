@@ -43,7 +43,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
 {
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());

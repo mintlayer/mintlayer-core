@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::SignedTransaction;
+
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
+    message::Announcement,
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -91,5 +94,13 @@ where
             .send(PeerManagerEvent::RemoveReserved(addr))
             .map_err(|_| P2pError::ChannelClosed)?;
         Ok(())
+    }
+
+    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
+        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+        // TODO: FIXME: Broadcast the transaction.
+        //_.make_announcement(Announcement::Transaction(tx));
+        todo!();
+        todo!()
     }
 }

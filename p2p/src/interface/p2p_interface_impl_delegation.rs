@@ -15,6 +15,8 @@
 
 use std::ops::{Deref, DerefMut};
 
+use common::chain::SignedTransaction;
+
 use crate::types::peer_id::PeerId;
 
 use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
@@ -49,5 +51,9 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
 
     async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()> {
         self.deref_mut().remove_reserved_node(addr).await
+    }
+
+    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
+        self.deref_mut().submit_transaction(tx).await
     }
 }

@@ -296,7 +296,7 @@ struct SyncingMessagingHandleMock {
 }
 
 #[async_trait]
-impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMock {
+impl SyncingMessagingService for SyncingMessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send(SyncingEvent::Message { peer, message }).unwrap();
         Ok(())

@@ -187,7 +187,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
 }
 
 #[async_trait]
-impl SyncingMessagingService<MockNetworkingService> for MockSyncingMessagingHandle {
+impl SyncingMessagingService for MockSyncingMessagingHandle {
     fn send_message(&mut self, _peer_id: PeerId, _request: SyncMessage) -> p2p::Result<()> {
         unreachable!()
     }

@@ -39,6 +39,7 @@ snowstorm = "0.4.0"
 serde.workspace = true
 socket2 = { version = "0.5", features = ["all"] }
 tokio-socks = { version = "0.5.1" }
+hex.workspace = true
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../chainstate/test-framework" }

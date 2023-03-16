@@ -42,7 +42,7 @@ async fn block_announcement_3_peers<A, S>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::SyncingMessagingHandle: SyncingMessagingService,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());

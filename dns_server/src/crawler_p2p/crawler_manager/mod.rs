@@ -88,7 +88,7 @@ pub struct CrawlerManager<N: NetworkingService, S> {
 
 impl<N: NetworkingService, S: DnsServerStorage> CrawlerManager<N, S>
 where
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
     N::ConnectivityHandle: ConnectivityService<N>,
     DnsServerError: From<<<N as NetworkingService>::Address as FromStr>::Err>,
 {

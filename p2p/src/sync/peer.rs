@@ -87,7 +87,7 @@ pub struct Peer<T: NetworkingService> {
 impl<T> Peer<T>
 where
     T: NetworkingService,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

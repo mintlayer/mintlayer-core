@@ -30,7 +30,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     N::start(
@@ -49,7 +49,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
+    N::SyncingMessagingHandle: SyncingMessagingService + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (connectivity, _sync) = N::start(
@@ -80,7 +80,7 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + std::fmt::Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::SyncingMessagingHandle: SyncingMessagingService,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service1, _) = N::start(
