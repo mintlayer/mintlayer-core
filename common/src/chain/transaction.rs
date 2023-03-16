@@ -147,7 +147,7 @@ impl Transaction {
 mod test {
     use super::*;
     use crypto::random::RngCore;
-    use serialization::{Decode, Encode};
+    use serialization::{DecodeAll, Encode};
 
     #[test]
     #[allow(clippy::eq_op)]
@@ -162,6 +162,6 @@ mod test {
         assert_eq!(tx.version_byte(), *encoded_tx.first().unwrap());
 
         // let's ensure that flags comes right after that
-        assert_eq!(u32::decode(&mut &encoded_tx[1..5]).unwrap(), flags);
+        assert_eq!(u32::decode_all(&mut &encoded_tx[1..5]).unwrap(), flags);
     }
 }

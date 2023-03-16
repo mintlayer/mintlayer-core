@@ -186,7 +186,7 @@ fn test_scale_structures() {
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(test_main.clone()));
     assert!(!enc.is_empty());
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(test_main)));
 }
@@ -201,7 +201,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum::decode(&mut &enc[..]).ok();
+    let dec = TestEnum::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum::OnlyOneVariant));
 
@@ -213,7 +213,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum2::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum2::decode(&mut &enc[..]).ok();
+    let dec = TestEnum2::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum2::OnlyOneVariant(0xAB)));
 
@@ -225,7 +225,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum3::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum3::decode(&mut &enc[..]).ok();
+    let dec = TestEnum3::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum3::OnlyOneVariant(0xABCD)));
 
@@ -237,7 +237,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum4::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum4::decode(&mut &enc[..]).ok();
+    let dec = TestEnum4::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum4::OnlyOneVariant(0xABCDEF12)));
 
@@ -249,7 +249,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum5::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum5::decode(&mut &enc[..]).ok();
+    let dec = TestEnum5::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum5::OnlyOneVariant(0xABCDEF1213141516)));
 
@@ -261,7 +261,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum6::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum6::decode(&mut &enc[..]).ok();
+    let dec = TestEnum6::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(
         dec,
@@ -276,7 +276,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum7::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum7::decode(&mut &enc[..]).ok();
+    let dec = TestEnum7::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(TestEnum7::OnlyOneVariant(vec![1, 2, 3, 4])));
 
@@ -293,7 +293,7 @@ fn test_scale_enums_with_single_variant() {
     let enc = TestEnum8::encode(&te);
     assert!(!enc.is_empty());
     dbg!(&enc);
-    let dec = TestEnum8::decode(&mut &enc[..]).ok();
+    let dec = TestEnum8::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(
         dec,
