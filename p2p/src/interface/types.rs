@@ -17,6 +17,9 @@ use serde::Serialize;
 
 use crate::types::peer_id::PeerId;
 
+/// Helper type used to return information about a connected peer from RPC.
+///
+/// `String` is used for types that implement `Display`, but do not have `serde::Serialize`.
 #[derive(Debug, Serialize)]
 pub struct ConnectedPeer {
     pub peer_id: PeerId,
