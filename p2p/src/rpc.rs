@@ -52,7 +52,7 @@ trait P2pRpc {
     #[method(name = "remove_reserved_node")]
     async fn remove_reserved_node(&self, addr: String) -> rpc::Result<()>;
 
-    /// Submits a transaction to mempool.
+    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
     async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
 }

@@ -38,7 +38,7 @@ async fn nonexistent_peer() {
     let peer = PeerId::new();
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
-    let tx = SignedTransaction::new(tx.clone(), vec![]).unwrap();
+    let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle.make_announcement(peer, Announcement::Transaction(tx));
 
     handle.resume_panic().await;
@@ -52,7 +52,7 @@ async fn invalid_transaction() {
     handle.connect_peer(peer).await;
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
-    let tx = SignedTransaction::new(tx.clone(), vec![]).unwrap();
+    let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle.make_announcement(peer, Announcement::Transaction(tx));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -86,7 +86,7 @@ async fn valid_transaction() {
         0x01,
     )
     .unwrap();
-    let tx = SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).unwrap();
+    let tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
 
     handle.make_announcement(peer, Announcement::Transaction(tx));
 
