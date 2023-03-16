@@ -27,11 +27,7 @@ const MAX_LENGTH: usize = 24;
 pub struct UserAgent(Vec<u8>);
 
 pub fn mintlayer_core_user_agent() -> UserAgent {
-    "MintlayerCore"
-        .as_bytes()
-        .to_owned()
-        .try_into()
-        .expect("default value must be valid")
+    "MintlayerCore".try_into().expect("default value must be valid")
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -79,6 +75,14 @@ impl TryFrom<Vec<u8>> for UserAgent {
             UserAgentError::InvalidChars
         );
         Ok(Self(value))
+    }
+}
+
+impl TryFrom<&str> for UserAgent {
+    type Error = UserAgentError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_bytes().to_owned())
     }
 }
 

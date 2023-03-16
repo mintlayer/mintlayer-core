@@ -41,8 +41,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         config::Network::Mainnet => common::chain::config::ChainType::Mainnet,
         config::Network::Testnet => common::chain::config::ChainType::Testnet,
     };
-    let user_agent = UserAgent::try_from(DNS_SERVER_USER_AGENT.as_bytes().to_owned())
-        .expect("expected valid user agent");
+    let user_agent = UserAgent::try_from(DNS_SERVER_USER_AGENT).expect("expected valid user agent");
     let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
 
     let p2p_config = Arc::new(P2pConfig {
