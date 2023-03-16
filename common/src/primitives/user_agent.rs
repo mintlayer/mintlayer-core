@@ -22,7 +22,7 @@ const MAX_LENGTH: usize = 24;
 /// Wrapper type for the user agent string.
 ///
 /// Used to validate the submitted string.
-/// The string cannot be too long and can only contain ASCII alphanumeric characters.
+/// The string cannot be too long and can only contain ASCII alphanumeric or punctuation characters.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode)]
 pub struct UserAgent(Vec<u8>);
 
@@ -36,7 +36,7 @@ pub enum UserAgentError {
     Empty,
     #[error("The string is too long: {0}, max allowed: {1}")]
     TooLong(usize, usize),
-    #[error("Only ASCII alphanumeric characters allowed")]
+    #[error("Only ASCII alphanumeric and punctuation characters allowed")]
     InvalidChars,
 }
 
@@ -45,9 +45,9 @@ impl From<UserAgentError> for serialization::Error {
         match error {
             UserAgentError::Empty => serialization::Error::from("Is empty"),
             UserAgentError::TooLong(_, _) => serialization::Error::from("The string is too long"),
-            UserAgentError::InvalidChars => {
-                serialization::Error::from("Only ASCII alphanumeric characters allowed")
-            }
+            UserAgentError::InvalidChars => serialization::Error::from(
+                "Only ASCII alphanumeric and punctuation characters allowed",
+            ),
         }
     }
 }
@@ -71,7 +71,10 @@ impl TryFrom<Vec<u8>> for UserAgent {
             UserAgentError::TooLong(value.len(), MAX_LENGTH)
         );
         ensure!(
-            value.iter().all(|ch| (*ch as char).is_ascii_alphanumeric()),
+            value
+                .iter()
+                .all(|ch| (*ch as char).is_ascii_alphanumeric()
+                    || (*ch as char).is_ascii_punctuation()),
             UserAgentError::InvalidChars
         );
         Ok(Self(value))
@@ -123,9 +126,11 @@ mod tests {
     #[test]
     fn user_agent() {
         // Valid values
-        check("1", true);
         check("MintlayerCore", true);
         check("SomeLongString1234567890", true);
+        check("\"\\", true);
+        check("!#$%&'()*+,-./:;<=", true);
+        check(">?@`[]^_```{|}~", true);
 
         // Invalid values
         check("", false);
