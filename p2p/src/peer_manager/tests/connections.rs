@@ -528,8 +528,7 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn, _, _) = T::start(
-    let (mut conn, _) =
+    let (mut conn, _, _) =
         T::start(transport, vec![addr1], Arc::clone(&config), p2p_config).await.unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
