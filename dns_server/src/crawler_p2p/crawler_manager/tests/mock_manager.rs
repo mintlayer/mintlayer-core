@@ -32,11 +32,11 @@ use common::{
 use p2p::{
     config::P2pConfig,
     error::{DialError, P2pError},
-    message::{AnnounceAddrRequest, Announcement, PeerManagerMessage, SyncMessage},
+    message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
         default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
@@ -103,8 +103,6 @@ pub struct MockConnectivityHandle {
     pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<SocketAddr>>,
 }
 
-#[derive(Clone)]
-pub struct MockMessagingHandle {}
 pub struct MockSyncingEventReceiver {}
 
 #[async_trait]
@@ -113,7 +111,7 @@ impl NetworkingService for MockNetworkingService {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type ConnectivityHandle = MockConnectivityHandle;
-    type MessagingHandle = MockMessagingHandle;
+    type MessagingHandle = ();
     type SyncingEventReceiver = MockSyncingEventReceiver;
 
     async fn start(
@@ -193,16 +191,6 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
 
     async fn poll_next(&mut self) -> p2p::Result<ConnectivityEvent<SocketAddr>> {
         Ok(self.conn_rx.recv().await.unwrap())
-    }
-}
-
-impl MessagingService for MockMessagingHandle {
-    fn send_message(&mut self, _peer_id: PeerId, _request: SyncMessage) -> p2p::Result<()> {
-        unreachable!()
-    }
-
-    fn make_announcement(&mut self, _announcement: Announcement) -> p2p::Result<()> {
-        unreachable!()
     }
 }
 

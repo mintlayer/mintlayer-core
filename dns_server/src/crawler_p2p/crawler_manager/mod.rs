@@ -31,7 +31,7 @@ use p2p::{
     net::{
         default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, SyncingEvent},
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     peer_manager::global_ip::IsGlobalIp,
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -88,7 +88,6 @@ pub struct CrawlerManager<N: NetworkingService, S> {
 
 impl<N: NetworkingService, S: DnsServerStorage> CrawlerManager<N, S>
 where
-    N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
     DnsServerError: From<<<N as NetworkingService>::Address as FromStr>::Err>,
