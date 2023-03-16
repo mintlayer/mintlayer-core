@@ -15,6 +15,7 @@
 
 mod internal;
 
+use crate::key::hdkd::derivation_path::DerivationPath;
 use crate::random::{CryptoRng, Rng};
 use schnorrkel::ExpansionMode::Ed25519;
 use serialization::{Decode, Encode};
@@ -40,6 +41,7 @@ pub enum RistrettoSignatureError {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct MLRistrettoPrivateKey {
     key_data: schnorrkel::SecretKey,
+    _empty_derivation_path: DerivationPath,
 }
 
 impl Encode for MLRistrettoPrivateKey {
@@ -82,7 +84,10 @@ impl Decode for MLRistrettoPrivateKey {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let mut v = Vec::decode(input)?;
         let result = schnorrkel::SecretKey::from_ed25519_bytes(&v)
-            .map(|r| MLRistrettoPrivateKey { key_data: r })
+            .map(|r| MLRistrettoPrivateKey {
+                key_data: r,
+                _empty_derivation_path: DerivationPath::empty(),
+            })
             .map_err(|_| serialization::Error::from("Private Key deserialization failed"));
         v.zeroize();
         result
@@ -120,7 +125,10 @@ impl MLRistrettoPrivateKey {
     }
 
     pub fn from_native(native: schnorrkel::SecretKey) -> Self {
-        Self { key_data: native }
+        Self {
+            key_data: native,
+            _empty_derivation_path: DerivationPath::empty(),
+        }
     }
 
     pub(crate) fn sign_message(
@@ -148,6 +156,10 @@ impl Derivable for MLRistrettoPrivateKey {
         let mini_key = self.as_native().hard_derive_mini_secret_key(Some(chaincode.into()), b"").0;
         let key = MLRistrettoPrivateKey::from_native(mini_key.expand(Ed25519));
         Ok(key)
+    }
+
+    fn get_derivation_path(&self) -> &DerivationPath {
+        &self._empty_derivation_path
     }
 }
 
@@ -354,7 +366,7 @@ mod test {
         let sk = MLRistrettoPrivateKey::decode(&mut sk_bytes.as_slice()).unwrap();
 
         let path = DerivationPath::from_str("m/0'").unwrap();
-        let child_sk = sk.clone().derive_path(&path).unwrap();
+        let child_sk = sk.clone().derive_absolute_path(&path).unwrap();
 
         assert_eq!(hex::encode(child_sk.encode()), "010118959f5bfcde4299d177763c94c30b56cd8a7df22d6fc4861d45067c4dccd0470957e0852e2b4af0d8d44a29ad8fdf17db6cf0f5f7feef9d268790b326bda500");
 
@@ -363,7 +375,7 @@ mod test {
             .unwrap();
 
         let path = DerivationPath::from_str("m/0'/1'").unwrap();
-        let child_sk_final_alt = sk.derive_path(&path).unwrap();
+        let child_sk_final_alt = sk.derive_absolute_path(&path).unwrap();
 
         assert_eq!(child_sk_final.encode(), child_sk_final_alt.encode());
 
