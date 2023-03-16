@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn len_and_is_empty_() {
+    fn len_and_is_empty() {
         let path_string = "m/1/2/3";
         let path = DerivationPath::from_str(path_string).unwrap();
         assert_eq!(path.len(), 3);
