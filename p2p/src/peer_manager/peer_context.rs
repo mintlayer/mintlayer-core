@@ -15,7 +15,10 @@
 
 use std::{collections::HashSet, time::Duration};
 
-use crate::net::types::{self, Role};
+use crate::{
+    net::types::{self, Role},
+    utils::rate_limiter::RateLimiter,
+};
 
 #[derive(Debug)]
 pub struct SentPing {
@@ -55,4 +58,6 @@ pub struct PeerContext<A> {
     /// Used to prevent infinity loops while broadcasting addresses.
     // TODO: Use bloom filter (like it's done in Bitcoin Core).
     pub announced_addresses: HashSet<A>,
+
+    pub address_rate_limiter: RateLimiter,
 }

@@ -20,6 +20,7 @@ use std::time::Duration;
 /// Token bucket based rate limiter
 ///
 /// See https://en.wikipedia.org/wiki/Token_bucket
+#[derive(Debug)]
 pub struct RateLimiter {
     rate: f64,
     tokens: f64,
