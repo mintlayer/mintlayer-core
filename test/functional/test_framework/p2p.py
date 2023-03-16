@@ -78,8 +78,8 @@ from test_framework.util import (
 
 logger = logging.getLogger("TestFramework.p2p")
 
-# The P2P user agent string that this test framework sends in its `version` message
-P2P_SUBVERSION = "/python-p2p-tester:0.0.3/"
+# The P2P user agent string that this test framework sends in its `handshake` message
+P2P_USER_AGENT = "PythonTesterP2P"
 
 # The services that this test framework offers in its `version` message
 P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
@@ -334,6 +334,7 @@ class P2PInterface(P2PConnection):
                         "patch": 0,
                     },
                     "network": [0xaa, 0xbb, 0xcc, 0xdd],
+                    "user_agent": P2P_USER_AGENT,
                     "subscriptions": ["Transactions", "Blocks", "PeerAddresses"],
                     "receiver_address": None,
                     "handshake_nonce": 123,

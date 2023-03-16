@@ -17,7 +17,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use p2p::testing_utils::TestTransportMaker;
+use p2p::testing_utils::{test_p2p_config, TestTransportMaker};
 use p2p::{
     error::{DialError, P2pError},
     net::{ConnectivityService, NetworkingService, SyncingMessagingService},
@@ -33,11 +33,12 @@ where
     N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     N::start(
         T::make_transport(),
         vec![T::make_address()],
         config,
-        Default::default(),
+        p2p_config,
     )
     .await
     .unwrap();
@@ -52,19 +53,25 @@ where
     N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     let (connectivity, _sync) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
 
     let addresses = connectivity.local_addresses().to_vec();
-    let res = N::start(T::make_transport(), addresses, config, Default::default())
-        .await
-        .expect_err("address is not in use");
+    let res = N::start(
+        T::make_transport(),
+        addresses,
+        config,
+        Arc::clone(&p2p_config),
+    )
+    .await
+    .expect_err("address is not in use");
     assert!(matches!(
         res,
         P2pError::DialError(DialError::IoError(
@@ -83,11 +90,12 @@ where
     N::SyncingMessagingHandle: SyncingMessagingService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     let (mut service1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -95,7 +103,7 @@ where
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();

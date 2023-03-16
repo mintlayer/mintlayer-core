@@ -21,6 +21,7 @@ use std::{
     time::Duration,
 };
 
+use common::primitives::user_agent::mintlayer_core_user_agent;
 use p2p::{
     error::{DialError, P2pError},
     net::types::PeerInfo,
@@ -59,7 +60,7 @@ fn basic(#[case] seed: Seed) {
                 peer_id: peer1,
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                agent: None,
+                user_agent: mintlayer_core_user_agent(),
                 subscriptions: Default::default(),
             },
         },
@@ -84,7 +85,7 @@ fn basic(#[case] seed: Seed) {
                 peer_id: peer2,
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                agent: None,
+                user_agent: mintlayer_core_user_agent(),
                 subscriptions: Default::default(),
             },
         },
@@ -162,7 +163,7 @@ fn randomized(#[case] seed: Seed) {
                         peer_id: PeerId::new(),
                         network: *chain_config.magic_bytes(),
                         version: *chain_config.version(),
-                        agent: None,
+                        user_agent: mintlayer_core_user_agent(),
                         subscriptions: Default::default(),
                     },
                 },
@@ -180,7 +181,7 @@ fn randomized(#[case] seed: Seed) {
                         peer_id: PeerId::new(),
                         network: [255, 255, 255, 255],
                         version: *chain_config.version(),
-                        agent: None,
+                        user_agent: mintlayer_core_user_agent(),
                         subscriptions: Default::default(),
                     },
                 },
@@ -229,7 +230,7 @@ fn incompatible_node(#[case] seed: Seed) {
                 peer_id: peer1,
                 network: [255, 255, 255, 255],
                 version: *chain_config.version(),
-                agent: None,
+                user_agent: mintlayer_core_user_agent(),
                 subscriptions: Default::default(),
             },
         },

@@ -18,7 +18,10 @@ use std::{
     fmt::{Debug, Display},
 };
 
-use common::{chain::ChainConfig, primitives::semver::SemVer};
+use common::{
+    chain::ChainConfig,
+    primitives::{semver::SemVer, user_agent::UserAgent},
+};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -33,8 +36,6 @@ pub enum Role {
     Outbound,
 }
 
-// TODO: Introduce and check the maximum allowed peer information size. See
-// https://github.com/mintlayer/mintlayer-core/issues/594 for details.
 /// Peer information learned during handshaking
 ///
 /// When an inbound/outbound connection succeeds, the networking service handshakes with the remote
@@ -42,6 +43,8 @@ pub enum Role {
 /// (both are Mintlayer nodes and that both support mandatory protocols). If those checks pass,
 /// the information is passed on to [crate::peer_manager::PeerManager] which decides whether it
 /// wants to keep the connection open or close it and possibly ban the peer from.
+///
+/// If new fields are added, make sure they are limited in size.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PeerInfo {
     /// Unique ID of the peer
@@ -54,7 +57,7 @@ pub struct PeerInfo {
     pub version: SemVer,
 
     /// User agent of the peer
-    pub agent: Option<String>,
+    pub user_agent: UserAgent,
 
     /// The announcements list that a peer interested is.
     pub subscriptions: BTreeSet<PubSubTopic>,
@@ -73,11 +76,7 @@ impl Display for PeerInfo {
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
         writeln!(f, "--> Network: {:x?}", self.network)?;
         writeln!(f, "--> Software version: {}", self.version)?;
-        writeln!(
-            f,
-            "--> User agent: {}",
-            self.agent.as_ref().unwrap_or(&"No user agent".to_string())
-        )?;
+        writeln!(f, "--> User agent: {}", self.user_agent)?;
 
         Ok(())
     }

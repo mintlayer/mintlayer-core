@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use clap::Parser;
+use common::primitives::user_agent::UserAgent;
 use config::DnsServerConfig;
 use crawler_p2p::crawler_manager::{
     storage_impl::DnsServerStorageImpl, CrawlerManager, CrawlerManagerConfig,
@@ -31,13 +32,17 @@ mod crawler_p2p;
 mod dns_server;
 mod error;
 
+const DNS_SERVER_USER_AGENT: &str = "MintlayerDnsSeedServer";
+
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
 
-    let chain_config = match config.network {
-        config::Network::Mainnet => Arc::new(common::chain::config::create_mainnet()),
-        config::Network::Testnet => Arc::new(common::chain::config::create_testnet()),
+    let chain_type = match config.network {
+        config::Network::Mainnet => common::chain::config::ChainType::Mainnet,
+        config::Network::Testnet => common::chain::config::ChainType::Testnet,
     };
+    let user_agent = UserAgent::try_from(DNS_SERVER_USER_AGENT).expect("expected valid user agent");
+    let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
@@ -56,6 +61,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent,
     });
 
     let transport = p2p::make_p2p_transport();

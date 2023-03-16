@@ -27,13 +27,13 @@ use crate::{
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, P2pTokioTestTimeGetter, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
 };
-use common::chain::config;
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -451,7 +451,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -478,7 +478,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -505,7 +505,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    agent: None,
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -527,14 +527,9 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let (mut conn, _) = T::start(
-        transport,
-        vec![addr1],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let p2p_config = Arc::new(test_p2p_config());
+    let (mut conn, _) =
+        T::start(transport, vec![addr1], Arc::clone(&config), p2p_config).await.unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
     conn.connect(addr2).expect("dial to succeed");
@@ -591,7 +586,7 @@ async fn connection_timeout_rpc_notified<T>(
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let (conn, _) = T::start(
         transport,
         vec![addr1],
@@ -686,6 +681,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -720,6 +716,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -799,6 +796,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -834,6 +832,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
@@ -862,6 +861,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),

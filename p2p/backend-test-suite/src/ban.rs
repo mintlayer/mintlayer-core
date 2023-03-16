@@ -24,13 +24,12 @@ use common::{
 };
 
 use p2p::{
-    config::P2pConfig,
     error::P2pError,
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, SyncMessage},
     net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
     sync::BlockSyncManager,
-    testing_utils::{connect_and_accept_services, TestTransportMaker},
+    testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
 
 tests![invalid_pubsub_block,];
@@ -47,14 +46,14 @@ where
 {
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let p2p_config = Arc::new(P2pConfig::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
 
     let (mut conn1, sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
-        Default::default(),
+        Arc::new(test_p2p_config()),
     )
     .await
     .unwrap();

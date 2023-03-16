@@ -15,6 +15,7 @@
 
 use std::{num::NonZeroU64, str::FromStr, time::Duration};
 
+use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
 
 use p2p::config::{NodeType, P2pConfig};
@@ -100,6 +101,7 @@ impl From<P2pConfigFile> for P2pConfig {
             msg_header_count_limit: Default::default(),
             msg_max_locator_count: Default::default(),
             max_request_blocks_count: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
         }
     }
 }

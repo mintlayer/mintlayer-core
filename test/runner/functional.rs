@@ -111,16 +111,23 @@ ENABLE_BITCOIND=true
     );
     std::fs::write(&config_file_path, config_str).map_err(Error::ConfigFile)?;
 
+    // Tests are expected to work with RUST_LOG set to debug. Using anything else may break them.
+    let env_log_key = "RUST_LOG";
+    let env_log_value_def = "debug";
+    let env_log_value = env::var(env_log_key).ok().unwrap_or(env_log_value_def.to_owned());
+    if env_log_value != env_log_value_def {
+        eprintln!("{}", "#".repeat(80));
+        eprintln!("WARNING: RUST_LOG env value is set to: {}", env_log_value);
+        eprintln!("{}", "#".repeat(80));
+    }
+
     let python_exe = find_python_exe();
 
     // Run the tests and get result
     let status = Command::new(python_exe)
         // Add environment variables
         .env("MINTLAYER_NODE", NODE_BINARY)
-        .env(
-            "RUST_LOG",
-            &env::var("RUST_LOG").unwrap_or_else(|_| "debug".into()),
-        )
+        .env(env_log_key, env_log_value)
         // Pass command-line arguments
         .arg(runner_path)
         .arg(format!("--configfile={}", config_file_path.display()))

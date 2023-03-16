@@ -116,6 +116,7 @@ where
                     subscriptions,
                     receiver_address,
                     handshake_nonce,
+                    user_agent,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
@@ -133,6 +134,7 @@ where
                             subscriptions,
                             receiver_address,
                             handshake_nonce,
+                            user_agent,
                         },
                     ))
                     .map_err(P2pError::from)?;
@@ -142,6 +144,7 @@ where
                         types::HandshakeMessage::HelloAck {
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
+                            user_agent: self.p2p_config.user_agent.clone(),
                             subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                             receiver_address: self.receiver_address.clone(),
                         },
@@ -153,6 +156,7 @@ where
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
+                        user_agent: self.p2p_config.user_agent.clone(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         receiver_address: self.receiver_address.clone(),
                         handshake_nonce,
@@ -162,6 +166,7 @@ where
                 let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
                     version,
                     network,
+                    user_agent,
                     subscriptions,
                     receiver_address,
                 })) = self.socket.recv().await
@@ -175,6 +180,7 @@ where
                         types::PeerEvent::PeerInfoReceived {
                             network,
                             version,
+                            user_agent,
                             subscriptions,
                             receiver_address,
                             handshake_nonce,
@@ -243,7 +249,8 @@ impl<T: TransportSocket> Drop for Peer<T> {
 mod tests {
     use super::*;
     use crate::testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
     };
     use crate::{
         message,
@@ -267,7 +274,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
@@ -276,7 +283,7 @@ mod tests {
             peer_id2,
             PeerRole::Inbound,
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -294,6 +301,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -309,6 +317,7 @@ mod tests {
             types::PeerEvent::PeerInfoReceived {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -340,7 +349,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
@@ -349,7 +358,7 @@ mod tests {
             peer_id3,
             PeerRole::Outbound { handshake_nonce: 1 },
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -368,6 +377,7 @@ mod tests {
                 types::HandshakeMessage::HelloAck {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
+                    user_agent: p2p_config.user_agent.clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -385,6 +395,7 @@ mod tests {
                 PeerEvent::PeerInfoReceived {
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
+                    user_agent: p2p_config.user_agent.clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -417,7 +428,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
@@ -426,7 +437,7 @@ mod tests {
             peer_id3,
             PeerRole::Inbound,
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -441,6 +452,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -475,7 +487,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();

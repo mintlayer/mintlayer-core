@@ -37,7 +37,7 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::PeerManager,
-    testing_utils::peerdb_inmemory_store,
+    testing_utils::{peerdb_inmemory_store, test_p2p_config},
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2pConfig,
@@ -63,7 +63,7 @@ where
         transport,
         vec![addr],
         Arc::clone(&chain_config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -91,7 +91,7 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let p2p_config = Arc::new(P2pConfig::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let (peer_manager, _tx) = make_peer_manager_custom::<T>(
         transport,
         addr,

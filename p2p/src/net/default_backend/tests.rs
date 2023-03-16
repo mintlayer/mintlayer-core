@@ -15,7 +15,9 @@
 
 use super::{transport::NoiseTcpTransport, *};
 use crate::error::DialError;
-use crate::testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp};
+use crate::testing_utils::{
+    test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportTcp,
+};
 use crate::{
     net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
     testing_utils::TestTransportNoise,
@@ -32,7 +34,7 @@ where
     T: TransportSocket + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
 
     let (mut conn1, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
@@ -64,7 +66,7 @@ where
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
-        assert_eq!(peer_info.agent, None);
+        assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(
             peer_info.subscriptions,
             [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
@@ -97,7 +99,7 @@ where
     T: TransportSocket,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
 
     let (mut conn1, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
@@ -131,7 +133,7 @@ where
                 peer_info.version,
                 common::primitives::semver::SemVer::new(0, 1, 0),
             );
-            assert_eq!(peer_info.agent, None);
+            assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         }
         _ => panic!("invalid event received, expected incoming connection"),
     }
@@ -158,7 +160,7 @@ where
     T: TransportSocket,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
 
     let (mut conn1, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
@@ -213,7 +215,7 @@ where
     T: TransportSocket + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
 
     let (mut conn1, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
@@ -257,7 +259,7 @@ where
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
-        assert_eq!(peer_info.agent, None);
+        assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(
             peer_info.subscriptions,
             [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
@@ -298,7 +300,7 @@ where
     });
 
     let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let (mut conn, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![],
