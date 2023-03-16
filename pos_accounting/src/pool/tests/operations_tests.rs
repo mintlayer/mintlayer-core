@@ -52,7 +52,7 @@ fn create_pool_twice(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
         0,
     );
-    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let mut db = PoSAccountingDB::new(&mut storage);
     let _ = db.create_pool(&outpoint, pledge_amount, pub_key.clone()).unwrap();
@@ -175,7 +175,7 @@ fn create_pool_undo_decomission_pool_merge(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);
 
-    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
         0,
@@ -203,7 +203,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
         0,
     );
-    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let mut db = PoSAccountingDB::new(&mut storage);
     let _ = db.create_delegation_id(pool_id, pub_key.clone(), &outpoint).unwrap();
@@ -235,7 +235,7 @@ fn create_delegation_id_unknown_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
 
-    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(&mut rng))),
         0,

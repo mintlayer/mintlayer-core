@@ -25,8 +25,9 @@ use crate::{
     error::ProtocolError,
     message::{BlockListRequest, HeaderListResponse, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
+    testing_utils::test_p2p_config,
     types::peer_id::PeerId,
-    P2pConfig, P2pError,
+    P2pError,
 };
 
 #[tokio::test]
@@ -59,7 +60,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let (chainstate, mempool) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
-    let p2p_config = Arc::new(P2pConfig::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))

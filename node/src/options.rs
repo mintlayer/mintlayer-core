@@ -60,7 +60,7 @@ pub struct RunOptions {
     #[clap(long)]
     pub node_type: Option<NodeTypeConfigFile>,
 
-    /// Mock time.
+    /// Mock time used to initialize the node time at startup, in seconds.
     #[clap(long)]
     #[arg(hide = true)]
     pub mock_time: Option<u64>,
@@ -84,6 +84,11 @@ pub struct RunOptions {
     /// Connect through SOCKS5 proxy.
     #[clap(long)]
     pub p2p_socks5_proxy: Option<String>,
+
+    /// Disable p2p encryption (for tests only).
+    #[clap(long)]
+    #[arg(hide = true)]
+    pub p2p_disable_noise: Option<bool>,
 
     /// Optional list of boot node addresses to connect.
     #[clap(long, value_name = "NODE")]
@@ -112,7 +117,7 @@ pub struct RunOptions {
 
     /// After what time a peer is detected as dead and is disconnected (in seconds).
     #[clap(long)]
-    pub p2p_ping_timeout: Option<u64>,
+    pub p2p_ping_timeout: Option<NonZeroU64>,
 
     /// A maximum tip age in seconds.
     ///

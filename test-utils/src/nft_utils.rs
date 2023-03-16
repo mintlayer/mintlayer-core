@@ -28,7 +28,7 @@ use crypto::random::{CryptoRng, Rng};
 use serialization::extras::non_empty_vec::DataOrNoVec;
 
 pub fn random_creator(rng: &mut (impl Rng + CryptoRng)) -> TokenCreator {
-    let (_, public_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     TokenCreator::from(public_key)
 }
 

@@ -47,7 +47,7 @@ fn signed_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
         // genesis block.

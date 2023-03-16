@@ -21,8 +21,8 @@ use common::{
 };
 
 use p2p::testing_utils::{
-    connect_and_accept_services, TestTransportChannel, TestTransportMaker, TestTransportNoise,
-    TestTransportTcp,
+    connect_and_accept_services, test_p2p_config, TestTransportChannel, TestTransportMaker,
+    TestTransportNoise, TestTransportTcp,
 };
 use p2p::{
     message::Announcement,
@@ -47,11 +47,12 @@ where
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     let (mut conn1, mut messaging_handle1, _sync1) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -62,7 +63,7 @@ where
                 A::make_transport(),
                 vec![A::make_address()],
                 Arc::clone(&config),
-                Default::default(),
+                Arc::clone(&p2p_config),
             )
             .await
             .unwrap();

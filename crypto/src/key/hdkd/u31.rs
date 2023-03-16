@@ -17,25 +17,25 @@ use std::{fmt::Display, str::FromStr};
 
 use super::derivable::DerivationError;
 
-const MSB_BIT: u32 = 0x80000000;
+pub const MSB_BIT: u32 = 0x80000000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct U31(u32);
 
 impl U31 {
-    pub fn from_u32_with_msb(val: u32) -> (Self, bool) {
-        let msb = val & MSB_BIT == 0;
-        let val = val & !MSB_BIT;
+    pub const fn from_u32_with_msb(val: u32) -> (Self, bool) {
+        let msb = val & MSB_BIT != 0; // If the msb is set
+        let val = val & !MSB_BIT; // Get the value without the msb
         let result = Self(val);
         (result, msb)
     }
 
-    pub fn into_encoded_with_msb(self, msb: bool) -> u32 {
-        if msb {
-            self.0 | MSB_BIT
-        } else {
-            self.0
-        }
+    pub const fn into_encoded_with_msb(self, msb: bool) -> u32 {
+        self.0 | (MSB_BIT * msb as u32)
+    }
+
+    pub(crate) fn plus_one(&self) -> Result<Self, DerivationError> {
+        (self.0 + 1).try_into()
     }
 }
 

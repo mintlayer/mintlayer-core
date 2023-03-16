@@ -27,7 +27,7 @@ use common::{
             sighashtype,
         },
     },
-    primitives::{Compact, Id, H256},
+    primitives::{user_agent::mintlayer_core_user_agent, Compact, Id, H256},
     Uint256,
 };
 use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
@@ -41,7 +41,7 @@ use p2p::{
         default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    testing_utils::{connect_and_accept_services, TestTransportMaker},
+    testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
 
 tests![
@@ -59,11 +59,12 @@ where
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     let (mut conn1, mut messaging_handle1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -71,7 +72,7 @@ where
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -152,6 +153,7 @@ where
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Vec::new(),
         reserved_nodes: Vec::new(),
         max_inbound_connections: Default::default(),
@@ -165,6 +167,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
@@ -210,11 +213,12 @@ where
     let mut rng = crypto::random::make_true_rng();
 
     let config = Arc::new(common::chain::config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -223,7 +227,7 @@ where
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();

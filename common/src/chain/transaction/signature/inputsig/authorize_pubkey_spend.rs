@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crypto::key::Signature;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{chain::signature::TransactionSigError, primitives::H256};
 
@@ -24,8 +24,8 @@ pub struct AuthorizedPublicKeySpend {
 }
 
 impl AuthorizedPublicKeySpend {
-    pub fn from_data(data: &Vec<u8>) -> Result<Self, TransactionSigError> {
-        let decoded = AuthorizedPublicKeySpend::decode(&mut data.as_slice())
+    pub fn from_data(data: &[u8]) -> Result<Self, TransactionSigError> {
+        let decoded = AuthorizedPublicKeySpend::decode_all(&mut &data[..])
             .map_err(|_| TransactionSigError::InvalidSignatureEncoding)?;
         Ok(decoded)
     }
@@ -91,7 +91,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -115,7 +115,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -144,7 +144,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -158,7 +158,7 @@ mod test {
             )
             .unwrap();
 
-            let mut raw_signature = witness.raw_signature().clone();
+            let mut raw_signature = witness.raw_signature().to_vec();
             AuthorizedPublicKeySpend::from_data(&raw_signature).unwrap();
 
             // Changing the first byte doesn't changes the signature data, instead it changes the
@@ -179,7 +179,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -208,7 +208,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 

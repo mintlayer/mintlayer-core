@@ -15,6 +15,7 @@
 
 use std::{collections::BTreeSet, time::Duration};
 
+use common::primitives::user_agent::UserAgent;
 use utils::make_config_setting;
 
 use crate::net::types::PubSubTopic;
@@ -62,12 +63,14 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 }
 
 /// The p2p subsystem configuration.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<String>,
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
+    /// Disable p2p encryption (for tests only).
+    pub disable_noise: Option<bool>,
     /// Optional list of initial node addresses.
     /// Boot node addresses are added to PeerDb as regular discovered addresses.
     pub boot_nodes: Vec<String>,
@@ -97,4 +100,6 @@ pub struct P2pConfig {
     pub msg_max_locator_count: MaxLocatorSize,
     /// A maximum number of blocks that can be requested from a single peer.
     pub max_request_blocks_count: RequestedBlocksLimit,
+    /// User agent value of this node (sent to peers over the network).
+    pub user_agent: UserAgent,
 }

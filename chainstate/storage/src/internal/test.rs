@@ -251,7 +251,7 @@ fn test_storage_transactions_with_result_check() {
 fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.gen_range(0..(u128::MAX - 1));
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(random_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),

@@ -20,14 +20,25 @@ mod ping;
 use std::{sync::Arc, time::Duration};
 
 use common::time_getter::TimeGetter;
-use tokio::{sync::mpsc::UnboundedSender, time::timeout};
+use crypto::random::Rng;
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    time::timeout,
+};
 
 use crate::{
     event::PeerManagerEvent,
+    expect_recv,
     interface::types::ConnectedPeer,
-    net::{ConnectivityService, NetworkingService},
+    message::{PeerManagerMessage, PingRequest, PingResponse},
+    net::{
+        default_backend::types::{Command, Message},
+        types::ConnectivityEvent,
+        ConnectivityService, NetworkingService,
+    },
     peer_manager::PeerManager,
-    testing_utils::peerdb_inmemory_store,
+    testing_utils::{peerdb_inmemory_store, test_p2p_config},
+    types::peer_id::PeerId,
     utils::oneshot_nofail,
     P2pConfig,
 };
@@ -52,7 +63,7 @@ where
         transport,
         vec![addr],
         Arc::clone(&chain_config),
-        Default::default(),
+        Arc::clone(&p2p_config),
     )
     .await
     .unwrap();
@@ -80,7 +91,7 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let p2p_config = Arc::new(P2pConfig::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let (peer_manager, _tx) = make_peer_manager_custom::<T>(
         transport,
         addr,
@@ -117,4 +128,39 @@ async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(
     let (rtx, rrx) = oneshot_nofail::channel();
     tx.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
     timeout(Duration::from_secs(1), rrx).await.unwrap().unwrap()
+}
+
+/// Send some message to PeerManager and ensure it's processed
+async fn send_and_sync<T: NetworkingService>(
+    peer: PeerId,
+    message: PeerManagerMessage,
+    conn_tx: &UnboundedSender<ConnectivityEvent<T::Address>>,
+    cmd_rx: &mut UnboundedReceiver<Command<T::Address>>,
+) {
+    conn_tx.send(ConnectivityEvent::Message { peer, message }).unwrap();
+
+    let sent_nonce = crypto::random::make_pseudo_rng().gen();
+    conn_tx
+        .send(ConnectivityEvent::Message {
+            peer,
+            message: PeerManagerMessage::PingRequest(PingRequest { nonce: sent_nonce }),
+        })
+        .unwrap();
+
+    let event = expect_recv!(cmd_rx);
+    match event {
+        Command::SendMessage {
+            peer,
+            message: Message::PingResponse(PingResponse { nonce }),
+        } => {
+            conn_tx
+                .send(ConnectivityEvent::Message {
+                    peer,
+                    message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
+                })
+                .unwrap();
+            assert_eq!(nonce, sent_nonce);
+        }
+        _ => panic!("unexpected event: {event:?}"),
+    }
 }

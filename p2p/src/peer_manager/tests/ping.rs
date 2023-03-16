@@ -15,11 +15,12 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::chain::config;
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
     config::P2pConfig,
     event::PeerManagerEvent,
+    expect_recv,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
         default_backend::{
@@ -29,7 +30,7 @@ use crate::{
         },
         types::{ConnectivityEvent, PeerInfo},
     },
-    peer_manager::PeerManager,
+    peer_manager::{tests::send_and_sync, PeerManager},
     testing_utils::{peerdb_inmemory_store, P2pTokioTestTimeGetter},
     types::peer_id::PeerId,
 };
@@ -42,6 +43,7 @@ async fn ping_timeout() {
     let p2p_config: Arc<P2pConfig> = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: None,
+        disable_noise: Default::default(),
         boot_nodes: Default::default(),
         reserved_nodes: Default::default(),
         max_inbound_connections: Default::default(),
@@ -55,6 +57,7 @@ async fn ping_timeout() {
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
@@ -72,7 +75,7 @@ async fn ping_timeout() {
 
     let mut peer_manager = PeerManager::new(
         Arc::clone(&chain_config),
-        p2p_config,
+        Arc::clone(&p2p_config),
         connectivity_handle,
         peer_rx,
         time_getter.get_time_getter(),
@@ -92,14 +95,14 @@ async fn ping_timeout() {
                 peer_id: PeerId::new(),
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                agent: None,
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: Default::default(),
             },
             receiver_address: None,
         })
         .unwrap();
 
-    let event = cmd_rx.recv().await.unwrap();
+    let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::Accept { peer_id: _ } => {}
         _ => panic!("unexpected event: {event:?}"),
@@ -109,18 +112,19 @@ async fn ping_timeout() {
     for _ in 0..5 {
         time_getter.advance_time(ping_check_period).await;
 
-        let event = cmd_rx.recv().await.unwrap();
+        let event = expect_recv!(&mut cmd_rx);
         match event {
             Command::SendMessage {
                 peer,
                 message: Message::PingRequest(PingRequest { nonce }),
             } => {
-                conn_tx
-                    .send(ConnectivityEvent::Message {
-                        peer,
-                        message: PeerManagerMessage::PingResponse(PingResponse { nonce }),
-                    })
-                    .unwrap();
+                send_and_sync::<TestNetworkingService>(
+                    peer,
+                    PeerManagerMessage::PingResponse(PingResponse { nonce }),
+                    &conn_tx,
+                    &mut cmd_rx,
+                )
+                .await;
             }
             _ => panic!("unexpected event: {event:?}"),
         }
@@ -128,7 +132,7 @@ async fn ping_timeout() {
 
     // Receive one more ping request but do not send a ping response
     time_getter.advance_time(ping_check_period).await;
-    let event = cmd_rx.recv().await.unwrap();
+    let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::SendMessage {
             peer: _,
@@ -140,7 +144,7 @@ async fn ping_timeout() {
     time_getter.advance_time(ping_timeout).await;
 
     // PeerManager should ask backend to close connection
-    let event = cmd_rx.recv().await.unwrap();
+    let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::Disconnect { peer_id } => {
             conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id }).unwrap();

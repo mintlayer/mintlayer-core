@@ -34,13 +34,19 @@ use std::{
 };
 
 use interface::p2p_interface::P2pInterface;
-use net::default_backend::transport::NoiseSocks5Transport;
+use net::default_backend::transport::{
+    NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
+};
 use peer_manager::peerdb::storage::PeerDbStorage;
 use tap::TapFallible;
 use tokio::sync::mpsc;
 
+use ::utils::ensure;
 use chainstate::chainstate_interface;
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{
+    chain::{config::ChainType, ChainConfig},
+    time_getter::TimeGetter,
+};
 use logging::log;
 use mempool::MempoolHandle;
 
@@ -157,17 +163,22 @@ pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 
 pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
 pub type P2pNetworkingServiceSocks5Proxy = DefaultNetworkingService<NoiseSocks5Transport>;
+pub type P2pNetworkingServiceUnencrypted = DefaultNetworkingService<TcpTransportSocket>;
 
 pub fn make_p2p_transport() -> NoiseTcpTransport {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = net::default_backend::transport::TcpTransportSocket::new();
+    let base_transport = TcpTransportSocket::new();
     NoiseTcpTransport::new(stream_adapter, base_transport)
 }
 
 pub fn make_p2p_transport_socks5_proxy(proxy: &str) -> NoiseSocks5Transport {
     let stream_adapter = NoiseEncryptionAdapter::gen_new();
-    let base_transport = net::default_backend::transport::Socks5TransportSocket::new(proxy);
+    let base_transport = Socks5TransportSocket::new(proxy);
     NoiseSocks5Transport::new(stream_adapter, base_transport)
+}
+
+pub fn make_p2p_transport_unencrypted() -> TcpTransportSocket {
+    TcpTransportSocket::new()
 }
 
 fn get_p2p_bind_addresses<S: AsRef<str>>(
@@ -214,7 +225,36 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
         p2p_config.socks5_proxy.is_some(),
     )?;
 
-    if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
+    if let Some(true) = p2p_config.disable_noise {
+        ensure!(
+            *chain_config.chain_type() == ChainType::Regtest,
+            P2pError::InvalidConfigurationValue(
+                "P2P encryption can only be disabled on the regtest network".to_owned()
+            )
+        );
+        ensure!(
+            p2p_config.socks5_proxy.is_none(),
+            P2pError::InvalidConfigurationValue(
+                "SOCKS5 proxy support is not implemented for unencrypted".to_owned()
+            )
+        );
+
+        let transport = make_p2p_transport_unencrypted();
+
+        let p2p = P2p::<P2pNetworkingServiceUnencrypted>::new(
+            transport,
+            bind_addresses,
+            chain_config,
+            p2p_config,
+            chainstate_handle,
+            mempool_handle,
+            time_getter,
+            peerdb_storage,
+        )
+        .await?;
+
+        Ok(Box::new(p2p))
+    } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
         let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
         let p2p = P2p::<P2pNetworkingServiceSocks5Proxy>::new(

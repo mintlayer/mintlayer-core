@@ -22,11 +22,11 @@ P2PTxInvStore: A p2p interface class that inherits from P2PDataStore, and keeps
 
 import asyncio
 from collections import defaultdict
-from io import BytesIO
 import logging
 import struct
 import sys
 import threading
+import scalecodec
 
 from test_framework.messages import (
     CBlockHeader,
@@ -78,19 +78,14 @@ from test_framework.util import (
 
 logger = logging.getLogger("TestFramework.p2p")
 
-# The minimum P2P version that this test framework supports
-MIN_P2P_VERSION_SUPPORTED = 60001
-# The P2P version that this test framework implements and sends in its `version` message
-# Version 70016 supports wtxid relay
-P2P_VERSION = 70016
+# The P2P user agent string that this test framework sends in its `handshake` message
+P2P_USER_AGENT = "PythonTesterP2P"
+
 # The services that this test framework offers in its `version` message
 P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
-# The P2P user agent string that this test framework sends in its `version` message
-P2P_SUBVERSION = "/python-p2p-tester:0.0.3/"
-# Value for relay that this test framework sends in its `version` message
-P2P_VERSION_RELAY = 1
-# Delay after receiving a tx inv before requesting transactions from non-preferred peers, in seconds
-NONPREF_PEER_TX_DELAY = 2
+
+# Maximum message size
+MAX_MESSAGE_SIZE = 10 * 1024 * 1024
 
 MESSAGEMAP = {
     b"addr": msg_addr,
@@ -222,28 +217,23 @@ class P2PConnection(asyncio.Protocol):
         the on_message callback for processing."""
         try:
             while True:
+                # Wait for the message length header first
                 if len(self.recvbuf) < 4:
                     return
-                if self.recvbuf[:4] != self.magic_bytes:
-                    raise ValueError("magic bytes mismatch: {} != {}".format(repr(self.magic_bytes), repr(self.recvbuf)))
-                if len(self.recvbuf) < 4 + 12 + 4 + 4:
+                msglen = struct.unpack("<I", self.recvbuf[0:4])[0]
+                if msglen > MAX_MESSAGE_SIZE:
+                    raise AssertionError("Frame of length {} is too large".format(MAX_MESSAGE_SIZE))
+                # Wait for the full message
+                if len(self.recvbuf) < 4 + msglen:
                     return
-                msgtype = self.recvbuf[4:4+12].split(b"\x00", 1)[0]
-                msglen = struct.unpack("<i", self.recvbuf[4+12:4+12+4])[0]
-                checksum = self.recvbuf[4+12+4:4+12+4+4]
-                if len(self.recvbuf) < 4 + 12 + 4 + 4 + msglen:
-                    return
-                msg = self.recvbuf[4+12+4+4:4+12+4+4+msglen]
-                th = sha256(msg)
-                h = sha256(th)
-                if checksum != h[:4]:
-                    raise ValueError("got bad checksum " + repr(self.recvbuf))
-                self.recvbuf = self.recvbuf[4+12+4+4+msglen:]
-                if msgtype not in MESSAGEMAP:
-                    raise ValueError("Received unknown msgtype from %s:%d: '%s' %s" % (self.dstaddr, self.dstport, msgtype, repr(msg)))
-                f = BytesIO(msg)
-                t = MESSAGEMAP[msgtype]()
-                t.deserialize(f)
+                data = self.recvbuf[4:4 + msglen]
+                self.recvbuf = self.recvbuf[4 + msglen:]
+
+                obj = scalecodec.base.RuntimeConfiguration().create_scale_object("Message")
+                # This will throw if the data has any bytes left.
+                # Check that `init_p2p_types` has the correct type declarations if decoding fails.
+                t = obj.decode(scalecodec.ScaleBytes(data))
+
                 self._log_message("receive", t)
                 self.on_message(t)
         except Exception as e:
@@ -281,16 +271,12 @@ class P2PConnection(asyncio.Protocol):
 
     def build_message(self, message):
         """Build a serialized P2P message"""
-        msgtype = message.msgtype
-        data = message.serialize()
-        tmsg = self.magic_bytes
-        tmsg += msgtype
-        tmsg += b"\x00" * (12 - len(msgtype))
-        tmsg += struct.pack("<I", len(data))
-        th = sha256(data)
-        h = sha256(th)
-        tmsg += h[:4]
-        tmsg += data
+        obj = scalecodec.base.RuntimeConfiguration().create_scale_object("Message")
+        data = obj.encode(message)
+
+        # Prepend message length (little-endian u32)
+        tmsg = struct.pack("<I", len(data))
+        tmsg += data.data
         return tmsg
 
     def _log_message(self, direction, msg):
@@ -337,30 +323,37 @@ class P2PInterface(P2PConnection):
         # If the peer supports wtxid-relay
         self.wtxidrelay = wtxidrelay
 
-    def peer_connect_send_version(self, services):
-        # Send a version msg
-        vt = msg_version()
-        vt.nVersion = P2P_VERSION
-        vt.strSubVer = P2P_SUBVERSION
-        vt.relay = P2P_VERSION_RELAY
-        vt.nServices = services
-        vt.addrTo.ip = self.dstaddr
-        vt.addrTo.port = self.dstport
-        vt.addrFrom.ip = "0.0.0.0"
-        vt.addrFrom.port = 0
+    def peer_connect_send_handshake(self, services):
+        # Send a handshake msg
+        vt = {
+            "handshake": {
+                "Hello": {
+                    "version": {
+                        "major": 0,
+                        "minor": 1,
+                        "patch": 0,
+                    },
+                    "network": [0xaa, 0xbb, 0xcc, 0xdd],
+                    "user_agent": P2P_USER_AGENT,
+                    "subscriptions": ["Transactions", "Blocks", "PeerAddresses"],
+                    "receiver_address": None,
+                    "handshake_nonce": 123,
+                }
+            }
+        }
         self.on_connection_send_msg = vt  # Will be sent in connection_made callback
 
     def peer_connect(self, *args, services=P2P_SERVICES, send_version=True, **kwargs):
         create_conn = super().peer_connect(*args, **kwargs)
 
         if send_version:
-            self.peer_connect_send_version(services)
+            self.peer_connect_send_handshake(services)
 
         return create_conn
 
     def peer_accept_connection(self, *args, services=P2P_SERVICES, **kwargs):
         create_conn = super().peer_accept_connection(*args, **kwargs)
-        self.peer_connect_send_version(services)
+        self.peer_connect_send_handshake(services)
 
         return create_conn
 
@@ -373,9 +366,11 @@ class P2PInterface(P2PConnection):
         and the most recent message of each type."""
         with p2p_lock:
             try:
-                msgtype = message.msgtype.decode('ascii')
+                # Get message type from the first key (for example "ping_request")
+                msgtype = next(iter(message))
                 self.message_count[msgtype] += 1
-                self.last_message[msgtype] = message
+                # Store message body
+                self.last_message[msgtype] = message[msgtype]
                 getattr(self, 'on_' + msgtype)(message)
             except:
                 print("ERROR delivering %s (%s)" % (repr(message), sys.exc_info()[0]))
@@ -390,33 +385,39 @@ class P2PInterface(P2PConnection):
     def on_close(self):
         pass
 
-    def on_addr(self, message): pass
-    def on_addrv2(self, message): pass
-    def on_block(self, message): pass
-    def on_blocktxn(self, message): pass
-    def on_cfcheckpt(self, message): pass
-    def on_cfheaders(self, message): pass
-    def on_cfilter(self, message): pass
-    def on_cmpctblock(self, message): pass
-    def on_feefilter(self, message): pass
-    def on_filteradd(self, message): pass
-    def on_filterclear(self, message): pass
-    def on_filterload(self, message): pass
-    def on_getaddr(self, message): pass
-    def on_getblocks(self, message): pass
-    def on_getblocktxn(self, message): pass
-    def on_getdata(self, message): pass
-    def on_getheaders(self, message): pass
-    def on_headers(self, message): pass
-    def on_mempool(self, message): pass
-    def on_merkleblock(self, message): pass
-    def on_notfound(self, message): pass
-    def on_pong(self, message): pass
-    def on_sendaddrv2(self, message): pass
-    def on_sendcmpct(self, message): pass
-    def on_sendheaders(self, message): pass
-    def on_tx(self, message): pass
-    def on_wtxidrelay(self, message): pass
+    def on_handshake(self, message): pass
+    def on_ping_request(self, message): pass
+    def on_ping_response(self, message): pass
+    def on_header_list_request(self, message): pass
+
+    # Not used:
+    # def on_addr(self, message): pass
+    # def on_addrv2(self, message): pass
+    # def on_block(self, message): pass
+    # def on_blocktxn(self, message): pass
+    # def on_cfcheckpt(self, message): pass
+    # def on_cfheaders(self, message): pass
+    # def on_cfilter(self, message): pass
+    # def on_cmpctblock(self, message): pass
+    # def on_feefilter(self, message): pass
+    # def on_filteradd(self, message): pass
+    # def on_filterclear(self, message): pass
+    # def on_filterload(self, message): pass
+    # def on_getaddr(self, message): pass
+    # def on_getblocks(self, message): pass
+    # def on_getblocktxn(self, message): pass
+    # def on_getdata(self, message): pass
+    # def on_getheaders(self, message): pass
+    # def on_headers(self, message): pass
+    # def on_mempool(self, message): pass
+    # def on_merkleblock(self, message): pass
+    # def on_notfound(self, message): pass
+    # def on_pong(self, message): pass
+    # def on_sendaddrv2(self, message): pass
+    # def on_sendcmpct(self, message): pass
+    # def on_sendheaders(self, message): pass
+    # def on_tx(self, message): pass
+    # def on_wtxidrelay(self, message): pass
 
     def on_inv(self, message):
         want = msg_getdata()
@@ -427,20 +428,22 @@ class P2PInterface(P2PConnection):
             self.send_message(want)
 
     def on_ping(self, message):
-        self.send_message(msg_pong(message.nonce))
+        self.send_message({
+            "ping_response": {
+                "nonce": message['nonce'],
+                }
+            }
+        )
 
-    def on_verack(self, message):
-        pass
-
-    def on_version(self, message):
-        assert message.nVersion >= MIN_P2P_VERSION_SUPPORTED, "Version {} received. Test framework only supports versions greater than {}".format(message.nVersion, MIN_P2P_VERSION_SUPPORTED)
-        if message.nVersion >= 70016 and self.wtxidrelay:
-            self.send_message(msg_wtxidrelay())
-        if self.support_addrv2:
-            self.send_message(msg_sendaddrv2())
-        self.send_message(msg_verack())
-        self.nServices = message.nServices
-        self.send_message(msg_getaddr())
+    # def on_version(self, message):
+    #     assert message.nVersion >= MIN_P2P_VERSION_SUPPORTED, "Version {} received. Test framework only supports versions greater than {}".format(message.nVersion, MIN_P2P_VERSION_SUPPORTED)
+    #     if message.nVersion >= 70016 and self.wtxidrelay:
+    #         self.send_message(msg_wtxidrelay())
+    #     if self.support_addrv2:
+    #         self.send_message(msg_sendaddrv2())
+    #     self.send_message(msg_verack())
+    #     self.nServices = message.nServices
+    #     self.send_message(msg_getaddr())
 
     # Connection helper methods
 
@@ -530,9 +533,9 @@ class P2PInterface(P2PConnection):
 
         self.wait_until(test_function, timeout=timeout)
 
-    def wait_for_verack(self, timeout=60):
+    def wait_for_handshake(self, timeout=60):
         def test_function():
-            return "verack" in self.last_message
+            return "handshake" in self.last_message
 
         self.wait_until(test_function, timeout=timeout)
 
@@ -552,12 +555,17 @@ class P2PInterface(P2PConnection):
 
     def sync_with_ping(self, timeout=60):
         """Ensure ProcessMessages is called on this connection"""
-        self.send_message(msg_ping(nonce=self.ping_counter))
-
+        self.send_message({
+            "ping_request": {
+                    "nonce": self.ping_counter,
+                }
+            }
+        )
         def test_function():
-            return self.last_message.get("pong") and self.last_message["pong"].nonce == self.ping_counter
+            return self.last_message.get("ping_response") and self.last_message["ping_response"]["nonce"] == self.ping_counter
 
         self.wait_until(test_function, timeout=timeout)
+
         self.ping_counter += 1
 
 

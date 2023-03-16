@@ -31,7 +31,7 @@ use tokio::sync::mpsc;
 use chainstate::ban_score::BanScore;
 use common::{
     chain::{config::ChainType, ChainConfig},
-    primitives::semver::SemVer,
+    primitives::{semver::SemVer, time::duration_to_int},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -138,10 +138,8 @@ where
     ) -> crate::Result<Self> {
         let peerdb =
             peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
-        utils::ensure!(
-            !p2p_config.ping_timeout.is_zero(),
-            P2pError::InvalidConfigurationValue("ping timeout can't be 0".into())
-        );
+        assert!(!p2p_config.outbound_connection_timeout.is_zero());
+        assert!(!p2p_config.ping_timeout.is_zero());
         Ok(PeerManager {
             chain_config,
             p2p_config,
@@ -466,6 +464,8 @@ where
                 role,
                 score: 0,
                 sent_ping: None,
+                ping_last: None,
+                ping_min: None,
                 expect_addr_list_response,
                 announced_addresses: HashSet::new(),
             },
@@ -788,11 +788,35 @@ where
         );
     }
 
-    fn handle_ping_response(&mut self, peer: PeerId, nonce: u64) {
-        if let Some(peer) = self.peers.get_mut(&peer) {
-            if peer.sent_ping.as_ref().map(|sent_ping| sent_ping.nonce) == Some(nonce) {
-                // Correct reply received, clear pending request
-                peer.sent_ping = None;
+    fn handle_ping_response(&mut self, peer_id: PeerId, nonce: u64) {
+        if let Some(peer) = self.peers.get_mut(&peer_id) {
+            if let Some(sent_ping) = peer.sent_ping.as_mut() {
+                if sent_ping.nonce == nonce {
+                    // Correct reply received, clear pending request and update ping times
+
+                    let ping_time_last = self
+                        .time_getter
+                        .get_time()
+                        .checked_sub(sent_ping.timestamp)
+                        .unwrap_or_default();
+
+                    let ping_time_min = peer.ping_min.map_or(ping_time_last, |ping_time_min| {
+                        std::cmp::min(ping_time_min, ping_time_last)
+                    });
+
+                    peer.sent_ping = None;
+                    peer.ping_last = Some(ping_time_last);
+                    peer.ping_min = Some(ping_time_min);
+                } else {
+                    log::debug!(
+                        "wrong nonce in ping response from peer {}, received: {}, expected: {}",
+                        peer_id,
+                        nonce,
+                        sent_ping.nonce,
+                    );
+                }
+            } else {
+                log::debug!("unexpected ping response received from peer {}", peer_id);
             }
         }
     }
@@ -879,7 +903,28 @@ where
 
     /// Returns short info about all connected peers
     fn get_connected_peers(&self) -> Vec<ConnectedPeer> {
-        self.peers.values().map(Into::into).collect()
+        let now = self.time_getter.get_time();
+        self.peers
+            .values()
+            .map(|context| ConnectedPeer {
+                peer_id: context.info.peer_id,
+                address: context.address.to_string(),
+                inbound: context.role == Role::Inbound,
+                ban_score: context.score,
+                user_agent: context.info.user_agent.to_string(),
+                version: context.info.version.to_string(),
+                ping_wait: context.sent_ping.as_ref().map(|sent_ping| {
+                    duration_to_int(&now.checked_sub(sent_ping.timestamp).unwrap_or_default())
+                        .expect("valid timestamp expected (ping_wait)")
+                }),
+                ping_last: context.ping_last.map(|time| {
+                    duration_to_int(&time).expect("valid timestamp expected (ping_last)")
+                }),
+                ping_min: context.ping_min.map(|time| {
+                    duration_to_int(&time).expect("valid timestamp expected (ping_min)")
+                }),
+            })
+            .collect()
     }
 
     /// Checks if the peer is in active state
@@ -946,38 +991,62 @@ where
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
-        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
-        let mut ping_check_interval = if ping_check_enabled {
-            tokio::time::interval(*self.p2p_config.ping_check_period)
-        } else {
-            // Use any valid (non-zero) value
-            tokio::time::interval(Duration::MAX)
-        };
-
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
+        let mut last_time = self.time_getter.get_time();
+
+        let ping_check_enabled = !self.p2p_config.ping_check_period.is_zero();
+        let mut last_ping_check = self.time_getter.get_time();
+
+        let mut heartbeat_call_needed = false;
+
+        let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
         loop {
             tokio::select! {
                 event_res = self.rx_peer_manager.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
+                    heartbeat_call_needed = true;
                 },
+
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);
+                    heartbeat_call_needed = true;
                 },
-                _event = ping_check_interval.tick(), if ping_check_enabled => {
-                    self.ping_check();
-                }
-                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL_MAX) => {}
+
+                _ = periodic_interval.tick() => {}
             }
 
-            // Finally, update the peer manager state
+            // Update the peer manager state as needed
+
+            // Changing the clock time can cause various problems, log such events to make it easier to find the source of the problems
             let now = self.time_getter.get_time();
-            if now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN {
+            if now < last_time {
+                log::warn!(
+                    "Backward time adjustment detected ({} seconds)",
+                    last_time.checked_sub(now).unwrap_or_default().as_secs_f64()
+                );
+            } else if now > last_time + Duration::from_secs(60) {
+                log::warn!(
+                    "Forward time jump detected ({} seconds)",
+                    now.checked_sub(last_time).unwrap_or_default().as_secs_f64()
+                );
+            }
+            last_time = now;
+
+            if (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN && heartbeat_call_needed)
+                || (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX)
+            {
                 self.heartbeat().await;
                 last_heartbeat = now;
+                heartbeat_call_needed = false;
+            }
+
+            if ping_check_enabled && now >= last_ping_check + *self.p2p_config.ping_check_period {
+                self.ping_check();
+                last_ping_check = now;
             }
         }
     }

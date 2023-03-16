@@ -99,13 +99,14 @@ fn read_config_override_values() {
     let max_orphan_blocks = 2;
     let p2p_addr = "address";
     let p2p_socks5_proxy = "socks5_proxy";
+    let p2p_disable_noise = false;
     let p2p_boot_node = "boot_node";
     let p2p_reserved_node = "reserved_node";
     let p2p_max_inbound_connections = 123;
     let p2p_ban_threshold = 3;
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let p2p_ping_check_period = 30;
-    let p2p_ping_timeout = 60;
+    let p2p_ping_timeout = NonZeroU64::new(60).unwrap();
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
@@ -121,6 +122,7 @@ fn read_config_override_values() {
         tx_index_enabled: Some(false),
         p2p_addr: Some(vec![p2p_addr.to_owned()]),
         p2p_socks5_proxy: Some(p2p_socks5_proxy.to_owned()),
+        p2p_disable_noise: Some(p2p_disable_noise),
         p2p_boot_node: Some(vec![p2p_boot_node.to_owned()]),
         p2p_reserved_node: Some(vec![p2p_reserved_node.to_owned()]),
         p2p_max_inbound_connections: Some(p2p_max_inbound_connections),
@@ -160,6 +162,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.p2p.clone().unwrap().socks5_proxy,
         Some(p2p_socks5_proxy.to_owned())
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().disable_noise,
+        Some(p2p_disable_noise)
     );
     assert_eq!(
         config.p2p.clone().unwrap().boot_nodes,

@@ -25,12 +25,13 @@ use std::{
     time::Duration,
 };
 
-use common::time_getter::TimeGetter;
+use common::{primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, Rng};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
 
 use crate::{
+    config::P2pConfig,
     net::{
         default_backend::transport::{
             MpscChannelTransport, NoiseEncryptionAdapter, NoiseTcpTransport, TcpTransportSocket,
@@ -82,14 +83,14 @@ pub struct TestTransportChannel {}
 impl TestTransportMaker for TestTransportChannel {
     type Transport = MpscChannelTransport;
 
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn make_transport() -> Self::Transport {
         MpscChannelTransport::new()
     }
 
     fn make_address() -> Self::Address {
-        0
+        "0.0.0.0:0".parse().unwrap()
     }
 }
 
@@ -144,11 +145,10 @@ impl RandomAddressMaker for TestTcpAddressMaker {
 pub struct TestChannelAddressMaker {}
 
 impl RandomAddressMaker for TestChannelAddressMaker {
-    type Address = u32;
+    type Address = SocketAddr;
 
     fn new() -> Self::Address {
-        let mut rng = make_pseudo_rng();
-        rng.gen()
+        TestTcpAddressMaker::new()
     }
 }
 
@@ -293,5 +293,38 @@ impl P2pTokioTestTimeGetter {
         self.time_getter.advance_time(duration);
         tokio::time::advance(duration).await;
         tokio::time::resume();
+    }
+}
+
+/// Receive a message from the tokio channel.
+/// Panics if the channel is closed or no message received in 10 seconds.
+#[macro_export]
+macro_rules! expect_recv {
+    // Implemented as a macro until #[track_caller] works correctly with async functions
+    // (needed to print the caller location if unwraps fail)
+    ($x:expr) => {
+        tokio::time::timeout(Duration::from_secs(10), $x.recv()).await.unwrap().unwrap()
+    };
+}
+
+pub fn test_p2p_config() -> P2pConfig {
+    P2pConfig {
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     }
 }

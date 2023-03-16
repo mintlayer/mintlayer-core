@@ -226,15 +226,31 @@ impl Manager {
         self.add_subsystem_with_custom_eventloop(
             "ctrl-c",
             |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
+                // Gracefully handle SIGTERM on *nix
+                #[cfg(unix)]
+                let term_signal = async move {
+                    let mut signal =
+                        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                            .expect("Signal handler failed unexpectedly");
+                    signal.recv().await;
+                };
+                #[cfg(not(unix))]
+                let term_signal = std::future::pending();
+
                 tokio::select! {
                     ctrl_c_signal = tokio::signal::ctrl_c() => {
-                        if ctrl_c_signal.is_err() {
-                            log::info!("Ctrl-C signal handler failed");
+                        if let Err(e) = ctrl_c_signal {
+                            log::error!("Ctrl-C signal handler failed: {e}");
+                        } else {
+                            log::info!("Ctrl-C signal received");
                         }
+                    }
+                    _ = term_signal => {
+                        log::info!("Terminate signal received");
                     }
                     () = shutdown_rq.recv() => {},
                     call = call_rq.recv() => { call(&mut ()); }
-                };
+                }
             },
         );
     }

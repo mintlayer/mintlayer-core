@@ -22,6 +22,7 @@
 
 use libtest_mimic::{run, Arguments as HarnessArgs, Failed, Trial};
 use std::env::consts::EXE_SUFFIX;
+use std::path::PathBuf;
 use std::{env, ffi::OsString, path::Path, process::Command};
 
 // Useful paths we get from Cargo
@@ -30,7 +31,6 @@ const TEMP_DIR: &str = env!("CARGO_TARGET_TMPDIR");
 const CRATE_DIR: &str = env!("CARGO_MANIFEST_DIR");
 const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 const PACKAGE_URL: &str = env!("CARGO_PKG_HOMEPAGE");
-const PYTHON_EXECUTABLE: &str = "python3";
 
 #[derive(thiserror::Error)]
 enum Error {
@@ -48,6 +48,42 @@ impl std::fmt::Debug for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self}")
     }
+}
+
+fn get_executable_path_from_path_env_var<P>(exe_name: P) -> Option<PathBuf>
+where
+    P: AsRef<Path>,
+{
+    assert!(
+        exe_name.as_ref().is_relative(),
+        "Path provided for executable must be relative; '{}' was provided",
+        exe_name.as_ref().display()
+    );
+    let path_env_var = env::var_os("PATH").expect("PATH env var not found");
+    env::split_paths(&path_env_var).find_map(|dir| {
+        let full_path = dir.join(&exe_name);
+        full_path.is_file().then_some(full_path)
+    })
+}
+
+fn find_python_exe() -> PathBuf {
+    let possible_python_execs = ["python3", "python"];
+
+    let file_suffix = (env::consts::OS == "windows").then_some(".exe").unwrap_or_default();
+
+    let python_exe = possible_python_execs
+        .into_iter()
+        .find_map(|exe| get_executable_path_from_path_env_var(format!("{exe}{file_suffix}")))
+        .unwrap_or_else(|| {
+            panic!(
+                "Unable to find any of the executables {:?} in PATH",
+                possible_python_execs
+            )
+        });
+
+    println!("Found python executable in path: {}", python_exe.display());
+
+    python_exe
 }
 
 fn do_run(runner_args: &[OsString]) -> Result<(), Failed> {
@@ -75,14 +111,23 @@ ENABLE_BITCOIND=true
     );
     std::fs::write(&config_file_path, config_str).map_err(Error::ConfigFile)?;
 
+    // Tests are expected to work with RUST_LOG set to debug. Using anything else may break them.
+    let env_log_key = "RUST_LOG";
+    let env_log_value_def = "debug";
+    let env_log_value = env::var(env_log_key).ok().unwrap_or(env_log_value_def.to_owned());
+    if env_log_value != env_log_value_def {
+        eprintln!("{}", "#".repeat(80));
+        eprintln!("WARNING: RUST_LOG env value is set to: {}", env_log_value);
+        eprintln!("{}", "#".repeat(80));
+    }
+
+    let python_exe = find_python_exe();
+
     // Run the tests and get result
-    let status = Command::new(PYTHON_EXECUTABLE)
+    let status = Command::new(python_exe)
         // Add environment variables
         .env("MINTLAYER_NODE", NODE_BINARY)
-        .env(
-            "RUST_LOG",
-            &env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        )
+        .env(env_log_key, env_log_value)
         // Pass command-line arguments
         .arg(runner_path)
         .arg(format!("--configfile={}", config_file_path.display()))

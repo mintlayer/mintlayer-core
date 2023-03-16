@@ -15,6 +15,7 @@
 
 use std::{num::NonZeroU64, str::FromStr, time::Duration};
 
+use common::primitives::user_agent::mintlayer_core_user_agent;
 use serde::{Deserialize, Serialize};
 
 use p2p::config::{NodeType, P2pConfig};
@@ -56,6 +57,8 @@ pub struct P2pConfigFile {
     pub bind_addresses: Option<Vec<String>>,
     /// SOCKS5 proxy.
     pub socks5_proxy: Option<String>,
+    /// Disable p2p encryption (for tests only).
+    pub disable_noise: Option<bool>,
     /// Optional list of boot node addresses to connect.
     pub boot_nodes: Option<Vec<String>>,
     /// Optional list of reserved node addresses to connect.
@@ -71,7 +74,7 @@ pub struct P2pConfigFile {
     /// How often send ping requests to peers.
     pub ping_check_period: Option<u64>,
     /// When a peer is detected as dead and disconnected.
-    pub ping_timeout: Option<u64>,
+    pub ping_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }
@@ -81,6 +84,7 @@ impl From<P2pConfigFile> for P2pConfig {
         P2pConfig {
             bind_addresses: c.bind_addresses.clone().unwrap_or_default(),
             socks5_proxy: c.socks5_proxy.clone(),
+            disable_noise: c.disable_noise,
             boot_nodes: c.boot_nodes.clone().unwrap_or_default(),
             reserved_nodes: c.reserved_nodes.clone().unwrap_or_default(),
             max_inbound_connections: c.max_inbound_connections.into(),
@@ -91,12 +95,13 @@ impl From<P2pConfigFile> for P2pConfig {
                 .map(|t| Duration::from_secs(t.into()))
                 .into(),
             ping_check_period: c.ping_check_period.map(Duration::from_secs).into(),
-            ping_timeout: c.ping_timeout.map(Duration::from_secs).into(),
+            ping_timeout: c.ping_timeout.map(|t| Duration::from_secs(t.into())).into(),
             node_type: c.node_type.map(Into::into).into(),
             allow_discover_private_ips: Default::default(),
             msg_header_count_limit: Default::default(),
             msg_max_locator_count: Default::default(),
             max_request_blocks_count: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
         }
     }
 }

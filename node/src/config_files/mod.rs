@@ -126,7 +126,8 @@ fn chainstate_config(
 fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let P2pConfigFile {
         bind_addresses,
-        socks5_proxy: proxy,
+        socks5_proxy,
+        disable_noise,
         boot_nodes,
         reserved_nodes,
         max_inbound_connections,
@@ -139,7 +140,8 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     } = config;
 
     let bind_addresses = options.p2p_addr.clone().or(bind_addresses);
-    let socks5_proxy = options.p2p_socks5_proxy.clone().or(proxy);
+    let socks5_proxy = options.p2p_socks5_proxy.clone().or(socks5_proxy);
+    let disable_noise = options.p2p_disable_noise.or(disable_noise);
     let boot_nodes = options.p2p_boot_node.clone().or(boot_nodes);
     let reserved_nodes = options.p2p_reserved_node.clone().or(reserved_nodes);
     let max_inbound_connections = options.p2p_max_inbound_connections.or(max_inbound_connections);
@@ -153,6 +155,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     P2pConfigFile {
         bind_addresses,
         socks5_proxy,
+        disable_noise,
         boot_nodes,
         reserved_nodes,
         max_inbound_connections,

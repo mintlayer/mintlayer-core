@@ -71,7 +71,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             let genesis_id = tf.genesis().get_id();
 
             // prepare tx_a
-            let (_, pub_key_a) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            let (_, pub_key_a) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_a = TransactionBuilder::new()
                 .add_input(
@@ -108,7 +108,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .build();
 
             // prepare tx_c
-            let (_, pub_key_c) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            let (_, pub_key_c) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
             let tx_c = TransactionBuilder::new()
                 .add_input(

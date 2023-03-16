@@ -36,6 +36,7 @@ use crate::{
     message::SyncMessage,
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{Announcement, BlockSyncManager},
+    testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
     SyncingEventReceiver,
@@ -229,7 +230,7 @@ impl SyncManagerHandleBuilder {
     pub fn new() -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
-            p2p_config: Arc::new(P2pConfig::default()),
+            p2p_config: Arc::new(test_p2p_config()),
             subsystems: None,
         }
     }

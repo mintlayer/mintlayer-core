@@ -244,7 +244,7 @@ fn generate_random_invalid_input(rng: &mut impl Rng) -> TxInput {
 }
 
 fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
