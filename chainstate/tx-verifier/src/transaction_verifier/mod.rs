@@ -16,6 +16,7 @@
 mod accounting_undo_cache;
 mod amounts_map;
 mod cached_inputs_operation;
+mod input_output_policy;
 mod token_issuance_cache;
 mod tx_index_cache;
 mod utils;
@@ -723,8 +724,7 @@ where
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
-        utils::check_inputs_can_be_spent(&self.utxo_cache, tx.transaction())?;
-        utils::check_outputs_are_valid(tx.transaction())?;
+        input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache
