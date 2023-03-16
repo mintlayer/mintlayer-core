@@ -37,12 +37,12 @@ type HmacSha512 = Hmac<Sha512>;
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Secp256k1ExtendedPrivateKey {
     /// The absolute derivation path that was used to derive this key
-    pub derivation_path: DerivationPath,
+    derivation_path: DerivationPath,
     /// The chain code is used in BIP32 in conjunction with the private key to allow derivation
     /// of child keys
-    pub chain_code: ChainCode,
-    /// The actual private key that implements the rest of the cryptographic functions  
-    pub private_key: Secp256k1PrivateKey,
+    chain_code: ChainCode,
+    /// The actual private key that implements the rest of the cryptographic functions
+    private_key: Secp256k1PrivateKey,
 }
 
 fn new_hmac_sha_512(key: &[u8]) -> HmacSha512 {
@@ -114,6 +114,10 @@ impl Secp256k1ExtendedPrivateKey {
     pub fn private_key(&self) -> &Secp256k1PrivateKey {
         &self.private_key
     }
+
+    pub fn into_private_key(self) -> Secp256k1PrivateKey {
+        self.private_key
+    }
 }
 
 impl Derivable for Secp256k1ExtendedPrivateKey {
@@ -169,17 +173,21 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
 pub struct Secp256k1ExtendedPublicKey {
     /// The absolute derivation path that was used to derive this key
-    pub derivation_path: DerivationPath,
+    derivation_path: DerivationPath,
     /// The chain code is used in BIP32 in conjunction with the public key to allow derivation
     /// of child public keys
-    pub chain_code: ChainCode,
+    chain_code: ChainCode,
     /// The actual public key that implements the rest of the cryptographic functions
-    pub public_key: Secp256k1PublicKey,
+    public_key: Secp256k1PublicKey,
 }
 
 impl Secp256k1ExtendedPublicKey {
     pub fn public_key(&self) -> &Secp256k1PublicKey {
         &self.public_key
+    }
+
+    pub fn into_public_key(self) -> Secp256k1PublicKey {
+        self.public_key
     }
 
     pub fn from_private_key(private_key: &Secp256k1ExtendedPrivateKey) -> Self {

@@ -92,7 +92,7 @@ impl ExtendedPrivateKey {
 
     pub fn private_key(self) -> PrivateKey {
         match self.key {
-            ExtendedPrivateKeyHolder::Secp256k1Schnorr(k) => k.private_key.into(),
+            ExtendedPrivateKeyHolder::Secp256k1Schnorr(k) => k.into_private_key().into(),
         }
     }
 
@@ -125,7 +125,7 @@ impl ExtendedPublicKey {
 
     pub fn into_public_key(self) -> PublicKey {
         match self.pub_key {
-            ExtendedPublicKeyHolder::Secp256k1Schnorr(k) => k.public_key.into(),
+            ExtendedPublicKeyHolder::Secp256k1Schnorr(k) => k.into_public_key().into(),
         }
     }
 }
