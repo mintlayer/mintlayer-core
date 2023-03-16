@@ -42,7 +42,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     event::PeerManagerEvent,
-    message::{Announcement, SyncMessage},
+    message::Announcement,
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::{Peer, PeerEvent},
     types::peer_id::PeerId,
@@ -72,9 +72,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A mapping from a peer identifier to the channel.
     peers: HashMap<PeerId, UnboundedSender<PeerEvent>>,
-
-    peer_sender: UnboundedSender<(PeerId, SyncMessage)>,
-    peer_receiver: UnboundedReceiver<(PeerId, SyncMessage)>,
 }
 
 /// Syncing manager
@@ -94,8 +91,6 @@ where
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     ) -> Self {
-        let (peer_sender, peer_receiver) = mpsc::unbounded_channel();
-
         Self {
             _chain_config: chain_config,
             p2p_config,
@@ -106,8 +101,6 @@ where
             mempool_handle,
             is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
-            peer_sender,
-            peer_receiver,
         }
     }
 
@@ -127,12 +120,6 @@ where
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     self.handle_new_tip(block_id).await?;
-                },
-
-                // Resend messages from peers to the backend.
-                message = self.peer_receiver.recv() => {
-                    let (peer, message) = message.ok_or(P2pError::ChannelClosed)?;
-                    self.messaging_handle.send_message(peer, message)?;
                 },
 
                 event = self.sync_event_receiver.poll_next() => {
@@ -174,7 +161,7 @@ where
             .map(|_| Err::<(), _>(P2pError::PeerError(PeerError::PeerAlreadyExists)))
             .transpose()?;
 
-        let peer_sender = self.peer_sender.clone();
+        let messaging_handle = self.messaging_handle.clone();
         let peer_manager_sender = self.peer_manager_sender.clone();
         let chainstate_handle = self.chainstate_handle.clone();
         let mempool_handle = self.mempool_handle.clone();
@@ -187,7 +174,7 @@ where
                 chainstate_handle,
                 mempool_handle,
                 peer_manager_sender,
-                peer_sender,
+                messaging_handle,
                 receiver,
                 is_initial_block_download,
             );

@@ -33,8 +33,9 @@ use mempool::MempoolHandle;
 use p2p_test_utils::start_subsystems;
 
 use crate::{
+    message::SyncMessage,
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
-    sync::{Announcement, BlockSyncManager, SyncMessage},
+    sync::{Announcement, BlockSyncManager},
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
     SyncingEventReceiver,

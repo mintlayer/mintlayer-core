@@ -24,7 +24,6 @@ use common::{
     primitives::Amount,
 };
 use mempool::error::{Error as MempoolError, TxValidationError};
-use p2p_test_utils::start_subsystems;
 
 use crate::{
     message::Announcement, sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId,

@@ -49,7 +49,7 @@ use crate::{
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent, Result,
+    MessagingService, PeerManagerEvent, Result,
 };
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ pub struct Peer<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-    message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    messaging_handle: T::MessagingHandle,
     events_receiver: UnboundedReceiver<PeerEvent>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
@@ -87,8 +87,7 @@ pub struct Peer<T: NetworkingService> {
 impl<T> Peer<T>
 where
     T: NetworkingService,
-    // TODO: FIXME:
-    //T::SyncingMessagingHandle: SyncingMessagingService,
+    T::MessagingHandle: MessagingService,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -97,7 +96,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-        message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+        messaging_handle: T::MessagingHandle,
         events_receiver: UnboundedReceiver<PeerEvent>,
         is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
@@ -107,7 +106,7 @@ where
             chainstate_handle,
             mempool_handle,
             peer_manager_sender,
-            message_sender,
+            messaging_handle,
             events_receiver,
             is_initial_block_download,
             known_headers: Vec::new(),
@@ -147,12 +146,10 @@ where
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
-        self.message_sender
-            .send((
-                self.id(),
-                SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-            ))
-            .map_err(Into::into)
+        self.messaging_handle.send_message(
+            self.id(),
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+        )
     }
 
     async fn handle_event(&mut self, event: PeerEvent) -> Result<()> {
@@ -197,12 +194,10 @@ where
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
         debug_assert!(headers.len() <= limit);
-        self.message_sender.send((
+        self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-        ))?;
-
-        Ok(())
+        )
     }
 
     /// Processes the blocks request.
@@ -479,10 +474,10 @@ where
         }
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
-        self.message_sender.send((
+        self.messaging_handle.send_message(
             self.id(),
             SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
-        ))?;
+        )?;
         self.requested_blocks.extend(block_ids);
 
         Ok(())
@@ -502,11 +497,9 @@ where
         let height = height?;
         self.best_known_block = height;
 
-        self.message_sender
-            .send((
-                self.id(),
-                SyncMessage::BlockResponse(BlockResponse::new(block)),
-            ))
-            .map_err(Into::into)
+        self.messaging_handle.send_message(
+            self.id(),
+            SyncMessage::BlockResponse(BlockResponse::new(block)),
+        )
     }
 }
