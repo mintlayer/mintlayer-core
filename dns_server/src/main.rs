@@ -43,8 +43,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     };
     let user_agent = UserAgent::try_from(DNS_SERVER_USER_AGENT.as_bytes().to_owned())
         .expect("expected valid user agent");
-    let chain_config =
-        Arc::new(common::chain::config::Builder::new(chain_type).user_agent(user_agent).build());
+    let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Vec::new(),
@@ -63,6 +62,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent,
     });
 
     let transport = p2p::make_p2p_transport();

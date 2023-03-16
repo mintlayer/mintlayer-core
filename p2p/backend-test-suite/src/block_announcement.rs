@@ -27,7 +27,7 @@ use common::{
             sighashtype,
         },
     },
-    primitives::{Compact, Id, H256},
+    primitives::{user_agent::mintlayer_core_user_agent, Compact, Id, H256},
     Uint256,
 };
 use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
@@ -159,6 +159,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let (mut conn1, mut sync1) = N::start(
         T::make_transport(),

@@ -25,7 +25,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::{chain::ChainConfig, primitives::semver::SemVer};
+use common::{
+    chain::ChainConfig,
+    primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
+};
 use p2p::{
     config::P2pConfig,
     error::{DialError, P2pError},
@@ -130,7 +133,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 peer_id,
                 network: *node.chain_config.magic_bytes(),
                 version: SemVer::new(1, 2, 3),
-                user_agent: node.chain_config.user_agent().clone(),
+                user_agent: mintlayer_core_user_agent(),
                 subscriptions: BTreeSet::new(),
             };
             let old = self.state.connected.lock().unwrap().insert(address, peer_id);

@@ -15,6 +15,8 @@
 
 use std::{sync::Arc, time::Duration};
 
+use common::primitives::user_agent::mintlayer_core_user_agent;
+
 use crate::{
     config::P2pConfig,
     error::{DialError, P2pError},
@@ -50,6 +52,7 @@ fn unban_peer() {
             msg_header_count_limit: Default::default(),
             msg_max_locator_count: Default::default(),
             max_request_blocks_count: Default::default(),
+            user_agent: mintlayer_core_user_agent(),
         }),
         time_getter.get_time_getter(),
         db_store,

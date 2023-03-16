@@ -26,7 +26,7 @@ const MAX_LENGTH: usize = 24;
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode)]
 pub struct UserAgent(Vec<u8>);
 
-pub fn default_user_agent() -> UserAgent {
+pub fn mintlayer_core_user_agent() -> UserAgent {
     "MintlayerCore"
         .as_bytes()
         .to_owned()

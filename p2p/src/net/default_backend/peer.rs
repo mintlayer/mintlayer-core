@@ -144,7 +144,7 @@ where
                         types::HandshakeMessage::HelloAck {
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
-                            user_agent: self.chain_config.user_agent().clone(),
+                            user_agent: self.p2p_config.user_agent.clone(),
                             subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                             receiver_address: self.receiver_address.clone(),
                         },
@@ -156,7 +156,7 @@ where
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
-                        user_agent: self.chain_config.user_agent().clone(),
+                        user_agent: self.p2p_config.user_agent.clone(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         receiver_address: self.receiver_address.clone(),
                         handshake_nonce,
@@ -283,7 +283,7 @@ mod tests {
             peer_id2,
             PeerRole::Inbound,
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -301,7 +301,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
-                user_agent: chain_config.user_agent().clone(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -317,7 +317,7 @@ mod tests {
             types::PeerEvent::PeerInfoReceived {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                user_agent: chain_config.user_agent().clone(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -358,7 +358,7 @@ mod tests {
             peer_id3,
             PeerRole::Outbound { handshake_nonce: 1 },
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -377,7 +377,7 @@ mod tests {
                 types::HandshakeMessage::HelloAck {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
-                    user_agent: chain_config.user_agent().clone(),
+                    user_agent: p2p_config.user_agent.clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -395,7 +395,7 @@ mod tests {
                 PeerEvent::PeerInfoReceived {
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
-                    user_agent: chain_config.user_agent().clone(),
+                    user_agent: p2p_config.user_agent.clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -437,7 +437,7 @@ mod tests {
             peer_id3,
             PeerRole::Inbound,
             Arc::clone(&chain_config),
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -452,7 +452,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
-                user_agent: chain_config.user_agent().clone(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),

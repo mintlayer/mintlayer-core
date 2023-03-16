@@ -33,7 +33,7 @@ use crate::{
     types::peer_id::PeerId,
     utils::oneshot_nofail,
 };
-use common::chain::config;
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
     error::{DialError, P2pError, ProtocolError},
@@ -451,7 +451,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    user_agent: config.user_agent().clone(),
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -478,7 +478,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    user_agent: config.user_agent().clone(),
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -505,7 +505,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     peer_id: PeerId::new(),
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
-                    user_agent: config.user_agent().clone(),
+                    user_agent: mintlayer_core_user_agent(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -681,6 +681,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -715,6 +716,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -794,6 +796,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -829,6 +832,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
@@ -857,6 +861,7 @@ where
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),

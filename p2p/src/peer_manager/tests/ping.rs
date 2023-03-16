@@ -15,7 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use common::chain::config;
+use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
     config::P2pConfig,
@@ -57,6 +57,7 @@ async fn ping_timeout() {
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     });
     let ping_check_period = *p2p_config.ping_check_period;
     let ping_timeout = *p2p_config.ping_timeout;
@@ -74,7 +75,7 @@ async fn ping_timeout() {
 
     let mut peer_manager = PeerManager::new(
         Arc::clone(&chain_config),
-        p2p_config,
+        Arc::clone(&p2p_config),
         connectivity_handle,
         peer_rx,
         time_getter.get_time_getter(),
@@ -94,7 +95,7 @@ async fn ping_timeout() {
                 peer_id: PeerId::new(),
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
-                user_agent: chain_config.user_agent().clone(),
+                user_agent: p2p_config.user_agent.clone(),
                 subscriptions: Default::default(),
             },
             receiver_address: None,

@@ -25,7 +25,10 @@ use crate::{
     types::peer_id::PeerId,
     utils::oneshot_nofail,
 };
-use common::{chain::config, primitives::semver::SemVer};
+use common::{
+    chain::config,
+    primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
+};
 
 use crate::{
     error::{P2pError, PeerError},
@@ -227,7 +230,7 @@ where
             peer_id,
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
-            user_agent: config.user_agent().clone(),
+            user_agent: mintlayer_core_user_agent(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
         None,
@@ -244,7 +247,7 @@ where
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
-            user_agent: config.user_agent().clone(),
+            user_agent: mintlayer_core_user_agent(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
         None,
@@ -261,7 +264,7 @@ where
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
-            user_agent: config.user_agent().clone(),
+            user_agent: mintlayer_core_user_agent(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
         None,
@@ -320,7 +323,7 @@ where
             peer_id,
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
-            user_agent: config.user_agent().clone(),
+            user_agent: mintlayer_core_user_agent(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
         None,
@@ -336,7 +339,7 @@ where
             peer_id,
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
-            user_agent: config.user_agent().clone(),
+            user_agent: mintlayer_core_user_agent(),
             subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
         },
         None,
@@ -353,7 +356,7 @@ where
                 peer_id,
                 network: *config.magic_bytes(),
                 version: SemVer::new(0, 1, 0),
-                user_agent: config.user_agent().clone(),
+                user_agent: mintlayer_core_user_agent(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),

@@ -19,7 +19,6 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::user_agent::{default_user_agent, UserAgent};
 use crate::primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256};
 
 use std::collections::BTreeMap;
@@ -92,7 +91,6 @@ pub struct Builder {
     p2p_port: u16,
     max_future_block_time_offset: Duration,
     version: SemVer,
-    user_agent: UserAgent,
     target_block_spacing: Duration,
     coin_decimals: u8,
     max_block_header_size: usize,
@@ -126,7 +124,6 @@ impl Builder {
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
             version: SemVer::new(0, 1, 0),
-            user_agent: default_user_agent(),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
@@ -168,7 +165,6 @@ impl Builder {
             magic_bytes,
             p2p_port,
             version,
-            user_agent,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -216,7 +212,6 @@ impl Builder {
             magic_bytes,
             p2p_port,
             version,
-            user_agent,
             max_block_header_size,
             max_block_size_with_standard_txs,
             max_block_size_with_smart_contracts,
@@ -261,7 +256,6 @@ impl Builder {
     builder_method!(p2p_port: u16);
     builder_method!(max_future_block_time_offset: Duration);
     builder_method!(version: SemVer);
-    builder_method!(user_agent: UserAgent);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
     builder_method!(max_block_header_size: usize);

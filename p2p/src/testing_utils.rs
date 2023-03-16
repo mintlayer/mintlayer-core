@@ -25,7 +25,7 @@ use std::{
     time::Duration,
 };
 
-use common::time_getter::TimeGetter;
+use common::{primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, Rng};
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
@@ -325,5 +325,6 @@ pub fn test_p2p_config() -> P2pConfig {
         msg_header_count_limit: Default::default(),
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
     }
 }
