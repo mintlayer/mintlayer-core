@@ -94,36 +94,3 @@ async fn valid_transaction() {
     handle.assert_no_peer_manager_event().await;
     handle.assert_no_error().await;
 }
-
-#[tokio::test]
-async fn tx_from_mempool() {
-    let chain_config = Arc::new(create_unit_test_config());
-    let (chainstate, mempool) = start_subsystems(Arc::clone(&chain_config));
-    let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(Arc::clone(&chain_config))
-        .with_subsystems(chainstate, mempool.clone())
-        .build()
-        .await;
-
-    let peer = PeerId::new();
-    handle.connect_peer(peer).await;
-
-    let tx = Transaction::new(
-        0x00,
-        vec![TxInput::new(OutPointSourceId::from(chain_config.genesis_block_id()), 0)],
-        vec![TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::Burn,
-        )],
-        0x01,
-    )
-    .unwrap();
-    let tx = SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).unwrap();
-    let tx_ = tx.clone();
-    mempool.call_async_mut(|m| m.add_transaction(tx_)).await.unwrap().unwrap();
-
-    assert_eq!(Announcement::Transaction(tx), handle.announcement().await);
-
-    handle.assert_no_peer_manager_event().await;
-    handle.assert_no_error().await;
-}

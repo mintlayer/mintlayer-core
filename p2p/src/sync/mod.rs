@@ -43,7 +43,7 @@ use crate::{
     error::{P2pError, PeerError},
     event::PeerManagerEvent,
     message::{Announcement, SyncMessage},
-    net::{types::SyncingEvent, NetworkingService, SyncingMessagingService},
+    net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::{Peer, PeerEvent},
     types::peer_id::PeerId,
     Result,
@@ -58,8 +58,8 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// The p2p configuration.
     p2p_config: Arc<P2pConfig>,
 
-    /// A handle for sending/receiving syncing events.
-    messaging_handle: T::SyncingMessagingHandle,
+    messaging_handle: T::MessagingHandle,
+    sync_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -81,13 +81,15 @@ pub struct BlockSyncManager<T: NetworkingService> {
 impl<T> BlockSyncManager<T>
 where
     T: NetworkingService + 'static,
-    T::SyncingMessagingHandle: SyncingMessagingService,
+    T::MessagingHandle: MessagingService,
+    T::SyncingEventReceiver: SyncingEventReceiver,
 {
     /// Creates a new sync manager instance.
     pub fn new(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        messaging_handle: T::SyncingMessagingHandle,
+        messaging_handle: T::MessagingHandle,
+        sync_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -98,6 +100,7 @@ where
             _chain_config: chain_config,
             p2p_config,
             messaging_handle,
+            sync_event_receiver,
             peer_manager_sender,
             chainstate_handle,
             mempool_handle,
@@ -132,7 +135,7 @@ where
                     self.messaging_handle.send_message(peer, message)?;
                 },
 
-                event = self.messaging_handle.poll_next() => {
+                event = self.sync_event_receiver.poll_next() => {
                     self.handle_peer_event(event?)?;
                 },
             }

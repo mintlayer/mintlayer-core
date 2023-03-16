@@ -527,7 +527,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let (mut conn, _) = T::start(
+    let (mut conn, _, _) = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
@@ -592,7 +592,7 @@ async fn connection_timeout_rpc_notified<T>(
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(Default::default());
-    let (conn, _) = T::start(
+    let (conn, _, _) = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),

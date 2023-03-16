@@ -66,8 +66,11 @@ pub trait NetworkingService {
     /// Handle for sending/receiving connectivity-related events
     type ConnectivityHandle: Send;
 
-    /// Handle for sending/receiving request-response messages
-    type SyncingMessagingHandle: Send;
+    /// A handle for sending messages and announcements to peers.
+    type MessagingHandle: Send + Sync + Clone;
+
+    /// A receiver for syncing events.
+    type SyncingEventReceiver: Send;
 
     /// Initialize the network service provider
     ///
@@ -79,7 +82,11 @@ pub trait NetworkingService {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-    ) -> crate::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)>;
+    ) -> crate::Result<(
+        Self::ConnectivityHandle,
+        Self::MessagingHandle,
+        Self::SyncingEventReceiver,
+    )>;
 }
 
 /// [ConnectivityService] provides an interface through which objects can send
@@ -123,17 +130,18 @@ where
     async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T::Address>>;
 }
 
-/// [SyncingMessagingService] provides an interface for sending and receiving block
-/// and header requests with a remote peer.
-#[async_trait]
-pub trait SyncingMessagingService {
+/// An interface for sending messages and announcements to peers.
+pub trait MessagingService: Clone {
     /// Sends a message to the peer.
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> crate::Result<()>;
 
     /// Publishes an announcement on the network.
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()>;
+}
 
-    /// Poll syncing-related event from the networking service
+#[async_trait]
+pub trait SyncingEventReceiver {
+    /// Polls syncing-related events from the networking service.
     async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent>;
 }
 

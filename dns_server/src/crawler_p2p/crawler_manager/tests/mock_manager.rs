@@ -33,7 +33,7 @@ use p2p::{
     net::{
         default_backend::transport::TransportAddress,
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
@@ -100,7 +100,9 @@ pub struct MockConnectivityHandle {
     pub conn_rx: mpsc::UnboundedReceiver<ConnectivityEvent<SocketAddr>>,
 }
 
-pub struct MockSyncingMessagingHandle {}
+#[derive(Clone)]
+pub struct MockMessagingHandle {}
+pub struct MockSyncingEventReceiver {}
 
 #[async_trait]
 impl NetworkingService for MockNetworkingService {
@@ -108,14 +110,19 @@ impl NetworkingService for MockNetworkingService {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type ConnectivityHandle = MockConnectivityHandle;
-    type SyncingMessagingHandle = MockSyncingMessagingHandle;
+    type MessagingHandle = MockMessagingHandle;
+    type SyncingEventReceiver = MockSyncingEventReceiver;
 
     async fn start(
         _transport: Self::Transport,
         _bind_addresses: Vec<Self::Address>,
-        _chain_config: Arc<common::chain::ChainConfig>,
+        _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
-    ) -> p2p::Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
+    ) -> p2p::Result<(
+        Self::ConnectivityHandle,
+        Self::MessagingHandle,
+        Self::SyncingEventReceiver,
+    )> {
         unreachable!()
     }
 }
@@ -186,8 +193,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
     }
 }
 
-#[async_trait]
-impl SyncingMessagingService for MockSyncingMessagingHandle {
+impl MessagingService for MockMessagingHandle {
     fn send_message(&mut self, _peer_id: PeerId, _request: SyncMessage) -> p2p::Result<()> {
         unreachable!()
     }
@@ -195,7 +201,10 @@ impl SyncingMessagingService for MockSyncingMessagingHandle {
     fn make_announcement(&mut self, _announcement: Announcement) -> p2p::Result<()> {
         unreachable!()
     }
+}
 
+#[async_trait]
+impl SyncingEventReceiver for MockSyncingEventReceiver {
     async fn poll_next(&mut self) -> p2p::Result<SyncingEvent> {
         std::future::pending().await
     }
@@ -228,7 +237,7 @@ pub fn test_crawler(
         state: state.clone(),
         conn_rx,
     };
-    let sync = MockSyncingMessagingHandle {};
+    let sync = MockSyncingEventReceiver {};
 
     let storage = storage::inmemory::InMemory::new();
     let store = DnsServerStorageImpl::new(storage).unwrap();

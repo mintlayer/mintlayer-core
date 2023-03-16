@@ -20,7 +20,7 @@ use std::{fmt::Debug, sync::Arc};
 use p2p::testing_utils::TestTransportMaker;
 use p2p::{
     error::{DialError, P2pError},
-    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
+    net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
 };
 
 tests![connect, connect_address_in_use, connect_accept,];
@@ -30,7 +30,8 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     N::start(
@@ -49,10 +50,11 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService + Debug,
+    N::MessagingHandle: MessagingService + Debug,
+    N::SyncingEventReceiver: SyncingEventReceiver + Debug,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (connectivity, _sync) = N::start(
+    let (connectivity, _messaging_handle, _sync) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -80,10 +82,11 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + std::fmt::Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut service1, _) = N::start(
+    let (mut service1, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -91,7 +94,7 @@ where
     )
     .await
     .unwrap();
-    let (mut service2, _) = N::start(
+    let (mut service2, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),

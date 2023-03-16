@@ -20,7 +20,8 @@ macro_rules! tests {
             T: p2p::testing_utils::TestTransportMaker<Transport = N::Transport, Address = N::Address>,
             N: p2p::net::NetworkingService + std::fmt::Debug + 'static,
             N::ConnectivityHandle: p2p::net::ConnectivityService<N> + std::fmt::Debug,
-            N::SyncingMessagingHandle: p2p::net::SyncingMessagingService + std::fmt::Debug,
+            N::MessagingHandle: MessagingService + std::fmt::Debug,
+            N::SyncingEventReceiver: SyncingEventReceiver + std::fmt::Debug,
             A: p2p::testing_utils::RandomAddressMaker<Address = N::Address>,
         {
             [

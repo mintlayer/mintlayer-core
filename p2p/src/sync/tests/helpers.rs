@@ -36,7 +36,8 @@ use crate::{
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{Announcement, BlockSyncManager, SyncMessage},
     types::peer_id::PeerId,
-    NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
+    MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
+    SyncingEventReceiver,
 };
 
 /// A timeout for blocking calls.
@@ -76,8 +77,10 @@ impl SyncManagerHandle {
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
         let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
-        let messaging_handle = SyncingMessagingHandleMock {
+        let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
+        };
+        let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
         };
 
@@ -85,6 +88,7 @@ impl SyncManagerHandle {
             chain_config,
             p2p_config,
             messaging_handle,
+            sync_event_receiver,
             chainstate,
             mempool,
             peer_manager_sender,
@@ -277,26 +281,32 @@ impl NetworkingService for NetworkingServiceStub {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type ConnectivityHandle = ();
-    type SyncingMessagingHandle = SyncingMessagingHandleMock;
+    type MessagingHandle = MessagingHandleMock;
+    type SyncingEventReceiver = SyncingEventReceiverMock;
 
     async fn start(
         _: Self::Transport,
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
-    ) -> Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
+    ) -> Result<(
+        Self::ConnectivityHandle,
+        Self::MessagingHandle,
+        Self::SyncingEventReceiver,
+    )> {
         panic!("Stub service shouldn't be used directly");
     }
 }
 
-/// A mock implementation of the `SyncingMessagingService` trait.
-struct SyncingMessagingHandleMock {
+#[derive(Clone)]
+struct MessagingHandleMock {
     events_sender: UnboundedSender<SyncingEvent>,
+}
+struct SyncingEventReceiverMock {
     events_receiver: UnboundedReceiver<SyncingEvent>,
 }
 
-#[async_trait]
-impl SyncingMessagingService for SyncingMessagingHandleMock {
+impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send(SyncingEvent::Message { peer, message }).unwrap();
         Ok(())
@@ -311,7 +321,10 @@ impl SyncingMessagingService for SyncingMessagingHandleMock {
             .unwrap();
         Ok(())
     }
+}
 
+#[async_trait]
+impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
         Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await

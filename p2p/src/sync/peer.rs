@@ -46,7 +46,7 @@ use crate::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
         SyncMessage,
     },
-    net::{NetworkingService, SyncingMessagingService},
+    net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     PeerManagerEvent, Result,
@@ -87,7 +87,8 @@ pub struct Peer<T: NetworkingService> {
 impl<T> Peer<T>
 where
     T: NetworkingService,
-    T::SyncingMessagingHandle: SyncingMessagingService,
+    // TODO: FIXME:
+    //T::SyncingMessagingHandle: SyncingMessagingService,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

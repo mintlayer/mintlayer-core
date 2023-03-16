@@ -39,7 +39,7 @@ use p2p::{
     message::Announcement,
     net::{
         default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     testing_utils::{connect_and_accept_services, TestTransportMaker},
 };
@@ -54,11 +54,12 @@ async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -66,7 +67,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, mut sync2) = N::start(
+    let (mut conn2, mut messaging_handle2, mut sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -85,7 +86,7 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1
+    messaging_handle1
         .make_announcement(Announcement::Block(Box::new(block.header().clone())))
         .unwrap();
 
@@ -116,7 +117,7 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync2
+    messaging_handle2
         .make_announcement(Announcement::Block(Box::new(block.header().clone())))
         .unwrap();
 
@@ -143,7 +144,8 @@ async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
@@ -164,7 +166,7 @@ where
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
     });
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -172,7 +174,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, _sync2) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -191,7 +193,7 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1
+    messaging_handle1
         .make_announcement(Announcement::Block(Box::new(block.header().clone())))
         .unwrap();
 }
@@ -200,14 +202,15 @@ async fn block_announcement_too_big_message<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     // TODO: Use seedable random.
     let mut rng = crypto::random::make_true_rng();
 
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -216,7 +219,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _sync2) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -253,7 +256,7 @@ where
     let encoded_size = message.encode().len();
 
     assert_eq!(
-        sync1.make_announcement(message),
+        messaging_handle1.make_announcement(message),
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             encoded_size,
             ANNOUNCEMENT_MAX_SIZE

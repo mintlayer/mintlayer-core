@@ -22,7 +22,7 @@ use crate::{
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    P2p,
+    MessagingService, P2p,
 };
 
 use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
@@ -31,6 +31,7 @@ use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 impl<T> P2pInterface for P2p<T>
 where
     T: NetworkingService,
+    T::MessagingHandle: MessagingService,
 {
     async fn connect(&mut self, addr: String) -> crate::Result<()> {
         let (tx, rx) = oneshot_nofail::channel();
@@ -97,10 +98,8 @@ where
     }
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
-        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
-        // TODO: FIXME: Broadcast the transaction.
-        //_.make_announcement(Announcement::Transaction(tx));
-        todo!();
-        todo!()
+        let tx_ = tx.clone();
+        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx_)).await??;
+        self.messaging_handle.make_announcement(Announcement::Transaction(tx))
     }
 }
