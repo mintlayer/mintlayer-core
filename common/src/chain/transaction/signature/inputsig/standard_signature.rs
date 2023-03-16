@@ -161,7 +161,7 @@ impl StandardInputSignature {
         })
     }
 
-    pub fn raw_signature(&self) -> &Vec<u8> {
+    pub fn raw_signature(&self) -> &[u8] {
         &self.raw_signature
     }
 }
@@ -228,8 +228,8 @@ mod test {
     fn produce_signature_address_missmatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -254,8 +254,8 @@ mod test {
     fn produce_signature_key_missmatch(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (private_key, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (_, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
 
@@ -283,7 +283,7 @@ mod test {
         let chain_config = create_mainnet();
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let outpoints = [
             Destination::Address(PublicKeyHash::from(&public_key)),
             Destination::PublicKey(public_key),

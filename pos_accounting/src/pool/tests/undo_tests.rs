@@ -45,7 +45,7 @@ fn create_pool(
     op: &mut impl PoSAccountingOperations,
     pledged_amount: Amount,
 ) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
@@ -59,7 +59,7 @@ fn create_delegation_id(
     op: &mut impl PoSAccountingOperations,
     target_pool: PoolId,
 ) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,

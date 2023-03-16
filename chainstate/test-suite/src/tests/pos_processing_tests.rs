@@ -50,7 +50,7 @@ fn create_chain_with_stake_pool(
     tf: &mut TestFramework,
 ) -> (OutPoint, PoolId, VRFPrivateKey) {
     let genesis_id = tf.genesis().get_id();
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let tx = TransactionBuilder::new()
         .add_input(

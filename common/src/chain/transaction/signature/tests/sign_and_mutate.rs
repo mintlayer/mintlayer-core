@@ -52,7 +52,7 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let test_data = [
         (0, 31, Ok(())),
@@ -113,7 +113,7 @@ fn modify_and_verify(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
 
     {
@@ -220,7 +220,7 @@ fn mutate_all(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
     let tx = generate_and_sign_tx(
@@ -265,7 +265,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
     let tx = generate_and_sign_tx(
@@ -322,7 +322,7 @@ fn mutate_none(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
     let tx = generate_and_sign_tx(
@@ -377,7 +377,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
@@ -437,7 +437,7 @@ fn mutate_single(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
     let tx = generate_and_sign_tx(
@@ -526,7 +526,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();

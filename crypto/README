@@ -4,18 +4,23 @@ if you have any questions about the crypto subsystem speak to ben
 do not use crypto primitives without understanding what you are doing - speak to amin, ben and sam for clarification
 
 hashing
+
 - blake2
-- sha1  !!! DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING
+- sha1 !!! DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING
 - sha2
-- sha3 
+- sha3
 - ripemd160
 
 sigs
-- ristretto schnorr (no sig aggr)
+
+- secp256k1 schnorr signatures
+
+encryption
+
+- chacha20poly1305
 
 example of use from another subsystem
 add your dependencies to your cargo.toml file
-
 
 ```
 crypto = {path = "../crypto"}

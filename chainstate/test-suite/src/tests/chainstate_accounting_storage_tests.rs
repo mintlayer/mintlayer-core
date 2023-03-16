@@ -98,7 +98,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
         let (tx, pool_id) =
             make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
@@ -158,7 +158,7 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let expected_epoch_index = 0;
 
         let (tx1, pool_id1) =
@@ -271,7 +271,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
@@ -399,7 +399,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
@@ -539,7 +539,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
 

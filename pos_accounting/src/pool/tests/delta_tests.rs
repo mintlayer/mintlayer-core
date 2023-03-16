@@ -41,7 +41,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let data1 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [(
@@ -87,7 +87,7 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
     };
     let mut delta1 = PoSAccountingDelta::from_data(&mut db, data1);
 
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let data2 = PoSAccountingDeltaData {
         pool_data: DeltaDataCollection::from_iter(
             [
@@ -239,8 +239,8 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let mut storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(
