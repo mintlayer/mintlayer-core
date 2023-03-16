@@ -157,7 +157,7 @@ mod tests {
 
     use crate::chain::config::create_mainnet;
     use crate::primitives::H256;
-    use serialization::{Decode, Encode};
+    use serialization::{DecodeAll, Encode};
     use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
@@ -421,7 +421,7 @@ mod tests {
         // Hence, we use an invalid challenge, and expect the verification to fail.
         let mut encoded = data.challenge.encode();
         encoded[0] = 0;
-        data.challenge = ClassicMultisigChallenge::decode(&mut encoded.as_slice()).unwrap();
+        data.challenge = ClassicMultisigChallenge::decode_all(&mut encoded.as_slice()).unwrap();
         assert_eq!(data.challenge.min_required_signatures(), 0);
 
         assert_eq!(

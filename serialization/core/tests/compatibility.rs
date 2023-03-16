@@ -17,7 +17,7 @@ mod utils;
 
 use arraytools::ArrayTools;
 use hex_literal::hex;
-use serialization_core::{Decode, Encode};
+use serialization_core::{Decode, DecodeAll, Encode};
 use std::collections::BTreeMap;
 use utils::{OptionWrapper, SimpleWrapper};
 
@@ -30,7 +30,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("01"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("01"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("01"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -40,7 +40,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("02"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("02"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("02"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -50,7 +50,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("d204"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("d204"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("d204"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -60,7 +60,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("2e16"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("2e16"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("2e16"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -70,7 +70,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("78d7c83d"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("78d7c83d"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("78d7c83d"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -80,7 +80,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("9c9bf78f"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("9c9bf78f"))).ok();
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("9c9bf78f"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -90,7 +90,8 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("a99874d96fd4c8df"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("a99874d96fd4c8df"))).ok();
+        let dec =
+            SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("a99874d96fd4c8df"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -100,7 +101,8 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("45598e2b5942260f"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!("45598e2b5942260f"))).ok();
+        let dec =
+            SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!("45598e2b5942260f"))).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -110,7 +112,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("6f7d32890204cfda1af9994ef5020080"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!(
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!(
             "6f7d32890204cfda1af9994ef5020080"
         )))
         .ok();
@@ -123,7 +125,7 @@ fn test_scale_version_compatibility_numbers() {
         let enc = SimpleWrapper::encode(&SimpleWrapper(test));
         assert_eq!(enc, hex!("5029f787d210ec973296fe1e23e6729e"));
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut ArrayTools::as_slice(&hex!(
+        let dec = SimpleWrapper::decode_all(&mut ArrayTools::as_slice(&hex!(
             "5029f787d210ec973296fe1e23e6729e"
         )))
         .ok();
@@ -297,7 +299,7 @@ fn test_scale_version_compatibility_struct() {
     assert_eq!(&enc, &bytes_representation);
 
     // Backward compatibility
-    let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(test_main)));
 }
@@ -342,7 +344,7 @@ fn test_scale_version_compatibility_enum() {
         assert_eq!(&enc, &bytes_representation);
 
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(numbers)));
     }
@@ -368,7 +370,7 @@ fn test_scale_version_compatibility_enum() {
         assert_eq!(&enc, &bytes_representation);
 
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(strings)));
     }
@@ -408,7 +410,7 @@ fn test_scale_version_compatibility_enum() {
         assert_eq!(&enc, &bytes_representation);
 
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(containers)));
     }
@@ -427,7 +429,7 @@ fn test_scale_version_compatibility_array() {
         );
         assert_eq!(&enc, &bytes_representation);
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -438,7 +440,7 @@ fn test_scale_version_compatibility_array() {
         let bytes_representation = vec![1, 0, 1, 0, 0, 0, 1, 1, 1];
         assert_eq!(&enc, &bytes_representation);
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -462,7 +464,7 @@ fn test_scale_version_compatibility_array() {
         assert_eq!(&enc, &bytes_representation);
 
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut &bytes_representation[..]).ok();
+        let dec = SimpleWrapper::decode_all(&mut &bytes_representation[..]).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(test)));
     }
@@ -482,12 +484,12 @@ fn test_scale_version_compatibility_bool() {
     }
     {
         // Backward compatibility
-        let dec = SimpleWrapper::decode(&mut vec![1].as_slice()).ok();
+        let dec = SimpleWrapper::decode_all(&mut vec![1].as_slice()).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(true)));
     }
     {
-        let dec = SimpleWrapper::decode(&mut vec![0].as_slice()).ok();
+        let dec = SimpleWrapper::decode_all(&mut vec![0].as_slice()).ok();
         assert!(&dec.is_some());
         assert_eq!(dec, Some(SimpleWrapper(false)));
     }

@@ -22,7 +22,7 @@ use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
-use serialization::{Decode, Encode};
+use serialization::{DecodeAll, Encode};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "chainstate")]
@@ -89,7 +89,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
     async fn submit_block(&self, block_hex: String) -> rpc::Result<()> {
         // TODO there should be a generic way of decoding SCALE-encoded hex json strings
         let block_data = hex::decode(block_hex).map_err(rpc::Error::to_call_error)?;
-        let block = Block::decode(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
+        let block = Block::decode_all(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
         let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));

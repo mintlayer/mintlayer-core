@@ -16,7 +16,7 @@
 mod utils;
 
 use rand::Rng;
-use serialization_core::{Decode, Encode};
+use serialization_core::{DecodeAll, Encode};
 use std::collections::BTreeMap;
 use utils::SimpleWrapper;
 
@@ -25,13 +25,13 @@ fn test_scale_vectors() {
     let vector = vec![-11, 12, -13, 14, -15, 16, -17, 18, -19];
     let enc = SimpleWrapper::encode(&SimpleWrapper(vector.clone()));
     assert!(!enc.is_empty());
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(vector)));
     let vector = vec![b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h', b'i', b'j', b'k'];
     let enc = SimpleWrapper::encode(&SimpleWrapper(vector.clone()));
     assert!(!enc.is_empty());
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(vector)));
     let vector = vec![
@@ -45,7 +45,7 @@ fn test_scale_vectors() {
     let enc = SimpleWrapper::encode(&SimpleWrapper(vector.clone()));
     assert!(!enc.is_empty());
 
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(vector)));
     let mut vector = Vec::new();
@@ -86,7 +86,7 @@ fn test_scale_vectors() {
     }
     let enc = SimpleWrapper::encode(&SimpleWrapper(vector.clone()));
     assert!(!enc.is_empty());
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(vector)));
 }
@@ -115,7 +115,7 @@ fn test_scale_btree_map() {
     }
     let enc = SimpleWrapper::encode(&SimpleWrapper(btree_map.clone()));
     assert!(!enc.is_empty());
-    let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
+    let dec = SimpleWrapper::decode_all(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(btree_map)));
 }

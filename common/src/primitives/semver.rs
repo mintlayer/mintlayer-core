@@ -78,6 +78,8 @@ impl std::fmt::Display for SemVer {
 mod tests {
     use super::*;
 
+    use serialization::DecodeAll;
+
     #[test]
     fn vertest_string() {
         let version = SemVer::new(1, 2, 3);
@@ -166,23 +168,26 @@ mod tests {
     #[test]
     fn vertest_encode_decode() {
         let encoded = SemVer::new(1, 2, 3).encode();
-        assert_eq!(Decode::decode(&mut &encoded[..]), Ok(SemVer::new(1, 2, 3)));
+        assert_eq!(
+            DecodeAll::decode_all(&mut &encoded[..]),
+            Ok(SemVer::new(1, 2, 3))
+        );
 
         let encoded = SemVer::new(0xff, 0xff, 0xff).encode();
         assert_eq!(
-            Decode::decode(&mut &encoded[..]),
+            DecodeAll::decode_all(&mut &encoded[..]),
             Ok(SemVer::new(0xff, 0xff, 0xff))
         );
 
         let encoded = SemVer::new(0xff, 0xff, 0xffff).encode();
         assert_eq!(
-            Decode::decode(&mut &encoded[..]),
+            DecodeAll::decode_all(&mut &encoded[..]),
             Ok(SemVer::new(0xff, 0xff, 0xffff))
         );
 
         let encoded = SemVer::new(1, 2, 0x500).encode();
         assert_eq!(
-            Decode::decode(&mut &encoded[..]),
+            DecodeAll::decode_all(&mut &encoded[..]),
             Ok(SemVer::new(1, 2, 0x500))
         );
     }

@@ -28,7 +28,7 @@ use tokio::{sync::mpsc, time::timeout};
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
-use serialization::{Decode, Encode};
+use serialization::{DecodeAll, Encode};
 use utils::set_flag::SetFlag;
 
 use crate::{
@@ -215,7 +215,7 @@ where
     ///
     /// It is not an error if there are no peers that subscribed to the related topic.
     fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
-        let announcement = Announcement::decode(&mut &message[..])?;
+        let announcement = Announcement::decode_all(&mut &message[..])?;
 
         // Send the message to peers in pseudorandom order.
         let mut peers: Vec<_> = self

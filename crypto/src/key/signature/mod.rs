@@ -105,7 +105,7 @@ mod test {
         assert!(pk.verify_message(&sig, msg));
 
         let encoded_sig = sig.encode();
-        let decoded_sig = Signature::decode(&mut encoded_sig.as_slice()).unwrap();
+        let decoded_sig = Signature::decode_all(&mut encoded_sig.as_slice()).unwrap();
         assert_eq!(decoded_sig, sig);
     }
 
@@ -122,9 +122,9 @@ mod test {
         let pk_bin: Vec<u8> = FromHex::from_hex(pk_hex).unwrap();
         let sk_bin: Vec<u8> = FromHex::from_hex(sk_hex).unwrap();
 
-        let pk = PublicKey::decode(&mut pk_bin.as_slice()).unwrap();
-        let sk = PrivateKey::decode(&mut sk_bin.as_slice()).unwrap();
-        let sig = Signature::decode(&mut sig_bin.as_slice()).unwrap();
+        let pk = PublicKey::decode_all(&mut pk_bin.as_slice()).unwrap();
+        let sk = PrivateKey::decode_all(&mut sk_bin.as_slice()).unwrap();
+        let sig = Signature::decode_all(&mut sig_bin.as_slice()).unwrap();
 
         assert_eq!(pk.kind(), KeyKind::Secp256k1Schnorr);
         assert_eq!(sk.kind(), KeyKind::Secp256k1Schnorr);
