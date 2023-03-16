@@ -32,7 +32,7 @@ mod crawler_p2p;
 mod dns_server;
 mod error;
 
-const DNS_SERVER_USER_AGENT: &str = "DnsSeedServer";
+const DNS_SERVER_USER_AGENT: &str = "MintlayerDnsSeedServer";
 
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
@@ -41,8 +41,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         config::Network::Mainnet => common::chain::config::ChainType::Mainnet,
         config::Network::Testnet => common::chain::config::ChainType::Testnet,
     };
-    let user_agent =
-        UserAgent::try_from(DNS_SERVER_USER_AGENT.to_owned()).expect("expected valid user agent");
+    let user_agent = UserAgent::try_from(DNS_SERVER_USER_AGENT.as_bytes().to_owned())
+        .expect("expected valid user agent");
     let chain_config =
         Arc::new(common::chain::config::Builder::new(chain_type).user_agent(user_agent).build());
 

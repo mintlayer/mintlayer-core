@@ -76,7 +76,7 @@ impl Display for PeerInfo {
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
         writeln!(f, "--> Network: {:x?}", self.network)?;
         writeln!(f, "--> Software version: {}", self.version)?;
-        writeln!(f, "--> User agent: {}", self.user_agent.as_ref())?;
+        writeln!(f, "--> User agent: {}", self.user_agent)?;
 
         Ok(())
     }

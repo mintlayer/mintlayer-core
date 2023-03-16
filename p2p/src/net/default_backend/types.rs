@@ -90,7 +90,7 @@ pub enum HandshakeMessage {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
-        user_agent: String,
+        user_agent: UserAgent,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -102,7 +102,7 @@ pub enum HandshakeMessage {
         version: SemVer,
         network: [u8; 4],
         subscriptions: BTreeSet<PubSubTopic>,
-        user_agent: String,
+        user_agent: UserAgent,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,

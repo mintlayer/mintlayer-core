@@ -17,7 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::{sync::mpsc, time::timeout};
 
-use common::{chain::ChainConfig, primitives::user_agent::UserAgent};
+use common::chain::ChainConfig;
 use logging::log;
 use utils::set_flag::SetFlag;
 
@@ -122,9 +122,6 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
 
-                let user_agent = UserAgent::try_from(user_agent)
-                    .map_err(|e| P2pError::ProtocolError(ProtocolError::InvalidUserAgent(e)))?;
-
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
                 // It's required to reliable detect self-connects.
@@ -147,7 +144,7 @@ where
                         types::HandshakeMessage::HelloAck {
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
-                            user_agent: self.chain_config.user_agent().as_ref().to_owned(),
+                            user_agent: self.chain_config.user_agent().clone(),
                             subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                             receiver_address: self.receiver_address.clone(),
                         },
@@ -159,7 +156,7 @@ where
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
-                        user_agent: self.chain_config.user_agent().as_ref().to_owned(),
+                        user_agent: self.chain_config.user_agent().clone(),
                         subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
                         receiver_address: self.receiver_address.clone(),
                         handshake_nonce,
@@ -176,9 +173,6 @@ where
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
-
-                let user_agent = UserAgent::try_from(user_agent)
-                    .map_err(|e| P2pError::ProtocolError(ProtocolError::InvalidUserAgent(e)))?;
 
                 self.tx
                     .send((
@@ -306,7 +300,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
-                user_agent: chain_config.user_agent().as_ref().to_owned(),
+                user_agent: chain_config.user_agent().clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
@@ -382,7 +376,7 @@ mod tests {
                 types::HandshakeMessage::HelloAck {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
-                    user_agent: chain_config.user_agent().as_ref().to_owned(),
+                    user_agent: chain_config.user_agent().clone(),
                     subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                         .into_iter()
                         .collect(),
@@ -457,7 +451,7 @@ mod tests {
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
-                user_agent: chain_config.user_agent().as_ref().to_owned(),
+                user_agent: chain_config.user_agent().clone(),
                 subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
                     .into_iter()
                     .collect(),
