@@ -62,7 +62,7 @@ impl From<NodeType> for BTreeSet<PubSubTopic> {
 }
 
 /// The p2p subsystem configuration.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_addresses: Vec<String>,

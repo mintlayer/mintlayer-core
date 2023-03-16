@@ -34,6 +34,7 @@ use p2p_test_utils::start_chainstate;
 use crate::{
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{Announcement, BlockSyncManager, SyncMessage},
+    testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
 };
@@ -218,7 +219,7 @@ impl SyncManagerHandleBuilder {
     pub fn new() -> Self {
         Self {
             chain_config: Arc::new(create_mainnet()),
-            p2p_config: Arc::new(P2pConfig::default()),
+            p2p_config: Arc::new(test_p2p_config()),
             chainstate: None,
         }
     }

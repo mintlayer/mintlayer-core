@@ -27,8 +27,8 @@ use crate::{
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker,
-        TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, P2pTokioTestTimeGetter, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -527,14 +527,9 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let (mut conn, _) = T::start(
-        transport,
-        vec![addr1],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let p2p_config = Arc::new(test_p2p_config());
+    let (mut conn, _) =
+        T::start(transport, vec![addr1], Arc::clone(&config), p2p_config).await.unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
     conn.connect(addr2).expect("dial to succeed");
@@ -591,7 +586,7 @@ async fn connection_timeout_rpc_notified<T>(
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let p2p_config = Arc::new(Default::default());
+    let p2p_config = Arc::new(test_p2p_config());
     let (conn, _) = T::start(
         transport,
         vec![addr1],

@@ -21,7 +21,8 @@ use crate::{
     net::AsBannableAddress,
     peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
     testing_utils::{
-        peerdb_inmemory_store, P2pBasicTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
+        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker,
+        TestTcpAddressMaker,
     },
 };
 
@@ -76,8 +77,8 @@ fn unban_peer() {
 fn connected_unreachable() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let mut peerdb =
-        PeerDb::new(Default::default(), time_getter.get_time_getter(), db_store).unwrap();
+    let p2p_config = Arc::new(test_p2p_config());
+    let mut peerdb = PeerDb::new(p2p_config, time_getter.get_time_getter(), db_store).unwrap();
 
     let address = TestTcpAddressMaker::new();
     peerdb.peer_discovered(address);
@@ -97,8 +98,8 @@ fn connected_unreachable() {
 fn connected_unknown() {
     let db_store = peerdb_inmemory_store();
     let time_getter = P2pBasicTestTimeGetter::new();
-    let mut peerdb =
-        PeerDb::new(Default::default(), time_getter.get_time_getter(), db_store).unwrap();
+    let p2p_config = Arc::new(test_p2p_config());
+    let mut peerdb = PeerDb::new(p2p_config, time_getter.get_time_getter(), db_store).unwrap();
 
     let address = TestTcpAddressMaker::new();
 

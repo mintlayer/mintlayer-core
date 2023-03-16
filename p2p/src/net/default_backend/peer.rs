@@ -249,7 +249,8 @@ impl<T: TransportSocket> Drop for Peer<T> {
 mod tests {
     use super::*;
     use crate::testing_utils::{
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
+        TestTransportTcp,
     };
     use crate::{
         message,
@@ -273,7 +274,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
@@ -348,7 +349,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, mut rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
@@ -427,7 +428,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id3 = PeerId::new();
@@ -486,7 +487,7 @@ mod tests {
     {
         let (socket1, socket2) = get_two_connected_sockets::<A, T>().await;
         let chain_config = Arc::new(common::chain::config::create_mainnet());
-        let p2p_config = Arc::new(P2pConfig::default());
+        let p2p_config = Arc::new(test_p2p_config());
         let (tx1, _rx1) = mpsc::unbounded_channel();
         let (_tx2, rx2) = mpsc::unbounded_channel();
         let peer_id2 = PeerId::new();
