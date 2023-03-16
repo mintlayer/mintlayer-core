@@ -347,7 +347,7 @@ pub fn run_script<'a, Ctx: Context>(
         cur_instr_num = cur_instr_num.saturating_add(1);
     }
 
-    // Check OP_IF/OP_NOTIF has been closed properly wiht OP_ENDIF.
+    // Check OP_IF/OP_NOTIF has been closed properly with OP_ENDIF.
     if !exec_stack.is_empty() {
         return Err(Error::UnbalancedIfElse);
     }
@@ -392,7 +392,7 @@ fn check_multisig<'a, Ctx: Context>(
     Ok(true)
 }
 
-/// Execute an ["ordinay"](opcodes::Ordinary) opcode.
+/// Execute an ["ordinary"](opcodes::Ordinary) opcode.
 fn execute_opcode(opcode: opcodes::Ordinary, stack: &mut Stack<'_>) -> crate::Result<()> {
     use opcodes::Ordinary as Opc;
 
