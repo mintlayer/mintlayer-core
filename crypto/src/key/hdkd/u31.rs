@@ -30,12 +30,8 @@ impl U31 {
         (result, msb)
     }
 
-    pub fn into_encoded_with_msb(self, msb: bool) -> u32 {
-        if msb {
-            self.0 | MSB_BIT
-        } else {
-            self.0
-        }
+    pub const fn into_encoded_with_msb(self, msb: bool) -> u32 {
+        self.0 | (MSB_BIT * msb as u32)
     }
 
     pub(crate) fn plus_one(&self) -> Result<Self, DerivationError> {
