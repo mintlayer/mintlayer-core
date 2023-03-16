@@ -30,9 +30,6 @@ use serialization::{Decode, Encode};
 use sha2::Sha512;
 use zeroize::Zeroize;
 
-// Create alias for HMAC-SHA512
-type HmacSha512 = Hmac<Sha512>;
-
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
 /// the private key at one of the nodes of this tree.
 #[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -46,12 +43,12 @@ pub struct Secp256k1ExtendedPrivateKey {
     private_key: Secp256k1PrivateKey,
 }
 
-fn new_hmac_sha_512(key: &[u8]) -> HmacSha512 {
-    HmacSha512::new_from_slice(key).expect("HMAC can take key of any size")
+fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
+    Hmac::<Sha512>::new_from_slice(key).expect("HMAC can take key of any size")
 }
 
 fn to_key_and_chain_code(
-    mac: HmacSha512,
+    mac: Hmac<Sha512>,
 ) -> Result<(secp256k1::SecretKey, ChainCode), DerivationError> {
     // Finalize the hmac
     let mut result = mac.finalize().into_bytes();
@@ -251,6 +248,7 @@ mod test {
     use bip39::Mnemonic;
     use rstest::rstest;
     use std::str::FromStr;
+    use test_utils::random::{make_seedable_rng, Seed};
     use test_utils::{assert_encoded_eq, decode_from_hex};
 
     #[test]
@@ -387,5 +385,19 @@ mod test {
         let pk = pk.unwrap();
         assert_encoded_eq(&path, path_encoded);
         assert_encoded_eq(&pk, format!("{path_encoded}{chaincode}{public}").as_str());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    /// Test to prove that hmac-sha512 can be used with keys of any size, since there's an expect in it
+    fn mac_key_of_any_size(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let key_size = rng.gen_range(0..=1000);
+
+        let key = (0..key_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+
+        let _hmac = new_hmac_sha_512(&key);
     }
 }
