@@ -38,7 +38,7 @@ pub trait AddressableData<T: AsRef<[u8]>> {
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum AddressError {
-    #[error("Bech39 encoding error: {0}")]
+    #[error("Bech32 encoding error: {0}")]
     Bech32EncodingError(Bech32Error),
     #[error("Invalid prefix: {0}")]
     InvalidPrefix(String),
@@ -117,7 +117,7 @@ mod tests {
     fn basic(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let cfg = create_mainnet();
-        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let address = Address::from_public_key_hash(&cfg, &public_key_hash)
             .expect("Address from pubkeyhash failed");
@@ -134,7 +134,7 @@ mod tests {
     fn ensure_cfg_and_with_hrp_compatiblity(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
         let cfg = create_mainnet();
-        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+        let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let hrp = cfg.address_prefix();
         let address1 = Address::new(&cfg, public_key_hash.encode());

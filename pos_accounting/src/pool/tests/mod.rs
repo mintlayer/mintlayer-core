@@ -43,7 +43,7 @@ fn create_storage_with_pool(
     pledged_amount: Amount,
 ) -> (PoolId, PublicKey, InMemoryPoSAccounting) {
     let pool_id = new_pool_id(rng.next_u64());
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
 
     let storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
@@ -68,8 +68,8 @@ fn create_storage_with_pool_and_delegation(
 ) {
     let pool_id = new_pool_id(rng.next_u64());
     let delegation_id = new_delegation_id(rng.next_u64());
-    let (_, pub_key_pool) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
-    let (_, pub_key_del) = PrivateKey::new_from_rng(rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key_pool) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let (_, pub_key_del) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
 
     let storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, PoolData::new(pub_key_pool.clone(), pledged_amount))]),

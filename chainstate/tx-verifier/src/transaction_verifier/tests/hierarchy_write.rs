@@ -782,8 +782,8 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let (outpoint1, _) = create_utxo(&mut rng, 1000);
     let (outpoint2, _) = create_utxo(&mut rng, 2000);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
@@ -845,8 +845,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let (outpoint1, _) = create_utxo(&mut rng, 1000);
     let (outpoint2, _) = create_utxo(&mut rng, 2000);
 
-    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
-    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (_, pub_key1) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (_, pub_key2) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);

@@ -34,7 +34,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
 
     let chain_config = create_mainnet();
 
-    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+    let (private_key, public_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
 
     // Test all combinations of signature hash types in every position.

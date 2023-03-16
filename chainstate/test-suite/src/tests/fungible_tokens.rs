@@ -1812,7 +1812,7 @@ fn token_issuance_in_block_reward(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let (_, pub_key) =
-            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::RistrettoSchnorr);
+            crypto::key::PrivateKey::new_from_rng(&mut rng, crypto::key::KeyKind::Secp256k1Schnorr);
 
         // Check if it issuance
         let reward_output = TxOutput::new(

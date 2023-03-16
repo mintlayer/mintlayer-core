@@ -99,7 +99,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
         let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
@@ -124,7 +124,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
 
@@ -154,7 +154,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
@@ -169,7 +169,7 @@ mod test {
             )
             .unwrap();
 
-            let mut raw_signature = witness.raw_signature().clone();
+            let mut raw_signature = witness.raw_signature().to_vec();
             AuthorizedPublicKeyHashSpend::from_data(&raw_signature).unwrap();
 
             // Changing the first byte doesn't changes the signature data, instead it changes the
@@ -192,7 +192,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
@@ -223,7 +223,7 @@ mod test {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
         let (private_key, public_key) =
-            PrivateKey::new_from_rng(&mut rng, KeyKind::RistrettoSchnorr);
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();

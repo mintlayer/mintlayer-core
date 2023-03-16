@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use crypto::key::Signature;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
@@ -101,8 +101,8 @@ impl AuthorizedClassicalMultisigSpend {
         self.signatures.iter().map(|(k, v)| (*k, v))
     }
 
-    pub fn from_data(data: &Vec<u8>) -> Result<Self, TransactionSigError> {
-        let decoded = AuthorizedClassicalMultisigSpend::decode(&mut data.as_slice())
+    pub fn from_data(data: &[u8]) -> Result<Self, TransactionSigError> {
+        let decoded = AuthorizedClassicalMultisigSpend::decode_all(&mut &data[..])
             .map_err(|_| TransactionSigError::InvalidSignatureEncoding)?;
         Ok(decoded)
     }
