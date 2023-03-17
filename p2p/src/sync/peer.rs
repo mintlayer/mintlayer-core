@@ -200,7 +200,7 @@ where
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
         utils::ensure!(
             !block_ids.is_empty(),
-            P2pError::ProtocolError(ProtocolError::InvalidMessage("Empty block list requested"))
+            P2pError::ProtocolError(ProtocolError::ZeroBlocksInRequest)
         );
 
         log::debug!(
@@ -236,13 +236,13 @@ where
             .call(move |c| {
                 for id in ids {
                     let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
-                        ProtocolError::UnknownBlockRequested,
+                        ProtocolError::UnknownBlockRequested(id),
                     ))?;
 
                     if index.block_height() <= best_known_block {
-                        return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                            "Peer requested already known block",
-                        )));
+                        return Err(P2pError::ProtocolError(
+                            ProtocolError::DuplicatedBlockRequest(id),
+                        ));
                     }
                 }
                 Result::<_>::Ok(())

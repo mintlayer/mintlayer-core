@@ -751,9 +751,7 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         ensure!(
             addresses.len() <= MAX_ADDRESS_COUNT,
-            P2pError::ProtocolError(ProtocolError::InvalidMessage(
-                "More than MAX_ADDRESS_COUNT addresses sent"
-            ))
+            P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(
             peer.expect_addr_list_response,

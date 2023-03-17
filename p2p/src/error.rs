@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use chainstate::ban_score::BanScore;
-use common::primitives::semver::SemVer;
+use common::{
+    chain::Block,
+    primitives::{semver::SemVer, Id},
+};
 use thiserror::Error;
 
 /// Errors related to invalid data/peer information that results in connection getting closed
@@ -25,10 +28,6 @@ pub enum ProtocolError {
     DifferentNetwork([u8; 4], [u8; 4]),
     #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
     InvalidVersion(SemVer, SemVer),
-    // TODO: This error is very generic and probably should be replaced with several different ones,
-    // because it has a ban score of 100 and in many cases it is too harsh.
-    #[error("Peer sent an invalid message")]
-    InvalidMessage(&'static str),
     #[error("Peer is unresponsive")]
     Unresponsive,
     #[error("Locator size ({0}) exceeds allowed limit ({1})")]
@@ -37,12 +36,20 @@ pub enum ProtocolError {
     BlocksRequestLimitExceeded(usize, usize),
     #[error("Number of headers in message ({0}) exceeds allowed limit ({1})")]
     HeadersLimitExceeded(usize, usize),
-    #[error("A peer requested an unknown block")]
-    UnknownBlockRequested,
+    #[error("A peer requested an unknown block ({0})")]
+    UnknownBlockRequested(Id<Block>),
+    #[error("A peer tried to download same block ({0})")]
+    DuplicatedBlockRequest(Id<Block>),
     #[error("Headers aren't connected")]
     DisconnectedHeaders,
     #[error("Received a message ({0}) that wasn't expected")]
     UnexpectedMessage(&'static str),
+    #[error("Empty block list requested")]
+    ZeroBlocksInRequest,
+    #[error("Handshake expected")]
+    HandshakeExpected,
+    #[error("More than MAX_ADDRESS_COUNT addresses sent")]
+    AddressListLimitExceeded,
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
@@ -188,14 +195,17 @@ impl BanScore for ProtocolError {
         match self {
             ProtocolError::DifferentNetwork(_, _) => 100,
             ProtocolError::InvalidVersion(_, _) => 100,
-            ProtocolError::InvalidMessage(_) => 100,
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
             ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
             ProtocolError::HeadersLimitExceeded(_, _) => 20,
-            ProtocolError::UnknownBlockRequested => 20,
+            ProtocolError::UnknownBlockRequested(_) => 20,
+            ProtocolError::DuplicatedBlockRequest(_) => 20,
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnexpectedMessage(_) => 20,
+            ProtocolError::ZeroBlocksInRequest => 20,
+            ProtocolError::HandshakeExpected => 20,
+            ProtocolError::AddressListLimitExceeded => 20,
         }
     }
 }
