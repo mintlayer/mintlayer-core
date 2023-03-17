@@ -198,9 +198,11 @@ where
 
     /// Processes the blocks request.
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
-        if block_ids.is_empty() {
-            return Ok(());
-        }
+        utils::ensure!(
+            !block_ids.is_empty(),
+            P2pError::ProtocolError(ProtocolError::InvalidMessage("Empty block list requested"))
+        );
+
         log::debug!(
             "Blocks request from peer {}: {}-{} ({})",
             self.id(),
@@ -383,7 +385,7 @@ where
         // Do not request the block if it is already known
         if self
             .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&block_id.into()))
+            .call(move |c| c.get_block_index(&block_id))
             .await??
             .is_some()
         {

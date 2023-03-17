@@ -28,7 +28,7 @@ pub enum ProtocolError {
     // TODO: This error is very generic and probably should be replaced with several different ones,
     // because it has a ban score of 100 and in many cases it is too harsh.
     #[error("Peer sent an invalid message")]
-    InvalidMessage,
+    InvalidMessage(&'static str),
     #[error("Peer is unresponsive")]
     Unresponsive,
     #[error("Locator size ({0}) exceeds allowed limit ({1})")]
@@ -188,7 +188,7 @@ impl BanScore for ProtocolError {
         match self {
             ProtocolError::DifferentNetwork(_, _) => 100,
             ProtocolError::InvalidVersion(_, _) => 100,
-            ProtocolError::InvalidMessage => 100,
+            ProtocolError::InvalidMessage(_) => 100,
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
             ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
