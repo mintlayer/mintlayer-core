@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::SignedTransaction;
+
 use crate::types::peer_id::PeerId;
 
 use super::types::ConnectedPeer;
@@ -28,4 +30,6 @@ pub trait P2pInterface: Send + Sync {
 
     async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()>;
     async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()>;
+
+    async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()>;
 }

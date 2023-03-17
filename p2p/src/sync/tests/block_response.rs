@@ -19,7 +19,7 @@ use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
 use crypto::random::Rng;
-use p2p_test_utils::{chainstate_subsystem, create_n_blocks};
+use p2p_test_utils::{create_n_blocks, start_subsystems_with_chainstate};
 use test_utils::random::Seed;
 
 use crate::{
@@ -31,7 +31,6 @@ use crate::{
     P2pError,
 };
 
-// Messages from unknown peers are ignored.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -45,11 +44,12 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -72,11 +72,12 @@ async fn unrequested_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -107,11 +108,12 @@ async fn valid_response(#[case] seed: Seed) {
         .build();
     let num_blocks = rng.gen_range(2..10);
     let blocks = create_n_blocks(&mut tf, num_blocks);
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
@@ -142,7 +144,7 @@ async fn valid_response(#[case] seed: Seed) {
         if i < num_blocks - 1 {
             assert_eq!(
                 handle.announcement().await,
-                Announcement::Block(block.header().clone())
+                Announcement::Block(Box::new(block.header().clone()))
             );
         } else {
             // The order of receiving the block announcement and header list request is nondeterministic.
@@ -163,7 +165,10 @@ async fn valid_response(#[case] seed: Seed) {
                 ) => (*announcement, message),
                 (e1, e2) => panic!("Unexpected events: {e1:?} {e2:?}"),
             };
-            assert_eq!(announcement, Announcement::Block(block.header().clone()));
+            assert_eq!(
+                announcement,
+                Announcement::Block(Box::new(block.header().clone()))
+            );
             assert!(matches!(request, SyncMessage::HeaderListRequest(_)));
         }
     }

@@ -27,7 +27,10 @@ use p2p::{
     error::P2pError,
     event::PeerManagerEvent,
     message::{Announcement, HeaderListResponse, SyncMessage},
-    net::{types::SyncingEvent, ConnectivityService, NetworkingService, SyncingMessagingService},
+    net::{
+        types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
+        SyncingEventReceiver,
+    },
     sync::BlockSyncManager,
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
@@ -42,14 +45,15 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
 {
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
-    let handle = p2p_test_utils::start_chainstate(Arc::clone(&chain_config)).await;
+    let (chainstate, mempool) = p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
 
-    let (mut conn1, sync1) = N::start(
+    let (mut conn1, messaging_handle, sync_event_receiveer) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -61,12 +65,14 @@ where
     let mut sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        sync1,
-        handle.clone(),
+        messaging_handle,
+        sync_event_receiveer,
+        chainstate,
+        mempool,
         tx_peer_manager,
     );
 
-    let (mut conn2, mut sync2) = N::start(
+    let (mut conn2, mut messaging_handle_2, mut sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -103,13 +109,15 @@ where
             } => peer,
             e => panic!("Unexpected event type: {e:?}"),
         };
-        sync2
+        messaging_handle_2
             .send_message(
                 peer,
                 SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
             )
             .unwrap();
-        sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+        messaging_handle_2
+            .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+            .unwrap();
     });
 
     match rx_peer_manager.recv().await {

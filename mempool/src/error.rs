@@ -24,7 +24,7 @@ use common::primitives::H256;
 
 use crate::pool::fee::Fee;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {
     #[error("Mempool is full")]
     MempoolFull,
@@ -38,7 +38,7 @@ pub enum Error {
     RecvError,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum TxValidationError {
     #[error("Transaction has no inputs.")]
     NoInputs,

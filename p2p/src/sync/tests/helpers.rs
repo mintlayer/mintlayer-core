@@ -29,14 +29,17 @@ use tokio::{
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::chain::{config::create_mainnet, ChainConfig};
-use p2p_test_utils::start_chainstate;
+use mempool::MempoolHandle;
+use p2p_test_utils::start_subsystems;
 
 use crate::{
+    message::SyncMessage,
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
-    sync::{Announcement, BlockSyncManager, SyncMessage},
+    sync::{Announcement, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
-    NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result, SyncingMessagingService,
+    MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
+    SyncingEventReceiver,
 };
 
 /// A timeout for blocking calls.
@@ -70,13 +73,16 @@ impl SyncManagerHandle {
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool: MempoolHandle,
     ) -> Self {
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
         let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
-        let messaging_handle = SyncingMessagingHandleMock {
+        let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
+        };
+        let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
         };
 
@@ -84,7 +90,9 @@ impl SyncManagerHandle {
             chain_config,
             p2p_config,
             messaging_handle,
+            sync_event_receiver,
             chainstate,
+            mempool,
             peer_manager_sender,
         );
 
@@ -212,7 +220,10 @@ impl SyncManagerHandle {
 pub struct SyncManagerHandleBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    chainstate: Option<subsystem::Handle<Box<dyn ChainstateInterface>>>,
+    subsystems: Option<(
+        subsystem::Handle<Box<dyn ChainstateInterface>>,
+        MempoolHandle,
+    )>,
 }
 
 impl SyncManagerHandleBuilder {
@@ -220,7 +231,7 @@ impl SyncManagerHandleBuilder {
         Self {
             chain_config: Arc::new(create_mainnet()),
             p2p_config: Arc::new(test_p2p_config()),
-            chainstate: None,
+            subsystems: None,
         }
     }
 
@@ -229,11 +240,12 @@ impl SyncManagerHandleBuilder {
         self
     }
 
-    pub fn with_chainstate(
+    pub fn with_subsystems(
         mut self,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool: MempoolHandle,
     ) -> Self {
-        self.chainstate = Some(chainstate);
+        self.subsystems = Some((chainstate, mempool));
         self
     }
 
@@ -243,12 +255,18 @@ impl SyncManagerHandleBuilder {
     }
 
     pub async fn build(self) -> SyncManagerHandle {
-        let chainstate = match self.chainstate {
-            Some(chainstate) => chainstate,
-            None => start_chainstate(Arc::clone(&self.chain_config)).await,
+        let (chainstate, mempool) = match self.subsystems {
+            Some((c, m)) => (c, m),
+            None => start_subsystems(Arc::clone(&self.chain_config)),
         };
 
-        SyncManagerHandle::start_with_params(self.chain_config, self.p2p_config, chainstate).await
+        SyncManagerHandle::start_with_params(
+            self.chain_config,
+            self.p2p_config,
+            chainstate,
+            mempool,
+        )
+        .await
     }
 }
 
@@ -265,26 +283,32 @@ impl NetworkingService for NetworkingServiceStub {
     type Address = SocketAddr;
     type BannableAddress = IpAddr;
     type ConnectivityHandle = ();
-    type SyncingMessagingHandle = SyncingMessagingHandleMock;
+    type MessagingHandle = MessagingHandleMock;
+    type SyncingEventReceiver = SyncingEventReceiverMock;
 
     async fn start(
         _: Self::Transport,
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
-    ) -> Result<(Self::ConnectivityHandle, Self::SyncingMessagingHandle)> {
+    ) -> Result<(
+        Self::ConnectivityHandle,
+        Self::MessagingHandle,
+        Self::SyncingEventReceiver,
+    )> {
         panic!("Stub service shouldn't be used directly");
     }
 }
 
-/// A mock implementation of the `SyncingMessagingService` trait.
-struct SyncingMessagingHandleMock {
+#[derive(Clone)]
+struct MessagingHandleMock {
     events_sender: UnboundedSender<SyncingEvent>,
+}
+struct SyncingEventReceiverMock {
     events_receiver: UnboundedReceiver<SyncingEvent>,
 }
 
-#[async_trait]
-impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMock {
+impl MessagingService for MessagingHandleMock {
     fn send_message(&mut self, peer: PeerId, message: SyncMessage) -> Result<()> {
         self.events_sender.send(SyncingEvent::Message { peer, message }).unwrap();
         Ok(())
@@ -299,7 +323,10 @@ impl SyncingMessagingService<NetworkingServiceStub> for SyncingMessagingHandleMo
             .unwrap();
         Ok(())
     }
+}
 
+#[async_trait]
+impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
         Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await

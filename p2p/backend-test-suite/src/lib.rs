@@ -28,7 +28,7 @@ use std::fmt::Debug;
 use libtest_mimic::{Arguments, Trial};
 
 use p2p::{
-    net::{ConnectivityService, NetworkingService, SyncingMessagingService},
+    net::{ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver},
     testing_utils::{RandomAddressMaker, TestTransportMaker},
 };
 
@@ -38,7 +38,8 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
+    N::MessagingHandle: MessagingService + Debug,
+    N::SyncingEventReceiver: SyncingEventReceiver + Debug,
     A: RandomAddressMaker<Address = N::Address>,
 {
     logging::init_logging::<&str>(None);
@@ -52,7 +53,8 @@ where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N> + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N> + Debug,
+    N::MessagingHandle: MessagingService + Debug,
+    N::SyncingEventReceiver: SyncingEventReceiver + Debug,
     A: RandomAddressMaker<Address = N::Address>,
 {
     std::iter::empty()

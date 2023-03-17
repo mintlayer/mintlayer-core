@@ -32,7 +32,7 @@ use p2p::{
             DefaultNetworkingService,
         },
         types::SyncingEvent,
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
 };
 
@@ -42,12 +42,13 @@ async fn block_announcement_3_peers<A, S>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + Debug,
-    S::SyncingMessagingHandle: SyncingMessagingService<S>,
+    S::MessagingHandle: MessagingService,
+    S::SyncingEventReceiver: SyncingEventReceiver,
     S::ConnectivityHandle: ConnectivityService<S>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut sync1) = S::start(
+    let (mut conn1, mut messaging_handle1, _sync1) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -66,7 +67,7 @@ where
             )
             .await
             .unwrap();
-            (res.0, res.1)
+            (res.0, res.2)
         }))
         .await;
 
@@ -82,8 +83,8 @@ where
     connect_and_accept_services::<S>(&mut peer1.0, &mut peer2.0).await;
     connect_and_accept_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
-    sync1
-        .make_announcement(Announcement::Block(
+    messaging_handle1
+        .make_announcement(Announcement::Block(Box::new(
             Block::new(
                 vec![],
                 Id::new(H256([0x03; 32])),
@@ -94,7 +95,7 @@ where
             .unwrap()
             .header()
             .clone(),
-        ))
+        )))
         .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.

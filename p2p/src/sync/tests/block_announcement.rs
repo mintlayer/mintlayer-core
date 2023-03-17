@@ -26,7 +26,7 @@ use common::{
     primitives::Idable,
 };
 use consensus::ConsensusVerificationError;
-use p2p_test_utils::chainstate_subsystem;
+use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -36,7 +36,6 @@ use crate::{
     P2pError,
 };
 
-// Announcements from unknown peers are ignored.
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -50,17 +49,18 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
     let peer = PeerId::new();
 
-    handle.make_announcement(peer, Announcement::Block(block.header().clone()));
+    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
 
     handle.resume_panic().await;
 }
@@ -79,18 +79,22 @@ async fn unknown_prev_block(#[case] seed: Seed) {
         .build();
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(peer, Announcement::Block(block_2.header().clone()));
+    handle.make_announcement(
+        peer,
+        Announcement::Block(Box::new(block_2.header().clone())),
+    );
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
@@ -118,7 +122,7 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(block.header().clone()));
+    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -157,7 +161,7 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(block.header().clone()));
+    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -170,7 +174,7 @@ async fn invalid_consensus_data() {
         ))
         .ban_score()
     );
-    //handle.assert_no_event().await;
+    handle.assert_no_event().await;
     handle.assert_no_error().await;
 }
 
@@ -186,18 +190,19 @@ async fn valid_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_chainstate(chainstate)
+        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(peer, Announcement::Block(block.header().clone()));
+    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);

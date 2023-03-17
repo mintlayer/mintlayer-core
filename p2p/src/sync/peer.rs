@@ -29,10 +29,14 @@ use void::Void;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
-    chain::{block::BlockHeader, Block},
+    chain::{block::BlockHeader, Block, SignedTransaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
+use mempool::{
+    error::{Error as MempoolError, TxValidationError},
+    MempoolHandle,
+};
 use utils::const_value::ConstValue;
 
 use crate::{
@@ -42,10 +46,10 @@ use crate::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
         SyncMessage,
     },
-    net::{NetworkingService, SyncingMessagingService},
+    net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    PeerManagerEvent, Result,
+    MessagingService, PeerManagerEvent, Result,
 };
 
 #[derive(Debug)]
@@ -64,8 +68,9 @@ pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-    message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+    messaging_handle: T::MessagingHandle,
     events_receiver: UnboundedReceiver<PeerEvent>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
@@ -82,14 +87,16 @@ pub struct Peer<T: NetworkingService> {
 impl<T> Peer<T>
 where
     T: NetworkingService,
-    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    T::MessagingHandle: MessagingService,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: PeerId,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
+        mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
-        message_sender: UnboundedSender<(PeerId, SyncMessage)>,
+        messaging_handle: T::MessagingHandle,
         events_receiver: UnboundedReceiver<PeerEvent>,
         is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
@@ -97,8 +104,9 @@ where
             id: id.into(),
             p2p_config,
             chainstate_handle,
+            mempool_handle,
             peer_manager_sender,
-            message_sender,
+            messaging_handle,
             events_receiver,
             is_initial_block_download,
             known_headers: Vec::new(),
@@ -138,12 +146,10 @@ where
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
-        self.message_sender
-            .send((
-                self.id(),
-                SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
-            ))
-            .map_err(Into::into)
+        self.messaging_handle.send_message(
+            self.id(),
+            SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
+        )
     }
 
     async fn handle_event(&mut self, event: PeerEvent) -> Result<()> {
@@ -188,12 +194,10 @@ where
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
         debug_assert!(headers.len() <= limit);
-        self.message_sender.send((
+        self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-        ))?;
-
-        Ok(())
+        )
     }
 
     /// Processes the blocks request.
@@ -366,7 +370,8 @@ where
 
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
         match announcement {
-            Announcement::Block(header) => self.handle_block_announcement(header).await,
+            Announcement::Block(header) => self.handle_block_announcement(*header).await,
+            Announcement::Transaction(tx) => self.handle_transaction_announcement(tx).await,
         }
     }
 
@@ -409,6 +414,13 @@ where
         self.request_blocks(vec![header])
     }
 
+    async fn handle_transaction_announcement(&mut self, tx: SignedTransaction) -> Result<()> {
+        self.mempool_handle
+            .call_async_mut(|m| m.add_transaction(tx))
+            .await?
+            .map_err(Into::into)
+    }
+
     /// Handles a result of message processing.
     ///
     /// There are three possible types of errors:
@@ -423,8 +435,18 @@ where
         };
 
         match error {
+            // Due to the fact that p2p is split into several tasks, it is possible to send a
+            // request/response after a peer is disconnected, but before receiving the disconnect
+            // event. Therefore this error can be safely ignored.
+            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+            P2pError::MempoolError(
+                MempoolError::MempoolFull
+                // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
+                | MempoolError::TxValidationError(TxValidationError::TransactionAlreadyInMempool),
+            ) => Ok(()),
             // A protocol error - increase the ban score of a peer.
             e @ (P2pError::ProtocolError(_)
+            | P2pError::MempoolError(MempoolError::TxValidationError(_))
             | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(_),
             ))) => {
@@ -445,10 +467,6 @@ where
                     e => Err(e),
                 })
             }
-            // Due to the fact that p2p is split into several tasks, it is possible to send a
-            // request/response after a peer is disconnected, but before receiving the disconnect
-            // event. Therefore this error can be safely ignored.
-            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.
             e @ (P2pError::DialError(_)
@@ -462,7 +480,8 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)
+            | P2pError::MempoolError(_)) => Err(e),
         }
     }
 
@@ -491,10 +510,10 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
-        self.message_sender.send((
+        self.messaging_handle.send_message(
             self.id(),
             SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
-        ))?;
+        )?;
         self.requested_blocks.extend(block_ids);
 
         Ok(())
@@ -514,11 +533,9 @@ where
         let height = height?;
         self.best_known_block = height;
 
-        self.message_sender
-            .send((
-                self.id(),
-                SyncMessage::BlockResponse(BlockResponse::new(block)),
-            ))
-            .map_err(Into::into)
+        self.messaging_handle.send_message(
+            self.id(),
+            SyncMessage::BlockResponse(BlockResponse::new(block)),
+        )
     }
 }

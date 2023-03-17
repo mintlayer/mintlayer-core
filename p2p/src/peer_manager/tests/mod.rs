@@ -59,7 +59,7 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (conn, _) = T::start(
+    let (conn, _, _) = T::start(
         transport,
         vec![addr],
         Arc::clone(&chain_config),

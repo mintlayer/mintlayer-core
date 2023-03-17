@@ -2192,6 +2192,7 @@ dependencies = [
  "consensus",
  "crypto",
  "futures",
+ "hex",
  "itertools",
  "jsonrpsee",
  "logging",

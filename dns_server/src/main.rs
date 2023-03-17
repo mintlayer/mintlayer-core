@@ -66,7 +66,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
     let transport = p2p::make_p2p_transport();
 
-    let (conn, sync) = p2p::P2pNetworkingService::start(
+    let (conn, _messaging_handle, sync) = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),

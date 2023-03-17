@@ -39,7 +39,7 @@ use p2p::{
     message::Announcement,
     net::{
         default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
-        ConnectivityService, NetworkingService, SyncingMessagingService,
+        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
@@ -54,12 +54,13 @@ async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, mut sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -67,7 +68,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, mut sync2) = N::start(
+    let (mut conn2, mut messaging_handle2, mut sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -86,7 +87,9 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    messaging_handle1
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 
     match sync2.poll_next().await.unwrap() {
         SyncingEvent::Connected { peer_id: _ } => {}
@@ -99,7 +102,8 @@ where
             peer: _,
             announcement,
         } => match *announcement {
-            Announcement::Block(block) => block,
+            Announcement::Block(h) => *h,
+            a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
     };
@@ -114,7 +118,9 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync2.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    messaging_handle2
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 
     match sync1.poll_next().await.unwrap() {
         SyncingEvent::Connected { peer_id: _ } => {}
@@ -126,7 +132,8 @@ where
             peer: _,
             announcement,
         } => match *announcement {
-            Announcement::Block(block) => block,
+            Announcement::Block(h) => *h,
+            a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
     };
@@ -138,7 +145,8 @@ async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
@@ -161,7 +169,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
     });
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -169,7 +177,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, _sync2) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -188,14 +196,17 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    sync1.make_announcement(Announcement::Block(block.header().clone())).unwrap();
+    messaging_handle1
+        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .unwrap();
 }
 
 async fn block_announcement_too_big_message<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
     N: NetworkingService + Debug,
-    N::SyncingMessagingHandle: SyncingMessagingService<N>,
+    N::MessagingHandle: MessagingService,
+    N::SyncingEventReceiver: SyncingEventReceiver,
     N::ConnectivityHandle: ConnectivityService<N>,
 {
     // TODO: Use seedable random.
@@ -203,7 +214,7 @@ where
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -212,7 +223,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _sync2) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -245,11 +256,11 @@ where
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    let message = Announcement::Block(block.header().clone());
+    let message = Announcement::Block(Box::new(block.header().clone()));
     let encoded_size = message.encode().len();
 
     assert_eq!(
-        sync1.make_announcement(message),
+        messaging_handle1.make_announcement(message),
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             encoded_size,
             ANNOUNCEMENT_MAX_SIZE
