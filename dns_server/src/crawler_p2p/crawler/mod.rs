@@ -38,7 +38,11 @@ use common::chain::ChainConfig;
 use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
 use p2p::{
-    error::P2pError, net::types::PeerInfo, types::peer_id::PeerId, utils::rate_limiter::RateLimiter,
+    error::P2pError,
+    net::types::PeerInfo,
+    peer_manager::{ADDR_RATE_BUCKET_SIZE, ADDR_RATE_INITIAL_SIZE, MAX_ADDR_RATE_PER_SECOND},
+    types::peer_id::PeerId,
+    utils::rate_limiter::RateLimiter,
 };
 
 use crate::crawler_p2p::crawler::address_data::AddressStateTransitionTo;
@@ -47,14 +51,6 @@ use self::address_data::{AddressData, AddressState};
 
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
-
-/// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
-const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
-/// Bucket size used to rate limit address announcements from a peer.
-/// Use a non-zero value to allow peers to send their own addresses immediately after connection.
-const ADDR_RATE_INITIAL_SIZE: u32 = 10;
-/// Bucket size used to rate limit address announcements from a peer.
-const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// The `Crawler` is the component that communicates with Mintlayer peers using p2p,
 /// and based on the results, commands the DNS server to add/remove ip addresses.

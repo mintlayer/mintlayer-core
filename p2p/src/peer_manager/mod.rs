@@ -77,12 +77,12 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 const MAX_ADDRESS_COUNT: usize = 1000;
 
 /// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
-const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
+pub const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
 /// Bucket size used to rate limit address announcements from a peer.
-/// Use a non-zero value to allow peers to send their own addresses immediately after connection.
-const ADDR_RATE_INITIAL_SIZE: u32 = 10;
+/// Use 1 to allow peers to send one own address immediately after connecting.
+pub const ADDR_RATE_INITIAL_SIZE: u32 = 1;
 /// Bucket size used to rate limit address announcements from a peer.
-const ADDR_RATE_BUCKET_SIZE: u32 = 10;
+pub const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
@@ -221,7 +221,9 @@ where
             })
             .collect::<Vec<_>>();
 
-        for address in discovered_own_addresses {
+        // Send only one address because of the rate limiter (see `ADDR_RATE_INITIAL_SIZE`).
+        // Select a random address to give all addresses a chance to be discovered by the network.
+        if let Some(address) = discovered_own_addresses.into_iter().choose(&mut make_pseudo_rng()) {
             self.announce_address(peer_id, address);
         }
     }
