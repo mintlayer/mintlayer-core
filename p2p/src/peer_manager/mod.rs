@@ -56,7 +56,7 @@ use crate::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
     },
-    utils::oneshot_nofail,
+    utils::{oneshot_nofail, rate_limiter::RateLimiter},
 };
 
 use self::{
@@ -75,6 +75,14 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
+
+/// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
+pub const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
+/// Bucket size used to rate limit address announcements from a peer.
+/// Use 1 to allow peers to send one own address immediately after connecting.
+pub const ADDR_RATE_INITIAL_SIZE: u32 = 1;
+/// Bucket size used to rate limit address announcements from a peer.
+pub const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
@@ -213,7 +221,9 @@ where
             })
             .collect::<Vec<_>>();
 
-        for address in discovered_own_addresses {
+        // Send only one address because of the rate limiter (see `ADDR_RATE_INITIAL_SIZE`).
+        // Select a random address to give all addresses a chance to be discovered by the network.
+        if let Some(address) = discovered_own_addresses.into_iter().choose(&mut make_pseudo_rng()) {
             self.announce_address(peer_id, address);
         }
     }
@@ -456,6 +466,13 @@ where
             );
         }
 
+        let address_rate_limiter = RateLimiter::new(
+            self.time_getter.get_time(),
+            MAX_ADDR_RATE_PER_SECOND,
+            ADDR_RATE_INITIAL_SIZE,
+            ADDR_RATE_BUCKET_SIZE,
+        );
+
         let old_value = self.peers.insert(
             peer_id,
             PeerContext {
@@ -468,6 +485,7 @@ where
                 ping_min: None,
                 expect_addr_list_response,
                 announced_addresses: HashSet::new(),
+                address_rate_limiter,
             },
         );
         assert!(old_value.is_none());
@@ -697,18 +715,21 @@ where
         }
     }
 
-    fn handle_announce_addr_request(&mut self, peer: PeerId, address: PeerAddress) {
-        // TODO: Rate limit announce address requests to prevent DoS attacks.
-        // For example it's 0.1 req/sec in Bitcoin Core.
+    fn handle_announce_addr_request(&mut self, peer_id: PeerId, address: PeerAddress) {
         if let Some(address) = <T::Address as TransportAddress>::from_peer_address(
             &address,
             *self.p2p_config.allow_discover_private_ips,
         ) {
-            self.peers
-                .get_mut(&peer)
-                .expect("peer sending AnnounceAddrRequest must be known")
-                .announced_addresses
-                .insert(address.clone());
+            let peer = self
+                .peers
+                .get_mut(&peer_id)
+                .expect("peer sending AnnounceAddrRequest must be known");
+            if !peer.address_rate_limiter.accept(self.time_getter.get_time()) {
+                log::debug!("address announcement is rate limited from peer {peer_id}");
+                return;
+            }
+
+            peer.announced_addresses.insert(address.clone());
 
             self.peerdb.peer_discovered(address.clone());
 

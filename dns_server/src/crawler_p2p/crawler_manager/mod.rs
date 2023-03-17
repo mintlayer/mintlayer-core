@@ -159,11 +159,11 @@ where
                 // Ignored
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
-                // TODO: Rate limit `AnnounceAddrRequest` requests from a specific peer to prevent DoS attack,
-                // when too many invalid addresses are announced, preventing the server from discovering new addresses.
-                // For example, Bitcoin Core allows 0.1 address/sec.
                 if let Some(address) = TransportAddress::from_peer_address(&address, false) {
-                    self.send_crawler_event(CrawlerEvent::NewAddress { address });
+                    self.send_crawler_event(CrawlerEvent::NewAddress {
+                        address,
+                        sender: peer_id,
+                    });
                 }
             }
             PeerManagerMessage::PingRequest(PingRequest { nonce }) => {

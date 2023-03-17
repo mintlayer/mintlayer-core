@@ -89,7 +89,10 @@ impl MockCrawler {
     pub fn step(&mut self, event: CrawlerEvent<SocketAddr>, rng: &mut impl Rng) {
         match &event {
             CrawlerEvent::Timer { period: _ } => {}
-            CrawlerEvent::NewAddress { address: _ } => {}
+            CrawlerEvent::NewAddress {
+                address: _,
+                sender: _,
+            } => {}
             CrawlerEvent::Connected { peer_info, address } => {
                 let removed = self.pending_connects.remove(address);
                 assert!(removed);
