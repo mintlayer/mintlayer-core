@@ -37,7 +37,9 @@ use std::{
 use common::chain::ChainConfig;
 use crypto::random::{seq::IteratorRandom, Rng};
 use logging::log;
-use p2p::{error::P2pError, net::types::PeerInfo, types::peer_id::PeerId};
+use p2p::{
+    error::P2pError, net::types::PeerInfo, types::peer_id::PeerId, utils::rate_limiter::RateLimiter,
+};
 
 use crate::crawler_p2p::crawler::address_data::AddressStateTransitionTo;
 
@@ -45,6 +47,14 @@ use self::address_data::{AddressData, AddressState};
 
 /// How many outbound connection attempts can be made per heartbeat
 const MAX_CONNECTS_PER_HEARTBEAT: usize = 25;
+
+/// The maximum rate of address announcements the node will process from a peer (value as in Bitcoin Core).
+const MAX_ADDR_RATE_PER_SECOND: f64 = 0.1;
+/// Bucket size used to rate limit address announcements from a peer.
+/// Use a non-zero value to allow peers to send their own addresses immediately after connection.
+const ADDR_RATE_INITIAL_SIZE: u32 = 10;
+/// Bucket size used to rate limit address announcements from a peer.
+const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// The `Crawler` is the component that communicates with Mintlayer peers using p2p,
 /// and based on the results, commands the DNS server to add/remove ip addresses.
@@ -66,12 +76,17 @@ pub struct Crawler<A> {
     /// Map of all currently connected outbound peers that we successfully
     /// reached and are still connected to (generally speaking,
     /// we don't have to stay connected to those peers, but this is an implementation detail)
-    outbound_peers: BTreeMap<PeerId, A>,
+    outbound_peers: BTreeMap<PeerId, Peer<A>>,
+}
+
+struct Peer<A> {
+    address: A,
+    address_rate_limiter: RateLimiter,
 }
 
 pub enum CrawlerEvent<A> {
     Timer { period: Duration },
-    NewAddress { address: A },
+    NewAddress { address: A, sender: PeerId },
     Connected { address: A, peer_info: PeerInfo },
     Disconnected { peer_id: PeerId },
     ConnectionError { address: A, error: P2pError },
@@ -165,7 +180,12 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         self.remove_outbound_peer(peer_id, callback);
     }
 
-    fn handle_new_address(&mut self, address: A) {
+    fn handle_new_address(&mut self, address: A, sender: PeerId) {
+        let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
+        if !peer.address_rate_limiter.accept(self.now) {
+            log::debug!("address announcement is rate limited from peer {sender}");
+            return;
+        }
         if let Entry::Vacant(vacant) = self.addresses.entry(address.clone()) {
             log::debug!("new address {} added", address.to_string());
             vacant.insert(AddressData {
@@ -214,7 +234,19 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
         peer_info: PeerInfo,
         callback: &mut impl FnMut(CrawlerCommand<A>),
     ) {
-        let old_peer = self.outbound_peers.insert(peer_id, address.clone());
+        let address_rate_limiter = RateLimiter::new(
+            self.now,
+            MAX_ADDR_RATE_PER_SECOND,
+            ADDR_RATE_INITIAL_SIZE,
+            ADDR_RATE_BUCKET_SIZE,
+        );
+
+        let peer = Peer {
+            address: address.clone(),
+            address_rate_limiter,
+        };
+
+        let old_peer = self.outbound_peers.insert(peer_id, peer);
         assert!(old_peer.is_none());
 
         let is_compatible = peer_info.is_compatible(&self.chain_config);
@@ -260,19 +292,19 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     ) {
         log::debug!("outbound peer removed, peer_id: {}", peer_id);
 
-        let address = self
+        let peer = self
             .outbound_peers
             .remove(&peer_id)
             .expect("peer must be known (remove_outbound_peer)");
 
         let address_data = self
             .addresses
-            .get_mut(&address)
+            .get_mut(&peer.address)
             .expect("address must be known (remove_outbound_peer)");
 
         Self::change_address_state(
             self.now,
-            &address,
+            &peer.address,
             address_data,
             AddressStateTransitionTo::Disconnected,
             callback,
@@ -324,8 +356,8 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
 
                 self.heartbeat(callback, rng);
             }
-            CrawlerEvent::NewAddress { address } => {
-                self.handle_new_address(address);
+            CrawlerEvent::NewAddress { address, sender } => {
+                self.handle_new_address(address, sender);
             }
             CrawlerEvent::Connected { peer_info, address } => {
                 self.handle_connected(address, peer_info, callback);

@@ -713,17 +713,17 @@ where
         }
     }
 
-    fn handle_announce_addr_request(&mut self, peer: PeerId, address: PeerAddress) {
+    fn handle_announce_addr_request(&mut self, peer_id: PeerId, address: PeerAddress) {
         if let Some(address) = <T::Address as TransportAddress>::from_peer_address(
             &address,
             *self.p2p_config.allow_discover_private_ips,
         ) {
             let peer = self
                 .peers
-                .get_mut(&peer)
+                .get_mut(&peer_id)
                 .expect("peer sending AnnounceAddrRequest must be known");
             if !peer.address_rate_limiter.accept(self.time_getter.get_time()) {
-                log::debug!("Address announcment is dropped because of rate limiting");
+                log::debug!("address announcement is rate limited from peer {peer_id}");
                 return;
             }
 

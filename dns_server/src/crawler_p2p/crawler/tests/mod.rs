@@ -73,7 +73,13 @@ fn basic(#[case] seed: Seed) {
     let node2: SocketAddr = "4.3.2.1:12345".parse().unwrap();
     let peer2 = PeerId::new();
 
-    crawler.step(CrawlerEvent::NewAddress { address: node2 }, &mut rng);
+    crawler.step(
+        CrawlerEvent::NewAddress {
+            address: node2,
+            sender: peer1,
+        },
+        &mut rng,
+    );
 
     crawler.timer(Duration::from_secs(100), &mut rng);
     assert!(crawler.pending_connects.contains(&node2));
@@ -198,7 +204,8 @@ fn randomized(#[case] seed: Seed) {
         // Randomly send an address announcement request
         if !crawler.peers.is_empty() && rng.gen_bool(0.01) {
             let address = nodes.iter().choose(&mut rng).cloned().unwrap();
-            crawler.step(CrawlerEvent::NewAddress { address }, &mut rng)
+            let sender = crawler.peers.keys().choose(&mut rng).cloned().unwrap();
+            crawler.step(CrawlerEvent::NewAddress { address, sender }, &mut rng)
         }
 
         if !crawler.peers.is_empty() && rng.gen_bool(0.001) {
