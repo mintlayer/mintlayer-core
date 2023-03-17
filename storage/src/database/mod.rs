@@ -45,9 +45,9 @@ where
     }
 }
 
-impl<B: Backend, Sch> utils::shallow_clone::ShallowClone for Storage<B, Sch>
+impl<B: Backend, Sch> ShallowClone for Storage<B, Sch>
 where
-    B::Impl: utils::shallow_clone::ShallowClone,
+    B::Impl: ShallowClone,
 {
     fn shallow_clone(&self) -> Self {
         Self {
@@ -141,7 +141,7 @@ impl<'tx, B: Backend, Sch: Schema> TransactionRw<'tx, B, Sch> {
 }
 
 /// Represents an immutable view of a key-value map
-pub struct MapRef<'tx, Tx: internal::TxImpl, DbMap: schema::DbMap> {
+pub struct MapRef<'tx, Tx: TxImpl, DbMap: schema::DbMap> {
     dbtx: &'tx Tx::Impl,
     map_id: DbMapId,
     _phantom: std::marker::PhantomData<fn() -> DbMap>,

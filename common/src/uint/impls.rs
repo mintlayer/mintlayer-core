@@ -585,8 +585,8 @@ pub struct ParseLengthError {
     pub expected: usize,
 }
 
-impl ::core::fmt::Display for ParseLengthError {
-    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+impl core::fmt::Display for ParseLengthError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(
             f,
             "Invalid length: got {}, expected {}",
@@ -674,7 +674,7 @@ mod tests {
             "0x00000000000000000000000000000000000000000000000000000000deadbeef"
         );
         assert_eq!(
-            format!("{:?}", Uint256::from_u64(u64::max_value())),
+            format!("{:?}", Uint256::from_u64(u64::MAX)),
             "0x000000000000000000000000000000000000000000000000ffffffffffffffff"
         );
 

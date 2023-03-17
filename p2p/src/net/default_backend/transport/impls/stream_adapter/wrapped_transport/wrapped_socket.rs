@@ -59,7 +59,7 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportSocket
         Ok(AdaptedListener::new(stream_adapter, listener))
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
         let base = self.base_transport.connect(address);
         let stream_adapter = self.stream_adapter.clone();
         Box::pin(async move {

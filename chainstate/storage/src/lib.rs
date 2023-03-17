@@ -124,98 +124,87 @@ pub trait BlockchainStorageWrite:
     + PoSAccountingStorageWrite<TipStorageTag>
 {
     /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+    fn set_storage_version(&mut self, version: u32) -> Result<()>;
 
     /// Set the hash of the best block
-    fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
+    fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> Result<()>;
 
     // Set the block index
-    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> Result<()>;
 
     /// Add a new block into the database
-    fn add_block(&mut self, block: &Block) -> crate::Result<()>;
+    fn add_block(&mut self, block: &Block) -> Result<()>;
 
     /// Remove block from the database
-    fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+    fn del_block(&mut self, id: Id<Block>) -> Result<()>;
 
     /// Change tx indexing state flag
-    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> crate::Result<()>;
+    fn set_is_mainchain_tx_index_enabled(&mut self, enabled: bool) -> Result<()>;
 
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
-    ) -> crate::Result<()>;
+    ) -> Result<()>;
 
     /// Delete outputs state index associated with given transaction
-    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
+    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> Result<()>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(
         &mut self,
         height: &BlockHeight,
         block_id: &Id<GenBlock>,
-    ) -> crate::Result<()>;
+    ) -> Result<()>;
 
     /// Remove block id from given mainchain height
-    fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+    fn del_block_id_at_height(&mut self, height: &BlockHeight) -> Result<()>;
 
     /// Set the mainchain epoch data of the given epoch index
-    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> Result<()>;
 
     /// Remove the mainchain epoch data of the given epoch index
-    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
+    fn del_epoch_data(&mut self, epoch_index: u64) -> Result<()>;
 
     /// Set data associated with token issuance (and ACL changes in the future)
-    fn set_token_aux_data(
-        &mut self,
-        token_id: &TokenId,
-        data: &TokenAuxiliaryData,
-    ) -> crate::Result<()>;
+    fn set_token_aux_data(&mut self, token_id: &TokenId, data: &TokenAuxiliaryData) -> Result<()>;
 
     // Remove token tx
-    fn del_token_aux_data(&mut self, token_id: &TokenId) -> crate::Result<()>;
+    fn del_token_aux_data(&mut self, token_id: &TokenId) -> Result<()>;
 
     // Binding Id of issuance tx with token id
-    fn set_token_id(
-        &mut self,
-        issuance_tx_id: &Id<Transaction>,
-        token_id: &TokenId,
-    ) -> crate::Result<()>;
+    fn set_token_id(&mut self, issuance_tx_id: &Id<Transaction>, token_id: &TokenId) -> Result<()>;
 
     // Remove token id
-    fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> crate::Result<()>;
+    fn del_token_id(&mut self, issuance_tx_id: &Id<Transaction>) -> Result<()>;
 
     // Set accounting block undo data for specific block
-    fn set_accounting_undo_data(
-        &mut self,
-        id: Id<Block>,
-        undo: &AccountingBlockUndo,
-    ) -> crate::Result<()>;
+    fn set_accounting_undo_data(&mut self, id: Id<Block>, undo: &AccountingBlockUndo)
+        -> Result<()>;
 
     // Remove accounting block undo data for specific block
-    fn del_accounting_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
+    fn del_accounting_undo_data(&mut self, id: Id<Block>) -> Result<()>;
 
     // Set accounting delta for specific block
     fn set_accounting_epoch_delta(
         &mut self,
         epoch_index: EpochIndex,
         delta: &PoSAccountingDeltaData,
-    ) -> crate::Result<()>;
+    ) -> Result<()>;
 
     // Remove accounting delta for specific block
-    fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+    fn del_accounting_epoch_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
     // Set accounting undo for specific epoch
     fn set_accounting_epoch_undo_delta(
         &mut self,
         epoch_index: EpochIndex,
         undo: &DeltaMergeUndo,
-    ) -> crate::Result<()>;
+    ) -> Result<()>;
 
     // Remove accounting block undo data for specific block
-    fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> crate::Result<()>;
+    fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction
@@ -245,10 +234,10 @@ pub trait Transactional<'t> {
     type TransactionRw: TransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> crate::Result<Self::TransactionRo>;
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> crate::Result<Self::TransactionRw>;
+    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
 }
 
 pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

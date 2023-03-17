@@ -177,7 +177,7 @@ pub async fn run(options: Options) -> Result<()> {
 /// 2. If a custom data directory is specified, it MUST exist. Otherwise, an error is returned.
 fn prepare_data_dir<F: Fn() -> PathBuf>(
     default_data_dir_getter: F,
-    datadir_path_opt: &Option<std::path::PathBuf>,
+    datadir_path_opt: &Option<PathBuf>,
 ) -> Result<PathBuf> {
     let data_dir = match datadir_path_opt {
         Some(data_dir) => {
@@ -201,7 +201,7 @@ fn prepare_data_dir<F: Fn() -> PathBuf>(
 
 async fn start(
     config_path: &Path,
-    datadir_path_opt: &Option<std::path::PathBuf>,
+    datadir_path_opt: &Option<PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
 ) -> Result<()> {

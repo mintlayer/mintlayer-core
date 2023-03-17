@@ -286,7 +286,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
     fn get_block_reward(
         &self,
-        block_index: &chainstate_types::BlockIndex,
+        block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()

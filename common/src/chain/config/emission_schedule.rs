@@ -271,8 +271,9 @@ pub const MAINNET_COIN_PREMINE: Mlt = Mlt::from_mlt(400_000_000);
 
 pub fn mainnet_schedule_table(block_interval: Duration) -> EmissionScheduleTabular {
     // Check block interval is in whole seconds
-    assert!(
-        (block_interval.as_nanos() % 1_000_000_000) == 0,
+    assert_eq!(
+        (block_interval.as_nanos() % 1_000_000_000),
+        0,
         "Block interval supported up to the resolution of 1 sec"
     );
 

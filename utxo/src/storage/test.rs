@@ -369,7 +369,7 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn try_flush_spent_utxo(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let mut rng = make_seedable_rng(seed);
 
     let mut db_interface =
         UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());

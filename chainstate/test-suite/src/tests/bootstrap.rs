@@ -183,7 +183,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
             let mut write_buffer = Vec::new();
 
             let writer: BufWriter<Box<dyn std::io::Write + Send>> =
-                std::io::BufWriter::new(Box::new(&mut write_buffer));
+                BufWriter::new(Box::new(&mut write_buffer));
 
             tf1.chainstate.export_bootstrap_stream(writer, with_orphans).unwrap();
 

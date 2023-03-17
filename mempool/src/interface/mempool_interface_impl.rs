@@ -60,7 +60,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterfaceImpl<M> {
             .chainstate_handle()
             .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
-            .map_err(|_| crate::error::Error::SubsystemFailure)?;
+            .map_err(|_| Error::SubsystemFailure)?;
         Ok(rx)
     }
 }

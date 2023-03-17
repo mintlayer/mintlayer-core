@@ -43,22 +43,20 @@ use crate::{
     },
     primitives::{
         id::{self, WithId},
-        merkle::{self, tree::MerkleTree, MerkleTreeFormError},
+        merkle::{tree::MerkleTree, MerkleTreeFormError},
         Id, Idable, VersionTag, H256,
     },
 };
 
 use super::signed_transaction::SignedTransaction;
 
-pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, merkle::MerkleTreeFormError> {
+pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
     const TX_HASHER: fn(&SignedTransaction) -> H256 =
         |tx: &SignedTransaction| tx.transaction().get_id().get();
     calculate_generic_merkle_root(&TX_HASHER, body)
 }
 
-pub fn calculate_witness_merkle_root(
-    body: &BlockBody,
-) -> Result<H256, merkle::MerkleTreeFormError> {
+pub fn calculate_witness_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
     const TX_HASHER: fn(&SignedTransaction) -> H256 =
         |tx: &SignedTransaction| tx.serialized_hash().get();
     calculate_generic_merkle_root(&TX_HASHER, body)
@@ -67,7 +65,7 @@ pub fn calculate_witness_merkle_root(
 fn calculate_generic_merkle_root(
     tx_hasher: &fn(&SignedTransaction) -> H256,
     body: &BlockBody,
-) -> Result<H256, merkle::MerkleTreeFormError> {
+) -> Result<H256, MerkleTreeFormError> {
     let rewards_hash = id::hash_encoded(&body.reward);
 
     if body.transactions.is_empty() {

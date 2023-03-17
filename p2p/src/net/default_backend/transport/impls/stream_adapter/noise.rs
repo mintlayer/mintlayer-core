@@ -58,7 +58,7 @@ impl std::fmt::Debug for NoiseEncryptionAdapter {
 
 /// StreamAdapter that encrypts the data going through it with noise protocol
 impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
-    type Stream = snowstorm::NoiseStream<T>;
+    type Stream = NoiseStream<T>;
 
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         let local_key = Arc::clone(&self.local_key);
@@ -84,4 +84,4 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
     }
 }
 
-impl<T: PeerStream> PeerStream for snowstorm::NoiseStream<T> {}
+impl<T: PeerStream> PeerStream for NoiseStream<T> {}

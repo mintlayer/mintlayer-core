@@ -53,7 +53,7 @@ impl SchnorrkelPublicKey {
     pub fn verify_vrf_data(
         &self,
         message: Transcript,
-        vrf_data: &data::SchnorrkelVRFReturn,
+        vrf_data: &SchnorrkelVRFReturn,
     ) -> Result<(), VRFError> {
         self.key
             .vrf_verify(message, vrf_data.preout(), vrf_data.proof())

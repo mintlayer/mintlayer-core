@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::emission_schedule::{self, *};
+use super::emission_schedule::*;
 use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
 
 use crate::chain::{
@@ -65,8 +65,8 @@ impl ChainType {
 #[derive(Clone)]
 enum EmissionScheduleInit {
     Mainnet,
-    Table(emission_schedule::EmissionScheduleTabular),
-    Fn(std::sync::Arc<emission_schedule::EmissionScheduleFn>),
+    Table(EmissionScheduleTabular),
+    Fn(Arc<EmissionScheduleFn>),
 }
 
 #[derive(Clone)]
@@ -192,7 +192,7 @@ impl Builder {
             EmissionScheduleInit::Fn(f) => EmissionSchedule::from_arc_fn(f),
             EmissionScheduleInit::Table(t) => t.schedule(),
             EmissionScheduleInit::Mainnet => {
-                emission_schedule::mainnet_schedule_table(target_block_spacing).schedule()
+                mainnet_schedule_table(target_block_spacing).schedule()
             }
         };
 
@@ -299,7 +299,7 @@ impl Builder {
     }
 
     /// Initialize an emission schedule using a function
-    pub fn emission_schedule_fn(mut self, f: Box<emission_schedule::EmissionScheduleFn>) -> Self {
+    pub fn emission_schedule_fn(mut self, f: Box<EmissionScheduleFn>) -> Self {
         self.emission_schedule = EmissionScheduleInit::Fn(f.into());
         self
     }

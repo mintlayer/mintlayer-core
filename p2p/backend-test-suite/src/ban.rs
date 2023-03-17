@@ -53,7 +53,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool) = p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
 
-    let (mut conn1, messaging_handle, sync_event_receiveer) = N::start(
+    let (mut conn1, messaging_handle, sync_event_receiver) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -66,7 +66,7 @@ where
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         messaging_handle,
-        sync_event_receiveer,
+        sync_event_receiver,
         chainstate,
         mempool,
         tx_peer_manager,

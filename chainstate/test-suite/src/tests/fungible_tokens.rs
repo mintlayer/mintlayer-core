@@ -1755,9 +1755,12 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check tokens available in storage
         let token_aux_data = tf.chainstate.get_token_aux_data(token_id).unwrap().unwrap();
         // Check id
-        assert!(issuance_block.get_id() == token_aux_data.issuance_block_id());
+        assert_eq!(issuance_block.get_id(), token_aux_data.issuance_block_id());
         let issuance_tx = &issuance_block.transactions()[0];
-        assert!(issuance_tx.transaction().get_id() == token_aux_data.issuance_tx().get_id());
+        assert_eq!(
+            issuance_tx.transaction().get_id(),
+            token_aux_data.issuance_tx().get_id()
+        );
         // Check issuance storage in the chain and in the storage
         assert_eq!(
             issuance_tx.transaction().outputs()[0].value(),
@@ -1784,7 +1787,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check that issuance transaction in the storage is removed
         assert!(tf
             .chainstate
-            .get_mainchain_tx_index(&common::chain::OutPointSourceId::Transaction(
+            .get_mainchain_tx_index(&OutPointSourceId::Transaction(
                 issuance_tx.transaction().get_id()
             ))
             .unwrap()

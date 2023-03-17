@@ -169,7 +169,7 @@ impl Manager {
             log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
 
             // Close the channel to signal the completion of the shutdown.
-            std::mem::drop(shutting_down_tx);
+            drop(shutting_down_tx);
         }));
 
         log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
@@ -305,7 +305,7 @@ impl Manager {
         let mut task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
 
         // Signal the manager is shut down so it does not wait for itself
-        std::mem::drop(self.shutting_down_tx);
+        drop(self.shutting_down_tx);
 
         // Wait for a subsystem to shut down
         loop {
@@ -336,7 +336,7 @@ impl Manager {
                         log::info!("Manager {}: all subsystems already down", self.name);
                     }
                 }
-            };
+            }
             break;
         }
 

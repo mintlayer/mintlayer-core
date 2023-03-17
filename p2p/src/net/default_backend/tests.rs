@@ -129,10 +129,7 @@ where
             receiver_address: _,
         } => {
             assert_eq!(peer_info.network, *config.magic_bytes());
-            assert_eq!(
-                peer_info.version,
-                common::primitives::semver::SemVer::new(0, 1, 0),
-            );
+            assert_eq!(peer_info.version, SemVer::new(0, 1, 0),);
             assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         }
         _ => panic!("invalid event received, expected incoming connection"),

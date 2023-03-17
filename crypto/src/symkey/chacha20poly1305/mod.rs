@@ -278,7 +278,7 @@ mod test {
 
             // the only remaining case is for "some_key = some_hex_value" in the line
             let split_parts = line.split('=').collect::<Vec<_>>();
-            assert!(split_parts.len() == 2);
+            assert_eq!(split_parts.len(), 2);
 
             // insert this information to the map
             let k = split_parts[0].trim();

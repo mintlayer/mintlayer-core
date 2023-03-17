@@ -49,7 +49,7 @@ impl_hasher_trait!(Ripemd160, ripemd::Ripemd160, typenum::U20);
 
 /////// Streams
 pub trait StreamHasher {
-    type OutputSize: generic_array::ArrayLength<u8>;
+    type OutputSize: ArrayLength<u8>;
 
     fn new() -> Self;
 

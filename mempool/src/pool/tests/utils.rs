@@ -25,13 +25,13 @@ pub struct ValuedOutPoint {
     pub value: Amount,
 }
 
-impl std::cmp::PartialOrd for ValuedOutPoint {
+impl PartialOrd for ValuedOutPoint {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         other.value.partial_cmp(&self.value)
     }
 }
 
-impl std::cmp::Ord for ValuedOutPoint {
+impl Ord for ValuedOutPoint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         other.value.cmp(&self.value)
     }

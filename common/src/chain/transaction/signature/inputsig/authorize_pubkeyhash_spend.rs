@@ -62,7 +62,7 @@ pub fn sign_address_spending(
     spendee_addr: &PublicKeyHash,
     sighash: &H256,
 ) -> Result<AuthorizedPublicKeyHashSpend, TransactionSigError> {
-    let public_key = crypto::key::PublicKey::from_private_key(private_key);
+    let public_key = PublicKey::from_private_key(private_key);
     let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
         return Err(TransactionSigError::PublicKeyToAddressMismatch);

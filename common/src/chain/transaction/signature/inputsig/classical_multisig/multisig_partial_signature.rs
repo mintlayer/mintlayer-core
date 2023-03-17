@@ -234,8 +234,9 @@ mod tests {
                     sigs
                 }
                 Err(err) => {
-                    assert!(
-                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                    assert_eq!(
+                        err,
+                        PartiallySignedMultisigStructureError::Overconstrained(
                             sig_count,
                             challenge.min_required_signatures() as usize
                         )
@@ -328,8 +329,9 @@ mod tests {
                     sigs
                 }
                 Err(err) => {
-                    assert!(
-                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                    assert_eq!(
+                        err,
+                        PartiallySignedMultisigStructureError::Overconstrained(
                             sig_count,
                             challenge.min_required_signatures() as usize
                         )
@@ -379,8 +381,9 @@ mod tests {
                     sigs
                 }
                 Err(err) => {
-                    assert!(
-                        err == PartiallySignedMultisigStructureError::Overconstrained(
+                    assert_eq!(
+                        err,
+                        PartiallySignedMultisigStructureError::Overconstrained(
                             sig_count,
                             challenge.min_required_signatures() as usize
                         )

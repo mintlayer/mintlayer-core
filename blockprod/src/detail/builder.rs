@@ -259,9 +259,10 @@ mod tests {
             .expect("Error reading from Block Builder")
         {
             BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
-                assert!(block_id == new_block_id, "Invalid Block ID received");
-                assert!(
-                    new_block_height == BlockHeight::one(),
+                assert_eq!(block_id, new_block_id, "Invalid Block ID received");
+                assert_eq!(
+                    new_block_height,
+                    BlockHeight::one(),
                     "Invalid block height received"
                 );
             }
@@ -352,9 +353,10 @@ mod tests {
             move || {
                 match block_maker_rx.recv().expect("Error reading from Block Builder") {
                     BlockMakerControlCommand::NewTip(new_block_id, new_block_height) => {
-                        assert!(block_id == new_block_id, "Invalid Block ID received");
-                        assert!(
-                            new_block_height == BlockHeight::one(),
+                        assert_eq!(block_id, new_block_id, "Invalid Block ID received");
+                        assert_eq!(
+                            new_block_height,
+                            BlockHeight::one(),
                             "Invalid block height received"
                         );
                     }

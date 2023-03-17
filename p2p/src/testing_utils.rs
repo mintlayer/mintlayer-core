@@ -51,7 +51,7 @@ pub trait TestTransportMaker {
     type Transport;
 
     /// An address type.
-    type Address: Clone + Eq + std::fmt::Debug + std::hash::Hash + Send + Sync + ToString;
+    type Address: Clone + Eq + Debug + std::hash::Hash + Send + Sync + ToString;
 
     /// Creates new transport instance, generating new keys if needed.
     fn make_transport() -> Self::Transport;

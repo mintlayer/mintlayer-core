@@ -92,8 +92,5 @@ pub fn process_with_none<T>(err: Error) -> storage_core::Result<Option<T>> {
 
 /// Process an error with operations where "successful" error codes are not expected
 pub fn process_with_err<T>(err: Error) -> storage_core::Result<T> {
-    process(
-        err,
-        Err(storage_core::error::Fatal::InternalError(err.to_string()).into()),
-    )
+    process(err, Err(Fatal::InternalError(err.to_string()).into()))
 }

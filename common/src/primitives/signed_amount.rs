@@ -52,7 +52,7 @@ impl SignedAmount {
 
     pub fn into_unsigned(self) -> Option<Amount> {
         let atoms = self.val;
-        let unsigned_atoms: super::amount::UnsignedIntType = atoms.try_into().ok()?;
+        let unsigned_atoms: UnsignedIntType = atoms.try_into().ok()?;
         Some(Amount::from_atoms(unsigned_atoms))
     }
 

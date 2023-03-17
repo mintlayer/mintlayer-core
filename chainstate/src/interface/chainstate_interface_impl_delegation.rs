@@ -213,7 +213,7 @@ impl<
 
     fn get_token_id_from_issuance_tx(
         &self,
-        tx_id: &Id<common::chain::Transaction>,
+        tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError> {
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }

@@ -79,9 +79,7 @@ fn attempt_to_disconnect_tx_mainchain(#[case] seed: Seed, #[case] num_blocks: us
             let mut tmp_verifier = verifier.derive_child();
             assert_eq!(
                 tmp_verifier.disconnect_transaction(&TransactionSource::Chain(block_id), tx),
-                Err(chainstate::ConnectTransactionError::UtxoError(
-                    utxo::Error::NoUtxoFound
-                ))
+                Err(ConnectTransactionError::UtxoError(utxo::Error::NoUtxoFound))
             );
         }
 
@@ -189,7 +187,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             );
             assert_eq!(
                 child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-                Err(chainstate::ConnectTransactionError::MissingMempoolTxsUndo)
+                Err(ConnectTransactionError::MissingMempoolTxsUndo)
             );
             assert_eq!(
                 child_verifier
@@ -202,7 +200,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             );
             assert_eq!(
                 child_verifier.disconnect_transaction(&TransactionSource::Mempool, &tx2),
-                Err(chainstate::ConnectTransactionError::MissingMempoolTxsUndo)
+                Err(ConnectTransactionError::MissingMempoolTxsUndo)
             );
         }
 
@@ -216,7 +214,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
 
         assert_eq!(
             verifier.disconnect_transaction(&TransactionSource::Mempool, &tx1),
-            Err(chainstate::ConnectTransactionError::TxUndoWithDependency(
+            Err(ConnectTransactionError::TxUndoWithDependency(
                 tx1.transaction().get_id()
             ))
         );

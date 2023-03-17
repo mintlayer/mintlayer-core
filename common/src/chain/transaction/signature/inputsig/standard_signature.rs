@@ -19,10 +19,7 @@ use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{
-        signature::{
-            sighashtype::{self, SigHashType},
-            signature_hash, TransactionSigError,
-        },
+        signature::{sighashtype::SigHashType, signature_hash, TransactionSigError},
         ChainConfig, Destination, Transaction,
     },
     primitives::H256,
@@ -50,7 +47,7 @@ pub struct StandardInputSignature {
 }
 
 impl StandardInputSignature {
-    pub fn new(sighash_type: sighashtype::SigHashType, raw_signature: Vec<u8>) -> Self {
+    pub fn new(sighash_type: SigHashType, raw_signature: Vec<u8>) -> Self {
         Self {
             sighash_type,
             raw_signature,
@@ -100,7 +97,7 @@ impl StandardInputSignature {
 
     pub fn produce_uniparty_signature_for_input(
         private_key: &crypto::key::PrivateKey,
-        sighash_type: sighashtype::SigHashType,
+        sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &Transaction,
         input_num: usize,
@@ -135,7 +132,7 @@ impl StandardInputSignature {
     pub fn produce_classical_multisig_signature_for_input(
         chain_config: &ChainConfig,
         authorization: &AuthorizedClassicalMultisigSpend,
-        sighash_type: sighashtype::SigHashType,
+        sighash_type: SigHashType,
         tx: &Transaction,
         input_num: usize,
     ) -> Result<Self, TransactionSigError> {
@@ -169,7 +166,7 @@ impl StandardInputSignature {
 impl Decode for StandardInputSignature {
     fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let sighash_byte = input.read_byte()?;
-        let sighash: sighashtype::SigHashType = sighash_byte
+        let sighash: SigHashType = sighash_byte
             .try_into()
             .map_err(|_| serialization::Error::from("Invalid sighash byte"))?;
         let raw_sig = Vec::decode(input)?;

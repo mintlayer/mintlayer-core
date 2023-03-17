@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-type NoRequest = subsystem::subsystem::CallRequest<()>;
+type NoRequest = subsystem::CallRequest<()>;
 
 mod helpers;
 

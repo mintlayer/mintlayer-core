@@ -622,12 +622,12 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
             );
 
             // genesis is stored if tx index is enabled
-            assert!(
+            assert_eq!(
                 db_tx
                     .get_mainchain_tx_index(&OutPointSourceId::BlockReward(genesis_id.into()))
                     .expect("ok")
-                    .is_some()
-                    == tx_index_enabled
+                    .is_some(),
+                tx_index_enabled
             );
 
             // block_1 reward is not stored (because the block is not in the mainchain)
@@ -637,21 +637,21 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 .is_none());
 
             // block_2 reward is stored if tx index is enabled
-            assert!(
+            assert_eq!(
                 db_tx
                     .get_mainchain_tx_index(&OutPointSourceId::BlockReward(block_2_id.into()))
                     .expect("ok")
-                    .is_some()
-                    == tx_index_enabled
+                    .is_some(),
+                tx_index_enabled
             );
 
             // block_3 reward is stored if tx index is enabled
-            assert!(
+            assert_eq!(
                 db_tx
                     .get_mainchain_tx_index(&OutPointSourceId::BlockReward(block_3_id.into()))
                     .expect("ok")
-                    .is_some()
-                    == tx_index_enabled
+                    .is_some(),
+                tx_index_enabled
             );
 
             // tx index from block_1 is not stored (because the block is not in the mainchain)
@@ -661,21 +661,21 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
                 .is_none());
 
             // tx index from block_2 is stored if tx index is enabled
-            assert!(
+            assert_eq!(
                 db_tx
                     .get_mainchain_tx_index(&OutPointSourceId::Transaction(tx_2_id))
                     .expect("ok")
-                    .is_some()
-                    == tx_index_enabled
+                    .is_some(),
+                tx_index_enabled
             );
 
             // tx index from block_3 is stored if tx index is enabled
-            assert!(
+            assert_eq!(
                 db_tx
                     .get_mainchain_tx_index(&OutPointSourceId::Transaction(tx_3_id))
                     .expect("ok")
-                    .is_some()
-                    == tx_index_enabled
+                    .is_some(),
+                tx_index_enabled
             );
         }
 
