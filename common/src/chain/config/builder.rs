@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::emission_schedule::*;
-use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
+use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc, time::Duration};
 
-use crate::chain::{
-    ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
+use crate::{
+    chain::{
+        config::{
+            create_mainnet_genesis, create_unit_test_genesis, emission_schedule, ChainConfig,
+            ChainType, EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular,
+        },
+        ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
+    },
+    primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256},
 };
-use crate::primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256};
-
-use std::collections::BTreeMap;
-use std::num::NonZeroU64;
-use std::sync::Arc;
-use std::time::Duration;
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -192,7 +192,7 @@ impl Builder {
             EmissionScheduleInit::Fn(f) => EmissionSchedule::from_arc_fn(f),
             EmissionScheduleInit::Table(t) => t.schedule(),
             EmissionScheduleInit::Mainnet => {
-                mainnet_schedule_table(target_block_spacing).schedule()
+                emission_schedule::mainnet_schedule_table(target_block_spacing).schedule()
             }
         };
 
