@@ -204,8 +204,8 @@ impl BanScore for ProtocolError {
             ProtocolError::DisconnectedHeaders => 20,
             ProtocolError::UnexpectedMessage(_) => 20,
             ProtocolError::ZeroBlocksInRequest => 20,
-            ProtocolError::HandshakeExpected => 20,
-            ProtocolError::AddressListLimitExceeded => 20,
+            ProtocolError::HandshakeExpected => 100,
+            ProtocolError::AddressListLimitExceeded => 100,
         }
     }
 }
