@@ -198,7 +198,16 @@ where
 
     /// Processes the blocks request.
     async fn handle_block_request(&mut self, block_ids: Vec<Id<Block>>) -> Result<()> {
-        log::debug!("Blocks request from peer {}", self.id());
+        if block_ids.is_empty() {
+            return Ok(());
+        }
+        log::debug!(
+            "Blocks request from peer {}: {}-{} ({})",
+            self.id(),
+            block_ids.first().expect("block_ids is not empty"),
+            block_ids.last().expect("block_ids is not empty"),
+            block_ids.len(),
+        );
 
         if self.is_initial_block_download.load(Ordering::Acquire) {
             log::debug!("Ignoring blocks request because the node is in initial block download");
@@ -360,10 +369,24 @@ where
     }
 
     async fn handle_block_announcement(&mut self, header: BlockHeader) -> Result<()> {
-        log::debug!("Block announcement from peer {}: {header:?}", self.id());
+        let block_id = header.block_id();
+        log::debug!(
+            "Block announcement from peer {}: {block_id}: {header:?}",
+            self.id()
+        );
 
         if !self.requested_blocks.is_empty() {
             // We will download this block as part of syncing anyway.
+            return Ok(());
+        }
+
+        // Do not request the block if it is already known
+        if self
+            .chainstate_handle
+            .call(move |c| c.get_gen_block_index(&block_id.into()))
+            .await??
+            .is_some()
+        {
             return Ok(());
         }
 
@@ -450,12 +473,22 @@ where
 
         // Remove already requested blocks.
         headers.retain(|h| !self.requested_blocks.contains(&h.get_id()));
+        if headers.is_empty() {
+            return Ok(());
+        }
 
         if headers.len() > *self.p2p_config.max_request_blocks_count {
             self.known_headers = headers.split_off(*self.p2p_config.max_request_blocks_count);
         }
 
         let block_ids: Vec<_> = headers.into_iter().map(|h| h.get_id()).collect();
+        log::debug!(
+            "Request blocks from peer {}: {}-{} ({})",
+            self.id(),
+            block_ids.first().expect("block_ids is not empty"),
+            block_ids.last().expect("block_ids is not empty"),
+            block_ids.len(),
+        );
         self.message_sender.send((
             self.id(),
             SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
