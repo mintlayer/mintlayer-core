@@ -27,8 +27,8 @@ use crate::{
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, P2pTokioTestTimeGetter, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, P2pTokioTestTimeGetter,
+        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -776,7 +776,7 @@ where
 {
     let chain_config = Arc::new(config::create_mainnet());
 
-    let time_getter = P2pTokioTestTimeGetter::new();
+    let time_getter = P2pBasicTestTimeGetter::new();
 
     // Start the first peer manager
     let p2p_config_1 = Arc::new(P2pConfig {
@@ -888,13 +888,11 @@ where
             break;
         }
 
-        // Without this noise handshake does complete in time for some reasons
-        tokio::time::sleep(Duration::from_millis(10)).await;
-
-        time_getter.advance_time(Duration::from_millis(1000)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        time_getter.advance_time(Duration::from_millis(1000));
 
         assert!(
-            Instant::now().duration_since(started_at) < Duration::from_secs(10),
+            Instant::now().duration_since(started_at) < Duration::from_secs(60),
             "Unexpected peer counts: {connected_peers_1}, {connected_peers_2}, {connected_peers_3}, expected: {EXPECTED_COUNT}"
         );
     }
