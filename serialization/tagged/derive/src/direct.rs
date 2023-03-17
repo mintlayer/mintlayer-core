@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Derive macro for encoding/decoging enums without the extra tag byte
+//! Derive macro for encoding/decoding enums without the extra tag byte
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};

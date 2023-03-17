@@ -18,7 +18,7 @@
 //! # Tagged types
 //!
 //! The [Tagged] trait is used for types whose encoding starts with a specific byte. The byte can
-//! then be used to distinguis between enum variants without explicitly sotring the variant index.
+//! then be used to distinguish between enum variants without explicitly sorting the variant index.
 //! Use `<T as Tagged>::TAG` to get the initial byte value as a `u8` constant.
 //!
 //! * There is a canonical [Tag] which is a unit type that encodes to the specified byte value.
