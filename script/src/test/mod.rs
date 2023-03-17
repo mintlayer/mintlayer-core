@@ -23,9 +23,9 @@ fn test_4opc_sequences() {
     use std::io::{BufRead, BufReader};
 
     // The test vectors are encoded in a gzipped CSV file.
-    // Each line in the file is has the following comma-separated filelds:
+    // Each line in the file is has the following comma-separated fields:
     // 1) The hex-encoded bitcoin script
-    // 2) The expected outcome, which is either 0 (script should fail) or 1 (script should succceed)
+    // 2) The expected outcome, which is either 0 (script should fail) or 1 (script should succeed)
     // 3) If the expected outcome is 1 (success), then a sequence of comma-separated hex-encoded
     //    stack items after the execution of the script follows.
     //

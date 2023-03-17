@@ -119,7 +119,7 @@ where
                     user_agent,
                 })) = self.socket.recv().await
                 else {
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
                 // Send PeerInfoReceived before sending handshake to remote peer!
@@ -171,7 +171,7 @@ where
                     receiver_address,
                 })) = self.socket.recv().await
                 else {
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
                 self.tx
@@ -514,10 +514,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
+        assert!(matches!(
             handle.await.unwrap(),
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
-        );
+            Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected))
+        ),);
     }
 
     #[tokio::test]

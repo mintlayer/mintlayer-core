@@ -48,8 +48,8 @@ pub enum KdfConfig {
 
 /// The result of hashing a password.
 /// Note that the result stores the hashed password as it's appropriate
-/// for client/server authentciation. To use this for encryption,
-/// call the function into_challenge() to remove the hased password.
+/// for client/server authentication. To use this for encryption,
+/// call the function into_challenge() to remove the hashed password.
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum KdfResult {
     #[codec(index = 0)]
@@ -62,7 +62,7 @@ pub enum KdfResult {
 
 impl KdfResult {
     /// Removes the hashed password from a hashing operation.
-    /// This is appropriarte for storage as header for encrypted
+    /// This is appropriate for storage as header for encrypted
     /// data (such as wallets, where the hashed password is the
     /// symmetric encryption key)
     pub fn into_challenge(self) -> KdfChallenge {
