@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use thiserror::Error;
+
+use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
     chain::Block,
     primitives::{semver::SemVer, Id},
 };
-use thiserror::Error;
-
-use chainstate::{ban_score::BanScore, ChainstateError};
-use common::primitives::semver::SemVer;
 use mempool::error::Error as MempoolError;
 
 /// Errors related to invalid data/peer information that results in connection getting closed

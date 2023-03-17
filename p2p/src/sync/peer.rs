@@ -510,6 +510,7 @@ where
             block_ids.last().expect("block_ids is not empty"),
             block_ids.len(),
         );
+        self.messaging_handle.send_message(
             self.id(),
             SyncMessage::BlockListRequest(BlockListRequest::new(block_ids.clone())),
         )?;
