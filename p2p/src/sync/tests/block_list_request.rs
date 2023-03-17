@@ -17,7 +17,10 @@ use std::{iter, sync::Arc};
 
 use chainstate::{ban_score::BanScore, BlockSource};
 use chainstate_test_framework::TestFramework;
-use common::{chain::config::create_unit_test_config, primitives::Idable};
+use common::{
+    chain::{config::create_unit_test_config, Block},
+    primitives::{Id, Idable},
+};
 use crypto::random::Rng;
 use p2p_test_utils::{chainstate_subsystem, create_n_blocks};
 use test_utils::random::Seed;
@@ -103,7 +106,8 @@ async fn unknown_blocks(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let unknown_blocks = create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
+    let unknown_blocks: Vec<Id<Block>> =
+        create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
     let chainstate = chainstate_subsystem(tf.into_chainstate()).await;
 
     let mut handle = SyncManagerHandle::builder()
@@ -115,6 +119,9 @@ async fn unknown_blocks(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
+    let expected_score =
+        P2pError::ProtocolError(ProtocolError::UnknownBlockRequested(unknown_blocks[0]))
+            .ban_score();
     handle.send_message(
         peer,
         SyncMessage::BlockListRequest(BlockListRequest::new(unknown_blocks)),
@@ -122,10 +129,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
-    assert_eq!(
-        score,
-        P2pError::ProtocolError(ProtocolError::UnknownBlockRequested).ban_score()
-    );
+    assert_eq!(score, expected_score);
     handle.assert_no_event().await;
 }
 
