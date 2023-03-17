@@ -183,6 +183,7 @@ impl BanScore for P2pError {
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
+            // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
             P2pError::MempoolError(_) => 20,
         }
     }

@@ -416,6 +416,7 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
             P2pError::MempoolError(
                 MempoolError::MempoolFull
+                // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
                 | MempoolError::TxValidationError(TxValidationError::TransactionAlreadyInMempool),
             ) => Ok(()),
             // A protocol error - increase the ban score of a peer.
