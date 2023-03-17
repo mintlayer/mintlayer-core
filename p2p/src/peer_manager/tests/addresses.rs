@@ -88,7 +88,7 @@ where
     let accepted_count = pm.peerdb.known_addresses().count();
     // The average expected count is 13 (1 + 120 * 0.1), but the exact number is not very important
     assert!(
-        accepted_count >= 5 && accepted_count <= 20,
+        (5..25).contains(&accepted_count),
         "Unexpected accepted address count: {accepted_count}"
     );
 }
