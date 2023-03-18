@@ -60,3 +60,105 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
         Some(block_index)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use chainstate_storage::inmemory::Store;
+    use common::{
+        chain::{
+            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+            config::create_unit_test_config,
+            Block,
+        },
+        primitives::{time, Idable, H256},
+    };
+
+    use super::*;
+    use crate::{
+        BlockSource, Chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy,
+    };
+
+    #[test]
+    fn history_iteration() {
+        utils::concurrency::model(|| {
+            let chain_config = Arc::new(create_unit_test_config());
+            let genesis_id = chain_config.genesis_block_id();
+            let chainstate_config = ChainstateConfig::new();
+            let storage = Store::new_empty().unwrap();
+            let mut chainstate = Chainstate::new(
+                chain_config,
+                chainstate_config,
+                storage,
+                DefaultTransactionVerificationStrategy::new(),
+                None,
+                Default::default(),
+            )
+            .unwrap();
+
+            // Put three blocks in a chain after genesis.
+            let block1 = Block::new(
+                vec![],
+                genesis_id,
+                BlockTimestamp::from_duration_since_epoch(time::get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap();
+            chainstate.process_block(block1.clone().into(), BlockSource::Local).unwrap();
+
+            let block2 = Block::new(
+                vec![],
+                block1.get_id().into(),
+                BlockTimestamp::from_duration_since_epoch(time::get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap();
+            chainstate.process_block(block2.clone().into(), BlockSource::Local).unwrap();
+
+            let block3 = Block::new(
+                vec![],
+                block2.get_id().into(),
+                BlockTimestamp::from_duration_since_epoch(time::get_time()),
+                ConsensusData::None,
+                BlockReward::new(Vec::new()),
+            )
+            .unwrap();
+            chainstate.process_block(block3.clone().into(), BlockSource::Local).unwrap();
+
+            ///// test history iterator - start from tip
+            {
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
+                let mut iter =
+                    BlockIndexHistoryIterator::new(block3.get_id().into(), &chainstate_ref);
+                assert_eq!(iter.next().unwrap().block_id(), block3.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), block2.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), block1.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), genesis_id);
+                assert!(iter.next().is_none());
+            }
+
+            ///// test history iterator - start from genesis
+            {
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
+                let mut iter = BlockIndexHistoryIterator::new(genesis_id, &chainstate_ref);
+                assert_eq!(iter.next().unwrap().block_id(), genesis_id);
+                assert!(iter.next().is_none());
+            }
+
+            ///// test history iterator - start from an invalid non-existing block id
+            {
+                let chainstate_ref = chainstate.make_db_tx_ro().unwrap();
+                let mut iter =
+                    BlockIndexHistoryIterator::new(Id::new(H256::zero()), &chainstate_ref);
+
+                assert_ne!(iter.next_id, None); // ensure that we start with some id
+                assert!(iter.next().is_none());
+                assert_eq!(iter.next_id, None); // ensure that we won't be trying to read the db again
+                assert!(iter.next().is_none());
+            }
+        });
+    }
+}
