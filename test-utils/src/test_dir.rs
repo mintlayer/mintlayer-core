@@ -65,7 +65,7 @@ pub fn try_create_dir(path: impl AsRef<Path>) -> io::Result<DirCreationOutcome> 
     match fs::create_dir(path.as_ref()) {
         Ok(()) => Ok(DirCreationOutcome::Created),
         Err(e) => match e.kind() {
-            std::io::ErrorKind::AlreadyExists => Ok(DirCreationOutcome::AlreadyExists),
+            io::ErrorKind::AlreadyExists => Ok(DirCreationOutcome::AlreadyExists),
             _ => Err(e),
         },
     }

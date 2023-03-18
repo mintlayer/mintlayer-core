@@ -30,11 +30,11 @@ pub mod rngs {
 }
 
 #[must_use]
-pub fn make_true_rng() -> impl rand::Rng + rand::CryptoRng {
+pub fn make_true_rng() -> impl Rng + CryptoRng {
     rand::rngs::StdRng::from_entropy()
 }
 
 #[must_use]
-pub fn make_pseudo_rng() -> impl rand::Rng {
+pub fn make_pseudo_rng() -> impl Rng {
     rand::rngs::ThreadRng::default()
 }

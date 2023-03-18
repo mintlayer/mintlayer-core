@@ -19,7 +19,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 type Map = BTreeMap<Data, Data>;
 
-pub struct PrefixIter<'i>(storage_core::util::PrefixIter<'i, Data>);
+pub struct PrefixIter<'i>(util::PrefixIter<'i, Data>);
 
 impl<'i> Iterator for PrefixIter<'i> {
     type Item = (Data, Data);

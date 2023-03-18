@@ -13,18 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::emission_schedule::{self, *};
-use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
+use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc, time::Duration};
 
-use crate::chain::{
-    ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
+use crate::{
+    chain::{
+        config::{
+            create_mainnet_genesis, create_unit_test_genesis, emission_schedule, ChainConfig,
+            ChainType, EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular,
+        },
+        ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
+    },
+    primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256},
 };
-use crate::primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256};
-
-use std::collections::BTreeMap;
-use std::num::NonZeroU64;
-use std::sync::Arc;
-use std::time::Duration;
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -65,8 +65,8 @@ impl ChainType {
 #[derive(Clone)]
 enum EmissionScheduleInit {
     Mainnet,
-    Table(emission_schedule::EmissionScheduleTabular),
-    Fn(std::sync::Arc<emission_schedule::EmissionScheduleFn>),
+    Table(EmissionScheduleTabular),
+    Fn(Arc<EmissionScheduleFn>),
 }
 
 #[derive(Clone)]
@@ -299,7 +299,7 @@ impl Builder {
     }
 
     /// Initialize an emission schedule using a function
-    pub fn emission_schedule_fn(mut self, f: Box<emission_schedule::EmissionScheduleFn>) -> Self {
+    pub fn emission_schedule_fn(mut self, f: Box<EmissionScheduleFn>) -> Self {
         self.emission_schedule = EmissionScheduleInit::Fn(f.into());
         self
     }

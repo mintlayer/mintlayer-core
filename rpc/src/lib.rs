@@ -32,12 +32,12 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[rpc(server, namespace = "example_server")]
 trait RpcInfo {
     #[method(name = "protocol_version")]
-    fn protocol_version(&self) -> crate::Result<String>;
+    fn protocol_version(&self) -> Result<String>;
 }
 
 struct RpcInfo;
 impl RpcInfoServer for RpcInfo {
-    fn protocol_version(&self) -> crate::Result<String> {
+    fn protocol_version(&self) -> Result<String> {
         Ok("version1".into())
     }
 }
@@ -170,20 +170,20 @@ mod tests {
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
         #[method(name = "name")]
-        fn name(&self) -> crate::Result<String>;
+        fn name(&self) -> Result<String>;
 
         #[method(name = "add")]
-        fn add(&self, a: u64, b: u64) -> crate::Result<u64>;
+        fn add(&self, a: u64, b: u64) -> Result<u64>;
     }
 
     pub struct SubsystemRpcImpl;
 
     impl SubsystemRpcServer for SubsystemRpcImpl {
-        fn name(&self) -> crate::Result<String> {
+        fn name(&self) -> Result<String> {
             Ok("sub1".into())
         }
 
-        fn add(&self, a: u64, b: u64) -> crate::Result<u64> {
+        fn add(&self, a: u64, b: u64) -> Result<u64> {
             Ok(a + b)
         }
     }

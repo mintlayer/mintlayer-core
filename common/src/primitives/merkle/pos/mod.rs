@@ -97,13 +97,13 @@ impl NodePosition {
 
     pub fn node_kind(&self) -> NodeKind {
         if self.abs_index() == self.tree_size.get() - 1 {
-            return node_kind::NodeKind::Root;
+            return NodeKind::Root;
         }
 
         if self.abs_index() % 2 == 0 {
-            node_kind::NodeKind::LeftChild
+            NodeKind::LeftChild
         } else {
-            node_kind::NodeKind::RightChild
+            NodeKind::RightChild
         }
     }
 

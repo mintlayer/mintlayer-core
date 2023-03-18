@@ -73,7 +73,7 @@ impl MpscChannelTransport {
 
     fn new_port(&self) -> u16 {
         let port = self.last_port.fetch_add(1, Ordering::Relaxed);
-        assert!(port != 0);
+        assert_ne!(port, 0);
         port
     }
 }
@@ -125,10 +125,7 @@ impl TransportSocket for MpscChannelTransport {
         })
     }
 
-    fn connect(
-        &self,
-        mut address: Self::Address,
-    ) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn connect(&self, mut address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
         if address.ip().is_unspecified() {
             address.set_ip(self.local_address);
         }

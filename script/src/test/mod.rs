@@ -67,5 +67,5 @@ fn test_4opc_sequences() {
     }
 
     // Let the test fail if we have at least one mismatch.
-    assert!(fails == 0, "{fails} tests failed");
+    assert_eq!(fails, 0, "{fails} tests failed");
 }

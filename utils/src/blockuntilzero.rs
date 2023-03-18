@@ -56,7 +56,6 @@ where
         self.value.load(Ordering::Acquire)
     }
 
-    #[must_use = "CountTracker is useless without holding its object"]
     pub fn count_one(&self) -> CountTracker<T> {
         CountTracker::new(Arc::clone(&self.value))
     }

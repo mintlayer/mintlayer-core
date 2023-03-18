@@ -367,8 +367,8 @@ fn check_last_event(tf: &mut TestFramework, events: &EventList) {
             let block_index = tf.block_indexes.last().unwrap();
             if is_block_in_main_chain(tf, block_index.block_id()) {
                 // If block not in main chain then it means we didn't receive a new tip event. Nothing to check!
-                assert!(block_id == block_index.block_id());
-                assert!(block_height == &block_index.block_height());
+                assert_eq!(block_id, block_index.block_id());
+                assert_eq!(block_height, &block_index.block_height());
             }
         }
         None => {

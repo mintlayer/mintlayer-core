@@ -63,7 +63,7 @@ pub trait TransactionRw: WalletStorageWrite + IsTransaction {
     fn abort(self);
 
     /// Commit the transaction
-    fn commit(self) -> crate::Result<()>;
+    fn commit(self) -> Result<()>;
 }
 
 /// Support for transactions over wallet storage
@@ -75,10 +75,10 @@ pub trait Transactional<'t> {
     type TransactionRw: TransactionRw + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> crate::Result<Self::TransactionRo>;
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> crate::Result<Self::TransactionRw>;
+    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
 }
 
 pub trait WalletStorage: WalletStorageWrite + for<'tx> Transactional<'tx> + Send {}

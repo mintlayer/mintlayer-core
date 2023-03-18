@@ -105,7 +105,7 @@ where
             max_size: MAX_MEMPOOL_SIZE_BYTES,
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
             // TODO research whether we really need parking lot
-            rolling_fee_rate: parking_lot::RwLock::new(RollingFeeRate::new(clock.get_time())),
+            rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
             events_controller: Default::default(),

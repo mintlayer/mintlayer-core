@@ -214,11 +214,10 @@ mod tests {
     #[test]
     fn no_values_required_in_toml_files() {
         let _config: NodeConfigFile = toml::from_str("").unwrap();
-        let _config: chainstate_launcher::ChainstateLauncherConfigFile =
-            toml::from_str("").unwrap();
-        let _config: chainstate::ChainstateConfigFile = toml::from_str("").unwrap();
-        let _config: p2p::P2pConfigFile = toml::from_str("").unwrap();
-        let _config: rpc::RpcConfigFile = toml::from_str("").unwrap();
+        let _config: ChainstateLauncherConfigFile = toml::from_str("").unwrap();
+        let _config: ChainstateConfigFile = toml::from_str("").unwrap();
+        let _config: P2pConfigFile = toml::from_str("").unwrap();
+        let _config: RpcConfigFile = toml::from_str("").unwrap();
     }
 
     #[test]

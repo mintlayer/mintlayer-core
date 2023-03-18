@@ -37,7 +37,7 @@ impl UtxoSource {
     pub fn blockchain_height(&self) -> Result<BlockHeight, Error> {
         match self {
             UtxoSource::Blockchain(h) => Ok(*h),
-            UtxoSource::Mempool => Err(crate::Error::NoBlockchainHeightFound),
+            UtxoSource::Mempool => Err(Error::NoBlockchainHeightFound),
         }
     }
 }

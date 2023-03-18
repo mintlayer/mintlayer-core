@@ -56,7 +56,7 @@ impl TransportSocket for Socks5TransportSocket {
         Socks5TransportListener::new(addresses)
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
         let proxy = Arc::clone(&self.proxy);
         Box::pin(async move {
             let socket = TcpStream::connect(proxy.as_str()).await.map_err(|e| {

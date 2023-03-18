@@ -19,8 +19,7 @@ use crate::{
     SystemUsageEstimator,
 };
 use chainstate::{
-    chainstate_interface, make_chainstate, BlockSource, ChainstateConfig,
-    DefaultTransactionVerificationStrategy,
+    make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
 };
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
@@ -227,7 +226,7 @@ async fn setup() -> Mempool<SystemUsageEstimator> {
 }
 
 async fn setup_with_chainstate(
-    chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
+    chainstate: Box<dyn ChainstateInterface>,
 ) -> Mempool<SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -241,7 +240,7 @@ async fn setup_with_chainstate(
 }
 
 pub async fn start_chainstate(
-    chainstate: Box<dyn chainstate_interface::ChainstateInterface>,
+    chainstate: Box<dyn ChainstateInterface>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem("chainstate", chainstate);
@@ -1122,7 +1121,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        rolling_fee / std::num::NonZeroUsize::new(2).expect("nonzero")
+        rolling_fee / NonZeroUsize::new(2).expect("nonzero")
     );
 
     mock_time.store(
@@ -1137,7 +1136,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
-        rolling_fee / std::num::NonZeroUsize::new(4).expect("nonzero")
+        rolling_fee / NonZeroUsize::new(4).expect("nonzero")
     );
     log::debug!(
         "After successful addition of dummy, rolling fee rate is {:?}",

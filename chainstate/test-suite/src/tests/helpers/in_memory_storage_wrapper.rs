@@ -99,20 +99,18 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
-    ) -> Result<Option<utxo::Utxo>, chainstate_types::storage_result::Error> {
+    ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.storage.get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(
-        &self,
-    ) -> Result<Option<Id<GenBlock>>, chainstate_types::storage_result::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {
         self.storage.get_best_block_for_utxos()
     }
 
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<utxo::UtxosBlockUndo>, chainstate_types::storage_result::Error> {
+    ) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error> {
         self.storage.get_undo_data(id)
     }
 }

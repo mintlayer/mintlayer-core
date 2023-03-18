@@ -121,10 +121,10 @@ impl SingleProofHashes {
     pub fn verify(&self, leaf: H256, root: H256) -> ProofVerifyResult {
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
-            match leaf == root {
-                true => return ProofVerifyResult::PassedTrivially,
-                false => return ProofVerifyResult::Failed,
-            }
+            return match leaf == root {
+                true => ProofVerifyResult::PassedTrivially,
+                false => ProofVerifyResult::Failed,
+            };
         }
 
         let hash = self.branch.iter().enumerate().fold(leaf, |prev_hash, (index, sibling)| {

@@ -100,7 +100,7 @@ where
         storage: S,
         dns_server_cmd_tx: mpsc::UnboundedSender<DnsServerCommand>,
     ) -> Result<Self, DnsServerError> {
-        let last_crawler_timer = tokio::time::Instant::now();
+        let last_crawler_timer = Instant::now();
 
         // Addresses that are stored in the DB as reachable
         let loaded_addresses: BTreeSet<N::Address> = Self::load_storage(&storage)?;
@@ -219,7 +219,7 @@ where
     }
 
     fn heartbeat(&mut self) {
-        let now = tokio::time::Instant::now();
+        let now = Instant::now();
         let period = now.duration_since(self.last_crawler_timer);
         self.last_crawler_timer = now;
 

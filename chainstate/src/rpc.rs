@@ -173,7 +173,7 @@ mod test {
         );
         let _ = man.add_subsystem_with_custom_eventloop(
             "test",
-            move |_: subsystem::subsystem::CallRequest<()>, _| proc(handle),
+            move |_: subsystem::CallRequest<()>, _| proc(handle),
         );
         man.main().await;
     }

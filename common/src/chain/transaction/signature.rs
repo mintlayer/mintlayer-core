@@ -342,7 +342,7 @@ pub fn verify_signature<T: Transactable>(
     ))?;
 
     match input_witness {
-        inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
+        InputWitness::NoSignature(_) => match outpoint_destination {
             Destination::Address(_)
             | Destination::PublicKey(_)
             | Destination::ScriptHash(_)
@@ -351,7 +351,7 @@ pub fn verify_signature<T: Transactable>(
             }
             Destination::AnyoneCanSpend => {}
         },
-        inputsig::InputWitness::Standard(witness) => verify_standard_input_signature(
+        InputWitness::Standard(witness) => verify_standard_input_signature(
             chain_config,
             outpoint_destination,
             witness,

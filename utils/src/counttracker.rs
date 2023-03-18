@@ -33,7 +33,6 @@ where
     <T as Atomic>::Type: One,
     <T as Atomic>::Type: Zero,
 {
-    #[must_use = "CountTracker is useless without holding its object"]
     pub fn new(source: Arc<T>) -> Self {
         source.fetch_add(
             <T as Atomic>::Type::one(),

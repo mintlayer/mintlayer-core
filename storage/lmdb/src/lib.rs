@@ -45,7 +45,7 @@ impl<'tx, C> PrefixIter<'tx, C> {
     }
 }
 
-impl<'tx, C: lmdb::Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
+impl<'tx, C: Cursor<'tx>> Iterator for PrefixIter<'tx, C> {
     type Item = (Data, Data);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -209,7 +209,7 @@ impl backend::BackendImpl for LmdbImpl {
 pub struct Lmdb {
     path: PathBuf,
     flags: lmdb::EnvironmentFlags,
-    inital_map_size: InitialMapSize,
+    initial_map_size: InitialMapSize,
     resize_settings: DatabaseResizeSettings,
     resize_callback: MapResizeCallback,
 }
@@ -218,14 +218,14 @@ impl Lmdb {
     /// New LMDB database backend
     pub fn new(
         path: PathBuf,
-        inital_map_size: InitialMapSize,
+        initial_map_size: InitialMapSize,
         resize_settings: DatabaseResizeSettings,
         resize_callback: MapResizeCallback,
     ) -> Self {
         Self {
             path,
             flags: lmdb::EnvironmentFlags::default(),
-            inital_map_size,
+            initial_map_size,
             resize_settings,
             resize_callback,
         }
@@ -255,7 +255,7 @@ impl backend::Backend for Lmdb {
         std::fs::create_dir_all(&self.path).map_err(error::process_io_error)?;
 
         let initial_map_size = self
-            .inital_map_size
+            .initial_map_size
             .into_memsize()
             .map(|v| v.as_bytes().try_into().expect("MemSize to usize conversion failed"));
 

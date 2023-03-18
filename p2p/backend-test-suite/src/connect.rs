@@ -87,7 +87,7 @@ where
 async fn connect_accept<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService + std::fmt::Debug + 'static,
+    N: NetworkingService + Debug + 'static,
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,
     N::SyncingEventReceiver: SyncingEventReceiver,

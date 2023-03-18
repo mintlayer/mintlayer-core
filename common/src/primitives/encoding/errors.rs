@@ -41,7 +41,7 @@ pub enum Bech32Error {
     StdError(#[from] fmt::Error),
 }
 
-impl From<bech32::Error> for Bech32Error {
+impl From<Error> for Bech32Error {
     fn from(e: Error) -> Self {
         match e {
             Error::MissingSeparator => Self::NoSeparator,

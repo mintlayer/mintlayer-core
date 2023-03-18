@@ -478,7 +478,7 @@ mod unit_test {
     #[trace]
     #[case(Seed::from_entropy())]
     fn set_best_block(#[case] seed: Seed) {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let expected_best_block_id: Id<GenBlock> = H256::random_using(&mut rng).into();
         let test_view = empty_test_utxos_view(H256::zero().into());

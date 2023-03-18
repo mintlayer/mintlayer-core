@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(x | y, Amount { val: 5 });
         assert_eq!(x & z, Amount { val: 0 });
         assert_eq!(x ^ y, Amount { val: 4 });
-        assert!(!zero == UnsignedIntType::MAX);
+        assert_eq!(!zero, UnsignedIntType::MAX);
     }
 
     #[test]

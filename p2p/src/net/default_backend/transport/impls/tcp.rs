@@ -75,7 +75,7 @@ impl TransportSocket for TcpTransportSocket {
         TcpTransportListener::new(addresses)
     }
 
-    fn connect(&self, address: Self::Address) -> BoxFuture<'static, crate::Result<Self::Stream>> {
+    fn connect(&self, address: Self::Address) -> BoxFuture<'static, Result<Self::Stream>> {
         Box::pin(async move {
             let stream = TcpStream::connect(address).await?;
             Ok(stream)

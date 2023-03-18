@@ -75,7 +75,7 @@ fn cache_simulation_with_undo(
     }
 }
 
-/// Recursive function that hierarchically filles a cache, consumes it and returns it, recursively
+/// A recursive function that hierarchically fills a cache, consumes it and returns it, recursively
 /// In every call:
 /// 1. Create a "current cache" from the given parent (current as in "this level")
 /// 2. Populate the cache with with arbitrary outputs (in populate_...())

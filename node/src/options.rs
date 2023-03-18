@@ -149,7 +149,7 @@ impl Options {
     /// The data directory is created as a side-effect of the invocation.
     /// Process is terminated on error.
     pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
-        clap::Parser::parse_from(args)
+        Parser::parse_from(args)
     }
 
     /// Returns the data directory

@@ -59,9 +59,7 @@ impl Decoder for EncoderDecoder {
 
         match decode_res {
             Ok(msg) => Ok(Some(msg)),
-            Err(e) => {
-                Err(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()).into())
-            }
+            Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e.to_string()).into()),
         }
     }
 }
@@ -104,7 +102,7 @@ impl<S: AsyncWrite + AsyncRead + Unpin> BufferedTranscoder<S> {
     }
 
     pub async fn send(&mut self, msg: Message) -> Result<()> {
-        let mut buf = bytes::BytesMut::new();
+        let mut buf = BytesMut::new();
         EncoderDecoder {}.encode(msg, &mut buf)?;
         self.stream.write_all(&buf).await?;
         self.stream.flush().await?;

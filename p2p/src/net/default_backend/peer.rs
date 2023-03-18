@@ -128,7 +128,7 @@ where
                 self.tx
                     .send((
                         self.peer_id,
-                        types::PeerEvent::PeerInfoReceived {
+                        PeerEvent::PeerInfoReceived {
                             network,
                             version,
                             subscriptions,
@@ -177,7 +177,7 @@ where
                 self.tx
                     .send((
                         self.peer_id,
-                        types::PeerEvent::PeerInfoReceived {
+                        PeerEvent::PeerInfoReceived {
                             network,
                             version,
                             user_agent,
@@ -241,7 +241,7 @@ where
 
 impl<T: TransportSocket> Drop for Peer<T> {
     fn drop(&mut self) {
-        let _ = self.tx.send((self.peer_id, types::PeerEvent::ConnectionClosed));
+        let _ = self.tx.send((self.peer_id, PeerEvent::ConnectionClosed));
     }
 }
 
@@ -314,7 +314,7 @@ mod tests {
         let _peer = handle.await.unwrap();
         assert_eq!(
             rx1.try_recv().unwrap().1,
-            types::PeerEvent::PeerInfoReceived {
+            PeerEvent::PeerInfoReceived {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),

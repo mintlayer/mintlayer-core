@@ -108,7 +108,7 @@ fn fill_buffer<S: std::io::Read>(
 
 pub fn export_bootstrap_stream<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy>(
     magic_bytes: &[u8],
-    writer: &mut std::io::BufWriter<Box<dyn std::io::Write + 'a + Send>>,
+    writer: &mut std::io::BufWriter<Box<dyn Write + 'a + Send>>,
     include_orphans: bool,
     query_interface: &ChainstateQuery<'a, S, V>,
 ) -> Result<(), BootstrapError>

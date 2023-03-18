@@ -141,7 +141,7 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn orphan_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut rng = make_seedable_rng(seed);
 
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut tf = TestFramework::builder(&mut rng)

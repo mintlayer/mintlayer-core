@@ -204,7 +204,7 @@ where
     let mut pm2 = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
@@ -303,7 +303,7 @@ where
     let mut pm2 = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
-        Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+        Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 

@@ -25,7 +25,7 @@ use itertools::EitherOrBoth;
 type DataPair = (Data, Data);
 type DataPairRef<'a> = (&'a [u8], &'a Option<Data>);
 type KeyCompareFn = fn(&DataPair, &DataPairRef<'_>) -> std::cmp::Ordering;
-type ItemMergeFn = fn(itertools::EitherOrBoth<DataPair, DataPairRef<'_>>) -> Option<DataPair>;
+type ItemMergeFn = fn(EitherOrBoth<DataPair, DataPairRef<'_>>) -> Option<DataPair>;
 type DbIter<'i, T> = <T as ReadOps>::PrefixIter<'i>;
 type DeltaIter<'i> = crate::util::PrefixIter<'i, Option<Data>>;
 type JoinIter<'i, T> = itertools::MergeJoinBy<DbIter<'i, T>, DeltaIter<'i>, KeyCompareFn>;

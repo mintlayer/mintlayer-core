@@ -80,7 +80,7 @@ fn create_pool_twice(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn decomission_unknown_pool(#[case] seed: Seed) {
+fn decommission_unknown_pool(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let pool_id = new_pool_id(rng.next_u64());
@@ -109,7 +109,7 @@ fn decomission_unknown_pool(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
+fn create_pool_decommission_pool_undo_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledge_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
@@ -138,7 +138,7 @@ fn create_pool_decomission_pool_undo_merge(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
+fn create_pool_decommission_pool_merge_undo_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledge_amount = Amount::from_atoms(100);
     let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledge_amount);
@@ -170,7 +170,7 @@ fn create_pool_decomission_pool_merge_undo_merge(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn create_pool_undo_decomission_pool_merge(#[case] seed: Seed) {
+fn create_pool_undo_decommission_pool_merge(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut storage = InMemoryPoSAccounting::new();
     let mut db = PoSAccountingDB::new(&mut storage);

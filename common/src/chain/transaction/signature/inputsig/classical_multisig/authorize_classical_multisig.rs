@@ -901,9 +901,15 @@ mod tests {
                 current_signatures.challenge().clone(),
             );
 
-            assert!(current_signatures.challenge() == tampered_with_signatures.challenge());
-            assert!(current_signatures.signatures() != tampered_with_signatures.signatures());
-            assert!(current_signatures != tampered_with_signatures);
+            assert_eq!(
+                current_signatures.challenge(),
+                tampered_with_signatures.challenge()
+            );
+            assert_ne!(
+                current_signatures.signatures(),
+                tampered_with_signatures.signatures()
+            );
+            assert_ne!(current_signatures, tampered_with_signatures);
 
             // Now we sign again, and because the signature from before is invalid, this should fail
             let sign_err = sign_classical_multisig_spending(

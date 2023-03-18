@@ -69,11 +69,11 @@ where
 }
 
 impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
-    type TransactionRo = store_tx::StoreTxRo<'tx, B>;
-    type TransactionRw = store_tx::StoreTxRw<'tx, B>;
+    type TransactionRo = StoreTxRo<'tx, B>;
+    type TransactionRw = StoreTxRw<'tx, B>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRo> {
-        self.0.transaction_ro().map_err(crate::Error::from).map(store_tx::StoreTxRo)
+        self.0.transaction_ro().map_err(crate::Error::from).map(StoreTxRo)
     }
 
     fn transaction_rw<'st: 'tx>(

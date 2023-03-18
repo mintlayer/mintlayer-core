@@ -14,20 +14,20 @@
 // limitations under the License.
 
 pub mod ban_score;
+pub mod bootstrap;
 pub mod query;
 pub mod tokens;
+pub mod tx_verification_strategy;
 
 mod block_index_history_iter;
-pub mod bootstrap;
 mod chainstateref;
 mod error;
 mod median_time;
 mod orphan_blocks;
-pub mod tx_verification_strategy;
 
-pub use self::error::*;
-pub use self::median_time::calculate_median_time_past;
-pub use self::tokens::is_rfc3986_valid_symbol;
+pub use self::{
+    error::*, median_time::calculate_median_time_past, tokens::is_rfc3986_valid_symbol,
+};
 pub use chainstate_types::Locator;
 pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, InitializationError, OrphanCheckError,
@@ -166,7 +166,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         if best_block_id.is_none() {
             chainstate
                 .process_genesis()
-                .map_err(crate::ChainstateError::ProcessBlockError)
+                .map_err(ChainstateError::ProcessBlockError)
                 .log_err()?;
         } else {
             chainstate.check_genesis().map_err(crate::ChainstateError::from)?;
