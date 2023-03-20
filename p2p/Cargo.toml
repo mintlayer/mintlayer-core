@@ -51,7 +51,7 @@ test-utils = { path = "../test-utils" }
 consensus = { path = "../consensus" }
 
 portpicker = "0.1"
-rstest = "0.16"
+rstest = "0.17"
 
 [[test]]
 name = "backend_tcp"

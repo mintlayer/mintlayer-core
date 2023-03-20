@@ -19,7 +19,7 @@ tx-verifier = { path = '../tx-verifier' }
 utils = { path = '../../utils' }
 utxo = {path = '../../utxo'}
 
-rstest = "0.16"
+rstest = "0.17"
 itertools.workspace = true
 
 [dev-dependencies]

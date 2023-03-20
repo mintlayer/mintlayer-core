@@ -21,4 +21,4 @@ parity-scale-codec.workspace = true
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.16"
+rstest = "0.17"

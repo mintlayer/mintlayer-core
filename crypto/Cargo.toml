@@ -10,7 +10,7 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 
 [dependencies]
 serialization = { path = "../serialization" }
-secp256k1 = { version = "0.26", default-features = false, features = ["global-context", "rand-std"] }
+secp256k1 = { version = "0.27", default-features = false, features = ["global-context", "rand-std"] }
 hmac = "0.12"
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
 sha-1 = "0.10"
@@ -34,6 +34,6 @@ zeroize = "1.5"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.16"
+rstest = "0.17"
 hex.workspace = true
 rand_chacha = "0.3.1"

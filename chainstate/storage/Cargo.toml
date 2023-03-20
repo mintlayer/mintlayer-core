@@ -25,7 +25,7 @@ utils = { path = '../../utils' }
 itertools.workspace = true
 mockall = "0.11"
 num-traits = "0.2"
-rstest = "0.16"
+rstest = "0.17"
 
 [features]
 mock = [ 'mockall' ]

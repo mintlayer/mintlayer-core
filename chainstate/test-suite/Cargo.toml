@@ -28,5 +28,5 @@ hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
-rstest = "0.16"
+rstest = "0.17"
 expect-test = "1.3"

@@ -20,7 +20,7 @@ wasm-bindgen = "0.2"
 thiserror.workspace = true
 
 [dev-dependencies]
-rstest = "0.16"
+rstest = "0.17"
 test-utils = {path = '../test-utils'}
 
 [profile.release]
