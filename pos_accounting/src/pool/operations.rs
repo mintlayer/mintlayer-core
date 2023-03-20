@@ -15,10 +15,10 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
-use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
 use crate::error::Error;
@@ -65,6 +65,12 @@ pub struct SpendFromShareUndo {
     pub(crate) amount: Amount,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct IncreasePoolBalanceUndo {
+    pub(crate) pool_id: PoolId,
+    pub(crate) amount_added: Amount,
+}
+
 #[must_use]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum PoSAccountingUndo {
@@ -73,6 +79,7 @@ pub enum PoSAccountingUndo {
     CreateDelegationId(CreateDelegationIdUndo),
     DelegateStaking(DelegateStakingUndo),
     SpendFromShare(SpendFromShareUndo),
+    IncreasePoolBalance(IncreasePoolBalanceUndo),
 }
 
 use super::{delegation::DelegationData, pool_data::PoolData};
@@ -82,15 +89,24 @@ pub trait PoSAccountingOperations {
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
-        decommission_key: PublicKey,
+        decommission_key: Destination,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
     ) -> Result<(PoolId, PoSAccountingUndo), Error>;
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;
 
+    fn increase_pool_balance(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<PoSAccountingUndo, Error>;
+
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
-        spend_key: PublicKey,
+        spend_key: Destination,
         input0_outpoint: &OutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error>;
 

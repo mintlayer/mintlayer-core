@@ -202,7 +202,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         );
 
         // Case 7: reward is a stake lock
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let decommission_destination = super::new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()
@@ -210,9 +210,8 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 coins.clone(),
                 OutputPurpose::StakePool(Box::new(StakePoolData::new(
                     anyonecanspend_address(),
-                    None,
                     vrf_pub_key,
-                    pub_key,
+                    decommission_destination,
                     0,
                     Amount::ZERO,
                 ))),

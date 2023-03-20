@@ -28,6 +28,23 @@ pub enum AccountingBlockUndoError {
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub struct AccountingBlockRewardUndo(Vec<PoSAccountingUndo>);
+
+impl AccountingBlockRewardUndo {
+    pub fn new(utxos: Vec<PoSAccountingUndo>) -> Self {
+        Self(utxos)
+    }
+
+    pub fn inner(&self) -> &[PoSAccountingUndo] {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> Vec<PoSAccountingUndo> {
+        self.0
+    }
+}
+
+#[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct AccountingTxUndo(Vec<PoSAccountingUndo>);
 
 impl AccountingTxUndo {
@@ -46,20 +63,35 @@ impl AccountingTxUndo {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Encode, Decode)]
 pub struct AccountingBlockUndo {
+    reward_undos: Option<AccountingBlockRewardUndo>,
     tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
 }
 
 impl AccountingBlockUndo {
-    pub fn new(tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>) -> Self {
-        Self { tx_undos }
+    pub fn new(
+        tx_undos: BTreeMap<Id<Transaction>, AccountingTxUndo>,
+        reward_undos: Option<AccountingBlockRewardUndo>,
+    ) -> Self {
+        Self {
+            reward_undos,
+            tx_undos,
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.tx_undos.is_empty()
+        self.reward_undos.is_none() && self.tx_undos.is_empty()
     }
 
     pub fn tx_undos(&self) -> &BTreeMap<Id<Transaction>, AccountingTxUndo> {
         &self.tx_undos
+    }
+
+    pub fn reward_undos(&self) -> Option<&AccountingBlockRewardUndo> {
+        self.reward_undos.as_ref()
+    }
+
+    pub fn set_reward_undo(&mut self, undo: AccountingBlockRewardUndo) {
+        self.reward_undos = Some(undo);
     }
 
     pub fn insert_tx_undo(
@@ -78,6 +110,10 @@ impl AccountingBlockUndo {
 
     pub fn take_tx_undo(&mut self, tx_id: &Id<Transaction>) -> Option<AccountingTxUndo> {
         self.tx_undos.remove(tx_id)
+    }
+
+    pub fn take_reward_undos(&mut self) -> Option<AccountingBlockRewardUndo> {
+        self.reward_undos.take()
     }
 
     pub fn combine(&mut self, other: AccountingBlockUndo) -> Result<(), AccountingBlockUndoError> {

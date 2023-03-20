@@ -51,8 +51,8 @@ impl From<&SignedTransaction> for MutableTransaction {
     fn from(tx: &SignedTransaction) -> Self {
         Self {
             flags: tx.flags(),
-            inputs: tx.inputs().clone(),
-            outputs: tx.outputs().clone(),
+            inputs: tx.inputs().to_owned(),
+            outputs: tx.outputs().to_owned(),
             lock_time: tx.lock_time(),
             witness: tx.signatures().to_vec(),
         }

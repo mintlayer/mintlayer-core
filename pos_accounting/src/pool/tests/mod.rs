@@ -16,15 +16,19 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, PoolId},
-    primitives::{Amount, H256},
+    chain::{DelegationId, Destination, OutPoint, OutPointSourceId, PoolId},
+    primitives::{Amount, Id, H256},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
+    key::{KeyKind, PrivateKey},
     random::{CryptoRng, Rng},
+    vrf::{VRFKeyKind, VRFPrivateKey},
 };
 
-use crate::{storage::in_memory::InMemoryPoSAccounting, DelegationData, PoolData};
+use crate::{
+    error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,
+    PoSAccountingOperations, PoSAccountingUndo, PoolData,
+};
 
 mod delta_tests;
 mod operations_tests;
@@ -38,21 +42,80 @@ fn new_delegation_id(v: u64) -> DelegationId {
     DelegationId::new(H256::from_low_u64_be(v))
 }
 
+fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Destination::PublicKey(pub_key)
+}
+
+fn create_pool_data(
+    rng: &mut (impl Rng + CryptoRng),
+    decomission_destination: Destination,
+    pledged_amount: Amount,
+) -> PoolData {
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+    let margin_ration = rng.gen_range(0u64..1000);
+    let cost_per_epoch = Amount::from_atoms(rng.gen_range(0..1000));
+    PoolData::new(
+        decomission_destination,
+        pledged_amount,
+        vrf_pk,
+        margin_ration,
+        cost_per_epoch,
+    )
+}
+
+fn create_pool(
+    rng: &mut (impl Rng + CryptoRng),
+    op: &mut impl PoSAccountingOperations,
+    pledged_amount: Amount,
+) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
+    let destination = new_pub_key_destination(rng);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
+        0,
+    );
+    let pool_data = create_pool_data(rng, destination, pledged_amount);
+    op.create_pool(
+        &outpoint,
+        pledged_amount,
+        pool_data.decommission_destination().clone(),
+        pool_data.vrf_public_key().clone(),
+        pool_data.margin_ratio_per_thousand(),
+        pool_data.cost_per_epoch(),
+    )
+    .map(|(id, undo)| (id, pool_data, undo))
+}
+
+fn create_delegation_id(
+    rng: &mut (impl Rng + CryptoRng),
+    op: &mut impl PoSAccountingOperations,
+    target_pool: PoolId,
+) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
+    let destination = new_pub_key_destination(rng);
+    let outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
+        0,
+    );
+    op.create_delegation_id(target_pool, destination.clone(), &outpoint)
+        .map(|(id, undo)| (id, destination, undo))
+}
+
 fn create_storage_with_pool(
     rng: &mut (impl Rng + CryptoRng),
     pledged_amount: Amount,
-) -> (PoolId, PublicKey, InMemoryPoSAccounting) {
+) -> (PoolId, PoolData, InMemoryPoSAccounting) {
     let pool_id = new_pool_id(rng.next_u64());
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination = new_pub_key_destination(rng);
+    let pool_data = create_pool_data(rng, destination, pledged_amount);
 
     let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data.clone())]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
     );
-    (pool_id, pub_key, storage)
+    (pool_id, pool_data, storage)
 }
 
 fn create_storage_with_pool_and_delegation(
@@ -61,25 +124,26 @@ fn create_storage_with_pool_and_delegation(
     delegated_amount: Amount,
 ) -> (
     PoolId,
-    PublicKey,
+    PoolData,
     DelegationId,
-    PublicKey,
+    Destination,
     InMemoryPoSAccounting,
 ) {
     let pool_id = new_pool_id(rng.next_u64());
+    let destination_pool = new_pub_key_destination(rng);
     let delegation_id = new_delegation_id(rng.next_u64());
-    let (_, pub_key_pool) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let (_, pub_key_del) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination_del = new_pub_key_destination(rng);
+    let pool_data = create_pool_data(rng, destination_pool, pledged_amount);
 
     let storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key_pool.clone(), pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data.clone())]),
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),
         BTreeMap::from([(
             delegation_id,
-            DelegationData::new(pool_id, pub_key_del.clone()),
+            DelegationData::new(pool_id, destination_del.clone()),
         )]),
     );
-    (pool_id, pub_key_pool, delegation_id, pub_key_del, storage)
+    (pool_id, pool_data, delegation_id, destination_del, storage)
 }

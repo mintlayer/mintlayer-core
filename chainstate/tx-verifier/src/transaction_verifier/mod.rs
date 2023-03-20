@@ -16,6 +16,7 @@
 mod accounting_undo_cache;
 mod amounts_map;
 mod cached_inputs_operation;
+mod input_output_policy;
 mod token_issuance_cache;
 mod tx_index_cache;
 mod utils;
@@ -38,7 +39,7 @@ use self::{
     amounts_map::AmountsMap,
     cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
-    error::{ConnectTransactionError, TokensError},
+    error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
@@ -54,18 +55,20 @@ use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     amount_sum,
     chain::{
-        block::{timestamp::BlockTimestamp, BlockRewardTransactable},
+        block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
+        stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
         TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockDistance, BlockHeight, Id, Idable, H256},
 };
+use consensus::ConsensusPoSError;
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
-    PoSAccountingView,
+    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingUndo, PoSAccountingView,
 };
 use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
@@ -360,12 +363,82 @@ where
         Ok(())
     }
 
+    fn get_stake_pool_data_from_output(
+        &self,
+        output: &TxOutput,
+        block_id: Id<Block>,
+    ) -> Result<StakePoolData, ConnectTransactionError> {
+        match output.purpose() {
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::LockThenTransfer(_, _)
+            | OutputPurpose::Burn => Err(ConnectTransactionError::InvalidOutputPurposeInReward(
+                block_id,
+            )),
+            OutputPurpose::StakePool(d) => Ok(d.as_ref().clone()),
+            OutputPurpose::ProduceBlockFromStake(d, pool_id) => {
+                let pool_data = self
+                    .accounting_delta
+                    .get_pool_data(*pool_id)?
+                    .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
+                Ok(StakePoolData::new(
+                    d.clone(),
+                    pool_data.vrf_public_key().clone(),
+                    pool_data.decommission_destination().clone(),
+                    pool_data.margin_ratio_per_thousand(),
+                    pool_data.cost_per_epoch(),
+                ))
+            }
+        }
+    }
+
+    fn check_stake_outputs_in_reward(
+        &self,
+        block: &WithId<Block>,
+    ) -> Result<(), ConnectTransactionError> {
+        match block.consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => Ok(()),
+            ConsensusData::PoS(_) => {
+                let block_reward_transactable = block.block_reward_transactable();
+
+                let kernel_output = consensus::get_kernel_output(
+                    block_reward_transactable.inputs().ok_or(
+                        SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
+                    )?,
+                    &self.utxo_cache,
+                )
+                .map_err(SpendStakeError::ConsensusPoSError)?;
+                let kernel_stake_pool_data =
+                    self.get_stake_pool_data_from_output(&kernel_output, block.get_id())?;
+
+                let reward_output = match block_reward_transactable
+                    .outputs()
+                    .ok_or(SpendStakeError::NoBlockRewardOutputs)?
+                {
+                    [] => Err(SpendStakeError::NoBlockRewardOutputs),
+                    [output] => Ok(output),
+                    _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
+                }?;
+                let reward_stake_pool_data =
+                    self.get_stake_pool_data_from_output(reward_output, block.get_id())?;
+
+                ensure!(
+                    kernel_stake_pool_data == reward_stake_pool_data,
+                    SpendStakeError::StakePoolDataMismatch
+                );
+
+                Ok(())
+            }
+        }
+    }
+
     pub fn check_block_reward(
         &self,
         block: &WithId<Block>,
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
+        self.check_stake_outputs_in_reward(block)?;
+
         let block_reward_transactable = block.block_reward_transactable();
 
         let inputs = block_reward_transactable.inputs();
@@ -422,10 +495,11 @@ where
         use common::chain::timelock::OutputTimeLock;
 
         let timelock = match output.purpose() {
-            OutputPurpose::Transfer(_) => return Ok(()),
+            OutputPurpose::Transfer(_)
+            | OutputPurpose::Burn
+            | OutputPurpose::StakePool(_)
+            | OutputPurpose::ProduceBlockFromStake(_, _) => return Ok(()),
             OutputPurpose::LockThenTransfer(_, tl) => tl,
-            OutputPurpose::StakePool(_) => return Ok(()),
-            OutputPurpose::Burn => return Ok(()),
         };
 
         let source_block_height = source_block_index.block_height();
@@ -562,7 +636,8 @@ where
                 OutputPurpose::StakePool(data) => Some((data, output.value())),
                 OutputPurpose::Transfer(_)
                 | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn => None,
+                | OutputPurpose::Burn
+                | OutputPurpose::ProduceBlockFromStake(_, _) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -579,6 +654,9 @@ where
                             input0.outpoint(),
                             delegation_amount,
                             pool_data.decommission_key().clone(),
+                            pool_data.vrf_public_key().clone(),
+                            pool_data.margin_ratio_per_thousand(),
+                            pool_data.cost_per_epoch(),
                         )
                         .map_err(ConnectTransactionError::PoSAccountingError)?;
                     let new_delta_data = temp_delta.consume();
@@ -633,7 +711,8 @@ where
             }
             OutputPurpose::Transfer(_)
             | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn => Ok(()),
+            | OutputPurpose::Burn
+            | OutputPurpose::ProduceBlockFromStake(_, _) => Ok(()),
         })
     }
 
@@ -644,6 +723,8 @@ where
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
+
+        input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
         self.token_issuance_cache
@@ -741,6 +822,22 @@ where
             // mark tx index as spend
             tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
         }
+
+        // add subsidy to the pool balance
+        match block_index.block_header().consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+            ConsensusData::PoS(pos_data) => {
+                let block_subsidy =
+                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                let undo = self
+                    .accounting_delta
+                    .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
+
+                self.accounting_block_undo
+                    .get_or_create_block_undo(&TransactionSource::Chain(block_id))
+                    .set_reward_undo(AccountingBlockRewardUndo::new(vec![undo]));
+            }
+        };
 
         Ok(())
     }
@@ -894,17 +991,34 @@ where
                     reward_undo,
                 )?;
 
-                let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
-
                 if let (Some(inputs), Some(tx_index_cache)) =
                     (reward_transactable.inputs(), self.tx_index_cache.as_mut())
                 {
                     // pre-cache all inputs
+                    let tx_index_fetcher =
+                        |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
                     tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // unspend inputs
                     tx_index_cache.unspend_tx_index_inputs(inputs)?;
+                }
+
+                match block.header().consensus_data() {
+                    ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+                    ConsensusData::PoS(_) => {
+                        let block_undo_fetcher =
+                            |id: Id<Block>| self.storage.get_accounting_undo(id);
+                        let reward_undo = self.accounting_block_undo.take_block_reward_undo(
+                            &TransactionSource::Chain(block.get_id()),
+                            block_undo_fetcher,
+                        )?;
+                        if let Some(reward_undo) = reward_undo {
+                            reward_undo
+                                .into_inner()
+                                .into_iter()
+                                .try_for_each(|undo| self.accounting_delta.undo(undo))?;
+                        }
+                    }
                 }
             }
         }

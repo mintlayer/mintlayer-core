@@ -19,24 +19,23 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
-    BlockPreconnectData, ConsensusExtraData, EpochData, GenBlockIndex, GetAncestorError,
-    PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
+    GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
+        timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, OutputPurpose, Transaction,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
-use consensus::compute_extra_consensus_data;
 use logging::log;
 use pos_accounting::PoSAccountingDB;
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
@@ -363,6 +362,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
+        // TODO(Gosha):
+        // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
+        // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
         consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
@@ -386,64 +388,56 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn check_block_reward_timelock(
+        &self,
+        block: &Block,
+        timelock: &OutputTimeLock,
+    ) -> Result<(), CheckBlockError> {
+        match timelock {
+            OutputTimeLock::ForBlockCount(c) => {
+                let cs: i64 = (*c)
+                    .try_into()
+                    .map_err(|_| {
+                        CheckBlockError::InvalidBlockRewardMaturityDistanceValue(block.get_id(), *c)
+                    })
+                    .log_err()?;
+                let given = BlockDistance::new(cs);
+                let required = block.consensus_data().reward_maturity_distance(self.chain_config);
+                ensure!(
+                    given >= required,
+                    CheckBlockError::InvalidBlockRewardMaturityDistance(
+                        block.get_id(),
+                        given,
+                        required
+                    )
+                );
+                Ok(())
+            }
+            OutputTimeLock::UntilHeight(_)
+            | OutputTimeLock::UntilTime(_)
+            | OutputTimeLock::ForSeconds(_) => Err(
+                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
+            ),
+        }
+    }
+
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
-        let required = block.consensus_data().reward_maturity_distance(self.chain_config);
-        for output in block.block_reward().outputs() {
+        block.block_reward().outputs().iter().try_for_each(|output| {
             match output.purpose() {
-                common::chain::OutputPurpose::Transfer(_) => {
-                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
-                        block.get_id(),
-                    ))
+                OutputPurpose::LockThenTransfer(_, tl) => {
+                    self.check_block_reward_timelock(block, tl)
                 }
-                common::chain::OutputPurpose::LockThenTransfer(_, tl) => match tl {
-                    common::chain::timelock::OutputTimeLock::UntilHeight(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                    common::chain::timelock::OutputTimeLock::UntilTime(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                    common::chain::timelock::OutputTimeLock::ForBlockCount(c) => {
-                        let cs: i64 = (*c)
-                            .try_into()
-                            .map_err(|_| {
-                                CheckBlockError::InvalidBlockRewardMaturityDistanceValue(
-                                    block.get_id(),
-                                    *c,
-                                )
-                            })
-                            .log_err()?;
-                        let given = BlockDistance::new(cs);
-                        if given < required {
-                            return Err(CheckBlockError::InvalidBlockRewardMaturityDistance(
-                                block.get_id(),
-                                given,
-                                required,
-                            ));
-                        }
-                    }
-                    common::chain::timelock::OutputTimeLock::ForSeconds(_) => {
-                        return Err(CheckBlockError::InvalidBlockRewardMaturityTimelockType(
-                            block.get_id(),
-                        ))
-                    }
-                },
-                common::chain::OutputPurpose::StakePool(_) => {
-                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
-                        block.get_id(),
-                    ))
+                OutputPurpose::ProduceBlockFromStake(_, _) => {
+                    // The output can be reused in block reward right away
+                    Ok(())
                 }
-                common::chain::OutputPurpose::Burn => {
-                    return Err(CheckBlockError::InvalidBlockRewardOutputType(
+                OutputPurpose::Transfer(_) | OutputPurpose::StakePool(_) | OutputPurpose::Burn => {
+                    Err(CheckBlockError::InvalidBlockRewardOutputType(
                         block.get_id(),
                     ))
                 }
             }
-        }
-        Ok(())
+        })
     }
 
     fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
@@ -714,8 +708,16 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // Connect the new chain
         for block_index in new_chain {
-            self.connect_tip(&block_index).log_err()?;
-            self.post_connect_tip(&block_index).log_err()?;
+            let block: WithId<Block> = self
+                .get_block_from_index(&block_index)
+                .log_err()?
+                .ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
+                    *block_index.block_id(),
+                ))?
+                .into();
+
+            self.connect_tip(&block_index, &block).log_err()?;
+            self.post_connect_tip(&block_index, block.as_ref()).log_err()?;
         }
 
         Ok(())
@@ -766,19 +768,19 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     // Connect new block
-    fn connect_tip(&mut self, new_tip_block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn connect_tip(
+        &mut self,
+        new_tip_block_index: &BlockIndex,
+        new_tip: &WithId<Block>,
+    ) -> Result<(), BlockError> {
         let best_block_id =
             self.get_best_block_id().map_err(BlockError::BestBlockLoadError).log_err()?;
         utils::ensure!(
             &best_block_id == new_tip_block_index.prev_block_id(),
             BlockError::InvariantErrorInvalidTip,
         );
-        let block = self
-            .get_block_from_index(new_tip_block_index)
-            .log_err()?
-            .expect("Inconsistent DB");
 
-        self.connect_transactions(new_tip_block_index, &block.into()).log_err()?;
+        self.connect_transactions(new_tip_block_index, new_tip).log_err()?;
 
         self.db_tx
             .set_block_id_at_height(
@@ -878,24 +880,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
-        let utxos_db = UtxosDB::new(&self.db_tx);
-        let consensus_extra = match &prev_block_index {
-            GenBlockIndex::Block(prev_bi) => {
-                compute_extra_consensus_data(self.chain_config, prev_bi, block.header(), &utxos_db)?
-            }
-            GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
-        };
-
         let chain_trust =
             *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
-        let block_index = BlockIndex::new(
-            block,
-            chain_trust,
-            some_ancestor,
-            height,
-            time_max,
-            BlockPreconnectData::new(consensus_extra),
-        );
+        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 
@@ -911,16 +898,17 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(block_index)
     }
 
-    fn post_connect_tip(&mut self, tip_index: &BlockIndex) -> Result<(), BlockError> {
+    fn post_connect_tip(&mut self, tip_index: &BlockIndex, tip: &Block) -> Result<(), BlockError> {
+        let tip_height = tip_index.block_height();
         epoch_seal::update_epoch_seal(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEvent::Connect(tip_index.block_height()),
+            epoch_seal::BlockStateEvent::Connect(tip_height),
         )?;
         epoch_seal::update_epoch_data(
             &mut self.db_tx,
             self.chain_config,
-            epoch_seal::BlockStateEventWithIndex::Connect(tip_index.block_height(), tip_index),
+            epoch_seal::BlockStateEventWithIndex::Connect(tip_height, tip),
         )
     }
 

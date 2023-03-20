@@ -20,15 +20,15 @@ use super::{
         storage::TransactionVerifierStorageError,
     },
 };
-use chainstate_types::PropertyQueryError;
+use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
-    chain::{Block, GenBlock, Transaction},
+    chain::{Block, GenBlock, PoolId, Transaction},
     primitives::{BlockDistance, BlockHeight, Id},
 };
-use consensus::{ConsensusVerificationError, ExtraConsensusDataError};
+use consensus::ConsensusVerificationError;
 
 use thiserror::Error;
-use tx_verifier::transaction_verifier::error::TxIndexError;
+use tx_verifier::transaction_verifier::error::{SpendStakeError, TxIndexError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -56,8 +56,6 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
-    #[error("Failed to compute consensus extra data: {0}")]
-    ConsensusExtraDataError(#[from] ExtraConsensusDataError),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Changing tx index state is not implemented for existing DB")]
@@ -66,6 +64,14 @@ pub enum BlockError {
     TxIndexConstructionError(#[from] TxIndexError),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("PoS randomness error: `{0}`")]
+    RandomnessError(#[from] PoSRandomnessError),
+    #[error("Inconsistent db, block not found after connect: {0}")]
+    InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
+    #[error("Error during stake spending")]
+    SpendStakeError(#[from] SpendStakeError),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

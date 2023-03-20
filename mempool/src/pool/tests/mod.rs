@@ -292,7 +292,7 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     .await?
     .transaction()
     .outputs()
-    .clone();
+    .to_owned();
     let inputs = vec![input, duplicate_input];
     let tx = SignedTransaction::new(
         Transaction::new(flags, inputs, outputs, locktime)?,
@@ -367,7 +367,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?
     .transaction()
     .outputs()
-    .clone();
+    .to_owned();
 
     let bad_outpoint_index = 1;
     let bad_input = TxInput::new(outpoint_source_id, bad_outpoint_index);
@@ -760,7 +760,7 @@ async fn test_bip125_max_replacements(
     let tx = tx_builder.build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let input = tx.transaction().inputs().first().expect("one input").clone();
-    let outputs = tx.transaction().outputs().clone();
+    let outputs = tx.transaction().outputs().to_owned();
     let tx_id = tx.transaction().get_id();
     mempool.add_transaction(tx).await?;
 

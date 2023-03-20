@@ -281,7 +281,7 @@ pub fn outputs_from_block(blk: &Block) -> BlockOutputs {
     .chain(blk.transactions().iter().map(|tx| {
         (
             OutPointSourceId::Transaction(tx.transaction().get_id()),
-            tx.transaction().outputs().clone(),
+            tx.transaction().outputs().to_owned(),
         )
     }))
     .collect()

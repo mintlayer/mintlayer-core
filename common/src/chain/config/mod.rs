@@ -216,6 +216,18 @@ impl ChainConfig {
         self.is_last_block_in_epoch(height) && current_epoch_index >= sealed_epoch_distance_from_tip
     }
 
+    pub fn sealed_epoch_index(&self, height: &BlockHeight) -> Option<EpochIndex> {
+        let current_epoch_index = self.epoch_index_from_height(height);
+        let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
+
+        if self.is_last_block_in_epoch(height) {
+            current_epoch_index.checked_sub(sealed_epoch_distance_from_tip)
+        } else {
+            // If an epoch is not full it must be taken into account increasing the distance to the sealed epoch
+            current_epoch_index.checked_sub(sealed_epoch_distance_from_tip + 1)
+        }
+    }
+
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
     }
@@ -419,10 +431,12 @@ mod tests {
     #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(0), 0)]
     #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(1), 1)]
     #[case(NonZeroU64::new(1).unwrap(), BlockHeight::from(2), 2)]
+    //---------------------------------------------------------//
     #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(0), 0)]
     #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(1), 0)]
     #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(2), 1)]
     #[case(NonZeroU64::new(2).unwrap(), BlockHeight::from(3), 1)]
+    //---------------------------------------------------------//
     #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(0), 0)]
     #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(1), 0)]
     #[case(NonZeroU64::new(3).unwrap(), BlockHeight::from(2), 0)]
@@ -436,5 +450,85 @@ mod tests {
     ) {
         let config = Builder::test_chain().epoch_length(epoch_length).build();
         assert_eq!(expected, config.epoch_index_from_height(&block_height));
+    }
+
+    #[rstest]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(0), Some(0))]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(1), Some(1))]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(2), Some(2))]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(3), Some(3))]
+    #[case(NonZeroU64::new(1).unwrap(), 0, BlockHeight::from(4), Some(4))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(1), Some(0))]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(2), Some(1))]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(3), Some(2))]
+    #[case(NonZeroU64::new(1).unwrap(), 1, BlockHeight::from(4), Some(3))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(1), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(2), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(3), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(4), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 0, BlockHeight::from(5), Some(2))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(1), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(2), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(3), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(4), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(5), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(6), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 1, BlockHeight::from(7), Some(2))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(1), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(2), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(3), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(4), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(5), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(6), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(7), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(8), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(9), Some(2))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(10), Some(2))]
+    #[case(NonZeroU64::new(2).unwrap(), 2, BlockHeight::from(11), Some(3))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(1), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(2), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(3), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(4), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(5), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(6), None)]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(7), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(8), Some(0))]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(9), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(10), Some(1))]
+    #[case(NonZeroU64::new(2).unwrap(), 3, BlockHeight::from(11), Some(2))]
+    //------------------------------------------------------------------//
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(0), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(1), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(2), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(3), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(4), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(5), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(6), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(7), None)]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(8), Some(0))]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(9), Some(0))]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(10), Some(0))]
+    #[case(NonZeroU64::new(3).unwrap(), 2, BlockHeight::from(11), Some(1))]
+    fn sealed_epoch_index(
+        #[case] epoch_length: NonZeroU64,
+        #[case] seal_to_tip_distance: usize,
+        #[case] block_height: BlockHeight,
+        #[case] expected_epoch: Option<EpochIndex>,
+    ) {
+        let config = Builder::test_chain()
+            .epoch_length(epoch_length)
+            .sealed_epoch_distance_from_tip(seal_to_tip_distance)
+            .build();
+        assert_eq!(expected_epoch, config.sealed_epoch_index(&block_height));
     }
 }

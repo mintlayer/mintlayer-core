@@ -15,10 +15,10 @@
 
 use accounting::DataDelta;
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
-use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 
 use crate::{
     error::Error,
@@ -27,8 +27,8 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo,
-            SpendFromShareUndo,
+            DelegationDataUndo, IncreasePoolBalanceUndo, PoSAccountingOperations,
+            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -42,7 +42,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         &mut self,
         input0_outpoint: &OutPoint,
         pledge_amount: Amount,
-        decommission_key: PublicKey,
+        decommission_key: Destination,
+        vrf_public_key: VRFPublicKey,
+        margin_ratio_per_thousand: u64,
+        cost_per_epoch: Amount,
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
@@ -57,10 +60,18 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         }
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
-        let undo_data = self.data.pool_data.merge_delta_data_element(
-            pool_id,
-            DataDelta::new(None, Some(PoolData::new(decommission_key, pledge_amount))),
-        )?;
+
+        let pool_data = PoolData::new(
+            decommission_key,
+            pledge_amount,
+            vrf_public_key,
+            margin_ratio_per_thousand,
+            cost_per_epoch,
+        );
+        let undo_data = self
+            .data
+            .pool_data
+            .merge_delta_data_element(pool_id, DataDelta::new(None, Some(pool_data)))?;
 
         Ok((
             pool_id,
@@ -92,10 +103,25 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         }))
     }
 
+    fn increase_pool_balance(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<PoSAccountingUndo, Error> {
+        self.add_balance_to_pool(pool_id, amount_to_add)?;
+
+        Ok(PoSAccountingUndo::IncreasePoolBalance(
+            IncreasePoolBalanceUndo {
+                pool_id,
+                amount_added: amount_to_add,
+            },
+        ))
+    }
+
     fn create_delegation_id(
         &mut self,
         target_pool: PoolId,
-        spend_key: PublicKey,
+        spend_key: Destination,
         input0_outpoint: &OutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
         if !self.pool_exists(target_pool)? {
@@ -178,6 +204,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
+            PoSAccountingUndo::IncreasePoolBalance(undo) => self.undo_increase_pool_balance(undo),
         }
     }
 }
@@ -281,6 +308,15 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         self.add_balance_to_pool(pool_id, undo_data.amount)?;
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
+
+        Ok(())
+    }
+
+    fn undo_increase_pool_balance(
+        &mut self,
+        undo_data: IncreasePoolBalanceUndo,
+    ) -> Result<(), Error> {
+        self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_added)?;
 
         Ok(())
     }

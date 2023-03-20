@@ -16,14 +16,17 @@
 pub mod error;
 pub mod kernel;
 
-use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, BlockIndexHandle};
+use chainstate_types::{
+    pos_randomness::{PoSRandomness, PoSRandomnessError},
+    BlockIndexHandle,
+};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
         config::EpochIndex,
         ChainConfig, OutputPurpose, TxOutput,
     },
-    primitives::{Idable, H256},
+    primitives::{BlockHeight, Idable},
     Uint256, Uint512,
 };
 use pos_accounting::PoSAccountingView;
@@ -34,36 +37,44 @@ use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
 fn check_stake_kernel_hash<P: PoSAccountingView>(
     epoch_index: EpochIndex,
-    random_seed: &H256,
+    random_seed: &PoSRandomness,
     pos_data: &PoSData,
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
     pos_accounting_view: &P,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = (*pos_data.bits())
+    let target: Uint256 = (*pos_data.compact_target())
         .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.compact_target()))?;
 
-    let pool_data = match kernel_output.purpose() {
+    let vrf_pub_key = match kernel_output.purpose() {
         OutputPurpose::Transfer(_)
         | OutputPurpose::LockThenTransfer(_, _)
         | OutputPurpose::Burn => {
             // only pool outputs can be staked
-            return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
-                spender_block_header.get_id(),
+            return Err(ConsensusPoSError::RandomnessError(
+                PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
+                    spender_block_header.get_id(),
+                ),
             ));
         }
-
-        OutputPurpose::StakePool(d) => d.as_ref(),
+        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+            let pool_data = pos_accounting_view
+                .get_pool_data(*pool_id)?
+                .ok_or(ConsensusPoSError::PoolDataNotFound(*pool_id))?;
+            pool_data.vrf_public_key().clone()
+        }
     };
 
-    let hash_pos: Uint256 = verify_vrf_and_get_vrf_output(
+    let hash_pos: Uint256 = PoSRandomness::from_block(
         epoch_index,
-        random_seed,
-        pos_data.vrf_data(),
-        pool_data.vrf_public_key(),
         spender_block_header,
+        random_seed,
+        pos_data,
+        &vrf_pub_key,
     )?
+    .value()
     .into();
 
     let hash_pos_arith: Uint512 = hash_pos.into();
@@ -84,26 +95,26 @@ fn check_stake_kernel_hash<P: PoSAccountingView>(
 
 fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
-    current_epoch_index: EpochIndex,
+    current_height: BlockHeight,
     block_index_handle: &H,
-) -> Result<H256, ConsensusPoSError> {
-    let sealed_epoch_distance_from_tip = chain_config.sealed_epoch_distance_from_tip() as u64;
-    let random_seed = if current_epoch_index >= sealed_epoch_distance_from_tip {
-        let sealed_epoch_index = current_epoch_index
-            .checked_sub(sealed_epoch_distance_from_tip)
-            .expect("must've been already checked for underflow");
-        let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
-        match epoch_data {
-            Some(d) => d.randomness(),
-            None => {
-                // TODO: no epoch_data means either that no epoch was created yet or
-                // that the data is actually missing
-                chain_config.initial_randomness()
+) -> Result<PoSRandomness, ConsensusPoSError> {
+    let sealed_epoch_index = chain_config.sealed_epoch_index(&current_height);
+
+    let random_seed = match sealed_epoch_index {
+        Some(sealed_epoch_index) => {
+            let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
+            match epoch_data {
+                Some(d) => *d.randomness(),
+                None => {
+                    // TODO: no epoch_data means either that no epoch was created yet or
+                    // that the data is actually missing
+                    PoSRandomness::at_genesis(chain_config)
+                }
             }
         }
-    } else {
-        chain_config.initial_randomness()
+        None => PoSRandomness::at_genesis(chain_config),
     };
+
     Ok(random_seed)
 }
 
@@ -124,15 +135,13 @@ where
         .get_gen_block_index(header.prev_block_id())?
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
 
-    let kernel_output = get_kernel_output(pos_data, utxos_view)?;
+    let current_height = prev_block_index.block_height().next_height();
+    let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
 
-    let epoch_index =
-        chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
-
-    let random_seed = randomness_of_sealed_epoch(chain_config, epoch_index, block_index_handle)?;
-
+    let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
+    let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
     check_stake_kernel_hash(
-        epoch_index,
+        current_epoch_index,
         &random_seed,
         pos_data,
         &kernel_output,

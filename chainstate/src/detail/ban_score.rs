@@ -14,9 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
-use consensus::{
-    ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError, ExtraConsensusDataError,
-};
+use consensus::{ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError};
 
 use super::{
     transaction_verifier::{
@@ -51,11 +49,14 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
-            BlockError::ConsensusExtraDataError(e) => e.ban_score(),
             BlockError::TransactionVerifierError(err) => err.ban_score(),
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
+            BlockError::RandomnessError(err) => err.ban_score(),
+            BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
+            BlockError::SpendStakeError(_) => 100,
+            BlockError::PoolDataNotFound(_) => 0,
         }
     }
 }
@@ -105,10 +106,15 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::UtxoBlockUndoError(_) => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
+            ConnectTransactionError::AttemptToSpendInvalidOutputType => 100,
+            ConnectTransactionError::AttemptToUseInvalidOutputInTx => 100,
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
+            ConnectTransactionError::SpendStakeError(_) => 100,
+            ConnectTransactionError::InvalidOutputPurposeInReward(_) => 100,
+            ConnectTransactionError::PoolDataNotFound(_) => 0,
         }
     }
 }
@@ -279,11 +285,11 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::NoKernel => 100,
             ConsensusPoSError::MultipleKernels => 100,
             ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
-            ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
-            ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
-            ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
-            ConsensusPoSError::PoolBalanceNotFound(_) => 0,
+            ConsensusPoSError::PrevBlockIndexNotFound(_) => 0,
+            ConsensusPoSError::PoolBalanceNotFound(_) => 100,
             ConsensusPoSError::PoSAccountingError(err) => err.ban_score(),
+            ConsensusPoSError::RandomnessError(err) => err.ban_score(),
+            ConsensusPoSError::PoolDataNotFound(_) => 0,
         }
     }
 }
@@ -293,15 +299,6 @@ impl BanScore for PoSRandomnessError {
         match self {
             PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_) => 100,
             PoSRandomnessError::VRFDataVerificationFailed(_) => 100,
-        }
-    }
-}
-
-impl BanScore for ExtraConsensusDataError {
-    fn ban_score(&self) -> u32 {
-        match self {
-            ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(_) => 100,
-            ExtraConsensusDataError::PoSRandomnessCalculationFailed(e) => e.ban_score(),
         }
     }
 }

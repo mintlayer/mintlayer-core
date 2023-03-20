@@ -15,58 +15,25 @@
 
 use std::collections::BTreeMap;
 
-use common::{
-    chain::{DelegationId, OutPoint, OutPointSourceId, PoolId},
-    primitives::{Amount, Id, H256},
-};
-use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
-    random::{CryptoRng, Rng},
-};
+use common::primitives::Amount;
+use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use super::{create_storage_with_pool, create_storage_with_pool_and_delegation};
+use super::{
+    create_delegation_id, create_pool, create_storage_with_pool,
+    create_storage_with_pool_and_delegation,
+};
 use crate::{
-    error::Error,
     pool::{
         delegation::DelegationData,
         delta::PoSAccountingDelta,
-        operations::{PoSAccountingOperations, PoSAccountingUndo},
-        pool_data::PoolData,
+        operations::PoSAccountingOperations,
         storage::PoSAccountingDB,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
     storage::in_memory::InMemoryPoSAccounting,
 };
-
-fn create_pool(
-    rng: &mut (impl Rng + CryptoRng),
-    op: &mut impl PoSAccountingOperations,
-    pledged_amount: Amount,
-) -> Result<(PoolId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let outpoint = OutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
-    op.create_pool(&outpoint, pledged_amount, pub_key.clone())
-        .map(|(id, undo)| (id, pub_key, undo))
-}
-
-fn create_delegation_id(
-    rng: &mut (impl Rng + CryptoRng),
-    op: &mut impl PoSAccountingOperations,
-    target_pool: PoolId,
-) -> Result<(DelegationId, PublicKey, PoSAccountingUndo), Error> {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let outpoint = OutPoint::new(
-        OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
-        0,
-    );
-    op.create_delegation_id(target_pool, pub_key.clone(), &outpoint)
-        .map(|(id, undo)| (id, pub_key, undo))
-}
 
 #[rstest]
 #[trace]
@@ -96,7 +63,7 @@ fn create_pool_check_undo_check(
     op: &mut (impl PoSAccountingOperations + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, undo) = create_pool(rng, op, pledged_amount).unwrap();
+    let (pool_id, pool_data, undo) = create_pool(rng, op, pledged_amount).unwrap();
 
     assert_eq!(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
@@ -104,7 +71,7 @@ fn create_pool_check_undo_check(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key, pledged_amount)
+        pool_data
     );
     assert_eq!(op.get_pool_delegations_shares(pool_id).unwrap(), None);
 
@@ -125,12 +92,13 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
     let mut delta = PoSAccountingDelta::new(&db);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, delta_undo) = create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
+    let (pool_id, pool_data, delta_undo) =
+        create_pool(&mut rng, &mut delta, pledged_amount).unwrap();
 
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -195,7 +163,7 @@ fn decommission_pool_check_undo_check(
     op: &mut (impl PoSAccountingOperations + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
 
     let undo = op.decommission_pool(pool_id).unwrap();
 
@@ -211,7 +179,7 @@ fn decommission_pool_check_undo_check(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key, pledged_amount)
+        pool_data
     );
     assert_eq!(op.get_pool_delegations_shares(pool_id).expect("ok"), None);
 }
@@ -222,7 +190,7 @@ fn decommission_pool_check_undo_check(
 fn decommission_pool_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledged_amount);
+    let (pool_id, pool_data, mut storage) = create_storage_with_pool(&mut rng, pledged_amount);
 
     let delta_undo = {
         let mut db = PoSAccountingDB::new(&mut storage);
@@ -243,7 +211,7 @@ fn decommission_pool_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -262,7 +230,7 @@ fn decommission_pool_undo_flush(#[case] seed: Seed) {
     let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
     let mut delta = PoSAccountingDelta::new(&db);
     let delta_undo = delta.decommission_pool(pool_id).unwrap();
@@ -271,7 +239,7 @@ fn decommission_pool_undo_flush(#[case] seed: Seed) {
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -308,7 +276,7 @@ fn check_delegation_id(
     op: &mut (impl PoSAccountingOperations + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, undo) = create_delegation_id(rng, op, pool_id).unwrap();
 
     assert_eq!(
@@ -331,7 +299,7 @@ fn check_delegation_id(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key, pledged_amount)
+        pool_data
     );
     assert_eq!(op.get_delegation_balance(delegation_id).expect("ok"), None);
     assert_eq!(
@@ -346,7 +314,7 @@ fn check_delegation_id(
 fn create_delegation_id_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, mut storage) = create_storage_with_pool(&mut rng, pledged_amount);
+    let (pool_id, pool_data, mut storage) = create_storage_with_pool(&mut rng, pledged_amount);
 
     let delta_undo = {
         let mut db = PoSAccountingDB::new(&mut storage);
@@ -357,7 +325,7 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data.clone())]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -375,7 +343,7 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -394,7 +362,7 @@ fn create_delegation_id_undo_flush(#[case] seed: Seed) {
     let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
 
     let mut delta = PoSAccountingDelta::new(&db);
     let (_, _, delta_undo) = create_delegation_id(&mut rng, &mut delta, pool_id).unwrap();
@@ -404,7 +372,7 @@ fn create_delegation_id_undo_flush(#[case] seed: Seed) {
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -441,7 +409,7 @@ fn check_delegate_staking(
     op: &mut (impl PoSAccountingOperations + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, _) = create_delegation_id(rng, op, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
@@ -472,7 +440,7 @@ fn check_delegate_staking(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key, pledged_amount)
+        pool_data
     );
     assert_eq!(op.get_delegation_balance(delegation_id).expect("ok"), None);
 }
@@ -484,7 +452,7 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledged_amount = Amount::from_atoms(100);
     let delegated_amount = Amount::from_atoms(0);
-    let (pool_id, pub_key, delegation_id, del_pub_key, mut storage) =
+    let (pool_id, pool_data, delegation_id, del_pub_key, mut storage) =
         create_storage_with_pool_and_delegation(&mut rng, pledged_amount, delegated_amount);
 
     let delta_undo = {
@@ -496,7 +464,7 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data.clone())]),
             BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
             BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
             BTreeMap::from([(delegation_id, delegated_amount)]),
@@ -517,7 +485,7 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -536,7 +504,7 @@ fn delegate_staking_delta_undo_flush(#[case] seed: Seed) {
     let mut db = PoSAccountingDB::new(&mut storage);
 
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(&mut rng, &mut db, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, _) = create_delegation_id(&mut rng, &mut db, pool_id).unwrap();
 
     let mut delta = PoSAccountingDelta::new(&db);
@@ -547,7 +515,7 @@ fn delegate_staking_delta_undo_flush(#[case] seed: Seed) {
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -584,7 +552,7 @@ fn check_spend_share(
     op: &mut (impl PoSAccountingOperations + PoSAccountingView),
 ) {
     let pledged_amount = Amount::from_atoms(100);
-    let (pool_id, pub_key, _) = create_pool(rng, op, pledged_amount).unwrap();
+    let (pool_id, pool_data, _) = create_pool(rng, op, pledged_amount).unwrap();
     let (delegation_id, del_pub_key, _) = create_delegation_id(rng, op, pool_id).unwrap();
 
     let delegated_amount = Amount::from_atoms(300);
@@ -603,7 +571,7 @@ fn check_spend_share(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key.clone(), pledged_amount)
+        pool_data
     );
     assert_eq!(
         op.get_delegation_data(delegation_id).expect("ok").expect("some"),
@@ -626,7 +594,7 @@ fn check_spend_share(
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
-        PoolData::new(pub_key, pledged_amount)
+        pool_data
     );
     assert_eq!(
         op.get_delegation_data(delegation_id).expect("ok").expect("some"),
@@ -645,7 +613,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledged_amount = Amount::from_atoms(100);
     let delegated_amount = Amount::from_atoms(300);
-    let (pool_id, pub_key, delegation_id, del_pub_key, mut storage) =
+    let (pool_id, pool_data, delegation_id, del_pub_key, mut storage) =
         create_storage_with_pool_and_delegation(&mut rng, pledged_amount, delegated_amount);
 
     let delta_undo = {
@@ -657,7 +625,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key.clone(), pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data.clone())]),
             BTreeMap::from([(
                 pool_id,
                 ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap(),
@@ -684,7 +652,7 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
         db.batch_write_delta(new_delta.consume()).unwrap();
 
         let expected_storage = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
             BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
             BTreeMap::from([(delegation_id, delegated_amount)]),
@@ -701,7 +669,7 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let pledged_amount = Amount::from_atoms(100);
     let delegated_amount = Amount::from_atoms(300);
-    let (pool_id, pub_key, delegation_id, del_pub_key, mut storage) =
+    let (pool_id, pool_data, delegation_id, del_pub_key, mut storage) =
         create_storage_with_pool_and_delegation(&mut rng, pledged_amount, delegated_amount);
 
     let mut db = PoSAccountingDB::new(&mut storage);
@@ -713,7 +681,7 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     db.batch_write_delta(delta.consume()).unwrap();
 
     let expected_storage = InMemoryPoSAccounting::from_values(
-        BTreeMap::from([(pool_id, PoolData::new(pub_key, pledged_amount))]),
+        BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),

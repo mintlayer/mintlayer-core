@@ -27,7 +27,7 @@ pub enum ConsensusData {
     #[codec(index = 1)]
     PoW(PoWData),
     #[codec(index = 2)]
-    PoS(PoSData),
+    PoS(Box<PoSData>),
 }
 
 impl ConsensusData {
@@ -50,14 +50,21 @@ impl ConsensusData {
     }
 }
 
-/// Fake PoS just to test spending block rewards; will be removed at some point in the future
+/// Data required to validate a block according to the PoS consensus rules.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSData {
+    /// Inputs for block reward
     kernel_inputs: Vec<TxInput>,
     kernel_witness: Vec<InputWitness>,
+
+    /// Id of the stake pool used for target calculations
     stake_pool_id: PoolId,
+
+    /// VRF data used for calculating hash below the target.
+    /// It represents random seed generated based on the randomness of the sealed epoch.
     vrf_data: VRFReturn,
-    bits: Compact,
+
+    compact_target: Compact,
 }
 
 impl PoSData {
@@ -66,14 +73,14 @@ impl PoSData {
         kernel_witness: Vec<InputWitness>,
         stake_pool_id: PoolId,
         vrf_data: VRFReturn,
-        bits: Compact,
+        compact_target: Compact,
     ) -> Self {
         Self {
             kernel_inputs,
             kernel_witness,
             stake_pool_id,
             vrf_data,
-            bits,
+            compact_target,
         }
     }
 
@@ -89,8 +96,8 @@ impl PoSData {
         &self.stake_pool_id
     }
 
-    pub fn bits(&self) -> &Compact {
-        &self.bits
+    pub fn compact_target(&self) -> &Compact {
+        &self.compact_target
     }
 
     pub fn vrf_data(&self) -> &VRFReturn {

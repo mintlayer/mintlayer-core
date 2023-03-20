@@ -19,7 +19,7 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        OutPointSourceId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        OutPointSourceId, PoolId, SpendError, Spender, Transaction, TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -89,12 +89,22 @@ pub enum ConnectTransactionError {
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
     AttemptToSpendBurnedAmount,
+    #[error("Attempt to spend an output that is invalid in a transaction")]
+    AttemptToSpendInvalidOutputType,
+    #[error("Attempt to use invalid output type in a transaction")]
+    AttemptToUseInvalidOutputInTx,
     #[error("PoS accounting error")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
     #[error("No token outputs are allowed in PoS accounting operations {0}")]
     TokenOutputInPoSAccountingOperation(Id<Transaction>),
+    #[error("Error during stake spending")]
+    SpendStakeError(#[from] SpendStakeError),
+    #[error("Attempted to use a non-locked stake as output in block reward {0}")]
+    InvalidOutputPurposeInReward(Id<Block>),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -206,4 +216,18 @@ pub enum TokensError {
     MediaHashTooShort,
     #[error("The media hash is too long")]
     MediaHashTooLong,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum SpendStakeError {
+    #[error("Block reward output has no outputs")]
+    NoBlockRewardOutputs,
+    #[error("Block reward output has multiple outputs")]
+    MultipleBlockRewardOutputs,
+    #[error("Invalid purpose used in block reward")]
+    InvalidBlockRewardPurpose,
+    #[error("Stake pool data in kernel doesn't match data in block reward output")]
+    StakePoolDataMismatch,
+    #[error("Consensus PoS error")]
+    ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }

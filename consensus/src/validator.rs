@@ -13,14 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use self::error::ExtraConsensusDataError;
-
-use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, BlockIndexHandle, ConsensusExtraData,
-};
+use chainstate_types::BlockIndexHandle;
 use common::{
     chain::{
-        block::{consensus_data::PoSData, BlockHeader, ConsensusData},
+        block::{BlockHeader, ConsensusData},
         config::ChainConfig,
         PoWStatus, RequiredConsensus,
     },
@@ -29,12 +25,8 @@ use common::{
 use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
 
-pub mod error;
-
 use crate::{
-    error::ConsensusVerificationError,
-    pos::{check_proof_of_stake, kernel::get_kernel_output},
-    pow::check_pow_consensus,
+    error::ConsensusVerificationError, pos::check_proof_of_stake, pow::check_pow_consensus,
 };
 
 /// Checks if the given block identified by the header contains the correct consensus data.
@@ -77,49 +69,6 @@ where
             header,
         ),
         RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
-    }
-}
-
-fn compute_current_randomness<U: UtxosView>(
-    chain_config: &ChainConfig,
-    pos_data: &PoSData,
-    prev_block_index: &BlockIndex,
-    header: &BlockHeader,
-    utxos_view: &U,
-) -> Result<PoSRandomness, ExtraConsensusDataError> {
-    let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
-    let kernel_output = get_kernel_output(pos_data, utxos_view)
-        .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
-    let current_randomness = PoSRandomness::from_block(
-        chain_config,
-        &prev_block_index.block_height().next_height(),
-        header,
-        prev_randomness.cloned(),
-        &kernel_output,
-        pos_data,
-    )?;
-    Ok(current_randomness)
-}
-
-pub fn compute_extra_consensus_data<U: UtxosView>(
-    chain_config: &ChainConfig,
-    prev_block_index: &BlockIndex,
-    header: &BlockHeader,
-    utxos_view: &U,
-) -> Result<ConsensusExtraData, ExtraConsensusDataError> {
-    match header.consensus_data() {
-        ConsensusData::None => Ok(ConsensusExtraData::None),
-        ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
-        ConsensusData::PoS(pos_data) => {
-            let current_randomness = compute_current_randomness(
-                chain_config,
-                pos_data,
-                prev_block_index,
-                header,
-                utxos_view,
-            )?;
-            Ok(ConsensusExtraData::PoS(current_randomness))
-        }
     }
 }
 
@@ -168,9 +117,11 @@ where
     P: PoSAccountingView,
 {
     match header.consensus_data() {
-        ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
-            "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
-        )),
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            Err(ConsensusVerificationError::ConsensusTypeMismatch(
+                "Chain configuration says we are PoS but block consensus data is not PoS.".into(),
+            ))
+        }
         ConsensusData::PoS(pos_data) => check_proof_of_stake(
             chain_config,
             header,

@@ -25,67 +25,81 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, PoolId, SignedTransaction, Transaction, TxInput, TxOutput,
+        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
     },
-    primitives::{signed_amount::SignedAmount, Amount, Id, Idable},
+    primitives::{signed_amount::SignedAmount, Amount, Idable},
 };
 use crypto::{
-    key::{KeyKind, PrivateKey, PublicKey},
     random::CryptoRng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoolData;
 use utxo::UtxosStorageRead;
 
+fn create_pool_data(
+    rng: &mut (impl Rng + CryptoRng),
+    decomission_destination: Destination,
+    pledged_amount: Amount,
+) -> PoolData {
+    let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+    let margin_ration = rng.gen_range(0u64..1000);
+    let cost_per_epoch = Amount::from_atoms(rng.gen_range(0..1000));
+    PoolData::new(
+        decomission_destination,
+        pledged_amount,
+        vrf_pk,
+        margin_ration,
+        cost_per_epoch,
+    )
+}
+
 fn make_tx_with_stake_pool_from_genesis(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     amount_to_stake: Amount,
-    pub_key: &PublicKey,
-) -> (SignedTransaction, PoolId) {
+    amount_to_transfer: Amount,
+) -> (SignedTransaction, PoolId, PoolData) {
     let outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
-    make_tx_with_stake_pool(rng, outpoint_id, amount_to_stake, pub_key)
-}
-
-fn make_tx_with_stake_pool_from_tx(
-    rng: &mut (impl Rng + CryptoRng),
-    tx_id: Id<Transaction>,
-    amount_to_stake: Amount,
-    pub_key: &PublicKey,
-) -> (SignedTransaction, PoolId) {
-    let outpoint_id = OutPointSourceId::Transaction(tx_id);
-    make_tx_with_stake_pool(rng, outpoint_id, amount_to_stake, pub_key)
+    make_tx_with_stake_pool(
+        rng,
+        OutPoint::new(outpoint_id, 0),
+        amount_to_stake,
+        amount_to_transfer,
+    )
 }
 
 fn make_tx_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
-    outpoint_id: OutPointSourceId,
+    outpoint: OutPoint,
     amount_to_stake: Amount,
-    pub_key: &PublicKey,
-) -> (SignedTransaction, PoolId) {
-    let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let tx_output = TxOutput::new(
+    amount_to_transfer: Amount,
+) -> (SignedTransaction, PoolId, PoolData) {
+    let destination = new_pub_key_destination(rng);
+    let pool_data = create_pool_data(rng, destination, amount_to_stake);
+    let stake_output = TxOutput::new(
         OutputValue::Coin(amount_to_stake),
         OutputPurpose::StakePool(Box::new(StakePoolData::new(
             anyonecanspend_address(),
-            None,
-            vrf_pub_key,
-            pub_key.clone(),
-            0,
-            Amount::ZERO,
+            pool_data.vrf_public_key().clone(),
+            pool_data.decommission_destination().clone(),
+            pool_data.margin_ratio_per_thousand(),
+            pool_data.cost_per_epoch(),
         ))),
     );
 
-    let input0_outpoint = OutPoint::new(outpoint_id, 0);
+    let transfer_output = TxOutput::new(
+        OutputValue::Coin(amount_to_transfer),
+        OutputPurpose::Transfer(anyonecanspend_address()),
+    );
+
+    let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
     let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::new(input0_outpoint.tx_id(), input0_outpoint.output_index()),
-            empty_witness(rng),
-        )
-        .add_output(tx_output)
+        .add_input(outpoint.into(), empty_witness(rng))
+        .add_output(transfer_output)
+        .add_output(stake_output)
         .build();
-    (tx, pool_id)
+    (tx, pool_id, pool_data)
 }
 
 // Process a tx with a stake pool. Check that new pool balance and data are stored
@@ -98,10 +112,13 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
 
-        let (tx, pool_id) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
+        let (tx, pool_id, pool_data) = make_tx_with_stake_pool_from_genesis(
+            &mut rng,
+            &mut tf,
+            amount_to_stake,
+            Amount::from_atoms(1),
+        );
         let tx_utxo_outpoint =
             OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
 
@@ -120,7 +137,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         );
 
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
-            pool_data: BTreeMap::from([(pool_id, PoolData::new(pub_key, amount_to_stake))]),
+            pool_data: BTreeMap::from([(pool_id, pool_data)]),
             pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
@@ -158,17 +175,20 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let expected_epoch_index = 0;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
-            &pub_key,
+            Amount::from_atoms(300),
+        );
+
+        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
         );
 
         let block1_index = tf
@@ -199,8 +219,8 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         // check that result is stored to tip
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([
-                (pool_id1, PoolData::new(pub_key.clone(), amount_to_stake)),
-                (pool_id2, PoolData::new(pub_key.clone(), amount_to_stake)),
+                (pool_id1, pool_data1.clone()),
+                (pool_id2, pool_data2.clone()),
             ]),
             pool_balances: BTreeMap::from([
                 (pool_id1, amount_to_stake),
@@ -220,12 +240,11 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
         // check that delta for epoch is stored
-        let pool_data = PoolData::new(pub_key.clone(), amount_to_stake);
         let expected_epoch_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
                 [
-                    (pool_id1, DataDelta::new(None, Some(pool_data.clone()))),
-                    (pool_id2, DataDelta::new(None, Some(pool_data))),
+                    (pool_id1, DataDelta::new(None, Some(pool_data1))),
+                    (pool_id2, DataDelta::new(None, Some(pool_data2))),
                 ]
                 .into_iter(),
             ),
@@ -271,19 +290,22 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
-            &pub_key,
+            Amount::from_atoms(300),
+        );
+
+        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
         );
 
         let block1_index = tf
@@ -314,8 +336,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         // check that result is stored to tip
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([
-                (pool_id1, PoolData::new(pub_key.clone(), amount_to_stake)),
-                (pool_id2, PoolData::new(pub_key.clone(), amount_to_stake)),
+                (pool_id1, pool_data1.clone()),
+                (pool_id2, pool_data2.clone()),
             ]),
             pool_balances: BTreeMap::from([
                 (pool_id1, amount_to_stake),
@@ -335,10 +357,9 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         assert!(storage.read_accounting_data_sealed().unwrap().is_empty());
 
         // check that deltas per block are stored
-        let pool_data = PoolData::new(pub_key.clone(), amount_to_stake);
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
+                [(pool_id1, DataDelta::new(None, Some(pool_data1)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
@@ -356,7 +377,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
 
         let expected_epoch2_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
+                [(pool_id2, DataDelta::new(None, Some(pool_data2)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
@@ -399,19 +420,22 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
-
-        let (tx2, pool_id2) = make_tx_with_stake_pool_from_tx(
+        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
-            tx1.transaction().get_id(),
+            &mut tf,
             amount_to_stake,
-            &pub_key,
+            Amount::from_atoms(300),
+        );
+
+        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+            &mut rng,
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            amount_to_stake,
+            Amount::from_atoms(200),
         );
 
         let block1_index = tf
@@ -442,8 +466,8 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         // check that result is stored to tip
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([
-                (pool_id1, PoolData::new(pub_key.clone(), amount_to_stake)),
-                (pool_id2, PoolData::new(pub_key.clone(), amount_to_stake)),
+                (pool_id1, pool_data1.clone()),
+                (pool_id2, pool_data2.clone()),
             ]),
             pool_balances: BTreeMap::from([
                 (pool_id1, amount_to_stake),
@@ -460,10 +484,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
 
         // check that epoch1 is stored to sealed
         let expected_sealed_storage_data = pos_accounting::PoSAccountingData {
-            pool_data: BTreeMap::from([(
-                pool_id1,
-                PoolData::new(pub_key.clone(), amount_to_stake),
-            )]),
+            pool_data: BTreeMap::from([(pool_id1, pool_data1.clone())]),
             pool_balances: BTreeMap::from([(pool_id1, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
@@ -475,10 +496,9 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         );
 
         // check that deltas per block are stored
-        let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [(pool_id1, DataDelta::new(None, Some(pool_data.clone())))].into_iter(),
+                [(pool_id1, DataDelta::new(None, Some(pool_data1)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
@@ -496,7 +516,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
 
         let expected_epoch2_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [(pool_id2, DataDelta::new(None, Some(pool_data)))].into_iter(),
+                [(pool_id2, DataDelta::new(None, Some(pool_data2)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
                 [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
@@ -539,12 +559,15 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .with_chain_config(chain_config)
             .build();
         let amount_to_stake = Amount::from_atoms(100);
-        let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
 
-        let (tx1, pool_id1) =
-            make_tx_with_stake_pool_from_genesis(&mut rng, &mut tf, amount_to_stake, &pub_key);
+        let (tx1, pool_id, pool_data) = make_tx_with_stake_pool_from_genesis(
+            &mut rng,
+            &mut tf,
+            amount_to_stake,
+            Amount::from_atoms(1),
+        );
 
         let block1_index = tf
             .make_block_builder()
@@ -561,11 +584,8 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
 
         // check that result is stored to tip and sealed
         let expected_storage_data = pos_accounting::PoSAccountingData {
-            pool_data: BTreeMap::from([(
-                pool_id1,
-                PoolData::new(pub_key.clone(), amount_to_stake),
-            )]),
-            pool_balances: BTreeMap::from([(pool_id1, amount_to_stake)]),
+            pool_data: BTreeMap::from([(pool_id, pool_data.clone())]),
+            pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -580,13 +600,12 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         );
 
         // check that deltas per block are stored
-        let pool_data = PoolData::new(pub_key.clone(), Amount::from_atoms(100));
         let expected_epoch1_delta = pos_accounting::PoSAccountingDeltaData {
             pool_data: DeltaDataCollection::from_iter(
-                [(pool_id1, DataDelta::new(None, Some(pool_data)))].into_iter(),
+                [(pool_id, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
+                [(pool_id, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),

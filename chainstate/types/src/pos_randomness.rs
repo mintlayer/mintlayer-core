@@ -16,13 +16,12 @@
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
-        Block, ChainConfig, OutputPurpose, TxOutput,
+        config::EpochIndex,
+        Block, ChainConfig,
     },
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        BlockHeight, Id, Idable, H256,
-    },
+    primitives::{Id, H256},
 };
+use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 use thiserror::Error;
 
@@ -36,7 +35,7 @@ pub enum PoSRandomnessError {
     VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
 }
 
-#[derive(Debug, Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone, Copy)]
 pub struct PoSRandomness {
     value: H256,
 }
@@ -47,50 +46,25 @@ impl PoSRandomness {
     }
 
     pub fn from_block(
-        chain_config: &ChainConfig,
-        block_height: &BlockHeight,
+        epoch_index: EpochIndex,
         header: &BlockHeader,
-        previous_randomness: Option<PoSRandomness>,
-        kernel_output: &TxOutput,
+        seal_randomness: &PoSRandomness,
         pos_data: &PoSData,
+        vrf_pub_key: &VRFPublicKey,
     ) -> Result<Self, PoSRandomnessError> {
-        use crypto::hash::StreamHasher;
-
-        let prev_randomness = previous_randomness.unwrap_or_else(|| Self::at_genesis(chain_config));
-        let prev_randomness_val = prev_randomness.value();
-
-        let epoch_index = chain_config.epoch_index_from_height(block_height);
-
-        let pool_data = match kernel_output.purpose() {
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn => {
-                // only pool outputs can be staked
-                return Err(PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
-                    header.get_id(),
-                ));
-            }
-            OutputPurpose::StakePool(d) => d.as_ref(),
-        };
-
-        let hash_pos: H256 = verify_vrf_and_get_vrf_output(
+        let hash: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
-            &prev_randomness_val,
+            &seal_randomness.value(),
             pos_data.vrf_data(),
-            pool_data.vrf_public_key(),
+            vrf_pub_key,
             header,
         )?;
-
-        let mut hasher = DefaultHashAlgoStream::new();
-        hash_encoded_to(&prev_randomness_val, &mut hasher);
-        hash_encoded_to(&hash_pos, &mut hasher);
-        let hash: H256 = hasher.finalize().into();
 
         Ok(Self::new(hash))
     }
 
     /// randomness at genesis
-    fn at_genesis(chain_config: &ChainConfig) -> Self {
+    pub fn at_genesis(chain_config: &ChainConfig) -> Self {
         Self {
             value: chain_config.initial_randomness(),
         }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::{key::PublicKey, vrf::VRFPublicKey};
+use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
 use crate::primitives::Amount;
@@ -22,10 +22,9 @@ use super::Destination;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct StakePoolData {
-    owner: Destination,
-    staker: Option<Destination>,
+    staker: Destination,
     vrf_public_key: VRFPublicKey,
-    decommission_key: PublicKey,
+    decommission_key: Destination,
     // TODO: create a PerThousand type
     #[codec(compact)]
     margin_ratio_per_thousand: u64,
@@ -34,15 +33,13 @@ pub struct StakePoolData {
 
 impl StakePoolData {
     pub fn new(
-        owner: Destination,
-        staker: Option<Destination>,
+        staker: Destination,
         vrf_public_key: VRFPublicKey,
-        decommission_key: PublicKey,
+        decommission_key: Destination,
         margin_ratio_per_thousand: u64,
         cost_per_epoch: Amount,
     ) -> Self {
         Self {
-            owner,
             staker,
             vrf_public_key,
             decommission_key,
@@ -51,31 +48,23 @@ impl StakePoolData {
         }
     }
 
-    pub fn owner(&self) -> &Destination {
-        &self.owner
+    pub fn staker(&self) -> &Destination {
+        &self.staker
     }
 
     pub fn vrf_public_key(&self) -> &VRFPublicKey {
         &self.vrf_public_key
     }
 
-    pub fn decommission_key(&self) -> &PublicKey {
+    pub fn decommission_key(&self) -> &Destination {
         &self.decommission_key
-    }
-
-    pub fn staker(&self) -> &Destination {
-        self.staker.as_ref().unwrap_or(&self.owner)
-    }
-
-    pub fn is_delegated(&self) -> bool {
-        self.staker.is_some()
     }
 
     pub fn margin_ratio_per_thousand(&self) -> u64 {
         self.margin_ratio_per_thousand
     }
 
-    pub fn cost_per_epoch(&self) -> &Amount {
-        &self.cost_per_epoch
+    pub fn cost_per_epoch(&self) -> Amount {
+        self.cost_per_epoch
     }
 }
