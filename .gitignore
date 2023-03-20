@@ -31,3 +31,6 @@ test/config.ini
 
 # Python compiled files
 *.pyc
+
+# wasm
+wasm_crypto/pkg/
