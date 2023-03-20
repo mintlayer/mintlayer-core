@@ -18,6 +18,7 @@ use std::sync::Arc;
 use crate::transaction_verifier::token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp};
 
 use super::*;
+use chainstate_types::GenBlockIndex;
 use common::{
     chain::{
         config::Builder as ConfigBuilder, tokens::TokenAuxiliaryData, TxMainChainIndex,
