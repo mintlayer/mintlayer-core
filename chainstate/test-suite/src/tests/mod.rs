@@ -37,8 +37,6 @@ mod chainstate_storage_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
-// TODO: Do something with this file.
-//mod history_iteration;
 mod homomorphism;
 mod initialization;
 mod mempool_output_timelock;
