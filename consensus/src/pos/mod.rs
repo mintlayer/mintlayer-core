@@ -22,71 +22,47 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{consensus_data::PoSData, BlockHeader},
+        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockHeader},
         config::EpochIndex,
-        ChainConfig, OutputPurpose, TxOutput,
+        ChainConfig, OutputPurpose,
     },
-    primitives::{BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
 };
+use crypto::vrf::VRFPublicKey;
 use pos_accounting::PoSAccountingView;
 use utils::ensure;
 use utxo::UtxosView;
 
 use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
 
-fn check_stake_kernel_hash<P: PoSAccountingView>(
+pub fn check_pos_hash(
     epoch_index: EpochIndex,
     random_seed: &PoSRandomness,
     pos_data: &PoSData,
-    kernel_output: &TxOutput,
-    spender_block_header: &BlockHeader,
-    pos_accounting_view: &P,
+    vrf_pub_key: &VRFPublicKey,
+    block_timestamp: BlockTimestamp,
+    pool_balance: Amount,
 ) -> Result<(), ConsensusPoSError> {
     let target: Uint256 = (*pos_data.compact_target())
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.compact_target()))?;
 
-    let vrf_pub_key = match kernel_output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::LockThenTransfer(_, _)
-        | OutputPurpose::Burn => {
-            // only pool outputs can be staked
-            return Err(ConsensusPoSError::RandomnessError(
-                PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
-                    spender_block_header.get_id(),
-                ),
-            ));
-        }
-        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
-        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
-            let pool_data = pos_accounting_view
-                .get_pool_data(*pool_id)?
-                .ok_or(ConsensusPoSError::PoolDataNotFound(*pool_id))?;
-            pool_data.vrf_public_key().clone()
-        }
-    };
-
-    let hash_pos: Uint256 = PoSRandomness::from_block(
+    let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
-        spender_block_header,
+        block_timestamp,
         random_seed,
         pos_data,
-        &vrf_pub_key,
+        vrf_pub_key,
     )?
     .value()
     .into();
 
-    let hash_pos_arith: Uint512 = hash_pos.into();
-
-    let stake_pool_id = *pos_data.stake_pool_id();
-    let pool_balance: Uint512 = pos_accounting_view
-        .get_pool_balance(stake_pool_id)?
-        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?
-        .into();
+    let hash: Uint512 = hash.into();
+    let pool_balance: Uint512 = pool_balance.into();
 
     ensure!(
-        hash_pos_arith <= pool_balance * target.into(),
+        hash <= pool_balance * target.into(),
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
@@ -140,13 +116,37 @@ where
 
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
     let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
-    check_stake_kernel_hash(
+
+    let vrf_pub_key = match kernel_output.purpose() {
+        OutputPurpose::Transfer(_)
+        | OutputPurpose::LockThenTransfer(_, _)
+        | OutputPurpose::Burn => {
+            // only pool outputs can be staked
+            return Err(ConsensusPoSError::RandomnessError(
+                PoSRandomnessError::InvalidOutputPurposeInStakeKernel(header.get_id()),
+            ));
+        }
+        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+            let pool_data = pos_accounting_view
+                .get_pool_data(*pool_id)?
+                .ok_or(ConsensusPoSError::PoolDataNotFound(*pool_id))?;
+            pool_data.vrf_public_key().clone()
+        }
+    };
+
+    let stake_pool_id = *pos_data.stake_pool_id();
+    let pool_balance = pos_accounting_view
+        .get_pool_balance(stake_pool_id)?
+        .ok_or(ConsensusPoSError::PoolBalanceNotFound(stake_pool_id))?;
+
+    check_pos_hash(
         current_epoch_index,
         &random_seed,
         pos_data,
-        &kernel_output,
-        header,
-        pos_accounting_view,
+        &vrf_pub_key,
+        header.timestamp(),
+        pool_balance,
     )?;
     Ok(())
 }

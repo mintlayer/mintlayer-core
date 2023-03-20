@@ -173,7 +173,7 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
     let epoch_index = chain_config.epoch_index_from_height(block_height);
     PoSRandomness::from_block(
         epoch_index,
-        block.header(),
+        block.header().timestamp(),
         &sealed_epoch_randomness,
         pos_data,
         &vrf_pub_key,
