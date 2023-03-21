@@ -1,0 +1,42 @@
+name: Node.js CI
+
+on:
+  push:
+    branches:
+      - "**" # target all branches
+  pull_request:
+    branches:
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_LOG: debug
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - name: Install rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+      - uses: actions/checkout@v3
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+      - name: Build the wasm module
+        working-directory: ./wasm-crypto
+        run: wasm-pack build --target nodejs
+      - name: Run the tests
+        working-directory: ./wasm-crypto
+        run: node js-bindings/node-entry.js
