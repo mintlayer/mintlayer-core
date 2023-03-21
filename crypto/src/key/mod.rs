@@ -29,10 +29,11 @@ pub use signature::Signature;
 
 use self::key_holder::{PrivateKeyHolder, PublicKeyHolder};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
-    Unknown,
+    #[error("Data conversion error: {0}")]
     DataConversionError(String),
+    #[error("Signature construction error")]
     SignatureConstructionError,
 }
 

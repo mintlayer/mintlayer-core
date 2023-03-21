@@ -44,6 +44,7 @@ members = [
   "utils",                        # Various utilities.
   "utxo",                         # Utxo and related utilities (cache, undo, etc.).
   "wallet",                       # Wallet executable.
+  "wasm-crypto",                  # WASM bindings for the crypto crate.
 ]
 
 default-members = [
