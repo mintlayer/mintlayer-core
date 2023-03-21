@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crypto::random::Rng;
 use test_utils::random::Seed;
 
 use super::rolling_bloom_filter::RollingBloomFilter;
@@ -26,7 +27,10 @@ fn test_rolling_bloom_filter(#[case] seed: Seed) {
     let mut filter = RollingBloomFilter::<u128>::new(100, 0.01, &mut rng);
     for i in 0..400 {
         filter.insert(&i, &mut rng);
-        assert!(filter.contains(&i));
+
+        // Last 100 must be remembered, select random number from all recently added
+        let num = rng.gen_range((i.saturating_sub(99))..=i);
+        assert!(filter.contains(&num), "not found {num}, i: {i}");
     }
 
     // Last 100 guaranteed to be remembered
@@ -53,7 +57,10 @@ fn test_rolling_bloom_filter_2(#[case] seed: Seed) {
     let mut filter = RollingBloomFilter::<u128>::new(1000, 0.001, &mut rng);
     for i in 0..2000 {
         filter.insert(&i, &mut rng);
-        assert!(filter.contains(&i));
+
+        // Last 1000 must be remembered, select random number from all recently added
+        let num = rng.gen_range((i.saturating_sub(999))..=i);
+        assert!(filter.contains(&num), "not found {num}, i: {i}");
     }
 
     // Last 1000 guaranteed to be remembered
