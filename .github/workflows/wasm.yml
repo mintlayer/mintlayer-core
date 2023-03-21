@@ -1,4 +1,4 @@
-name: Node.js CI
+name: Wasm build and test with Node.js
 
 on:
   push:
