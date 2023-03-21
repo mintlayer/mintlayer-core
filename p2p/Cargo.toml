@@ -53,6 +53,7 @@ consensus = { path = "../consensus" }
 
 rstest.workspace = true
 portpicker = "0.1"
+criterion = "0.3"
 
 [[test]]
 name = "backend_tcp"
@@ -64,4 +65,8 @@ harness = false
 
 [[test]]
 name = "backend_noise"
+harness = false
+
+[[bench]]
+name = "benches"
 harness = false
