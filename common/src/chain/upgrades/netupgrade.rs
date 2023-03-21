@@ -120,24 +120,20 @@ impl<T: Ord + Copy> NetUpgrades<T> {
     }
 
     pub fn height_range(&self, version: T) -> Option<(BlockHeight, BlockHeight)> {
-        let res = self
-            .0
+        self.0
             .iter()
             .enumerate()
-            .find(|&(_, &(_, elem_version))| elem_version == version);
-
-        res.map(|(idx, &(start_h, _))| {
-            (
-                start_h,
-                if idx == (self.0.len() - 1) {
+            .find(|&(_, &(_, elem_version))| elem_version == version)
+            .map(|(idx, &(start_h, _))| {
+                let end_h = if idx == (self.0.len() - 1) {
                     BlockHeight::max()
                 } else {
                     (self.0[idx + 1].0 - BlockDistance::new(1)).expect(
                         "Upgrade heights should never overflow/underflow as they're chosen by us",
                     )
-                },
-            )
-        })
+                };
+                (start_h, end_h)
+            })
     }
 }
 

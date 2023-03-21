@@ -45,16 +45,9 @@ where
         BlockHeight::new(old_block_height)
     };
 
-    let retarget_block_index = match get_ancestor(block_index, retarget_height) {
-        Ok(bi) => bi,
-        Err(err) => {
-            return Err(ConsensusPoWError::AncestorAtHeightNotFound(
-                *block_index.block_id(),
-                retarget_height,
-                err,
-            ))
-        }
-    };
+    let retarget_block_index = get_ancestor(block_index, retarget_height).map_err(|err| {
+        ConsensusPoWError::AncestorAtHeightNotFound(*block_index.block_id(), retarget_height, err)
+    })?;
 
     Ok(retarget_block_index.block_timestamp())
 }
