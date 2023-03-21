@@ -32,5 +32,6 @@ static_assertions.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-rstest = "0.17"
 test-utils = { path = "../test-utils" }
+
+rstest.workspace = true

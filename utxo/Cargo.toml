@@ -21,4 +21,4 @@ crypto = { path = '../crypto' }
 test-utils = {path = '../test-utils'}
 
 itertools.workspace = true
-rstest = "0.17"
+rstest.workspace = true

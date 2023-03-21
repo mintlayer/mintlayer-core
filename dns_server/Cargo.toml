@@ -30,4 +30,4 @@ directories = "5.0"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.17"
+rstest.workspace = true
