@@ -15,7 +15,7 @@
 
 use common::{
     chain::{
-        block::{consensus_data::PoSData, BlockHeader},
+        block::{consensus_data::PoSData, timestamp::BlockTimestamp},
         config::EpochIndex,
         Block, ChainConfig,
     },
@@ -47,7 +47,7 @@ impl PoSRandomness {
 
     pub fn from_block(
         epoch_index: EpochIndex,
-        header: &BlockHeader,
+        block_timestamp: BlockTimestamp,
         seal_randomness: &PoSRandomness,
         pos_data: &PoSData,
         vrf_pub_key: &VRFPublicKey,
@@ -57,7 +57,7 @@ impl PoSRandomness {
             &seal_randomness.value(),
             pos_data.vrf_data(),
             vrf_pub_key,
-            header,
+            block_timestamp,
         )?;
 
         Ok(Self::new(hash))

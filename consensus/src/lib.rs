@@ -20,7 +20,7 @@ mod pow;
 
 pub use crate::{
     error::ConsensusVerificationError,
-    pos::{error::ConsensusPoSError, kernel::get_kernel_output},
+    pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
     pow::{check_proof_of_work, mine, ConsensusPoWError},
     validator::validate_consensus,
 };

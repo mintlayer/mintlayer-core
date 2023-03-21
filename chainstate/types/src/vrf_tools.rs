@@ -14,10 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{
-        block::{timestamp::BlockTimestamp, BlockHeader},
-        config::EpochIndex,
-    },
+    chain::{block::timestamp::BlockTimestamp, config::EpochIndex},
     primitives::H256,
 };
 use crypto::vrf::{
@@ -78,10 +75,9 @@ pub fn verify_vrf_and_get_vrf_output(
     random_seed: &H256,
     vrf_data: &VRFReturn,
     vrf_public_key: &VRFPublicKey,
-    spender_block_header: &BlockHeader,
+    block_timestamp: BlockTimestamp,
 ) -> Result<H256, ProofOfStakeVRFError> {
-    let transcript =
-        construct_transcript(epoch_index, random_seed, spender_block_header.timestamp());
+    let transcript = construct_transcript(epoch_index, random_seed, block_timestamp);
 
     vrf_public_key.verify_vrf_data(transcript.clone().into(), vrf_data)?;
 
