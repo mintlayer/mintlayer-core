@@ -64,6 +64,7 @@ mockall::mock! {
         ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
         fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
         fn get_locator(&self) -> Result<Locator, ChainstateError>;
+        fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
         fn get_headers(
             &self,
             locator: Locator,
