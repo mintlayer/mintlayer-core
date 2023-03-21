@@ -33,4 +33,4 @@ test/config.ini
 *.pyc
 
 # wasm
-wasm_crypto/pkg/
+wasm-crypto/pkg/

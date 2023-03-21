@@ -10,7 +10,7 @@ import init, {
   public_key_from_private_key,
   sign_message,
   verify_signature,
-} from "../pkg/wasm_crypto.js";
+} from "../pkg/wasm-crypto.js";
 
 async function run() {
   // Initialize the wasm module

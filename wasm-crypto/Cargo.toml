@@ -1,5 +1,5 @@
 [package]
-name = "wasm_crypto"
+name = "wasm-crypto"
 license.workspace = true
 version.workspace = true
 edition.workspace = true
