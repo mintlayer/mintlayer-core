@@ -18,33 +18,38 @@ use std::hash::Hash;
 use crypto::random::Rng;
 use probabilistic_collections::SipHasherBuilder;
 
+/// A space-efficient probabilistic data structure to test for membership in a set.
 pub struct BloomFilter<T>(probabilistic_collections::bloom::BloomFilter<T>);
 
 impl<T: Hash> BloomFilter<T> {
+    /// Constructs a new, empty `BloomFilter` with an estimated max capacity of `size` items,
+    /// and a maximum false positive probability of `fpp`.
     pub fn new(size: usize, fpp: f64, rng: &mut impl Rng) -> Self {
         assert!(size > 0);
         assert!(fpp > 0.0 && fpp < 1.0);
-        Self(probabilistic_collections::bloom::BloomFilter::<
-            T,
-            SipHasherBuilder,
-        >::with_hashers(
-            size,
-            fpp,
-            [
-                SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-                SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
-            ],
-        ))
+        Self(
+            probabilistic_collections::bloom::BloomFilter::<T>::with_hashers(
+                size,
+                fpp,
+                [
+                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+                    SipHasherBuilder::from_seed(rng.gen(), rng.gen()),
+                ],
+            ),
+        )
     }
 
+    /// Inserts an element into the bloom filter
     pub fn insert(&mut self, value: &T) {
         self.0.insert(value);
     }
 
+    /// Checks if an element is possibly in the bloom filter
     pub fn contains(&self, value: &T) -> bool {
         self.0.contains(value)
     }
 
+    /// Clears the bloom filter, removing all elements
     pub fn clear(&mut self) {
         self.0.clear();
     }
