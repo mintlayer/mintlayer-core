@@ -242,7 +242,7 @@ fn pos_basic(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,
@@ -326,7 +326,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let invalid_kernel_input = OutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         invalid_kernel_input,
         &vrf_pk,
         &vrf_sk,
@@ -379,7 +379,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     ));
 
     let valid_prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let valid_block_timestamp = tf.current_time().into();
+    let valid_block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
     let valid_epoch: EpochIndex = 1;
     let valid_vrf_transcript =
         construct_transcript(valid_epoch, &valid_prev_randomness, valid_block_timestamp);
@@ -389,7 +389,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
     let (valid_pos_data, valid_block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,
@@ -527,7 +527,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
     let (valid_pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,
@@ -609,7 +609,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,
@@ -661,7 +661,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,
@@ -800,7 +800,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         &vrf_pk_1,
         &vrf_sk_1,
@@ -885,7 +885,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
             .unwrap()
             .unwrap();
     let (pos_data, block_timestamp) = mine(
-        tf.current_time().into(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         &vrf_pk,
         &vrf_sk,

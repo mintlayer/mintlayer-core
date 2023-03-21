@@ -54,14 +54,6 @@ impl BlockTimestamp {
     }
 }
 
-impl From<Duration> for BlockTimestamp {
-    fn from(duration: Duration) -> BlockTimestamp {
-        BlockTimestamp {
-            timestamp: duration.as_secs(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
