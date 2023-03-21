@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod bloom_filters;
-pub mod oneshot_nofail;
-pub mod rate_limiter;
+pub mod bloom_filter;
+pub mod rolling_bloom_filter;
+
+#[cfg(test)]
+mod tests;

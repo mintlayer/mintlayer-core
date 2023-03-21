@@ -40,6 +40,7 @@ serde.workspace = true
 socket2 = { version = "0.5", features = ["all"] }
 tokio-socks = { version = "0.5.1" }
 hex.workspace = true
+probabilistic-collections = "0.7.0"
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../chainstate/test-framework" }
