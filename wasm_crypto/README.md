@@ -20,7 +20,7 @@ To test the wasm binary. First, install `http-server` web server (feel free to u
 cargo install http-server
 ```
 
-Then run the http server, run the following then choose the `index.html` file:
+Then run the http server, and then choose the file `js-bindings/index.html`:
 
 ```
 http-server --port 8080 --verbose
@@ -32,7 +32,7 @@ If you're using a remote server, either tunnel to port 8080, or expose that port
 http-server --port 8080 --host 0.0.0.0 --verbose
 ```
 
-The ported wasm functions are exported to the file `index.html` with a basic test/example in them using JavaScript. Use your browser's console to see the output.
+The ported wasm functions are exported to the file `js-bindings/wasm-crypto.js` and used in the file `index.html` with a basic test/example in them using JavaScript. Use your browser's console to see the output.
 
 ### Further documentation
 
