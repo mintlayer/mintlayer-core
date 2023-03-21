@@ -60,7 +60,3 @@ node js-bindings/node-entry.js
 
 - https://developer.mozilla.org/en-US/docs/WebAssembly/Rust_to_wasm
 - https://rustwasm.github.io/wasm-bindgen/introduction.html
-
-```
-
-```
