@@ -50,8 +50,8 @@ p2p-backend-test-suite = { path = "backend-test-suite" }
 test-utils = { path = "../test-utils" }
 consensus = { path = "../consensus" }
 
+rstest.workspace = true
 portpicker = "0.1"
-rstest = "0.16"
 
 [[test]]
 name = "backend_tcp"

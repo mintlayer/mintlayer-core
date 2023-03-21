@@ -17,4 +17,4 @@ parity-scale-codec.workspace = true
 
 [dev-dependencies]
 proptest = "1.0"
-rstest = "0.16"
+rstest.workspace = true

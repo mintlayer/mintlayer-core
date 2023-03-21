@@ -25,9 +25,9 @@ async-trait.workspace = true
 parity-scale-codec.workspace = true
 void = "1.0"
 clap = { version = "4", features = ["derive"] }
-directories = "4.0"
+directories = "5.0"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.16"
+rstest.workspace = true
