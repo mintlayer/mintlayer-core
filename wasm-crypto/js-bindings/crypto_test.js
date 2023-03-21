@@ -5,17 +5,14 @@
 // will "boot" the module and make it ready to use. Currently browsers
 // don't support natively imported WebAssembly as an ES module, but
 // eventually the manual initialization won't be required!
-import init, {
+import {
   make_private_key,
   public_key_from_private_key,
   sign_message,
   verify_signature,
 } from "../pkg/wasm_crypto.js";
 
-async function run() {
-  // Initialize the wasm module
-  await init();
-
+export async function run_test() {
   // Try signature verification
   const priv_key = make_private_key();
   console.log(`priv key = ${priv_key}`);
@@ -48,5 +45,3 @@ async function run() {
     console.log("Tested decoding bad private key successfully");
   }
 }
-
-run();
