@@ -4,11 +4,14 @@
 
 ### To run in a web browser
 
-Make sure you have wasm-pack:
+Make sure you have wasm-pack and the wasm32-unknown-unknown target installed:
 
 ```
+rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 ```
+
+Also make sure you have `clang` installed. It's required.
 
 To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
 
@@ -38,11 +41,14 @@ The ported wasm functions are exported to the file `js-bindings/index.js` and us
 
 ### To run in Node.js
 
-Make sure you have wasm-pack:
+Make sure you have wasm-pack and the wasm32-unknown-unknown target installed:
 
 ```
+rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 ```
+
+Also make sure you have `clang` installed. It's required.
 
 To build the wasm package from the crate, run (in the wasm Cargo.toml directory):
 
