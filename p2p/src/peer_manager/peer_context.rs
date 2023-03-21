@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, time::Duration};
+use std::time::Duration;
 
 use crate::{
     net::types::{self, Role},
-    utils::rate_limiter::RateLimiter,
+    utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, rate_limiter::RateLimiter},
 };
 
 #[derive(Debug)]
@@ -26,7 +26,6 @@ pub struct SentPing {
     pub timestamp: Duration,
 }
 
-#[derive(Debug)]
 pub struct PeerContext<A> {
     /// Peer information
     pub info: types::PeerInfo,
@@ -56,8 +55,7 @@ pub struct PeerContext<A> {
 
     /// All addresses that were announced to or from this peer.
     /// Used to prevent infinity loops while broadcasting addresses.
-    // TODO: Use bloom filter (like it's done in Bitcoin Core).
-    pub announced_addresses: HashSet<A>,
+    pub announced_addresses: RollingBloomFilter<A>,
 
     pub address_rate_limiter: RateLimiter,
 }

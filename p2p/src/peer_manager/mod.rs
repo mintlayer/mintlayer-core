@@ -20,7 +20,7 @@ pub mod peer_context;
 pub mod peerdb;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::Duration,
 };
@@ -56,7 +56,10 @@ use crate::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
     },
-    utils::{oneshot_nofail, rate_limiter::RateLimiter},
+    utils::{
+        bloom_filters::rolling_bloom_filter::RollingBloomFilter, oneshot_nofail,
+        rate_limiter::RateLimiter,
+    },
 };
 
 use self::{
@@ -86,6 +89,10 @@ pub const ADDR_RATE_BUCKET_SIZE: u32 = 10;
 
 /// To how many peers resend received address
 const PEER_ADDRESS_RESEND_COUNT: usize = 2;
+
+// Use the same parameters as Bitcoin Core (last 5000 addresses)
+const PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE: usize = 5000;
+const PEER_ADDRESSES_ROLLING_BLOOM_FPP: f64 = 0.001;
 
 /// Hardcoded seed DNS hostnames
 // TODO: Replace with actual values
@@ -240,7 +247,7 @@ where
                     address: address.as_peer_address(),
                 }),
             );
-            peer.announced_addresses.insert(address);
+            peer.announced_addresses.insert(&address, &mut make_pseudo_rng());
         }
     }
 
@@ -473,6 +480,12 @@ where
             ADDR_RATE_BUCKET_SIZE,
         );
 
+        let announced_addresses = RollingBloomFilter::new(
+            PEER_ADDRESSES_ROLLING_BLOOM_FILTER_SIZE,
+            PEER_ADDRESSES_ROLLING_BLOOM_FPP,
+            &mut make_pseudo_rng(),
+        );
+
         let old_value = self.peers.insert(
             peer_id,
             PeerContext {
@@ -484,7 +497,7 @@ where
                 ping_last: None,
                 ping_min: None,
                 expect_addr_list_response,
-                announced_addresses: HashSet::new(),
+                announced_addresses,
                 address_rate_limiter,
             },
         );
@@ -729,7 +742,7 @@ where
                 return;
             }
 
-            peer.announced_addresses.insert(address.clone());
+            peer.announced_addresses.insert(&address, &mut make_pseudo_rng());
 
             self.peerdb.peer_discovered(address.clone());
 
