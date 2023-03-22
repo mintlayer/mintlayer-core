@@ -22,6 +22,3 @@ thiserror.workspace = true
 [dev-dependencies]
 rstest.workspace = true
 test-utils = {path = '../test-utils'}
-
-[profile.release]
-lto = true
