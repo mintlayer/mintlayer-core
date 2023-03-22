@@ -227,10 +227,8 @@ impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
         tree_size: TreeSize,
         input: BTreeMap<&usize, &T>,
     ) -> BTreeMap<usize, T> {
-        let mut result = input
-            .into_iter()
-            .map(|(a, b)| (a.clone(), b.clone()))
-            .collect::<BTreeMap<usize, T>>();
+        let mut result =
+            input.into_iter().map(|(a, b)| (*a, b.clone())).collect::<BTreeMap<usize, T>>();
         for (index_l, index_r) in tree_size.iter_pairs_indices() {
             if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
