@@ -23,7 +23,7 @@ use std::{
 
 use itertools::Itertools;
 
-use crate::primitives::merkle::{
+use crate::merkle::{
     hasher::PairHasher,
     pos::{node_kind::NodeKind, NodePosition},
     tree::{tree_size::TreeSize, MerkleTree, Node},

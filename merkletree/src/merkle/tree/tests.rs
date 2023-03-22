@@ -13,28 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::primitives::{
-    id::{default_hash, DefaultHashAlgoStream},
-    H256,
-};
 use crypto::hash::StreamHasher;
+
+use super::*;
+use crate::interal::{hash_data, HashAlgoStream, HashedData};
 
 #[test]
 fn merkletree_too_small() {
-    let t0 = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![]);
+    let t0 = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![]);
     assert_eq!(t0.unwrap_err(), MerkleTreeFormError::TooSmall(0));
 }
 
 #[test]
 fn merkletree_basic_two_leaf_node() {
-    let v1 = default_hash(H256::zero());
-    let v2 = default_hash(H256::from_low_u64_be(1));
+    let v1 = hash_data(HashedData::zero());
+    let v2 = hash_data(HashedData::from_low_u64_be(1));
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v1, v2]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2]).unwrap();
 
     // recreate the expected root
-    let mut test_hasher = DefaultHashAlgoStream::new();
+    let mut test_hasher = HashAlgoStream::new();
     test_hasher.write(v1);
     test_hasher.write(v2);
 
@@ -43,23 +41,23 @@ fn merkletree_basic_two_leaf_node() {
 
 #[test]
 fn merkletree_basic_four_leaf_node() {
-    let v1 = default_hash(H256::zero());
-    let v2 = default_hash(H256::from_low_u64_be(1));
-    let v3 = default_hash(H256::from_low_u64_be(2));
-    let v4 = default_hash(H256::from_low_u64_be(3));
+    let v1 = hash_data(HashedData::zero());
+    let v2 = hash_data(HashedData::from_low_u64_be(1));
+    let v3 = hash_data(HashedData::from_low_u64_be(2));
+    let v4 = hash_data(HashedData::from_low_u64_be(3));
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v1, v2, v3, v4]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2, v3, v4]).unwrap();
 
     // recreate the expected root
-    let mut node10 = DefaultHashAlgoStream::new();
+    let mut node10 = HashAlgoStream::new();
     node10.write(v1);
     node10.write(v2);
 
-    let mut node11 = DefaultHashAlgoStream::new();
+    let mut node11 = HashAlgoStream::new();
     node11.write(v3);
     node11.write(v4);
 
-    let mut node00 = DefaultHashAlgoStream::new();
+    let mut node00 = HashAlgoStream::new();
     let n10 = node10.finalize();
     node00.write(n10);
     let n11 = node11.finalize();
@@ -72,34 +70,33 @@ fn merkletree_basic_four_leaf_node() {
 
 #[test]
 fn merkletree_basic_eight_leaf_node() {
-    let v1 = default_hash(H256::zero());
-    let v2 = default_hash(H256::from_low_u64_be(1));
-    let v3 = default_hash(H256::from_low_u64_be(2));
-    let v4 = default_hash(H256::from_low_u64_be(3));
-    let v5 = default_hash(H256::from_low_u64_be(4));
-    let v6 = default_hash(H256::from_low_u64_be(5));
-    let v7 = default_hash(H256::from_low_u64_be(6));
-    let v8 = default_hash(H256::from_low_u64_be(7));
+    let v1 = hash_data(HashedData::zero());
+    let v2 = hash_data(HashedData::from_low_u64_be(1));
+    let v3 = hash_data(HashedData::from_low_u64_be(2));
+    let v4 = hash_data(HashedData::from_low_u64_be(3));
+    let v5 = hash_data(HashedData::from_low_u64_be(4));
+    let v6 = hash_data(HashedData::from_low_u64_be(5));
+    let v7 = hash_data(HashedData::from_low_u64_be(6));
+    let v8 = hash_data(HashedData::from_low_u64_be(7));
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![
-        v1, v2, v3, v4, v5, v6, v7, v8,
-    ])
-    .unwrap();
+    let t =
+        MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2, v3, v4, v5, v6, v7, v8])
+            .unwrap();
 
     // recreate the expected root
-    let mut node20 = DefaultHashAlgoStream::new();
+    let mut node20 = HashAlgoStream::new();
     node20.write(v1);
     node20.write(v2);
 
-    let mut node21 = DefaultHashAlgoStream::new();
+    let mut node21 = HashAlgoStream::new();
     node21.write(v3);
     node21.write(v4);
 
-    let mut node22 = DefaultHashAlgoStream::new();
+    let mut node22 = HashAlgoStream::new();
     node22.write(v5);
     node22.write(v6);
 
-    let mut node23 = DefaultHashAlgoStream::new();
+    let mut node23 = HashAlgoStream::new();
     node23.write(v7);
     node23.write(v8);
 
@@ -108,35 +105,35 @@ fn merkletree_basic_eight_leaf_node() {
     let n22 = node22.finalize();
     let n23 = node23.finalize();
 
-    let mut node10 = DefaultHashAlgoStream::new();
+    let mut node10 = HashAlgoStream::new();
     node10.write(n20);
     node10.write(n21);
 
-    let mut node11 = DefaultHashAlgoStream::new();
+    let mut node11 = HashAlgoStream::new();
     node11.write(n22);
     node11.write(n23);
 
     let n10 = node10.finalize();
     let n11 = node11.finalize();
 
-    let mut node00 = DefaultHashAlgoStream::new();
-    node00.write(H256::from(n10));
-    node00.write(H256::from(n11));
+    let mut node00 = HashAlgoStream::new();
+    node00.write(HashedData::from(n10));
+    node00.write(HashedData::from(n11));
 
     let res = node00.finalize();
 
-    assert_eq!(t.root(), H256::from(res));
+    assert_eq!(t.root(), HashedData::from(res));
 }
 
 #[test]
 fn merkletree_with_arbitrary_length_2() {
-    let v1 = H256::zero();
-    let v2 = H256::from_low_u64_be(1);
+    let v1 = HashedData::zero();
+    let v2 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v1, v2]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2]).unwrap();
 
     // recreate the expected root
-    let mut test_hasher = DefaultHashAlgoStream::new();
+    let mut test_hasher = HashAlgoStream::new();
     test_hasher.write(v1);
     test_hasher.write(v2);
 
@@ -145,22 +142,22 @@ fn merkletree_with_arbitrary_length_2() {
 
 #[test]
 fn merkletree_with_arbitrary_length_3() {
-    let v1 = H256::zero();
-    let v2 = H256::from_low_u64_be(1);
-    let v3 = H256::from_low_u64_be(2);
+    let v1 = HashedData::zero();
+    let v2 = HashedData::from_low_u64_be(1);
+    let v3 = HashedData::from_low_u64_be(2);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v1, v2, v3]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2, v3]).unwrap();
 
     // recreate the expected root
-    let mut node10 = DefaultHashAlgoStream::new();
+    let mut node10 = HashAlgoStream::new();
     node10.write(v1);
     node10.write(v2);
 
-    let mut node11 = DefaultHashAlgoStream::new();
+    let mut node11 = HashAlgoStream::new();
     node11.write(v3);
-    node11.write(default_hash(v3));
+    node11.write(hash_data(v3));
 
-    let mut node00 = DefaultHashAlgoStream::new();
+    let mut node00 = HashAlgoStream::new();
     let n10 = node10.finalize();
     node00.write(n10);
     let n11 = node11.finalize();
@@ -173,32 +170,32 @@ fn merkletree_with_arbitrary_length_3() {
 
 #[test]
 fn merkletree_with_arbitrary_length_5() {
-    let v1 = H256::zero();
-    let v2 = H256::from_low_u64_be(1);
-    let v3 = H256::from_low_u64_be(2);
-    let v4 = H256::from_low_u64_be(3);
-    let v5 = H256::from_low_u64_be(4);
-    let v6 = default_hash(v5);
-    let v7 = default_hash(v6);
-    let v8 = default_hash(v7);
+    let v1 = HashedData::zero();
+    let v2 = HashedData::from_low_u64_be(1);
+    let v3 = HashedData::from_low_u64_be(2);
+    let v4 = HashedData::from_low_u64_be(3);
+    let v5 = HashedData::from_low_u64_be(4);
+    let v6 = hash_data(v5);
+    let v7 = hash_data(v6);
+    let v8 = hash_data(v7);
 
     let t =
-        MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v1, v2, v3, v4, v5]).unwrap();
+        MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v1, v2, v3, v4, v5]).unwrap();
 
     // recreate the expected root
-    let mut node20 = DefaultHashAlgoStream::new();
+    let mut node20 = HashAlgoStream::new();
     node20.write(v1);
     node20.write(v2);
 
-    let mut node21 = DefaultHashAlgoStream::new();
+    let mut node21 = HashAlgoStream::new();
     node21.write(v3);
     node21.write(v4);
 
-    let mut node22 = DefaultHashAlgoStream::new();
+    let mut node22 = HashAlgoStream::new();
     node22.write(v5);
     node22.write(v6);
 
-    let mut node23 = DefaultHashAlgoStream::new();
+    let mut node23 = HashAlgoStream::new();
     node23.write(v7);
     node23.write(v8);
 
@@ -207,18 +204,18 @@ fn merkletree_with_arbitrary_length_5() {
     let n22 = node22.finalize();
     let n23 = node23.finalize();
 
-    let mut node10 = DefaultHashAlgoStream::new();
+    let mut node10 = HashAlgoStream::new();
     node10.write(n20);
     node10.write(n21);
 
-    let mut node11 = DefaultHashAlgoStream::new();
+    let mut node11 = HashAlgoStream::new();
     node11.write(n22);
     node11.write(n23);
 
     let n10 = node10.finalize();
     let n11 = node11.finalize();
 
-    let mut node00 = DefaultHashAlgoStream::new();
+    let mut node00 = HashAlgoStream::new();
     node00.write(n10);
     node00.write(n11);
 
@@ -244,9 +241,9 @@ fn leaf_count_from_tree_size() {
 
 #[test]
 fn bottom_access_one_leaf() {
-    let v00 = H256::from_low_u64_be(1);
+    let v00 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00]).unwrap();
 
     assert_eq!(t.node_value_from_bottom(0, 0).unwrap(), v00);
 
@@ -266,15 +263,15 @@ fn bottom_access_one_leaf() {
 
 #[test]
 fn bottom_access_two_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
 
     assert_eq!(t.node_value_from_bottom(0, 0).unwrap(), v00);
     assert_eq!(t.node_value_from_bottom(0, 1).unwrap(), v01);
 
-    let v10 = DefaultHashAlgoStream::hash_pair(&v00, &v01);
+    let v10 = HashAlgoStream::hash_pair(&v00, &v01);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
 
@@ -299,26 +296,26 @@ fn bottom_access_two_leaves() {
 
 #[test]
 fn bottom_access_four_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
 
     let t =
-        MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
+        MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
 
     assert_eq!(t.node_value_from_bottom(0, 0).unwrap(), v00);
     assert_eq!(t.node_value_from_bottom(0, 1).unwrap(), v01);
     assert_eq!(t.node_value_from_bottom(0, 2).unwrap(), v02);
     assert_eq!(t.node_value_from_bottom(0, 3).unwrap(), v03);
 
-    let v10 = DefaultHashAlgoStream::hash_pair(&v00, &v01);
-    let v11 = DefaultHashAlgoStream::hash_pair(&v02, &v03);
+    let v10 = HashAlgoStream::hash_pair(&v00, &v01);
+    let v11 = HashAlgoStream::hash_pair(&v02, &v03);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
     assert_eq!(t.node_value_from_bottom(1, 1).unwrap(), v11);
 
-    let v20 = DefaultHashAlgoStream::hash_pair(&v10, &v11);
+    let v20 = HashAlgoStream::hash_pair(&v10, &v11);
 
     assert_eq!(t.node_value_from_bottom(2, 0).unwrap(), v20);
 
@@ -348,16 +345,16 @@ fn bottom_access_four_leaves() {
 
 #[test]
 fn bottom_access_eight_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
-    let v04 = H256::from_low_u64_be(4);
-    let v05 = default_hash(v04);
-    let v06 = default_hash(v05);
-    let v07 = default_hash(v06);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
+    let v04 = HashedData::from_low_u64_be(4);
+    let v05 = hash_data(v04);
+    let v06 = hash_data(v05);
+    let v07 = hash_data(v06);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
         .unwrap();
 
     assert_eq!(t.node_value_from_bottom(0, 0).unwrap(), v00);
@@ -369,23 +366,23 @@ fn bottom_access_eight_leaves() {
     assert_eq!(t.node_value_from_bottom(0, 6).unwrap(), v06);
     assert_eq!(t.node_value_from_bottom(0, 7).unwrap(), v07);
 
-    let v10 = DefaultHashAlgoStream::hash_pair(&v00, &v01);
-    let v11 = DefaultHashAlgoStream::hash_pair(&v02, &v03);
-    let v12 = DefaultHashAlgoStream::hash_pair(&v04, &v05);
-    let v13 = DefaultHashAlgoStream::hash_pair(&v06, &v07);
+    let v10 = HashAlgoStream::hash_pair(&v00, &v01);
+    let v11 = HashAlgoStream::hash_pair(&v02, &v03);
+    let v12 = HashAlgoStream::hash_pair(&v04, &v05);
+    let v13 = HashAlgoStream::hash_pair(&v06, &v07);
 
     assert_eq!(t.node_value_from_bottom(1, 0).unwrap(), v10);
     assert_eq!(t.node_value_from_bottom(1, 1).unwrap(), v11);
     assert_eq!(t.node_value_from_bottom(1, 2).unwrap(), v12);
     assert_eq!(t.node_value_from_bottom(1, 3).unwrap(), v13);
 
-    let v20 = DefaultHashAlgoStream::hash_pair(&v10, &v11);
-    let v21 = DefaultHashAlgoStream::hash_pair(&v12, &v13);
+    let v20 = HashAlgoStream::hash_pair(&v10, &v11);
+    let v21 = HashAlgoStream::hash_pair(&v12, &v13);
 
     assert_eq!(t.node_value_from_bottom(2, 0).unwrap(), v20);
     assert_eq!(t.node_value_from_bottom(2, 1).unwrap(), v21);
 
-    let v30 = DefaultHashAlgoStream::hash_pair(&v20, &v21);
+    let v30 = HashAlgoStream::hash_pair(&v20, &v21);
     assert_eq!(t.node_value_from_bottom(3, 0).unwrap(), v30);
 
     // Some invalid accesses at index
@@ -549,11 +546,11 @@ fn position_from_index_15_tree_elements() {
 
 #[test]
 fn parent_iter_one_leaf() {
-    let v00 = H256::from_low_u64_be(1);
+    let v00 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00]).unwrap();
 
-    let val = |v: Node<H256, DefaultHashAlgoStream>| *v.hash();
+    let val = |v: Node<HashedData, HashAlgoStream>| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
@@ -570,12 +567,12 @@ fn parent_iter_one_leaf() {
 
 #[test]
 fn parent_iter_two_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
 
-    let val = |v: Node<H256, DefaultHashAlgoStream>| *v.hash();
+    let val = |v: Node<HashedData, HashAlgoStream>| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
@@ -598,15 +595,15 @@ fn parent_iter_two_leaves() {
 
 #[test]
 fn parent_iter_four_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
 
     let t =
-        MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
+        MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
 
-    let val = |v: Node<H256, DefaultHashAlgoStream>| *v.hash();
+    let val = |v: Node<HashedData, HashAlgoStream>| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
@@ -643,16 +640,16 @@ fn parent_iter_four_leaves() {
 
 #[test]
 fn parent_iter_eight_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
-    let v04 = H256::from_low_u64_be(4);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
+    let v04 = HashedData::from_low_u64_be(4);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
         .unwrap();
 
-    let val = |v: Node<H256, DefaultHashAlgoStream>| *v.hash();
+    let val = |v: Node<HashedData, HashAlgoStream>| *v.hash();
 
     let mut leaf0iter = t.iter_from_leaf_to_root(0).unwrap();
     assert_eq!(leaf0iter.next().map(val), t.node_value_from_bottom(0, 0));
@@ -721,9 +718,9 @@ fn parent_iter_eight_leaves() {
 
 #[test]
 fn node_and_siblings_one_leaf() {
-    let v00 = H256::zero();
+    let v00 = HashedData::zero();
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00]).unwrap();
 
     let node = t.node_from_bottom(0, 0).unwrap();
     assert_eq!(node.abs_index(), 0);
@@ -732,10 +729,10 @@ fn node_and_siblings_one_leaf() {
 
 #[test]
 fn node_and_siblings_two_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01]).unwrap();
 
     // To get the sibling, we use this simple function
     let flip_even_odd = |i| if i % 2 == 0 { i + 1 } else { i - 1 };
@@ -755,13 +752,13 @@ fn node_and_siblings_two_leaves() {
 
 #[test]
 fn node_and_siblings_four_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
 
     let t =
-        MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
+        MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03]).unwrap();
 
     // To get the sibling, we use this simple function
     let flip_even_odd = |i| if i % 2 == 0 { i + 1 } else { i - 1 };
@@ -787,13 +784,13 @@ fn node_and_siblings_four_leaves() {
 
 #[test]
 fn node_and_siblings_eight_leaves() {
-    let v00 = H256::zero();
-    let v01 = H256::from_low_u64_be(1);
-    let v02 = H256::from_low_u64_be(2);
-    let v03 = H256::from_low_u64_be(3);
-    let v04 = H256::from_low_u64_be(4);
+    let v00 = HashedData::zero();
+    let v01 = HashedData::from_low_u64_be(1);
+    let v02 = HashedData::from_low_u64_be(2);
+    let v03 = HashedData::from_low_u64_be(3);
+    let v04 = HashedData::from_low_u64_be(4);
 
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(vec![v00, v01, v02, v03, v04])
         .unwrap();
 
     // To get the sibling, we use this simple function

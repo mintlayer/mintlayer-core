@@ -69,25 +69,25 @@ impl<T: Copy, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
 
 #[cfg(test)]
 mod tests {
-    use crate::primitives::id::default_hash;
-    use crate::primitives::H256;
+
+    use crate::interal::{hash_data, HashedData};
 
     use super::*;
 
-    fn leaves_with_inc_padding(n: usize) -> Vec<H256> {
+    fn leaves_with_inc_padding(n: usize) -> Vec<HashedData> {
         let mut leaves = Vec::new();
         for i in 0..n {
-            leaves.push(H256::from_low_u64_be(i as u64));
+            leaves.push(HashedData::from_low_u64_be(i as u64));
         }
         for _ in n..n.next_power_of_two() {
-            leaves.push(default_hash(*leaves.last().unwrap()));
+            leaves.push(hash_data(*leaves.last().unwrap()));
         }
         leaves
     }
 
     #[test]
     fn non_zero_size() {
-        let f = |i: &H256| default_hash(i);
+        let f = |i: &HashedData| hash_data(i);
 
         for i in 1..130 {
             let all_leaves = leaves_with_inc_padding(i);
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn zero_size() {
-        let f = |i: &H256| default_hash(i);
+        let f = |i: &HashedData| hash_data(i);
 
         let vec = IncrementalPaddingIterator::new(Vec::new().into_iter(), f).collect::<Vec<_>>();
         assert_eq!(vec, Vec::new());

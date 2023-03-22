@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::merkle::tree::Node;
+use crate::merkle::tree::Node;
 
 #[derive(Debug, Clone)]
 pub struct NodeWithAbsOrder<'a, T, H> {

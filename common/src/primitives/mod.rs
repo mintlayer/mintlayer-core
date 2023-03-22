@@ -20,7 +20,7 @@ pub mod error;
 mod hash_encoded;
 pub mod height;
 pub mod id;
-pub mod merkle;
+pub mod merkle_tools;
 pub mod semver;
 pub mod signed_amount;
 pub mod time;

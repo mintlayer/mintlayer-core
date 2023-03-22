@@ -20,16 +20,12 @@ use crypto::random::SliceRandom;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use crate::primitives::{
-    id::{default_hash, DefaultHashAlgoStream},
-    merkle::{proof::multi::is_sorted_and_unique, tree::MerkleTree},
-    H256,
-};
+use crate::interal::{hash_data, HashAlgoStream, HashedData};
 
 use super::*;
 
-fn gen_leaves(n: usize) -> Vec<H256> {
-    (0..n).map(|i| default_hash(H256::from_low_u64_be(i as u64))).collect()
+fn gen_leaves(n: usize) -> Vec<HashedData> {
+    (0..n).map(|i| hash_data(HashedData::from_low_u64_be(i as u64))).collect()
 }
 
 #[test]
@@ -50,7 +46,7 @@ fn sorted_and_unique() {
 #[test]
 fn empty_multi_proof() {
     let leaves = gen_leaves(2);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[]);
     assert_eq!(
@@ -63,7 +59,7 @@ fn empty_multi_proof() {
 #[test]
 fn multi_proof_one_leaf_with_multiproof_as_single_proof() {
     let leaves = gen_leaves(1);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[0]).unwrap();
     let single_proof = SingleProofNodes::from_tree_leaf(&t, 0).unwrap();
@@ -78,7 +74,7 @@ fn multi_proof_one_leaf_with_multiproof_as_single_proof() {
 #[test]
 fn multi_proof_two_leaves_with_multiproof_as_single_proof() {
     let leaves = gen_leaves(2);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     for i in 0..2 {
         let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[i]).unwrap();
@@ -95,7 +91,7 @@ fn multi_proof_two_leaves_with_multiproof_as_single_proof() {
 #[test]
 fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
     let leaves = gen_leaves(4);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     for i in 0..4 {
         let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[i]).unwrap();
@@ -115,7 +111,7 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
 #[case(&[0,1], vec![])]
 fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(2);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(
@@ -152,7 +148,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nod
 #[case(&[0,1,2,3], vec![])]
 fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(4);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(
@@ -174,7 +170,7 @@ fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[usize], #[case] no
 #[test]
 fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
     let leaves = gen_leaves(8);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     for i in 0..8 {
         let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[i]).unwrap();
@@ -447,7 +443,7 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
 #[case(&[0,1,2,3,4,5,6,7], vec![])]
 fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
     let leaves = gen_leaves(8);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, input).unwrap();
     assert_eq!(
@@ -499,7 +495,7 @@ fn leaf_count_combinations_generator(#[case] leaf_count: usize) {
 #[case(128)]
 fn multi_proof_verification_leaves_empty(#[case] leaf_count: usize) {
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -544,7 +540,7 @@ fn multi_proof_verification(
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -583,7 +579,7 @@ fn multi_proof_verification(
 #[test]
 fn multi_proof_verification_one_leaf() {
     let leaves = gen_leaves(1);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -628,7 +624,7 @@ fn multi_proof_verification_tampered_nodes(
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -658,7 +654,7 @@ fn multi_proof_verification_tampered_nodes(
             assert!(multi_proof.nodes.contains_key(node_idx));
 
             let mut multi_proof = multi_proof.clone();
-            multi_proof.nodes.insert(*node_idx, H256::random_using(&mut rng));
+            multi_proof.nodes.insert(*node_idx, HashedData::random_using(&mut rng));
 
             let leaves_hashes_map = indices_to_map(&leaves_indices);
             assert!(
@@ -693,7 +689,7 @@ fn multi_proof_verification_tampered_leaves(
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -724,7 +720,7 @@ fn multi_proof_verification_tampered_leaves(
             assert!(leaves_hashes_map.contains_key(leaf_idx));
 
             let mut leaves_hashes_map = leaves_hashes_map.clone();
-            leaves_hashes_map.insert(*leaf_idx, H256::random_using(&mut rng));
+            leaves_hashes_map.insert(*leaf_idx, HashedData::random_using(&mut rng));
 
             assert!(
                 multi_proof.verify(leaves_hashes_map, t.root()).unwrap().failed(),
@@ -758,7 +754,7 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
@@ -820,7 +816,7 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
 
     let indices_to_map = |leaves_indices: &[usize]| {
         leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()

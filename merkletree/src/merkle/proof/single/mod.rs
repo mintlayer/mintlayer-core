@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::merkle::hasher::PairHasher;
+use crate::merkle::hasher::PairHasher;
 
 use super::{
     super::{
@@ -58,7 +58,7 @@ impl<'a, T: Copy, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
 
         let leaf = tree.node_from_bottom(0, leaf_index).ok_or(
             MerkleTreeProofExtractionError::AccessError(
-                crate::primitives::merkle::MerkleTreeAccessError::AbsIndexOutOfRange(
+                crate::merkle::MerkleTreeAccessError::AbsIndexOutOfRange(
                     leaf_index,
                     tree.total_node_count().get(),
                 ),
