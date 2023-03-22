@@ -45,12 +45,6 @@ MAX_PROTOCOL_MESSAGE_LENGTH = 4000000  # Maximum length of incoming protocol mes
 MAX_HEADERS_RESULTS = 2000  # Number of headers sent in one getheaders result
 MAX_INV_SIZE = 50000  # Maximum number of entries in an 'inv' protocol message
 
-NODE_NETWORK = (1 << 0)
-NODE_BLOOM = (1 << 2)
-NODE_WITNESS = (1 << 3)
-NODE_COMPACT_FILTERS = (1 << 6)
-NODE_NETWORK_LIMITED = (1 << 10)
-
 MSG_TX = 1
 MSG_BLOCK = 2
 MSG_FILTERED_BLOCK = 3

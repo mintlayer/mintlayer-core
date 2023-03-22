@@ -66,8 +66,6 @@ from test_framework.messages import (
     msg_version,
     MSG_WTX,
     msg_wtxidrelay,
-    NODE_NETWORK,
-    NODE_WITNESS,
     sha256,
 )
 from test_framework.util import (
@@ -81,15 +79,15 @@ logger = logging.getLogger("TestFramework.p2p")
 # The P2P user agent string that this test framework sends in its `handshake` message
 P2P_USER_AGENT = "PythonTesterP2P"
 
-# The services that this test framework offers in its `version` message
-P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
-
-# Maximum message size
-MAX_MESSAGE_SIZE = 10 * 1024 * 1024
-
 SERVICE_TRANSACTIONS = 1 << 0
 SERVICE_BLOCKS = 1 << 1
 SERVICE_PEER_ADDRESSES = 1 << 2
+
+# The services that this test framework offers in its `handshake` message
+P2P_SERVICES = SERVICE_TRANSACTIONS | SERVICE_BLOCKS | SERVICE_PEER_ADDRESSES
+
+# Maximum message size
+MAX_MESSAGE_SIZE = 10 * 1024 * 1024
 
 MESSAGEMAP = {
     b"addr": msg_addr,
@@ -339,7 +337,7 @@ class P2PInterface(P2PConnection):
                     },
                     "network": [0xaa, 0xbb, 0xcc, 0xdd],
                     "user_agent": P2P_USER_AGENT,
-                    "services": SERVICE_TRANSACTIONS | SERVICE_BLOCKS | SERVICE_PEER_ADDRESSES,
+                    "services": services,
                     "receiver_address": None,
                     "handshake_nonce": 123,
                 }
