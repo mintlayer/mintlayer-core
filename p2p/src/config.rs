@@ -44,17 +44,19 @@ pub enum NodeType {
     /// A node that doesn't subscribe to any events.
     ///
     /// This node type isn't useful outside of the tests.
+    #[cfg(feature = "testing_utils")]
     Inactive,
 }
 
 impl From<NodeType> for Services {
     fn from(t: NodeType) -> Self {
         match t {
-            NodeType::Full => [Service::BLOCKS, Service::TRANSACTIONS, Service::PEER_ADDRESSES]
+            NodeType::Full => [Service::Blocks, Service::Transactions, Service::PeerAddresses]
                 .as_slice()
                 .into(),
-            NodeType::BlocksOnly => [Service::BLOCKS].as_slice().into(),
-            NodeType::DnsServer => [Service::PEER_ADDRESSES].as_slice().into(),
+            NodeType::BlocksOnly => [Service::Blocks].as_slice().into(),
+            NodeType::DnsServer => [Service::PeerAddresses].as_slice().into(),
+            #[cfg(feature = "testing_utils")]
             NodeType::Inactive => [].as_slice().into(),
         }
     }

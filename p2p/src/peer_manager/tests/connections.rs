@@ -452,7 +452,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -477,7 +477,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -502,7 +502,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })

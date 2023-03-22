@@ -211,8 +211,8 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
         }
 
         let topic = match &announcement {
-            Announcement::Block(_) => Service::BLOCKS,
-            Announcement::Transaction(_) => Service::TRANSACTIONS,
+            Announcement::Block(_) => Service::Blocks,
+            Announcement::Transaction(_) => Service::Transactions,
         };
 
         self.command_sender

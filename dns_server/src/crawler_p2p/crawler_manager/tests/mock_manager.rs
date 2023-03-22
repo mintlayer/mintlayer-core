@@ -30,7 +30,7 @@ use common::{
     primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
 };
 use p2p::{
-    config::P2pConfig,
+    config::{NodeType, P2pConfig},
     error::{DialError, P2pError},
     message::{AnnounceAddrRequest, PeerManagerMessage},
     net::{
@@ -139,7 +139,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
                 network: *node.chain_config.magic_bytes(),
                 version: SemVer::new(1, 2, 3),
                 user_agent: mintlayer_core_user_agent(),
-                services: Default::default(),
+                services: NodeType::Full.into(),
             };
             let old = self.state.connected.lock().unwrap().insert(address, peer_id);
             assert!(old.is_none());

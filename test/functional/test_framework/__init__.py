@@ -56,7 +56,7 @@ def init_p2p_types():
                 "type_mapping": [
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
-                    ["services", "u32"],
+                    ["services", "u64"],
                     ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                     ["handshake_nonce", "u64"],
@@ -68,7 +68,7 @@ def init_p2p_types():
                 "type_mapping": [
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
-                    ["services", "u32"],
+                    ["services", "u64"],
                     ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                 ]

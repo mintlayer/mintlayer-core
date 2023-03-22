@@ -15,35 +15,40 @@
 
 use serialization::{Decode, Encode};
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode, Default)]
-pub struct Service(u32);
-
-impl Service {
-    /// Transactions
-    pub const TRANSACTIONS: Service = Service(1 << 0);
-
-    /// Blocks
-    pub const BLOCKS: Service = Service(1 << 1);
-
-    /// Peer address announcements from new nodes joining the network
-    pub const PEER_ADDRESSES: Service = Service(1 << 2);
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
+#[repr(u64)]
+pub enum Service {
+    Transactions = 1 << 0,
+    Blocks = 1 << 1,
+    PeerAddresses = 1 << 2,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode, Default)]
-pub struct Services(u32);
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Encode, Decode)]
+pub struct Services(u64);
 
 impl Services {
-    pub fn has_service(&self, service: Service) -> bool {
-        self.0 & service.0 != 0
+    pub fn has_service(&self, flag: Service) -> bool {
+        self.0 & flag as u64 != 0
     }
 }
 
 impl From<&[Service]> for Services {
     fn from(services: &[Service]) -> Self {
-        let mut result = 0;
-        for service in services {
-            result |= service.0
-        }
+        let result = services.iter().fold(0, |so_far, current| so_far | *current as u64);
         Services(result)
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn test_service_flags() {
+        let all_flags = vec![Service::Transactions, Service::Blocks, Service::PeerAddresses];
+        let services: Services = all_flags.as_slice().into();
+        for flag in all_flags {
+            assert!(services.has_service(flag));
+        }
     }
 }

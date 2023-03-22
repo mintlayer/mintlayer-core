@@ -230,7 +230,7 @@ where
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+            services: [Service::Blocks, Service::Transactions].as_slice().into(),
         },
         None,
     );
@@ -247,7 +247,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             user_agent: mintlayer_core_user_agent(),
-            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+            services: [Service::Blocks, Service::Transactions].as_slice().into(),
         },
         None,
     );
@@ -264,7 +264,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+            services: [Service::Blocks, Service::Transactions].as_slice().into(),
         },
         None,
     );
@@ -323,7 +323,7 @@ where
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+            services: [Service::Blocks, Service::Transactions].as_slice().into(),
         },
         None,
     );
@@ -339,7 +339,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             user_agent: mintlayer_core_user_agent(),
-            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+            services: [Service::Blocks, Service::Transactions].as_slice().into(),
         },
         None,
     );
@@ -356,7 +356,7 @@ where
                 network: *config.magic_bytes(),
                 version: SemVer::new(0, 1, 0),
                 user_agent: mintlayer_core_user_agent(),
-                services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
             },
             None,
         )

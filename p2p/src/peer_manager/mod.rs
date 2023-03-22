@@ -450,7 +450,7 @@ where
 
         log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
 
-        if info.services.has_service(Service::PEER_ADDRESSES) {
+        if info.services.has_service(Service::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 

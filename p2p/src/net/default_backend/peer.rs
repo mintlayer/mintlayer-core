@@ -300,7 +300,7 @@ mod tests {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
-                services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }))
@@ -314,7 +314,7 @@ mod tests {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),
-                services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }
@@ -372,7 +372,7 @@ mod tests {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
                     user_agent: p2p_config.user_agent.clone(),
-                    services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     receiver_address: None,
                 }
             ))
@@ -388,7 +388,7 @@ mod tests {
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
                     user_agent: p2p_config.user_agent.clone(),
-                    services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     receiver_address: None,
                     handshake_nonce: 1,
                 }
@@ -443,7 +443,7 @@ mod tests {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
-                services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }))
