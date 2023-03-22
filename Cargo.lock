@@ -1942,7 +1942,6 @@ dependencies = [
  "blake2",
  "crypto",
  "fixed-hash",
- "generic-array",
  "itertools",
  "rstest",
  "test-utils",

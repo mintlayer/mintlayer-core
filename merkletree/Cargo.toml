@@ -10,7 +10,6 @@ rust-version.workspace = true
 [dependencies]
 crypto = { path = '../crypto'}
 
-generic-array.workspace = true
 itertools.workspace = true
 thiserror.workspace = true
 

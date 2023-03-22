@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use blake2::digest::{
-    generic_array::GenericArray, Digest, FixedOutputReset, OutputSizeUser, Reset, Update,
-};
+pub use blake2::digest::{generic_array::GenericArray, typenum, Digest};
 use fixed_hash::construct_fixed_hash;
-use generic_array::typenum;
 
 use crate::hasher::PairHasher;
 
