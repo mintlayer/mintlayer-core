@@ -27,15 +27,6 @@ def init_p2p_types():
                 ]
             },
 
-            "PubSubTopic": {
-                "type": "enum",
-                "type_mapping": [
-                    ["Transactions", "Null"],
-                    ["Blocks", "Null"],
-                    ["PeerAddresses", "Null"],
-                ]
-            },
-
             "PeerAddressIp4": {
                 "type": "struct",
                 "type_mapping": [
@@ -65,7 +56,7 @@ def init_p2p_types():
                 "type_mapping": [
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
-                    ["subscriptions", "BTreeSet<PubSubTopic>"],
+                    ["services", "u32"],
                     ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                     ["handshake_nonce", "u64"],
@@ -77,7 +68,7 @@ def init_p2p_types():
                 "type_mapping": [
                     ["version", "SemVer"],
                     ["network", "[u8; 4]"],
-                    ["subscriptions", "BTreeSet<PubSubTopic>"],
+                    ["services", "u32"],
                     ["user_agent", "String"],
                     ["receiver_address", "Option<PeerAddress>"],
                 ]

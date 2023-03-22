@@ -87,6 +87,10 @@ P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
 # Maximum message size
 MAX_MESSAGE_SIZE = 10 * 1024 * 1024
 
+SERVICE_TRANSACTIONS = 1 << 0
+SERVICE_BLOCKS = 1 << 1
+SERVICE_PEER_ADDRESSES = 1 << 2
+
 MESSAGEMAP = {
     b"addr": msg_addr,
     b"addrv2": msg_addrv2,
@@ -316,7 +320,7 @@ class P2PInterface(P2PConnection):
         self.ping_counter = 1
 
         # The network services received from the peer
-        self.nServices = 0
+        self.services = 0
 
         self.support_addrv2 = support_addrv2
 
@@ -335,7 +339,7 @@ class P2PInterface(P2PConnection):
                     },
                     "network": [0xaa, 0xbb, 0xcc, 0xdd],
                     "user_agent": P2P_USER_AGENT,
-                    "subscriptions": ["Transactions", "Blocks", "PeerAddresses"],
+                    "services": SERVICE_TRANSACTIONS | SERVICE_BLOCKS | SERVICE_PEER_ADDRESSES,
                     "receiver_address": None,
                     "handshake_nonce": 123,
                 }
@@ -385,7 +389,9 @@ class P2PInterface(P2PConnection):
     def on_close(self):
         pass
 
-    def on_handshake(self, message): pass
+    def on_handshake(self, message):
+        self.services = message["handshake"]["HelloAck"]["services"]
+
     def on_ping_request(self, message): pass
     def on_ping_response(self, message): pass
     def on_header_list_request(self, message): pass

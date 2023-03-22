@@ -96,7 +96,7 @@ async fn ping_timeout() {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),
-                subscriptions: Default::default(),
+                services: Default::default(),
             },
             receiver_address: None,
         })

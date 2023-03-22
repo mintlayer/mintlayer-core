@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use common::primitives::{semver::SemVer, user_agent::UserAgent};
 use serialization::{Decode, Encode};
 
@@ -24,29 +22,17 @@ use crate::{
         BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage, PingRequest,
         PingResponse, SyncMessage,
     },
-    net::types::PubSubTopic,
+    net::types::services::{Service, Services},
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
 #[derive(Debug)]
 pub enum Command<A> {
-    Connect {
-        address: A,
-    },
-    Accept {
-        peer_id: PeerId,
-    },
-    Disconnect {
-        peer_id: PeerId,
-    },
-    SendMessage {
-        peer: PeerId,
-        message: Message,
-    },
-    AnnounceData {
-        topic: PubSubTopic,
-        message: Vec<u8>,
-    },
+    Connect { address: A },
+    Accept { peer_id: PeerId },
+    Disconnect { peer_id: PeerId },
+    SendMessage { peer: PeerId, message: Message },
+    AnnounceData { topic: Service, message: Vec<u8> },
 }
 
 /// Random nonce sent in outbound handshake.
@@ -60,7 +46,7 @@ pub enum PeerEvent {
         network: [u8; 4],
         version: SemVer,
         user_agent: UserAgent,
-        subscriptions: BTreeSet<PubSubTopic>,
+        services: Services,
         receiver_address: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
@@ -89,7 +75,7 @@ pub enum HandshakeMessage {
     Hello {
         version: SemVer,
         network: [u8; 4],
-        subscriptions: BTreeSet<PubSubTopic>,
+        services: Services,
         user_agent: UserAgent,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
@@ -101,7 +87,7 @@ pub enum HandshakeMessage {
     HelloAck {
         version: SemVer,
         network: [u8; 4],
-        subscriptions: BTreeSet<PubSubTopic>,
+        services: Services,
         user_agent: UserAgent,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)

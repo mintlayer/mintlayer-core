@@ -13,22 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeSet,
-    fmt::{Debug, Display},
-};
+pub mod services;
+
+use std::fmt::{Debug, Display};
 
 use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::UserAgent},
 };
-use serialization::{Decode, Encode};
 
 use crate::{
     message::{Announcement, PeerManagerMessage, SyncMessage},
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
 };
+
+use self::services::Services;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
@@ -60,7 +60,7 @@ pub struct PeerInfo {
     pub user_agent: UserAgent,
 
     /// The announcements list that a peer interested is.
-    pub subscriptions: BTreeSet<PubSubTopic>,
+    pub services: Services,
 }
 
 impl PeerInfo {
@@ -160,17 +160,4 @@ pub enum SyncingEvent {
         peer: PeerId,
         announcement: Box<Announcement>,
     },
-}
-
-/// Publish-subscribe topics
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
-pub enum PubSubTopic {
-    /// Transactions
-    Transactions,
-
-    /// Blocks
-    Blocks,
-
-    /// Peer address announcements from new nodes joining the network
-    PeerAddresses,
 }

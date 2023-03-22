@@ -16,7 +16,7 @@
 use std::sync::Arc;
 
 use crate::{
-    net::types::Role,
+    net::types::{services::Service, Role},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event, RandomAddressMaker,
         TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
@@ -38,7 +38,6 @@ use crate::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             DefaultNetworkingService,
         },
-        types::PubSubTopic,
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     peer_manager::tests::make_peer_manager,
@@ -231,7 +230,7 @@ where
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
         },
         None,
     );
@@ -248,7 +247,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             user_agent: mintlayer_core_user_agent(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
         },
         None,
     );
@@ -265,7 +264,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
         },
         None,
     );
@@ -324,7 +323,7 @@ where
             network: [1, 2, 3, 4],
             version: SemVer::new(0, 1, 0),
             user_agent: mintlayer_core_user_agent(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
         },
         None,
     );
@@ -340,7 +339,7 @@ where
             network: *config.magic_bytes(),
             version: SemVer::new(1, 1, 1),
             user_agent: mintlayer_core_user_agent(),
-            subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions].into_iter().collect(),
+            services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
         },
         None,
     );
@@ -357,9 +356,7 @@ where
                 network: *config.magic_bytes(),
                 version: SemVer::new(0, 1, 0),
                 user_agent: mintlayer_core_user_agent(),
-                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                    .into_iter()
-                    .collect(),
+                services: [Service::BLOCKS, Service::TRANSACTIONS].as_slice().into(),
             },
             None,
         )
