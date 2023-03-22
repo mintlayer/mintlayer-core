@@ -23,8 +23,10 @@ use crate::{
 };
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
-        signed_transaction::SignedTransaction, OutPointSourceId, Transaction, TxInput,
+        block::{timestamp::BlockTimestamp, BlockReward},
+        signature::inputsig::InputWitness,
+        signed_transaction::SignedTransaction,
+        OutPointSourceId, Transaction, TxInput,
     },
     primitives::{BlockHeight, Id, Idable, H256},
 };
@@ -72,8 +74,14 @@ fn create_block(
     num_of_txs: usize,
 ) -> Block {
     let txs = create_transactions(rng, inputs, max_num_of_outputs, num_of_txs);
-    Block::new_with_no_consensus(txs, prev_block_id, BlockTimestamp::from_int_seconds(1))
-        .expect("should be able to create a block")
+    Block::new(
+        txs,
+        prev_block_id,
+        BlockTimestamp::from_int_seconds(1),
+        common::chain::block::ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .expect("should be able to create a block")
 }
 
 /// populate the db with random values, for testing.
