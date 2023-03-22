@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::hash::StreamHasher;
+pub use blake2::digest::{
+    generic_array::GenericArray, Digest, FixedOutputReset, OutputSizeUser, Reset, Update,
+};
 use fixed_hash::construct_fixed_hash;
-use generic_array::{typenum, GenericArray};
+use generic_array::typenum;
 
 use crate::hasher::PairHasher;
 
@@ -23,15 +25,34 @@ construct_fixed_hash! {
     pub struct HashedData(32);
 }
 
+type Blake2bHasher = blake2::Blake2b<typenum::U32>;
+
+#[derive(Clone)]
+pub struct HashAlgo(Blake2bHasher);
+
 #[cfg(test)]
-pub type HashAlgo = crypto::hash::Blake2b32;
+impl HashAlgo {
+    pub fn new() -> Self {
+        Self(Blake2bHasher::new())
+    }
+
+    pub fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) {
+        Digest::update(&mut self.0, in_bytes);
+    }
+
+    pub fn finalize(&mut self) -> HashedData {
+        self.0.finalize_reset().into()
+    }
+}
 
 #[cfg(test)]
 pub fn hash_data<T: AsRef<[u8]> + Clone>(data: T) -> HashedData {
-    crypto::hash::hash::<HashAlgo, _>(&data).into()
+    let mut h = Blake2bHasher::new();
+    Digest::update(&mut h, data);
+    h.finalize_reset().into()
 }
 
-pub type HashAlgoStream = crypto::hash::Blake2b32Stream;
+// pub type HashAlgoStream = crypto::hash::Blake2b32Stream;
 
 impl From<GenericArray<u8, typenum::U32>> for HashedData {
     fn from(val: GenericArray<u8, typenum::U32>) -> Self {
@@ -39,19 +60,19 @@ impl From<GenericArray<u8, typenum::U32>> for HashedData {
     }
 }
 
-impl PairHasher for HashAlgoStream {
+impl PairHasher for HashAlgo {
     type Type = HashedData;
 
     fn hash_pair(left: &Self::Type, right: &Self::Type) -> Self::Type {
-        let mut hasher = HashAlgoStream::new();
-        hasher.write(left);
-        hasher.write(right);
-        hasher.finalize().into()
+        let mut h = Blake2bHasher::new();
+        Digest::update(&mut h, left);
+        Digest::update(&mut h, right);
+        h.finalize_reset().into()
     }
 
     fn hash_single(data: &Self::Type) -> Self::Type {
-        let mut hasher = HashAlgoStream::new();
-        hasher.write(data);
-        hasher.finalize().into()
+        let mut h = Blake2bHasher::new();
+        Digest::update(&mut h, data);
+        h.finalize_reset().into()
     }
 }

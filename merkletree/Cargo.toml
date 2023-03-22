@@ -15,6 +15,7 @@ itertools.workspace = true
 thiserror.workspace = true
 
 fixed-hash = "0.8.0"
+blake2 = "0.10"
 
 [dev-dependencies]
 test-utils = {path = '../test-utils'}

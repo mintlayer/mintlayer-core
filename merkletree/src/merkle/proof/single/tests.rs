@@ -17,7 +17,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
-    internal::{hash_data, HashAlgoStream, HashedData},
+    internal::{hash_data, HashAlgo, HashedData},
     proof::single::SingleProofNodes,
     tree::MerkleTree,
 };
@@ -31,7 +31,7 @@ fn single_proof_one_leaf() {
     let v0 = hash_data(HashedData::zero());
 
     let leaves = vec![v0];
-    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let leaf_index = 0;
     let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
@@ -78,7 +78,7 @@ fn single_proof_eight_leaves(
     #[case] branch: &[usize],
 ) {
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let p = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(
@@ -106,7 +106,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     for (leaf_index, _) in leaves.iter().enumerate() {
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
@@ -137,7 +137,7 @@ fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_c
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::<HashedData, HashAlgoStream>::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     for leaf_index in 0..leaf_count {
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
