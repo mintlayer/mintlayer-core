@@ -34,7 +34,7 @@ fn merkletree_basic_two_leaf_node() {
     test_hasher.write(v1);
     test_hasher.write(v2);
 
-    assert_eq!(t.root(), test_hasher.finalize().into());
+    assert_eq!(t.root(), test_hasher.finalize());
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn merkletree_basic_four_leaf_node() {
 
     let res = node00.finalize();
 
-    assert_eq!(t.root(), res.into());
+    assert_eq!(t.root(), res);
 }
 
 #[test]
@@ -114,12 +114,12 @@ fn merkletree_basic_eight_leaf_node() {
     let n11 = node11.finalize();
 
     let mut node00 = HashAlgo::new();
-    node00.write(HashedData::from(n10));
-    node00.write(HashedData::from(n11));
+    node00.write(n10);
+    node00.write(n11);
 
     let res = node00.finalize();
 
-    assert_eq!(t.root(), HashedData::from(res));
+    assert_eq!(t.root(), res);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn merkletree_with_arbitrary_length_2() {
     test_hasher.write(v1);
     test_hasher.write(v2);
 
-    assert_eq!(t.root(), test_hasher.finalize().into());
+    assert_eq!(t.root(), test_hasher.finalize());
 }
 
 #[test]
@@ -162,7 +162,7 @@ fn merkletree_with_arbitrary_length_3() {
 
     let res = node00.finalize();
 
-    assert_eq!(t.root(), res.into());
+    assert_eq!(t.root(), res);
 }
 
 #[test]
@@ -217,7 +217,7 @@ fn merkletree_with_arbitrary_length_5() {
 
     let res = node00.finalize();
 
-    assert_eq!(t.root(), res.into());
+    assert_eq!(t.root(), res);
 }
 
 #[test]
