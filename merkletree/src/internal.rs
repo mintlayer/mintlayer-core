@@ -27,7 +27,6 @@ type Blake2bHasher = blake2::Blake2b<typenum::U32>;
 #[derive(Clone)]
 pub struct HashAlgo(Blake2bHasher);
 
-#[cfg(test)]
 impl HashAlgo {
     pub fn new() -> Self {
         Self(Blake2bHasher::new())
@@ -42,7 +41,6 @@ impl HashAlgo {
     }
 }
 
-#[cfg(test)]
 pub fn hash_data<T: AsRef<[u8]> + Clone>(data: T) -> HashedData {
     let mut h = Blake2bHasher::new();
     Digest::update(&mut h, data);

@@ -16,6 +16,7 @@
 mod merkle;
 pub use merkle::*;
 
+#[cfg(test)]
 mod internal;
 
 #[cfg(test)]
