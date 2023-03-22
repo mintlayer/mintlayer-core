@@ -37,7 +37,7 @@ impl<T, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> IncrementalPaddin
     }
 }
 
-impl<T: Copy, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
+impl<T: Clone, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
     for IncrementalPaddingIterator<T, I, F>
 {
     type Item = T;
@@ -52,15 +52,16 @@ impl<T: Copy, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
                 {
                     None
                 } else {
-                    let res = (self.padding_function)(&self.last_value.expect("Never at zero"));
+                    let res =
+                        (self.padding_function)(&self.last_value.clone().expect("Never at zero"));
                     self.current_index += 1;
-                    self.last_value = Some(res);
+                    self.last_value = Some(res.clone());
                     Some(res)
                 }
             }
             Some(leaf) => {
                 self.current_index += 1;
-                self.last_value = Some(leaf);
+                self.last_value = Some(leaf.clone());
                 Some(leaf)
             }
         }

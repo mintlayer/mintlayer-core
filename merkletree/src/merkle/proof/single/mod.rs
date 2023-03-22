@@ -42,7 +42,7 @@ impl<T, H> Clone for SingleProofNodes<'_, T, H> {
     }
 }
 
-impl<'a, T: Copy, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
     /// Creates a proof for a leaf by its index in the lowest level (the tip).
     /// A proof doesn't contain the root.
     pub fn from_tree_leaf(
@@ -82,7 +82,7 @@ impl<'a, T: Copy, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
     }
 
     pub fn into_values(self) -> SingleProofHashes<T, H> {
-        let proof = self.branch.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
+        let proof = self.branch.into_iter().map(|node| node.hash().clone()).collect::<Vec<_>>();
         let leaf_abs_index = self.leaf.into_position().position().1 as u32;
         SingleProofHashes {
             leaf_index_in_level: leaf_abs_index,

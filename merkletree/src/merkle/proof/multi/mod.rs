@@ -82,7 +82,7 @@ fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
         .collect()
 }
 
-impl<'a, T: Copy, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
     pub fn from_tree_leaves(
         tree: &'a MerkleTree<T, H>,
         leaves_indices: &[usize],
@@ -194,7 +194,7 @@ impl<'a, T: Copy, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
 
     pub fn into_values(self) -> MultiProofHashes<T, H> {
         MultiProofHashes {
-            nodes: self.nodes.into_iter().map(|n| (n.abs_index(), *n.hash())).collect(),
+            nodes: self.nodes.into_iter().map(|n| (n.abs_index(), n.hash().clone())).collect(),
             tree_leaf_count: self.proof_leaves[0].tree().leaf_count(),
             _phantom: std::marker::PhantomData,
         }
@@ -213,7 +213,7 @@ pub struct MultiProofHashes<T, H> {
     _phantom: std::marker::PhantomData<H>,
 }
 
-impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
+impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
     pub fn nodes(&self) -> &BTreeMap<usize, T> {
         &self.nodes
     }
@@ -227,7 +227,10 @@ impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
         tree_size: TreeSize,
         input: BTreeMap<&usize, &T>,
     ) -> BTreeMap<usize, T> {
-        let mut result = input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, T>>();
+        let mut result = input
+            .into_iter()
+            .map(|(a, b)| (a.clone(), b.clone()))
+            .collect::<BTreeMap<usize, T>>();
         for (index_l, index_r) in tree_size.iter_pairs_indices() {
             if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
@@ -302,7 +305,7 @@ impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
         // Note: This can be made more efficient by marking "hashed" nodes and skipping them,
         // but we don't care about performance here. We care more about security.
         for (leaf_index, leaf_hash) in &leaves {
-            let mut hash = *leaf_hash;
+            let mut hash = leaf_hash.clone();
             let mut curr_node_pos = NodePosition::from_position(tree_size, 0, *leaf_index)
                 .expect("At level zero, leave index be valid");
 
@@ -313,7 +316,7 @@ impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
                 let sibling_index =
                     curr_node_pos.sibling().expect("This cannot be root").abs_index();
                 let sibling = match all_nodes.get(&sibling_index) {
-                    Some(sibling) => *sibling,
+                    Some(sibling) => sibling.clone(),
                     None => {
                         return Err(MerkleProofVerificationError::RequiredNodeMissing(
                             sibling_index,
@@ -328,7 +331,7 @@ impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
 
                 // move to the next level
                 curr_node_pos = curr_node_pos.parent().expect(err_msg);
-                hash = parent_hash;
+                hash = parent_hash.clone();
 
                 // If the next iteration is going to be the root, check if the root hash is correct and exit the inner loop
                 if curr_node_pos.node_kind().is_root() {

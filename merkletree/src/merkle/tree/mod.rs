@@ -58,9 +58,9 @@ impl<T: Debug, H> Debug for MerkleTree<T, H> {
     }
 }
 
-impl<T: Copy, H> MerkleTree<T, H> {
+impl<T: Clone, H> MerkleTree<T, H> {
     pub fn root(&self) -> T {
-        *self.tree.last().expect("By design, at least one element must exist")
+        self.tree.last().cloned().expect("By design, at least one element must exist")
     }
 
     pub fn total_node_count(&self) -> TreeSize {
@@ -92,7 +92,7 @@ impl<T: Copy, H> MerkleTree<T, H> {
         )?
         .abs_index();
 
-        Some(self.tree[index_in_tree])
+        Some(self.tree[index_in_tree].clone())
     }
 
     pub fn node_from_bottom(
@@ -114,15 +114,7 @@ impl<T: Copy, H> MerkleTree<T, H> {
     }
 }
 
-// TODO: attempt to get rid of Copy and replace it with Clone
-impl<T: Copy, H: PairHasher<Type = T>> MerkleTree<T, H> {
-    // pub(super) fn hash_pair(left: &H256, right: &H256) -> H256 {
-    //     let mut hasher = DefaultHashAlgoStream::new();
-    //     hasher.write(left.as_bytes());
-    //     hasher.write(right.as_bytes());
-    //     H256::from(hasher.finalize())
-    // }
-
+impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
     fn create_tree_from_padded_leaves(
         padded_leaves: impl IntoIterator<Item = T>,
     ) -> Result<Vec<T>, MerkleTreeFormError> {
@@ -228,7 +220,7 @@ impl<'a, T, H> Node<'a, T, H> {
     }
 }
 
-impl<'a, T: Copy, H: PairHasher<Type = T>> Node<'a, T, H> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     pub fn into_position(self) -> NodePosition {
         NodePosition::from_abs_index(self.tree().total_node_count(), self.absolute_index)
             .expect("Should never fail since the index is transitively valid")
@@ -278,7 +270,7 @@ impl<T: Debug, H> Debug for MerkleTreeNodeParentIterator<'_, T, H> {
     }
 }
 
-impl<'a, T: Copy, H: PairHasher<Type = T>> Iterator for MerkleTreeNodeParentIterator<'a, T, H> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> Iterator for MerkleTreeNodeParentIterator<'a, T, H> {
     type Item = Node<'a, T, H>;
 
     fn next(&mut self) -> Option<Node<'a, T, H>> {
