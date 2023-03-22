@@ -123,6 +123,7 @@ impl Display for TreeSize {
 
 #[cfg(test)]
 mod tests {
+    use crate::rand_tools::{make_seedable_rng, Seed};
     use rand::Rng;
     use rstest::rstest;
 
@@ -130,9 +131,9 @@ mod tests {
 
     #[rstest]
     #[trace]
-    #[case(test_utils::random::Seed::from_entropy())]
-    fn construction_from_tree_size(#[case] seed: test_utils::random::Seed) {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
+    #[case(Seed::from_entropy())]
+    fn construction_from_tree_size(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
 
         // select simple values
         assert_eq!(TreeSize::try_from(0), Err(TreeSizeError::ZeroSize));

@@ -16,9 +16,9 @@
 // We need lazy evaluations of bit shifting because it could overflow in cases
 #![allow(clippy::unnecessary_lazy_evaluations)]
 
+use crate::rand_tools::{make_seedable_rng, Seed};
 use rand::seq::SliceRandom;
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::internal::{hash_data, HashAlgo, HashedData};
 

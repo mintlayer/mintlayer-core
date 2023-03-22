@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::rand_tools::{make_seedable_rng, Seed};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
     internal::{hash_data, HashAlgo, HashedData},

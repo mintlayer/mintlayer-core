@@ -17,3 +17,6 @@ mod merkle;
 pub use merkle::*;
 
 mod internal;
+
+#[cfg(test)]
+mod rand_tools;

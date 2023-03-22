@@ -1943,8 +1943,8 @@ dependencies = [
  "fixed-hash",
  "itertools",
  "rand",
+ "rand_chacha",
  "rstest",
- "test-utils",
  "thiserror",
 ]
 

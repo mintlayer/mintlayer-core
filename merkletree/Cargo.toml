@@ -15,7 +15,6 @@ fixed-hash = "0.8"
 blake2 = "0.10"
 
 [dev-dependencies]
-test-utils = {path = '../test-utils'}
-
 rstest.workspace = true
 rand = "0.8"
+rand_chacha = "0.3"
