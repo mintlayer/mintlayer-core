@@ -123,10 +123,10 @@ impl Display for TreeSize {
 
 #[cfg(test)]
 mod tests {
+    use rand::Rng;
     use rstest::rstest;
 
     use super::*;
-    use crypto::random::Rng;
 
     #[rstest]
     #[trace]

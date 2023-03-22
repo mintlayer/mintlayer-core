@@ -8,15 +8,14 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = '../crypto'}
-
 itertools.workspace = true
 thiserror.workspace = true
 
-fixed-hash = "0.8.0"
+fixed-hash = "0.8"
 blake2 = "0.10"
 
 [dev-dependencies]
 test-utils = {path = '../test-utils'}
 
 rstest.workspace = true
+rand = "0.8"
