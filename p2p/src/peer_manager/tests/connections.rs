@@ -23,7 +23,7 @@ use tokio::time::timeout;
 
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
-    net::types::Role,
+    net::types::{services::Service, Role},
     peer_manager::tests::{get_connected_peers, run_peer_manager},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
@@ -44,7 +44,7 @@ use crate::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
             DefaultNetworkingService,
         },
-        types::{PeerInfo, PubSubTopic},
+        types::PeerInfo,
         ConnectivityService, NetworkingService,
     },
     peer_manager::{self, tests::make_peer_manager},
@@ -452,9 +452,7 @@ async fn inbound_connection_too_many_peers_tcp() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -479,9 +477,7 @@ async fn inbound_connection_too_many_peers_channels() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })
@@ -506,9 +502,7 @@ async fn inbound_connection_too_many_peers_noise() {
                     network: *config.magic_bytes(),
                     version: common::primitives::semver::SemVer::new(0, 1, 0),
                     user_agent: mintlayer_core_user_agent(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 },
             )
         })

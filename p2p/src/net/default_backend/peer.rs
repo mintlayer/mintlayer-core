@@ -113,7 +113,7 @@ where
                 let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
                     version,
                     network,
-                    subscriptions,
+                    services,
                     receiver_address,
                     handshake_nonce,
                     user_agent,
@@ -131,7 +131,7 @@ where
                         PeerEvent::PeerInfoReceived {
                             network,
                             version,
-                            subscriptions,
+                            services,
                             receiver_address,
                             handshake_nonce,
                             user_agent,
@@ -145,7 +145,7 @@ where
                             version: *self.chain_config.version(),
                             network: *self.chain_config.magic_bytes(),
                             user_agent: self.p2p_config.user_agent.clone(),
-                            subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
+                            services: (*self.p2p_config.node_type).into(),
                             receiver_address: self.receiver_address.clone(),
                         },
                     ))
@@ -157,7 +157,7 @@ where
                         version: *self.chain_config.version(),
                         network: *self.chain_config.magic_bytes(),
                         user_agent: self.p2p_config.user_agent.clone(),
-                        subscriptions: (*self.p2p_config.node_type.as_ref()).into(),
+                        services: (*self.p2p_config.node_type).into(),
                         receiver_address: self.receiver_address.clone(),
                         handshake_nonce,
                     }))
@@ -167,7 +167,7 @@ where
                     version,
                     network,
                     user_agent,
-                    subscriptions,
+                    services,
                     receiver_address,
                 })) = self.socket.recv().await
                 else {
@@ -181,7 +181,7 @@ where
                             network,
                             version,
                             user_agent,
-                            subscriptions,
+                            services,
                             receiver_address,
                             handshake_nonce,
                         },
@@ -248,20 +248,18 @@ impl<T: TransportSocket> Drop for Peer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::types::services::Service;
     use crate::testing_utils::{
         test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportNoise,
         TestTransportTcp,
     };
     use crate::{
         message,
-        net::{
-            default_backend::{
-                transport::{
-                    MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
-                },
-                types,
+        net::default_backend::{
+            transport::{
+                MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket, TransportListener,
             },
-            types::PubSubTopic,
+            types,
         },
     };
     use chainstate::Locator;
@@ -302,9 +300,7 @@ mod tests {
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
-                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                    .into_iter()
-                    .collect(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }))
@@ -318,9 +314,7 @@ mod tests {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),
-                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                    .into_iter()
-                    .collect(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }
@@ -378,9 +372,7 @@ mod tests {
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
                     user_agent: p2p_config.user_agent.clone(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     receiver_address: None,
                 }
             ))
@@ -396,9 +388,7 @@ mod tests {
                     network: *chain_config.magic_bytes(),
                     version: *chain_config.version(),
                     user_agent: p2p_config.user_agent.clone(),
-                    subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                        .into_iter()
-                        .collect(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
                     receiver_address: None,
                     handshake_nonce: 1,
                 }
@@ -453,9 +443,7 @@ mod tests {
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
-                subscriptions: [PubSubTopic::Blocks, PubSubTopic::Transactions]
-                    .into_iter()
-                    .collect(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }))

@@ -66,8 +66,6 @@ from test_framework.messages import (
     msg_version,
     MSG_WTX,
     msg_wtxidrelay,
-    NODE_NETWORK,
-    NODE_WITNESS,
     sha256,
 )
 from test_framework.util import (
@@ -81,8 +79,12 @@ logger = logging.getLogger("TestFramework.p2p")
 # The P2P user agent string that this test framework sends in its `handshake` message
 P2P_USER_AGENT = "PythonTesterP2P"
 
-# The services that this test framework offers in its `version` message
-P2P_SERVICES = NODE_NETWORK | NODE_WITNESS
+SERVICE_TRANSACTIONS = 1 << 0
+SERVICE_BLOCKS = 1 << 1
+SERVICE_PEER_ADDRESSES = 1 << 2
+
+# The services that this test framework offers in its `handshake` message
+P2P_SERVICES = SERVICE_TRANSACTIONS | SERVICE_BLOCKS | SERVICE_PEER_ADDRESSES
 
 # Maximum message size
 MAX_MESSAGE_SIZE = 10 * 1024 * 1024
@@ -316,7 +318,7 @@ class P2PInterface(P2PConnection):
         self.ping_counter = 1
 
         # The network services received from the peer
-        self.nServices = 0
+        self.services = 0
 
         self.support_addrv2 = support_addrv2
 
@@ -335,7 +337,7 @@ class P2PInterface(P2PConnection):
                     },
                     "network": [0xaa, 0xbb, 0xcc, 0xdd],
                     "user_agent": P2P_USER_AGENT,
-                    "subscriptions": ["Transactions", "Blocks", "PeerAddresses"],
+                    "services": services,
                     "receiver_address": None,
                     "handshake_nonce": 123,
                 }
@@ -385,7 +387,9 @@ class P2PInterface(P2PConnection):
     def on_close(self):
         pass
 
-    def on_handshake(self, message): pass
+    def on_handshake(self, message):
+        self.services = message["handshake"]["HelloAck"]["services"]
+
     def on_ping_request(self, message): pass
     def on_ping_response(self, message): pass
     def on_header_list_request(self, message): pass

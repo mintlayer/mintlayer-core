@@ -161,7 +161,7 @@ mod tests {
         // random invalid
         let attempts_count: usize = 1000;
         for _ in 0..attempts_count {
-            let sz = rng.gen::<usize>() % MAX_TREE_SIZE;
+            let sz = rng.gen_range(1..MAX_TREE_SIZE);
             if (sz + 1).is_power_of_two() {
                 assert_eq!(TreeSize::try_from(sz), Ok(TreeSize(sz)));
                 assert_eq!(TreeSize::from_value(sz), Ok(TreeSize(sz)));

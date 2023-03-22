@@ -48,8 +48,8 @@ use crate::{
     },
     net::{
         default_backend::transport::TransportAddress,
-        types::{ConnectivityEvent, Role},
-        types::{PeerInfo, PubSubTopic},
+        types::PeerInfo,
+        types::{services::Service, ConnectivityEvent, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     types::{
@@ -450,7 +450,7 @@ where
 
         log::info!("new peer accepted, peer_id: {peer_id}, address: {address:?}, role: {role:?}");
 
-        if info.subscriptions.contains(&PubSubTopic::PeerAddresses) {
+        if info.services.has_service(Service::PeerAddresses) {
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 

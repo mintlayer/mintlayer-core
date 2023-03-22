@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
-    config::P2pConfig,
+    config::{NodeType, P2pConfig},
     event::PeerManagerEvent,
     expect_recv,
     message::{PeerManagerMessage, PingRequest, PingResponse},
@@ -96,7 +96,7 @@ async fn ping_timeout() {
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),
-                subscriptions: Default::default(),
+                services: NodeType::Full.into(),
             },
             receiver_address: None,
         })

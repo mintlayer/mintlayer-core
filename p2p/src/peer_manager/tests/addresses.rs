@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
+    config::NodeType,
     net::{
         default_backend::{
             transport::{MpscChannelTransport, TransportAddress},
@@ -61,7 +62,7 @@ where
         network: *config.magic_bytes(),
         version: *config.version(),
         user_agent: mintlayer_core_user_agent(),
-        subscriptions: BTreeSet::new(),
+        services: NodeType::Full.into(),
     };
     pm.accept_connection(address, Role::Inbound, peer_info, None);
     assert_eq!(pm.peers.len(), 1);

@@ -36,11 +36,13 @@ use crate::{
             constants::ANNOUNCEMENT_MAX_SIZE,
             transport::{TransportListener, TransportSocket},
         },
-        types::{ConnectivityEvent, PubSubTopic, SyncingEvent},
+        types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     types::peer_id::PeerId,
 };
+
+use super::types::services::Service;
 
 #[derive(Debug)]
 pub struct DefaultNetworkingService<T: TransportSocket>(PhantomData<T>);
@@ -209,8 +211,8 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
         }
 
         let topic = match &announcement {
-            Announcement::Block(_) => PubSubTopic::Blocks,
-            Announcement::Transaction(_) => PubSubTopic::Transactions,
+            Announcement::Block(_) => Service::Blocks,
+            Announcement::Transaction(_) => Service::Transactions,
         };
 
         self.command_sender

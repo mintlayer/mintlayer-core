@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, time::Duration};
+use std::time::Duration;
 
 use common::primitives::user_agent::UserAgent;
 use utils::make_config_setting;
 
-use crate::net::types::PubSubTopic;
+use crate::net::types::services::{Service, Services};
 
 make_config_setting!(MaxInboundConnections, usize, 128);
 make_config_setting!(BanThreshold, u32, 100);
@@ -44,20 +44,20 @@ pub enum NodeType {
     /// A node that doesn't subscribe to any events.
     ///
     /// This node type isn't useful outside of the tests.
+    #[cfg(feature = "testing_utils")]
     Inactive,
 }
 
-impl From<NodeType> for BTreeSet<PubSubTopic> {
+impl From<NodeType> for Services {
     fn from(t: NodeType) -> Self {
         match t {
-            NodeType::Full => {
-                [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
-                    .into_iter()
-                    .collect()
-            }
-            NodeType::BlocksOnly => [PubSubTopic::Blocks].into_iter().collect(),
-            NodeType::DnsServer => [PubSubTopic::PeerAddresses].into_iter().collect(),
-            NodeType::Inactive => BTreeSet::new(),
+            NodeType::Full => [Service::Blocks, Service::Transactions, Service::PeerAddresses]
+                .as_slice()
+                .into(),
+            NodeType::BlocksOnly => [Service::Blocks].as_slice().into(),
+            NodeType::DnsServer => [Service::PeerAddresses].as_slice().into(),
+            #[cfg(feature = "testing_utils")]
+            NodeType::Inactive => [].as_slice().into(),
         }
     }
 }

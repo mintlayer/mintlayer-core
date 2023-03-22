@@ -17,10 +17,7 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{sync::mpsc, time::timeout};
@@ -42,7 +39,10 @@ use crate::{
             transport::{TransportListener, TransportSocket},
             types::{Command, Event, Message, PeerEvent},
         },
-        types::{ConnectivityEvent, PeerInfo, PubSubTopic, SyncingEvent},
+        types::{
+            services::{Service, Services},
+            ConnectivityEvent, PeerInfo, SyncingEvent,
+        },
         Announcement,
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
@@ -54,7 +54,7 @@ use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
 struct PeerContext {
     handle: tokio::task::JoinHandle<()>,
 
-    subscriptions: BTreeSet<PubSubTopic>,
+    services: Services,
 
     /// Channel used to send messages to the peer's event loop.
     ///
@@ -214,14 +214,14 @@ where
     /// Sends the announcement to all peers.
     ///
     /// It is not an error if there are no peers that subscribed to the related topic.
-    fn announce_data(&mut self, topic: PubSubTopic, message: Vec<u8>) -> crate::Result<()> {
+    fn announce_data(&mut self, topic: Service, message: Vec<u8>) -> crate::Result<()> {
         let announcement = Announcement::decode_all(&mut &message[..])?;
 
         // Send the message to peers in pseudorandom order.
         let mut peers: Vec<_> = self
             .peers
             .iter()
-            .filter(|(_peer_id, peer)| peer.subscriptions.contains(&topic))
+            .filter(|(_peer_id, peer)| peer.services.has_service(topic))
             .collect();
         peers.shuffle(&mut make_pseudo_rng());
 
@@ -387,7 +387,7 @@ where
             return Ok(());
         }
 
-        let subscriptions = peer_info.subscriptions.clone();
+        let services = peer_info.services;
 
         match peer_role {
             PeerRole::Outbound { handshake_nonce: _ } => {
@@ -414,7 +414,7 @@ where
             peer_id,
             PeerContext {
                 handle,
-                subscriptions,
+                services,
                 tx,
                 was_accepted: Default::default(),
             },
@@ -495,7 +495,7 @@ where
             PeerEvent::PeerInfoReceived {
                 network,
                 version,
-                subscriptions,
+                services,
                 receiver_address,
                 handshake_nonce,
                 user_agent,
@@ -507,7 +507,7 @@ where
                     network,
                     version,
                     user_agent,
-                    subscriptions,
+                    services,
                 },
                 receiver_address,
             ),

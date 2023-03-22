@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::{transport::NoiseTcpTransport, *};
+use crate::config::NodeType;
 use crate::error::DialError;
 use crate::testing_utils::{
     test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportTcp,
@@ -67,12 +68,7 @@ where
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
-        assert_eq!(
-            peer_info.subscriptions,
-            [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
-                .into_iter()
-                .collect()
-        );
+        assert_eq!(peer_info.services, NodeType::Full.into());
     } else {
         panic!("invalid event received");
     }
@@ -257,12 +253,7 @@ where
         assert_eq!(peer_info.network, *config.magic_bytes());
         assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
-        assert_eq!(
-            peer_info.subscriptions,
-            [PubSubTopic::Blocks, PubSubTopic::Transactions, PubSubTopic::PeerAddresses]
-                .into_iter()
-                .collect()
-        );
+        assert_eq!(peer_info.services, NodeType::Full.into());
     } else {
         panic!("invalid event received");
     }
