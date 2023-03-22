@@ -96,8 +96,8 @@ impl PoSData {
         &self.stake_pool_id
     }
 
-    pub fn compact_target(&self) -> &Compact {
-        &self.compact_target
+    pub fn compact_target(&self) -> Compact {
+        self.compact_target
     }
 
     pub fn vrf_data(&self) -> &VRFReturn {

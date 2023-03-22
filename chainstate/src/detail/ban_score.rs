@@ -289,6 +289,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::PoSAccountingError(err) => err.ban_score(),
             ConsensusPoSError::RandomnessError(err) => err.ban_score(),
             ConsensusPoSError::PoolDataNotFound(_) => 0,
+            ConsensusPoSError::InvalidTarget(_) => 100,
         }
     }
 }

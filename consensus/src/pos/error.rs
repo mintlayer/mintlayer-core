@@ -47,4 +47,6 @@ pub enum ConsensusPoSError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS randomness error: `{0}`")]
     RandomnessError(#[from] PoSRandomnessError),
+    #[error("Invalid target value: `{0:?}`")]
+    InvalidTarget(Compact),
 }

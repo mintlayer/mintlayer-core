@@ -32,6 +32,6 @@ pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use mlt::Mlt;
-pub use pos::{DelegationId, PoolId};
+pub use pos::{DelegationId, PoSChainConfig, create_test_pos_config, PoolId};
 pub use pow::PoWChainConfig;
 pub use upgrades::*;

@@ -15,6 +15,7 @@
 
 pub mod error;
 pub mod kernel;
+mod target;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
@@ -24,7 +25,7 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockHeader},
         config::EpochIndex,
-        ChainConfig, TxOutput,
+        ChainConfig, TxOutput, PoSChainConfig,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
@@ -44,9 +45,10 @@ pub fn check_pos_hash(
     block_timestamp: BlockTimestamp,
     pool_balance: Amount,
 ) -> Result<(), ConsensusPoSError> {
-    let target: Uint256 = (*pos_data.compact_target())
+    let target: Uint256 = pos_data
+        .compact_target()
         .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.compact_target()))?;
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(pos_data.compact_target()))?;
 
     let hash: Uint256 = PoSRandomness::from_block(
         epoch_index,
@@ -96,6 +98,7 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
 
 pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
+    pos_config: &PoSChainConfig,
     header: &BlockHeader,
     pos_data: &PoSData,
     block_index_handle: &H,
@@ -107,6 +110,15 @@ where
     U: UtxosView,
     P: PoSAccountingView,
 {
+    let target =
+        target::calculate_target_required(chain_config, pos_config, header, block_index_handle)?;
+
+    // FIXME: add test for a block with invalid target
+    utils::ensure!(
+        target == pos_data.compact_target(),
+        ConsensusPoSError::InvalidTarget(pos_data.compact_target())
+    );
+
     let prev_block_index = block_index_handle
         .get_gen_block_index(header.prev_block_id())?
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;

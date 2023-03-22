@@ -405,7 +405,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -428,7 +428,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -453,7 +453,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -474,7 +474,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -539,7 +539,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         valid_pos_data.kernel_witness().to_owned(),
         random_pool_id,
         valid_pos_data.vrf_data().clone(),
-        *valid_pos_data.compact_target(),
+        valid_pos_data.compact_target(),
     );
 
     let res = tf

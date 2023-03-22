@@ -18,7 +18,7 @@ use common::{
     chain::{
         block::{BlockHeader, ConsensusData},
         config::ChainConfig,
-        PoWStatus, RequiredConsensus,
+        PoSChainConfig, PoWStatus, RequiredConsensus,
     },
     primitives::Idable,
 };
@@ -116,6 +116,8 @@ where
     U: UtxosView,
     P: PoSAccountingView,
 {
+    let pos_config = common::chain::create_test_pos_config();
+
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {
             Err(ConsensusVerificationError::ConsensusTypeMismatch(
@@ -124,6 +126,7 @@ where
         }
         ConsensusData::PoS(pos_data) => check_proof_of_stake(
             chain_config,
+            &pos_config,
             header,
             pos_data,
             block_index_handle,
