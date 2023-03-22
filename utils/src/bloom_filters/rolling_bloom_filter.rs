@@ -21,25 +21,36 @@ use crypto::random::Rng;
 
 use super::bloom_filter::BloomFilter;
 
+/// Using values greater than 3 would be slower and may break the code.
+const SUBFILTER_COUNT: usize = 3;
+
 /// RollingBloomFilter is a probabilistic set of the most recently inserted items
 /// with the specified number of items and expected false positive rate.
 ///
 /// It works by constructing 3 smaller bloom filters and inserting items until all subfilters are full.
-/// Then that the oldest subfilter is replaced by a new one.
-/// An element is present if it's present in any subfilter.
+/// Then the oldest subfilter is replaced by a new one (with new seed values to prevent persistent false positives).
+/// An element is reported as present if it's present in any subfilter.
+///
+/// Used memory per element (only hashes are stored, so it does not depend on the size of the input elements):
+/// Memory (bytes)  FPP
+/// 3.123           0.001
+/// 4.023           0.0001
+/// 4.920           0.00001
+/// 5.820           0.000001
+
 pub struct RollingBloomFilter<T> {
     /// The list of subfilters that store items.
     /// The oldest subfilter will be replaced by a new empty subfilter when they are full.
-    subfilters: [BloomFilter<T>; 3],
+    subfilters: [BloomFilter<T>; SUBFILTER_COUNT],
 
     /// Currently used subfilter index
     subfilter_index: usize,
 
     /// Number of items added to the current subfilter
-    count_subfilter: usize,
+    subfilter_inserted_count: usize,
 
     /// Maximum number of items that can be added to a subfilter
-    size_subfilter: usize,
+    subfilter_inserted_max: usize,
 
     /// Desired false positive probability in each subfilter
     fpp_subfilter: f64,
@@ -58,38 +69,40 @@ impl<T: Hash> RollingBloomFilter<T> {
 
         // Use the smaller bloom filters to store size/2 of the last items in each.
         // This way we always remember `size..3/2*size` items.
-        let size_per_filter = (size + 1) / 2;
+        let subfilter_inserted_max = (size + 1) / (SUBFILTER_COUNT - 1);
+        assert!(subfilter_inserted_max > 0);
 
         // `fpp_per_filter` must be derived from `fpp` so that the probability of being detected in any subfilter is about `fpp`.
         // Since each subfilter can be considered independent, it is about (1 - p)^3,
         // which can be approximated by 1-3*p (if p is small).
         // As a result, the required ffp per filter should be about fpp / 3.0.
-        let fpp_per_filter = fpp / 3.0;
+        let fpp_subfilter = fpp / SUBFILTER_COUNT as f64;
 
         RollingBloomFilter {
             subfilters: [
-                BloomFilter::new(size_per_filter, fpp_per_filter, rng),
-                BloomFilter::new(size_per_filter, fpp_per_filter, rng),
-                BloomFilter::new(size_per_filter, fpp_per_filter, rng),
+                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
+                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
+                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
             ],
             subfilter_index: 0,
-            count_subfilter: 0,
-            size_subfilter: size_per_filter,
-            fpp_subfilter: fpp_per_filter,
+            subfilter_inserted_count: 0,
+            subfilter_inserted_max,
+            fpp_subfilter,
         }
     }
 
     /// Add item to the rolling bloom filter.
     pub fn insert(&mut self, item: &T, rng: &mut impl Rng) {
+        debug_assert!(self.subfilter_inserted_count < self.subfilter_inserted_max);
         self.subfilters[self.subfilter_index].insert(item);
-        self.count_subfilter += 1;
-        if self.count_subfilter == self.size_subfilter {
+        self.subfilter_inserted_count += 1;
+        if self.subfilter_inserted_count == self.subfilter_inserted_max {
             // The maximum number of items in the current subfilter has been reached.
             // Create a new subfilter with new seeds to get new false positives.
-            self.subfilter_index = (self.subfilter_index + 1) % 3;
+            self.subfilter_index = (self.subfilter_index + 1) % SUBFILTER_COUNT;
             self.subfilters[self.subfilter_index] =
-                BloomFilter::new(self.size_subfilter, self.fpp_subfilter, rng);
-            self.count_subfilter = 0;
+                BloomFilter::new(self.subfilter_inserted_max, self.fpp_subfilter, rng);
+            self.subfilter_inserted_count = 0;
         }
     }
 
