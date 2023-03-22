@@ -75,6 +75,39 @@ fn get_locator(#[case] seed: Seed) {
     });
 }
 
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_locator_from_height(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut btf = TestFramework::builder(&mut rng).build();
+
+        let blocks = rng.gen_range(1000..2000);
+        btf.create_chain(&btf.genesis().get_id().into(), blocks, &mut rng).unwrap();
+
+        for _ in 0..8 {
+            let height = rng.gen_range(1000..blocks) as u64;
+
+            // Check the locator length.
+            let locator = btf.chainstate.get_locator_from_height(height.into()).unwrap();
+            assert_eq!(locator.len(), (height as f64).log2().ceil() as usize + 1);
+
+            // Check the locator headers.
+            assert_eq!(
+                &locator[0],
+                &btf.chainstate.get_block_id_from_height(&height.into()).unwrap().unwrap()
+            );
+            for (i, header) in locator.iter().skip(1).enumerate() {
+                let idx = BlockHeight::from(height) - BlockDistance::new(2i64.pow(i as u32));
+                let expected =
+                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                assert_eq!(&expected, header);
+            }
+        }
+    });
+}
+
 // Check that new blocks (produced after a locator is created) are returned.
 #[rstest]
 #[trace]
