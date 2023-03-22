@@ -206,8 +206,8 @@ impl<T: Eq, H> Eq for Node<'_, T, H> {}
 impl<T, H> Clone for Node<'_, T, H> {
     fn clone(&self) -> Self {
         Self {
-            tree_ref: self.tree_ref.clone(),
-            absolute_index: self.absolute_index.clone(),
+            tree_ref: self.tree_ref,
+            absolute_index: self.absolute_index,
         }
     }
 }

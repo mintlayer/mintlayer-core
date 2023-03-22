@@ -36,7 +36,7 @@ pub struct SingleProofNodes<'a, T, H> {
 impl<T, H> Clone for SingleProofNodes<'_, T, H> {
     fn clone(&self) -> Self {
         Self {
-            leaf: self.leaf.clone(),
+            leaf: self.leaf,
             branch: self.branch.clone(),
         }
     }
