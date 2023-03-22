@@ -20,7 +20,7 @@ use crypto::random::SliceRandom;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
-use crate::interal::{hash_data, HashAlgoStream, HashedData};
+use crate::internal::{hash_data, HashAlgoStream, HashedData};
 
 use super::*;
 

@@ -70,7 +70,7 @@ impl<T: Copy, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
 #[cfg(test)]
 mod tests {
 
-    use crate::interal::{hash_data, HashedData};
+    use crate::internal::{hash_data, HashedData};
 
     use super::*;
 

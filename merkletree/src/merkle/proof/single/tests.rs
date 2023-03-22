@@ -17,7 +17,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 use crate::{
-    interal::{hash_data, HashAlgoStream, HashedData},
+    internal::{hash_data, HashAlgoStream, HashedData},
     proof::single::SingleProofNodes,
     tree::MerkleTree,
 };

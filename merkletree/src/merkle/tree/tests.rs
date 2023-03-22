@@ -16,7 +16,7 @@
 use crypto::hash::StreamHasher;
 
 use super::*;
-use crate::interal::{hash_data, HashAlgoStream, HashedData};
+use crate::internal::{hash_data, HashAlgoStream, HashedData};
 
 #[test]
 fn merkletree_too_small() {
