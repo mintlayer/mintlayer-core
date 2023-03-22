@@ -16,8 +16,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use crypto::random::make_pseudo_rng;
-
-use p2p::utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
+use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
 
 pub fn rolling_bloom_bench(c: &mut Criterion) {
     let mut data = [0u8; 32];

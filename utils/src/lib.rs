@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod blockuntilzero;
+pub mod bloom_filters;
 pub mod config_setting;
 pub mod const_value;
 pub mod counttracker;

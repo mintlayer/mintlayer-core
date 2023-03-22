@@ -95,11 +95,6 @@ impl<T: Hash> RollingBloomFilter<T> {
 
     /// Returns if the item's hash is present in the rolling bloom filter.
     pub fn contains(&self, item: &T) -> bool {
-        for filter in self.subfilters.iter() {
-            if filter.contains(item) {
-                return true;
-            }
-        }
-        false
+        self.subfilters.iter().any(|filter| filter.contains(item))
     }
 }

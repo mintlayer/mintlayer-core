@@ -15,9 +15,11 @@
 
 use std::time::Duration;
 
+use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
+
 use crate::{
     net::types::{self, Role},
-    utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, rate_limiter::RateLimiter},
+    utils::rate_limiter::RateLimiter,
 };
 
 #[derive(Debug)]

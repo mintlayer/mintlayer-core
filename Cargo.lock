@@ -2412,7 +2412,6 @@ dependencies = [
  "chainstate-test-framework",
  "common",
  "consensus",
- "criterion",
  "crypto",
  "futures",
  "hex",
@@ -2425,7 +2424,6 @@ dependencies = [
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
- "probabilistic-collections",
  "rpc",
  "rstest",
  "serde",
@@ -4396,11 +4394,16 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "atomic-traits",
+ "criterion",
+ "crypto",
  "logging",
  "loom",
  "num-traits",
+ "probabilistic-collections",
+ "rstest",
  "slave-pool",
  "static_assertions",
+ "test-utils",
 ]
 
 [[package]]

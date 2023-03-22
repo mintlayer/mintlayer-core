@@ -35,7 +35,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::ensure;
+use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure};
 
 use crate::{
     config::P2pConfig,
@@ -56,10 +56,7 @@ use crate::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
     },
-    utils::{
-        bloom_filters::rolling_bloom_filter::RollingBloomFilter, oneshot_nofail,
-        rate_limiter::RateLimiter,
-    },
+    utils::{oneshot_nofail, rate_limiter::RateLimiter},
 };
 
 use self::{

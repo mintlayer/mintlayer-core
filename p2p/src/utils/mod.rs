@@ -13,6 +13,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod bloom_filters;
 pub mod oneshot_nofail;
 pub mod rate_limiter;
