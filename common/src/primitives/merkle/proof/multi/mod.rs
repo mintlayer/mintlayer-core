@@ -17,18 +17,17 @@ mod ordered_node;
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
     num::NonZeroUsize,
 };
 
 use itertools::Itertools;
 
-use crate::primitives::{
-    merkle::{
-        pos::{node_kind::NodeKind, NodePosition},
-        tree::{tree_size::TreeSize, MerkleTree, Node},
-        MerkleProofVerificationError, MerkleTreeProofExtractionError,
-    },
-    H256,
+use crate::primitives::merkle::{
+    hasher::PairHasher,
+    pos::{node_kind::NodeKind, NodePosition},
+    tree::{tree_size::TreeSize, MerkleTree, Node},
+    MerkleProofVerificationError, MerkleTreeProofExtractionError,
 };
 
 use self::ordered_node::NodeWithAbsOrder;
@@ -42,14 +41,24 @@ use super::{single::SingleProofNodes, verify_result::ProofVerifyResult};
 /// This object is discarded in favor of `MultiProofHashes`, which can be created
 /// using the `MultiProofNodes::into_values()` method.
 #[must_use]
-#[derive(Debug, Clone)]
-pub struct MultiProofNodes<'a> {
+#[derive(Clone)]
+pub struct MultiProofNodes<'a, T, H> {
     /// The leaves where the calculation upwards to the root hash will start
-    proof_leaves: Vec<Node<'a>>,
+    proof_leaves: Vec<Node<'a, T, H>>,
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
-    nodes: Vec<Node<'a>>,
+    nodes: Vec<Node<'a, T, H>>,
     /// The number of leaves in the tree, from which this proof was extracted
     tree_leaf_count: NonZeroUsize,
+}
+
+impl<T: Debug, H> Debug for MultiProofNodes<'_, T, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MultiProofNodes")
+            .field("proof_leaves", &self.proof_leaves)
+            .field("nodes", &self.nodes)
+            .field("tree_leaf_count", &self.tree_leaf_count)
+            .finish()
+    }
 }
 
 /// Ensure the leaves indices are sorted and unique
@@ -73,9 +82,9 @@ fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
         .collect()
 }
 
-impl<'a> MultiProofNodes<'a> {
+impl<'a, T: Copy, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
     pub fn from_tree_leaves(
-        tree: &'a MerkleTree,
+        tree: &'a MerkleTree<T, H>,
         leaves_indices: &[usize],
     ) -> Result<Self, MerkleTreeProofExtractionError> {
         if leaves_indices.is_empty() {
@@ -153,7 +162,7 @@ impl<'a> MultiProofNodes<'a> {
             computed_from_prev_level = proofs_at_level
                 .iter()
                 .map(|n| n.get())
-                .tuple_windows::<(&Node, &Node)>()
+                .tuple_windows::<(&Node<T, H>, &Node<T, H>)>()
                 .filter(|n| n.0.abs_index() % 2 == 0 && n.0.abs_index() + 1 == n.1.abs_index())
                 .map(|(n1, _n2)| n1.parent().expect(parent_err).abs_index())
                 .collect();
@@ -171,11 +180,11 @@ impl<'a> MultiProofNodes<'a> {
         })
     }
 
-    pub fn nodes(&self) -> &[Node<'a>] {
+    pub fn nodes(&self) -> &[Node<'a, T, H>] {
         &self.nodes
     }
 
-    pub fn proof_leaves(&self) -> &[Node<'a>] {
+    pub fn proof_leaves(&self) -> &[Node<'a, T, H>] {
         &self.proof_leaves
     }
 
@@ -183,10 +192,11 @@ impl<'a> MultiProofNodes<'a> {
         self.tree_leaf_count
     }
 
-    pub fn into_values(self) -> MultiProofHashes {
+    pub fn into_values(self) -> MultiProofHashes<T, H> {
         MultiProofHashes {
             nodes: self.nodes.into_iter().map(|n| (n.abs_index(), *n.hash())).collect(),
             tree_leaf_count: self.proof_leaves[0].tree().leaf_count(),
+            _phantom: std::marker::PhantomData,
         }
     }
 }
@@ -195,15 +205,16 @@ impl<'a> MultiProofNodes<'a> {
 /// This struct is supposed to be serialized and stored to be used later, unlike `MultiProofNodes`.
 #[must_use]
 #[derive(Debug, Clone)]
-pub struct MultiProofHashes {
+pub struct MultiProofHashes<T, H> {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
-    nodes: BTreeMap<usize, H256>,
+    nodes: BTreeMap<usize, T>,
     /// The number of leaves in the tree, from which this proof was extracted
     tree_leaf_count: NonZeroUsize,
+    _phantom: std::marker::PhantomData<H>,
 }
 
-impl MultiProofHashes {
-    pub fn nodes(&self) -> &BTreeMap<usize, H256> {
+impl<T: Eq + Copy, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
+    pub fn nodes(&self) -> &BTreeMap<usize, T> {
         &self.nodes
     }
 
@@ -214,10 +225,9 @@ impl MultiProofHashes {
     /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
     fn calculate_missing_nodes(
         tree_size: TreeSize,
-        input: BTreeMap<&usize, &H256>,
-    ) -> BTreeMap<usize, H256> {
-        let mut result =
-            input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, H256>>();
+        input: BTreeMap<&usize, &T>,
+    ) -> BTreeMap<usize, T> {
+        let mut result = input.into_iter().map(|(a, b)| (*a, *b)).collect::<BTreeMap<usize, T>>();
         for (index_l, index_r) in tree_size.iter_pairs_indices() {
             if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
@@ -235,7 +245,7 @@ impl MultiProofHashes {
 
             if node_l.node_kind().is_left() && node_r.node_kind().is_right() {
                 let parent = node_l.parent().expect("Cannot be root because of loop range");
-                let hash = MerkleTree::hash_pair(&result[&index_l], &result[&index_r]);
+                let hash = H::hash_pair(&result[&index_l], &result[&index_r]);
 
                 result.insert(parent.abs_index(), hash);
             }
@@ -250,8 +260,8 @@ impl MultiProofHashes {
     /// circumventing verification by providing a proof of a single node.
     pub fn verify(
         &self,
-        leaves: BTreeMap<usize, H256>,
-        root: H256,
+        leaves: BTreeMap<usize, T>,
+        root: T,
     ) -> Result<ProofVerifyResult, MerkleProofVerificationError> {
         // in case it's a single-node tree, we don't need to verify or hash anything
 
@@ -283,7 +293,7 @@ impl MultiProofHashes {
         }
 
         let all_nodes = self.nodes.iter().chain(leaves.iter()).collect::<BTreeMap<_, _>>();
-        let all_nodes = MultiProofHashes::calculate_missing_nodes(tree_size, all_nodes);
+        let all_nodes = MultiProofHashes::<T, H>::calculate_missing_nodes(tree_size, all_nodes);
 
         // Result is Option<bool> because it must pass through the loop inside at least once; otherwise nothing is checked
         let mut result = ProofVerifyResult::PassedTrivially;
@@ -312,8 +322,8 @@ impl MultiProofHashes {
                 };
                 let parent_hash = match curr_node_pos.node_kind() {
                     NodeKind::Root => panic!("{}", err_msg),
-                    NodeKind::LeftChild => MerkleTree::hash_pair(&hash, &sibling),
-                    NodeKind::RightChild => MerkleTree::hash_pair(&sibling, &hash),
+                    NodeKind::LeftChild => H::hash_pair(&hash, &sibling),
+                    NodeKind::RightChild => H::hash_pair(&sibling, &hash),
                 };
 
                 // move to the next level

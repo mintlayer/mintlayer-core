@@ -15,6 +15,7 @@
 
 mod with_id;
 
+use crypto::hash::StreamHasher;
 pub use with_id::WithId;
 
 use std::fmt::{Debug, Display};
@@ -23,6 +24,8 @@ use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
 use typename::TypeName;
+
+use super::merkle::hasher::PairHasher;
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -159,6 +162,23 @@ impl<T: Idable> Idable for &T {
 pub type DefaultHashAlgo = crypto::hash::Blake2b32;
 pub type DefaultHashAlgoStream = crypto::hash::Blake2b32Stream;
 
+impl PairHasher for DefaultHashAlgoStream {
+    type Type = H256;
+
+    fn hash_pair(left: &Self::Type, right: &Self::Type) -> Self::Type {
+        let mut hasher = DefaultHashAlgoStream::new();
+        hasher.write(left);
+        hasher.write(right);
+        hasher.finalize().into()
+    }
+
+    fn hash_single(data: &Self::Type) -> Self::Type {
+        let mut hasher = DefaultHashAlgoStream::new();
+        hasher.write(data);
+        hasher.finalize().into()
+    }
+}
+
 /// Hash given slice using the default hash
 pub fn default_hash<T: AsRef<[u8]> + Clone>(data: T) -> H256 {
     crypto::hash::hash::<DefaultHashAlgo, _>(&data).into()
@@ -171,7 +191,6 @@ pub fn hash_encoded_to<T: Encode>(value: &T, hasher: &mut DefaultHashAlgoStream)
 
 /// Hash the encoded version of given value using the default hash
 pub fn hash_encoded<T: Encode>(value: &T) -> H256 {
-    use crypto::hash::StreamHasher;
     let mut hasher = DefaultHashAlgoStream::new();
     hash_encoded_to(value, &mut hasher);
     hasher.finalize().into()

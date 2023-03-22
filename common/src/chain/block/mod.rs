@@ -42,7 +42,7 @@ use crate::{
         timestamp::BlockTimestamp,
     },
     primitives::{
-        id::{self, WithId},
+        id::{self, DefaultHashAlgoStream, WithId},
         merkle::{tree::MerkleTree, MerkleTreeFormError},
         Id, Idable, VersionTag, H256,
     },
@@ -77,7 +77,7 @@ fn calculate_generic_merkle_root(
     let hashes: Vec<H256> = iter::once(rewards_hash)
         .chain(body.transactions.iter().map(tx_hasher))
         .collect();
-    let t = MerkleTree::from_leaves(hashes)?;
+    let t = MerkleTree::<H256, DefaultHashAlgoStream>::from_leaves(hashes)?;
     Ok(t.root())
 }
 
