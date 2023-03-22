@@ -82,6 +82,20 @@ fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
         .collect()
 }
 
+impl<'a, T, H> MultiProofNodes<'a, T, H> {
+    pub fn nodes(&self) -> &[Node<'a, T, H>] {
+        &self.nodes
+    }
+
+    pub fn proof_leaves(&self) -> &[Node<'a, T, H>] {
+        &self.proof_leaves
+    }
+
+    pub fn tree_leaf_count(&self) -> NonZeroUsize {
+        self.tree_leaf_count
+    }
+}
+
 impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
     pub fn from_tree_leaves(
         tree: &'a MerkleTree<T, H>,
@@ -180,18 +194,6 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
         })
     }
 
-    pub fn nodes(&self) -> &[Node<'a, T, H>] {
-        &self.nodes
-    }
-
-    pub fn proof_leaves(&self) -> &[Node<'a, T, H>] {
-        &self.proof_leaves
-    }
-
-    pub fn tree_leaf_count(&self) -> NonZeroUsize {
-        self.tree_leaf_count
-    }
-
     pub fn into_values(self) -> MultiProofHashes<T, H> {
         MultiProofHashes {
             nodes: self.nodes.into_iter().map(|n| (n.abs_index(), n.hash().clone())).collect(),
@@ -213,7 +215,7 @@ pub struct MultiProofHashes<T, H> {
     _phantom: std::marker::PhantomData<H>,
 }
 
-impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
+impl<T, H> MultiProofHashes<T, H> {
     pub fn nodes(&self) -> &BTreeMap<usize, T> {
         &self.nodes
     }
@@ -221,7 +223,9 @@ impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
     pub fn tree_leaf_count(&self) -> NonZeroUsize {
         self.tree_leaf_count
     }
+}
 
+impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
     /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
     fn calculate_missing_nodes(
         tree_size: TreeSize,

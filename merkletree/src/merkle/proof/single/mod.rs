@@ -43,6 +43,20 @@ impl<T, H> Clone for SingleProofNodes<'_, T, H> {
 }
 
 impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
+    pub fn into_nodes(self) -> Vec<Node<'a, T, H>> {
+        self.branch
+    }
+
+    pub fn branch(&self) -> &[Node<'a, T, H>] {
+        &self.branch
+    }
+
+    pub fn leaf(&self) -> Node<'a, T, H> {
+        self.leaf
+    }
+}
+
+impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
     /// Creates a proof for a leaf by its index in the lowest level (the tip).
     /// A proof doesn't contain the root.
     pub fn from_tree_leaf(
@@ -90,18 +104,6 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
             _hasher: std::marker::PhantomData,
         }
     }
-
-    pub fn into_nodes(self) -> Vec<Node<'a, T, H>> {
-        self.branch
-    }
-
-    pub fn branch(&self) -> &[Node<'a, T, H>] {
-        &self.branch
-    }
-
-    pub fn leaf(&self) -> Node<'a, T, H> {
-        self.leaf
-    }
 }
 
 /// Same as `SingleProofNodes`, but has only hashes and leaf index in the lowest level.
@@ -127,7 +129,9 @@ impl<T: Eq, H: PairHasher<Type = T>> SingleProofHashes<T, H> {
     pub fn leaf_index_in_level(&self) -> u32 {
         self.leaf_index_in_level
     }
+}
 
+impl<T: Eq, H: PairHasher<Type = T>> SingleProofHashes<T, H> {
     /// Verifies that the given leaf can produce the root's hash.
     pub fn verify(&self, leaf: T, root: T) -> ProofVerifyResult {
         // in case it's a single-node tree, we don't need to verify or hash anything
