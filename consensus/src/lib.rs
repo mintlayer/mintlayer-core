@@ -29,7 +29,10 @@ use common::{
 
 pub use crate::{
     error::ConsensusVerificationError,
-    pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
+    pos::{
+        check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output,
+        target::calculate_target_required,
+    },
     pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError},
     validator::validate_consensus,
 };

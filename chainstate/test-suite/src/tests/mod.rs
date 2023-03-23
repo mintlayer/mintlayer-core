@@ -18,15 +18,11 @@ use std::sync::Mutex;
 
 use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
-use common::chain::Destination;
 use common::{
     chain::{config::create_regtest, signature::inputsig::InputWitness, Block, GenBlock, Genesis},
     primitives::{BlockHeight, Id},
     Uint256,
 };
-use crypto::key::KeyKind;
-use crypto::key::PrivateKey;
-use crypto::random::CryptoRng;
 use crypto::random::Rng;
 use rstest::rstest;
 use serialization::Encode;
@@ -49,6 +45,7 @@ mod nft_transfer;
 mod output_timelock;
 mod pos_accounting_reorg;
 mod pos_processing_tests;
+mod pos_retargeting_tests;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
@@ -61,11 +58,6 @@ mod tx_verifier_disconnect;
 mod helpers;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
-
-fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
-    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    Destination::PublicKey(pub_key)
-}
 
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready

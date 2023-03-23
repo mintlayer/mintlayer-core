@@ -15,7 +15,7 @@
 
 pub mod error;
 pub mod kernel;
-mod target;
+pub mod target;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},

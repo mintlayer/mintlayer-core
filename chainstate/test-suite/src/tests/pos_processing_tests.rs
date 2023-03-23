@@ -15,6 +15,8 @@
 
 use std::num::NonZeroU64;
 
+use super::helpers::new_pub_key_destination;
+
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
     ConnectTransactionError, SpendStakeError,
@@ -64,7 +66,7 @@ fn create_stake_pool_data(
     amount: Amount,
     vrf_pk: VRFPublicKey,
 ) -> StakePoolData {
-    let destination = super::new_pub_key_destination(rng);
+    let destination = new_pub_key_destination(rng);
     StakePoolData::new(
         amount,
         anyonecanspend_address(),

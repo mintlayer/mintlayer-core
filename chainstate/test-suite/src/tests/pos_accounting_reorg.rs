@@ -16,21 +16,26 @@
 use itertools::Itertools;
 use std::num::NonZeroU64;
 
-use super::*;
+use super::helpers::new_pub_key_destination;
+
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
+use chainstate::BlockSource;
 use chainstate_storage::{inmemory::Store, BlockchainStorageWrite, TransactionRw, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, TxInput, TxOutput,
+        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, GenBlock,
+        OutPoint, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
+use crypto::random::Rng;
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
 use pos_accounting::PoSAccountingDeltaData;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 // Block `a` and block `c` have stake pool operation.

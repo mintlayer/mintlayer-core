@@ -13,79 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use super::helpers::block_index_handle_impl::TestBlockIndexHandle;
 
-use chainstate::{BlockSource, PropertyQueryError};
-use chainstate_storage::{BlockchainStorageRead, Transactional};
+use chainstate::BlockSource;
+use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
-use chainstate_types::{BlockIndex, BlockIndexHandle, BlockIndexHistoryIterator, GenBlockIndex};
-use common::{
-    chain::{Block, ChainConfig, GenBlockId},
-    primitives::{Id, Idable, H256},
-};
+use chainstate_types::BlockIndexHistoryIterator;
+use common::primitives::{Id, Idable, H256};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
-
-struct TestBlockIndexHandle<'a, S> {
-    db_tx: S,
-    chain_config: &'a ChainConfig,
-}
-
-impl<'a, S: BlockchainStorageRead> TestBlockIndexHandle<'a, S> {
-    pub fn new(storage: S, chain_config: &'a ChainConfig) -> Self {
-        Self {
-            db_tx: storage,
-            chain_config,
-        }
-    }
-}
-
-impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a, S> {
-    fn get_block_index(
-        &self,
-        _block_id: &Id<Block>,
-    ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-        unimplemented!()
-    }
-
-    fn get_gen_block_index(
-        &self,
-        block_id: &Id<common::chain::GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        match block_id.classify(&self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
-            GenBlockId::Block(id) => self
-                .db_tx
-                .get_block_index(&id)
-                .map(|b| b.map(GenBlockIndex::Block))
-                .map_err(PropertyQueryError::StorageError),
-        }
-    }
-
-    fn get_ancestor(
-        &self,
-        _block_index: &BlockIndex,
-        _ancestor_height: common::primitives::BlockHeight,
-    ) -> Result<GenBlockIndex, PropertyQueryError> {
-        unimplemented!()
-    }
-
-    fn get_block_reward(
-        &self,
-        _block_index: &BlockIndex,
-    ) -> Result<Option<common::chain::block::BlockReward>, PropertyQueryError> {
-        unimplemented!()
-    }
-
-    fn get_epoch_data(
-        &self,
-        _epoch_index: u64,
-    ) -> Result<Option<chainstate_types::EpochData>, PropertyQueryError> {
-        unimplemented!()
-    }
-}
 
 #[rstest]
 #[trace]

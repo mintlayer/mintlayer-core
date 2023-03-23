@@ -17,11 +17,16 @@ use chainstate_test_framework::{anyonecanspend_address, TestFramework, Transacti
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
-        timelock::OutputTimeLock, tokens::OutputValue, Transaction, TxInput, TxOutput,
+        timelock::OutputTimeLock, tokens::OutputValue, Destination, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::{CryptoRng, Rng},
+};
 
+pub mod block_index_handle_impl;
 pub mod in_memory_storage_wrapper;
 
 /// Adds a block with the locked output and returns input corresponding to this output.
@@ -63,4 +68,9 @@ pub fn add_block_with_locked_output(
         TxInput::new(tx_id.into(), 1),
         tx_id,
     )
+}
+
+pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
+    let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    Destination::PublicKey(pub_key)
 }
