@@ -39,12 +39,8 @@ const SUBFILTER_COUNT: usize = 3;
 /// 5.820           0.000001
 
 pub struct RollingBloomFilter<T> {
-    /// The list of subfilters that store items.
-    /// The oldest subfilter will be replaced by a new empty subfilter when they are full.
-    subfilters: [BloomFilter<T>; SUBFILTER_COUNT],
-
-    /// Currently used subfilter index
-    subfilter_index: usize,
+    /// The list of subfilters that store items (newest first, oldest last)
+    subfilters: Vec<BloomFilter<T>>,
 
     /// Number of items added to the current subfilter
     subfilter_inserted_count: usize,
@@ -78,13 +74,11 @@ impl<T: Hash> RollingBloomFilter<T> {
         // As a result, the required ffp per filter should be about fpp / 3.0.
         let fpp_subfilter = fpp / SUBFILTER_COUNT as f64;
 
+        let mut subfilters = Vec::with_capacity(SUBFILTER_COUNT);
+        subfilters.push(BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng));
+
         RollingBloomFilter {
-            subfilters: [
-                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
-                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
-                BloomFilter::new(subfilter_inserted_max, fpp_subfilter, rng),
-            ],
-            subfilter_index: 0,
+            subfilters,
             subfilter_inserted_count: 0,
             subfilter_inserted_max,
             fpp_subfilter,
@@ -94,14 +88,21 @@ impl<T: Hash> RollingBloomFilter<T> {
     /// Add item to the rolling bloom filter.
     pub fn insert(&mut self, item: &T, rng: &mut impl Rng) {
         debug_assert!(self.subfilter_inserted_count < self.subfilter_inserted_max);
-        self.subfilters[self.subfilter_index].insert(item);
+        // Insert the element into the newest subfilter
+        self.subfilters[0].insert(item);
         self.subfilter_inserted_count += 1;
+
+        // Check if the maximum number of items in the current subfilter has been reached
         if self.subfilter_inserted_count == self.subfilter_inserted_max {
-            // The maximum number of items in the current subfilter has been reached.
-            // Create a new subfilter with new seeds to get new false positives.
-            self.subfilter_index = (self.subfilter_index + 1) % SUBFILTER_COUNT;
-            self.subfilters[self.subfilter_index] =
-                BloomFilter::new(self.subfilter_inserted_max, self.fpp_subfilter, rng);
+            // Drop the oldest subfilter
+            if self.subfilters.len() == SUBFILTER_COUNT {
+                self.subfilters.pop();
+            }
+            // Create a new subfilter with new seeds to get new false positives
+            self.subfilters.insert(
+                0,
+                BloomFilter::new(self.subfilter_inserted_max, self.fpp_subfilter, rng),
+            );
             self.subfilter_inserted_count = 0;
         }
     }
