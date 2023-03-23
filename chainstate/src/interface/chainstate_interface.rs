@@ -63,6 +63,9 @@ pub trait ChainstateInterface: Send {
     /// to quickly find a common ancestor between different chains.
     fn get_locator(&self) -> Result<Locator, ChainstateError>;
 
+    /// Returns a locator starting from the specified height.
+    fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError>;
+
     /// Returns a list of block headers starting from the last locator's block that is in the main
     /// chain.
     ///

@@ -94,7 +94,11 @@ async fn valid_request(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     // Process a block to finish the initial block download.
-    tf.make_block_builder().build_and_process().unwrap().unwrap();
+    let block_index = tf.make_block_builder().build_and_process().unwrap().unwrap();
+    let locator = tf
+        .chainstate
+        .get_locator_from_height(block_index.block_height().prev_height().unwrap())
+        .unwrap();
     let (chainstate, mempool) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
 
@@ -109,11 +113,16 @@ async fn valid_request(#[case] seed: Seed) {
 
     handle.send_message(
         peer,
-        SyncMessage::HeaderListRequest(HeaderListRequest::new(Locator::new(Vec::new()))),
+        SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
     );
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
-    assert!(matches!(message, SyncMessage::HeaderListResponse(_)));
+    let headers = match message {
+        SyncMessage::HeaderListResponse(r) => r.into_headers(),
+        m => panic!("Unexpected message: {m:?}"),
+    };
+    assert_eq!(headers.len(), 1);
+    assert_eq!(&headers[0], block_index.block_header());
     handle.assert_no_error().await;
 }

@@ -106,6 +106,10 @@ impl<
         self.deref().get_locator()
     }
 
+    fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError> {
+        self.deref().get_locator_from_height(height)
+    }
+
     fn get_headers(
         &self,
         locator: Locator,

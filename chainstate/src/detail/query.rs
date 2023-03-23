@@ -110,7 +110,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
         let height = best_block_index.block_height();
+        self.get_locator_from_height(height)
+    }
 
+    pub fn get_locator_from_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Locator, PropertyQueryError> {
         let headers = locator_tip_distances()
             .map_while(|dist| height - dist)
             .map(|ht| self.chainstate_ref.get_block_id_by_height(&ht));

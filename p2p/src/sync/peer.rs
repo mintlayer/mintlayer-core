@@ -277,7 +277,8 @@ where
         }
         log::trace!("Received headers: {headers:#?}");
 
-        // We are in sync with this peer.
+        // TODO: Should the empty headers response be treated as misbehavior if we are going to
+        // send a locator starting with the block preceding the tip?
         if headers.is_empty() {
             return Ok(());
         }

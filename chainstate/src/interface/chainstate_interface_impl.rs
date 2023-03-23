@@ -143,6 +143,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn get_locator_from_height(&self, height: BlockHeight) -> Result<Locator, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_locator_from_height(height)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn get_headers(
         &self,
         locator: Locator,
