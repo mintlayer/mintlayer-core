@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,23 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod amount;
-pub mod compact;
-pub mod encoding;
-pub mod error;
-mod hash_encoded;
-pub mod height;
-pub mod id;
-pub mod merkle_tools;
-pub mod semver;
-pub mod signed_amount;
-pub mod time;
-pub mod user_agent;
-pub mod version_tag;
+mod merkle;
+pub use merkle::*;
 
-pub use amount::Amount;
-pub use compact::Compact;
-pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
-pub use height::{BlockDistance, BlockHeight};
-pub use id::{Id, Idable, H256};
-pub use version_tag::VersionTag;
+#[cfg(test)]
+mod internal;
+
+#[cfg(test)]
+mod rand_tools;

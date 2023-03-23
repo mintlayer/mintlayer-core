@@ -15,6 +15,7 @@
 
 mod with_id;
 
+use crypto::hash::StreamHasher;
 pub use with_id::WithId;
 
 use std::fmt::{Debug, Display};
@@ -171,7 +172,6 @@ pub fn hash_encoded_to<T: Encode>(value: &T, hasher: &mut DefaultHashAlgoStream)
 
 /// Hash the encoded version of given value using the default hash
 pub fn hash_encoded<T: Encode>(value: &T) -> H256 {
-    use crypto::hash::StreamHasher;
     let mut hasher = DefaultHashAlgoStream::new();
     hash_encoded_to(value, &mut hasher);
     hasher.finalize().into()

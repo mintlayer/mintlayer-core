@@ -16,18 +16,12 @@
 pub mod padding;
 pub mod tree_size;
 
+use self::{padding::IncrementalPaddingIterator, tree_size::TreeSize};
+use std::fmt::Debug;
+
 use std::num::NonZeroUsize;
 
-use crypto::hash::StreamHasher;
-
-use crate::primitives::{
-    id::{default_hash, DefaultHashAlgoStream},
-    H256,
-};
-
-use self::{padding::IncrementalPaddingIterator, tree_size::TreeSize};
-
-use super::{pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
+use super::{hasher::PairHasher, pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 
 /// Merkle tree in the form of a vector, where the bottom leaves first, from left to right, and the root is
 /// the last element.
@@ -44,55 +38,29 @@ use super::{pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 ///
 /// Given that this is strictly a filled-up binary tree, the number of leaves is always a power of 2, and the total number of
 /// nodes is always 2 * leaves - 1. These are invariants that are always held through type-level checks.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct MerkleTree {
-    tree: Vec<H256>,
+#[derive(Clone)]
+pub struct MerkleTree<T, H> {
+    tree: Vec<T>,
+    _hasher: std::marker::PhantomData<H>,
 }
 
-impl MerkleTree {
-    pub(super) fn hash_pair(left: &H256, right: &H256) -> H256 {
-        let mut hasher = DefaultHashAlgoStream::new();
-        hasher.write(left.as_bytes());
-        hasher.write(right.as_bytes());
-        H256::from(hasher.finalize())
+impl<T: PartialEq, H> PartialEq for MerkleTree<T, H> {
+    fn eq(&self, other: &Self) -> bool {
+        self.tree == other.tree
     }
+}
 
-    fn create_tree_from_padded_leaves(
-        padded_leaves: impl IntoIterator<Item = H256>,
-    ) -> Result<Vec<H256>, MerkleTreeFormError> {
-        let mut tree = padded_leaves.into_iter().collect::<Vec<_>>();
-        if tree.is_empty() {
-            return Err(MerkleTreeFormError::TooSmall(tree.len()));
-        }
-        let steps = tree.len() - 1;
-        tree.reserve(steps); // reserve another tree.len() - 1 elements (the rest of the tree after the leaves)
-        for i in 0..steps {
-            let el = Self::hash_pair(&tree[i * 2], &tree[i * 2 + 1]);
-            tree.push(el);
-        }
+impl<T, H> Eq for MerkleTree<T, H> where T: Eq {}
 
-        Ok(tree)
+impl<T: Debug, H> Debug for MerkleTree<T, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MerkleTree").field("tree", &self.tree).finish()
     }
+}
 
-    /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
-    /// Incremental padding means that the padding is created by hashing the last element of the list,
-    /// and then hashing the result with the next element of the list, and so on.
-    pub fn from_leaves(
-        leaves: impl IntoIterator<Item = H256>,
-    ) -> Result<Self, MerkleTreeFormError> {
-        let pad_f = |i: &H256| default_hash(i);
-
-        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter().fuse(), pad_f);
-
-        let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
-
-        TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
-        let res = Self { tree };
-        Ok(res)
-    }
-
-    pub fn root(&self) -> H256 {
-        *self.tree.last().expect("By design, at least one element must exist")
+impl<T: Clone, H> MerkleTree<T, H> {
+    pub fn root(&self) -> T {
+        self.tree.last().cloned().expect("By design, at least one element must exist")
     }
 
     pub fn total_node_count(&self) -> TreeSize {
@@ -116,7 +84,7 @@ impl MerkleTree {
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
-    ) -> Option<H256> {
+    ) -> Option<T> {
         let index_in_tree = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
@@ -124,14 +92,14 @@ impl MerkleTree {
         )?
         .abs_index();
 
-        Some(self.tree[index_in_tree])
+        Some(self.tree[index_in_tree].clone())
     }
 
     pub fn node_from_bottom(
         &self,
         level_from_bottom: usize,
         index_in_level: usize,
-    ) -> Option<Node> {
+    ) -> Option<Node<T, H>> {
         let absolute_index = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
@@ -144,11 +112,48 @@ impl MerkleTree {
             absolute_index,
         })
     }
+}
+
+impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
+    fn create_tree_from_padded_leaves(
+        padded_leaves: impl IntoIterator<Item = T>,
+    ) -> Result<Vec<T>, MerkleTreeFormError> {
+        let mut tree = padded_leaves.into_iter().collect::<Vec<_>>();
+        if tree.is_empty() {
+            return Err(MerkleTreeFormError::TooSmall(tree.len()));
+        }
+        let steps = tree.len() - 1;
+        tree.reserve(steps); // reserve another tree.len() - 1 elements (the rest of the tree after the leaves)
+        for i in 0..steps {
+            let el = H::hash_pair(&tree[i * 2], &tree[i * 2 + 1]);
+            tree.push(el);
+        }
+
+        Ok(tree)
+    }
+
+    /// Create a new merkle tree from a list of leaves, and padding with incremental padding if needed.
+    /// Incremental padding means that the padding is created by hashing the last element of the list,
+    /// and then hashing the result with the next element of the list, and so on.
+    pub fn from_leaves(leaves: impl IntoIterator<Item = T>) -> Result<Self, MerkleTreeFormError> {
+        let pad_f = |i: &T| H::hash_single(i);
+
+        let padded_leaves_iter = IncrementalPaddingIterator::new(leaves.into_iter().fuse(), pad_f);
+
+        let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
+
+        TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
+        let res = Self {
+            tree,
+            _hasher: std::marker::PhantomData,
+        };
+        Ok(res)
+    }
 
     pub fn iter_from_leaf_to_root(
         &self,
         leaf_index: usize,
-    ) -> Result<MerkleTreeNodeParentIterator, MerkleTreeAccessError> {
+    ) -> Result<MerkleTreeNodeParentIterator<T, H>, MerkleTreeAccessError> {
         let leaf_count = self.leaf_count().get();
 
         if leaf_index >= leaf_count {
@@ -168,31 +173,60 @@ impl MerkleTree {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub struct Node<'a> {
-    tree_ref: &'a MerkleTree,
+pub struct Node<'a, T, H> {
+    tree_ref: &'a MerkleTree<T, H>,
     absolute_index: usize,
 }
 
-impl<'a> Node<'a> {
-    pub fn hash(&self) -> &H256 {
+impl<T: Debug, H> Debug for Node<'_, T, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Node")
+            .field("tree_ref", &self.tree_ref)
+            .field("absolute_index", &self.absolute_index)
+            .finish()
+    }
+}
+
+impl<T: PartialEq, H> PartialEq for Node<'_, T, H> {
+    fn eq(&self, other: &Self) -> bool {
+        self.tree_ref == other.tree_ref && self.absolute_index == other.absolute_index
+    }
+}
+
+impl<T: Eq, H> Eq for Node<'_, T, H> {}
+
+impl<T, H> Clone for Node<'_, T, H> {
+    fn clone(&self) -> Self {
+        Self {
+            tree_ref: self.tree_ref,
+            absolute_index: self.absolute_index,
+        }
+    }
+}
+
+impl<T, H> Copy for Node<'_, T, H> {}
+
+impl<'a, T, H> Node<'a, T, H> {
+    pub fn hash(&self) -> &T {
         &self.tree_ref.tree[self.absolute_index]
     }
 
-    pub fn tree(&self) -> &'a MerkleTree {
+    pub fn tree(&self) -> &'a MerkleTree<T, H> {
         self.tree_ref
-    }
-
-    pub fn into_position(self) -> NodePosition {
-        NodePosition::from_abs_index(self.tree().total_node_count(), self.absolute_index)
-            .expect("Should never fail since the index is transitively valid")
     }
 
     pub fn abs_index(&self) -> usize {
         self.absolute_index
     }
+}
 
-    pub fn parent(&self) -> Option<Node<'a>> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
+    pub fn into_position(self) -> NodePosition {
+        NodePosition::from_abs_index(self.tree().total_node_count(), self.absolute_index)
+            .expect("Should never fail since the index is transitively valid")
+    }
+
+    pub fn parent(&self) -> Option<Node<'a, T, H>> {
         let pos = self.into_position().parent()?;
 
         Some(Node {
@@ -205,7 +239,7 @@ impl<'a> Node<'a> {
     /// The idea is simply: If it's even, then the odd next to it is the one.
     ///                     If it's odd, then the even before it is the one.
     /// This can only be None for the root node.
-    pub fn sibling(&self) -> Option<Node<'a>> {
+    pub fn sibling(&self) -> Option<Node<'a, T, H>> {
         let absolute_index = self.into_position().sibling()?;
         Some(Node {
             tree_ref: self.tree_ref,
@@ -217,22 +251,29 @@ impl<'a> Node<'a> {
         self.absolute_index == self.tree().tree.len() - 1
     }
 
-    pub fn into_iter_parents(self) -> MerkleTreeNodeParentIterator<'a> {
+    pub fn into_iter_parents(self) -> MerkleTreeNodeParentIterator<'a, T, H> {
         MerkleTreeNodeParentIterator { node: Some(self) }
     }
 }
 
 /// An iterator that iterates from a leaf node to the root node.
 #[must_use]
-#[derive(Debug)]
-pub struct MerkleTreeNodeParentIterator<'a> {
-    node: Option<Node<'a>>,
+pub struct MerkleTreeNodeParentIterator<'a, T, H> {
+    node: Option<Node<'a, T, H>>,
 }
 
-impl<'a> Iterator for MerkleTreeNodeParentIterator<'a> {
-    type Item = Node<'a>;
+impl<T: Debug, H> Debug for MerkleTreeNodeParentIterator<'_, T, H> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MerkleTreeNodeParentIterator")
+            .field("node", &self.node)
+            .finish()
+    }
+}
 
-    fn next(&mut self) -> Option<Node<'a>> {
+impl<'a, T: Clone, H: PairHasher<Type = T>> Iterator for MerkleTreeNodeParentIterator<'a, T, H> {
+    type Item = Node<'a, T, H>;
+
+    fn next(&mut self) -> Option<Node<'a, T, H>> {
         match self.node {
             None => None,
             Some(_) => {
