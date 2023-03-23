@@ -17,27 +17,28 @@ use chainstate_types::{BlockIndexHandle, BlockIndexHistoryIterator};
 use common::{
     chain::{
         block::{BlockHeader, ConsensusData},
-        ChainConfig, GenBlock, GenBlockId, PoSChainConfig,
+        ChainConfig, GenBlockId, PoSStatus,
     },
-    primitives::{Compact, Id, Idable},
+    primitives::{Compact, Idable},
     Uint256,
 };
 
 use crate::pos::error::ConsensusPoSError;
 
 fn calculate_average_block_time(
-    block_id: Id<GenBlock>,
+    block_header: &BlockHeader,
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<u64, ConsensusPoSError> {
-    let history_iter = BlockIndexHistoryIterator::new(block_id, block_index_handle);
+    let history_iter =
+        BlockIndexHistoryIterator::new(block_header.block_id().into(), block_index_handle);
+    //FIXME: iter over netupgrade version
 
     let block_times = history_iter
         .take(5) // FIXME: take it from config
         .map(|block_index| block_index.block_timestamp().as_int_seconds())
         .collect::<Vec<_>>();
-    // block_times.sort();
+    // block_times.sort_unstable();
 
-    // FIXME: proper error?
     debug_assert!(block_times.len() >= 2);
 
     let block_diffs = block_times.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>();
@@ -48,10 +49,15 @@ fn calculate_average_block_time(
 
 pub fn calculate_target_required(
     chain_config: &ChainConfig,
-    pos_config: &PoSChainConfig,
+    pos_status: &PoSStatus,
     block_header: &BlockHeader,
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<Compact, ConsensusPoSError> {
+    let pos_config = match pos_status {
+        PoSStatus::Ongoing { config } => config,
+        PoSStatus::Threshold { initial_difficulty } => return Ok(*initial_difficulty),
+    };
+
     let prev_block_id = match block_header.prev_block_id().classify(chain_config) {
         GenBlockId::Genesis(_) => return Ok(pos_config.target_limit().into()),
         GenBlockId::Block(id) => id,
@@ -66,9 +72,18 @@ pub fn calculate_target_required(
         ConsensusData::PoS(data) => data.compact_target().try_into().unwrap(),
     };
 
+    if !pos_config.retargeting_enabled() {
+        return Ok(Compact::from(prev_target));
+    }
+
+    match prev_block_index.prev_block_id().classify(chain_config) {
+        GenBlockId::Genesis(_) => return Ok(pos_config.target_limit().into()),
+        GenBlockId::Block(_) => { /*do nothing*/ }
+    };
+
     // FIXME limiting factor?
     let average_block_time =
-        calculate_average_block_time(block_header.block_id().into(), block_index_handle)?;
+        calculate_average_block_time(prev_block_index.block_header(), block_index_handle)?;
     let average_block_time = Uint256::from_u64(average_block_time);
     let target_block_time = Uint256::from_u64(pos_config.target_block_time().as_secs());
 

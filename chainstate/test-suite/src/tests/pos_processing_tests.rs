@@ -31,6 +31,7 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
         config::{Builder as ConfigBuilder, EpochIndex},
+        create_test_pos_config,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         tokens::OutputValue,
@@ -201,7 +202,10 @@ fn setup_test_chain_with_staked_pool(
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: create_test_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -299,7 +303,10 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: create_test_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -585,7 +592,10 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: create_test_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -761,7 +771,10 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: create_test_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");

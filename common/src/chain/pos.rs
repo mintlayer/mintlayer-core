@@ -30,7 +30,9 @@ pub type PoolId = Id<Pool>;
 pub enum Delegation {}
 pub type DelegationId = Id<Delegation>;
 
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct PoSChainConfig {
+    retargeting_enabled: bool,
     /// The lowest possible difficulty
     target_limit: Uint256,
     /// Time interval between the blocks targeted by the difficulty adjustment algorithm
@@ -41,11 +43,13 @@ pub struct PoSChainConfig {
 
 impl PoSChainConfig {
     pub fn new(
+        retargeting_enabled: bool,
         target_limit: Uint256,
         target_block_time: Duration,
         reward_maturity_distance: BlockDistance,
     ) -> Self {
         Self {
+            retargeting_enabled,
             target_limit,
             target_block_time,
             reward_maturity_distance,
@@ -63,11 +67,16 @@ impl PoSChainConfig {
     pub fn reward_maturity_distance(&self) -> BlockDistance {
         self.reward_maturity_distance
     }
+
+    pub fn retargeting_enabled(&self) -> bool {
+        self.retargeting_enabled
+    }
 }
 
-// FIXME: this should be a part of netupgrade
+// FIXME: find proper place for this
 pub fn create_test_pos_config() -> PoSChainConfig {
     PoSChainConfig {
+        retargeting_enabled: false,
         target_limit: Uint256::MAX,
         target_block_time: Duration::from_secs(2 * 60),
         reward_maturity_distance: 2000.into(),

@@ -25,7 +25,7 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockHeader},
         config::EpochIndex,
-        ChainConfig, TxOutput, PoSChainConfig,
+        ChainConfig, PoSStatus, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
@@ -98,7 +98,7 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
 
 pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
-    pos_config: &PoSChainConfig,
+    pos_status: &PoSStatus,
     header: &BlockHeader,
     pos_data: &PoSData,
     block_index_handle: &H,
@@ -111,7 +111,7 @@ where
     P: PoSAccountingView,
 {
     let target =
-        target::calculate_target_required(chain_config, pos_config, header, block_index_handle)?;
+        target::calculate_target_required(chain_config, pos_status, header, block_index_handle)?;
 
     // FIXME: add test for a block with invalid target
     utils::ensure!(
