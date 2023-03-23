@@ -122,6 +122,8 @@ where
     }
 
     pub async fn run(&mut self) -> Result<Void> {
+        // TODO: Improve the initial header exchange. See the
+        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
         self.request_headers().await?;
 
         loop {
@@ -139,17 +141,9 @@ where
     }
 
     async fn request_headers(&mut self) -> Result<()> {
-        let locator = self
-            .chainstate_handle
-            .call(|c| {
-                // Start from the block preceding the current best one if it is possible. This
-                // allows to initialize the `best_known_block` field even if we are fully synced
-                // with the peer.
-                let height = c.get_best_block_height()?;
-                let height = height.prev_height().unwrap_or(height);
-                c.get_locator_from_height(height)
-            })
-            .await??;
+        // TODO: Improve the initial header exchange. See the
+        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
+        let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
         self.messaging_handle.send_message(
@@ -283,19 +277,10 @@ where
         }
         log::trace!("Received headers: {headers:#?}");
 
+        // TODO: Should the empty headers response be treated as misbehavior if we are going to
+        // send a locator starting with the block preceding the tip?
         if headers.is_empty() {
             return Ok(());
-        }
-
-        if headers.len() == 1 {
-            let block_id = headers.first().expect("Headers shouldn't be empty").block_id();
-            if let Some(index) =
-                self.chainstate_handle.call(move |c| c.get_block_index(&block_id)).await??
-            {
-                // We received exactly one header, so we are in sync with this peer.
-                self.best_known_block = Some(index.block_height());
-                return Ok(());
-            }
         }
 
         // Each header must be connected to the previous one.
