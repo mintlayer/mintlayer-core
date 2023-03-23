@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 use crypto::random::Rng;
 use probabilistic_collections::SipHasherBuilder;
@@ -52,5 +52,11 @@ impl<T: Hash> BloomFilter<T> {
     /// Clears the bloom filter, removing all elements
     pub fn clear(&mut self) {
         self.0.clear();
+    }
+}
+
+impl<T> Debug for BloomFilter<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("BloomFilter").finish()
     }
 }
