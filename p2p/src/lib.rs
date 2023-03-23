@@ -14,7 +14,6 @@
 // limitations under the License.
 
 pub mod config;
-pub mod constants;
 pub mod error;
 pub mod event;
 pub mod interface;

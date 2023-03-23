@@ -34,7 +34,6 @@ use crate::{
     message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
-            constants::ANNOUNCEMENT_MAX_SIZE,
             peer,
             transport::{TransportListener, TransportSocket},
             types::{Command, Event, Message, PeerEvent},
@@ -243,13 +242,13 @@ where
         announcement: Announcement,
     ) -> crate::Result<()> {
         let size = announcement.encode().len();
-        if size > ANNOUNCEMENT_MAX_SIZE {
+        if size > *self.p2p_config.max_message_size {
             self.conn_tx
                 .send(ConnectivityEvent::Misbehaved {
                     peer_id,
                     error: P2pError::PublishError(PublishError::MessageTooLarge(
                         size,
-                        ANNOUNCEMENT_MAX_SIZE,
+                        *self.p2p_config.max_message_size,
                     )),
                 })
                 .map_err(P2pError::from)?;

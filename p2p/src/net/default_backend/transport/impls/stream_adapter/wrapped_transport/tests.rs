@@ -221,12 +221,12 @@ async fn send_2_reqs() {
     let mut rng = test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
     let id: Id<Block> = H256::random_using(&mut rng).into();
     let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
-    let mut peer_stream = BufferedTranscoder::new(peer_stream);
+    let mut peer_stream = BufferedTranscoder::new(peer_stream, 10 * 1024 * 1024);
     peer_stream.send(message_1.clone()).await.unwrap();
 
     peer_stream.send(message_2.clone()).await.unwrap();
 
-    let mut server_stream = BufferedTranscoder::new(server_stream);
+    let mut server_stream = BufferedTranscoder::new(server_stream, 10 * 1024 * 1024);
     assert_eq!(server_stream.recv().await.unwrap(), message_1);
     assert_eq!(server_stream.recv().await.unwrap(), message_2);
 }

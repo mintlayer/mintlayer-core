@@ -37,8 +37,8 @@ use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
+        SyncingEventReceiver,
     },
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
@@ -167,6 +167,7 @@ where
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
@@ -213,6 +214,7 @@ where
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let max_message_size = *p2p_config.max_message_size;
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -226,14 +228,14 @@ where
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
-        Arc::clone(&p2p_config),
+        p2p_config,
     )
     .await
     .unwrap();
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
-    let signature = (0..ANNOUNCEMENT_MAX_SIZE).map(|_| 0).collect::<Vec<u8>>();
+    let signature = (0..max_message_size).map(|_| 0).collect::<Vec<u8>>();
     let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
         sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
         signature,
@@ -262,7 +264,7 @@ where
         messaging_handle1.make_announcement(message),
         Err(P2pError::PublishError(PublishError::MessageTooLarge(
             encoded_size,
-            ANNOUNCEMENT_MAX_SIZE
+            max_message_size
         )))
     );
 }

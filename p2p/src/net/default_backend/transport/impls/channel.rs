@@ -212,10 +212,10 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, 10 * 1024 * 1024);
         peer_stream.send(message.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream);
+        let mut server_stream = BufferedTranscoder::new(server_stream, 10 * 1024 * 1024);
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 }
