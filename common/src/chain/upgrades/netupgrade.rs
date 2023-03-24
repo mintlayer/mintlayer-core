@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//#![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
+use std::ops::Range;
 
 use crate::chain::config::ChainType;
 use crate::chain::pow::limit;
 use crate::chain::PoSChainConfig;
-use crate::primitives::{BlockDistance, BlockHeight, Compact};
+use crate::primitives::{BlockHeight, Compact};
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
@@ -76,7 +76,6 @@ pub enum ConsensusUpgrade {
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum RequiredConsensus {
-    // Either genesis or previous block was not PoW
     PoW(PoWStatus),
     PoS(PoSStatus),
     DSA,
@@ -134,39 +133,38 @@ impl<T: Ord> NetUpgrades<T> {
         self.0.len()
     }
 
-    pub fn height_range(&self, version: &T) -> Option<(BlockHeight, BlockHeight)> {
+    pub fn height_range(&self, version: &T) -> Option<Range<BlockHeight>> {
         self.0
             .iter()
             .enumerate()
             .find(|(_, (_, elem_version))| elem_version == version)
             .map(|(idx, &(start_h, _))| {
-                let end_h = if idx == (self.0.len() - 1) {
-                    BlockHeight::max()
+                let end_h = if (idx + 1) < self.0.len() {
+                    self.0[idx + 1].0
                 } else {
-                    (self.0[idx + 1].0 - BlockDistance::new(1)).expect(
-                        "Upgrade heights should never overflow/underflow as they're chosen by us",
-                    )
+                    BlockHeight::max()
                 };
-                (start_h, end_h)
+                start_h..end_h
             })
+    }
+
+    pub fn version_at_height(&self, height: BlockHeight) -> Option<&(BlockHeight, T)> {
+        self.0.iter().rev().find(|(upgrade_height, _)| *upgrade_height <= height)
     }
 }
 
 impl NetUpgrades<UpgradeVersion> {
     pub fn consensus_status(&self, height: BlockHeight) -> RequiredConsensus {
         let (last_upgrade_height, last_consensus_upgrade) = self
-            .0
-            .iter()
-            .rev()
-            .filter(|(block_height, _upgrade)| *block_height <= height)
-            .find_map(|(block_height, upgrade)| {
-                if let UpgradeVersion::ConsensusUpgrade(consensus_upgrade) = upgrade {
-                    Some((block_height, consensus_upgrade))
-                } else {
-                    None
+            .version_at_height(height)
+            .and_then(|(upgrade_height, upgrade)| match upgrade {
+                UpgradeVersion::ConsensusUpgrade(consensus_upgrade) => {
+                    Some((upgrade_height, consensus_upgrade))
                 }
+                UpgradeVersion::SomeUpgrade => None,
             })
             .expect("Some consensus must have been set");
+
         match last_consensus_upgrade {
             ConsensusUpgrade::PoW { initial_difficulty } => {
                 if *last_upgrade_height < height {
@@ -204,7 +202,7 @@ mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::{create_test_pos_config, Activate};
-    use crate::primitives::BlockHeight;
+    use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -273,24 +271,35 @@ mod tests {
     fn check_upgrade_height_range() {
         let (upgrades, two_height, three_height) = mock_netupgrades();
 
-        let check = |vers_type: MockVersion, height: BlockHeight, end_range: BlockHeight| {
+        let check = |vers_type: MockVersion, range: Range<BlockHeight>| {
             let res = upgrades.height_range(&vers_type);
 
-            assert_eq!(Some((height, end_range)), res);
+            assert_eq!(Some(range), res);
         };
 
-        check(MockVersion::Zero, BlockHeight::zero(), BlockHeight::zero());
-        check(
-            MockVersion::One,
-            BlockHeight::one(),
-            (two_height - BlockDistance::new(1)).unwrap(),
-        );
-        check(
-            MockVersion::Two,
-            two_height,
-            (three_height - BlockDistance::new(1)).unwrap(),
-        );
-        check(MockVersion::Three, three_height, BlockHeight::max());
+        check(MockVersion::Zero, BlockHeight::zero()..BlockHeight::one());
+        check(MockVersion::One, BlockHeight::one()..two_height);
+        check(MockVersion::Two, two_height..three_height);
+        check(MockVersion::Three, three_height..BlockHeight::max());
+    }
+
+    #[test]
+    fn check_version_at_height() {
+        let (upgrades, two_height, three_height) = mock_netupgrades();
+
+        let check = |height: BlockHeight, expected_version: MockVersion| {
+            let res = upgrades.version_at_height(height).map(|(_, v)| v);
+
+            assert_eq!(Some(&expected_version), res);
+        };
+
+        check(BlockHeight::zero(), MockVersion::Zero);
+        check(BlockHeight::one(), MockVersion::One);
+        check(BlockHeight::one().next_height(), MockVersion::One);
+        check(two_height, MockVersion::Two);
+        check(two_height.next_height(), MockVersion::Two);
+        check(three_height, MockVersion::Three);
+        check(three_height.next_height(), MockVersion::Three);
     }
 
     fn mock_consensus_upgrades() -> anyhow::Result<NetUpgrades<UpgradeVersion>> {

@@ -51,7 +51,8 @@ fn setup_test_chain_with_staked_pool(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, PoolId) {
-    let pos_config = PoSChainConfig::new(true, Uint256::MAX, TARGET_BLOCK_TIME, 0.into());
+    let difficulty = Uint256::MAX;
+    let pos_config = PoSChainConfig::new(true, difficulty, TARGET_BLOCK_TIME, 0.into());
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -60,7 +61,7 @@ fn setup_test_chain_with_staked_pool(
         (
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: Uint256::MAX.into(),
+                initial_difficulty: difficulty.into(),
                 config: pos_config,
             }),
         ),
@@ -103,12 +104,13 @@ fn setup_test_chain_with_staked_pool(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn stable_difficulty(#[case] seed: Seed) {
+fn stable_block_time(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
-    for i in 0..10 {
+    // FIXME: mining?
+    for _i in 0..10 {
         let new_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
         let new_block_height = tf.best_block_index().block_height().next_height();
         let new_target = {
@@ -149,8 +151,9 @@ fn stable_difficulty(#[case] seed: Seed) {
             .unwrap()
             .get_epoch_data(sealed_epoch_index)
             .unwrap()
-            .map(|d| d.randomness().value())
-            .unwrap_or(tf.chainstate.get_chain_config().initial_randomness());
+            .map_or(tf.chainstate.get_chain_config().initial_randomness(), |d| {
+                d.randomness().value()
+            });
 
         let transcript = construct_transcript(
             current_epoch_index,

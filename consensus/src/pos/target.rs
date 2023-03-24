@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndexHandle, BlockIndexHistoryIterator};
+use chainstate_types::{BlockIndex, BlockIndexHandle, BlockIndexHistoryIterator};
 use common::{
     chain::{
         block::{BlockHeader, ConsensusData},
-        ChainConfig, GenBlockId, PoSStatus,
+        ChainConfig, GenBlockId, PoSStatus, RequiredConsensus,
     },
     primitives::{Compact, Idable},
     Uint256,
@@ -26,18 +26,25 @@ use common::{
 use crate::pos::error::ConsensusPoSError;
 
 fn calculate_average_block_time(
-    block_header: &BlockHeader,
+    chain_config: &ChainConfig,
+    block_index: &BlockIndex,
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<u64, ConsensusPoSError> {
     let history_iter =
-        BlockIndexHistoryIterator::new(block_header.block_id().into(), block_index_handle);
-    //FIXME: iter over netupgrade version
+        BlockIndexHistoryIterator::new((*block_index.block_id()).into(), block_index_handle);
 
-    let block_times = history_iter
+    let (_, net_version) = chain_config
+        .net_upgrade()
+        .version_at_height(block_index.block_height())
+        .unwrap();
+    let net_version_range = chain_config.net_upgrade().height_range(net_version).unwrap();
+
+    let mut block_times = history_iter
         .take(5) // FIXME: take it from config
+        .filter(|block_index| net_version_range.contains(&block_index.block_height()))
         .map(|block_index| block_index.block_timestamp().as_int_seconds())
         .collect::<Vec<_>>();
-    // block_times.sort_unstable();
+    block_times.sort_unstable(); // FIXME why timestamps aren't already sorted?
 
     debug_assert!(block_times.len() >= 2);
 
@@ -81,13 +88,24 @@ pub fn calculate_target_required(
         GenBlockId::Block(_) => { /*do nothing*/ }
     };
 
+    match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
+        RequiredConsensus::PoS(status) => {
+            if let PoSStatus::Threshold { initial_difficulty } = status {
+                return Ok(initial_difficulty);
+            }
+        }
+        RequiredConsensus::PoW(_) | RequiredConsensus::DSA | RequiredConsensus::IgnoreConsensus => {
+            panic!("Block's consensus data is not PoS")
+        }
+    };
+
     // FIXME limiting factor?
     let average_block_time =
-        calculate_average_block_time(prev_block_index.block_header(), block_index_handle)?;
+        calculate_average_block_time(chain_config, &prev_block_index, block_index_handle)?;
     let average_block_time = Uint256::from_u64(average_block_time);
     let target_block_time = Uint256::from_u64(pos_config.target_block_time().as_secs());
 
-    let new_target = prev_target * average_block_time / target_block_time;
+    let new_target = prev_target / target_block_time * average_block_time;
 
     if new_target > pos_config.target_limit() {
         Ok(Compact::from(pos_config.target_limit()))

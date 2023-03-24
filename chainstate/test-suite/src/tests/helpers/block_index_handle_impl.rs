@@ -42,14 +42,14 @@ impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a,
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-        self.db_tx.get_block_index(&block_id).map_err(PropertyQueryError::StorageError)
+        self.db_tx.get_block_index(block_id).map_err(PropertyQueryError::StorageError)
     }
 
     fn get_gen_block_index(
         &self,
         block_id: &Id<common::chain::GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        match block_id.classify(&self.chain_config) {
+        match block_id.classify(self.chain_config) {
             GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
                 self.chain_config.genesis_block(),
             )))),
