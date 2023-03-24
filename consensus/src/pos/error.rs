@@ -49,4 +49,6 @@ pub enum ConsensusPoSError {
     RandomnessError(#[from] PoSRandomnessError),
     #[error("Invalid target value: `{0:?}`")]
     InvalidTarget(Compact),
+    #[error("Decoding bits of block failed: `{0:?}`")]
+    DecodingBitsFailed(Compact),
 }

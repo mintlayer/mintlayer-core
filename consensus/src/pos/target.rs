@@ -36,22 +36,26 @@ fn calculate_average_block_time(
     let (_, net_version) = chain_config
         .net_upgrade()
         .version_at_height(block_index.block_height())
-        .unwrap();
-    let net_version_range = chain_config.net_upgrade().height_range(net_version).unwrap();
+        .expect("NetUpgrade must've been initialized");
+    let net_version_range = chain_config
+        .net_upgrade()
+        .height_range(net_version)
+        .expect("NetUpgrade must've been initialized");
 
-    let mut block_times = history_iter
+    // get timestamps from the history but make sure they belong to the same consensus version
+    let block_times = history_iter
         .take(5) // FIXME: take it from config
         .filter(|block_index| net_version_range.contains(&block_index.block_height()))
         .map(|block_index| block_index.block_timestamp().as_int_seconds())
         .collect::<Vec<_>>();
-    block_times.sort_unstable(); // FIXME why timestamps aren't already sorted?
 
     debug_assert!(block_times.len() >= 2);
 
-    let block_diffs = block_times.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>();
+    // block times are taken from history so they are sorted backwards
+    let block_diffs = block_times.windows(2).map(|t| t[0] - t[1]).collect::<Vec<_>>();
 
-    let res = block_diffs.iter().sum::<u64>() / block_diffs.len() as u64;
-    Ok(res)
+    let average = block_diffs.iter().sum::<u64>() / block_diffs.len() as u64;
+    Ok(average)
 }
 
 pub fn calculate_target_required(
@@ -76,17 +80,17 @@ pub fn calculate_target_required(
 
     let prev_target: Uint256 = match prev_block_index.block_header().consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => panic!("Block's consensus data is not PoS"),
-        ConsensusData::PoS(data) => data.compact_target().try_into().unwrap(),
+        ConsensusData::PoS(data) => {
+            let compact_target = data.compact_target();
+            compact_target
+                .try_into()
+                .map_err(|_| ConsensusPoSError::DecodingBitsFailed(compact_target))?
+        }
     };
 
     if !pos_config.retargeting_enabled() {
         return Ok(Compact::from(prev_target));
     }
-
-    match prev_block_index.prev_block_id().classify(chain_config) {
-        GenBlockId::Genesis(_) => return Ok(pos_config.target_limit().into()),
-        GenBlockId::Block(_) => { /*do nothing*/ }
-    };
 
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
         RequiredConsensus::PoS(status) => {

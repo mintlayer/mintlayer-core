@@ -113,7 +113,6 @@ where
     let target =
         target::calculate_target_required(chain_config, pos_status, header, block_index_handle)?;
 
-    // FIXME: add test for a block with invalid target
     utils::ensure!(
         target == pos_data.compact_target(),
         ConsensusPoSError::InvalidTarget(pos_data.compact_target())

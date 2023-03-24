@@ -32,7 +32,7 @@ use common::{
         ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoSChainConfig, PoolId,
         RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
     },
-    primitives::{Amount, BlockHeight, Idable},
+    primitives::{Amount, BlockHeight, Compact, Idable},
     Uint256,
 };
 use crypto::{random::CryptoRng, vrf::VRFPublicKey};
@@ -184,4 +184,52 @@ fn stable_block_time(#[case] seed: Seed) {
 
         tf.progress_time_seconds_since_epoch(TARGET_BLOCK_TIME.as_secs());
     }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn invalid_target(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+
+    let invalid_target = Compact(1);
+
+    let transcript = construct_transcript(
+        0,
+        &tf.chainstate.get_chain_config().initial_randomness(),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+    );
+    let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+    let best_block_outputs = tf.outputs_from_genblock(tf.best_block_id());
+    let pos_data = PoSData::new(
+        vec![TxInput::new(best_block_outputs.keys().next().unwrap().clone(), 0)],
+        vec![InputWitness::NoSignature(None)],
+        pool_id,
+        vrf_data,
+        invalid_target,
+    );
+
+    let reward_output = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(1)),
+        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
+    );
+    let res = tf
+        .make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![reward_output])
+        .build_and_process()
+        .unwrap_err();
+
+    assert_eq!(
+        res,
+        chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
+            chainstate::CheckBlockError::ConsensusVerificationFailed(
+                consensus::ConsensusVerificationError::PoSError(
+                    consensus::ConsensusPoSError::InvalidTarget(invalid_target)
+                )
+            )
+        ))
+    );
 }
