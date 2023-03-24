@@ -13,32 +13,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
-
 pub struct CyclicFilter<T, const SUBFILTER_COUNT: usize> {
-    list: VecDeque<T>,
+    list: Vec<T>,
 }
 
+/// A simple non-empty container that holds only the last `SUBFILTER_COUNT` elements
 impl<T, const SUBFILTER_COUNT: usize> CyclicFilter<T, SUBFILTER_COUNT> {
     pub fn new(new: T) -> Self {
-        let mut list = VecDeque::new();
-        list.push_back(new);
+        let mut list = Vec::with_capacity(SUBFILTER_COUNT);
+        list.push(new);
         CyclicFilter { list }
     }
 
+    /// Returns the latest inserted element
     pub fn get_current_mut(&mut self) -> &mut T {
-        self.list.back_mut().expect("")
+        &mut self.list[0]
     }
 
+    /// Inserts a new item, dropping older items if necessary
     pub fn roll_filters(&mut self, new: T) {
         if self.list.len() == SUBFILTER_COUNT {
-            self.list.pop_front();
+            self.list.pop();
         }
-        // Create a new subfilter with new seeds to get new false positives
-        self.list.push_back(new);
+        self.list.insert(0, new);
     }
 
-    pub fn get_all(&self) -> impl Iterator<Item = &T> {
+    /// Returns the last `SUBFILTER_COUNT` items starting with the most recent
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.list.iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cyclic_filter() {
+        let mut subfilters = CyclicFilter::<u32, 3>::new(0);
+        for i in 0..100 {
+            assert_eq!(*subfilters.get_current_mut(), i);
+
+            let count = subfilters.iter().count();
+            assert!(count >= 1 && count <= 3);
+
+            subfilters.roll_filters(i + 1);
+        }
     }
 }

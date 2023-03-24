@@ -25,7 +25,7 @@ use self::cyclic_subfilter::CyclicFilter;
 
 use super::bloom_filter::BloomFilter;
 
-/// Using values greater than 3 would be slower and may break the code.
+/// Using values other than 3 may be slower or break the code
 const SUBFILTER_COUNT: usize = 3;
 
 /// RollingBloomFilter is a probabilistic set of the most recently inserted items
@@ -67,14 +67,13 @@ impl<T: Hash> RollingBloomFilter<T> {
         assert!(size > 0);
         assert!(fpp > 0.0 && fpp < 1.0);
 
-        // Use the smaller bloom filters to store size/2 of the last items in each.
-        // This way we always remember `size..3/2*size` items.
+        // Use smaller bloom filters to store at least `size` of the last items in total
         let subfilter_inserted_max = std::cmp::max(1, size / (SUBFILTER_COUNT - 1));
 
         // `fpp_per_filter` must be derived from `fpp` so that the probability of being detected in any subfilter is about `fpp`.
-        // Since each subfilter can be considered independent, it is about (1 - p)^3,
-        // which can be approximated by 1-3*p (if p is small).
-        // As a result, the required ffp per filter should be about fpp / 3.0.
+        // Since each subfilter can be considered independent, it is about (1 - p)^SUBFILTER_COUNT,
+        // which can be approximated by 1-SUBFILTER_COUNT*p (if p is small).
+        // As a result, the required ffp per filter should be about fpp / SUBFILTER_COUNT.
         let fpp_subfilter = fpp / SUBFILTER_COUNT as f64;
 
         let subfilters = CyclicFilter::<BloomFilter<T>, SUBFILTER_COUNT>::new(BloomFilter::new(
@@ -100,6 +99,7 @@ impl<T: Hash> RollingBloomFilter<T> {
 
         // Check if the maximum number of items in the current subfilter has been reached
         if self.subfilter_inserted_count == self.subfilter_inserted_max {
+            // Create a new subfilter with new seeds to get new false positives
             self.subfilters.roll_filters(BloomFilter::new(
                 self.subfilter_inserted_max,
                 self.fpp_subfilter,
@@ -110,7 +110,8 @@ impl<T: Hash> RollingBloomFilter<T> {
     }
 
     /// Returns if the item's hash is present in the rolling bloom filter.
+    #[must_use]
     pub fn contains(&self, item: &T) -> bool {
-        self.subfilters.get_all().any(|filter| filter.contains(item))
+        self.subfilters.iter().any(|filter| filter.contains(item))
     }
 }

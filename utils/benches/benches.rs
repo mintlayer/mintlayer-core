@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use crypto::random::make_pseudo_rng;
 use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
@@ -24,6 +24,7 @@ pub fn rolling_bloom_bench(c: &mut Criterion) {
 
     let mut list = RollingBloomFilter::<[u8; 32]>::new(120000, 0.000001, &mut rng);
     let mut count = 0u32;
+
     c.bench_function("RollingBloomFilter", |b| {
         b.iter(|| {
             count += 1;
@@ -32,7 +33,16 @@ pub fn rolling_bloom_bench(c: &mut Criterion) {
             list.insert(&data, &mut rng);
 
             data[0..4].copy_from_slice(&count.to_be_bytes());
-            list.contains(&data);
+            black_box(list.contains(&data));
+        })
+    });
+
+    c.bench_function("RollingBloomFilter (insert only)", |b| {
+        b.iter(|| {
+            count += 1;
+
+            data[0..4].copy_from_slice(&count.to_le_bytes());
+            list.insert(&black_box(data), &mut rng);
         })
     });
 }
