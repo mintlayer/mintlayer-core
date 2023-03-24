@@ -26,13 +26,12 @@ use tokio::{
     time::timeout,
 };
 
-use crate::testing_utils::{
-    P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
-};
 use common::{
     chain::Block,
     primitives::{Id, H256},
 };
+use crypto::random::Rng;
+use test_utils::random::Seed;
 
 use crate::{
     message::BlockListRequest,
@@ -44,6 +43,9 @@ use crate::{
             TransportSocket,
         },
         types::Message,
+    },
+    testing_utils::{
+        P2pTokioTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
     },
 };
 
@@ -204,8 +206,13 @@ async fn test_bind_port_closed() {
     assert!(!*transport.base_transport.port_open.lock().unwrap());
 }
 
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn send_2_reqs() {
+async fn send_2_reqs(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
         NoiseEncryptionAdapter::gen_new(),
         TcpTransportSocket::new(),
@@ -218,15 +225,14 @@ async fn send_2_reqs() {
     let peer_stream = peer_res.unwrap();
 
     let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
-    let mut rng = test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
     let id: Id<Block> = H256::random_using(&mut rng).into();
     let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
-    let mut peer_stream = BufferedTranscoder::new(peer_stream, 10 * 1024 * 1024);
+    let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(512..1024));
     peer_stream.send(message_1.clone()).await.unwrap();
 
     peer_stream.send(message_2.clone()).await.unwrap();
 
-    let mut server_stream = BufferedTranscoder::new(server_stream, 10 * 1024 * 1024);
+    let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(512..1024));
     assert_eq!(server_stream.recv().await.unwrap(), message_1);
     assert_eq!(server_stream.recv().await.unwrap(), message_2);
 }

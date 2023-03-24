@@ -171,6 +171,8 @@ mod tests {
         chain::block::Block,
         primitives::{Id, H256},
     };
+    use crypto::random::Rng;
+    use test_utils::random::Seed;
 
     use crate::{
         message::BlockListRequest,
@@ -180,10 +182,13 @@ mod tests {
     use super::*;
     use crate::net::default_backend::{transport::BufferedTranscoder, types::Message};
 
-    const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
-
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test]
-    async fn send_recv() {
+    async fn send_recv(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let transport = TcpTransportSocket::new();
         let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
@@ -193,15 +198,20 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, MAX_MESSAGE_SIZE);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(128..1024));
         peer_stream.send(message.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream, MAX_MESSAGE_SIZE);
+        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(128..1024));
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test]
-    async fn send_2_reqs() {
+    async fn send_2_reqs(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let transport = TcpTransportSocket::new();
         let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
         let peer_fut = transport.connect(server.local_addresses().unwrap()[0]);
@@ -211,16 +221,14 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message_1 = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut rng =
-            test_utils::random::make_seedable_rng(test_utils::random::Seed::from_entropy());
         let id: Id<Block> = H256::random_using(&mut rng).into();
         let message_2 = Message::BlockListRequest(BlockListRequest::new(vec![id]));
 
-        let mut peer_stream = BufferedTranscoder::new(peer_stream, MAX_MESSAGE_SIZE);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(512..2048));
         peer_stream.send(message_1.clone()).await.unwrap();
         peer_stream.send(message_2.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream, MAX_MESSAGE_SIZE);
+        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(512..2048));
         assert_eq!(server_stream.recv().await.unwrap(), message_1);
         assert_eq!(server_stream.recv().await.unwrap(), message_2);
     }
