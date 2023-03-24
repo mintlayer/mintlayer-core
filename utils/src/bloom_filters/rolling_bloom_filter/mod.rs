@@ -68,7 +68,7 @@ impl<T: Hash> RollingBloomFilter<T> {
         assert!(fpp > 0.0 && fpp < 1.0);
 
         // Use smaller bloom filters to store at least `size` of the last items in total
-        let subfilter_inserted_max = std::cmp::max(1, size / (SUBFILTER_COUNT - 1));
+        let subfilter_inserted_max = std::cmp::max(1, (size + 1) / (SUBFILTER_COUNT - 1));
 
         // `fpp_per_filter` must be derived from `fpp` so that the probability of being detected in any subfilter is about `fpp`.
         // Since each subfilter can be considered independent, it is about (1 - p)^SUBFILTER_COUNT,

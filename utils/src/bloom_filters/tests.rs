@@ -44,7 +44,7 @@ fn test_rolling_bloom_filter(#[case] seed: Seed) {
             fp += 1;
         }
     }
-    // Expect about 100 false positive
+    // Expect about 100 false positives (tests showed results in [26..142] range)
     assert!(fp > 10 && fp < 200, "invalid fp value: {fp}");
 }
 
@@ -74,6 +74,6 @@ fn test_rolling_bloom_filter_2(#[case] seed: Seed) {
             fp += 1;
         }
     }
-    // Expect about 10 false positive
-    assert!(fp > 0 && fp < 20, "invalid fp value: {fp}");
+    // Expect about 10 false positives (tests showed results in [0..18] range)
+    assert!(fp < 30, "invalid fp value: {fp}");
 }

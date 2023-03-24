@@ -55,7 +55,7 @@ mod tests {
             assert_eq!(*subfilters.get_current_mut(), i);
 
             let count = subfilters.iter().count();
-            assert!(count >= 1 && count <= 3);
+            assert!((1..=3).contains(&count));
 
             subfilters.roll_filters(i + 1);
         }
