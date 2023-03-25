@@ -21,6 +21,8 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::{net::default_backend::types::Message, P2pError, Result};
 
+const HEADER_LEN: usize = 4;
+
 pub struct EncoderDecoder {
     max_message_size: usize,
 }
@@ -40,7 +42,7 @@ impl Decoder for EncoderDecoder {
             return Ok(None);
         }
 
-        let (header, remaining_bytes) = src.split_at_mut(4);
+        let (header, remaining_bytes) = src.split_at_mut(HEADER_LEN);
 
         // Unwrap is safe here because the header size is 4 bytes
         let length = u32::from_le_bytes(header.try_into().expect("valid size")) as usize;
@@ -92,5 +94,109 @@ impl Encoder<Message> for EncoderDecoder {
         dst.extend_from_slice(&encoded);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::ErrorKind,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+    };
+
+    use crypto::random::Rng;
+    use test_utils::random::Seed;
+
+    use super::*;
+    use crate::{
+        error::DialError,
+        message::{AddrListRequest, AnnounceAddrRequest, HeaderListResponse, PingRequest},
+    };
+
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn size_limit_encode(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let message = Message::AnnounceAddrRequest(AnnounceAddrRequest {
+            address: SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                rng.gen(),
+            )
+            .into(),
+        });
+
+        let mut buf = BytesMut::new();
+        // Encode to determine the serialized message length.
+        EncoderDecoder::new(rng.gen_range(64..128))
+            .encode(message.clone(), &mut buf)
+            .unwrap();
+        assert!(buf.len() > HEADER_LEN);
+        let message_length = buf.len() - HEADER_LEN;
+
+        let mut encoder = EncoderDecoder::new(rng.gen_range(0..message_length));
+        assert_eq!(
+            Err(P2pError::DialError(DialError::IoError(
+                ErrorKind::InvalidData
+            ))),
+            encoder.encode(message, &mut buf)
+        );
+    }
+
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn size_limit_decode(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let message = Message::AnnounceAddrRequest(AnnounceAddrRequest {
+            address: SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                rng.gen(),
+            )
+            .into(),
+        });
+        let mut encoded = BytesMut::new();
+        EncoderDecoder::new(rng.gen_range(126..512))
+            .encode(message, &mut encoded)
+            .unwrap();
+        println!("FIXME: encoded len (1) = {}", encoded.len());
+
+        let mut decoder = EncoderDecoder::new(rng.gen_range(0..(encoded.len() - HEADER_LEN)));
+        assert_eq!(
+            Err(P2pError::DialError(DialError::IoError(
+                ErrorKind::InvalidData
+            ))),
+            decoder.decode(&mut encoded)
+        );
+    }
+
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn roundtrip(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let messages = [
+            Message::PingRequest(PingRequest { nonce: 1 }),
+            Message::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+            Message::AnnounceAddrRequest(AnnounceAddrRequest {
+                address: SocketAddr::new(
+                    IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),
+                    rng.gen(),
+                )
+                .into(),
+            }),
+            Message::AddrListRequest(AddrListRequest {}),
+        ];
+
+        let mut encoder = EncoderDecoder::new(rng.gen_range(128..2048));
+        for message in messages {
+            let mut buf = BytesMut::new();
+            encoder.encode(message.clone(), &mut buf).unwrap();
+            let decoded = encoder.decode(&mut buf).unwrap().unwrap();
+            assert_eq!(message, decoded);
+        }
     }
 }

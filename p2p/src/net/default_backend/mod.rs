@@ -27,7 +27,7 @@ use logging::log;
 use serialization::Encode;
 
 use crate::{
-    error::{P2pError, PublishError},
+    error::P2pError,
     message::{Announcement, PeerManagerMessage, SyncMessage},
     net::{
         default_backend::transport::{TransportListener, TransportSocket},
@@ -211,19 +211,12 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     }
 
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()> {
-        let message = announcement.encode();
-        if message.len() > *self.p2p_config.max_message_size {
-            return Err(P2pError::PublishError(PublishError::MessageTooLarge(
-                message.len(),
-                *self.p2p_config.max_message_size,
-            )));
-        }
-
         let topic = match &announcement {
             Announcement::Block(_) => Service::Blocks,
             Announcement::Transaction(_) => Service::Transactions,
         };
 
+        let message = announcement.encode();
         self.command_sender
             .send(types::Command::AnnounceData { topic, message })
             .map_err(P2pError::from)

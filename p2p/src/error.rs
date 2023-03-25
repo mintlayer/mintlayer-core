@@ -71,13 +71,6 @@ pub enum PeerError {
     Pending(String),
 }
 
-/// PubSub errors for announcements
-#[derive(Error, Debug, PartialEq, Eq)]
-pub enum PublishError {
-    #[error("Message is too large. Tried to send {0:?} bytes when limit is {1:?}")]
-    MessageTooLarge(usize, usize),
-}
-
 /// Errors related to establishing a connection with a remote peer
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialError {
@@ -106,8 +99,6 @@ pub enum ConversionError {
 pub enum P2pError {
     #[error("Protocol violation: `{0}`")]
     ProtocolError(ProtocolError),
-    #[error("Failed to publish message: `{0}`")]
-    PublishError(PublishError),
     #[error("Failed to dial peer: `{0}`")]
     DialError(DialError),
     #[error("Connection to other task lost")]
@@ -178,7 +169,6 @@ impl BanScore for P2pError {
     fn ban_score(&self) -> u32 {
         match self {
             P2pError::ProtocolError(err) => err.ban_score(),
-            P2pError::PublishError(err) => err.ban_score(),
             P2pError::DialError(_) => 0,
             P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
@@ -212,14 +202,6 @@ impl BanScore for ProtocolError {
             ProtocolError::ZeroBlocksInRequest => 20,
             ProtocolError::HandshakeExpected => 100,
             ProtocolError::AddressListLimitExceeded => 100,
-        }
-    }
-}
-
-impl BanScore for PublishError {
-    fn ban_score(&self) -> u32 {
-        match self {
-            PublishError::MessageTooLarge(_, _) => 100,
         }
     }
 }

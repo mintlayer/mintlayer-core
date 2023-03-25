@@ -474,7 +474,6 @@ where
             | P2pError::ConversionError(_)
             | P2pError::PeerError(_)
             | P2pError::NoiseHandshakeError(_)
-            | P2pError::PublishError(_)
             | P2pError::InvalidConfigurationValue(_)
             | P2pError::ChainstateError(_)) => Err(e),
             // Fatal errors, simply propagate them to stop the sync manager.
