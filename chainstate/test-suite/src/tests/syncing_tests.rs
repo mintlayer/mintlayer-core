@@ -91,7 +91,10 @@ fn get_locator_from_height(#[case] seed: Seed) {
 
             // Check the locator length.
             let locator = btf.chainstate.get_locator_from_height(height.into()).unwrap();
-            assert_eq!(locator.len(), (height as f64).log2().ceil() as usize + 1);
+            assert_eq!(
+                locator.len(),
+                ((height + 1) as f64).log2().ceil() as usize + 1
+            );
 
             // Check the locator headers.
             assert_eq!(
