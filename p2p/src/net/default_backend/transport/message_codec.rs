@@ -161,7 +161,6 @@ mod tests {
         EncoderDecoder::new(rng.gen_range(126..512))
             .encode(message, &mut encoded)
             .unwrap();
-        println!("FIXME: encoded len (1) = {}", encoded.len());
 
         let mut decoder = EncoderDecoder::new(rng.gen_range(0..(encoded.len() - HEADER_LEN)));
         assert_eq!(

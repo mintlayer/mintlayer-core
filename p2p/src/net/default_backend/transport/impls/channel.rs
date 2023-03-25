@@ -220,7 +220,6 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        //let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(512));
         let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(128..1024));
         peer_stream.send(message.clone()).await.unwrap();
 
