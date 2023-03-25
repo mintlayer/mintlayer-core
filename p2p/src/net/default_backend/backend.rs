@@ -640,8 +640,8 @@ where
                     log::debug!("Failed to send request to peer {peer}: {e}")
                 }
             }
-            Command::AnnounceData { topic, message } => {
-                let res = self.announce_data(topic, message);
+            Command::AnnounceData { service, message } => {
+                let res = self.announce_data(service, message);
                 if let Err(e) = res {
                     log::error!("Failed to send announce data: {e}")
                 }

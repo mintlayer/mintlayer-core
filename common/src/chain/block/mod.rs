@@ -43,10 +43,12 @@ use crate::{
     },
     primitives::{
         id::{self, WithId},
-        merkle::{tree::MerkleTree, MerkleTreeFormError},
+        merkle_tools::MerkleHasher,
         Id, Idable, VersionTag, H256,
     },
 };
+
+use merkletree::{tree::MerkleTree, MerkleTreeFormError};
 
 use super::signed_transaction::SignedTransaction;
 
@@ -77,7 +79,7 @@ fn calculate_generic_merkle_root(
     let hashes: Vec<H256> = iter::once(rewards_hash)
         .chain(body.transactions.iter().map(tx_hasher))
         .collect();
-    let t = MerkleTree::from_leaves(hashes)?;
+    let t = MerkleTree::<H256, MerkleHasher>::from_leaves(hashes)?;
     Ok(t.root())
 }
 

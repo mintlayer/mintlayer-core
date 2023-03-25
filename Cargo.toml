@@ -21,6 +21,7 @@ members = [
   "dns_server",                   # DNS-server.
   "logging",                      # Logging engine and its interfaces.
   "mempool",                      # Mempool interface and implementation.
+  "merkletree",                   # Merkle tree implementation with merkle proofs.
   "mocks",                        # Mock implementations of our traits (used for testing)
   "node",                         # Node executable.
   "p2p",                          # P2p communication interfaces and protocols.
@@ -90,15 +91,16 @@ license = "MIT"
 [workspace.dependencies]
 async-trait = "0.1"
 futures = "0.3"
+generic-array = "0.14"
 hex = "0.4"
 itertools = "0.10"
 jsonrpsee = "0.16"
+once_cell = "1.13"
 parity-scale-codec = "3.1"
 serde = "1.0"
 static_assertions = "1.1"
 thiserror = "1.0"
 tokio = "1.0"
-once_cell = "1.13"
 
 rstest = "0.17"
 

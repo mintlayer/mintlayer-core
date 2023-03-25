@@ -8,16 +8,17 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-script = { path = '../script'}
 crypto = { path = '../crypto'}
+merkletree = { path = "../merkletree" }
 serialization = { path = "../serialization" }
 logging = { path = "../logging/" }
+script = { path = '../script'}
 utils = {path = '../utils'}
 typename = { path = "../utils/typename" }
 
 anyhow = "1.0"
 bech32 = "0.9"
-generic-array = "0.14"
+generic-array.workspace = true
 parity-scale-codec.workspace = true
 serde = { workspace = true, features = ["derive"] }
 static_assertions.workspace = true

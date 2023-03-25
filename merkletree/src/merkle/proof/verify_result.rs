@@ -15,7 +15,7 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProofVerifyResult {
-    /// The verification was successful, and the tree was recreated from the proof.
+    /// The verification was successful, and the tree root was recreated from the proof.
     PassedDecisively,
     /// The verification was unsuccessful, due to a mismatch in the root hash.
     Failed,
@@ -27,7 +27,7 @@ pub enum ProofVerifyResult {
 }
 
 impl ProofVerifyResult {
-    /// The verification was successful, and the tree was recreated from the proof.
+    /// The verification was successful, and the tree root was recreated from the proof.
     pub fn passed_decisively(self) -> bool {
         match self {
             ProofVerifyResult::PassedDecisively => true,
@@ -45,7 +45,7 @@ impl ProofVerifyResult {
         }
     }
 
-    /// The verification was successful, but the verification was trivial, done
+    /// The verification was successful, but the verification was trivially done
     /// by checking that the leaf == root. This happens when the number of leaves is 1.
     pub fn passed_trivially(self) -> bool {
         match self {

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::H256;
+use crate::merkle::hasher::PairHasher;
 
 use super::{
     super::{
@@ -27,17 +27,40 @@ use super::{
 /// This is considered an intermediary object. For storage, use `SingleProofHashes` through
 /// `SingleProofNodes::into_values()`.
 #[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SingleProofNodes<'a> {
-    leaf: Node<'a>,
-    branch: Vec<Node<'a>>,
+#[derive(Debug, PartialEq, Eq)]
+pub struct SingleProofNodes<'a, T, H> {
+    leaf: Node<'a, T, H>,
+    branch: Vec<Node<'a, T, H>>,
 }
 
-impl<'a> SingleProofNodes<'a> {
+impl<T, H> Clone for SingleProofNodes<'_, T, H> {
+    fn clone(&self) -> Self {
+        Self {
+            leaf: self.leaf,
+            branch: self.branch.clone(),
+        }
+    }
+}
+
+impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
+    pub fn into_nodes(self) -> Vec<Node<'a, T, H>> {
+        self.branch
+    }
+
+    pub fn branch(&self) -> &[Node<'a, T, H>] {
+        &self.branch
+    }
+
+    pub fn leaf(&self) -> Node<'a, T, H> {
+        self.leaf
+    }
+}
+
+impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
     /// Creates a proof for a leaf by its index in the lowest level (the tip).
     /// A proof doesn't contain the root.
     pub fn from_tree_leaf(
-        tree: &'a MerkleTree,
+        tree: &'a MerkleTree<T, H>,
         leaf_index: usize,
     ) -> Result<Self, MerkleTreeProofExtractionError> {
         let leaf_count = tree.leaf_count().get();
@@ -49,7 +72,7 @@ impl<'a> SingleProofNodes<'a> {
 
         let leaf = tree.node_from_bottom(0, leaf_index).ok_or(
             MerkleTreeProofExtractionError::AccessError(
-                crate::primitives::merkle::MerkleTreeAccessError::AbsIndexOutOfRange(
+                crate::merkle::MerkleTreeAccessError::AbsIndexOutOfRange(
                     leaf_index,
                     tree.total_node_count().get(),
                 ),
@@ -72,25 +95,14 @@ impl<'a> SingleProofNodes<'a> {
         Ok(result)
     }
 
-    pub fn into_values(self) -> SingleProofHashes {
-        let proof = self.branch.into_iter().map(|node| *node.hash()).collect::<Vec<_>>();
+    pub fn into_values(self) -> SingleProofHashes<T, H> {
+        let proof = self.branch.into_iter().map(|node| node.hash().clone()).collect::<Vec<_>>();
         let leaf_abs_index = self.leaf.into_position().position().1 as u32;
         SingleProofHashes {
             leaf_index_in_level: leaf_abs_index,
             branch: proof,
+            _hasher: std::marker::PhantomData,
         }
-    }
-
-    pub fn into_nodes(self) -> Vec<Node<'a>> {
-        self.branch
-    }
-
-    pub fn branch(&self) -> &[Node<'a>] {
-        &self.branch
-    }
-
-    pub fn leaf(&self) -> Node<'a> {
-        self.leaf
     }
 }
 
@@ -99,26 +111,29 @@ impl<'a> SingleProofNodes<'a> {
 /// This struct is supposed to be serialized, unlike `SingleProofNodes`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SingleProofHashes {
+pub struct SingleProofHashes<T, H> {
     leaf_index_in_level: u32,
-    branch: Vec<H256>,
+    branch: Vec<T>,
+    _hasher: std::marker::PhantomData<H>,
 }
 
-impl SingleProofHashes {
-    pub fn into_hashes(self) -> Vec<H256> {
+impl<T: Eq, H: PairHasher<Type = T>> SingleProofHashes<T, H> {
+    pub fn into_hashes(self) -> Vec<T> {
         self.branch
     }
 
-    pub fn branch(&self) -> &[H256] {
+    pub fn branch(&self) -> &[T] {
         &self.branch
     }
 
     pub fn leaf_index_in_level(&self) -> u32 {
         self.leaf_index_in_level
     }
+}
 
+impl<T: Eq, H: PairHasher<Type = T>> SingleProofHashes<T, H> {
     /// Verifies that the given leaf can produce the root's hash.
-    pub fn verify(&self, leaf: H256, root: H256) -> ProofVerifyResult {
+    pub fn verify(&self, leaf: T, root: T) -> ProofVerifyResult {
         // in case it's a single-node tree, we don't need to verify or hash anything
         if self.branch.is_empty() {
             return match leaf == root {
@@ -130,9 +145,9 @@ impl SingleProofHashes {
         let hash = self.branch.iter().enumerate().fold(leaf, |prev_hash, (index, sibling)| {
             let node_in_level_index = self.leaf_index_in_level >> index;
             if node_in_level_index % 2 == 0 {
-                MerkleTree::hash_pair(&prev_hash, sibling)
+                H::hash_pair(&prev_hash, sibling)
             } else {
-                MerkleTree::hash_pair(sibling, &prev_hash)
+                H::hash_pair(sibling, &prev_hash)
             }
         });
 

@@ -32,7 +32,7 @@ pub enum Command<A> {
     Accept { peer_id: PeerId },
     Disconnect { peer_id: PeerId },
     SendMessage { peer: PeerId, message: Message },
-    AnnounceData { topic: Service, message: Vec<u8> },
+    AnnounceData { service: Service, message: Vec<u8> },
 }
 
 /// Random nonce sent in outbound handshake.

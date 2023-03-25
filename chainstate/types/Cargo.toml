@@ -15,4 +15,4 @@ crypto = { path = "../../crypto" }
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true
-generic-array = "0.14"
+generic-array.workspace = true

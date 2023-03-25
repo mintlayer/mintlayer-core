@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,17 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod counttracker;
-pub mod ensure;
-pub mod eventhandler;
-pub mod newtype;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+mod merkle;
+pub use merkle::*;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+#[cfg(test)]
+mod internal;
+
+#[cfg(test)]
+mod rand_tools;

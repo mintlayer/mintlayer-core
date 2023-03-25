@@ -13,25 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::rand_tools::{make_seedable_rng, Seed};
 use rstest::rstest;
-use test_utils::random::{make_seedable_rng, Seed};
 
-use crate::primitives::{
-    id::default_hash,
-    merkle::{proof::single::SingleProofNodes, tree::MerkleTree},
-    H256,
+use crate::{
+    internal::{hash_data, HashAlgo, HashedData},
+    proof::single::SingleProofNodes,
+    tree::MerkleTree,
 };
 
-fn gen_leaves(n: usize) -> Vec<H256> {
-    (0..n).map(|i| default_hash(H256::from_low_u64_be(i as u64))).collect()
+fn gen_leaves(n: usize) -> Vec<HashedData> {
+    (0..n).map(|i| hash_data(HashedData::from_low_u64_be(i as u64))).collect()
 }
 
 #[test]
 fn single_proof_one_leaf() {
-    let v0 = default_hash(H256::zero());
+    let v0 = hash_data(HashedData::zero());
 
     let leaves = vec![v0];
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let leaf_index = 0;
     let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
@@ -78,7 +78,7 @@ fn single_proof_eight_leaves(
     #[case] branch: &[usize],
 ) {
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     let p = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(
@@ -106,7 +106,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::from_leaves(leaves.clone()).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     for (leaf_index, _) in leaves.iter().enumerate() {
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
@@ -114,7 +114,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
         // Tamper with the proof
         for node_index in 0..proof.branch.len() {
             let mut p = proof.clone();
-            p.branch[node_index] = H256::random_using(&mut rng);
+            p.branch[node_index] = HashedData::random_using(&mut rng);
             assert!(p.verify(leaves[leaf_index], t.root()).failed());
         }
     }
@@ -137,12 +137,12 @@ fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_c
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
-    let t = MerkleTree::from_leaves(leaves).unwrap();
+    let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
     for leaf_index in 0..leaf_count {
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
 
         // Use a botched leaf
-        assert!(proof.verify(H256::random_using(&mut rng), t.root()).failed());
+        assert!(proof.verify(HashedData::random_using(&mut rng), t.root()).failed());
     }
 }

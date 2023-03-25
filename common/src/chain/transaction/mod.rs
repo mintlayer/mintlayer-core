@@ -18,7 +18,6 @@ use thiserror::Error;
 use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 
-use crate::chain::transaction::transaction_v1::TransactionV1;
 use crate::primitives::{id::WithId, Id, Idable, H256};
 
 pub mod input;
@@ -38,6 +37,7 @@ use self::signature::inputsig::InputWitness;
 use self::signed_transaction::SignedTransaction;
 
 mod transaction_v1;
+use transaction_v1::TransactionV1;
 
 pub enum TransactionSize {
     ScriptedTransaction(usize),

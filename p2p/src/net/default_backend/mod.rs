@@ -211,14 +211,14 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     }
 
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()> {
-        let topic = match &announcement {
+        let service = match &announcement {
             Announcement::Block(_) => Service::Blocks,
             Announcement::Transaction(_) => Service::Transactions,
         };
 
         let message = announcement.encode();
         self.command_sender
-            .send(types::Command::AnnounceData { topic, message })
+            .send(types::Command::AnnounceData { service, message })
             .map_err(P2pError::from)
     }
 }
