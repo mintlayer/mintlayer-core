@@ -62,9 +62,6 @@ impl TryFrom<Vec<u8>> for UserAgent {
     type Error = UserAgentError;
 
     fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            return Err(UserAgentError::Empty);
-        }
         ensure!(!value.is_empty(), UserAgentError::Empty);
         ensure!(
             value.len() <= MAX_LENGTH,

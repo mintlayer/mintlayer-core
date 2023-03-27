@@ -967,8 +967,14 @@ where
         self.peers.values().any(|peer| peer.address == *address)
     }
 
+    /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)
     fn inbound_peer_count(&self) -> usize {
-        self.peers.values().filter(|peer| peer.role == Role::Inbound).count()
+        self.peers
+            .iter()
+            .filter(|(peer_id, peer)| {
+                peer.role == Role::Inbound && !self.pending_disconnects.contains_key(peer_id)
+            })
+            .count()
     }
 
     /// Sends ping requests and disconnects peers that do not respond in time
