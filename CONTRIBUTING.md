@@ -1,46 +1,21 @@
 # Mintlayer core contributing guide
 
-We are happy to take contributions to the project in any form: if you find a bug feel free to create an issue, 
-if you fix a bug feel free to create a pr to merge your fix, if you want to add a totally new feature go ahead and do so.
+## General
 
-## Setup
+If you want to contribute but have no idea what to start working on, feel free to check the [issues](https://github.com/mintlayer/mintlayer-core/issues) or grep for "TODO" in the code. If you have a proposal for a major change or feature that we haven't outlined before, the best idea would be to open an issue or pull request to discuss the idea before you delve too deeply into it, as there may be a good reason we haven't gone that route before.
 
-Follow [these instructions](https://www.rust-lang.org/tools/install) to install rust which is required to build Mintlayer.
+If you find a security issue, please follow the guide [here](https://github.com/mintlayer/mintlayer-core/security/policy) to report it. 
 
-## MIPS
+## External contributors
 
-Mintlayer accepts improvement proposals in [this repo](https://github.com/mintlayer/MIPS). Major changes should be discussed via a MIP before they can be included in the code base. Check the [BIPs repo](https://github.com/bitcoin/bips) to get an idea of how to write a MIP.
+First and foremost, you should make sure you have [rust installed](https://www.rust-lang.org/tools/install). As a rule, we use the latest stable version of rust that is available; if this changes, we'll be sure to update this note.
 
-## How to actually contribute
+As an outside contributor, your first step will be to fork the repo and create your own copy. You can't push to our repo directly, so without doing this, it won't be possible to contribute any code. Your contributions should be put in a logically named branch in your fork. If you're not sure what I mean by that, take a look at the extant branches in our repo, and you'll see some examples. If you have several significant changes to make that don't logically fit together, then multiple branches and pull requests are the way to go. 
 
-The first thing to do, once you know what you want to do, is to open an issue. If you think you'd found a bug open an issue so it can be discussed with the wider
-community. If you think you've got a snazzy new idea for a feature, open an issue and we'll discuss it as a community; maybe someone else is already working on it...
+As you make your changes, ensure the code is as clean as possible and well documented so that it's clear to us what you're up to when we review it and it is thoroughly tested. Make sure that the old tests still pass, as well as any tests you've added. We will only merge code with all the tests passing in CI. 
 
-Whatever it is you're working on you'll want to create a branch for your bug fix or feature from staging
- 
- 
-    git checkout staging
-    git checkout -b my_new_branch
-   
-   
-I'd suggest you pick a better name than that though, something which makes it obvious what you're working on is preferred. Once you're done the first step is to make
-sure that the existing functional tests and unit tests still work. If you've broken something it's time to go and fix that first. Once the existing tests are good
-it's time for you to add your own. Even for small bug fixes adding a unit test is worth the effort to ensure the bug isn't reintroduced later. For new features, functional tests
-are a hard requirement. Make life as easy as possible for the reviewer when they have to look at the actual code. What testing have you done? Have you run any benchmarks?
+## Internal contributors
 
-Once you've created a set of tests that prove out your code create a PR to merge your branch into staging. Make sure you write a good PR. Explain what you're doing, 
-explain why you're doing it, explain how this interacts with the existing codebase and explain how it works. Make sure to link to the open issue too. When you pick
-reviewers GitHub will likely recommend some people. If not tag anyone and they can help get the right people involved. Your code will either be merged or changes will be requested.
-Before you open the PR, think about what else you can do to make the reviewer's life easier… Can you run cargo-audit to find known issues in libraries? Could you run a fuzzer or static analyser? Have you checked the licenses of any libraries you’re using?
-A good pull request should try and limit the number of lines changed in the request, as a general rule it takes roughly 60 mins to review a 300-400 line request so try and keep PRs to 300-400 lines in total.
-A pull request should try and deal with a single issue be it a new feature or a bug fix. If you’re fixing 2 separate unrelated bugs then open 2 PRs. A PR should be made of logical commits, that could be a single commit for a simple bug or several commits for a more complex new feature. If you refactor some existing code and add a new feature in the same PR then that should be at least 2 commits.
+By internal contributors, we mean people who are members of the Mintlayer organization. If you are not employed full-time to work on Mintlayer but have substantial contributions, drop us a message, and we'll see what can be done about adding you.
 
-## A quick guide to Mintlayer
-
-Mintlayer uses a UTXO system rather than an account-based system.
-
-Mintlayer supports bech32 addresses and our own implementation of Bitcoin script, sometimes called chainscript or mintlayer script.
-
-Mintlayer has a feature known as programmable pools (or PPs). These are essentially Wasm-based smart contracts. As it stands PP support is very much a work in progress.
-
-At the moment Mintlayer uses Schnorr signatures for its base crypto. There is an intention to move to BLS in the near future. We have a BLS implementation ready to go but there is some degree of work to be done to fully integrate it with the existing code base, if you create a new feature try to plan it in a cryptographically agnostic way.
+Internal contributors don't need to worry about the above guide too much, the general bits about rust apply, but you can clone the repo and push branches directly. By default, you can't push to the master branch (and those who can should avoid it). When you create a pull request, it will automatically add the core repo maintainers as reviewers, don't feel like this is a complete list; if you think a review from someone else is handy, then add them; you won't be able to merge without a maintainer's approval though and preferably the approval of multiple. The CI will run automatically on your PRs, too, and you won't be able to merge without it passing. As a rule, a draft PR is always welcome as it will get feedback quicker, be sure to mark it as such.
