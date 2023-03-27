@@ -217,6 +217,7 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
         };
 
         let message = announcement.encode();
+        assert!(message.len() < *self.p2p_config.max_message_size);
         self.command_sender
             .send(types::Command::AnnounceData { service, message })
             .map_err(P2pError::from)
