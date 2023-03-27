@@ -53,6 +53,7 @@ fn unban_peer() {
             msg_max_locator_count: Default::default(),
             max_request_blocks_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
+            max_message_size: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,

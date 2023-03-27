@@ -102,6 +102,7 @@ impl From<P2pConfigFile> for P2pConfig {
             msg_max_locator_count: Default::default(),
             max_request_blocks_count: Default::default(),
             user_agent: mintlayer_core_user_agent(),
+            max_message_size: Default::default(),
         }
     }
 }

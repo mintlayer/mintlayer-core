@@ -31,6 +31,7 @@ make_config_setting!(PingTimeout, Duration, Duration::from_secs(150));
 make_config_setting!(HeaderLimit, usize, 2000);
 make_config_setting!(MaxLocatorSize, usize, 101);
 make_config_setting!(RequestedBlocksLimit, usize, 500);
+make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -102,4 +103,6 @@ pub struct P2pConfig {
     pub max_request_blocks_count: RequestedBlocksLimit,
     /// User agent value of this node (sent to peers over the network).
     pub user_agent: UserAgent,
+    /// A maximum size of a p2p message in bytes.
+    pub max_message_size: MaxMessageSize,
 }

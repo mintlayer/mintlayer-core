@@ -25,16 +25,15 @@ use tokio::{sync::mpsc, time::timeout};
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
-use serialization::{DecodeAll, Encode};
+use serialization::DecodeAll;
 use utils::set_flag::SetFlag;
 
 use crate::{
     config::P2pConfig,
-    error::{DialError, P2pError, PeerError, PublishError},
+    error::{DialError, P2pError, PeerError},
     message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::{
-            constants::ANNOUNCEMENT_MAX_SIZE,
             peer,
             transport::{TransportListener, TransportSocket},
             types::{Command, Event, Message, PeerEvent},
@@ -242,19 +241,6 @@ where
         peer_id: PeerId,
         announcement: Announcement,
     ) -> crate::Result<()> {
-        let size = announcement.encode().len();
-        if size > ANNOUNCEMENT_MAX_SIZE {
-            self.conn_tx
-                .send(ConnectivityEvent::Misbehaved {
-                    peer_id,
-                    error: P2pError::PublishError(PublishError::MessageTooLarge(
-                        size,
-                        ANNOUNCEMENT_MAX_SIZE,
-                    )),
-                })
-                .map_err(P2pError::from)?;
-        }
-
         Self::send_sync_event(
             &self.sync_tx,
             SyncingEvent::Announcement {

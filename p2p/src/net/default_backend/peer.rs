@@ -93,7 +93,7 @@ where
         tx: mpsc::UnboundedSender<(PeerId, PeerEvent)>,
         rx: mpsc::UnboundedReceiver<Event>,
     ) -> Self {
-        let socket = BufferedTranscoder::new(socket);
+        let socket = BufferedTranscoder::new(socket, *p2p_config.max_message_size);
 
         Self {
             peer_id,
@@ -293,7 +293,7 @@ mod tests {
             peer
         });
 
-        let mut socket2 = BufferedTranscoder::new(socket2);
+        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -364,7 +364,7 @@ mod tests {
             peer
         });
 
-        let mut socket2 = BufferedTranscoder::new(socket2);
+        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         socket2.recv().await.unwrap();
         assert!(socket2
             .send(types::Message::Handshake(
@@ -436,7 +436,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
-        let mut socket2 = BufferedTranscoder::new(socket2);
+        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
@@ -484,7 +484,7 @@ mod tests {
             peer_id2,
             PeerRole::Inbound,
             chain_config,
-            p2p_config,
+            Arc::clone(&p2p_config),
             socket1,
             None,
             tx1,
@@ -493,7 +493,7 @@ mod tests {
 
         let handle = tokio::spawn(async move { peer.handshake().await });
 
-        let mut socket2 = BufferedTranscoder::new(socket2);
+        let mut socket2 = BufferedTranscoder::new(socket2, *p2p_config.max_message_size);
         assert!(socket2.recv().now_or_never().is_none());
         socket2
             .send(types::Message::HeaderListRequest(

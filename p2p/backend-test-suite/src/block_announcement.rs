@@ -16,38 +16,21 @@
 use std::{fmt::Debug, sync::Arc};
 
 use common::{
-    chain::{
-        block::{
-            consensus_data::{ConsensusData, PoSData},
-            timestamp::BlockTimestamp,
-            Block, BlockReward,
-        },
-        signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighashtype,
-        },
-    },
-    primitives::{user_agent::mintlayer_core_user_agent, Compact, Id, H256},
+    chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
+    primitives::{user_agent::mintlayer_core_user_agent, Id, H256},
 };
-use crypto::vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey};
-use serialization::Encode;
 
 use p2p::{
     config::{NodeType, P2pConfig},
-    error::{P2pError, PublishError},
     message::Announcement,
     net::{
-        default_backend::constants::ANNOUNCEMENT_MAX_SIZE, types::SyncingEvent,
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
+        SyncingEventReceiver,
     },
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
 };
 
-tests![
-    block_announcement,
-    block_announcement_no_subscription,
-    block_announcement_too_big_message,
-];
+tests![block_announcement, block_announcement_no_subscription,];
 
 async fn block_announcement<T, N, A>()
 where
@@ -167,6 +150,7 @@ where
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
@@ -198,71 +182,4 @@ where
     messaging_handle1
         .make_announcement(Announcement::Block(Box::new(block.header().clone())))
         .unwrap();
-}
-
-async fn block_announcement_too_big_message<T, N, A>()
-where
-    T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
-    N: NetworkingService + Debug,
-    N::MessagingHandle: MessagingService,
-    N::SyncingEventReceiver: SyncingEventReceiver,
-    N::ConnectivityHandle: ConnectivityService<N>,
-{
-    // TODO: Use seedable random.
-    let mut rng = crypto::random::make_true_rng();
-
-    let config = Arc::new(common::chain::config::create_mainnet());
-    let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
-        T::make_transport(),
-        vec![T::make_address()],
-        Arc::clone(&config),
-        Arc::clone(&p2p_config),
-    )
-    .await
-    .unwrap();
-
-    let (mut conn2, _messaging_handle2, _sync2) = N::start(
-        T::make_transport(),
-        vec![T::make_address()],
-        Arc::clone(&config),
-        Arc::clone(&p2p_config),
-    )
-    .await
-    .unwrap();
-
-    connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
-
-    let signature = (0..ANNOUNCEMENT_MAX_SIZE).map(|_| 0).collect::<Vec<u8>>();
-    let signatures = vec![InputWitness::Standard(StandardInputSignature::new(
-        sighashtype::SigHashType::try_from(sighashtype::SigHashType::ALL).unwrap(),
-        signature,
-    ))];
-    let (sk, _pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
-    let pos = PoSData::new(
-        Vec::new(),
-        signatures,
-        H256::random_using(&mut rng).into(),
-        vrf_data,
-        Compact(0),
-    );
-    let block = Block::new(
-        Vec::new(),
-        Id::new(H256([0x04; 32])),
-        BlockTimestamp::from_int_seconds(1337u64),
-        ConsensusData::PoS(Box::new(pos)),
-        BlockReward::new(Vec::new()),
-    )
-    .unwrap();
-    let message = Announcement::Block(Box::new(block.header().clone()));
-    let encoded_size = message.encode().len();
-
-    assert_eq!(
-        messaging_handle1.make_announcement(message),
-        Err(P2pError::PublishError(PublishError::MessageTooLarge(
-            encoded_size,
-            ANNOUNCEMENT_MAX_SIZE
-        )))
-    );
 }

@@ -194,14 +194,22 @@ impl PeerStream for ChannelStream {}
 mod tests {
     use std::net::SocketAddrV4;
 
+    use crypto::random::Rng;
+    use test_utils::random::Seed;
+
     use super::*;
     use crate::{
         message::BlockListRequest,
         net::default_backend::{transport::BufferedTranscoder, types::Message},
     };
 
+    #[rstest::rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test]
-    async fn send_recv() {
+    async fn send_recv(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
         let transport = MpscChannelTransport::new();
         let address: SocketAddr = SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0).into();
         let mut server = transport.bind(vec![address]).await.unwrap();
@@ -212,10 +220,10 @@ mod tests {
         let peer_stream = peer_res.unwrap();
 
         let message = Message::BlockListRequest(BlockListRequest::new(vec![]));
-        let mut peer_stream = BufferedTranscoder::new(peer_stream);
+        let mut peer_stream = BufferedTranscoder::new(peer_stream, rng.gen_range(128..1024));
         peer_stream.send(message.clone()).await.unwrap();
 
-        let mut server_stream = BufferedTranscoder::new(server_stream);
+        let mut server_stream = BufferedTranscoder::new(server_stream, rng.gen_range(128..1024));
         assert_eq!(server_stream.recv().await.unwrap(), message);
     }
 }

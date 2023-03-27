@@ -62,6 +62,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         msg_max_locator_count: Default::default(),
         max_request_blocks_count: Default::default(),
         user_agent,
+        max_message_size: Default::default(),
     });
 
     let transport = p2p::make_p2p_transport();

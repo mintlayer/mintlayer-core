@@ -14,7 +14,6 @@
 // limitations under the License.
 
 pub mod backend;
-pub mod constants;
 pub mod peer;
 pub mod transport;
 pub mod types;
@@ -28,18 +27,15 @@ use logging::log;
 use serialization::Encode;
 
 use crate::{
-    config,
-    error::{P2pError, PublishError},
+    error::P2pError,
     message::{Announcement, PeerManagerMessage, SyncMessage},
     net::{
-        default_backend::{
-            constants::ANNOUNCEMENT_MAX_SIZE,
-            transport::{TransportListener, TransportSocket},
-        },
+        default_backend::transport::{TransportListener, TransportSocket},
         types::{ConnectivityEvent, SyncingEvent},
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     types::peer_id::PeerId,
+    P2pConfig,
 };
 
 use super::types::services::Service;
@@ -79,12 +75,26 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
 #[derive(Debug)]
 pub struct MessagingHandle<T: TransportSocket> {
     command_sender: mpsc::UnboundedSender<types::Command<T::Address>>,
+    p2p_config: Arc<P2pConfig>,
+}
+
+impl<T: TransportSocket> MessagingHandle<T> {
+    pub fn new(
+        command_sender: mpsc::UnboundedSender<types::Command<T::Address>>,
+        p2p_config: Arc<P2pConfig>,
+    ) -> Self {
+        Self {
+            command_sender,
+            p2p_config,
+        }
+    }
 }
 
 impl<T: TransportSocket> Clone for MessagingHandle<T> {
     fn clone(&self) -> Self {
         Self {
             command_sender: self.command_sender.clone(),
+            p2p_config: self.p2p_config.clone(),
         }
     }
 }
@@ -107,7 +117,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         transport: Self::Transport,
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
-        p2p_config: Arc<config::P2pConfig>,
+        p2p_config: Arc<P2pConfig>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
@@ -119,12 +129,13 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let socket = transport.bind(bind_addresses).await?;
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
+        let p2p_config_ = Arc::clone(&p2p_config);
         tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 socket,
                 chain_config,
-                p2p_config,
+                p2p_config_,
                 cmd_rx,
                 conn_tx,
                 sync_tx,
@@ -138,9 +149,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
-            Self::MessagingHandle {
-                command_sender: cmd_tx,
-            },
+            MessagingHandle::new(cmd_tx, p2p_config),
             Self::SyncingEventReceiver { sync_rx },
         ))
     }
@@ -202,19 +211,13 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
     }
 
     fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()> {
-        let message = announcement.encode();
-        if message.len() > ANNOUNCEMENT_MAX_SIZE {
-            return Err(P2pError::PublishError(PublishError::MessageTooLarge(
-                message.len(),
-                ANNOUNCEMENT_MAX_SIZE,
-            )));
-        }
-
         let service = match &announcement {
             Announcement::Block(_) => Service::Blocks,
             Announcement::Transaction(_) => Service::Transactions,
         };
 
+        let message = announcement.encode();
+        assert!(message.len() < *self.p2p_config.max_message_size);
         self.command_sender
             .send(types::Command::AnnounceData { service, message })
             .map_err(P2pError::from)
