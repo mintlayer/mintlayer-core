@@ -16,7 +16,8 @@
 use std::{num::NonZeroU64, time::Duration};
 
 use super::helpers::{
-    block_index_handle_impl::TestBlockIndexHandle, new_pub_key_destination, pos_mine,
+    new_pub_key_destination,
+    pos::{calculate_new_target, pos_mine},
 };
 
 use chainstate::chainstate_interface::ChainstateInterface;
@@ -29,10 +30,11 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
         config::Builder as ConfigBuilder,
+        create_unittest_pos_config,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
-        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoSChainConfig, PoolId,
-        RequiredConsensus, TxInput, TxOutput, UpgradeVersion,
+        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
+        UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Idable},
     Uint256,
@@ -55,7 +57,6 @@ fn setup_test_chain_with_staked_pool(
     vrf_pk: VRFPublicKey,
 ) -> (TestFramework, PoolId) {
     let difficulty = Uint256::MAX;
-    let pos_config = PoSChainConfig::new(true, difficulty, TARGET_BLOCK_TIME, 0.into());
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -65,7 +66,7 @@ fn setup_test_chain_with_staked_pool(
             BlockHeight::new(2),
             UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                 initial_difficulty: difficulty.into(),
-                config: pos_config,
+                config: create_unittest_pos_config(),
             }),
         ),
     ];
@@ -115,33 +116,7 @@ fn stable_block_time(#[case] seed: Seed) {
     for _i in 0..50 {
         let initial_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
         let new_block_height = tf.best_block_index().block_height().next_height();
-        let new_target = {
-            let pos_status = match tf
-                .chainstate
-                .get_chain_config()
-                .net_upgrade()
-                .consensus_status(new_block_height)
-            {
-                RequiredConsensus::PoS(status) => status,
-                RequiredConsensus::PoW(_)
-                | RequiredConsensus::DSA
-                | RequiredConsensus::IgnoreConsensus => panic!("Invalid consensus"),
-            };
-
-            let tmp_block = tf.make_block_builder().build();
-
-            let db_tx = tf.storage.transaction_ro().unwrap();
-            let block_index_handle =
-                TestBlockIndexHandle::new(db_tx, tf.chainstate.get_chain_config().as_ref());
-
-            consensus::calculate_target_required(
-                tf.chainstate.get_chain_config().as_ref(),
-                &pos_status,
-                tmp_block.header(),
-                &block_index_handle,
-            )
-            .unwrap()
-        };
+        let new_target = calculate_new_target(&mut tf, new_block_height).unwrap();
 
         let current_epoch_index =
             tf.chainstate.get_chain_config().epoch_index_from_height(&new_block_height);

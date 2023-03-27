@@ -14,26 +14,21 @@
 // limitations under the License.
 
 use chainstate_test_framework::{anyonecanspend_address, TestFramework, TransactionBuilder};
-use chainstate_types::{pos_randomness::PoSRandomness, vrf_tools::construct_transcript};
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp},
-        config::EpochIndex,
-        signature::inputsig::InputWitness,
-        timelock::OutputTimeLock,
-        tokens::OutputValue,
-        Destination, OutPoint, PoolId, Transaction, TxInput, TxOutput,
+        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
+        timelock::OutputTimeLock, tokens::OutputValue, Destination, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, BlockDistance, Compact, Id, Idable},
+    primitives::{Amount, BlockDistance, Id, Idable},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
     random::{CryptoRng, Rng},
-    vrf::{VRFPrivateKey, VRFPublicKey},
 };
 
 pub mod block_index_handle_impl;
 pub mod in_memory_storage_wrapper;
+pub mod pos;
 
 /// Adds a block with the locked output and returns input corresponding to this output.
 pub fn add_block_with_locked_output(
@@ -79,48 +74,4 @@ pub fn add_block_with_locked_output(
 pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn pos_mine(
-    initial_timestamp: BlockTimestamp,
-    kernel_outpoint: OutPoint,
-    vrf_pk: &VRFPublicKey,
-    vrf_sk: &VRFPrivateKey,
-    sealed_epoch_randomness: PoSRandomness,
-    pool_id: PoolId,
-    pool_balance: Amount,
-    epoch_index: EpochIndex,
-    target: Compact,
-) -> Option<(PoSData, BlockTimestamp)> {
-    let mut timestamp = initial_timestamp;
-
-    for _ in 0..1000 {
-        let transcript =
-            construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
-        let pos_data = PoSData::new(
-            vec![kernel_outpoint.clone().into()],
-            vec![InputWitness::NoSignature(None)],
-            pool_id,
-            vrf_data,
-            target,
-        );
-
-        if consensus::check_pos_hash(
-            epoch_index,
-            &sealed_epoch_randomness,
-            &pos_data,
-            vrf_pk,
-            timestamp,
-            pool_balance,
-        )
-        .is_ok()
-        {
-            return Some((pos_data, timestamp));
-        }
-
-        timestamp = timestamp.add_int_seconds(1).unwrap();
-    }
-    None
 }

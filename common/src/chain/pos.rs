@@ -32,27 +32,28 @@ pub type DelegationId = Id<Delegation>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct PoSChainConfig {
-    retargeting_enabled: bool,
     /// The lowest possible difficulty
     target_limit: Uint256,
     /// Time interval between the blocks targeted by the difficulty adjustment algorithm
     target_block_time: Duration,
     /// The distance required to pass to allow spending the block reward
     reward_maturity_distance: BlockDistance,
+    /// Max number of blocks required to calculate average block time. Min is 2
+    blocks_count_to_average: usize,
 }
 
 impl PoSChainConfig {
     pub fn new(
-        retargeting_enabled: bool,
         target_limit: Uint256,
         target_block_time: Duration,
         reward_maturity_distance: BlockDistance,
+        blocks_count_to_average: usize,
     ) -> Self {
         Self {
-            retargeting_enabled,
             target_limit,
             target_block_time,
             reward_maturity_distance,
+            blocks_count_to_average,
         }
     }
 
@@ -68,16 +69,16 @@ impl PoSChainConfig {
         self.reward_maturity_distance
     }
 
-    pub fn retargeting_enabled(&self) -> bool {
-        self.retargeting_enabled
+    pub fn blocks_count_to_average(&self) -> usize {
+        self.blocks_count_to_average
     }
 }
 
 pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
-        retargeting_enabled: false,
         target_limit: Uint256::MAX,
         target_block_time: Duration::from_secs(2 * 60),
         reward_maturity_distance: 2000.into(),
+        blocks_count_to_average: 5,
     }
 }
