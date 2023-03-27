@@ -73,8 +73,7 @@ impl PoSChainConfig {
     }
 }
 
-// FIXME: find proper place for this
-pub fn create_test_pos_config() -> PoSChainConfig {
+pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         retargeting_enabled: false,
         target_limit: Uint256::MAX,

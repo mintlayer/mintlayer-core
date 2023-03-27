@@ -201,7 +201,7 @@ impl NetUpgrades<UpgradeVersion> {
 mod tests {
     use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
-    use crate::chain::{create_test_pos_config, Activate};
+    use crate::chain::{create_unittest_pos_config, Activate};
     use crate::primitives::{BlockDistance, BlockHeight};
     use crate::Uint256;
 
@@ -318,7 +318,7 @@ mod tests {
                 first_pos_upgrade,
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
                     initial_difficulty: Uint256::from_u64(1500).into(),
-                    config: create_test_pos_config(),
+                    config: create_unittest_pos_config(),
                 }),
             ),
             (
@@ -358,7 +358,7 @@ mod tests {
         assert_eq!(
             upgrades.consensus_status(14_999.into()),
             RequiredConsensus::PoS(PoSStatus::Ongoing {
-                config: create_test_pos_config(),
+                config: create_unittest_pos_config(),
             })
         );
         assert_eq!(

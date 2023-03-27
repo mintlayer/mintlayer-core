@@ -15,7 +15,9 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::{block_index_handle_impl::TestBlockIndexHandle, new_pub_key_destination};
+use super::helpers::{
+    block_index_handle_impl::TestBlockIndexHandle, new_pub_key_destination, pos_mine,
+};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate_storage::{BlockchainStorageRead, Transactional};
@@ -44,6 +46,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 const TARGET_BLOCK_TIME: Duration = Duration::from_secs(2 * 60);
+const STAKED_BALANCE: Amount = Amount::from_atoms(1);
 
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
@@ -81,7 +84,7 @@ fn setup_test_chain_with_staked_pool(
     ));
 
     let stake_pool_data = StakePoolData::new(
-        Amount::from_atoms(1),
+        STAKED_BALANCE,
         anyonecanspend_address(),
         vrf_pk,
         new_pub_key_destination(rng),
@@ -107,11 +110,10 @@ fn setup_test_chain_with_staked_pool(
 fn stable_block_time(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
 
-    // FIXME: mining?
-    for _i in 0..10 {
-        let new_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
+    for _i in 0..50 {
+        let initial_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
         let new_block_height = tf.best_block_index().block_height().next_height();
         let new_target = {
             let pos_status = match tf
@@ -154,21 +156,20 @@ fn stable_block_time(#[case] seed: Seed) {
             .map_or(tf.chainstate.get_chain_config().initial_randomness(), |d| {
                 d.randomness().value()
             });
-
-        let transcript = construct_transcript(
-            current_epoch_index,
-            &sealed_epoch_randomness,
-            new_block_time,
-        );
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
         let best_block_outputs = tf.outputs_from_genblock(tf.best_block_id());
-        let pos_data = PoSData::new(
-            vec![TxInput::new(best_block_outputs.keys().next().unwrap().clone(), 0)],
-            vec![InputWitness::NoSignature(None)],
+
+        let (pos_data, valid_block_timestamp) = pos_mine(
+            initial_block_time,
+            OutPoint::new(best_block_outputs.keys().next().unwrap().clone(), 0),
+            &vrf_pk,
+            &vrf_sk,
+            chainstate_types::pos_randomness::PoSRandomness::new(sealed_epoch_randomness),
             pool_id,
-            vrf_data,
+            STAKED_BALANCE,
+            current_epoch_index,
             new_target,
-        );
+        )
+        .expect("should be able to mine");
 
         let reward_output = TxOutput::ProduceBlockFromStake(
             Amount::from_atoms(1),
@@ -177,7 +178,7 @@ fn stable_block_time(#[case] seed: Seed) {
         );
         tf.make_block_builder()
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
-            .with_timestamp(new_block_time)
+            .with_timestamp(valid_block_timestamp)
             .with_reward(vec![reward_output])
             .build_and_process()
             .unwrap();
@@ -211,10 +212,8 @@ fn invalid_target(#[case] seed: Seed) {
         invalid_target,
     );
 
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     let res = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
