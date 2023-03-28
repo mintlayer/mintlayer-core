@@ -345,6 +345,7 @@ dependencies = [
  "chainstate-storage",
  "chainstate-types",
  "common",
+ "consensus",
  "crossbeam-channel",
  "crypto",
  "futures",

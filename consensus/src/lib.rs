@@ -17,13 +17,52 @@
 
 mod pos;
 mod pow;
+mod error;
+mod validator;
+
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::block::{consensus_data::PoWData, ConsensusData},
+    chain::{Block, RequiredConsensus, ChainConfig},
+    primitives::{BlockHeight, Id},
+};
 
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
-    pow::{check_proof_of_work, mine, ConsensusPoWError},
+    pow::{check_proof_of_work, mine, calculate_work_required, ConsensusPoWError},
     validator::validate_consensus,
 };
 
-mod error;
-mod validator;
+#[allow(unreachable_code)]
+pub fn initialize_consensus_data<F, G>(
+    chain_config: &ChainConfig,
+    block: &mut Block,
+    block_height: BlockHeight,
+    get_block_index: F,
+    get_ancestor: G,
+) -> Result<(), ConsensusVerificationError>
+where
+    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
+    match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
+        RequiredConsensus::IgnoreConsensus => {}
+        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoW(pow_status) => {
+            let work_required = calculate_work_required(
+                chain_config,
+                block.header(),
+                &pow_status,
+                get_block_index,
+                get_ancestor,
+            )
+            .map_err(ConsensusVerificationError::PoWError)?;
+
+            let pow_data = PoWData::new(work_required, 0);
+            block.update_consensus_data(ConsensusData::PoW(pow_data));
+        }
+    }
+
+    Ok(())
+}

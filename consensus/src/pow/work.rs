@@ -15,7 +15,7 @@
 
 #![allow(dead_code)]
 
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::consensus_data::PoWData,
@@ -23,7 +23,7 @@ use common::{
         config::ChainConfig,
         PoWStatus,
     },
-    primitives::{Compact, Idable, H256},
+    primitives::{BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
 
@@ -53,8 +53,20 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     pow_status: &PoWStatus,
     block_index_handle: &H,
 ) -> Result<(), ConsensusPoWError> {
-    let work_required =
-        calculate_work_required(chain_config, header, pow_status, block_index_handle)?;
+    let get_block_index =
+        |&prev_block_id: &Id<Block>| block_index_handle.get_block_index(&prev_block_id);
+
+    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+        block_index_handle.get_ancestor(&block_index, ancestor_height)
+    };
+
+    let work_required = calculate_work_required(
+        chain_config,
+        header,
+        pow_status,
+        get_block_index,
+        get_ancestor,
+    )?;
 
     // TODO: add test for a block with invalid target
     if work_required != block_pow_data.bits() {
@@ -68,12 +80,17 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     }
 }
 
-fn calculate_work_required<H: BlockIndexHandle>(
+pub fn calculate_work_required<F, G>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pow_status: &PoWStatus,
-    block_index_handle: &H,
-) -> Result<Compact, ConsensusPoWError> {
+    get_block_index: F,
+    get_ancestor: G
+) -> Result<Compact, ConsensusPoWError>
+where
+    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
@@ -84,7 +101,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
                 .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
 
             // TODO: this should use get_gen_block_index() because the previous block could be genesis
-            let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
+            let prev_block_index = match get_block_index(&prev_block_id) {
                 Ok(id) => id,
                 Err(err) => {
                     return Err(ConsensusPoWError::PrevBlockLoadError(
@@ -102,7 +119,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
                 header.timestamp(),
-                block_index_handle,
+                get_ancestor,
             )
         }
     }
@@ -121,12 +138,15 @@ impl PoW {
         )
     }
 
-    fn get_work_required<H: BlockIndexHandle>(
+    fn get_work_required<F>(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: BlockTimestamp,
-        db_accessor: &H,
-    ) -> Result<Compact, ConsensusPoWError> {
+        get_ancestor: F,
+    ) -> Result<Compact, ConsensusPoWError>
+    where
+        F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+    {
         let prev_block_consensus_data = prev_block_index.block_header().consensus_data();
         // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
         // block was PoW
@@ -165,7 +185,7 @@ impl PoW {
         }
 
         let retarget_block_time =
-            get_starting_block_time(adjustment_interval, prev_block_index, db_accessor)?;
+            get_starting_block_time(adjustment_interval, prev_block_index, get_ancestor)?;
         self.next_work_required(retarget_block_time, prev_block_index, prev_block_bits)
     }
 

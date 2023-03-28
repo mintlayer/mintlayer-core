@@ -15,15 +15,17 @@
 
 use std::sync::Arc;
 
-use chainstate::ChainstateHandle;
+use chainstate::{ChainstateHandle, PropertyQueryError};
+use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward},
-        Block, ChainConfig,
+        Block, ChainConfig, Transactions,
     },
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
+use consensus::ConsensusVerificationError;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
@@ -92,20 +94,62 @@ impl BlockMaker {
         Ok(returned_accumulator)
     }
 
-    pub fn make_block(
+    pub async fn make_block(
         &self,
         current_tip_id: Id<Block>,
-        accumulator: &dyn TransactionAccumulator,
+        transactions: Transactions,
     ) -> Result<Block, BlockProductionError> {
         // TODO: this isn't efficient. We have to create the header first, then see if it obeys consensus rules, then construct the full block
         let current_time = self.time_getter.get_time();
-        let block = Block::new(
-            accumulator.transactions().clone(),
+        let mut block = Block::new(
+            transactions.transactions().clone(),
             current_tip_id.into(),
             BlockTimestamp::from_duration_since_epoch(current_time),
             common::chain::block::ConsensusData::None,
             BlockReward::new(vec![]), // TODO: define consensus and rewards through NetworkUpgrades
         )?;
+
+        block = self
+            .chainstate_handle
+            .call({
+                let chain_config = self.chain_config.clone();
+                let current_tip_height = self.current_tip_height.clone();
+
+                move |this| -> Result<Block, ConsensusVerificationError> {
+                    let get_block_index = |&prev_block_id: &Id<Block>| {
+                        this.get_block_index(&prev_block_id).map_err(|_| {
+                            PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.into())
+                        })
+                    };
+
+                    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+                        this.get_ancestor(&block_index.clone().into_gen_block_index(), ancestor_height)
+                            .map_err(|_| {
+                                PropertyQueryError::GetAncestorError(
+                                    GetAncestorError::InvalidAncestorHeight {
+                                        block_height: block_index.block_height(),
+                                        ancestor_height: ancestor_height,
+                                    },
+                                )
+                            })
+                    };
+
+                    consensus::initialize_consensus_data(
+                        &chain_config,
+                        &mut block,
+                        current_tip_height,
+                        get_block_index,
+                        get_ancestor,
+                    )?;
+
+                    Ok(block)
+                }
+            })
+            .await?
+            .map_err(|err| BlockProductionError::FailedConsensusInitialization(err))?;
+
+        // TODO: consensus::finalize_consensus_data(&block)
+
         Ok(block)
     }
 
@@ -150,7 +194,8 @@ impl BlockMaker {
 
         // TODO: do we want to introduce a separate executor for this loop to avoid starving other tasks?
         loop {
-            let block = self.make_block(self.current_tip_id, &*accumulator)?;
+            let transactions = Transactions::from(&accumulator);
+            let block = self.make_block(self.current_tip_id, transactions).await?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),

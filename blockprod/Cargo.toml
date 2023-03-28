@@ -9,7 +9,9 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
+chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
+consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
 mempool = { path = "../mempool/" }
 subsystem = { path = "../subsystem/" }

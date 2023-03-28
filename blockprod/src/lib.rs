@@ -22,6 +22,7 @@ use common::{
     chain::{block::BlockCreationError, ChainConfig},
     time_getter::TimeGetter,
 };
+use consensus::ConsensusVerificationError;
 use detail::{builder::PerpetualBlockBuilder, BlockProduction};
 use interface::BlockProductionInterface;
 use mempool::MempoolHandle;
@@ -42,6 +43,8 @@ pub enum BlockProductionError {
     SubsystemCallError(#[from] CallError),
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
+    #[error("Initialization of consensus failed: {0}")]
+    FailedConsensusInitialization(#[from] ConsensusVerificationError)
 }
 
 mod detail;
