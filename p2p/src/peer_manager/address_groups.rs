@@ -44,7 +44,9 @@ pub fn get_address_group(address: &PeerAddress) -> AddressGroup {
         PeerAddress::Ip4(addr) => {
             let ip = Ipv4Addr::from(addr.ip);
             if ip.is_global_unicast_ip() {
-                AddressGroup::PublicV4(ip.octets()[0..IPV4_GROUP_BYTES].try_into().unwrap())
+                AddressGroup::PublicV4(
+                    ip.octets()[0..IPV4_GROUP_BYTES].try_into().expect("must be valid"),
+                )
             } else if ip.is_loopback() {
                 AddressGroup::Local
             } else {
@@ -54,7 +56,9 @@ pub fn get_address_group(address: &PeerAddress) -> AddressGroup {
         PeerAddress::Ip6(addr) => {
             let ip = Ipv6Addr::from(addr.ip);
             if ip.is_global_unicast_ip() {
-                AddressGroup::PublicV6(ip.octets()[0..IPV6_GROUP_BYTES].try_into().unwrap())
+                AddressGroup::PublicV6(
+                    ip.octets()[0..IPV6_GROUP_BYTES].try_into().expect("must be valid"),
+                )
             } else if ip.is_loopback() {
                 AddressGroup::Local
             } else {
