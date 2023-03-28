@@ -142,8 +142,10 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
 
     let vrf_pub_key = match reward_output {
-        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
-            // only pool outputs can be staked
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::DecommissionPool(_, _, _, _) => {
             return Err(BlockError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardPurpose,
             ));

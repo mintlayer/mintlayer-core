@@ -61,8 +61,8 @@ use common::{
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxMainChainIndex,
-        TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -379,14 +379,15 @@ where
                 Err(ConnectTransactionError::InvalidOutputTypeInReward(block_id))
             }
             TxOutput::StakePool(d) => Ok(d.as_ref().clone()),
-            TxOutput::ProduceBlockFromStake(v, d, pool_id) => {
+            TxOutput::ProduceBlockFromStake(v, d, pool_id)
+            | TxOutput::DecommissionPool(v, d, pool_id, _) => {
                 let pool_data = self
                     .accounting_delta
                     .get_pool_data(*pool_id)?
                     .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
                 Ok(StakePoolData::new(
                     *v,
-                    d.clone(),
+                    d.clone(), // FIXME: is this correct??? what if owner and decommission differ?
                     pool_data.vrf_public_key().clone(),
                     pool_data.decommission_destination().clone(),
                     pool_data.margin_ratio_per_thousand(),
@@ -534,54 +535,74 @@ where
         Ok(())
     }
 
+    fn create_pool(
+        &mut self,
+        tx_source: TransactionSource,
+        tx: &Transaction,
+        pool_data: &StakePoolData,
+    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+
+        // TODO: check StakePoolData fields
+        let delegation_amount = pool_data.value();
+
+        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
+        let (_, undo) = temp_delta.create_pool(
+            input0.outpoint(),
+            delegation_amount,
+            pool_data.decommission_key().clone(),
+            pool_data.vrf_public_key().clone(),
+            pool_data.margin_ratio_per_thousand(),
+            pool_data.cost_per_epoch(),
+        )?;
+        let new_delta_data = temp_delta.consume();
+
+        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
+
+        self.accounting_block_deltas
+            .entry(tx_source)
+            .or_default()
+            .merge_with_delta(new_delta_data)?;
+
+        Ok(undo)
+    }
+
+    fn decommission_pool(
+        &mut self,
+        tx_source: TransactionSource,
+        pool_id: PoolId,
+    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
+        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
+
+        let undo = temp_delta.decommission_pool(pool_id)?;
+
+        let new_delta_data = temp_delta.consume();
+        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
+        self.accounting_block_deltas
+            .entry(tx_source)
+            .or_default()
+            .merge_with_delta(new_delta_data)?;
+        Ok(undo)
+    }
+
     fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input0_getter =
-            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
-
         let tx_undo = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::StakePool(data) => Some(data),
+                TxOutput::StakePool(data) => Some(self.create_pool(tx_source, tx, data)),
+                TxOutput::DecommissionPool(_, _, pool_id, _) => {
+                    Some(self.decommission_pool(tx_source, *pool_id))
+                }
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _, _) => None,
             })
-            .map(
-                |pool_data| -> Result<PoSAccountingUndo, ConnectTransactionError> {
-                    let input0 = input0_getter()?;
-
-                    // TODO: check StakePoolData fields
-                    let delegation_amount = pool_data.value();
-
-                    let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-                    let (_, undo) = temp_delta
-                        .create_pool(
-                            input0.outpoint(),
-                            delegation_amount,
-                            pool_data.decommission_key().clone(),
-                            pool_data.vrf_public_key().clone(),
-                            pool_data.margin_ratio_per_thousand(),
-                            pool_data.cost_per_epoch(),
-                        )
-                        .map_err(ConnectTransactionError::PoSAccountingError)?;
-                    let new_delta_data = temp_delta.consume();
-
-                    self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-
-                    self.accounting_block_deltas
-                        .entry(tx_source)
-                        .or_default()
-                        .merge_with_delta(new_delta_data)?;
-
-                    Ok(undo)
-                },
-            )
             .collect::<Result<Vec<_>, _>>()?;
 
         if !tx_undo.is_empty() {
@@ -600,7 +621,7 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::StakePool(_) => {
+            TxOutput::StakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
@@ -713,6 +734,11 @@ where
         block_index: &BlockIndex,
         reward_transactable: BlockRewardTransactable,
     ) -> Result<(), ConnectTransactionError> {
+        input_output_policy::check_reward_inputs_outputs_purposes(
+            &reward_transactable,
+            &self.utxo_cache,
+        )?;
+
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
             // pre-cache all inputs

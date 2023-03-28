@@ -424,7 +424,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         block.block_reward().outputs().iter().try_for_each(|output| {
             match output {
-                TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
+                TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => {
+                    self.check_block_reward_timelock(block, tl)
+                }
                 TxOutput::ProduceBlockFromStake(_, _, _) => {
                     // The output can be reused in block reward right away
                     Ok(())

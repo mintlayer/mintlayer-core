@@ -133,7 +133,10 @@ where
     let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
 
     let vrf_pub_key = match kernel_output {
-        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
+        TxOutput::Transfer(_,_)
+        | TxOutput::LockThenTransfer(_,_, _)
+        | TxOutput::Burn(_)
+        | TxOutput::DecommissionPool(_,_, _, _) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),

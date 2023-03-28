@@ -41,7 +41,7 @@ fn check_timelock(
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) => tl,
+        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };
 
     let source_block_height = source_block_index.block_height();
