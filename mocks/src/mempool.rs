@@ -99,6 +99,13 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
+    async fn transaction(
+        &self,
+        _id: &Id<Transaction>,
+    ) -> Result<Option<&SignedTransaction>, Error> {
+        Ok(None)
+    }
+
     async fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,

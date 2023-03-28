@@ -26,7 +26,9 @@ use common::{
 use mempool::error::{Error as MempoolError, TxValidationError};
 
 use crate::{
-    message::Announcement, sync::tests::helpers::SyncManagerHandle, types::peer_id::PeerId,
+    message::{Announcement, SyncMessage},
+    sync::tests::helpers::SyncManagerHandle,
+    types::peer_id::PeerId,
     P2pError,
 };
 
@@ -54,6 +56,15 @@ async fn invalid_transaction() {
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle.make_announcement(peer, Announcement::Transaction(tx.serialized_hash()));
+
+    let (sent_to, message) = handle.message().await;
+    assert_eq!(peer, sent_to);
+    assert_eq!(
+        message,
+        SyncMessage::TransactionRequest(tx.serialized_hash())
+    );
+
+    handle.send_message(peer, SyncMessage::TransactionResponse(tx));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);

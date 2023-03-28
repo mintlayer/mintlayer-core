@@ -372,14 +372,24 @@ where
     }
 
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
-        todo!();
-        todo!()
+        if let Some(tx) = self
+            .mempool_handle
+            .call_async(move |m| {
+                Box::pin(async move { m.transaction(&id).await.map(|o| o.cloned()) })
+            })
+            .await??
+        {
+            self.messaging_handle
+                .send_message(self.id(), SyncMessage::TransactionResponse(tx))?;
+        }
+
+        Ok(())
     }
 
     async fn handle_transaction_response(&mut self, tx: SignedTransaction) -> Result<()> {
-        // TODO: FIXME: Add to mempool and broadcast!
-        todo!();
-        todo!()
+        let id = tx.serialized_hash();
+        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+        self.messaging_handle.make_announcement(Announcement::Transaction(id))
     }
 
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {

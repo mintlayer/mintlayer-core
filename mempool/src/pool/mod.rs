@@ -684,6 +684,10 @@ where
         self.store.txs_by_id.contains_key(tx_id)
     }
 
+    pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
+        self.store.txs_by_id.get(id).map(|e| e.tx())
+    }
+
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
         self.events_controller.subscribe_to_events(handler)
     }

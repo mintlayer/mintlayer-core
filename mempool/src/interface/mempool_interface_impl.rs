@@ -103,6 +103,10 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for MempoolInte
         Ok(self.pool.contains_transaction(tx_id))
     }
 
+    async fn transaction(&self, id: &Id<Transaction>) -> Result<Option<&SignedTransaction>, Error> {
+        Ok(self.pool.transaction(id))
+    }
+
     async fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
