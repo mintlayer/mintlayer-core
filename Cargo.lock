@@ -703,6 +703,7 @@ dependencies = [
  "num",
  "pos_accounting",
  "rstest",
+ "test-utils",
  "thiserror",
  "utils",
  "utxo",
