@@ -57,7 +57,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
         |&prev_block_id: &Id<Block>| block_index_handle.get_block_index(&prev_block_id);
 
     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-        block_index_handle.get_ancestor(&block_index, ancestor_height)
+        block_index_handle.get_ancestor(block_index, ancestor_height)
     };
 
     let work_required = calculate_work_required(
@@ -85,7 +85,7 @@ pub fn calculate_work_required<F, G>(
     header: &BlockHeader,
     pow_status: &PoWStatus,
     get_block_index: F,
-    get_ancestor: G
+    get_ancestor: G,
 ) -> Result<Compact, ConsensusPoWError>
 where
     F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,

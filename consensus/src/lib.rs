@@ -15,22 +15,22 @@
 
 //! A consensus related logic.
 
+mod error;
 mod pos;
 mod pow;
-mod error;
 mod validator;
 
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::block::{consensus_data::PoWData, ConsensusData},
-    chain::{Block, RequiredConsensus, ChainConfig},
+    chain::{Block, ChainConfig, RequiredConsensus},
     primitives::{BlockHeight, Id},
 };
 
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
-    pow::{check_proof_of_work, mine, calculate_work_required, ConsensusPoWError},
+    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError},
     validator::validate_consensus,
 };
 

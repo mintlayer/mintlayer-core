@@ -113,7 +113,7 @@ impl BlockMaker {
             .chainstate_handle
             .call({
                 let chain_config = self.chain_config.clone();
-                let current_tip_height = self.current_tip_height.clone();
+                let current_tip_height = self.current_tip_height;
 
                 move |this| -> Result<Block, ConsensusVerificationError> {
                     let get_block_index = |&prev_block_id: &Id<Block>| {
@@ -123,15 +123,18 @@ impl BlockMaker {
                     };
 
                     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-                        this.get_ancestor(&block_index.clone().into_gen_block_index(), ancestor_height)
-                            .map_err(|_| {
-                                PropertyQueryError::GetAncestorError(
-                                    GetAncestorError::InvalidAncestorHeight {
-                                        block_height: block_index.block_height(),
-                                        ancestor_height: ancestor_height,
-                                    },
-                                )
-                            })
+                        this.get_ancestor(
+                            &block_index.clone().into_gen_block_index(),
+                            ancestor_height,
+                        )
+                        .map_err(|_| {
+                            PropertyQueryError::GetAncestorError(
+                                GetAncestorError::InvalidAncestorHeight {
+                                    block_height: block_index.block_height(),
+                                    ancestor_height,
+                                },
+                            )
+                        })
                     };
 
                     consensus::initialize_consensus_data(
@@ -146,7 +149,7 @@ impl BlockMaker {
                 }
             })
             .await?
-            .map_err(|err| BlockProductionError::FailedConsensusInitialization(err))?;
+            .map_err(BlockProductionError::FailedConsensusInitialization)?;
 
         // TODO: consensus::finalize_consensus_data(&block)
 

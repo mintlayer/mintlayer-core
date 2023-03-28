@@ -44,7 +44,7 @@ pub enum BlockProductionError {
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
-    FailedConsensusInitialization(#[from] ConsensusVerificationError)
+    FailedConsensusInitialization(#[from] ConsensusVerificationError),
 }
 
 mod detail;
