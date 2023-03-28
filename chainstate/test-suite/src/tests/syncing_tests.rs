@@ -86,7 +86,7 @@ fn get_locator_from_height(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::builder(&mut rng).build();
 
-        let blocks = rng.gen_range(1000..2000);
+        let blocks = rng.gen_range(1001..2000);
         btf.create_chain(&btf.genesis().get_id().into(), blocks, &mut rng).unwrap();
 
         for _ in 0..8 {
