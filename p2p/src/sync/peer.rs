@@ -29,7 +29,7 @@ use void::Void;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
-    chain::{block::BlockHeader, Block, SignedTransaction},
+    chain::{block::BlockHeader, Block, SignedTransaction, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -170,6 +170,8 @@ where
                 self.handle_header_response(r.into_headers()).await
             }
             SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
+            SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
+            SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
         }
     }
 
@@ -369,6 +371,17 @@ where
         Ok(())
     }
 
+    async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
+        todo!();
+        todo!()
+    }
+
+    async fn handle_transaction_response(&mut self, tx: SignedTransaction) -> Result<()> {
+        // TODO: FIXME: Add to mempool and broadcast!
+        todo!();
+        todo!()
+    }
+
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
         match announcement {
             Announcement::Block(header) => self.handle_block_announcement(*header).await,
@@ -415,11 +428,17 @@ where
         self.request_blocks(vec![header])
     }
 
-    async fn handle_transaction_announcement(&mut self, tx: SignedTransaction) -> Result<()> {
-        self.mempool_handle
-            .call_async_mut(|m| m.add_transaction(tx))
-            .await?
-            .map_err(Into::into)
+    async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
+        if !(self
+            .mempool_handle
+            .call_async(move |m| Box::pin(async move { m.contains_transaction(&tx).await }))
+            .await??)
+        {
+            self.messaging_handle
+                .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
+        }
+
+        Ok(())
     }
 
     /// Handles a result of message processing.

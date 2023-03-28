@@ -17,7 +17,7 @@ use chainstate::Locator;
 use common::{
     chain::{
         block::{Block, BlockHeader},
-        SignedTransaction,
+        SignedTransaction, Transaction,
     },
     primitives::Id,
 };
@@ -31,6 +31,8 @@ pub enum SyncMessage {
     BlockListRequest(BlockListRequest),
     HeaderListResponse(HeaderListResponse),
     BlockResponse(BlockResponse),
+    TransactionRequest(Id<Transaction>),
+    TransactionResponse(SignedTransaction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,5 +150,5 @@ pub enum Announcement {
     #[codec(index = 0)]
     Block(Box<BlockHeader>),
     #[codec(index = 1)]
-    Transaction(SignedTransaction),
+    Transaction(Id<Transaction>),
 }

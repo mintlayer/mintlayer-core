@@ -559,6 +559,20 @@ where
                     message: SyncMessage::BlockListRequest(r),
                 },
             ),
+            Message::TransactionRequest(id) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::TransactionRequest(id),
+                },
+            ),
+            Message::TransactionResponse(tx) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::TransactionResponse(tx),
+                },
+            ),
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
                 message: PeerManagerMessage::AddrListRequest(r),

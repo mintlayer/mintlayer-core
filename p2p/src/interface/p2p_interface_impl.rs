@@ -98,8 +98,8 @@ where
     }
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
-        let tx_ = tx.clone();
-        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx_)).await??;
-        self.messaging_handle.make_announcement(Announcement::Transaction(tx))
+        let id = tx.serialized_hash();
+        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+        self.messaging_handle.make_announcement(Announcement::Transaction(id))
     }
 }
