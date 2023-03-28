@@ -143,6 +143,30 @@ impl Transaction {
     }
 }
 
+pub struct Transactions {
+    transactions: Vec<SignedTransaction>,
+}
+
+impl Transactions {
+    pub fn new(transactions: &[SignedTransaction]) -> Transactions {
+        Transactions {
+            transactions: transactions.to_vec(),
+        }
+    }
+
+    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+        &self.transactions
+    }
+}
+
+impl From<&Vec<SignedTransaction>> for Transactions {
+    fn from(transactions: &Vec<SignedTransaction>) -> Self {
+        Transactions {
+            transactions: transactions.clone(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

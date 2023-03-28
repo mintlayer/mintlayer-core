@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::SignedTransaction, primitives::Amount};
+use common::{chain::SignedTransaction, chain::Transactions, primitives::Amount};
 use serialization::Encode;
 
 use crate::pool::fee::Fee;
@@ -79,5 +79,11 @@ impl TransactionAccumulator for DefaultTxAccumulator {
 
     fn total_fees(&self) -> Fee {
         self.total_fees
+    }
+}
+
+impl From<&Box<dyn TransactionAccumulator>> for Transactions {
+    fn from(transactions: &Box<dyn TransactionAccumulator>) -> Self {
+        Transactions::new(transactions.transactions())
     }
 }
