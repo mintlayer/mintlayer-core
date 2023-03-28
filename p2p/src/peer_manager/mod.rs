@@ -19,6 +19,7 @@ pub mod address_groups;
 pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
+mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -133,6 +134,8 @@ where
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
+
+    peer_eviction_random_state: peers_eviction::RandomState,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -149,6 +152,7 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
+        let mut rng = make_pseudo_rng();
         let peerdb =
             peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
@@ -164,6 +168,7 @@ where
             peers: BTreeMap::new(),
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
+            peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
         })
     }
 
@@ -394,7 +399,6 @@ where
         role: Role,
         info: &PeerInfo,
     ) -> crate::Result<()> {
-        // TODO: Allow only one connection per IP address
         ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -421,18 +425,38 @@ where
             !self.peerdb.is_address_banned(&address.as_bannable()),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
+
         // If the maximum number of inbound connections is reached,
         // the new inbound connection cannot be accepted even if it's valid.
         // Outbound peer count is not checked because the node initiates new connections
         // only when needed or from RPC requests.
         // TODO: Always allow connections from the whitelisted IPs
-        ensure!(
-            self.inbound_peer_count() < *self.p2p_config.max_inbound_connections
-                || role != Role::Inbound,
-            P2pError::PeerError(PeerError::TooManyPeers),
-        );
+        if role == Role::Inbound
+            && self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
+        {
+            let evicted = self.try_evict_random_connection();
+            ensure!(evicted, P2pError::PeerError(PeerError::TooManyPeers));
+        }
 
         Ok(())
+    }
+
+    fn try_evict_random_connection(&mut self) -> bool {
+        let candidates = self
+            .peers
+            .values()
+            .map(|peer| {
+                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state)
+            })
+            .collect::<Vec<peers_eviction::EvictionCandidate>>();
+
+        if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
+            self.disconnect(peer_id, None);
+
+            true
+        } else {
+            false
+        }
     }
 
     /// Try accept new connection
