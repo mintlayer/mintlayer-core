@@ -42,6 +42,7 @@ where
     N::SyncingEventReceiver: SyncingEventReceiver + Debug,
     A: RandomAddressMaker<Address = N::Address>,
 {
+    rlimit::increase_nofile_limit(10 * 1024).unwrap();
     logging::init_logging::<&str>(None);
     let args = Arguments::from_args();
     libtest_mimic::run(&args, tests::<T, N, A>()).exit();

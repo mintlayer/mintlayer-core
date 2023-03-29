@@ -165,7 +165,7 @@ checksum = "86ea188f25f0255d8f92797797c97ebf5631fa88178beb1a46fdf5622c9a00e4"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.4",
+ "syn 2.0.11",
 ]
 
 [[package]]
@@ -897,6 +897,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "ctor"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd4056f63fce3b82d852c3da92b08ea59959890813a7f4ce9c0ff85b10cf301b"
+dependencies = [
+ "quote",
+ "syn 2.0.11",
 ]
 
 [[package]]
@@ -2413,6 +2423,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "ctor",
  "futures",
  "hex",
  "itertools",
@@ -2424,6 +2435,7 @@ dependencies = [
  "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
+ "rlimit",
  "rpc",
  "rstest",
  "serde",
@@ -2455,6 +2467,7 @@ dependencies = [
  "logging",
  "p2p",
  "p2p-test-utils",
+ "rlimit",
  "serialization",
  "subsystem",
  "tokio",
@@ -3048,6 +3061,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rlimit"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8a29d87a652dc4d43c586328706bb5cdff211f3f39a530f240b53f7221dab8e"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "rpc"
 version = "0.1.0"
 dependencies = [
@@ -3397,7 +3419,7 @@ checksum = "e801c1712f48475582b7696ac71e0ca34ebb30e09338425384269d9717c62cad"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.4",
+ "syn 2.0.11",
 ]
 
 [[package]]
@@ -3819,9 +3841,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.4"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c622ae390c9302e214c31013517c2061ecb2699935882c60a9b37f82f8625ae"
+checksum = "21e3787bb71465627110e7d87ed4faaa36c1f61042ee67badb9e2ef173accc40"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3920,7 +3942,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.4",
+ "syn 2.0.11",
 ]
 
 [[package]]
