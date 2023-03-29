@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::{block::BlockRewardTransactable, Transaction, TxOutput};
+use utils::ensure;
 
 use super::error::ConnectTransactionError;
 
@@ -25,73 +26,157 @@ pub fn check_reward_inputs_outputs_purposes(
     Ok(())
 }
 
-/// Not all `OutputPurposes` can be used in a transaction.
-/// For example spending `ProduceBlockFromStake` and `StakePool` in a tx is not supported
-/// at the moment and considered invalid.
-pub fn check_tx_inputs_outputs_purposes(
-    tx: &Transaction,
-    utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
-    check_inputs_can_be_used_in_tx(tx, utxo_view)?;
-    check_outputs_can_be_used_in_tx(tx)?;
-    Ok(())
+#[rustfmt::skip]
+pub fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool {
+    match (input, output){
+        (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _)) |
+        (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _)) |
+        (TxOutput::Transfer(_, _), TxOutput::Burn(_)) |
+        (TxOutput::Transfer(_, _), TxOutput::StakePool(_)) => true,
+        (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
+        (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _)) |
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _)) |
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_)) |
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::StakePool(_)) => true,
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
+        (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+        (TxOutput::Burn(_), _) => false,
+        (TxOutput::StakePool(_), TxOutput::Transfer(_, _)) |
+        (TxOutput::StakePool(_), TxOutput::LockThenTransfer(_, _, _)) |
+        (TxOutput::StakePool(_), TxOutput::Burn(_)) |
+        (TxOutput::StakePool(_), TxOutput::StakePool(_)) |
+        (TxOutput::StakePool(_), TxOutput::ProduceBlockFromStake(_, _, _)) => false,
+        (TxOutput::StakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Transfer(_, _)) |
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::LockThenTransfer(_, _, _)) |
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Burn(_)) |
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::StakePool(_)) |
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) => false,
+        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => true,
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Transfer(_, _)) |
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::LockThenTransfer(_, _, _)) |
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Burn(_)) |
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::StakePool(_)) => true,
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
+        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+    }
 }
 
-/// Indicates whether an output purpose can be used in a tx as an input
-fn is_valid_input_for_tx(output: &TxOutput) -> bool {
-    match output {
+pub fn is_valid_many_to_one_combination(inputs: &[TxOutput], output: &TxOutput) -> bool {
+    let valid_inputs = inputs.iter().all(|input| match input {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _) => true,
         TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
             false
         }
-    }
-}
+    });
 
-/// Indicates whether an output purpose can be used in a tx as an output
-fn is_valid_output_for_tx(output: &TxOutput) -> bool {
-    match output {
+    let valid_output = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
-        | TxOutput::StakePool(_)
-        | TxOutput::DecommissionPool(_, _, _, _) => true,
-        TxOutput::ProduceBlockFromStake(_, _, _) => false,
-    }
+        | TxOutput::StakePool(_) => true,
+        TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
+    };
+
+    valid_inputs && valid_output
 }
 
-fn check_inputs_can_be_used_in_tx(
+pub fn is_valid_one_to_many_combination(input: &TxOutput, outputs: &[TxOutput]) -> bool {
+    let valid_input = match input {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::DecommissionPool(_, _, _, _) => true,
+        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
+            false
+        }
+    };
+
+    let valid_outputs = outputs.iter().all(|output| match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::StakePool(_) => true,
+        TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
+    });
+
+    valid_input && valid_outputs
+}
+
+pub fn is_valid_many_to_many_combination(inputs: &[TxOutput], outputs: &[TxOutput]) -> bool {
+    let valid_inputs = inputs.iter().all(|input| match input {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::DecommissionPool(_, _, _, _) => true,
+        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
+            false
+        }
+    });
+
+    let valid_outputs = outputs.iter().all(|output| match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::StakePool(_) => true,
+        TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
+    });
+
+    valid_inputs && valid_outputs
+}
+
+/// Not all `OutputPurposes` combinations can be used in a transaction.
+pub fn check_tx_inputs_outputs_purposes(
     tx: &Transaction,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<(), ConnectTransactionError> {
-    let can_be_spent = tx
+    let inputs = tx
         .inputs()
         .iter()
         .map(|input| {
             utxo_view
                 .utxo(input.outpoint())
                 .map_err(|_| utxo::Error::ViewRead)?
+                .map(|u| u.output().clone())
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
         })
-        .collect::<Result<Vec<_>, _>>()?
-        .iter()
-        .all(|utxo| is_valid_input_for_tx(utxo.output()));
+        .collect::<Result<Vec<_>, _>>()?;
 
-    utils::ensure!(
-        can_be_spent,
-        ConnectTransactionError::AttemptToSpendInvalidOutputType
-    );
-    Ok(())
-}
+    match inputs.as_slice() {
+        [] => todo!(),
+        [input] => match tx.outputs() {
+            [] => todo!(),
+            [output] => {
+                ensure!(
+                    is_valid_one_to_one_combination(input, output),
+                    ConnectTransactionError::AttemptToSpendInvalidOutputType
+                );
+            }
+            _ => {
+                ensure!(
+                    is_valid_one_to_many_combination(input, tx.outputs()),
+                    ConnectTransactionError::AttemptToSpendInvalidOutputType
+                );
+            }
+        },
+        _ => match tx.outputs() {
+            [] => todo!(),
+            [output] => {
+                ensure!(
+                    is_valid_many_to_one_combination(inputs.as_slice(), output),
+                    ConnectTransactionError::AttemptToSpendInvalidOutputType
+                );
+            }
+            _ => {
+                ensure!(
+                    is_valid_many_to_many_combination(inputs.as_slice(), tx.outputs()),
+                    ConnectTransactionError::AttemptToSpendInvalidOutputType
+                );
+            }
+        },
+    };
 
-fn check_outputs_can_be_used_in_tx(tx: &Transaction) -> Result<(), ConnectTransactionError> {
-    let are_outputs_valid = tx.outputs().iter().all(is_valid_output_for_tx);
-
-    utils::ensure!(
-        are_outputs_valid,
-        ConnectTransactionError::AttemptToUseInvalidOutputInTx
-    );
     Ok(())
 }
 
@@ -104,8 +189,13 @@ mod tests {
         },
         primitives::{Amount, Id, H256},
     };
-    use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+    use crypto::{
+        random::Rng,
+        vrf::{VRFKeyKind, VRFPrivateKey},
+    };
+    use itertools::Itertools;
     use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
     use utxo::Utxo;
 
     use super::*;
@@ -236,6 +326,43 @@ mod tests {
         let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
         assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &mocked_view));
     }
+
+    // FIXME: more tests
+
+    //#[rstest]
+    //#[trace]
+    //#[case(Seed::from_entropy())]
+    //fn tx_one_to_many(#[case] seed: Seed) {
+    //    let mut rng = make_seedable_rng(seed);
+    //    let every_purpose = [
+    //        transfer(),
+    //        lock_then_transfer(),
+    //        burn(),
+    //        stake_pool(),
+    //        produce_block(),
+    //        decommission_pool(),
+    //    ];
+
+    //    let t = every_purpose
+    //        .iter()
+    //        .combinations_with_replacement(rng.gen_range(1..10))
+    //        .collect::<Vec<_>>();
+    //    let outputs = t
+    //        .get(rng.gen_range(0..t.len()))
+    //        .unwrap()
+    //        .iter()
+    //        .map(|purpose| TxOutput::new(OutputValue::Coin(Amount::ZERO), **purpose));
+
+    //    let input = TxOutput::new(OutputValue::Coin(Amount::ZERO), in_purpose);
+    //    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+    //    let mut mocked_view = MockUtxoView::new();
+    //    mocked_view
+    //        .expect_utxo()
+    //        .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+
+    //    let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
+    //    assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &mocked_view));
+    //}
 
     // FIXME: tx_many_to_one, tx_one_to_many, tx_mane_to_many
 }
