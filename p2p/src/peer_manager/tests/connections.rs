@@ -677,6 +677,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -713,6 +714,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -794,6 +796,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let tx1 = run_peer_manager::<T>(
         A::make_transport(),
@@ -831,6 +834,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let tx2 = run_peer_manager::<T>(
         A::make_transport(),
@@ -861,6 +865,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let tx3 = run_peer_manager::<T>(
         A::make_transport(),

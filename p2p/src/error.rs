@@ -17,7 +17,7 @@ use thiserror::Error;
 
 use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
-    chain::Block,
+    chain::{Block, Transaction},
     primitives::{semver::SemVer, Id},
 };
 use mempool::error::Error as MempoolError;
@@ -52,6 +52,10 @@ pub enum ProtocolError {
     HandshakeExpected,
     #[error("More than MAX_ADDRESS_COUNT addresses sent")]
     AddressListLimitExceeded,
+    #[error("A peer tried to announce the same transaction ({0})")]
+    DuplicatedTransactionAnnouncement(Id<Transaction>),
+    #[error("Announced too many transactions (limit is {0})")]
+    TransactionAnnouncementLimitExceeded(usize),
 }
 
 /// Peer state errors (Errors either for an individual peer or for the [`PeerManager`](crate::peer_manager::PeerManager))
@@ -202,6 +206,8 @@ impl BanScore for ProtocolError {
             ProtocolError::ZeroBlocksInRequest => 20,
             ProtocolError::HandshakeExpected => 100,
             ProtocolError::AddressListLimitExceeded => 100,
+            ProtocolError::DuplicatedTransactionAnnouncement(_) => 20,
+            ProtocolError::TransactionAnnouncementLimitExceeded(_) => 20,
         }
     }
 }

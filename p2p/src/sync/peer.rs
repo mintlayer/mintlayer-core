@@ -46,7 +46,10 @@ use crate::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
         SyncMessage,
     },
-    net::NetworkingService,
+    net::{
+        types::services::{Service, Services},
+        NetworkingService,
+    },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
@@ -67,6 +70,7 @@ pub enum PeerEvent {
 pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
+    services: Services,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -82,6 +86,10 @@ pub struct Peer<T: NetworkingService> {
     blocks_queue: VecDeque<Id<Block>>,
     /// The height of the best known block of a peer.
     best_known_block: Option<BlockHeight>,
+    // TODO: Add a timer to remove entries.
+    /// A list of transactions that have been announced by this peer. An entry is added when the
+    /// identifier is announced and removed when the actual transaction is received.
+    announced_transactions: BTreeSet<Id<Transaction>>,
 }
 
 impl<T> Peer<T>
@@ -100,9 +108,12 @@ where
         events_receiver: UnboundedReceiver<PeerEvent>,
         is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
+        let services = (*p2p_config.node_type).into();
+
         Self {
             id: id.into(),
             p2p_config,
+            services,
             chainstate_handle,
             mempool_handle,
             peer_manager_sender,
@@ -113,6 +124,7 @@ where
             requested_blocks: BTreeSet::new(),
             blocks_queue: VecDeque::new(),
             best_known_block: None,
+            announced_transactions: BTreeSet::new(),
         }
     }
 
@@ -372,6 +384,12 @@ where
     }
 
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
+        if !self.services.has_service(Service::Transactions) {
+            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                "A transaction request is received, but this node doesn't have the corresponding service",
+            )));
+        }
+
         if let Some(tx) = self
             .mempool_handle
             .call_async(move |m| Box::pin(async move { m.transaction(&id).await }))
@@ -386,6 +404,13 @@ where
 
     async fn handle_transaction_response(&mut self, tx: SignedTransaction) -> Result<()> {
         let id = tx.serialized_hash();
+
+        if self.announced_transactions.take(&id).is_none() {
+            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                "Unexpected transaction response",
+            )));
+        }
+
         self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
         self.messaging_handle.make_announcement(Announcement::Transaction(id))
     }
@@ -437,6 +462,35 @@ where
     }
 
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
+        log::debug!("Transaction announcement from {} peer: {tx}", self.id());
+
+        if self.is_initial_block_download.load(Ordering::Acquire) {
+            log::debug!(
+                "Ignoring transaction announcement because the node is in initial block download"
+            );
+            return Ok(());
+        }
+
+        if !self.services.has_service(Service::Transactions) {
+            return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                "A transaction announcement is received, but this node doesn't have the corresponding service",
+            )));
+        }
+
+        if self.announced_transactions.len() >= *self.p2p_config.max_peer_tx_announcements {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::TransactionAnnouncementLimitExceeded(
+                    *self.p2p_config.max_peer_tx_announcements,
+                ),
+            ));
+        }
+
+        if self.announced_transactions.contains(&tx) {
+            return Err(P2pError::ProtocolError(
+                ProtocolError::DuplicatedTransactionAnnouncement(tx),
+            ));
+        }
+
         if !(self
             .mempool_handle
             .call_async(move |m| Box::pin(async move { m.contains_transaction(&tx).await }))
@@ -444,6 +498,7 @@ where
         {
             self.messaging_handle
                 .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
+            assert!(self.announced_transactions.insert(tx));
         }
 
         Ok(())

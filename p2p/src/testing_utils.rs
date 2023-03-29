@@ -327,5 +327,6 @@ pub fn test_p2p_config() -> P2pConfig {
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     }
 }
