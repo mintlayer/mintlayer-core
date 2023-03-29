@@ -46,6 +46,8 @@ pub enum TransactionSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidInputIndex(usize, usize),
+    #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`")]
+    InvalidUtxoCountVsInputs(usize, usize),
     #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
@@ -268,6 +270,7 @@ fn stream_signature_hash<T: Signable>(
     tx: &T,
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
+    inputs_utxos: &[TxOutput],
     target_input_num: usize,
 ) -> Result<(), TransactionSigError> {
     // TODO: even though this works fine, we need to make this function
@@ -294,8 +297,15 @@ fn stream_signature_hash<T: Signable>(
     inputs.signature_hash(stream, mode, target_input, target_input_num)?;
     outputs.signature_hash(stream, mode, target_input, target_input_num)?;
 
-    // TODO: consider doing just like taproot, and hash in all outputs that come from the outpoints of inputs,
-    //       this would be a good solution to avoid having to download full transactions to verify inputs
+    // Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
+    if inputs.len() != inputs_utxos.len() {
+        return Err(TransactionSigError::InvalidUtxoCountVsInputs(
+            inputs_utxos.len(),
+            inputs.len(),
+        ));
+    } else {
+        hash_encoded_to(&inputs_utxos, stream);
+    }
 
     // TODO: for P2SH add OP_CODESEPARATOR position
     hash_encoded_to(&u32::MAX, stream);
@@ -306,11 +316,12 @@ fn stream_signature_hash<T: Signable>(
 pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
+    inputs_utxos: &[TxOutput],
     input_num: usize,
 ) -> Result<H256, TransactionSigError> {
     let mut stream = DefaultHashAlgoStream::new();
 
-    stream_signature_hash(tx, &mut stream, mode, input_num)?;
+    stream_signature_hash(tx, &mut stream, mode, inputs_utxos, input_num)?;
 
     let result = stream.finalize().into();
     Ok(result)
@@ -321,9 +332,10 @@ fn verify_standard_input_signature<T: Transactable>(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
     tx: &T,
+    inputs_utxos: &[TxOutput],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
+    let sighash = signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num)?;
     witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
     Ok(())
 }
@@ -332,6 +344,7 @@ pub fn verify_signature<T: Transactable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
+    inputs_utxos: &[TxOutput],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
@@ -356,6 +369,7 @@ pub fn verify_signature<T: Transactable>(
             outpoint_destination,
             witness,
             tx,
+            inputs_utxos,
             input_num,
         )?,
     }
