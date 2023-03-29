@@ -105,9 +105,11 @@ pub fn select_for_eviction(mut candidates: Vec<EvictionCandidate>) -> Option<Pee
     let selected_group: NetGroupKeyed =
         *counts.iter().max_by_key(|(_group_id, count)| *count).expect("must exist").0;
 
+    // Evict the youngest peer (with max `peer_id`) in the selected group
     let peer_id = candidates
         .iter()
-        .find(|c| c.net_group_keyed == selected_group)
+        .filter(|c| c.net_group_keyed == selected_group)
+        .max_by_key(|peer| peer.peer_id)
         .expect("must exist")
         .peer_id;
 
