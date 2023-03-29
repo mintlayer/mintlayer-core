@@ -25,7 +25,6 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
-use consensus::ConsensusVerificationError;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
@@ -109,13 +108,14 @@ impl BlockMaker {
             BlockReward::new(vec![]), // TODO: define consensus and rewards through NetworkUpgrades
         )?;
 
-        block = self
+        let consensus_data = self
             .chainstate_handle
             .call({
                 let chain_config = self.chain_config.clone();
                 let current_tip_height = self.current_tip_height;
+                let header = block.header().clone();
 
-                move |this| -> Result<Block, ConsensusVerificationError> {
+                move |this| {
                     let get_block_index = |&prev_block_id: &Id<Block>| {
                         this.get_block_index(&prev_block_id).map_err(|_| {
                             PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.into())
@@ -137,21 +137,21 @@ impl BlockMaker {
                         })
                     };
 
-                    consensus::initialize_consensus_data(
+                    consensus::generate_consensus_data(
                         &chain_config,
-                        &mut block,
+                        &header,
                         current_tip_height,
                         get_block_index,
                         get_ancestor,
-                    )?;
-
-                    Ok(block)
+                    )
                 }
             })
             .await?
             .map_err(BlockProductionError::FailedConsensusInitialization)?;
 
-        // TODO: consensus::finalize_consensus_data(&block)
+        block.update_consensus_data(consensus_data);
+
+        // TODO: consensus::finalize_consensus_data(&block, consunsus_data)
 
         Ok(block)
     }

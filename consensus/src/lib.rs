@@ -22,7 +22,7 @@ mod validator;
 
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::block::{consensus_data::PoWData, ConsensusData},
+    chain::block::{consensus_data::PoWData, BlockHeader, ConsensusData},
     chain::{Block, ChainConfig, RequiredConsensus},
     primitives::{BlockHeight, Id},
 };
@@ -35,34 +35,31 @@ pub use crate::{
 };
 
 #[allow(unreachable_code)]
-pub fn initialize_consensus_data<F, G>(
+pub fn generate_consensus_data<F, G>(
     chain_config: &ChainConfig,
-    block: &mut Block,
+    header: &BlockHeader,
     block_height: BlockHeight,
     get_block_index: F,
     get_ancestor: G,
-) -> Result<(), ConsensusVerificationError>
+) -> Result<ConsensusData, ConsensusVerificationError>
 where
     F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
-        RequiredConsensus::IgnoreConsensus => {}
+        RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
         RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
-                block.header(),
+                header,
                 &pow_status,
                 get_block_index,
                 get_ancestor,
             )
             .map_err(ConsensusVerificationError::PoWError)?;
 
-            let pow_data = PoWData::new(work_required, 0);
-            block.update_consensus_data(ConsensusData::PoW(pow_data));
+            Ok(ConsensusData::PoW(PoWData::new(work_required, 0)))
         }
     }
-
-    Ok(())
 }
