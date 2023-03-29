@@ -677,6 +677,23 @@ where
         log::debug!("DNS seed records found: {total}");
     }
 
+    fn get_all_outbound(&self, reserved: bool) -> BTreeSet<T::Address> {
+        let pending_outbound = self
+            .pending_outbound_connects
+            .keys()
+            .filter(|addr| self.peerdb.is_reserved_node(addr) == reserved)
+            .cloned();
+        let connected_outbound = self
+            .peers
+            .values()
+            .filter(|peer| {
+                peer.role == Role::Outbound
+                    && self.peerdb.is_reserved_node(&peer.address) == reserved
+            })
+            .map(|peer| peer.address.clone());
+        pending_outbound.chain(connected_outbound).collect()
+    }
+
     /// Maintains the peer manager state.
     ///
     /// `PeerManager::heartbeat()` is called every time a network/control event is received
@@ -702,25 +719,8 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        // Do not take into account reserved nodes
-        let pending_outbound = self
-            .pending_outbound_connects
-            .keys()
-            .filter(|addr| !self.peerdb.is_reserved_node(addr))
-            .cloned()
-            .collect::<BTreeSet<_>>();
-        let connected_outbound = self
-            .peers
-            .values()
-            .filter(|peer| {
-                peer.role == Role::Outbound && !self.peerdb.is_reserved_node(&peer.address)
-            })
-            .map(|peer| peer.address.clone())
-            .collect::<BTreeSet<_>>();
-        let all_outbound =
-            pending_outbound.union(&connected_outbound).cloned().collect::<BTreeSet<_>>();
-
-        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_outbound);
+        let all_normal_outbound = self.get_all_outbound(false);
+        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
@@ -729,12 +729,14 @@ where
             && self.pending_outbound_connects.is_empty()
         {
             self.reload_dns_seed().await;
-            self.peerdb.select_new_outbound_addresses(&all_outbound)
+            self.peerdb.select_new_outbound_addresses(&all_normal_outbound)
         } else {
             new_addresses
         };
 
-        let reserved_addresses = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
+        let all_reserved_outbound = self.get_all_outbound(true);
+        let reserved_addresses =
+            self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
 
         for address in new_addresses.into_iter().chain(reserved_addresses.into_iter()) {
             self.connect(address, None);

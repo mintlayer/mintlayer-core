@@ -30,7 +30,7 @@ pub mod storage_impl;
 mod storage_load;
 
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -38,6 +38,7 @@ use std::{
 
 use common::time_getter::TimeGetter;
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
+use itertools::Itertools;
 use logging::log;
 
 use crate::{
@@ -52,7 +53,7 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::{address_groups::get_address_group, MAX_OUTBOUND_CONNECTIONS};
+use super::{address_groups::AddressGroup, MAX_OUTBOUND_CONNECTIONS};
 
 pub struct PeerDb<A, B, S> {
     /// P2P configuration
@@ -147,14 +148,18 @@ where
 
     /// Selects peer addresses for outbound connections (except reserved).
     /// Only one outbound connection is allowed per address group.
-    pub fn select_new_outbound_addresses(&self, all_outbound: &BTreeSet<A>) -> Vec<A> {
+    pub fn select_new_outbound_addresses(&self, all_normal_outbound: &BTreeSet<A>) -> Vec<A> {
+        let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(all_normal_outbound.len());
+        if count == 0 {
+            return Vec::new();
+        }
+
         let now = self.time_getter.get_time();
-        let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(all_outbound.len());
 
         // Only consider outbound connections, as inbound connections are open to attackers
-        let all_outbound_groups = all_outbound
+        let all_outbound_groups = all_normal_outbound
             .iter()
-            .map(|a| get_address_group(&a.as_peer_address()))
+            .map(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
             .collect::<BTreeSet<_>>();
 
         let mut selected = self
@@ -162,7 +167,8 @@ where
             .iter()
             .filter_map(|(addr, address_data)| {
                 if address_data.connect_now(now)
-                    && !all_outbound_groups.contains(&get_address_group(&addr.as_peer_address()))
+                    && !all_outbound_groups
+                        .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
@@ -175,15 +181,17 @@ where
 
         // Drop duplicate address groups as needed (shuffle selected addresses first to make the selection fair)
         selected.shuffle(&mut make_pseudo_rng());
-        let selected_grouped = selected
+        selected
             .into_iter()
-            .map(|a| (get_address_group(&a.as_peer_address()), a))
-            .collect::<HashMap<_, _>>();
-        selected_grouped.values().cloned().collect()
+            .unique_by(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
+            .collect()
     }
 
     /// Selects reserved peer addresses for outbound connections
-    pub fn select_reserved_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
+    pub fn select_reserved_outbound_addresses(
+        &self,
+        all_reserved_outbound: &BTreeSet<A>,
+    ) -> Vec<A> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
             .iter()
@@ -192,7 +200,7 @@ where
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
+                if address_data.connect_now(now) && !all_reserved_outbound.contains(addr) {
                     Some(addr.clone())
                 } else {
                     None

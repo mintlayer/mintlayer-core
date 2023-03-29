@@ -17,11 +17,9 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::types::peer_address::PeerAddress;
 
-use super::global_ip::IsGlobalIp;
-
-// IPv4 addresses /16 groups
+// IPv4 addresses grouped into /16 subnets
 const IPV4_GROUP_BYTES: usize = 2;
-// IPv4 addresses /32 groups
+// IPv6 addresses grouped into /32 subnets
 const IPV6_GROUP_BYTES: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -32,38 +30,32 @@ pub enum AddressGroup {
     PublicV6([u8; IPV6_GROUP_BYTES]),
 }
 
-/// Get the canonical identifier of the network group for address.
-///
-/// The groups are assigned in a way where it should be costly for an attacker to
-/// obtain addresses with many different group identifiers, even if it is cheap
-/// to obtain addresses with the same identifier.
-///
-/// See `NetGroupManager::GetGroup` in Bitcoin Core for a reference.
-pub fn get_address_group(address: &PeerAddress) -> AddressGroup {
-    match address {
-        PeerAddress::Ip4(addr) => {
-            let ip = Ipv4Addr::from(addr.ip);
-            if ip.is_global_unicast_ip() {
-                AddressGroup::PublicV4(
-                    ip.octets()[0..IPV4_GROUP_BYTES].try_into().expect("must be valid"),
-                )
-            } else if ip.is_loopback() {
-                AddressGroup::Local
-            } else {
-                AddressGroup::Private
+impl AddressGroup {
+    /// Get the canonical identifier of the network group for address.
+    ///
+    /// The groups are assigned in a way where it should be costly for an attacker to
+    /// obtain addresses with many different group identifiers, even if it is cheap
+    /// to obtain addresses with the same identifier.
+    ///
+    /// See `NetGroupManager::GetGroup` in Bitcoin Core for a reference.
+    pub fn from_peer_address(address: &PeerAddress) -> AddressGroup {
+        if address.is_global_unicast_ip() {
+            match address {
+                PeerAddress::Ip4(addr) => AddressGroup::PublicV4(
+                    Ipv4Addr::from(addr.ip).octets()[0..IPV4_GROUP_BYTES]
+                        .try_into()
+                        .expect("must be valid"),
+                ),
+                PeerAddress::Ip6(addr) => AddressGroup::PublicV6(
+                    Ipv6Addr::from(addr.ip).octets()[0..IPV6_GROUP_BYTES]
+                        .try_into()
+                        .expect("must be valid"),
+                ),
             }
-        }
-        PeerAddress::Ip6(addr) => {
-            let ip = Ipv6Addr::from(addr.ip);
-            if ip.is_global_unicast_ip() {
-                AddressGroup::PublicV6(
-                    ip.octets()[0..IPV6_GROUP_BYTES].try_into().expect("must be valid"),
-                )
-            } else if ip.is_loopback() {
-                AddressGroup::Local
-            } else {
-                AddressGroup::Private
-            }
+        } else if address.is_loopback() {
+            AddressGroup::Local
+        } else {
+            AddressGroup::Private
         }
     }
 }
@@ -78,7 +70,7 @@ mod tests {
 
     fn check_group(ip: &str, expected: AddressGroup) {
         let addr = SocketAddr::new(ip.parse().unwrap(), 12345).as_peer_address();
-        let group = get_address_group(&addr);
+        let group = AddressGroup::from_peer_address(&addr);
         assert_eq!(group, expected, "check failed for {ip}");
     }
 

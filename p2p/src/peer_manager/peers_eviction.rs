@@ -19,22 +19,22 @@ use crypto::random::Rng;
 
 use crate::{
     net::{default_backend::transport::TransportAddress, types::Role},
-    peer_manager::address_groups::get_address_group,
     types::peer_id::PeerId,
 };
 
-use super::peer_context::PeerContext;
+use super::{address_groups::AddressGroup, peer_context::PeerContext};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
+/// A copy of `PeerContext` with fields relevant to the eviction logic
 pub struct EvictionCandidate {
     peer_id: PeerId,
 
     /// Deterministically randomized address group ID
     net_group_keyed: NetGroupKeyed,
 
-    /// Minimum ping time in microseconds (or i64::MAX if not known yet)
+    /// Minimum ping time in microseconds (or i64::MAX if not yet known yet)
     ping_min: i64,
 
     /// Inbound or Outbound
@@ -59,9 +59,9 @@ impl EvictionCandidate {
     pub fn new<A: TransportAddress>(peer: &PeerContext<A>, random_state: &RandomState) -> Self {
         EvictionCandidate {
             peer_id: peer.info.peer_id,
-            net_group_keyed: NetGroupKeyed(
-                random_state.get_hash(&get_address_group(&peer.address.as_peer_address())),
-            ),
+            net_group_keyed: NetGroupKeyed(random_state.get_hash(
+                &AddressGroup::from_peer_address(&peer.address.as_peer_address()),
+            )),
             ping_min: peer.ping_min.map_or(i64::MAX, |val| val.as_micros() as i64),
             role: peer.role,
         }
@@ -70,27 +70,28 @@ impl EvictionCandidate {
 
 /// Based on `SelectNodeToEvict` from Bitcoin Core:
 ///
-/// Select an inbound peer to evict after filtering out (protecting) peers having
-/// distinct, difficult-to-forge characteristics. The protection logic picks out
+/// Select an inbound peer to evict after filtering out (preserving) peers having
+/// distinct, difficult-to-forge characteristics. The preservation logic picks out
 /// fixed numbers of desirable peers per various criteria.
-/// ...
 /// If any eviction candidates remain, the selection logic chooses a peer to evict.
 pub fn select_for_eviction(mut candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
     // TODO: Do not evict connections from whitelisted IPs
+
+    // Only consider inbound connections for eviction (attackers have no control over outbound connections)
     candidates.retain(|peer| peer.role == Role::Inbound);
 
-    // Deterministically select 4 peers to protect by netgroup.
-    // An attacker cannot predict which netgroups will be protected
+    // Deterministically select 4 peers to preserve by netgroup.
+    // An attacker cannot predict which netgroups will be preserved.
     candidates.sort_unstable_by_key(|peer| peer.net_group_keyed);
     candidates.truncate(candidates.len().saturating_sub(4));
 
-    // Protect the 8 nodes with the lowest minimum ping time.
+    // Preserve the 8 nodes with the lowest minimum ping time.
     // An attacker cannot manipulate this metric without physically moving nodes closer to the target.
     candidates.sort_unstable_by_key(|peer| -peer.ping_min);
     candidates.truncate(candidates.len().saturating_sub(8));
 
-    // TODO: Protect 4 nodes that most recently sent us novel transactions accepted into our mempool.
-    // TODO: Protect up to 8 peers that have sent us novel blocks.
+    // TODO: Preserve 4 nodes that most recently sent us novel transactions accepted into our mempool.
+    // TODO: Preserve up to 8 peers that have sent us novel blocks.
 
     if candidates.is_empty() {
         return None;

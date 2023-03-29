@@ -878,11 +878,12 @@ where
 
     // All peers should discover each other
     loop {
-        let counts = [
-            get_connected_peers(&tx1).await.len(),
-            get_connected_peers(&tx2).await.len(),
-            get_connected_peers(&tx3).await.len(),
-        ];
+        let connected_peers = tokio::join!(
+            get_connected_peers(&tx1),
+            get_connected_peers(&tx2),
+            get_connected_peers(&tx3)
+        );
+        let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
 
         // There should be:
         // - 2 outbound and 2 inbound connections to/from reserved peers.

@@ -17,6 +17,8 @@ use std::fmt::Display;
 
 use serialization::{Decode, Encode};
 
+use crate::peer_manager::global_ip::IsGlobalIp;
+
 use super::ip_address::{Ip4, Ip6};
 
 #[derive(Debug, Encode, Decode, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
@@ -41,6 +43,16 @@ pub enum PeerAddress {
     Ip4(PeerAddressIp4),
     #[codec(index = 1)]
     Ip6(PeerAddressIp6),
+}
+
+impl PeerAddress {
+    pub fn is_loopback(&self) -> bool {
+        std::net::SocketAddr::from(self).ip().is_loopback()
+    }
+
+    pub fn is_global_unicast_ip(&self) -> bool {
+        std::net::SocketAddr::from(self).ip().is_global_unicast_ip()
+    }
 }
 
 impl Display for PeerAddress {
