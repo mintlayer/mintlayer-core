@@ -60,4 +60,8 @@ pub enum ConsensusPoSError {
     InvalidTargetBlockTime,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
+
+    // TODO the following error should include the corresponding error from UtxosView
+    #[error("Failed to fetch utxo")]
+    FailedToFetchUtxo,
 }

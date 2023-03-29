@@ -13,21 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConsumedUtxoCache, Error, Utxo, UtxosCache};
+use crate::{error::ViewError, ConsumedUtxoCache, Error, Utxo, UtxosCache};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
 };
 
 pub trait UtxosView {
+    /// Error that can occur during utxo queries
+    type Error: ViewError;
+
     /// Retrieves utxo.
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;
 
     /// Checks whether outpoint is unspent.
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool;
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error>;
 
     /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Id<GenBlock>;
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error>;
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;

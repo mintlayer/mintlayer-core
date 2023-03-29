@@ -295,6 +295,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::TargetConversionError(_) => 100,
             ConsensusPoSError::InvalidTargetBlockTime => 100,
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
+            ConsensusPoSError::FailedToFetchUtxo => 0,
         }
     }
 }
@@ -319,6 +320,7 @@ impl BanScore for utxo::Error {
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::InvalidBlockRewardOutputType(_) => 100,
             utxo::Error::DBError(_) => 0,
+            utxo::Error::ViewError(_) => 0,
         }
     }
 }

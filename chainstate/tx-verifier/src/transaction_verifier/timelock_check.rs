@@ -92,8 +92,10 @@ pub fn check_timelocks<
 
     for input in inputs {
         let outpoint = input.outpoint();
-        let utxo =
-            utxos_view.utxo(outpoint).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let utxo = utxos_view
+            .utxo(outpoint)
+            .map_err(utxo::Error::from_view)?
+            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
         if utxo.output().has_timelock() {
             let height = match utxo.source() {

@@ -75,7 +75,7 @@ impl<S: UtxosStorageWrite> UtxosDB<S> {
         // before deriving cache, there has to be a best block
         utxos_db.set_best_block_for_utxos(&genesis_id).expect("Setting genesis failed");
 
-        let mut utxos_cache = UtxosCache::new(&utxos_db);
+        let mut utxos_cache = UtxosCache::new(&utxos_db).expect("Utxo cache setup failed");
 
         for (index, output) in genesis.utxos().iter().enumerate() {
             utxos_cache

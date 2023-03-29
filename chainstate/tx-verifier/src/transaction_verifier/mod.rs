@@ -194,7 +194,8 @@ pub struct TransactionVerifier<C, S, U, A> {
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
         let accounting_delta = PoSAccountingDelta::new(S::clone(&storage));
-        let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
+        let utxo_cache =
+            UtxosCache::new(UtxosDB::new(S::clone(&storage))).expect("Utxo cache setup failed");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
@@ -239,7 +240,7 @@ where
             best_block,
             tx_index_cache,
             token_issuance_cache: TokenIssuanceCache::new(),
-            utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
+            utxo_cache: UtxosCache::new(utxos).expect("Utxo cache setup failed"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta: PoSAccountingDelta::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
@@ -262,7 +263,7 @@ where
             storage: self,
             chain_config: self.chain_config.as_ref(),
             tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled()),
-            utxo_cache: UtxosCache::new(&self.utxo_cache),
+            utxo_cache: UtxosCache::new(&self.utxo_cache).expect("construct"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
@@ -310,6 +311,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(input.outpoint())
+                .map_err(utxo::Error::from_view)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
             self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
         });
@@ -499,6 +501,7 @@ where
                 let outpoint = input.outpoint();
                 self.utxo_cache
                     .utxo(outpoint)
+                    .map_err(utxo::Error::from_view)?
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)
                     .map(|utxo| utxo.take_output())
             })
@@ -509,6 +512,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(outpoint)
+                .map_err(utxo::Error::from_view)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             // TODO: see if a different treatment should be done for different output purposes

@@ -110,7 +110,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Ut
     for TransactionVerifier<C, S, U, A>
 {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
-        Ok(self.utxo_cache.utxo(outpoint))
+        Ok(self.utxo_cache.utxo(outpoint).expect("TODO(PR)"))
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {

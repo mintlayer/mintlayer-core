@@ -15,25 +15,25 @@
 
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosView};
+use chainstate_types::storage_result;
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
 };
 
 impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+    type Error = storage_result::Error;
+
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.get_utxo(outpoint)
-            .expect("Database error while attempting to retrieve utxo")
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.utxo(outpoint).is_some()
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+        self.utxo(outpoint).map(|u| u.is_some())
     }
 
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        self.get_best_block_for_utxos()
-            .expect("Database error while attempting to retrieve utxo set best block hash")
-            .expect("Failed to get best block hash")
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
+        Ok(self.get_best_block_for_utxos()?.expect("Failed to get best block hash"))
     }
 
     fn estimated_size(&self) -> Option<usize> {

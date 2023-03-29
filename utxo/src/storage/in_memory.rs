@@ -81,16 +81,18 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
 }
 
 impl UtxosView for UtxosDBInMemoryImpl {
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        self.store.get(outpoint).cloned()
+    type Error = std::convert::Infallible;
+
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+        Ok(self.store.get(outpoint).cloned())
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.store.get(outpoint).is_some()
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+        Ok(self.store.get(outpoint).is_some())
     }
 
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        self.best_block_id
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
+        Ok(self.best_block_id)
     }
 
     fn estimated_size(&self) -> Option<usize> {

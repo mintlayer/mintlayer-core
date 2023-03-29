@@ -27,19 +27,21 @@ use utxo::{Utxo, UtxosView};
 
 use super::helpers::in_memory_storage_wrapper::InMemoryStorageWrapper;
 
-pub struct EmptyUtxosView;
+struct EmptyUtxosView;
 
 impl UtxosView for EmptyUtxosView {
-    fn utxo(&self, _outpoint: &OutPoint) -> Option<Utxo> {
-        None
+    type Error = std::convert::Infallible;
+
+    fn utxo(&self, _outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+        Ok(None)
     }
 
-    fn has_utxo(&self, _outpoint: &OutPoint) -> bool {
-        false
+    fn has_utxo(&self, _outpoint: &OutPoint) -> Result<bool, Self::Error> {
+        Ok(false)
     }
 
-    fn best_block_hash(&self) -> Id<common::chain::GenBlock> {
-        H256::zero().into()
+    fn best_block_hash(&self) -> Result<Id<common::chain::GenBlock>, Self::Error> {
+        Ok(H256::zero().into())
     }
 
     fn estimated_size(&self) -> Option<usize> {
@@ -47,7 +49,7 @@ impl UtxosView for EmptyUtxosView {
     }
 }
 
-pub struct EmptyAccountingView;
+struct EmptyAccountingView;
 
 impl PoSAccountingView for EmptyAccountingView {
     fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
