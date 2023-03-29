@@ -24,8 +24,15 @@ use crate::internal::{hash_data, HashAlgo, HashedData};
 
 use super::*;
 
-fn gen_leaves(n: usize) -> Vec<HashedData> {
+fn gen_leaves(n: u32) -> Vec<HashedData> {
     (0..n).map(|i| hash_data(HashedData::from_low_u64_be(i as u64))).collect()
+}
+
+fn indices_to_map(leaves_indices: &[u32], leaves: &[HashedData]) -> BTreeMap<u32, HashedData> {
+    leaves_indices
+        .iter()
+        .map(|i| (*i, leaves[*i as usize]))
+        .collect::<BTreeMap<_, _>>()
 }
 
 #[test]
@@ -67,7 +74,7 @@ fn multi_proof_one_leaf_with_multiproof_as_single_proof() {
     assert_eq!(multi_proof.nodes(), single_proof.branch());
     assert_eq!(multi_proof.proof_leaves().len(), 1);
     assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
-    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
 }
 
 /// Proof of one leaf must be equivalent to single proof
@@ -83,7 +90,7 @@ fn multi_proof_two_leaves_with_multiproof_as_single_proof() {
         assert_eq!(multi_proof.nodes(), single_proof.branch());
         assert_eq!(multi_proof.proof_leaves().len(), 1);
         assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
-        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
     }
 }
 
@@ -100,7 +107,7 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
         assert_eq!(multi_proof.nodes(), single_proof.branch());
         assert_eq!(multi_proof.proof_leaves().len(), 1);
         assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
-        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
     }
 }
 
@@ -109,7 +116,7 @@ fn multi_proof_four_leaves_with_multiproof_as_single_proof() {
 #[case(&[0], vec![1])]
 #[case(&[1], vec![0])]
 #[case(&[0,1], vec![])]
-fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
+fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nodes: Vec<u32>) {
     let leaves = gen_leaves(2);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
@@ -126,7 +133,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nod
             .collect::<Vec<_>>(),
         input
     );
-    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
 }
 
 /// The number of tests is the 2^n-1, where n = 4 for 4 leaves, yielding 15 tests (we exclude the empty input case).
@@ -146,7 +153,7 @@ fn multi_proof_two_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nod
 #[case(&[0,2,3], vec![1])]
 #[case(&[1,2,3], vec![0])]
 #[case(&[0,1,2,3], vec![])]
-fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
+fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nodes: Vec<u32>) {
     let leaves = gen_leaves(4);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
@@ -163,7 +170,7 @@ fn multi_proof_four_leaves_with_proof_leaves(#[case] input: &[usize], #[case] no
             .collect::<Vec<_>>(),
         input
     );
-    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
 }
 
 /// Proof of one leaf must be equivalent to single proof
@@ -179,7 +186,7 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
         assert_eq!(multi_proof.nodes(), single_proof.branch());
         assert_eq!(multi_proof.proof_leaves().len(), 1);
         assert_eq!(multi_proof.proof_leaves()[0], single_proof.leaf());
-        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+        assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
     }
 }
 
@@ -441,7 +448,7 @@ fn multi_proof_eight_leaves_with_multiproof_as_single_proof() {
 #[case(&[0,2,3,4,5,6,7], vec![1])]
 #[case(&[1,2,3,4,5,6,7], vec![0])]
 #[case(&[0,1,2,3,4,5,6,7], vec![])]
-fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] nodes: Vec<usize>) {
+fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[u32], #[case] nodes: Vec<u32>) {
     let leaves = gen_leaves(8);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves).unwrap();
 
@@ -458,10 +465,10 @@ fn multi_proof_eight_leaves_with_proof_leaves(#[case] input: &[usize], #[case] n
             .collect::<Vec<_>>(),
         input
     );
-    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count());
+    assert_eq!(multi_proof.tree_leaf_count(), t.leaf_count().get());
 }
 
-fn gen_leaves_indices_combinations(leaf_count: usize) -> impl Iterator<Item = Vec<usize>> {
+fn gen_leaves_indices_combinations(leaf_count: u32) -> impl Iterator<Item = Vec<u32>> {
     assert!(
         leaf_count.is_power_of_two(),
         "leaf_count must be a power of 2"
@@ -470,14 +477,15 @@ fn gen_leaves_indices_combinations(leaf_count: usize) -> impl Iterator<Item = Ve
     for i in 0..leaf_count {
         leaves_indices.push(i);
     }
-    (0..leaf_count + 1).flat_map(move |n| leaves_indices.clone().into_iter().combinations(n))
+    (0..leaf_count + 1)
+        .flat_map(move |n| leaves_indices.clone().into_iter().combinations(n as usize))
 }
 
 #[rstest]
 #[case(2)]
 #[case(4)]
 #[case(8)]
-fn leaf_count_combinations_generator(#[case] leaf_count: usize) {
+fn leaf_count_combinations_generator(#[case] leaf_count: u32) {
     assert_eq!(
         gen_leaves_indices_combinations(leaf_count).count(),
         1 << leaf_count
@@ -493,13 +501,9 @@ fn leaf_count_combinations_generator(#[case] leaf_count: usize) {
 #[case(32)]
 #[case(64)]
 #[case(128)]
-fn multi_proof_verification_leaves_empty(#[case] leaf_count: usize) {
+fn multi_proof_verification_leaves_empty(#[case] leaf_count: u32) {
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
-
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
-    };
 
     // So creating the proof won't work anyway without leaves... but this can still be manipulated
     assert_eq!(
@@ -510,7 +514,10 @@ fn multi_proof_verification_leaves_empty(#[case] leaf_count: usize) {
     // we provide something  in the creation because it doesn't work with empty leaves, yet we test verification with it
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &[0]).unwrap();
     assert_eq!(
-        multi_proof.into_values().verify(indices_to_map(&[]), t.root()).unwrap_err(),
+        multi_proof
+            .into_values()
+            .verify(indices_to_map(&[], &leaves), t.root())
+            .unwrap_err(),
         MerkleProofVerificationError::LeavesContainerProvidedIsEmpty,
         "Failed for indices: {:?}",
         &[0]
@@ -534,17 +541,13 @@ fn multi_proof_verification_leaves_empty(#[case] leaf_count: usize) {
 #[case(Seed::from_entropy(), 128, Some(500))]
 fn multi_proof_verification(
     #[case] seed: Seed,
-    #[case] leaf_count: usize,
+    #[case] leaf_count: u32,
     #[case] max_test_cases: Option<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
-
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
-    };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
         .take(max_test_cases.unwrap_or(usize::MAX))
@@ -563,7 +566,7 @@ fn multi_proof_verification(
             continue;
         }
         let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
-        let leaves_hashes_map = indices_to_map(&leaves_indices);
+        let leaves_hashes_map = indices_to_map(&leaves_indices, &leaves);
         assert!(
             multi_proof
                 .into_values()
@@ -581,14 +584,10 @@ fn multi_proof_verification_one_leaf() {
     let leaves = gen_leaves(1);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
-    };
-
     let leaves_indices = vec![0];
 
     let multi_proof = MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap();
-    let leaves_hashes_map = indices_to_map(&leaves_indices);
+    let leaves_hashes_map = indices_to_map(&leaves_indices, &leaves);
 
     assert!(
         multi_proof
@@ -618,17 +617,13 @@ fn multi_proof_verification_one_leaf() {
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_nodes(
     #[case] seed: Seed,
-    #[case] leaf_count: usize,
+    #[case] leaf_count: u32,
     #[case] max_test_cases: Option<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
-
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
-    };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
         .take(max_test_cases.unwrap_or(usize::MAX))
@@ -656,7 +651,7 @@ fn multi_proof_verification_tampered_nodes(
             let mut multi_proof = multi_proof.clone();
             multi_proof.nodes.insert(*node_idx, HashedData::random_using(&mut rng));
 
-            let leaves_hashes_map = indices_to_map(&leaves_indices);
+            let leaves_hashes_map = indices_to_map(&leaves_indices, &leaves);
             assert!(
                 multi_proof.verify(leaves_hashes_map, t.root()).unwrap().failed(),
                 "Failed for indices: {:?}",
@@ -683,17 +678,13 @@ fn multi_proof_verification_tampered_nodes(
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_leaves(
     #[case] seed: Seed,
-    #[case] leaf_count: usize,
+    #[case] leaf_count: u32,
     #[case] max_test_cases: Option<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
-
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
-    };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
         .take(max_test_cases.unwrap_or(usize::MAX))
@@ -713,7 +704,7 @@ fn multi_proof_verification_tampered_leaves(
         }
         let multi_proof =
             MultiProofNodes::from_tree_leaves(&t, &leaves_indices).unwrap().into_values();
-        let leaves_hashes_map = indices_to_map(&leaves_indices);
+        let leaves_hashes_map = indices_to_map(&leaves_indices, &leaves);
 
         for leaf_idx in leaves_hashes_map.keys() {
             //assert that the leaf we'll mess with is part of the input list
@@ -748,7 +739,7 @@ fn multi_proof_verification_tampered_leaves(
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     #[case] seed: Seed,
-    #[case] leaf_count: usize,
+    #[case] leaf_count: u32,
     #[case] max_test_cases: Option<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
@@ -756,8 +747,11 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    let indices_to_map = |leaves_indices: &[u32]| {
+        leaves_indices
+            .iter()
+            .map(|i| (*i, leaves[*i as usize]))
+            .collect::<BTreeMap<_, _>>()
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
@@ -781,12 +775,11 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
         let leaves_hashes_map = indices_to_map(&leaves_indices);
 
         // Tamper with tree size
-        multi_proof.tree_leaf_count =
-            NonZeroUsize::new(multi_proof.tree_leaf_count.get() + 1).unwrap();
+        multi_proof.tree_leaf_count += 1;
 
         assert_eq!(
             multi_proof.verify(leaves_hashes_map, t.root()).unwrap_err(),
-            MerkleProofVerificationError::InvalidTreeLeavesCount(multi_proof.tree_leaf_count.get()),
+            MerkleProofVerificationError::InvalidTreeLeavesCount(multi_proof.tree_leaf_count),
             "Failed for indices: {:?}",
             leaves_indices
         );
@@ -810,7 +803,7 @@ fn multi_proof_verification_tampered_tree_size_into_invalid_value(
 #[case(Seed::from_entropy(), 128, Some(50))]
 fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     #[case] seed: Seed,
-    #[case] leaf_count: usize,
+    #[case] leaf_count: u32,
     #[case] max_test_cases: Option<usize>,
 ) {
     let mut rng = make_seedable_rng(seed);
@@ -818,8 +811,11 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
-    let indices_to_map = |leaves_indices: &[usize]| {
-        leaves_indices.iter().map(|i| (*i, leaves[*i])).collect::<BTreeMap<_, _>>()
+    let indices_to_map = |leaves_indices: &[u32]| {
+        leaves_indices
+            .iter()
+            .map(|i| (*i, leaves[*i as usize]))
+            .collect::<BTreeMap<_, _>>()
     };
 
     let mut cases = gen_leaves_indices_combinations(leaf_count)
@@ -843,8 +839,7 @@ fn multi_proof_verification_tampered_tree_size_into_wrong_value(
         let leaves_hashes_map = indices_to_map(&leaves_indices);
 
         // Tamper with tree size. By multiplying by 2, the size is valid, but the nodes are not for that tree
-        multi_proof.tree_leaf_count =
-            NonZeroUsize::new(multi_proof.tree_leaf_count.get() * 2).unwrap();
+        multi_proof.tree_leaf_count *= multi_proof.tree_leaf_count;
 
         let verify_result = multi_proof.verify(leaves_hashes_map, t.root());
 

@@ -61,7 +61,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
     /// A proof doesn't contain the root.
     pub fn from_tree_leaf(
         tree: &'a MerkleTree<T, H>,
-        leaf_index: usize,
+        leaf_index: u32,
     ) -> Result<Self, MerkleTreeProofExtractionError> {
         let leaf_count = tree.leaf_count().get();
         if leaf_index > leaf_count {
@@ -82,8 +82,8 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
         let proof: Vec<_> = leaf.into_iter_parents().map_while(|n| n.sibling()).collect();
 
         assert_eq!(
-            proof.len(),
-            tree.level_count().get() - 1,
+            proof.len() as u32,
+            tree.level_count().get()  - 1,
             "This happens only if the we fail to find a sibling, which is only for root. In the loop, this cannot happen, so siblings must exist"
         );
 
@@ -97,7 +97,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
 
     pub fn into_values(self) -> SingleProofHashes<T, H> {
         let proof = self.branch.into_iter().map(|node| node.hash().clone()).collect::<Vec<_>>();
-        let leaf_abs_index = self.leaf.into_position().position().1 as u32;
+        let leaf_abs_index = self.leaf.into_position().position().1;
         SingleProofHashes {
             leaf_index_in_level: leaf_abs_index,
             branch: proof,
@@ -111,6 +111,8 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
 /// This struct is supposed to be serialized, unlike `SingleProofNodes`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "scale-codec-encode", derive(parity_scale_codec::Encode))]
+#[cfg_attr(feature = "scale-codec-decode", derive(parity_scale_codec::Decode))]
 pub struct SingleProofHashes<T, H> {
     leaf_index_in_level: u32,
     branch: Vec<T>,

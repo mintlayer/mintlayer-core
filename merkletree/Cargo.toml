@@ -5,9 +5,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[features]
+scale-codec-encode = ["dep:parity-scale-codec"]
+scale-codec-decode = ["dep:parity-scale-codec"]
+
 [dependencies]
 itertools = "0.10"
 thiserror = "1.0"
+parity-scale-codec = { version = "3.1", optional = true }
 
 [dev-dependencies]
 blake2 = "0.10"

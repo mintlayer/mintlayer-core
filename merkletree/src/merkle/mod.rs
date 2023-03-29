@@ -28,12 +28,12 @@ pub enum MerkleTreeFormError {
 pub enum MerkleTreeProofExtractionError {
     #[error("No leaves were provided to create a proof")]
     NoLeavesToCreateProof,
-    #[error("One or more indexes are larger than the number of leaves in the tree: {0:?} vs leaves count {1}")]
-    IndexOutOfRange(Vec<usize>, usize),
+    #[error("One or more indexes are larger than the number of leaves in the tree: {0:?} vs leaf-count {1}")]
+    IndexOutOfRange(Vec<u32>, u32),
     #[error("Leaf index out of range: {0} vs leaves count {1}")]
-    LeafIndexOutOfRange(usize, usize),
+    LeafIndexOutOfRange(u32, u32),
     #[error("Leaves indices must be sorted in ascending: {0:?}")]
-    UnsortedOrUniqueLeavesIndices(Vec<usize>),
+    UnsortedOrUniqueLeavesIndices(Vec<u32>),
     #[error("Access error: {0}")]
     AccessError(#[from] MerkleTreeAccessError),
 }
@@ -43,9 +43,9 @@ pub enum MerkleTreeAccessError {
     #[error("Invalid tree size provided is invalid: {0}")]
     InvalidTreeSize(usize),
     #[error("Invalid initial index for leaf in iterator. Provided {0} vs tree size {1}")]
-    AbsIndexOutOfRange(usize, usize),
+    AbsIndexOutOfRange(u32, u32),
     #[error("Invalid initial index for leaf in iterator. Provided {0} vs size {1}")]
-    IterStartIndexOutOfRange(usize, usize),
+    IterStartIndexOutOfRange(u32, u32),
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
@@ -53,11 +53,13 @@ pub enum MerkleProofVerificationError {
     #[error("No leaves provided")]
     LeavesContainerProvidedIsEmpty,
     #[error("Invalid tree size")]
-    InvalidTreeLeavesCount(usize),
+    InvalidTreeLeavesCount(u32),
     #[error("One or more leaves have indices out of range: {0:?} vs leaves count {1}")]
-    LeavesIndicesOutOfRange(Vec<usize>, usize),
+    LeavesIndicesOutOfRange(Vec<u32>, u32),
     #[error("One or more nodes have indices out of range: {0:?} vs tree size {1}")]
-    NodesIndicesOutOfRange(Vec<usize>, usize),
+    NodesIndicesOutOfRange(Vec<u32>, u32),
     #[error("A required node is missing. Index of node: {0}")]
-    RequiredNodeMissing(usize),
+    RequiredNodeMissing(u32),
+    #[error("Tree size arithmetic error: {0}")]
+    TreeSizeArithmeticError(u32),
 }
