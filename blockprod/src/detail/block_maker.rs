@@ -111,7 +111,7 @@ impl BlockMaker {
         let consensus_data = self
             .chainstate_handle
             .call({
-                let chain_config = self.chain_config.clone();
+                let chain_config = Arc::clone(&self.chain_config);
                 let current_tip_height = self.current_tip_height;
                 let header = block.header().clone();
 
