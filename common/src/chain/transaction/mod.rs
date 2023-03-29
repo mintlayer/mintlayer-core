@@ -154,15 +154,15 @@ impl Transactions {
         }
     }
 
-    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+    pub fn transactions(&self) -> &[SignedTransaction] {
         &self.transactions
     }
 }
 
-impl From<&Vec<SignedTransaction>> for Transactions {
-    fn from(transactions: &Vec<SignedTransaction>) -> Self {
+impl From<&[SignedTransaction]> for Transactions {
+    fn from(transactions: &[SignedTransaction]) -> Self {
         Transactions {
-            transactions: transactions.clone(),
+            transactions: transactions.to_vec(),
         }
     }
 }
