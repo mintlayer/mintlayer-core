@@ -374,9 +374,7 @@ where
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
         if let Some(tx) = self
             .mempool_handle
-            .call_async(move |m| {
-                Box::pin(async move { m.transaction(&id).await.map(|o| o.cloned()) })
-            })
+            .call_async(move |m| Box::pin(async move { m.transaction(&id).await }))
             .await??
         {
             self.messaging_handle

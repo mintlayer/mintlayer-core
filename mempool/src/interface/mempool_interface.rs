@@ -29,7 +29,7 @@ pub trait MempoolInterface: Send + Sync {
     // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
 
-    async fn transaction(&self, id: &Id<Transaction>) -> Result<Option<&SignedTransaction>, Error>;
+    async fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
 
     async fn collect_txs(
         &self,

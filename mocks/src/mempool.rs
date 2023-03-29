@@ -99,10 +99,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    async fn transaction(
-        &self,
-        _id: &Id<Transaction>,
-    ) -> Result<Option<&SignedTransaction>, Error> {
+    async fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
         Ok(None)
     }
 
