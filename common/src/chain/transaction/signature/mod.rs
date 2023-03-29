@@ -268,9 +268,9 @@ impl Transactable for SignedTransaction {
 
 fn stream_signature_hash<T: Signable>(
     tx: &T,
+    inputs_utxos: &[TxOutput],
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
-    inputs_utxos: &[TxOutput],
     target_input_num: usize,
 ) -> Result<(), TransactionSigError> {
     // TODO: even though this works fine, we need to make this function
@@ -321,7 +321,7 @@ pub fn signature_hash<T: Signable>(
 ) -> Result<H256, TransactionSigError> {
     let mut stream = DefaultHashAlgoStream::new();
 
-    stream_signature_hash(tx, &mut stream, mode, inputs_utxos, input_num)?;
+    stream_signature_hash(tx, inputs_utxos, &mut stream, mode, input_num)?;
 
     let result = stream.finalize().into();
     Ok(result)
