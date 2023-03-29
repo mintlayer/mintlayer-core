@@ -164,7 +164,12 @@ pub fn generate_and_sign_tx(
     let signed_tx =
         sign_whole_tx(tx, &inputs_utxos, private_key, sighash_type, destination).unwrap();
     assert_eq!(
-        verify_signed_tx(chain_config, &signed_tx, &inputs_utxos, destination),
+        verify_signed_tx(
+            chain_config,
+            &signed_tx,
+            &inputs_utxos.iter().collect::<Vec<_>>(),
+            destination
+        ),
         Ok(())
     );
     Ok(signed_tx)
@@ -183,7 +188,7 @@ pub fn make_signature(
         sighash_type,
         outpoint_dest,
         tx,
-        inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         input_num,
     )?;
     Ok(input_sig)
@@ -192,7 +197,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.inputs().len() {

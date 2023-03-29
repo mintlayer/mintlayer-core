@@ -76,7 +76,12 @@ fn mixed_sighash_types(#[case] seed: Seed) {
 
         let signed_tx = tx.with_signatures(sigs).unwrap();
 
-        verify_signed_tx(&chain_config, &signed_tx, &inputs_utxos, &destination)
-            .expect("Signature verification failed")
+        verify_signed_tx(
+            &chain_config,
+            &signed_tx,
+            &inputs_utxos.iter().collect::<Vec<_>>(),
+            &destination,
+        )
+        .expect("Signature verification failed")
     }
 }

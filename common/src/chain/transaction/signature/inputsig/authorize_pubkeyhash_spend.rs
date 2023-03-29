@@ -114,7 +114,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 1,
             );
             assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
@@ -142,7 +142,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 rng.gen_range(0..inputs_utxos.len()),
             )
             .unwrap();
@@ -177,7 +177,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 rng.gen_range(0..inputs_utxos.len()),
             )
             .unwrap();
@@ -220,14 +220,19 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 input,
             )
             .unwrap();
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
-            let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos, input).unwrap();
+            let sighash = signature_hash(
+                witness.sighash_type(),
+                &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                input,
+            )
+            .unwrap();
 
             verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
@@ -256,12 +261,17 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 input,
             )
             .unwrap();
-            let sighash =
-                signature_hash(witness.sighash_type(), &tx, &inputs_utxos, input).unwrap();
+            let sighash = signature_hash(
+                witness.sighash_type(),
+                &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                input,
+            )
+            .unwrap();
 
             sign_address_spending(&private_key, &pubkey_hash, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));

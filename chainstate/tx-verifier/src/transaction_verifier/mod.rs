@@ -513,10 +513,14 @@ where
             // TODO: see if a different treatment should be done for different output purposes
             // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
             match utxo.output().purpose().destination() {
-                Some(d) => {
-                    verify_signature(self.chain_config.as_ref(), d, tx, &inputs_utxos, input_idx)
-                        .map_err(ConnectTransactionError::SignatureVerificationFailed)?
-                }
+                Some(d) => verify_signature(
+                    self.chain_config.as_ref(),
+                    d,
+                    tx,
+                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    input_idx,
+                )
+                .map_err(ConnectTransactionError::SignatureVerificationFailed)?,
                 None => return Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
             }
         }

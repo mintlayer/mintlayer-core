@@ -268,7 +268,7 @@ impl Transactable for SignedTransaction {
 
 fn stream_signature_hash<T: Signable>(
     tx: &T,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
     target_input_num: usize,
@@ -316,7 +316,7 @@ fn stream_signature_hash<T: Signable>(
 pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     input_num: usize,
 ) -> Result<H256, TransactionSigError> {
     let mut stream = DefaultHashAlgoStream::new();
@@ -332,7 +332,7 @@ fn verify_standard_input_signature<T: Transactable>(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
     tx: &T,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num)?;
@@ -344,7 +344,7 @@ pub fn verify_signature<T: Transactable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;

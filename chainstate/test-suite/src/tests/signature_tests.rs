@@ -90,7 +90,7 @@ fn signed_tx(#[case] seed: Seed) {
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
                 Destination::PublicKey(public_key),
                 &tx,
-                &[tx_1.transaction().outputs()[0].clone()],
+                &[&tx_1.transaction().outputs()[0]],
                 0,
             )
             .unwrap();
@@ -175,7 +175,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
             let sighash = signature_hash(
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
                 &tx,
-                &[tx_1.transaction().outputs()[0].clone()],
+                &[&tx_1.transaction().outputs()[0]],
                 0,
             )
             .unwrap();
@@ -197,7 +197,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                     &authorization,
                     SigHashType::try_from(SigHashType::ALL).unwrap(),
                     &tx,
-                    &[tx_1.transaction().outputs()[0].clone()],
+                    &[&tx_1.transaction().outputs()[0]],
                     0,
                 )
                 .unwrap();
@@ -285,7 +285,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         let sighash = signature_hash(
             SigHashType::try_from(SigHashType::ALL).unwrap(),
             &tx,
-            tx_1.transaction().outputs(),
+            &[&tx_1.transaction().outputs()[0]],
             0,
         )
         .unwrap();
@@ -306,7 +306,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                         &authorization,
                         SigHashType::try_from(SigHashType::ALL).unwrap(),
                         &tx,
-                        tx_1.transaction().outputs(),
+                        &[&tx_1.transaction().outputs()[0]],
                         0,
                     )
                     .unwrap();
