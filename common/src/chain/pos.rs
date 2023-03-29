@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
+use std::num::NonZeroU64;
 
 use typename::TypeName;
 
@@ -34,34 +34,39 @@ pub type DelegationId = Id<Delegation>;
 pub struct PoSChainConfig {
     /// The lowest possible difficulty
     target_limit: Uint256,
-    /// Time interval between the blocks targeted by the difficulty adjustment algorithm
-    target_block_time: Duration,
+    /// Time interval in secs between the blocks targeted by the difficulty adjustment algorithm
+    target_block_time: NonZeroU64,
     /// The distance required to pass to allow spending the block reward
     reward_maturity_distance: BlockDistance,
     /// Max number of blocks required to calculate average block time. Min is 2
-    blocks_count_to_average: usize,
+    block_count_to_average_for_blocktime: usize,
 }
 
 impl PoSChainConfig {
     pub fn new(
         target_limit: Uint256,
-        target_block_time: Duration,
+        target_block_time: u64,
         reward_maturity_distance: BlockDistance,
-        blocks_count_to_average: usize,
-    ) -> Self {
-        Self {
+        block_count_to_average_for_blocktime: usize,
+    ) -> Option<Self> {
+        let target_block_time = NonZeroU64::new(target_block_time)?;
+        if block_count_to_average_for_blocktime < 2 {
+            return None;
+        }
+
+        Some(Self {
             target_limit,
             target_block_time,
             reward_maturity_distance,
-            blocks_count_to_average,
-        }
+            block_count_to_average_for_blocktime,
+        })
     }
 
     pub fn target_limit(&self) -> Uint256 {
         self.target_limit
     }
 
-    pub fn target_block_time(&self) -> Duration {
+    pub fn target_block_time(&self) -> NonZeroU64 {
         self.target_block_time
     }
 
@@ -69,16 +74,16 @@ impl PoSChainConfig {
         self.reward_maturity_distance
     }
 
-    pub fn blocks_count_to_average(&self) -> usize {
-        self.blocks_count_to_average
+    pub fn block_count_to_average_for_blocktime(&self) -> usize {
+        self.block_count_to_average_for_blocktime
     }
 }
 
 pub fn create_unittest_pos_config() -> PoSChainConfig {
     PoSChainConfig {
         target_limit: Uint256::MAX,
-        target_block_time: Duration::from_secs(2 * 60),
+        target_block_time: NonZeroU64::new(2 * 60).expect("cannot not be 0"),
         reward_maturity_distance: 2000.into(),
-        blocks_count_to_average: 5,
+        block_count_to_average_for_blocktime: 5,
     }
 }

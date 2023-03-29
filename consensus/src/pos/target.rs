@@ -16,13 +16,14 @@
 use chainstate_types::{BlockIndexHandle, BlockIndexHistoryIterator};
 use common::{
     chain::{
-        block::{BlockHeader, ConsensusData},
-        Block, ChainConfig, GenBlockId, PoSChainConfig, PoSStatus, RequiredConsensus,
+        block::ConsensusData, Block, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
+        RequiredConsensus,
     },
-    primitives::{BlockHeight, Compact, Id, Idable},
+    primitives::{BlockHeight, Compact, Id},
     Uint256,
 };
 use itertools::Itertools;
+use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
@@ -46,22 +47,20 @@ fn calculate_average_block_time(
         .height_range(net_version)
         .expect("NetUpgrade must've been initialized");
 
-    // Get timestamps from the history but make sure they belong to the same consensus version
-    let block_times = history_iter
-        .take(pos_config.blocks_count_to_average())
+    // Get timestamps from the history but make sure they belong to the same consensus version.
+    // Then calculate differences of adjacent elements.
+    let block_diffs = history_iter
+        .take(pos_config.block_count_to_average_for_blocktime())
         .filter(|block_index| net_version_range.contains(&block_index.block_height()))
         .map(|block_index| block_index.block_timestamp().as_int_seconds())
-        .collect::<Vec<_>>();
-
-    // At least 2 items are required to calculate difference
-    debug_assert!(block_times.len() >= 2);
-
-    // Block times are taken from history so they are sorted backwards
-    let block_diffs = block_times
-        .iter()
-        .tuple_windows::<(&u64, &u64)>()
+        .tuple_windows::<(u64, u64)>()
         .map(|t| t.0 - t.1)
         .collect::<Vec<_>>();
+
+    ensure!(
+        !block_diffs.is_empty(),
+        ConsensusPoSError::NotEnoughTimestampsToAverage
+    );
 
     let average = block_diffs.iter().sum::<u64>() / block_diffs.len() as u64;
     Ok(average)
@@ -73,7 +72,7 @@ fn calculate_new_target(
     average_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
     let average_block_time = Uint256::from_u64(average_block_time);
-    let target_block_time = Uint256::from_u64(pos_config.target_block_time().as_secs());
+    let target_block_time = Uint256::from_u64(pos_config.target_block_time().get());
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = *prev_target / target_block_time * average_block_time;
@@ -88,7 +87,7 @@ fn calculate_new_target(
 pub fn calculate_target_required(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
-    block_header: &BlockHeader,
+    prev_block_id: Id<GenBlock>,
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<Compact, ConsensusPoSError> {
     // check if current block is a net upgrade threshold
@@ -97,13 +96,13 @@ pub fn calculate_target_required(
         PoSStatus::Ongoing { config } => config,
     };
 
-    let prev_block_id = match block_header.prev_block_id().classify(chain_config) {
+    let prev_block_id = match prev_block_id.classify(chain_config) {
         GenBlockId::Genesis(_) => return Ok(pos_config.target_limit().into()),
         GenBlockId::Block(id) => id,
     };
     let prev_block_index = block_index_handle
         .get_block_index(&prev_block_id)?
-        .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(block_header.get_id()))?;
+        .ok_or(ConsensusPoSError::PrevBlockIndexNotFound(prev_block_id))?;
 
     // check if prev block is a net upgrade threshold
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
@@ -113,7 +112,7 @@ pub fn calculate_target_required(
             }
             PoSStatus::Ongoing { config: _config } => { /*do nothing*/ }
         },
-        RequiredConsensus::PoW(_) | RequiredConsensus::DSA | RequiredConsensus::IgnoreConsensus => {
+        RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
             panic!("Prev block's consensus status must be PoS because we are in Ongoing PoS net version")
         }
     };
@@ -144,7 +143,7 @@ pub fn calculate_target_required(
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc, time::Duration};
+    use std::sync::Arc;
 
     use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
     use common::{
@@ -154,7 +153,7 @@ mod tests {
             create_unittest_pos_config, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoolId,
             UpgradeVersion,
         },
-        primitives::H256,
+        primitives::{Idable, H256},
     };
     use crypto::{
         random::{CryptoRng, Rng},
@@ -165,36 +164,43 @@ mod tests {
 
     use super::*;
 
+    fn make_block(
+        rng: &mut (impl Rng + CryptoRng),
+        prev_block: Id<GenBlock>,
+        timestamp: BlockTimestamp,
+    ) -> Block {
+        let (sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        Block::new(
+            vec![],
+            prev_block,
+            timestamp,
+            ConsensusData::PoS(Box::new(PoSData::new(
+                vec![],
+                vec![],
+                PoolId::new(H256::zero()),
+                vrf_data,
+                Compact(rng.gen_range(1..1000)),
+            ))),
+            BlockReward::new(vec![]),
+        )
+        .unwrap()
+    }
+
     struct TestBlockIndexHandle<'a> {
         chain_config: &'a ChainConfig,
         blocks: Vec<(Id<Block>, BlockIndex)>,
     }
 
     impl<'a> TestBlockIndexHandle<'a> {
-        fn make_block(
-            rng: &mut (impl Rng + CryptoRng),
-            prev_block: Id<GenBlock>,
-            timestamp: BlockTimestamp,
-        ) -> Block {
-            let (sk, _) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-            let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
-            Block::new(
-                vec![],
-                prev_block,
-                timestamp,
-                ConsensusData::PoS(Box::new(PoSData::new(
-                    vec![],
-                    vec![],
-                    PoolId::new(H256::zero()),
-                    vrf_data,
-                    Compact(rng.gen_range(1..1000)),
-                ))),
-                BlockReward::new(vec![]),
-            )
-            .unwrap()
+        pub fn new(chain_config: &'a ChainConfig) -> Self {
+            Self {
+                blocks: Default::default(),
+                chain_config,
+            }
         }
 
-        pub fn new(
+        pub fn new_with_blocks(
             rng: &mut (impl Rng + CryptoRng),
             chain_config: &'a ChainConfig,
             timestamps: &[u64],
@@ -206,7 +212,7 @@ mod tests {
                 .map(|(i, t)| {
                     let height = i as u64 + 1;
                     let timestamp = BlockTimestamp::from_int_seconds(*t);
-                    let block = Self::make_block(rng, best_block, timestamp);
+                    let block = make_block(rng, best_block, timestamp);
                     let block_index = BlockIndex::new(
                         &block,
                         Uint256::ZERO,
@@ -221,6 +227,21 @@ mod tests {
 
             Self {
                 blocks,
+                chain_config,
+            }
+        }
+
+        pub fn new_with_single_block(chain_config: &'a ChainConfig, block: &Block) -> Self {
+            let block_index = BlockIndex::new(
+                block,
+                Uint256::ZERO,
+                block.prev_block_id(),
+                0.into(),
+                BlockTimestamp::from_int_seconds(1),
+            );
+
+            Self {
+                blocks: vec![(block.get_id(), block_index)],
                 chain_config,
             }
         }
@@ -286,7 +307,7 @@ mod tests {
         {
             // average block time <= target block time
             let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = config.target_block_time().as_secs() / rng.gen_range(1..10);
+            let average_block_time = config.target_block_time().get() / rng.gen_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time).unwrap();
             assert!(new_target <= Compact::from(prev_target));
@@ -294,7 +315,7 @@ mod tests {
         {
             // average block time >= target block time
             let prev_target = Uint256::from_u64(rng.gen::<u64>());
-            let average_block_time = config.target_block_time().as_secs() * rng.gen_range(1..10);
+            let average_block_time = config.target_block_time().get() * rng.gen_range(1..10);
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time).unwrap();
             assert!(new_target >= Compact::from(prev_target));
@@ -306,14 +327,10 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_new_target_too_easy(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config = PoSChainConfig::new(Uint256::ONE, Duration::from_secs(1), 1.into(), 1);
-        let prev_target = rng.gen_range(2..u64::MAX);
-        let new_target = calculate_new_target(
-            &config,
-            &Uint256::from_u64(prev_target),
-            config.target_block_time().as_secs(),
-        )
-        .unwrap();
+        let config = PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 2).unwrap();
+        let prev_target = H256::random_using(&mut rng).into();
+        let new_target =
+            calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
 
         assert_eq!(new_target, Compact::from(config.target_limit()));
     }
@@ -342,7 +359,17 @@ mod tests {
             .build();
 
         let block_index_handle =
-            TestBlockIndexHandle::new(&mut rng, &chain_config, &[1, 2, 6, 8, 10]);
+            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[1, 2, 6, 8, 10]);
+
+        let average_block_time = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            *block_index_handle.get_block_index_by_height(1).unwrap().block_id(),
+            BlockHeight::new(1),
+            &block_index_handle,
+        )
+        .unwrap();
+        assert_eq!(average_block_time, 1);
 
         let average_block_time = calculate_average_block_time(
             &chain_config,
@@ -365,11 +392,74 @@ mod tests {
         assert_eq!(average_block_time, 2);
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_average_block_time_less_than_2_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let pos_config = create_unittest_pos_config();
+        let upgrades = vec![(
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: Uint256::MAX.into(),
+                config: pos_config.clone(),
+            }),
+        )];
+        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+
+        {
+            // check that having zero timestamps is not enough to calculate average
+            let block_index_handle = TestBlockIndexHandle::new(&chain_config);
+            let random_block_id = Id::<Block>::new(H256::random_using(&mut rng));
+            assert_eq!(
+                0,
+                BlockIndexHistoryIterator::new(random_block_id.into(), &block_index_handle).count()
+            );
+
+            let res = calculate_average_block_time(
+                &chain_config,
+                &pos_config,
+                random_block_id,
+                BlockHeight::new(0),
+                &block_index_handle,
+            )
+            .unwrap_err();
+            assert_eq!(res, ConsensusPoSError::NotEnoughTimestampsToAverage);
+        }
+
+        {
+            // check that having a single timestamp is not enough to calculate average
+            let prev_block_id = Id::<Block>::new(H256::random_using(&mut rng));
+            let block = make_block(
+                &mut rng,
+                prev_block_id.into(),
+                BlockTimestamp::from_int_seconds(1),
+            );
+            let block_index_handle =
+                TestBlockIndexHandle::new_with_single_block(&chain_config, &block);
+            assert_eq!(
+                1,
+                BlockIndexHistoryIterator::new(block.get_id().into(), &block_index_handle).count()
+            );
+
+            let res = calculate_average_block_time(
+                &chain_config,
+                &pos_config,
+                *block_index_handle.get_block_index_by_height(1).unwrap().block_id(),
+                BlockHeight::new(0),
+                &block_index_handle,
+            )
+            .unwrap_err();
+            assert_eq!(res, ConsensusPoSError::NotEnoughTimestampsToAverage);
+        }
+    }
+
     fn get_pos_status(chain_config: &ChainConfig, height: BlockHeight) -> PoSStatus {
         match chain_config.net_upgrade().consensus_status(height) {
-            RequiredConsensus::PoW(_)
-            | RequiredConsensus::DSA
-            | RequiredConsensus::IgnoreConsensus => panic!("invalid consensus"),
+            RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
+                panic!("invalid consensus")
+            }
             RequiredConsensus::PoS(pos_status) => pos_status,
         }
     }
@@ -381,10 +471,8 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config_1 =
-            PoSChainConfig::new(target_limit_1, Duration::from_secs(10), 1.into(), 2);
-        let pos_config_2 =
-            PoSChainConfig::new(target_limit_2, Duration::from_secs(20), 1.into(), 5);
+        let pos_config_1 = PoSChainConfig::new(target_limit_1, 10, 1.into(), 2).unwrap();
+        let pos_config_2 = PoSChainConfig::new(target_limit_2, 20, 1.into(), 5).unwrap();
         let upgrades = vec![
             (
                 BlockHeight::new(0),
@@ -411,8 +499,11 @@ mod tests {
             ))
             .build();
 
-        let block_index_handle =
-            TestBlockIndexHandle::new(&mut rng, &chain_config, &[1, 2, 6, 8, 10, 12, 14]);
+        let block_index_handle = TestBlockIndexHandle::new_with_blocks(
+            &mut rng,
+            &chain_config,
+            &[1, 2, 6, 8, 10, 12, 14],
+        );
 
         {
             // check with prev genesis
@@ -422,7 +513,7 @@ mod tests {
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
-                block_header,
+                *block_header.prev_block_id(),
                 &block_index_handle,
             )
             .unwrap();
@@ -437,7 +528,7 @@ mod tests {
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
-                block_header,
+                *block_header.prev_block_id(),
                 &block_index_handle,
             )
             .unwrap();
@@ -452,7 +543,7 @@ mod tests {
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
-                block_header,
+                *block_header.prev_block_id(),
                 &block_index_handle,
             )
             .unwrap();
@@ -467,7 +558,7 @@ mod tests {
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
-                block_header,
+                *block_header.prev_block_id(),
                 &block_index_handle,
             )
             .unwrap();

@@ -69,7 +69,6 @@ where
             pos_accounting_view,
             header,
         ),
-        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
     }
 }
 

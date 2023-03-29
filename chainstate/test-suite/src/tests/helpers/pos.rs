@@ -34,7 +34,6 @@ use super::block_index_handle_impl::TestBlockIndexHandle;
 pub fn pos_mine(
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: OutPoint,
-    vrf_pk: &VRFPublicKey,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
@@ -56,11 +55,12 @@ pub fn pos_mine(
             target,
         );
 
+        let vrf_pk = VRFPublicKey::from_private_key(vrf_sk);
         if consensus::check_pos_hash(
             epoch_index,
             &sealed_epoch_randomness,
             &pos_data,
-            vrf_pk,
+            &vrf_pk,
             timestamp,
             pool_balance,
         )
@@ -81,14 +81,10 @@ pub fn calculate_new_target(
     let pos_status =
         match tf.chainstate.get_chain_config().net_upgrade().consensus_status(block_height) {
             RequiredConsensus::PoS(status) => status,
-            RequiredConsensus::PoW(_)
-            | RequiredConsensus::DSA
-            | RequiredConsensus::IgnoreConsensus => {
+            RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
                 panic!("Invalid consensus")
             }
         };
-
-    let tmp_block = tf.make_block_builder().build();
 
     let db_tx = tf.storage.transaction_ro().unwrap();
     let block_index_handle =
@@ -97,7 +93,7 @@ pub fn calculate_new_target(
     consensus::calculate_target_required(
         tf.chainstate.get_chain_config().as_ref(),
         &pos_status,
-        tmp_block.header(),
+        tf.best_block_id(),
         &block_index_handle,
     )
 }

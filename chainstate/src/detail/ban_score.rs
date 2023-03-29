@@ -291,6 +291,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::PoolDataNotFound(_) => 0,
             ConsensusPoSError::InvalidTarget(_) => 100,
             ConsensusPoSError::DecodingBitsFailed(_) => 100,
+            ConsensusPoSError::NotEnoughTimestampsToAverage => 100,
         }
     }
 }

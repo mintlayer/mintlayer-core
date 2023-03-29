@@ -51,7 +51,7 @@ where
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
-        RequiredConsensus::DSA | RequiredConsensus::PoS(_) => unimplemented!(),
+        RequiredConsensus::PoS(_) => unimplemented!(),
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
@@ -74,7 +74,7 @@ pub fn finalize_consensus_data(
 ) -> Result<(), ConsensusVerificationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
-        RequiredConsensus::DSA | RequiredConsensus::PoS(_) => unimplemented!(),
+        RequiredConsensus::PoS(_) => unimplemented!(),
         RequiredConsensus::PoW(_) => match block.consensus_data() {
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),

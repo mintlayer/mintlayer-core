@@ -110,8 +110,12 @@ where
     U: UtxosView,
     P: PoSAccountingView,
 {
-    let target =
-        target::calculate_target_required(chain_config, pos_status, header, block_index_handle)?;
+    let target = target::calculate_target_required(
+        chain_config,
+        pos_status,
+        *header.prev_block_id(),
+        block_index_handle,
+    )?;
 
     utils::ensure!(
         target == pos_data.compact_target(),

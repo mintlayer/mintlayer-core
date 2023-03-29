@@ -196,7 +196,7 @@ fn pos_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let sealed_pool_balance =
@@ -208,7 +208,6 @@ fn pos_basic(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
@@ -283,7 +282,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let genesis_id = tf.genesis().get_id();
-    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
@@ -296,7 +295,6 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         invalid_kernel_input,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
@@ -337,7 +335,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let expected_error = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
         CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
@@ -362,7 +360,6 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let (valid_pos_data, valid_block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(valid_prev_randomness),
         pool_id,
@@ -492,7 +489,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let sealed_pool_balance =
@@ -504,7 +501,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let (valid_pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
@@ -580,7 +576,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk.clone());
+    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk);
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
@@ -590,7 +586,6 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
@@ -636,8 +631,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
-    let target_block_time = create_unittest_pos_config().target_block_time().as_secs();
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let target_block_time = create_unittest_pos_config().target_block_time().get();
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
@@ -646,7 +641,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
@@ -676,7 +670,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_2_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
@@ -714,7 +707,6 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_3_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         *sealed_epoch_randomness.randomness(),
         pool_id,
@@ -777,7 +769,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
     let stake_pool_data1 =
-        create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1.clone());
+        create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1);
     let stake_pool_data2 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_2);
     let (stake_pool_outpoint1, pool_id1, _, pool_id2) =
         add_block_with_2_stake_pools(&mut rng, &mut tf, stake_pool_data1, stake_pool_data2);
@@ -794,7 +786,6 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
-        &vrf_pk_1,
         &vrf_sk_1,
         PoSRandomness::new(initial_randomness),
         pool_id1,
@@ -862,7 +853,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     // create initial chain: genesis <- block_a
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
     let block_a_id = tf.best_block_id();
 
     // prepare and process block_b with StakePool -> ProduceBlockFromStake kernel
@@ -876,7 +867,6 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
@@ -906,7 +896,6 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         block_timestamp,
         block_a_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
@@ -946,7 +935,6 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let (pos_data, block_timestamp) = pos_mine(
         block_timestamp,
         block_3_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         *sealed_epoch_randomness.randomness(),
         pool_id,

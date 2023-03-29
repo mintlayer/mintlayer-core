@@ -51,4 +51,6 @@ pub enum ConsensusPoSError {
     InvalidTarget(Compact),
     #[error("Decoding bits of block failed: `{0:?}`")]
     DecodingBitsFailed(Compact),
+    #[error("Not enough timestamps to calculate block time average")]
+    NotEnoughTimestampsToAverage,
 }

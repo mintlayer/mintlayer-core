@@ -111,7 +111,7 @@ fn setup_test_chain_with_staked_pool(
 fn stable_block_time(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     for _i in 0..50 {
         let initial_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
@@ -136,7 +136,6 @@ fn stable_block_time(#[case] seed: Seed) {
         let (pos_data, valid_block_timestamp) = pos_mine(
             initial_block_time,
             OutPoint::new(best_block_outputs.keys().next().unwrap().clone(), 0),
-            &vrf_pk,
             &vrf_sk,
             chainstate_types::pos_randomness::PoSRandomness::new(sealed_epoch_randomness),
             pool_id,

@@ -70,7 +70,6 @@ pub enum ConsensusUpgrade {
         initial_difficulty: Compact,
         config: PoSChainConfig,
     },
-    DSA,
     IgnoreConsensus,
 }
 
@@ -78,7 +77,6 @@ pub enum ConsensusUpgrade {
 pub enum RequiredConsensus {
     PoW(PoWStatus),
     PoS(PoSStatus),
-    DSA,
     IgnoreConsensus,
 }
 
@@ -104,7 +102,6 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
                 initial_difficulty,
                 config: _,
             } => RequiredConsensus::PoS(PoSStatus::Threshold { initial_difficulty }),
-            ConsensusUpgrade::DSA => RequiredConsensus::DSA,
             ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
         }
     }
@@ -191,7 +188,6 @@ impl NetUpgrades<UpgradeVersion> {
                     })
                 }
             }
-            ConsensusUpgrade::DSA => RequiredConsensus::DSA,
             ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
         }
     }
