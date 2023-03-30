@@ -151,7 +151,11 @@ impl BlockMaker {
 
         block.update_consensus_data(consensus_data);
 
-        // TODO: consensus::finalize_consensus_data(&block, consunsus_data)
+        consensus::finalize_consensus_data(
+            &self.chain_config,
+            &mut block,
+            self.current_tip_height,
+        )?;
 
         Ok(block)
     }

@@ -63,3 +63,28 @@ where
         }
     }
 }
+
+pub fn finalize_consensus_data(
+    chain_config: &ChainConfig,
+    block: &mut Block,
+    block_height: BlockHeight,
+) -> Result<(), ConsensusVerificationError> {
+    match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
+        RequiredConsensus::IgnoreConsensus => Ok(()),
+        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoW(_) => {
+            match block.consensus_data() {
+                ConsensusData::None => Ok(()),
+                ConsensusData::PoS(_) => unimplemented!(),
+                ConsensusData::PoW(pow_data) => {
+                    // TODO: replace the static value below with one
+                    // from BlockProductionConfig
+                    mine(block, 0xffffffff, pow_data.bits())
+                        .map_err(ConsensusVerificationError::PoWError)?;
+
+                    Ok(())
+                }
+            }
+        }
+    }
+}
