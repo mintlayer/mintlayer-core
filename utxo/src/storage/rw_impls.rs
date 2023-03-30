@@ -43,15 +43,17 @@ impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
 }
 
 impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
+    type Error = S::Error;
+
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
         self.0.get_best_block_for_utxos()
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, StorageError> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         self.0.get_undo_data(id)
     }
 }

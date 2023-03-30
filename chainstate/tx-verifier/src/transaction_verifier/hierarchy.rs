@@ -106,24 +106,23 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> UtxosStorageRead
+impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
     for TransactionVerifier<C, S, U, A>
 {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, storage_result::Error> {
-        Ok(self.utxo_cache.utxo(outpoint).expect("TODO(PR)"))
+    type Error = U::Error;
+
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
+        self.utxo_cache.utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
         Ok(Some(self.best_block))
     }
 
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_undo_data(id),
+            None => self.storage.get_undo_data(id).map_err(|_| todo!("PR")),
         }
     }
 }

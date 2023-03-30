@@ -25,13 +25,13 @@ use common::{
 use std::ops::{Deref, DerefMut};
 
 pub trait UtxosStorageRead {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error>;
-    fn get_undo_data(&self, id: Id<Block>)
-        -> Result<Option<UtxosBlockUndo>, storage_result::Error>;
+    type Error: std::error::Error;
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error>;
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error>;
 }
 
-pub trait UtxosStorageWrite: UtxosStorageRead {
+pub trait UtxosStorageWrite: UtxosStorageRead<Error = storage_result::Error> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), storage_result::Error>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), storage_result::Error>;
 
@@ -100,18 +100,20 @@ where
     T: Deref,
     <T as Deref>::Target: UtxosStorageRead,
 {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error> {
+    type Error = <T::Target as UtxosStorageRead>::Error;
+
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.deref().get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, storage_result::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
         self.deref().get_best_block_for_utxos()
     }
 
     fn get_undo_data(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<UtxosBlockUndo>, storage_result::Error> {
+    ) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         self.deref().get_undo_data(id)
     }
 }

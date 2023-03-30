@@ -194,8 +194,8 @@ pub struct TransactionVerifier<C, S, U, A> {
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
         let accounting_delta = PoSAccountingDelta::new(S::clone(&storage));
-        let utxo_cache =
-            UtxosCache::new(UtxosDB::new(S::clone(&storage))).expect("Utxo cache setup failed");
+        let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
+            .expect("Utxo cache setup failed");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")

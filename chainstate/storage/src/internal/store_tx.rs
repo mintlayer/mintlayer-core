@@ -204,6 +204,8 @@ macro_rules! impl_read_ops {
         }
 
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
+            type Error = crate::Error;
+
             fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
