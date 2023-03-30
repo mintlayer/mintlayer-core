@@ -372,11 +372,10 @@ where
     fn get_stake_pool_data_from_output(
         &self,
         output: &TxOutput,
-        block_id: Id<Block>,
     ) -> Result<StakePoolData, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward(block_id))
+                Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::StakePool(d) => Ok(d.as_ref().clone()),
             TxOutput::ProduceBlockFromStake(v, d, pool_id)
@@ -414,7 +413,7 @@ where
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
                 let kernel_stake_pool_data =
-                    self.get_stake_pool_data_from_output(&kernel_output, block.get_id())?;
+                    self.get_stake_pool_data_from_output(&kernel_output)?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -424,8 +423,7 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
-                let reward_stake_pool_data =
-                    self.get_stake_pool_data_from_output(reward_output, block.get_id())?;
+                let reward_stake_pool_data = self.get_stake_pool_data_from_output(reward_output)?;
 
                 ensure!(
                     kernel_stake_pool_data == reward_stake_pool_data,

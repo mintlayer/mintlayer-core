@@ -392,7 +392,7 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
+                ConnectTransactionError::InvalidOutputTypeInTx
             ))
         );
     });
@@ -446,7 +446,7 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
+                ConnectTransactionError::InvalidOutputTypeInTx
             ))
         );
     });
@@ -515,7 +515,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
+                ConnectTransactionError::InvalidOutputTypeInTx
             ))
         );
     });
@@ -551,7 +551,7 @@ fn use_produce_block_output_in_tx(#[case] seed: Seed) {
         assert_eq!(
             res,
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToUseInvalidOutputInTx
+                ConnectTransactionError::InvalidOutputTypeInTx
             ))
         );
     });

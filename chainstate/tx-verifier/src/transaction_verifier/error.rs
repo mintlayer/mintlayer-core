@@ -39,6 +39,8 @@ pub enum ConnectTransactionError {
     InvariantBrokenAlreadyUnspent,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
+    #[error("No inputs in a transaction")]
+    MissingTxInputs,
     #[error("Coin output is not found to be able to stake")]
     MissingCoinOutputToStake,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
@@ -89,18 +91,16 @@ pub enum ConnectTransactionError {
     BurnAmountSumError(Id<Transaction>),
     #[error("Attempt to spend burned amount in transaction")]
     AttemptToSpendBurnedAmount,
-    #[error("Attempt to spend an output that is invalid in a transaction")]
-    AttemptToSpendInvalidOutputType,
-    #[error("Attempt to use invalid output type in a transaction")]
-    AttemptToUseInvalidOutputInTx,
     #[error("PoS accounting error")]
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
     #[error("Error during stake spending")]
     SpendStakeError(#[from] SpendStakeError),
-    #[error("Attempted to use a non-locked stake as output in block reward {0}")]
-    InvalidOutputTypeInReward(Id<Block>),
+    #[error("Attempt to use invalid output type in a transaction")]
+    InvalidOutputTypeInTx,
+    #[error("Attempted to use a invalid output type in block reward")]
+    InvalidOutputTypeInReward,
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 
