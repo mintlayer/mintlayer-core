@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 crypto = { path = '../crypto'}
-merkletree = { path = "../merkletree", features = ["scale-codec-encode", "scale-codec-decode"] }
+merkletree = { path = "../merkletree", features = ["scale-codec"] }
 serialization = { path = "../serialization" }
 logging = { path = "../logging/" }
 script = { path = '../script'}

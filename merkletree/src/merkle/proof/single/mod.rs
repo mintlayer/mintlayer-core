@@ -111,8 +111,10 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> SingleProofNodes<'a, T, H> {
 /// This struct is supposed to be serialized, unlike `SingleProofNodes`.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "scale-codec-encode", derive(parity_scale_codec::Encode))]
-#[cfg_attr(feature = "scale-codec-decode", derive(parity_scale_codec::Decode))]
+#[cfg_attr(
+    feature = "scale-codec",
+    derive(parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
 pub struct SingleProofHashes<T, H> {
     leaf_index_in_level: u32,
     branch: Vec<T>,

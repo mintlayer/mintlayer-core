@@ -6,8 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [features]
-scale-codec-encode = ["dep:parity-scale-codec"]
-scale-codec-decode = ["dep:parity-scale-codec"]
+scale-codec = ["dep:parity-scale-codec"]
 
 [dependencies]
 itertools = "0.10"
