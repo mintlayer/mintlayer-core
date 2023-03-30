@@ -20,7 +20,7 @@ use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward},
-        Block, ChainConfig, Transactions,
+        Block, ChainConfig, SignedTransaction,
     },
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
