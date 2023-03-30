@@ -586,7 +586,7 @@ fn sign_mutate_then_verify(
         chain_config,
         rng,
         destination,
-        &inputs_utxos,
+        inputs_utxos,
         3,
         private_key,
         sighash_type,
@@ -600,6 +600,7 @@ fn sign_mutate_then_verify(
     check_change_flags(chain_config, &original_tx, inputs_utxos, destination);
     check_change_locktime(chain_config, &original_tx, inputs_utxos, destination);
     check_mutate_witness(chain_config, &original_tx, inputs_utxos, destination);
+    check_mutate_inputs_utxos(chain_config, &original_tx, inputs_utxos, destination);
     original_tx
 }
 
@@ -767,4 +768,30 @@ fn check_mutate_input(
     }
 }
 
-// TODO: Add tests for manipulating inputs_utxos
+// An input UTXO mutation should result in signature verification error.
+fn check_mutate_inputs_utxos(
+    chain_config: &ChainConfig,
+    original_tx: &SignedTransaction,
+    inputs_utxos: &[&TxOutput],
+    outpoint_dest: &Destination,
+) {
+    for input in 0..inputs_utxos.len() {
+        let inputs_utxo = TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(123456789012345)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        );
+        let mut inputs_utxos = inputs_utxos.to_owned();
+        inputs_utxos[input] = &inputs_utxo;
+
+        assert!(matches!(
+            verify_signature(
+                chain_config,
+                outpoint_dest,
+                original_tx,
+                &inputs_utxos,
+                input
+            ),
+            Err(TransactionSigError::SignatureVerificationFailed)
+        ));
+    }
+}
