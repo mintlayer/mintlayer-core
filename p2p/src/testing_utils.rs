@@ -27,6 +27,7 @@ use std::{
 
 use common::{primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter};
 use crypto::random::{make_pseudo_rng, Rng};
+use ctor::ctor;
 use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
 
@@ -328,4 +329,12 @@ pub fn test_p2p_config() -> P2pConfig {
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
     }
+}
+
+// Increase `RLIMIT_NOFILE` because it's too low on macOS by default (256)
+// and the tests fail (p2p tests open a lot of connections).
+// The `ctor` crate is used because there is no easy way to run some code before the tests start.
+#[ctor]
+fn set_nofile_limit() {
+    rlimit::increase_nofile_limit(10 * 1024).unwrap();
 }
