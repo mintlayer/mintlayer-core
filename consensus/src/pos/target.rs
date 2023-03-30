@@ -54,15 +54,14 @@ fn calculate_average_block_time(
         .filter(|block_index| net_version_range.contains(&block_index.block_height()))
         .map(|block_index| block_index.block_timestamp().as_int_seconds())
         .tuple_windows::<(u64, u64)>()
-        .map(|t| t.0 - t.1)
-        .collect::<Vec<_>>();
+        .map(|t| t.0 - t.1);
 
-    ensure!(
-        !block_diffs.is_empty(),
-        ConsensusPoSError::NotEnoughTimestampsToAverage
-    );
+    let (sum, count) = block_diffs.fold((0u64, 0u64), |(sum, count), curr| (sum + curr, count + 1));
 
-    let average = block_diffs.iter().sum::<u64>() / block_diffs.len() as u64;
+    ensure!(count > 0, ConsensusPoSError::NotEnoughTimestampsToAverage);
+
+    let average = sum / count;
+
     Ok(average)
 }
 
