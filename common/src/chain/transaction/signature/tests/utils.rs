@@ -125,7 +125,7 @@ pub fn generate_unsigned_tx(
 
 pub fn sign_whole_tx(
     tx: Transaction,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -154,7 +154,7 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -163,12 +163,7 @@ pub fn generate_and_sign_tx(
     let signed_tx =
         sign_whole_tx(tx, inputs_utxos, private_key, sighash_type, destination).unwrap();
     assert_eq!(
-        verify_signed_tx(
-            chain_config,
-            &signed_tx,
-            &inputs_utxos.iter().collect::<Vec<_>>(),
-            destination
-        ),
+        verify_signed_tx(chain_config, &signed_tx, inputs_utxos, destination),
         Ok(())
     );
     Ok(signed_tx)
@@ -176,7 +171,7 @@ pub fn generate_and_sign_tx(
 
 pub fn make_signature(
     tx: &Transaction,
-    inputs_utxos: &[TxOutput],
+    inputs_utxos: &[&TxOutput],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -187,7 +182,7 @@ pub fn make_signature(
         sighash_type,
         outpoint_dest,
         tx,
-        &inputs_utxos.iter().collect::<Vec<_>>(),
+        inputs_utxos,
         input_num,
     )?;
     Ok(input_sig)

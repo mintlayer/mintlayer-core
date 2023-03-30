@@ -63,7 +63,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
             InputWitness::Standard(
                 make_signature(
                     &tx,
-                    &inputs_utxos,
+                    &inputs_utxos.iter().collect::<Vec<_>>(),
                     input,
                     &private_key,
                     sighash_type,

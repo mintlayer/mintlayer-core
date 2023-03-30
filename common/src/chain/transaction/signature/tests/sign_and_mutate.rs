@@ -76,7 +76,13 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
     {
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, inputs);
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs, outputs).unwrap();
-        match sign_whole_tx(tx, &inputs_utxos, &private_key, sighash_type, &destination) {
+        match sign_whole_tx(
+            tx,
+            &inputs_utxos.iter().collect::<Vec<_>>(),
+            &private_key,
+            sighash_type,
+            &destination,
+        ) {
             Ok(signed_tx) => {
                 // Test flags change.
                 let updated_tx = change_flags(&mut rng, &signed_tx, 1234567890);
@@ -413,7 +419,7 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -460,7 +466,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -534,7 +540,7 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -593,7 +599,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -682,7 +688,7 @@ fn mutate_single(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -819,7 +825,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        &inputs_utxos,
+        &inputs_utxos.iter().collect::<Vec<_>>(),
         OUTPUTS,
         &private_key,
         sighash_type,
