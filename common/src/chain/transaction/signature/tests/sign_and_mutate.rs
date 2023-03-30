@@ -189,7 +189,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            false,
+            true, // Fails because the signature commits to all `inputs_utxos`
         );
         check_mutate_input(
             &chain_config,
@@ -278,7 +278,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            false,
+            true, // Fails because the signature commits to all `inputs_utxos`
         );
         check_mutate_input(
             &chain_config,
@@ -367,7 +367,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            false,
+            true, // Fails because the signature commits to all `inputs_utxos`
         );
         check_mutate_input(
             &chain_config,
@@ -413,7 +413,7 @@ fn mutate_all(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -460,7 +460,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -468,6 +468,10 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
+        add_input,           // Fails because the signature commits to all `inputs_utxos`
+        remove_first_input,  // Fails because the signature commits to all `inputs_utxos`
+        remove_middle_input, // Fails because the signature commits to all `inputs_utxos`
+        remove_last_input,   // Fails because the signature commits to all `inputs_utxos`
         add_output,
         mutate_output,
         remove_first_output,
@@ -485,20 +489,24 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     );
 
     {
+        let tx = SignedTransactionWithUtxo {
+            tx: tx.clone(),
+            inputs_utxos: inputs_utxos.clone(),
+        };
         let tx = mutate_input(&mut rng, &tx);
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 0
             ),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
     }
 
-    let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
+    let mutations = [];
     check_mutations(
         &chain_config,
         &mut rng,
@@ -526,7 +534,7 @@ fn mutate_none(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -585,7 +593,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -593,15 +601,19 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     .unwrap();
 
     {
+        let tx = SignedTransactionWithUtxo {
+            tx: tx.clone(),
+            inputs_utxos: inputs_utxos.clone(),
+        };
         let tx = mutate_input(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 0
             ),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -611,8 +623,8 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Ok(())
@@ -621,10 +633,22 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     }
 
     let mutations = [
-        add_input,
-        remove_first_input,
-        remove_middle_input,
-        remove_last_input,
+        add_input,           // Fails because the signature commits to all `inputs_utxos`
+        remove_first_input,  // Fails because the signature commits to all `inputs_utxos`
+        remove_middle_input, // Fails because the signature commits to all `inputs_utxos`
+        remove_last_input,   // Fails because the signature commits to all `inputs_utxos`
+    ];
+    check_mutations(
+        &chain_config,
+        &mut rng,
+        &tx,
+        &inputs_utxos,
+        &destination,
+        mutations,
+        Err(TransactionSigError::SignatureVerificationFailed),
+    );
+
+    let mutations = [
         add_output,
         mutate_output,
         remove_first_output,
@@ -658,7 +682,7 @@ fn mutate_single(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
@@ -673,9 +697,13 @@ fn mutate_single(#[case] seed: Seed) {
         remove_last_input,
         remove_first_output,
     ];
+    let tx = SignedTransactionWithUtxo {
+        tx,
+        inputs_utxos: inputs_utxos.clone(),
+    };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the different error.
@@ -684,8 +712,8 @@ fn mutate_single(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Err(TransactionSigError::SignatureVerificationFailed)
@@ -695,8 +723,8 @@ fn mutate_single(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
@@ -706,7 +734,7 @@ fn mutate_single(#[case] seed: Seed) {
     let mutations = [add_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -715,8 +743,8 @@ fn mutate_single(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Ok(())
@@ -726,8 +754,8 @@ fn mutate_single(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
@@ -736,15 +764,15 @@ fn mutate_single(#[case] seed: Seed) {
 
     {
         let tx = mutate_output(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 0
             ),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -754,8 +782,8 @@ fn mutate_single(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Ok(())
@@ -765,8 +793,8 @@ fn mutate_single(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
@@ -791,17 +819,21 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &chain_config,
         &mut rng,
         &destination,
-        INPUTS,
+        &inputs_utxos,
         OUTPUTS,
         &private_key,
         sighash_type,
     )
     .unwrap();
 
-    let mutations = [add_input, remove_last_input, add_output, remove_last_output];
+    let mutations = [add_output, remove_last_output];
+    let tx = SignedTransactionWithUtxo {
+        tx,
+        inputs_utxos: inputs_utxos.clone(),
+    };
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -810,8 +842,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Ok(()),
@@ -822,8 +854,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs))
@@ -833,14 +865,14 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     let mutations = [mutate_input, mutate_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 0
             ),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -850,8 +882,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Ok(()),
@@ -862,18 +894,23 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
         );
     }
 
-    let mutations = [remove_first_input, remove_first_output];
+    let mutations = [
+        add_input,         // Fails because the signature commits to all `inputs_utxos`
+        remove_last_input, // Fails because the signature commits to all `inputs_utxos`
+        remove_first_input,
+        remove_first_output,
+    ];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -882,8 +919,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
                 verify_signature(
                     &chain_config,
                     &destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 Err(TransactionSigError::SignatureVerificationFailed),
@@ -894,8 +931,8 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
             verify_signature(
                 &chain_config,
                 &destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 inputs
             ),
             Err(TransactionSigError::InvalidSignatureIndex(inputs, inputs)),
@@ -903,6 +940,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     }
 }
 
+#[track_caller]
 fn check_mutations<M, R>(
     chain_config: &ChainConfig,
     rng: &mut R,
@@ -913,19 +951,23 @@ fn check_mutations<M, R>(
     expected: Result<(), TransactionSigError>,
 ) where
     R: Rng,
-    M: IntoIterator<Item = fn(&mut R, &SignedTransaction) -> SignedTransaction>,
+    M: IntoIterator<Item = fn(&mut R, &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo>,
 {
+    let tx = SignedTransactionWithUtxo {
+        tx: tx.clone(),
+        inputs_utxos: inputs_utxos.to_vec(),
+    };
     for mutate in mutations.into_iter() {
-        let tx = mutate(rng, tx);
+        let tx = mutate(rng, &tx);
         // The number of inputs can be changed by the `mutate` function.
-        let inputs = tx.inputs().len();
+        let inputs = tx.tx.inputs().len();
 
         assert_eq!(
             verify_signature(
                 chain_config,
                 destination,
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &tx.tx,
+                &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                 INVALID_INPUT
             ),
             Err(TransactionSigError::InvalidSignatureIndex(
@@ -938,8 +980,8 @@ fn check_mutations<M, R>(
                 verify_signature(
                     chain_config,
                     destination,
-                    &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &tx.tx,
+                    &tx.inputs_utxos.iter().collect::<Vec<_>>(),
                     input
                 ),
                 expected
@@ -948,52 +990,92 @@ fn check_mutations<M, R>(
     }
 }
 
-fn add_input(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
-    updater.inputs.push(updater.inputs[0].clone());
-    updater.witness.push(updater.witness[0].clone());
-    updater.generate_tx().unwrap()
+struct SignedTransactionWithUtxo {
+    tx: SignedTransaction,
+    inputs_utxos: Vec<TxOutput>,
 }
 
-fn mutate_input(rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn add_input(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
+    updater.inputs.push(updater.inputs[0].clone());
+    updater.witness.push(updater.witness[0].clone());
+    let mut inputs_utxos = tx.inputs_utxos.clone();
+    inputs_utxos.push(inputs_utxos[0].clone());
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos,
+    }
+}
+
+fn mutate_input(rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
         9999,
     );
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
-fn remove_first_input(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_first_input(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs.remove(0);
     updater.witness.remove(0);
-    updater.generate_tx().unwrap()
+    let mut inputs_utxos = tx.inputs_utxos.clone();
+    inputs_utxos.remove(0);
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos,
+    }
 }
 
-fn remove_middle_input(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_middle_input(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     assert!(updater.inputs.len() > 8);
     updater.inputs.remove(7);
     updater.witness.remove(7);
-    updater.generate_tx().unwrap()
+    let mut inputs_utxos = tx.inputs_utxos.clone();
+    inputs_utxos.remove(7);
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos,
+    }
 }
 
-fn remove_last_input(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_last_input(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.inputs.pop().expect("Unexpected empty inputs");
     updater.witness.pop().expect("Unexpected empty witness");
-    updater.generate_tx().unwrap()
+    let mut inputs_utxos = tx.inputs_utxos.clone();
+    inputs_utxos.pop().expect("Unexpected empty witness");
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos,
+    }
 }
 
-fn add_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn add_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.push(updater.outputs[0].clone());
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
-fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs[0] = TxOutput::new(
         match updater.outputs[0].value() {
             OutputValue::Coin(coin) => {
@@ -1003,26 +1085,47 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransacti
         },
         updater.outputs[0].purpose().clone(),
     );
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
-fn remove_first_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_first_output(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.remove(0);
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
-fn remove_middle_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_middle_output(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     assert!(updater.outputs.len() > 8);
     updater.outputs.remove(7);
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
-fn remove_last_output(_rng: &mut impl Rng, tx: &SignedTransaction) -> SignedTransaction {
-    let mut updater = MutableTransaction::from(tx);
+fn remove_last_output(
+    _rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
+    let mut updater = MutableTransaction::from(&tx.tx);
     updater.outputs.pop().expect("Unexpected empty outputs");
-    updater.generate_tx().unwrap()
+    SignedTransactionWithUtxo {
+        tx: updater.generate_tx().unwrap(),
+        inputs_utxos: tx.inputs_utxos.clone(),
+    }
 }
 
 fn change_flags(

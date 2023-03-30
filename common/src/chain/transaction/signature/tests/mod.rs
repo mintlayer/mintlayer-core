@@ -63,7 +63,7 @@ fn sign_and_verify_different_sighash_types(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &destination,
-            inputs_utxos.len(),
+            &inputs_utxos,
             3,
             &private_key,
             sighash_type,
@@ -178,7 +178,7 @@ fn verify_signature_invalid_signature_index(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &destination,
-            inputs_utxos.len(),
+            &inputs_utxos,
             3,
             &private_key,
             sighash_type,
@@ -221,7 +221,7 @@ fn verify_signature_wrong_destination(#[case] seed: Seed) {
             &chain_config,
             &mut rng,
             &outpoint,
-            inputs_utxos.len(),
+            &inputs_utxos,
             3,
             &private_key,
             sighash_type,
@@ -324,7 +324,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        false,
+        true, // Fails because the signature commits to all `inputs_utxos`
     );
     check_mutate_input(
         &chain_config,
@@ -435,7 +435,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        false,
+        true, // Fails because the signature commits to all `inputs_utxos`
     );
     check_mutate_input(
         &chain_config,
@@ -546,7 +546,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        false,
+        true, // Fails because the signature commits to all `inputs_utxos`
     );
     check_mutate_input(
         &chain_config,
@@ -586,14 +586,14 @@ fn sign_mutate_then_verify(
         chain_config,
         rng,
         destination,
-        inputs_utxos.len(),
+        &inputs_utxos.iter().map(|input| (*input).clone()).collect::<Vec<_>>(),
         3,
         private_key,
         sighash_type,
     )
     .unwrap();
     assert_eq!(
-        verify_signed_tx(chain_config, &original_tx, &inputs_utxos, destination),
+        verify_signed_tx(chain_config, &original_tx, inputs_utxos, destination),
         Ok(())
     );
 
@@ -639,7 +639,7 @@ fn check_change_locktime(
 
 fn check_insert_input(
     chain_config: &ChainConfig,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     original_tx: &SignedTransaction,
     inputs_utxos: &[&TxOutput],
     destination: &Destination,
@@ -648,10 +648,18 @@ fn check_insert_input(
     let mut tx_updater = MutableTransaction::from(original_tx);
     let outpoint_source_id =
         OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(rng)));
+
+    let inputs_utxo = TxOutput::new(
+        OutputValue::Coin(Amount::from_atoms(123)),
+        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+    );
+    let mut inputs_utxos = inputs_utxos.to_vec();
+    inputs_utxos.push(&inputs_utxo);
+
     tx_updater.inputs.push(TxInput::new(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
     let tx = tx_updater.generate_tx().unwrap();
-    let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
+    let res = verify_signature(chain_config, destination, &tx, &inputs_utxos, 0);
     if should_fail {
         assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
     } else {

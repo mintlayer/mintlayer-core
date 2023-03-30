@@ -154,15 +154,14 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs: usize,
+    inputs_utxos: &[TxOutput],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let (inputs_utxos, _priv_keys) = generate_inputs_utxos(rng, inputs);
     let tx = generate_unsigned_tx(rng, destination, inputs_utxos.len(), outputs).unwrap();
     let signed_tx =
-        sign_whole_tx(tx, &inputs_utxos, private_key, sighash_type, destination).unwrap();
+        sign_whole_tx(tx, inputs_utxos, private_key, sighash_type, destination).unwrap();
     assert_eq!(
         verify_signed_tx(
             chain_config,
