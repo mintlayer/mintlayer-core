@@ -2105,6 +2105,7 @@ dependencies = [
  "blake2",
  "fixed-hash",
  "itertools",
+ "parity-scale-codec",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rstest",

@@ -224,11 +224,11 @@ fn merkletree_with_arbitrary_length_5() {
 fn leaf_count_from_tree_size() {
     for i in 1..30 {
         let leaf_count = 1 << (i - 1);
-        let tree_size = (1 << i) - 1;
+        let tree_size: u32 = (1 << i) - 1;
         let tree_size: TreeSize = tree_size.try_into().unwrap();
         assert_eq!(
             tree_size.leaf_count(),
-            NonZeroUsize::new(leaf_count).unwrap(),
+            NonZeroU32::new(leaf_count).unwrap(),
             "Check failed for i = {}",
             i
         );
@@ -410,11 +410,11 @@ fn bottom_access_eight_leaves() {
 
 #[test]
 fn position_from_index_1_tree_element() {
-    let tree_size: TreeSize = 1.try_into().unwrap();
+    let tree_size: TreeSize = 1u32.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
-        let level_end: usize = 1;
+        let level_end: u32 = 1;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i).unwrap(),
@@ -426,11 +426,11 @@ fn position_from_index_1_tree_element() {
 
 #[test]
 fn position_from_index_3_tree_elements() {
-    let tree_size: TreeSize = 3.try_into().unwrap();
+    let tree_size: TreeSize = 3u32.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
-        let level_end: usize = 2;
+        let level_end: u32 = 2;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -441,7 +441,7 @@ fn position_from_index_3_tree_elements() {
     {
         let level = 1;
         let level_start = 2;
-        let level_end: usize = 3;
+        let level_end: u32 = 3;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -453,11 +453,11 @@ fn position_from_index_3_tree_elements() {
 
 #[test]
 fn position_from_index_7_tree_elements() {
-    let tree_size: TreeSize = 7.try_into().unwrap();
+    let tree_size: TreeSize = 7u32.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
-        let level_end: usize = 4;
+        let level_end: u32 = 4;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -468,7 +468,7 @@ fn position_from_index_7_tree_elements() {
     {
         let level = 1;
         let level_start = 4;
-        let level_end: usize = 6;
+        let level_end: u32 = 6;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -479,7 +479,7 @@ fn position_from_index_7_tree_elements() {
     {
         let level = 2;
         let level_start = 6;
-        let level_end: usize = 7;
+        let level_end: u32 = 7;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -491,11 +491,11 @@ fn position_from_index_7_tree_elements() {
 
 #[test]
 fn position_from_index_15_tree_elements() {
-    let tree_size: TreeSize = 15.try_into().unwrap();
+    let tree_size: TreeSize = 15u32.try_into().unwrap();
     {
         let level = 0;
         let level_start = 0;
-        let level_end: usize = 8;
+        let level_end: u32 = 8;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -506,7 +506,7 @@ fn position_from_index_15_tree_elements() {
     {
         let level = 1;
         let level_start = 8;
-        let level_end: usize = 12;
+        let level_end: u32 = 12;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -517,7 +517,7 @@ fn position_from_index_15_tree_elements() {
     {
         let level = 2;
         let level_start = 12;
-        let level_end: usize = 14;
+        let level_end: u32 = 14;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),
@@ -528,7 +528,7 @@ fn position_from_index_15_tree_elements() {
     {
         let level = 3;
         let level_start = 14;
-        let level_end: usize = 15;
+        let level_end: u32 = 15;
         for i in level_start..level_end {
             assert_eq!(
                 NodePosition::from_abs_index(tree_size, i),

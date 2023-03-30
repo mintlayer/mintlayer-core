@@ -22,7 +22,7 @@ use crate::{
     tree::MerkleTree,
 };
 
-fn gen_leaves(n: usize) -> Vec<HashedData> {
+fn gen_leaves(n: u32) -> Vec<HashedData> {
     (0..n).map(|i| hash_data(HashedData::from_low_u64_be(i as u64))).collect()
 }
 
@@ -37,7 +37,10 @@ fn single_proof_one_leaf() {
     let p0 = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap();
     assert_eq!(p0.branch().len(), 0);
 
-    assert!(p0.into_values().verify(leaves[leaf_index], t.root()).passed_trivially());
+    assert!(p0
+        .into_values()
+        .verify(leaves[leaf_index as usize], t.root())
+        .passed_trivially());
 }
 
 #[rstest]
@@ -73,9 +76,9 @@ fn single_proof_one_leaf() {
 #[case(16, 14, &[15,22,26,28])]
 #[case(16, 15, &[14,22,26,28])]
 fn single_proof_eight_leaves(
-    #[case] leaf_count: usize,
-    #[case] leaf_index: usize,
-    #[case] branch: &[usize],
+    #[case] leaf_count: u32,
+    #[case] leaf_index: u32,
+    #[case] branch: &[u32],
 ) {
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
@@ -86,7 +89,10 @@ fn single_proof_eight_leaves(
         branch
     );
 
-    assert!(p.into_values().verify(leaves[leaf_index], t.root()).passed_decisively());
+    assert!(p
+        .into_values()
+        .verify(leaves[leaf_index as usize], t.root())
+        .passed_decisively());
 }
 
 #[rstest]
@@ -102,20 +108,21 @@ fn single_proof_eight_leaves(
 #[case(Seed::from_entropy(), 32)]
 #[trace]
 #[case(Seed::from_entropy(), 64)]
-fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_count: usize) {
+fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_count: u32) {
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);
     let t = MerkleTree::<HashedData, HashAlgo>::from_leaves(leaves.clone()).unwrap();
 
     for (leaf_index, _) in leaves.iter().enumerate() {
+        let leaf_index = leaf_index as u32;
         let proof = SingleProofNodes::from_tree_leaf(&t, leaf_index).unwrap().into_values();
 
         // Tamper with the proof
         for node_index in 0..proof.branch.len() {
             let mut p = proof.clone();
             p.branch[node_index] = HashedData::random_using(&mut rng);
-            assert!(p.verify(leaves[leaf_index], t.root()).failed());
+            assert!(p.verify(leaves[leaf_index as usize], t.root()).failed());
         }
     }
 }
@@ -133,7 +140,7 @@ fn single_proof_eight_leaves_tamper_with_nodes(#[case] seed: Seed, #[case] leaf_
 #[case(Seed::from_entropy(), 32)]
 #[trace]
 #[case(Seed::from_entropy(), 64)]
-fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_count: usize) {
+fn single_proof_eight_leaves_tamper_with_leaf(#[case] seed: Seed, #[case] leaf_count: u32) {
     let mut rng = make_seedable_rng(seed);
 
     let leaves = gen_leaves(leaf_count);

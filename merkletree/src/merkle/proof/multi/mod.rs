@@ -18,7 +18,6 @@ mod ordered_node;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    num::NonZeroUsize,
 };
 
 use itertools::Itertools;
@@ -48,7 +47,7 @@ pub struct MultiProofNodes<'a, T, H> {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
     nodes: Vec<Node<'a, T, H>>,
     /// The number of leaves in the tree, from which this proof was extracted
-    tree_leaf_count: NonZeroUsize,
+    tree_leaf_count: u32,
 }
 
 impl<T: Debug, H> Debug for MultiProofNodes<'_, T, H> {
@@ -62,8 +61,8 @@ impl<T: Debug, H> Debug for MultiProofNodes<'_, T, H> {
 }
 
 /// Ensure the leaves indices are sorted and unique
-fn is_sorted_and_unique(leaves_indices: &[usize]) -> bool {
-    leaves_indices.iter().tuple_windows::<(&usize, &usize)>().all(|(i, j)| i < j)
+fn is_sorted_and_unique(leaves_indices: &[u32]) -> bool {
+    leaves_indices.iter().tuple_windows::<(&u32, &u32)>().all(|(i, j)| i < j)
 }
 
 fn transpose<T>(v: Vec<Vec<T>>) -> Vec<Vec<T>> {
@@ -91,7 +90,7 @@ impl<'a, T, H> MultiProofNodes<'a, T, H> {
         &self.proof_leaves
     }
 
-    pub fn tree_leaf_count(&self) -> NonZeroUsize {
+    pub fn tree_leaf_count(&self) -> u32 {
         self.tree_leaf_count
     }
 }
@@ -99,7 +98,7 @@ impl<'a, T, H> MultiProofNodes<'a, T, H> {
 impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
     pub fn from_tree_leaves(
         tree: &'a MerkleTree<T, H>,
-        leaves_indices: &[usize],
+        leaves_indices: &[u32],
     ) -> Result<Self, MerkleTreeProofExtractionError> {
         if leaves_indices.is_empty() {
             return Err(MerkleTreeProofExtractionError::NoLeavesToCreateProof);
@@ -157,7 +156,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
             let siblings = nodes_of_level
                 .iter()
                 .map(|node| node.sibling().expect(sibling_err).abs_index())
-                .collect::<BTreeSet<usize>>();
+                .collect::<BTreeSet<u32>>();
 
             // We remove leaves that are already in siblings because they will come from the verification input.
             // This happens when the leaves, for which a proof is requested, are used together to build a parent node
@@ -190,14 +189,14 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
                 .map(|i| tree.node_from_bottom(0, *i).expect("Leaves already checked"))
                 .collect(),
             nodes: proof,
-            tree_leaf_count: tree.leaf_count(),
+            tree_leaf_count: tree.leaf_count().get(),
         })
     }
 
     pub fn into_values(self) -> MultiProofHashes<T, H> {
         MultiProofHashes {
             nodes: self.nodes.into_iter().map(|n| (n.abs_index(), n.hash().clone())).collect(),
-            tree_leaf_count: self.proof_leaves[0].tree().leaf_count(),
+            tree_leaf_count: self.proof_leaves[0].tree().leaf_count().get(),
             _phantom: std::marker::PhantomData,
         }
     }
@@ -207,32 +206,33 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> MultiProofNodes<'a, T, H> {
 /// This struct is supposed to be serialized and stored to be used later, unlike `MultiProofNodes`.
 #[must_use]
 #[derive(Debug, Clone)]
+#[cfg_attr(
+    feature = "scale-codec",
+    derive(parity_scale_codec::Encode, parity_scale_codec::Decode)
+)]
 pub struct MultiProofHashes<T, H> {
     /// The minimal set of nodes needed to recreate the root hash (in addition to the leaves)
-    nodes: BTreeMap<usize, T>,
+    nodes: BTreeMap<u32, T>,
     /// The number of leaves in the tree, from which this proof was extracted
-    tree_leaf_count: NonZeroUsize,
+    tree_leaf_count: u32,
     _phantom: std::marker::PhantomData<H>,
 }
 
 impl<T, H> MultiProofHashes<T, H> {
-    pub fn nodes(&self) -> &BTreeMap<usize, T> {
+    pub fn nodes(&self) -> &BTreeMap<u32, T> {
         &self.nodes
     }
 
-    pub fn tree_leaf_count(&self) -> NonZeroUsize {
+    pub fn tree_leaf_count(&self) -> u32 {
         self.tree_leaf_count
     }
 }
 
 impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
     /// While verifying the multi-proof, we need to precalculate all the possible nodes that are required to build the root hash.
-    fn calculate_missing_nodes(
-        tree_size: TreeSize,
-        input: BTreeMap<&usize, &T>,
-    ) -> BTreeMap<usize, T> {
+    fn calculate_missing_nodes(tree_size: TreeSize, input: BTreeMap<&u32, &T>) -> BTreeMap<u32, T> {
         let mut result =
-            input.into_iter().map(|(a, b)| (*a, b.clone())).collect::<BTreeMap<usize, T>>();
+            input.into_iter().map(|(a, b)| (*a, b.clone())).collect::<BTreeMap<u32, T>>();
         for (index_l, index_r) in tree_size.iter_pairs_indices() {
             if !result.contains_key(&index_l) || !result.contains_key(&(index_r)) {
                 continue;
@@ -265,7 +265,7 @@ impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
     /// circumventing verification by providing a proof of a single node.
     pub fn verify(
         &self,
-        leaves: BTreeMap<usize, T>,
+        leaves: BTreeMap<u32, T>,
         root: T,
     ) -> Result<ProofVerifyResult, MerkleProofVerificationError> {
         // in case it's a single-node tree, we don't need to verify or hash anything
@@ -274,21 +274,21 @@ impl<T: Eq + Clone, H: PairHasher<Type = T>> MultiProofHashes<T, H> {
             return Err(MerkleProofVerificationError::LeavesContainerProvidedIsEmpty);
         }
 
-        if !self.tree_leaf_count.get().is_power_of_two() {
+        if !self.tree_leaf_count.is_power_of_two() {
             return Err(MerkleProofVerificationError::InvalidTreeLeavesCount(
-                self.tree_leaf_count().get(),
+                self.tree_leaf_count(),
             ));
         }
 
-        if leaves.iter().any(|(index, _hash)| *index >= self.tree_leaf_count.get()) {
+        if leaves.iter().any(|(index, _hash)| *index >= self.tree_leaf_count) {
             return Err(MerkleProofVerificationError::LeavesIndicesOutOfRange(
                 leaves.keys().cloned().collect(),
-                self.tree_leaf_count.get(),
+                self.tree_leaf_count,
             ));
         }
 
-        let tree_size = TreeSize::from_value(self.tree_leaf_count.get() * 2 - 1)
-            .expect("Already proven from source");
+        let tree_size =
+            TreeSize::from_u32(self.tree_leaf_count * 2 - 1).expect("Already proven from source");
 
         if self.nodes.iter().any(|(index, _hash)| *index >= tree_size.get()) {
             return Err(MerkleProofVerificationError::NodesIndicesOutOfRange(

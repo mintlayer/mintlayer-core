@@ -15,7 +15,7 @@
 
 pub mod node_kind;
 
-use std::num::NonZeroUsize;
+use std::num::NonZeroU32;
 
 use self::node_kind::NodeKind;
 
@@ -27,11 +27,11 @@ use super::tree::tree_size::TreeSize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePosition {
     tree_size: TreeSize,
-    absolute_index: usize,
+    absolute_index: u32,
 }
 
 impl NodePosition {
-    pub fn from_abs_index(tree_size: TreeSize, absolute_index: usize) -> Option<Self> {
+    pub fn from_abs_index(tree_size: TreeSize, absolute_index: u32) -> Option<Self> {
         if absolute_index >= tree_size.get() {
             return None;
         }
@@ -44,8 +44,8 @@ impl NodePosition {
 
     pub fn from_position(
         tree_size: TreeSize,
-        level_from_bottom: usize,
-        index_in_level: usize,
+        level_from_bottom: u32,
+        index_in_level: u32,
     ) -> Option<Self> {
         let level_count = tree_size.level_count().get();
         if level_from_bottom >= level_count {
@@ -73,13 +73,13 @@ impl NodePosition {
         self.tree_size
     }
 
-    pub fn abs_index(&self) -> usize {
+    pub fn abs_index(&self) -> u32 {
         self.absolute_index
     }
 
     /// Returns the level and index in the level of the node, as in (level, index).
     /// Notice that the index value is capped by the number of nodes in the level.
-    pub fn position(&self) -> (usize, usize) {
+    pub fn position(&self) -> (u32, u32) {
         assert!(
             self.abs_index() < self.tree_size.get(),
             "Index must be within the tree size"
@@ -87,7 +87,7 @@ impl NodePosition {
 
         let level_from_top = (self.tree_size.get() - self.abs_index() + 1)
             .next_power_of_two()
-            .trailing_zeros() as usize;
+            .trailing_zeros();
 
         let level = self.tree_size.level_count().get() - level_from_top;
         let level_start = self.tree_size.level_start(level).expect("Abs index is valid");
@@ -107,8 +107,10 @@ impl NodePosition {
         }
     }
 
-    pub fn tree_level_count(&self) -> NonZeroUsize {
-        (self.tree_size.get().trailing_ones() as usize)
+    pub fn tree_level_count(&self) -> NonZeroU32 {
+        self.tree_size
+            .get()
+            .trailing_ones()
             .try_into()
             .expect("Cannot be zero if tree_size is not zero")
     }

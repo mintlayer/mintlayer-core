@@ -19,7 +19,7 @@ pub mod tree_size;
 use self::{padding::IncrementalPaddingIterator, tree_size::TreeSize};
 use std::fmt::Debug;
 
-use std::num::NonZeroUsize;
+use std::num::NonZeroU32;
 
 use super::{hasher::PairHasher, pos::NodePosition, MerkleTreeAccessError, MerkleTreeFormError};
 
@@ -70,21 +70,17 @@ impl<T: Clone, H> MerkleTree<T, H> {
             .expect("(total_node_count) By design, tree_size is always > 0")
     }
 
-    pub fn leaf_count(&self) -> NonZeroUsize {
+    pub fn leaf_count(&self) -> NonZeroU32 {
         let tree_size = self.total_node_count();
         tree_size.leaf_count()
     }
 
-    pub fn level_count(&self) -> NonZeroUsize {
+    pub fn level_count(&self) -> NonZeroU32 {
         let tree_size = self.total_node_count();
         tree_size.level_count()
     }
 
-    pub fn node_value_from_bottom(
-        &self,
-        level_from_bottom: usize,
-        index_in_level: usize,
-    ) -> Option<T> {
+    pub fn node_value_from_bottom(&self, level_from_bottom: u32, index_in_level: u32) -> Option<T> {
         let index_in_tree = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
             level_from_bottom,
@@ -92,13 +88,13 @@ impl<T: Clone, H> MerkleTree<T, H> {
         )?
         .abs_index();
 
-        Some(self.tree[index_in_tree].clone())
+        Some(self.tree[index_in_tree as usize].clone())
     }
 
     pub fn node_from_bottom(
         &self,
-        level_from_bottom: usize,
-        index_in_level: usize,
+        level_from_bottom: u32,
+        index_in_level: u32,
     ) -> Option<Node<T, H>> {
         let absolute_index = NodePosition::from_position(
             self.tree.len().try_into().expect("Tree size is by design > 0"),
@@ -142,7 +138,7 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
 
         let tree = Self::create_tree_from_padded_leaves(padded_leaves_iter)?;
 
-        TreeSize::from_value(tree.len()).expect("Invalid tree size. Invariant broken.");
+        TreeSize::try_from(tree.len()).expect("Invalid tree size. Invariant broken.");
         let res = Self {
             tree,
             _hasher: std::marker::PhantomData,
@@ -152,7 +148,7 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
 
     pub fn iter_from_leaf_to_root(
         &self,
-        leaf_index: usize,
+        leaf_index: u32,
     ) -> Result<MerkleTreeNodeParentIterator<T, H>, MerkleTreeAccessError> {
         let leaf_count = self.leaf_count().get();
 
@@ -175,7 +171,7 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
 
 pub struct Node<'a, T, H> {
     tree_ref: &'a MerkleTree<T, H>,
-    absolute_index: usize,
+    absolute_index: u32,
 }
 
 impl<T: Debug, H> Debug for Node<'_, T, H> {
@@ -208,14 +204,14 @@ impl<T, H> Copy for Node<'_, T, H> {}
 
 impl<'a, T, H> Node<'a, T, H> {
     pub fn hash(&self) -> &T {
-        &self.tree_ref.tree[self.absolute_index]
+        &self.tree_ref.tree[self.absolute_index as usize]
     }
 
     pub fn tree(&self) -> &'a MerkleTree<T, H> {
         self.tree_ref
     }
 
-    pub fn abs_index(&self) -> usize {
+    pub fn abs_index(&self) -> u32 {
         self.absolute_index
     }
 }
@@ -248,7 +244,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     }
 
     pub fn is_root(&self) -> bool {
-        self.absolute_index == self.tree().tree.len() - 1
+        self.absolute_index == self.tree().tree.len() as u32 - 1
     }
 
     pub fn into_iter_parents(self) -> MerkleTreeNodeParentIterator<'a, T, H> {

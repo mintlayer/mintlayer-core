@@ -20,7 +20,7 @@ use super::*;
 
 #[test]
 fn construction_from_abs_index() {
-    for tree_size_in in 1..16 {
+    for tree_size_in in 1..16u32 {
         let tree_size: Result<TreeSize, _> = tree_size_in.try_into();
         let tree_size = match tree_size {
             Ok(t) => {
@@ -52,7 +52,7 @@ fn construction_from_abs_index() {
     }
 }
 
-const BIG_VAL: usize = 1000;
+const BIG_VAL: u32 = 1000;
 
 #[rstest]
 #[case(1,  0..1, &[0..1], true)]
@@ -68,15 +68,15 @@ const BIG_VAL: usize = 1000;
 #[case(31, 0..2, &[16..BIG_VAL, 8..BIG_VAL,  4..BIG_VAL, 2..BIG_VAL, 1..BIG_VAL], false)]
 #[case(63, 0..2, &[32..BIG_VAL, 16..BIG_VAL, 8..BIG_VAL, 4..BIG_VAL, 2..BIG_VAL, 1..BIG_VAL], false)]
 fn construction_from_position(
-    #[case] tree_size: usize,
-    #[case] levels: Range<usize>,
-    #[case] indices_in_levels: &[Range<usize>],
+    #[case] tree_size: u32,
+    #[case] levels: Range<u32>,
+    #[case] indices_in_levels: &[Range<u32>],
     #[case] success: bool,
 ) {
     let tree_size: TreeSize = tree_size.try_into().unwrap();
 
     for level in levels {
-        for index in indices_in_levels[level].clone() {
+        for index in indices_in_levels[level as usize].clone() {
             let pos = NodePosition::from_position(tree_size, level, index);
             assert_eq!(
                 pos.is_some(),
@@ -99,8 +99,8 @@ fn construction_from_position(
 #[test]
 fn abs_index_to_and_from_pos() {
     // Exhaustive to a limit to avoid making the test take too long
-    for tree_log_size in 1..10 {
-        let tree_size: TreeSize = ((1 << tree_log_size) - 1).try_into().unwrap();
+    for tree_log_size in 1..10u32 {
+        let tree_size: TreeSize = ((1 << tree_log_size) - 1u32).try_into().unwrap();
         for abs_pos in 0..tree_size.get() {
             let pos_from_abs = NodePosition::from_abs_index(tree_size, abs_pos).unwrap();
             let (level, index) = pos_from_abs.position();
@@ -112,7 +112,7 @@ fn abs_index_to_and_from_pos() {
 
 #[test]
 fn parent_iter_one_leaf() {
-    let t_size = 1.try_into().unwrap();
+    let t_size = 1u32.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
     let mut leaf0iter = n.into_iter_parents();
@@ -122,7 +122,7 @@ fn parent_iter_one_leaf() {
 
 #[test]
 fn parent_iter_two_leaves() {
-    let t_size = 3.try_into().unwrap();
+    let t_size = 3u32.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
     let mut leaf0iter = n.into_iter_parents();
@@ -139,7 +139,7 @@ fn parent_iter_two_leaves() {
 
 #[test]
 fn parent_iter_four_leaves() {
-    let t_size = 7.try_into().unwrap();
+    let t_size = 7u32.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
     let mut leaf0iter = n.into_iter_parents();
@@ -172,7 +172,7 @@ fn parent_iter_four_leaves() {
 
 #[test]
 fn parent_iter_eight_leaves() {
-    let t_size = 15.try_into().unwrap();
+    let t_size = 15u32.try_into().unwrap();
 
     let n = NodePosition::from_abs_index(t_size, 0).unwrap();
     let mut leaf0iter = n.into_iter_parents();
@@ -241,7 +241,7 @@ fn parent_iter_eight_leaves() {
 
 #[test]
 fn node_and_siblings_one_leaf() {
-    let t_size = 1.try_into().unwrap();
+    let t_size = 1u32.try_into().unwrap();
     let node = NodePosition::from_abs_index(t_size, 0).unwrap();
 
     assert_eq!(node.abs_index(), 0);
@@ -250,7 +250,7 @@ fn node_and_siblings_one_leaf() {
 
 #[test]
 fn node_and_siblings_two_leaves() {
-    let t_size = 3.try_into().unwrap();
+    let t_size = 3u32.try_into().unwrap();
 
     // To get the sibling, we use this simple function
     let flip_even_odd = |i| if i % 2 == 0 { i + 1 } else { i - 1 };
@@ -270,7 +270,7 @@ fn node_and_siblings_two_leaves() {
 
 #[test]
 fn node_and_siblings_four_leaves() {
-    let t_size = 7.try_into().unwrap();
+    let t_size = 7u32.try_into().unwrap();
 
     // To get the sibling, we use this simple function
     let flip_even_odd = |i| if i % 2 == 0 { i + 1 } else { i - 1 };
@@ -296,7 +296,7 @@ fn node_and_siblings_four_leaves() {
 
 #[test]
 fn node_and_siblings_eight_leaves() {
-    let t_size = 15.try_into().unwrap();
+    let t_size = 15u32.try_into().unwrap();
 
     // To get the sibling, we use this simple function
     let flip_even_odd = |i| if i % 2 == 0 { i + 1 } else { i - 1 };
@@ -329,7 +329,7 @@ fn node_and_siblings_eight_leaves() {
 #[test]
 fn from_abs_index_construction_boundaries() {
     for p in 1..10 {
-        let t_size: TreeSize = ((1 << p) - 1).try_into().unwrap();
+        let t_size: TreeSize = ((1 << p) - 1u32).try_into().unwrap();
 
         for i in 0..t_size.get() {
             assert!(NodePosition::from_abs_index(t_size, i).is_some());
@@ -343,18 +343,18 @@ fn from_abs_index_construction_boundaries() {
 #[test]
 fn absolute_index_from_bottom() {
     // Tree size: 1
-    let s: TreeSize = 1.try_into().expect("is not zero");
+    let s: TreeSize = 1u32.try_into().expect("is not zero");
     assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
 
     // Tree size: 3
-    let s: TreeSize = 3.try_into().expect("is not zero");
+    let s: TreeSize = 3u32.try_into().expect("is not zero");
     assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
     assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
 
     assert_eq!(NodePosition::from_position(s, 1, 0).unwrap().abs_index(), 2);
 
     // Tree size: 7
-    let s: TreeSize = 7.try_into().expect("is not zero");
+    let s: TreeSize = 7u32.try_into().expect("is not zero");
     assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
     assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
     assert_eq!(NodePosition::from_position(s, 0, 2).unwrap().abs_index(), 2);
@@ -366,7 +366,7 @@ fn absolute_index_from_bottom() {
     assert_eq!(NodePosition::from_position(s, 2, 0).unwrap().abs_index(), 6);
 
     // Tree size: 15
-    let s: TreeSize = 15.try_into().expect("is not zero");
+    let s: TreeSize = 15u32.try_into().expect("is not zero");
     assert_eq!(NodePosition::from_position(s, 0, 0).unwrap().abs_index(), 0);
     assert_eq!(NodePosition::from_position(s, 0, 1).unwrap().abs_index(), 1);
     assert_eq!(NodePosition::from_position(s, 0, 2).unwrap().abs_index(), 2);
