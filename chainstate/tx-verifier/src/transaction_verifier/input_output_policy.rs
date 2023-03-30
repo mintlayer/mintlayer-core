@@ -49,7 +49,34 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DecommissionPool(_, _, _, _) => {
                         Err(ConnectTransactionError::InvalidOutputTypeInReward)
                     }
-                    TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => Ok(()),
+                    TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
+                        let outputs =
+                            reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
+                                SpendStakeError::NoBlockRewardOutputs,
+                            ))?;
+                        ensure!(
+                            outputs.len() != 0,
+                            ConnectTransactionError::SpendStakeError(
+                                SpendStakeError::NoBlockRewardOutputs,
+                            )
+                        );
+                        ensure!(
+                            outputs.len() == 1,
+                            ConnectTransactionError::SpendStakeError(
+                                SpendStakeError::MultipleBlockRewardOutputs,
+                            )
+                        );
+                        match outputs.first().expect("nonempty") {
+                            TxOutput::Transfer(_, _)
+                            | TxOutput::LockThenTransfer(_, _, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::StakePool(_) => {
+                                Err(ConnectTransactionError::InvalidOutputTypeInReward)
+                            }
+                            TxOutput::ProduceBlockFromStake(_, _, _)
+                            | TxOutput::DecommissionPool(_, _, _, _) => Ok(()),
+                        }
+                    }
                 },
                 // multiple inputs
                 _ => Err(ConnectTransactionError::SpendStakeError(
@@ -247,16 +274,23 @@ pub fn check_tx_inputs_outputs_purposes(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use common::{
         chain::{
-            stakelock::StakePoolData, timelock::OutputTimeLock, tokens::OutputValue, Destination,
-            GenBlock, OutPoint, OutPointSourceId, PoolId,
+            block::{
+                consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, ConsensusData,
+            },
+            stakelock::StakePoolData,
+            timelock::OutputTimeLock,
+            tokens::OutputValue,
+            Block, Destination, GenBlock, OutPoint, OutPointSourceId, PoolId, TxInput,
         },
-        primitives::{Amount, Id, H256},
+        primitives::{Amount, Compact, Id, H256},
     };
     use crypto::{
         random::Rng,
-        vrf::{VRFKeyKind, VRFPrivateKey},
+        vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
     };
     use itertools::Itertools;
     use rstest::rstest;
@@ -321,6 +355,24 @@ mod tests {
             PoolId::new(H256::zero()),
             OutputTimeLock::ForBlockCount(1),
         )
+    }
+
+    fn get_random_outputs(
+        rng: &mut impl Rng,
+        source: &[TxOutput],
+        result_len: usize,
+    ) -> Vec<TxOutput> {
+        let all_combinations =
+            source.iter().combinations_with_replacement(result_len).collect::<Vec<_>>();
+        let all_combinations_len = all_combinations.len();
+
+        all_combinations
+            .into_iter()
+            .nth(rng.gen_range(0..all_combinations_len))
+            .unwrap()
+            .into_iter()
+            .map(|output| output.clone())
+            .collect::<Vec<_>>()
     }
 
     #[rstest]
@@ -430,4 +482,221 @@ mod tests {
     //}
 
     // FIXME: tx_many_to_one, tx_one_to_many, tx_mane_to_many
+
+    fn make_block(kernels: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Block {
+        let (sk, _) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        Block::new(
+            vec![],
+            Id::<GenBlock>::new(H256::zero()),
+            BlockTimestamp::from_int_seconds(0),
+            ConsensusData::PoS(Box::new(PoSData::new(
+                kernels,
+                vec![],
+                PoolId::new(H256::zero()),
+                vrf_data,
+                Compact(1),
+            ))),
+            BlockReward::new(reward_outputs),
+        )
+        .unwrap()
+    }
+
+    fn make_block_no_kernel(reward_outputs: Vec<TxOutput>) -> Block {
+        Block::new(
+            vec![],
+            Id::<GenBlock>::new(H256::zero()),
+            BlockTimestamp::from_int_seconds(0),
+            ConsensusData::None,
+            BlockReward::new(reward_outputs),
+        )
+        .unwrap()
+    }
+
+    #[rstest]
+    #[rustfmt::skip]
+    #[case(transfer(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(transfer(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    /*-----------------------------------------------------------------------------------------------*/
+    #[case(burn(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(burn(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(burn(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    /*-----------------------------------------------------------------------------------------------*/
+    #[case(lock_then_transfer(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(lock_then_transfer(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(lock_then_transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(lock_then_transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(lock_then_transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    /*-----------------------------------------------------------------------------------------------*/
+    #[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(stake_pool(), produce_block(),      Ok(()))]
+    #[case(stake_pool(), decommission_pool(),  Ok(()))]
+    /*-----------------------------------------------------------------------------------------------*/
+    #[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(produce_block(), produce_block(),      Ok(()))]
+    #[case(produce_block(), decommission_pool(),  Ok(()))]
+    /*-----------------------------------------------------------------------------------------------*/
+    #[case(decommission_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(decommission_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(decommission_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(decommission_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(decommission_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    #[case(decommission_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+    fn reward_one_to_one(
+        #[case] input: TxOutput,
+        #[case] output: TxOutput,
+        #[case] result: Result<(), ConnectTransactionError>,
+    ) {
+        match input {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::DecommissionPool(_, _, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::StakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _) => {
+                /* this is a compile guard: after adding new arm don't forget to reconsider the test */
+            },
+        };
+
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let mut mocked_view = MockUtxoView::new();
+        mocked_view
+            .expect_utxo()
+            .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+
+        let block = make_block(vec![outpoint.into()], vec![output]);
+
+        assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn reward_one_to_none(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let valid_kernels = [stake_pool(), produce_block()];
+
+        let input = get_random_outputs(&mut rng, &valid_kernels, 1).into_iter().next().unwrap();
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+
+        let mut mocked_view = MockUtxoView::new();
+        mocked_view
+            .expect_utxo()
+            .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+
+        let block = make_block(vec![outpoint.into()], vec![]);
+
+        let res =
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+                .unwrap_err();
+        assert_eq!(
+            res,
+            ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs)
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn reward_none_to_any(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        {
+            // valid cases
+            let valid_purposes = [lock_then_transfer()];
+
+            let number_of_outputs = rng.gen_range(1..10);
+            let outputs = get_random_outputs(&mut rng, &valid_purposes, number_of_outputs);
+
+            let mocked_view = MockUtxoView::new();
+            let block = make_block_no_kernel(outputs);
+
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+                .unwrap();
+        }
+
+        {
+            // invalid cases
+            let invalid_purposes =
+                [transfer(), burn(), stake_pool(), produce_block(), decommission_pool()];
+
+            let number_of_outputs = rng.gen_range(1..10);
+            let outputs = get_random_outputs(&mut rng, &invalid_purposes, number_of_outputs);
+
+            let mocked_view = MockUtxoView::new();
+            let block = make_block_no_kernel(outputs);
+
+            let res = check_reward_inputs_outputs_purposes(
+                &block.block_reward_transactable(),
+                &mocked_view,
+            )
+            .unwrap_err();
+            assert_eq!(res, ConnectTransactionError::InvalidOutputTypeInReward);
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn reward_many_to_none(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let all_purposes = [
+            lock_then_transfer(),
+            transfer(),
+            burn(),
+            stake_pool(),
+            produce_block(),
+            decommission_pool(),
+        ];
+
+        let number_of_outputs = rng.gen_range(2..10);
+        let kernel_outputs = get_random_outputs(&mut rng, &all_purposes, number_of_outputs)
+            .into_iter()
+            .enumerate()
+            .map(|(i, output)| {
+                (
+                    OutPoint::new(
+                        OutPointSourceId::BlockReward(Id::new(H256::zero())),
+                        i as u32,
+                    ),
+                    output,
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let inputs: Vec<TxInput> = kernel_outputs.iter().map(|(k, _)| k.clone().into()).collect();
+
+        let mut mocked_view = MockUtxoView::new();
+        mocked_view.expect_utxo().returning(move |outpoint| {
+            kernel_outputs.get(outpoint).map(|v| Utxo::new_for_mempool(v.clone(), false))
+        });
+
+        let block = make_block(inputs, vec![]);
+
+        let res =
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+                .unwrap_err();
+        assert_eq!(
+            res,
+            ConnectTransactionError::SpendStakeError(SpendStakeError::ConsensusPoSError(
+                ConsensusPoSError::MultipleKernels
+            ))
+        );
+    }
 }
