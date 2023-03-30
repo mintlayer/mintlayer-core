@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::{Block, Destination, SignedTransaction};
+
 use crate::BlockProductionError;
 
+#[async_trait::async_trait]
 pub trait BlockProductionInterface: Send {
     /// When called, the Block Builder will start creating blocks at the next tip in chainstate
     fn start(&self) -> Result<(), BlockProductionError>;
@@ -26,4 +29,11 @@ pub trait BlockProductionInterface: Send {
 
     /// Check if the Block Builder is currently connected
     fn is_connected(&self) -> bool;
+
+    /// Generate a block with the given transactions to the specified reward destination
+    async fn generate_block(
+        &self,
+        reward_destination: Destination,
+        transactions: Vec<SignedTransaction>,
+    ) -> Result<Block, BlockProductionError>;
 }

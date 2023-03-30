@@ -19,11 +19,16 @@ pub mod builder;
 use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
-use common::{chain::ChainConfig, time_getter::TimeGetter};
+use common::{
+    chain::{block::BlockCreationError, Block, ChainConfig, Destination, SignedTransaction},
+    time_getter::TimeGetter,
+};
 use mempool::MempoolHandle;
 use tokio::sync::mpsc;
 
-use crate::{interface::BlockProductionInterface, BlockProductionError};
+use crate::{
+    detail::block_maker::BlockMaker, interface::BlockProductionInterface, BlockProductionError,
+};
 
 use self::builder::BlockBuilderControlCommand;
 
@@ -55,6 +60,7 @@ impl BlockProduction {
     }
 }
 
+#[async_trait::async_trait]
 impl BlockProductionInterface for BlockProduction {
     fn stop(&self) -> Result<(), BlockProductionError> {
         self.builder_tx
@@ -72,6 +78,45 @@ impl BlockProductionInterface for BlockProduction {
 
     fn is_connected(&self) -> bool {
         !self.builder_tx.is_closed()
+    }
+
+    async fn generate_block(
+        &self,
+        reward_destination: Destination,
+        transactions: Vec<SignedTransaction>,
+    ) -> Result<Block, BlockProductionError> {
+        let (current_tip_id, current_tip_height) = self
+            .chainstate_handle
+            .call(|this| {
+                if let Ok(current_tip_id) = this.get_best_block_id() {
+                    if let Ok(Some(current_tip_height)) =
+                        this.get_block_height_in_main_chain(&current_tip_id)
+                    {
+                        return Some((current_tip_id, current_tip_height));
+                    }
+                }
+
+                None
+            })
+            .await?
+            .ok_or(BlockProductionError::FailedToConstructBlock(
+                BlockCreationError::CurrentTipRetrievalError,
+            ))?;
+
+        let (_tx, dummy_rx) = crossbeam_channel::unbounded();
+
+        let block_maker = BlockMaker::new(
+            self.chain_config.clone(),
+            self.chainstate_handle.clone(),
+            self.mempool_handle.clone(),
+            self.time_getter.clone(),
+            reward_destination,
+            current_tip_id,
+            current_tip_height,
+            dummy_rx,
+        );
+
+        Ok(block_maker.generate_block(transactions).await?)
     }
 }
 

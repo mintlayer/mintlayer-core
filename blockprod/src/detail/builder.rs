@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{Block, ChainConfig},
+    chain::{Block, ChainConfig, Destination, GenBlock},
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
@@ -36,6 +36,7 @@ pub struct PerpetualBlockBuilder {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
+    reward_destination: Destination,
     builder_rx: mpsc::UnboundedReceiver<BlockBuilderControlCommand>,
     block_makers_tx: crossbeam_channel::Sender<BlockMakerControlCommand>,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
@@ -54,6 +55,7 @@ impl PerpetualBlockBuilder {
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
+        reward_destination: Destination,
         builder_rx: mpsc::UnboundedReceiver<BlockBuilderControlCommand>,
         enabled: bool,
     ) -> Self {
@@ -63,6 +65,7 @@ impl PerpetualBlockBuilder {
             chainstate_handle,
             mempool_handle,
             time_getter,
+            reward_destination,
             builder_rx,
             block_makers_tx: block_makers_tx.clone(),
             block_maker_rx,
@@ -92,7 +95,7 @@ impl PerpetualBlockBuilder {
 
     pub async fn trigger_new_block_production(
         &self,
-        current_tip_id: Id<Block>,
+        current_tip_id: Id<GenBlock>,
         current_tip_height: BlockHeight,
     ) -> Result<(), BlockProductionError> {
         if !self.enabled {
@@ -103,6 +106,7 @@ impl PerpetualBlockBuilder {
         let chainstate_handle = self.chainstate_handle.clone();
         let mempool_handle = self.mempool_handle.clone();
         let time_getter = self.time_getter.clone();
+        let reward_destination = self.reward_destination.clone();
         let command_receiver = self.block_maker_rx.clone();
         tokio::spawn(async move {
             BlockMaker::new(
@@ -110,6 +114,7 @@ impl PerpetualBlockBuilder {
                 chainstate_handle,
                 mempool_handle,
                 time_getter,
+                reward_destination,
                 current_tip_id,
                 current_tip_height,
                 command_receiver,
@@ -134,7 +139,7 @@ impl PerpetualBlockBuilder {
                 }
                 block_info = mempool_rx.recv() => {
                     let (block_id, block_height) = block_info.ok_or(BlockProductionError::MempoolChannelClosed)?;
-                    self.trigger_new_block_production(block_id, block_height).await?;
+                    self.trigger_new_block_production(block_id.into(), block_height).await?;
                 }
                 event = self.builder_rx.recv() => match event.ok_or(BlockProductionError::BlockBuilderChannelClosed)? {
                     BlockBuilderControlCommand::Stop => {
@@ -243,6 +248,7 @@ mod tests {
             chainstate,
             mempool,
             Default::default(),
+            Destination::AnyoneCanSpend,
             rx_builder,
             true,
         );
@@ -281,6 +287,7 @@ mod tests {
             chainstate,
             mempool,
             Default::default(),
+            Destination::AnyoneCanSpend,
             rx_builder,
             true,
         );
@@ -308,6 +315,7 @@ mod tests {
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
+            Destination::AnyoneCanSpend,
             rx_builder,
             true,
         );
@@ -414,6 +422,7 @@ mod tests {
             chainstate.clone(),
             mempool,
             Default::default(),
+            Destination::AnyoneCanSpend,
             rx_builder,
             true,
         );
@@ -469,6 +478,7 @@ mod tests {
             chainstate.clone(),
             mempool,
             Default::default(),
+            Destination::AnyoneCanSpend,
             rx_builder,
             true,
         );
