@@ -46,7 +46,7 @@ where
     F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
-    match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
+    match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
         RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
         RequiredConsensus::PoW(pow_status) => {

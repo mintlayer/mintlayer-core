@@ -146,7 +146,7 @@ impl BlockMaker {
                     consensus::generate_consensus_data(
                         &chain_config,
                         &header,
-                        current_tip_height,
+                        current_tip_height.next_height(),
                         get_block_index,
                         get_ancestor,
                     )
