@@ -100,7 +100,7 @@ impl MempoolInterface for MempoolInterfaceMock {
     }
 
     async fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
-        todo!("Add tests")
+        unimplemented!()
     }
 
     async fn collect_txs(
