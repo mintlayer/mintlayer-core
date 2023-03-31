@@ -295,6 +295,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
     for ChainstateRef<'a, S, V>
 {
+    type Error = pos_accounting::Error;
+
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }

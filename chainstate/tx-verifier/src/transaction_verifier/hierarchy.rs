@@ -257,36 +257,38 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Fl
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> PoSAccountingView
     for TransactionVerifier<C, S, U, A>
 {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+    type Error = pos_accounting::Error;
+
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
         self.accounting_delta.pool_exists(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
         self.accounting_delta.get_pool_balance(pool_id)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         self.accounting_delta.get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         self.accounting_delta.get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, pos_accounting::Error> {
+    ) -> Result<Option<DelegationData>, Self::Error> {
         self.accounting_delta.get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
         self.accounting_delta.get_pool_delegations_shares(pool_id)
     }
 
@@ -294,7 +296,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
+    ) -> Result<Option<Amount>, Self::Error> {
         self.accounting_delta.get_pool_delegation_share(pool_id, delegation_id)
     }
 }

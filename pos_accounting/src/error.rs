@@ -79,4 +79,8 @@ pub enum Error {
     InvariantErrorDelegationUndoFailedDataNotFound,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
+
+    // TODO: Need a more granular error reporting in the following
+    #[error("PoS accounting view query failed")]
+    ViewFail,
 }

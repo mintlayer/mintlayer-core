@@ -33,6 +33,8 @@ use crate::{
 };
 
 impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAccountingDB<S, T> {
+    type Error = Error;
+
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }

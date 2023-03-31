@@ -108,7 +108,7 @@ pub fn check_proof_of_stake<H, U, P>(
 where
     H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingView,
+    P: PoSAccountingView<Error = pos_accounting::Error>,
 {
     let target = target::calculate_target_required(
         chain_config,

@@ -52,6 +52,8 @@ impl UtxosView for EmptyUtxosView {
 struct EmptyAccountingView;
 
 impl PoSAccountingView for EmptyAccountingView {
+    type Error = pos_accounting::Error;
+
     fn pool_exists(&self, _pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         Ok(false)
     }
