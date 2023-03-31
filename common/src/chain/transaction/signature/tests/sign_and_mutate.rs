@@ -1089,7 +1089,7 @@ fn add_value(output_value: OutputValue) -> OutputValue {
 
 fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
-    // Should failed due to change in output value
+    // Should fail due to change in output value
     updater.outputs[0] = match updater.outputs[0].clone() {
         TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
         TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
