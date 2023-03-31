@@ -119,7 +119,9 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
                 }
             }
             sighashtype::InputsMode::AnyoneCanPay => {
+                // Commit the input being signed (target input)
                 hash_encoded_to(&target_input.outpoint(), stream);
+                // Commit the utxo of the input being signed (target input)
                 hash_encoded_to(&self.inputs_utxos[target_input_num], stream);
             }
         }
