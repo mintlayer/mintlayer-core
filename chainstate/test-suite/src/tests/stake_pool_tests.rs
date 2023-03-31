@@ -48,16 +48,14 @@ fn stake_pool_basic(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -87,19 +85,17 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -130,24 +126,21 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
+            .add_output(TxOutput::Transfer(
                 random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -178,18 +171,17 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 token_issuance_data.into(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
@@ -207,24 +199,22 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx0_id), 1),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
                     token_id,
                     amount: amount_to_issue,
                 })
                 .into(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..100_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100..100_000)),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
             .build();
 
         let best_block_index = tf
@@ -237,80 +227,6 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         assert_eq!(
             tf.best_block_id(),
             Id::<GenBlock>::from(*best_block_index.block_id())
-        );
-    });
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn stake_pool_with_tokens_as_input_value(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-
-        let token_issuance_data =
-            random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng);
-        let amount_to_issue = token_issuance_data.amount_to_issue;
-
-        // create a tx with coins utxo and token issuance utxo
-        let tx0 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::new(
-                token_issuance_data.into(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
-            .build();
-        let tx0_id = tx0.transaction().get_id();
-        let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
-
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-
-        // use token input to stake pool with tokens
-        let tx1 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx0_id), 0),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::new(
-                TokenData::TokenTransfer(TokenTransfer {
-                    token_id,
-                    amount: amount_to_issue,
-                })
-                .into(),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
-            .build();
-        let tx1_id = tx1.transaction().get_id();
-
-        let result = tf.make_block_builder().with_transactions(vec![tx0, tx1]).build_and_process();
-
-        assert_eq!(
-            result.unwrap_err(),
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx1_id)
-            ))
         );
     });
 }
@@ -334,26 +250,22 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key.clone(),
-                    destination.clone(),
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                vrf_pub_key.clone(),
+                destination.clone(),
+                0,
+                Amount::ZERO,
+            ))))
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -396,16 +308,14 @@ fn stake_pool_overspend(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::BlockReward(genesis_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(genesis_overspend_amount),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                genesis_overspend_amount,
+                anyonecanspend_address(),
+                vrf_pub_key,
+                destination,
+                0,
+                Amount::ZERO,
+            ))))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -434,6 +344,7 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
         let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
+            Amount::from_atoms(rng.gen_range(100_000..200_000)),
             anyonecanspend_address(),
             vrf_pub_key,
             destination,
@@ -449,10 +360,7 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(stake_pool_data)),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
         let tx1_id = tx1.transaction().get_id();
         let pool_id =
@@ -464,9 +372,10 @@ fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
-                OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
+            .add_output(TxOutput::ProduceBlockFromStake(
+                Amount::from_atoms(rng.gen_range(1..100_000)),
+                anyonecanspend_address(),
+                pool_id,
             ))
             .build();
 
@@ -492,6 +401,7 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
         let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
+            Amount::from_atoms(rng.gen_range(100_000..200_000)),
             anyonecanspend_address(),
             vrf_pub_key,
             destination,
@@ -507,10 +417,7 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(stake_pool_data)),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
         let tx1_id = tx1.transaction().get_id();
         tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
@@ -520,9 +427,9 @@ fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -548,6 +455,7 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
         let destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let stake_pool_data = StakePoolData::new(
+            Amount::from_atoms(rng.gen_range(100_000..200_000)),
             anyonecanspend_address(),
             vrf_pub_key,
             destination,
@@ -563,18 +471,16 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::StakePool(Box::new(stake_pool_data)),
-            ))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
         let pool_id =
             pos_accounting::make_pool_id(tx1.transaction().inputs().get(0).unwrap().outpoint());
         tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
 
-        let spend_stake_output = TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(rng.gen_range(50_000..100_000))),
-            OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
+        let spend_stake_output = TxOutput::ProduceBlockFromStake(
+            Amount::from_atoms(rng.gen_range(50_000..100_000)),
+            anyonecanspend_address(),
+            pool_id,
         );
         let block2_index = tf
             .make_block_builder()
@@ -591,9 +497,9 @@ fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..50_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
         let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
@@ -625,9 +531,10 @@ fn use_produce_block_output_in_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
+            .add_output(TxOutput::ProduceBlockFromStake(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                anyonecanspend_address(),
+                pool_id,
             ))
             .build();
 

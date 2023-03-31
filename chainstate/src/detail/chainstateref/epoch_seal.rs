@@ -20,7 +20,7 @@ use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
 use common::{
     chain::{
         block::{consensus_data::PoSData, ConsensusData},
-        Block, ChainConfig, OutputPurpose,
+        Block, ChainConfig, TxOutput,
     },
     primitives::BlockHeight,
 };
@@ -141,17 +141,15 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         .get(0)
         .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
 
-    let vrf_pub_key = match reward_output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::LockThenTransfer(_, _)
-        | OutputPurpose::Burn => {
+    let vrf_pub_key = match reward_output {
+        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
             // only pool outputs can be staked
             return Err(BlockError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardPurpose,
             ));
         }
-        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
-        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+        TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::ProduceBlockFromStake(_, _, pool_id) => {
             let pos_view = PoSAccountingDB::<_, TipStorageTag>::new(db_tx);
             let pool_data = pos_view
                 .get_pool_data(*pool_id)?
@@ -241,8 +239,7 @@ mod tests {
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::{Builder as ConfigBuilder, EpochIndex},
             stakelock::StakePoolData,
-            tokens::OutputValue,
-            Block, Destination, OutputPurpose, PoolId, TxOutput,
+            Block, Destination, PoolId, TxOutput,
         },
         primitives::{Amount, Compact, H256},
     };
@@ -260,16 +257,14 @@ mod tests {
         let vrf_data = vrf_sk.produce_vrf_data(vrf_transcript.into());
 
         let stake_pool_data = StakePoolData::new(
+            Amount::from_atoms(1),
             Destination::AnyoneCanSpend,
             vrf_pk,
             Destination::AnyoneCanSpend,
             0,
             Amount::ZERO,
         );
-        let reward_output = TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::StakePool(Box::new(stake_pool_data)),
-        );
+        let reward_output = TxOutput::StakePool(Box::new(stake_pool_data));
         let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, Compact(1));
         Block::new(
             vec![],

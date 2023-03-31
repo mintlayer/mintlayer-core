@@ -73,7 +73,7 @@ pub fn calculate_total_outputs(
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
     let iter = outputs
         .iter()
-        .map(|output| get_output_token_id_and_amount(output.value(), include_issuance));
+        .map(|output| get_output_token_id_and_amount(&output.value(), include_issuance));
     let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
 
     let result = AmountsMap::from_fallible_iter(iter)?;

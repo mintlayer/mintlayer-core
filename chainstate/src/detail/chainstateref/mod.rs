@@ -30,7 +30,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, OutputPurpose, Transaction,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -423,19 +423,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
         block.block_reward().outputs().iter().try_for_each(|output| {
-            match output.purpose() {
-                OutputPurpose::LockThenTransfer(_, tl) => {
-                    self.check_block_reward_timelock(block, tl)
-                }
-                OutputPurpose::ProduceBlockFromStake(_, _) => {
+            match output {
+                TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
+                TxOutput::ProduceBlockFromStake(_, _, _) => {
                     // The output can be reused in block reward right away
                     Ok(())
                 }
-                OutputPurpose::Transfer(_) | OutputPurpose::StakePool(_) | OutputPurpose::Burn => {
-                    Err(CheckBlockError::InvalidBlockRewardOutputType(
-                        block.get_id(),
-                    ))
-                }
+                TxOutput::Transfer(_, _) | TxOutput::StakePool(_) | TxOutput::Burn(_) => Err(
+                    CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                ),
             }
         })
     }
@@ -545,7 +541,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 .try_for_each(|token_data| {
                     check_tokens_data(
                         self.chain_config,
-                        token_data,
+                        token_data.as_ref(),
                         tx.transaction(),
                         block.get_id(),
                     )

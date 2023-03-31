@@ -22,6 +22,7 @@ use super::Destination;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct StakePoolData {
+    value: Amount,
     staker: Destination,
     vrf_public_key: VRFPublicKey,
     decommission_key: Destination,
@@ -33,6 +34,7 @@ pub struct StakePoolData {
 
 impl StakePoolData {
     pub fn new(
+        value: Amount,
         staker: Destination,
         vrf_public_key: VRFPublicKey,
         decommission_key: Destination,
@@ -40,6 +42,7 @@ impl StakePoolData {
         cost_per_epoch: Amount,
     ) -> Self {
         Self {
+            value,
             staker,
             vrf_public_key,
             decommission_key,
@@ -66,5 +69,9 @@ impl StakePoolData {
 
     pub fn cost_per_epoch(&self) -> Amount {
         self.cost_per_epoch
+    }
+
+    pub fn value(&self) -> Amount {
+        self.value
     }
 }

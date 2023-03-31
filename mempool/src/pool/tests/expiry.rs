@@ -37,13 +37,13 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
 
@@ -101,9 +101,9 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     );
 
     for _ in 0..num_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
     let parent = tx_builder.build();

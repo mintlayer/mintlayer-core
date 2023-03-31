@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{OutputPurpose, Transaction, TxOutput};
+use common::chain::{Transaction, TxOutput};
 
 use super::error::ConnectTransactionError;
 
-/// Not all `OutputPurposes` can be used in a transaction.
+/// Not all `OutputType`s can be used in a transaction.
 /// For example spending `ProduceBlockFromStake` and `StakePool` in a tx is not supported
 /// at the moment and considered invalid.
 pub fn check_tx_inputs_outputs_purposes(
@@ -31,22 +31,22 @@ pub fn check_tx_inputs_outputs_purposes(
 
 /// Indicates whether an output purpose can be used in a tx as an input
 fn is_valid_input_for_tx(output: &TxOutput) -> bool {
-    match output.purpose() {
-        OutputPurpose::Transfer(_) | OutputPurpose::LockThenTransfer(_, _) => true,
-        OutputPurpose::Burn
-        | OutputPurpose::StakePool(_)
-        | OutputPurpose::ProduceBlockFromStake(_, _) => false,
+    match output {
+        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) => true,
+        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
+            false
+        }
     }
 }
 
 /// Indicates whether an output purpose can be used in a tx as an output
 fn is_valid_output_for_tx(output: &TxOutput) -> bool {
-    match output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::LockThenTransfer(_, _)
-        | OutputPurpose::Burn
-        | OutputPurpose::StakePool(_) => true,
-        OutputPurpose::ProduceBlockFromStake(_, _) => false,
+    match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::StakePool(_) => true,
+        TxOutput::ProduceBlockFromStake(_, _, _) => false,
     }
 }
 

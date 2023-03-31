@@ -157,7 +157,7 @@ impl MempoolStore {
                     .ok_or_else(make_err)
             })
             .map(|output| match output.value() {
-                OutputValue::Coin(coin) => *coin,
+                OutputValue::Coin(coin) => coin,
                 OutputValue::Token(_) => Amount::from_atoms(0),
             })
     }

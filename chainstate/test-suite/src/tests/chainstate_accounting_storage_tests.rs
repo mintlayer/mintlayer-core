@@ -76,20 +76,18 @@ fn make_tx_with_stake_pool(
 ) -> (SignedTransaction, PoolId, PoolData) {
     let destination = new_pub_key_destination(rng);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
-    let stake_output = TxOutput::new(
-        OutputValue::Coin(amount_to_stake),
-        OutputPurpose::StakePool(Box::new(StakePoolData::new(
-            anyonecanspend_address(),
-            pool_data.vrf_public_key().clone(),
-            pool_data.decommission_destination().clone(),
-            pool_data.margin_ratio_per_thousand(),
-            pool_data.cost_per_epoch(),
-        ))),
-    );
+    let stake_output = TxOutput::StakePool(Box::new(StakePoolData::new(
+        amount_to_stake,
+        anyonecanspend_address(),
+        pool_data.vrf_public_key().clone(),
+        pool_data.decommission_destination().clone(),
+        pool_data.margin_ratio_per_thousand(),
+        pool_data.cost_per_epoch(),
+    )));
 
-    let transfer_output = TxOutput::new(
+    let transfer_output = TxOutput::Transfer(
         OutputValue::Coin(amount_to_transfer),
-        OutputPurpose::Transfer(anyonecanspend_address()),
+        anyonecanspend_address(),
     );
 
     let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
@@ -654,9 +652,9 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 

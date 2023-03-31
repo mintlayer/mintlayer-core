@@ -39,9 +39,9 @@ fn store_coin(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
 
-        let tx_output = TxOutput::new(
+        let tx_output = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         );
 
         // spend coin
@@ -121,7 +121,7 @@ fn store_token(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenIssuance {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
@@ -129,12 +129,11 @@ fn store_token(#[case] seed: Seed) {
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
         let tx_id = tx.transaction().get_id();
         let tx_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_id), 0);
@@ -196,9 +195,9 @@ fn reorg_store_coin(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id();
 
         // create block
-        let tx_1_output = TxOutput::new(
+        let tx_1_output = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(300)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         );
         let tx_1 = TransactionBuilder::new()
             .add_input(
@@ -217,9 +216,9 @@ fn reorg_store_coin(#[case] seed: Seed) {
         tf.process_block(block_1, BlockSource::Local).unwrap();
 
         // create parallel chain
-        let tx_2_output = TxOutput::new(
+        let tx_2_output = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(200)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         );
         let tx_2 = TransactionBuilder::new()
             .add_input(
@@ -240,9 +239,9 @@ fn reorg_store_coin(#[case] seed: Seed) {
         tf.process_block(block_2, BlockSource::Local).unwrap();
 
         // produce one more block to cause reorg
-        let tx_3_output = TxOutput::new(
+        let tx_3_output = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         );
         let tx_3 = TransactionBuilder::new()
             .add_input(
@@ -372,7 +371,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenIssuance {
                     token_ticker: "AAAA".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(1..u128::MAX)),
@@ -380,12 +379,11 @@ fn reorg_store_token(#[case] seed: Seed) {
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
         let tx_1_outpoint = OutPoint::new(
             OutPointSourceId::Transaction(tx_1.transaction().get_id()),
@@ -407,7 +405,7 @@ fn reorg_store_token(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenIssuance {
                     token_ticker: "BBBB".as_bytes().to_vec(),
                     amount_to_issue: bbbb_tokens_amount,
@@ -415,12 +413,11 @@ fn reorg_store_token(#[case] seed: Seed) {
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
         let tx_2_id = tx_2.transaction().get_id();
         let tx_2_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx_2_id), 0);
@@ -440,13 +437,13 @@ fn reorg_store_token(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx_2_id), 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
                     token_id: token_2_id,
                     amount: bbbb_tokens_amount,
                 })
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         let tx_3_id = tx_3.transaction().get_id();
@@ -553,9 +550,9 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
             let genesis_id = tf.genesis().get_id();
 
             // create block
-            let tx_1_output = TxOutput::new(
+            let tx_1_output = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(300)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             );
             let tx_1 = TransactionBuilder::new()
                 .add_input(
@@ -571,9 +568,9 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
             tf.process_block(block_1, BlockSource::Local).unwrap();
 
             // create parallel chain
-            let tx_2_output = TxOutput::new(
+            let tx_2_output = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(200)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             );
             let tx_2 = TransactionBuilder::new()
                 .add_input(
@@ -593,9 +590,9 @@ fn reorg_store_coin_no_tx_index(#[case] seed: Seed, #[case] tx_index_enabled: bo
             tf.process_block(block_2, BlockSource::Local).unwrap();
 
             // produce one more block to cause reorg
-            let tx_3_output = TxOutput::new(
+            let tx_3_output = TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             );
             let tx_3 = TransactionBuilder::new()
                 .add_input(

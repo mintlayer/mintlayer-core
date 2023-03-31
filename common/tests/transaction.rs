@@ -25,9 +25,9 @@ fn transaction_id_snapshots() {
     let hash1 = H256([0x51; 32]);
     let hash2 = H256([0x52; 32]);
 
-    let outs0: Vec<TxOutput> = [TxOutput::new(
+    let outs0: Vec<TxOutput> = [TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(25)),
-        OutputPurpose::Transfer(Destination::ScriptHash(Id::new(hash0))),
+        Destination::ScriptHash(Id::new(hash0)),
     )]
     .to_vec();
     let ins0: Vec<TxInput> = [TxInput::new(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
@@ -75,7 +75,7 @@ fn transaction_id_snapshots() {
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0x1205cd5f2da893cc6b48946309c5c5e5f2d97ecc475b47e3f7ffff0db0b126e0
+        0xc702999390064f5bec31b087007abbffc764da468abf6f092897b846df995456
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -89,7 +89,7 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0xed07c7ea4e6e70715dc0a02883966eea60c33d5aa83f50fe5c87bc3b54e4e775
+        0x502421db45587e3d733bdeb495a32540fec6f6d8697e502e69233a2dd211f423
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

@@ -24,7 +24,7 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockHeader},
         config::EpochIndex,
-        ChainConfig, OutputPurpose,
+        ChainConfig, TxOutput,
     },
     primitives::{Amount, BlockHeight, Idable},
     Uint256, Uint512,
@@ -117,20 +117,18 @@ where
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
     let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
 
-    let vrf_pub_key = match kernel_output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::LockThenTransfer(_, _)
-        | OutputPurpose::Burn => {
+    let vrf_pub_key = match kernel_output {
+        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
-                PoSRandomnessError::InvalidOutputPurposeInStakeKernel(header.get_id()),
+                PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
             ));
         }
-        OutputPurpose::StakePool(d) => d.as_ref().vrf_public_key().clone(),
-        OutputPurpose::ProduceBlockFromStake(_, pool_id) => {
+        TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::ProduceBlockFromStake(_, _, pool_id) => {
             let pool_data = pos_accounting_view
-                .get_pool_data(*pool_id)?
-                .ok_or(ConsensusPoSError::PoolDataNotFound(*pool_id))?;
+                .get_pool_data(pool_id)?
+                .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;
             pool_data.vrf_public_key().clone()
         }
     };

@@ -19,8 +19,8 @@ use crate::{
 };
 use common::{
     chain::{
-        tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose,
-        Transaction, TxInput, TxOutput,
+        tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, Transaction,
+        TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -68,9 +68,9 @@ pub fn create_tx_outputs(rng: &mut (impl Rng + CryptoRng), size: u32) -> Vec<TxO
     for _ in 0..size {
         let random_amt = rng.gen_range(1..u128::MAX);
         let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-        tx_outputs.push(TxOutput::new(
+        tx_outputs.push(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(random_amt)),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            Destination::PublicKey(pub_key),
         ));
     }
 
@@ -132,9 +132,9 @@ fn inner_create_utxo(
     // just a random value generated, and also a random `is_block_reward` value.
     let output_value = rng.gen_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let output = TxOutput::new(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(output_value)),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        Destination::PublicKey(pub_key),
     );
 
     // generate utxo

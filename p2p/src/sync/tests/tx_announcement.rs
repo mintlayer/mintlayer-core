@@ -20,8 +20,7 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{
         config::create_unit_test_config, signature::inputsig::InputWitness, tokens::OutputValue,
-        GenBlock, OutPointSourceId, OutputPurpose, SignedTransaction, Transaction, TxInput,
-        TxOutput,
+        GenBlock, OutPointSourceId, SignedTransaction, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
 };
@@ -343,10 +342,7 @@ fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
     let tx = Transaction::new(
         0x00,
         vec![TxInput::new(OutPointSourceId::from(out_point), 0)],
-        vec![TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::Burn,
-        )],
+        vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
         0x01,
     )
     .unwrap();

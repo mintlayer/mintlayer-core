@@ -19,7 +19,7 @@ use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{token_id, Metadata, NftIssuance, OutputValue, TokenData, TokenTransfer},
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -81,18 +81,15 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         issuance_data,
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -121,17 +118,16 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Burn(
                         TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         }
                         .into(),
-                        OutputPurpose::Burn,
                     ))
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123455)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -155,17 +151,17 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(b1_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         TokenData::TokenTransfer(TokenTransfer {
                             token_id,
                             amount: Amount::from_atoms(1),
                         })
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123455)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -188,9 +184,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(b1_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value.clone(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -213,9 +209,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value,
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -236,17 +232,17 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::new(issuance_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
                     token_id,
                     amount: Amount::from_atoms(1),
                 })
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         let b2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
@@ -270,17 +266,16 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::new(b2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Burn(
                 TokenTransfer {
                     token_id,
                     amount: Amount::from_atoms(1),
                 }
                 .into(),
-                OutputPurpose::Burn,
             ))
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         let c2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
@@ -304,17 +299,16 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                 TxInput::new(c2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Burn(
                 TokenTransfer {
                     token_id,
                     amount: Amount::from_atoms(1),
                 }
                 .into(),
-                OutputPurpose::Burn,
             ))
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(123454)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         let d2_outpoint_id: OutPointSourceId = tx_2.transaction().get_id().into();
@@ -341,9 +335,9 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
                         TxInput::new(d2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         OutputValue::Coin(Amount::from_atoms(123453)),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -396,14 +390,11 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
                         TxInput::new(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         issuance_value.clone().into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -425,11 +416,11 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         // Check issuance storage in the chain and in the storage
         assert_eq!(
             issuance_tx.outputs()[0].value(),
-            &issuance_value.clone().into()
+            issuance_value.clone().into()
         );
         assert_eq!(
             token_aux_data.issuance_tx().outputs()[0].value(),
-            &issuance_value.into()
+            issuance_value.into()
         );
 
         // Cause reorg

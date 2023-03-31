@@ -102,7 +102,7 @@ pub enum ConnectTransactionError {
     #[error("Error during stake spending")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Attempted to use a non-locked stake as output in block reward {0}")]
-    InvalidOutputPurposeInReward(Id<Block>),
+    InvalidOutputTypeInReward(Id<Block>),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 }

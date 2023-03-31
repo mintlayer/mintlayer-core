@@ -19,7 +19,7 @@ mod mock;
 
 use super::*;
 use common::{
-    chain::{Destination, OutPoint, OutputPurpose},
+    chain::{Destination, OutPoint},
     primitives::{amount::UnsignedIntType, H256},
 };
 use crypto::{
@@ -35,9 +35,9 @@ fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (Out
         0,
     );
     let (_, pub_key1) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let output1 = TxOutput::new(
+    let output1 = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(value)),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key1)),
+        Destination::PublicKey(pub_key1),
     );
     let utxo = Utxo::new_for_blockchain(output1, false, BlockHeight::new(1));
     (outpoint, utxo)

@@ -16,7 +16,7 @@
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{tokens::OutputValue, PoolId},
-    primitives::Id,
+    primitives::{Amount, Id},
 };
 use script::Script;
 use serialization::{Decode, Encode};
@@ -41,71 +41,64 @@ pub enum Destination {
     ClassicMultisig(PublicKeyHash),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum OutputPurpose {
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub enum TxOutput {
     #[codec(index = 0)]
-    Transfer(Destination),
+    Transfer(OutputValue, Destination),
     #[codec(index = 1)]
-    LockThenTransfer(Destination, OutputTimeLock),
+    LockThenTransfer(OutputValue, Destination, OutputTimeLock),
     #[codec(index = 2)]
-    Burn,
+    Burn(OutputValue),
     /// Output type that is used to create a stake pool
     #[codec(index = 3)]
     StakePool(Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
-    ProduceBlockFromStake(Destination, PoolId),
+    ProduceBlockFromStake(Amount, Destination, PoolId),
 }
 
-impl OutputPurpose {
+impl TxOutput {
+    // TODO: this has to go
     pub fn destination(&self) -> Option<&Destination> {
         match self {
-            OutputPurpose::Transfer(d) => Some(d),
-            OutputPurpose::LockThenTransfer(d, _) => Some(d),
-            OutputPurpose::Burn => None,
-            OutputPurpose::StakePool(d) => Some(d.staker()),
-            OutputPurpose::ProduceBlockFromStake(d, _) => Some(d),
+            TxOutput::Transfer(_, d) => Some(d),
+            TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            TxOutput::Burn(_) => None,
+            TxOutput::StakePool(d) => Some(d.staker()),
+            TxOutput::ProduceBlockFromStake(_, d, _) => Some(d),
         }
     }
 
     pub fn is_burn(&self) -> bool {
         match self {
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::StakePool(_)
-            | OutputPurpose::ProduceBlockFromStake(_, _) => false,
-            OutputPurpose::Burn => true,
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::StakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _) => false,
+            TxOutput::Burn(_) => true,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct TxOutput {
-    value: OutputValue,
-    purpose: OutputPurpose,
-}
-
 impl TxOutput {
-    pub fn new(value: OutputValue, purpose: OutputPurpose) -> Self {
-        TxOutput { value, purpose }
-    }
-
-    pub fn value(&self) -> &OutputValue {
-        &self.value
-    }
-
-    pub fn purpose(&self) -> &OutputPurpose {
-        &self.purpose
+    pub fn value(&self) -> OutputValue {
+        match self {
+            TxOutput::Transfer(v, _) => v.clone(),
+            TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+            TxOutput::Burn(v) => v.clone(),
+            TxOutput::StakePool(d) => OutputValue::Coin(d.value()),
+            TxOutput::ProduceBlockFromStake(v, _, _) => OutputValue::Coin(*v),
+        }
     }
 
     pub fn has_timelock(&self) -> bool {
-        match &self.purpose {
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::Burn
-            | OutputPurpose::StakePool(_)
-            | OutputPurpose::ProduceBlockFromStake(_, _) => false,
-            OutputPurpose::LockThenTransfer(_, _) => true,
+        match self {
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::StakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _) => false,
+            TxOutput::LockThenTransfer(_, _, _) => true,
         }
     }
 }

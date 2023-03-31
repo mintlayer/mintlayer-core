@@ -1080,17 +1080,23 @@ fn add_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTran
     }
 }
 
+fn add_value(output_value: OutputValue) -> OutputValue {
+    match output_value {
+        OutputValue::Coin(v) => OutputValue::Coin((v + Amount::from_atoms(100)).unwrap()),
+        OutputValue::Token(v) => OutputValue::Token(v),
+    }
+}
+
 fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
-    updater.outputs[0] = TxOutput::new(
-        match updater.outputs[0].value() {
-            OutputValue::Coin(coin) => {
-                OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
-            }
-            OutputValue::Token(asset) => OutputValue::Token(asset.clone()),
-        },
-        updater.outputs[0].purpose().clone(),
-    );
+    // Should failed due to change in output value
+    updater.outputs[0] = match updater.outputs[0].clone() {
+        TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
+        TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
+        TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
+        TxOutput::StakePool(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::ProduceBlockFromStake(_, _, _) => unreachable!(), // TODO: come back to this later
+    };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),
         inputs_utxos: tx.inputs_utxos.clone(),

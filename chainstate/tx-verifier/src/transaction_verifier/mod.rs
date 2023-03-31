@@ -61,8 +61,8 @@ use common::{
         signed_transaction::SignedTransaction,
         stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput,
-        TxMainChainIndex, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxMainChainIndex,
+        TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
 };
@@ -285,13 +285,15 @@ where
                         self.get_token_id_from_issuance_tx(tx_id)
                             .map_err(ConnectTransactionError::TransactionVerifierError)
                     };
-                let (key, amount) =
-                    get_input_token_id_and_amount(utxo.output().value(), issuance_token_id_getter)?;
+                let (key, amount) = get_input_token_id_and_amount(
+                    &utxo.output().value(),
+                    issuance_token_id_getter,
+                )?;
                 Ok((key, amount))
             }
             OutPointSourceId::BlockReward(_) => {
                 let (key, amount) =
-                    get_input_token_id_and_amount(utxo.output().value(), || Ok(None))?;
+                    get_input_token_id_and_amount(&utxo.output().value(), || Ok(None))?;
                 match key {
                     CoinOrTokenId::Coin => Ok((CoinOrTokenId::Coin, amount)),
                     CoinOrTokenId::TokenId(tid) => Ok((CoinOrTokenId::TokenId(tid), amount)),
@@ -346,7 +348,7 @@ where
         let total_burned = tx
             .outputs()
             .iter()
-            .filter(|o| *o.purpose() == OutputPurpose::Burn)
+            .filter(|o| matches!(*o, TxOutput::Burn(_)))
             .filter_map(|o| o.value().coin_amount())
             .try_fold(Amount::ZERO, |so_far, v| {
                 (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
@@ -369,19 +371,18 @@ where
         output: &TxOutput,
         block_id: Id<Block>,
     ) -> Result<StakePoolData, ConnectTransactionError> {
-        match output.purpose() {
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn => Err(ConnectTransactionError::InvalidOutputPurposeInReward(
-                block_id,
-            )),
-            OutputPurpose::StakePool(d) => Ok(d.as_ref().clone()),
-            OutputPurpose::ProduceBlockFromStake(d, pool_id) => {
+        match output {
+            TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
+                Err(ConnectTransactionError::InvalidOutputTypeInReward(block_id))
+            }
+            TxOutput::StakePool(d) => Ok(d.as_ref().clone()),
+            TxOutput::ProduceBlockFromStake(v, d, pool_id) => {
                 let pool_data = self
                     .accounting_delta
                     .get_pool_data(*pool_id)?
                     .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
                 Ok(StakePoolData::new(
+                    *v,
                     d.clone(),
                     pool_data.vrf_public_key().clone(),
                     pool_data.decommission_destination().clone(),
@@ -512,7 +513,7 @@ where
 
             // TODO: see if a different treatment should be done for different output purposes
             // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-            match utxo.output().purpose().destination() {
+            match utxo.output().destination() {
                 Some(d) => verify_signature(
                     self.chain_config.as_ref(),
                     d,
@@ -539,12 +540,12 @@ where
         let tx_undo = tx
             .outputs()
             .iter()
-            .filter_map(|output| match output.purpose() {
-                OutputPurpose::StakePool(data) => Some((data, output.value())),
-                OutputPurpose::Transfer(_)
-                | OutputPurpose::LockThenTransfer(_, _)
-                | OutputPurpose::Burn
-                | OutputPurpose::ProduceBlockFromStake(_, _) => None,
+            .filter_map(|output| match output {
+                TxOutput::StakePool(data) => Some((data, output.value())),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::ProduceBlockFromStake(_, _, _) => None,
             })
             .map(
                 |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
@@ -595,8 +596,8 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        tx.outputs().iter().try_for_each(|output| match output.purpose() {
-            OutputPurpose::StakePool(_) => {
+        tx.outputs().iter().try_for_each(|output| match output {
+            TxOutput::StakePool(_) => {
                 let block_undo_fetcher = |id: Id<Block>| self.storage.get_accounting_undo(id);
                 self.accounting_block_undo
                     .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
@@ -616,10 +617,10 @@ where
                     })
                     .map_err(ConnectTransactionError::PoSAccountingError)
             }
-            OutputPurpose::Transfer(_)
-            | OutputPurpose::LockThenTransfer(_, _)
-            | OutputPurpose::Burn
-            | OutputPurpose::ProduceBlockFromStake(_, _) => Ok(()),
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _) => Ok(()),
         })
     }
 

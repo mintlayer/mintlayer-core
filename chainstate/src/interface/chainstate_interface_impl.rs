@@ -365,7 +365,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             |mut values, outpoint| {
                 if let Some(utxo) = utxo_view.utxo(outpoint) {
                     match utxo.output().value() {
-                        OutputValue::Coin(amount) => values.push(Some(*amount)),
+                        OutputValue::Coin(amount) => values.push(Some(amount)),
                         _ => {
                             return Err(ChainstateError::FailedToReadProperty(
                                 PropertyQueryError::ExpectedCoinOutpointAndFoundToken,

@@ -118,9 +118,9 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1000)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
         let tx0_id = tx0.transaction().get_id();
@@ -147,9 +147,9 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx0_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -163,9 +163,9 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 

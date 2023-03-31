@@ -19,7 +19,7 @@ use common::{
     chain::{
         signature::inputsig::InputWitness,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        Block, Destination, Genesis, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Block, Destination, Genesis, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -61,17 +61,14 @@ pub fn create_utxo_data(
     let new_output = match output.value() {
         OutputValue::Coin(output_value) => {
             let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
-            let new_value = (*output_value - spent_value).unwrap();
+            let new_value = (output_value - spent_value).unwrap();
             utils::ensure!(new_value >= Amount::from_atoms(1));
-            TxOutput::new(
-                OutputValue::Coin(new_value),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )
+            TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
         }
-        OutputValue::Token(token_data) => match &**token_data {
-            TokenData::TokenTransfer(_transfer) => TxOutput::new(
+        OutputValue::Token(token_data) => match &*token_data {
+            TokenData::TokenTransfer(_transfer) => TxOutput::Transfer(
                 OutputValue::Token(token_data.clone()),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ),
             TokenData::TokenIssuance(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
@@ -104,15 +101,15 @@ pub fn create_multiple_utxo_data(
             if switch == 0 {
                 // issue nft
                 let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
-                if *output_value >= min_tx_fee {
+                if output_value >= min_tx_fee {
                     // Coin output is created intentionally besides issuance output in order to not waste utxo
                     // (e.g. single genesis output on issuance)
                     vec![
-                        TxOutput::new(
+                        TxOutput::Transfer(
                             random_nft_issuance(chainstate.get_chain_config().clone(), rng).into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ),
-                        TxOutput::new(OutputValue::Coin(min_tx_fee), OutputPurpose::Burn),
+                        TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
                     ]
                 } else {
                     return None;
@@ -120,16 +117,16 @@ pub fn create_multiple_utxo_data(
             } else if switch == 1 {
                 // issue token
                 let min_tx_fee = chainstate.get_chain_config().token_min_issuance_fee();
-                if *output_value >= min_tx_fee {
+                if output_value >= min_tx_fee {
                     // Coin output is created intentionally besides issuance output in order to not waste utxo
                     // (e.g. single genesis output on issuance)
                     vec![
-                        TxOutput::new(
+                        TxOutput::Transfer(
                             random_token_issuance(chainstate.get_chain_config().clone(), rng)
                                 .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ),
-                        TxOutput::new(OutputValue::Coin(min_tx_fee), OutputPurpose::Burn),
+                        TxOutput::Burn(OutputValue::Coin(min_tx_fee)),
                     ]
                 } else {
                     return None;
@@ -140,15 +137,12 @@ pub fn create_multiple_utxo_data(
                     .map(|_| {
                         let new_value = Amount::from_atoms(output_value.into_atoms() / num_outputs);
                         debug_assert!(new_value >= Amount::from_atoms(1));
-                        TxOutput::new(
-                            OutputValue::Coin(new_value),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        )
+                        TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
                     })
                     .collect()
             }
         }
-        OutputValue::Token(token_data) => match &**token_data {
+        OutputValue::Token(token_data) => match &*token_data {
             TokenData::TokenTransfer(transfer) => {
                 if rng.gen::<bool>() {
                     // burn transferred tokens
@@ -157,13 +151,12 @@ pub fn create_multiple_utxo_data(
                     } else {
                         transfer.amount
                     };
-                    vec![TxOutput::new(
+                    vec![TxOutput::Burn(
                         TokenTransfer {
                             token_id: transfer.token_id,
                             amount: amount_to_burn,
                         }
                         .into(),
-                        OutputPurpose::Burn,
                     )]
                 } else {
                     // transfer tokens again
@@ -173,21 +166,21 @@ pub fn create_multiple_utxo_data(
                             .map(|_| {
                                 let amount =
                                     Amount::from_atoms(transfer.amount.into_atoms() / num_outputs);
-                                TxOutput::new(
+                                TxOutput::Transfer(
                                     TokenTransfer {
                                         token_id: transfer.token_id,
                                         amount,
                                     }
                                     .into(),
-                                    OutputPurpose::Transfer(anyonecanspend_address()),
+                                    anyonecanspend_address(),
                                 )
                             })
                             .collect()
                     } else {
                         // transfer with a single output
-                        vec![TxOutput::new(
+                        vec![TxOutput::Transfer(
                             OutputValue::Token(token_data.clone()),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
+                            anyonecanspend_address(),
                         )]
                     }
                 }
@@ -225,7 +218,7 @@ fn new_token_transfer_output(
     outsrc: &OutPointSourceId,
     amount: Amount,
 ) -> TxOutput {
-    TxOutput::new(
+    TxOutput::Transfer(
         TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
@@ -238,7 +231,7 @@ fn new_token_transfer_output(
             amount,
         }
         .into(),
-        OutputPurpose::Transfer(anyonecanspend_address()),
+        anyonecanspend_address(),
     )
 }
 
@@ -247,7 +240,7 @@ fn new_token_burn_output(
     outsrc: &OutPointSourceId,
     amount_to_burn: Amount,
 ) -> TxOutput {
-    TxOutput::new(
+    TxOutput::Burn(
         TokenTransfer {
             token_id: match outsrc {
                 OutPointSourceId::Transaction(prev_tx) => {
@@ -260,7 +253,6 @@ fn new_token_burn_output(
             amount: amount_to_burn,
         }
         .into(),
-        OutputPurpose::Burn,
     )
 }
 

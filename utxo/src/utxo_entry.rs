@@ -138,16 +138,16 @@ mod unit_test {
     use super::*;
     use crate::UtxoSource;
     use common::{
-        chain::{tokens::OutputValue, Destination, OutputPurpose, TxOutput},
+        chain::{tokens::OutputValue, Destination, TxOutput},
         primitives::Amount,
     };
     use rstest::rstest;
 
     fn some_utxo() -> Option<Utxo> {
         Some(Utxo::new(
-            TxOutput::new(
+            TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ),
             false,
             UtxoSource::Mempool,

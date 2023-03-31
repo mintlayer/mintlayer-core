@@ -17,8 +17,7 @@ use chainstate_test_framework::{anyonecanspend_address, TestFramework, Transacti
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::inputsig::InputWitness,
-        timelock::OutputTimeLock, tokens::OutputValue, OutputPurpose, Transaction, TxInput,
-        TxOutput,
+        timelock::OutputTimeLock, tokens::OutputValue, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockDistance, Id, Idable},
 };
@@ -41,9 +40,10 @@ pub fn add_block_with_locked_output(
             InputWitness::NoSignature(None),
         )
         .add_anyone_can_spend_output(10000)
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(100000)),
-            OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
+            anyonecanspend_address(),
+            output_time_lock,
         ))
         .build();
     let tx_id = tx.transaction().get_id();

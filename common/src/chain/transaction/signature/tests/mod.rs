@@ -29,7 +29,7 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        ChainConfig, Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
@@ -650,9 +650,9 @@ fn check_insert_input(
     let outpoint_source_id =
         OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random_using(rng)));
 
-    let inputs_utxo = TxOutput::new(
+    let inputs_utxo = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(123)),
-        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        Destination::AnyoneCanSpend,
     );
     let mut inputs_utxos = inputs_utxos.to_vec();
     inputs_utxos.push(&inputs_utxo);
@@ -705,9 +705,9 @@ fn check_insert_output(
 ) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    tx_updater.outputs.push(TxOutput::new(
+    tx_updater.outputs.push(TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1234567890)),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
@@ -715,6 +715,13 @@ fn check_insert_output(
         assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
     } else {
         res.unwrap();
+    }
+}
+
+fn add_value(output_value: OutputValue) -> OutputValue {
+    match output_value {
+        OutputValue::Coin(v) => OutputValue::Coin((v + Amount::from_atoms(100)).unwrap()),
+        OutputValue::Token(v) => OutputValue::Token(v),
     }
 }
 
@@ -727,15 +734,14 @@ fn check_mutate_output(
 ) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.outputs[0] = TxOutput::new(
-        match tx_updater.outputs[0].value() {
-            OutputValue::Coin(coin) => {
-                OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
-            }
-            OutputValue::Token(asset) => OutputValue::Token(asset.clone()),
-        },
-        tx_updater.outputs[0].purpose().clone(),
-    );
+    tx_updater.outputs[0] = match tx_updater.outputs[0].clone() {
+        TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
+        TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
+        TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
+        TxOutput::StakePool(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::ProduceBlockFromStake(_, _, _) => unreachable!(), // TODO: come back to this later
+    };
+
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, inputs_utxos, 0);
     if should_fail {
@@ -776,9 +782,9 @@ fn check_mutate_inputs_utxos(
     outpoint_dest: &Destination,
 ) {
     for input in 0..inputs_utxos.len() {
-        let inputs_utxo = TxOutput::new(
+        let inputs_utxo = TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(123456789012345)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         );
         let mut inputs_utxos = inputs_utxos.to_owned();
         inputs_utxos[input] = &inputs_utxo;

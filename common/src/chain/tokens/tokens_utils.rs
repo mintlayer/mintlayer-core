@@ -34,5 +34,5 @@ pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
 }
 
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
-    outputs.iter().filter(|&output| is_tokens_issuance(output.value())).count()
+    outputs.iter().filter(|&output| is_tokens_issuance(&output.value())).count()
 }
