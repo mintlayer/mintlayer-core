@@ -24,10 +24,11 @@ use crate::{
 
 use super::{address_groups::AddressGroup, peer_context::PeerContext};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
+#[derive(Debug, PartialEq, Eq)]
 pub struct EvictionCandidate {
     peer_id: PeerId,
 
@@ -68,31 +69,35 @@ impl EvictionCandidate {
     }
 }
 
-/// Based on `SelectNodeToEvict` from Bitcoin Core:
-///
-/// Select an inbound peer to evict after filtering out (preserving) peers having
-/// distinct, difficult-to-forge characteristics. The preservation logic picks out
-/// fixed numbers of desirable peers per various criteria.
-/// If any eviction candidates remain, the selection logic chooses a peer to evict.
-pub fn select_for_eviction(mut candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
-    // TODO: Do not evict connections from whitelisted IPs
-
-    // Only consider inbound connections for eviction (attackers have no control over outbound connections)
+// Only consider inbound connections for eviction (attackers have no control over outbound connections)
+fn filter_inbound(mut candidates: Vec<EvictionCandidate>) -> Vec<EvictionCandidate> {
     candidates.retain(|peer| peer.role == Role::Inbound);
+    candidates
+}
 
-    // Deterministically select 4 peers to preserve by netgroup.
-    // An attacker cannot predict which netgroups will be preserved.
+// Deterministically select peers to preserve by netgroup.
+// An attacker cannot predict which netgroups will be preserved.
+fn filter_address_group(
+    mut candidates: Vec<EvictionCandidate>,
+    count: usize,
+) -> Vec<EvictionCandidate> {
     candidates.sort_unstable_by_key(|peer| peer.net_group_keyed);
-    candidates.truncate(candidates.len().saturating_sub(4));
+    candidates.truncate(candidates.len().saturating_sub(count));
+    candidates
+}
 
-    // Preserve the 8 nodes with the lowest minimum ping time.
-    // An attacker cannot manipulate this metric without physically moving nodes closer to the target.
+// Preserve the nodes with the lowest minimum ping time.
+// An attacker cannot manipulate this metric without physically moving nodes closer to the target.
+fn filter_fast_ping(
+    mut candidates: Vec<EvictionCandidate>,
+    count: usize,
+) -> Vec<EvictionCandidate> {
     candidates.sort_unstable_by_key(|peer| -peer.ping_min);
-    candidates.truncate(candidates.len().saturating_sub(8));
+    candidates.truncate(candidates.len().saturating_sub(count));
+    candidates
+}
 
-    // TODO: Preserve 4 nodes that most recently sent us novel transactions accepted into our mempool.
-    // TODO: Preserve up to 8 peers that have sent us novel blocks.
-
+fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
     if candidates.is_empty() {
         return None;
     }
@@ -115,3 +120,25 @@ pub fn select_for_eviction(mut candidates: Vec<EvictionCandidate>) -> Option<Pee
 
     Some(peer_id)
 }
+
+/// Based on `SelectNodeToEvict` from Bitcoin Core:
+///
+/// Select an inbound peer to evict after filtering out (preserving) peers having
+/// distinct, difficult-to-forge characteristics. The preservation logic picks out
+/// fixed numbers of desirable peers per various criteria.
+/// If any eviction candidates remain, the selection logic chooses a peer to evict.
+pub fn select_for_eviction(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
+    // TODO: Preserve connections from whitelisted IPs
+
+    let candidates = filter_inbound(candidates);
+    let candidates = filter_address_group(candidates, 4);
+    let candidates = filter_fast_ping(candidates, 8);
+
+    // TODO: Preserve 4 nodes that most recently sent us novel transactions accepted into our mempool.
+    // TODO: Preserve up to 8 peers that have sent us novel blocks.
+
+    find_group_most_connections(candidates)
+}
+
+#[cfg(test)]
+mod tests;
