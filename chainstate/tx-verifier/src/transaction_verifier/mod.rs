@@ -541,20 +541,18 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::StakePool(data) => Some((data, output.value())),
+                TxOutput::StakePool(data) => Some(data),
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _, _) => None,
             })
             .map(
-                |(pool_data, output_value)| -> Result<PoSAccountingUndo, ConnectTransactionError> {
+                |pool_data| -> Result<PoSAccountingUndo, ConnectTransactionError> {
                     let input0 = input0_getter()?;
 
                     // TODO: check StakePoolData fields
-                    let delegation_amount = output_value.coin_amount().ok_or_else(|| {
-                        ConnectTransactionError::TokenOutputInPoSAccountingOperation(tx.get_id())
-                    })?;
+                    let delegation_amount = pool_data.value();
 
                     let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
                     let (_, undo) = temp_delta
