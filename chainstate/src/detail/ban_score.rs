@@ -114,6 +114,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::InvalidOutputTypeInReward(_) => 100,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
+            ConnectTransactionError::UndoFetchFailure => 0,
         }
     }
 }
@@ -319,8 +320,8 @@ impl BanScore for utxo::Error {
             utxo::Error::NoBlockchainHeightFound => 0,
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::InvalidBlockRewardOutputType(_) => 100,
-            utxo::Error::DBError(_) => 0,
-            utxo::Error::ViewError(_) => 0,
+            utxo::Error::ViewRead => 0,
+            utxo::Error::StorageWrite => 0,
         }
     }
 }

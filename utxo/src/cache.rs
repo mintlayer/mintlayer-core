@@ -88,7 +88,7 @@ impl<P: UtxosView> UtxosCache<P> {
         let entry = self
             .parent
             .utxo(outpoint)
-            .map_err(Error::from_view)?
+            .map_err(|_| Error::ViewRead)?
             .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No));
         if let Some(entry) = &entry {
             self.utxos.insert(outpoint.clone(), entry.clone());
@@ -122,7 +122,7 @@ impl<P: UtxosView> UtxosCache<P> {
             let outpoint = OutPoint::new(OutPointSourceId::BlockReward(*block_id), idx as u32);
             // block reward transactions can always be overwritten
             let overwrite = if check_for_overwrite {
-                self.has_utxo(&outpoint).map_err(Error::from_view)?
+                self.has_utxo(&outpoint).map_err(|_| Error::ViewRead)?
             } else {
                 true
             };
@@ -150,7 +150,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .try_for_each(|(idx, output)| {
                 let outpoint = OutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.
-                let has_utxo = self.has_utxo(&outpoint).map_err(Error::from_view)?;
+                let has_utxo = self.has_utxo(&outpoint).map_err(|_| Error::ViewRead)?;
                 let overwrite = check_for_overwrite && has_utxo;
                 let utxo = Utxo::new(output.clone(), false, source.clone());
 

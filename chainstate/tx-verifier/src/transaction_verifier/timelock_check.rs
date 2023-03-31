@@ -94,7 +94,7 @@ pub fn check_timelocks<
         let outpoint = input.outpoint();
         let utxo = utxos_view
             .utxo(outpoint)
-            .map_err(utxo::Error::from_view)?
+            .map_err(|_| utxo::Error::ViewRead)?
             .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
         if utxo.output().has_timelock() {

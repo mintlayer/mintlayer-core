@@ -311,7 +311,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(input.outpoint())
-                .map_err(utxo::Error::from_view)?
+                .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
             self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
         });
@@ -512,7 +512,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(outpoint)
-                .map_err(utxo::Error::from_view)?
+                .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             // TODO: see if a different treatment should be done for different output purposes
@@ -801,7 +801,11 @@ where
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
-        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
         match tx_source {
             TransactionSource::Chain(block_id) => {
                 let current_block_height = self
@@ -840,7 +844,11 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
-        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
         let tx_undo = self.utxo_block_undo.take_tx_undo(
             tx_source,
             &tx.transaction().get_id(),
@@ -897,7 +905,11 @@ where
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
 
-                let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+                let block_undo_fetcher = |id: Id<Block>| {
+                    self.storage
+                        .get_undo_data(id)
+                        .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+                };
                 let reward_undo = self.utxo_block_undo.take_block_reward_undo(
                     &TransactionSource::Chain(block.get_id()),
                     block_undo_fetcher,

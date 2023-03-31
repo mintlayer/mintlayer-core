@@ -19,8 +19,8 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, storage_result, BlockIndex, BlockIndexHandle,
-    EpochData, GenBlockIndex, GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
+    GenBlockIndex, GetAncestorError, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -143,7 +143,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     // TODO: When the mempool incorporates the transaction-verifier, this won't be needed anymore
-    pub fn make_utxo_view(&self) -> impl UtxosView<Error = storage_result::Error> + '_ {
+    pub fn make_utxo_view(&self) -> impl UtxosView<Error = S::Error> + '_ {
         UtxosDB::new(&self.db_tx)
     }
 

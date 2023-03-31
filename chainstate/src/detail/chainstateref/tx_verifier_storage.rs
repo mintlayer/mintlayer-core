@@ -103,6 +103,8 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStorageRead
     for ChainstateRef<'a, S, V>
 {
+    type Error = storage_result::Error;
+
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,

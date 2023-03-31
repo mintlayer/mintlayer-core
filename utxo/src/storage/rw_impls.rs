@@ -15,29 +15,28 @@
 
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{Utxo, UtxosBlockUndo};
-use chainstate_types::storage_result::Error as StorageError;
 use common::{
     chain::{Block, GenBlock, OutPoint},
     primitives::Id,
 };
 
 impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Self::Error> {
         self.0.set_utxo(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Self::Error> {
         self.0.del_utxo(outpoint)
     }
 
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error> {
         self.0.set_best_block_for_utxos(block_id)
     }
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), StorageError> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error> {
         self.0.set_undo_data(id, undo)
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error> {
         self.0.del_undo_data(id)
     }
 }

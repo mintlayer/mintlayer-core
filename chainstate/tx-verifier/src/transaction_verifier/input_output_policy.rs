@@ -60,7 +60,7 @@ fn check_inputs_can_be_used_in_tx(
         .map(|input| {
             utxo_view
                 .utxo(input.outpoint())
-                .map_err(utxo::Error::from_view)?
+                .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
         })
         .collect::<Result<Vec<_>, _>>()?

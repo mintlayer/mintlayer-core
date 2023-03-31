@@ -121,6 +121,7 @@ mockall::mock! {
     }
 
     impl UtxosStorageRead for Store {
+        type Error = storage_result::Error;
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;

@@ -13,9 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use chainstate_types::storage_result;
 use common::{
     chain::{block::GenBlock, OutPointSourceId},
     primitives::Id,
@@ -40,52 +37,15 @@ pub enum Error {
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Block reward type is invalid `{0}`")]
     InvalidBlockRewardOutputType(Id<GenBlock>),
-    #[error("Database error: `{0}`")]
-    DBError(#[from] storage_result::Error),
 
-    /// Error when querying a UtxoView
-    ///
-    /// TODO: This is a temporary solution. It uses a trait object to handle many possible error
-    /// types. The concrete error type depends on the UtxoView used. The error enum here should be
-    /// parametrized by the error type rather than hide it, so the information is available at
-    /// compilation time. That, however, leads to many call sites having to be updated so it's left
-    /// for future updates.
-    #[error("View query failed: `{0}`")]
-    ViewError(BoxedViewError),
+    // TODO: This is a temporary solution. It does not provide much information, the exact utxo
+    //       view error is lost. The concrete error type depends on the UtxoView used. The error
+    //       enum here should be parametrized by the error type rather than hide it, so the error
+    //       type information is available at compilation time and the exact error emitted from
+    //       UtxoView is available to the caller at run time. That, however, leads to many call
+    //       sites having to be updated so it's left for future improvements.
+    #[error("UTXO view query failed `for some reason (TM)`")]
+    ViewRead,
+    #[error("UTXO storage write failed `for some reason (TM)`")]
+    StorageWrite,
 }
-
-impl Error {
-    pub fn from_view(e: impl ViewError) -> Self {
-        Self::ViewError(BoxedViewError::new(e))
-    }
-}
-
-/// Trait for arrors that can happen when querying a `UtxosView`
-pub trait ViewError: 'static + Send + Sync + std::error::Error {}
-
-impl ViewError for chainstate_types::storage_result::Error {}
-impl ViewError for std::convert::Infallible {}
-
-/// Boxed view error is used to suppot the temporary hack mentioned in [Error::ViewError]
-#[derive(Debug, Clone)]
-pub struct BoxedViewError(Arc<Box<dyn ViewError>>);
-
-impl BoxedViewError {
-    fn new(e: impl ViewError) -> Self {
-        Self(Arc::new(Box::new(e)))
-    }
-}
-
-impl std::fmt::Display for BoxedViewError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl PartialEq for BoxedViewError {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_string() == other.to_string()
-    }
-}
-
-impl Eq for BoxedViewError {}

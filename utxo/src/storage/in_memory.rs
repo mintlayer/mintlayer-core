@@ -15,7 +15,7 @@
 
 use super::{UtxosStorageRead, UtxosStorageWrite};
 use crate::{Utxo, UtxosBlockUndo, UtxosView};
-use chainstate_types::storage_result::Error;
+use chainstate_types::storage_result::{self, Error};
 use common::{
     chain::{Block, GenBlock, OutPoint},
     primitives::Id,
@@ -40,6 +40,8 @@ impl UtxosDBInMemoryImpl {
 }
 
 impl UtxosStorageRead for UtxosDBInMemoryImpl {
+    type Error = storage_result::Error;
+
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
         let res = self.store.get(outpoint);
         Ok(res.cloned())

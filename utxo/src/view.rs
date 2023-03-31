@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::ViewError, ConsumedUtxoCache, Error, Utxo, UtxosCache};
+use crate::{ConsumedUtxoCache, Error, Utxo, UtxosCache};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
@@ -21,7 +21,7 @@ use common::{
 
 pub trait UtxosView {
     /// Error that can occur during utxo queries
-    type Error: ViewError;
+    type Error: std::error::Error;
 
     /// Retrieves utxo.
     fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;

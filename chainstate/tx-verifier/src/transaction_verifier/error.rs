@@ -103,6 +103,10 @@ pub enum ConnectTransactionError {
     InvalidOutputTypeInReward(Id<Block>),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
+
+    // TODO The following should contain more granullar inner error information
+    #[error("Fetching undo data failed")]
+    UndoFetchFailure,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

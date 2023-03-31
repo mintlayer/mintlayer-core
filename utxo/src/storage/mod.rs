@@ -17,7 +17,6 @@ mod rw_impls;
 mod view_impls;
 
 use crate::{FlushableUtxoView, Utxo, UtxosBlockUndo, UtxosCache};
-use chainstate_types::storage_result;
 use common::{
     chain::{Block, ChainConfig, GenBlock, OutPoint},
     primitives::{BlockHeight, Id},
@@ -31,21 +30,14 @@ pub trait UtxosStorageRead {
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error>;
 }
 
-pub trait UtxosStorageWrite: UtxosStorageRead<Error = storage_result::Error> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), storage_result::Error>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), storage_result::Error>;
+pub trait UtxosStorageWrite: UtxosStorageRead {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Self::Error>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Self::Error>;
 
-    fn set_best_block_for_utxos(
-        &mut self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<(), storage_result::Error>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error>;
 
-    fn set_undo_data(
-        &mut self,
-        id: Id<Block>,
-        undo: &UtxosBlockUndo,
-    ) -> Result<(), storage_result::Error>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error>;
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error>;
 }
 
 #[must_use]
@@ -110,10 +102,7 @@ where
         self.deref().get_best_block_for_utxos()
     }
 
-    fn get_undo_data(
-        &self,
-        id: Id<Block>,
-    ) -> Result<Option<UtxosBlockUndo>, Self::Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         self.deref().get_undo_data(id)
     }
 }
@@ -123,30 +112,23 @@ where
     T: DerefMut,
     <T as Deref>::Target: UtxosStorageWrite,
 {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), storage_result::Error> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Self::Error> {
         self.deref_mut().set_utxo(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), storage_result::Error> {
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Self::Error> {
         self.deref_mut().del_utxo(outpoint)
     }
 
-    fn set_best_block_for_utxos(
-        &mut self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<(), storage_result::Error> {
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Self::Error> {
         self.deref_mut().set_best_block_for_utxos(block_id)
     }
 
-    fn set_undo_data(
-        &mut self,
-        id: Id<Block>,
-        undo: &UtxosBlockUndo,
-    ) -> Result<(), storage_result::Error> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> Result<(), Self::Error> {
         self.deref_mut().set_undo_data(id, undo)
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), storage_result::Error> {
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Self::Error> {
         self.deref_mut().del_undo_data(id)
     }
 }

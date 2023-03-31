@@ -96,6 +96,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
+
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
