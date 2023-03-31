@@ -21,6 +21,7 @@
 
 use crate::primitives::{Amount, H256};
 use serialization::{Decode, Encode};
+use thiserror::Error;
 
 macro_rules! construct_uint {
     ($name:ident, $n_words:expr) => {
@@ -616,6 +617,24 @@ impl From<Uint256> for Uint512 {
     }
 }
 
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum UintConversionError {
+    #[error("Conversion would overflow result type")]
+    ConversionOverflow,
+}
+
+impl TryFrom<Uint512> for Uint256 {
+    type Error = UintConversionError;
+
+    fn try_from(n: Uint512) -> Result<Self, UintConversionError> {
+        if n > Uint256::MAX.into() {
+            Err(UintConversionError::ConversionOverflow)
+        } else {
+            Ok(Uint256([n[0], n[1], n[2], n[3]]))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -1073,5 +1092,30 @@ mod tests {
         let a = Uint256::MAX;
         let b = Uint512([u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0x00, 0x00, 0x00, 0x00]);
         assert_eq!(Uint512::from(a), b);
+    }
+
+    #[test]
+    pub fn uint256_from_uint512_simple() {
+        assert_eq!(Uint256::ONE, Uint256::try_from(Uint512::ONE).unwrap());
+
+        let a = Uint256([0xFA, 0xFB, 0xFC, 0xFD]);
+        let b = Uint512([0xFA, 0xFB, 0xFC, 0xFD, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(Uint256::try_from(b).unwrap(), a);
+
+        let a = Uint256::MAX;
+        let b = Uint512([u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0x00, 0x00, 0x00, 0x00]);
+        assert_eq!(Uint256::try_from(b).unwrap(), a);
+
+        let a = Uint512::from(Uint256::MAX) + Uint512::ONE;
+        assert_eq!(
+            Uint256::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
+
+        let a = Uint512::MAX;
+        assert_eq!(
+            Uint256::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
     }
 }

@@ -47,7 +47,11 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
         let block_index = match block_index {
             Some(bi) => bi,
             None => {
-                log::error!("CRITICAL: Invariant error; attempted to read id of a non-existent block index in iterator with id {:?}", self.next_id);
+                log::error!(
+                    "CRITICAL: Invariant error; \
+                    attempted to read id of a non-existent block index in iterator with id {:?}",
+                    self.next_id
+                );
                 self.next_id = None;
                 return None;
             }

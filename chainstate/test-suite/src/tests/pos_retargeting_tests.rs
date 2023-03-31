@@ -20,7 +20,9 @@ use super::helpers::{
     pos::{calculate_new_target, pos_mine},
 };
 
-use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate::{
+    chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
+};
 use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
@@ -39,6 +41,7 @@ use common::{
     primitives::{Amount, BlockHeight, Compact, Idable},
     Uint256,
 };
+use consensus::{ConsensusPoSError, ConsensusVerificationError};
 use crypto::{random::CryptoRng, vrf::VRFPublicKey};
 use crypto::{
     random::Rng,
@@ -197,12 +200,10 @@ fn invalid_target(#[case] seed: Seed) {
 
     assert_eq!(
         res,
-        chainstate::ChainstateError::ProcessBlockError(chainstate::BlockError::CheckBlockFailed(
-            chainstate::CheckBlockError::ConsensusVerificationFailed(
-                consensus::ConsensusVerificationError::PoSError(
-                    consensus::ConsensusPoSError::InvalidTarget(invalid_target)
-                )
-            )
+        ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                ConsensusPoSError::InvalidTarget(invalid_target)
+            ))
         ))
     );
 }

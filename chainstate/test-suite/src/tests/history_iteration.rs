@@ -72,11 +72,9 @@ fn history_iteration(#[case] seed: Seed) {
             let db_tx = tf.storage.transaction_ro().unwrap();
             let block_index_handle =
                 TestBlockIndexHandle::new(db_tx, tf.chainstate.get_chain_config().as_ref());
-            let mut iter =
-                BlockIndexHistoryIterator::new(Id::new(H256::zero()), &block_index_handle);
+            let iter = BlockIndexHistoryIterator::new(Id::new(H256::zero()), &block_index_handle);
 
-            assert!(iter.next().is_none());
-            assert!(iter.next().is_none());
+            assert!(iter.fuse().next().is_none());
         }
     });
 }

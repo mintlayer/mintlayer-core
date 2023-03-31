@@ -20,7 +20,7 @@ use common::{
         RequiredConsensus,
     },
     primitives::{BlockHeight, Compact, Id},
-    Uint256,
+    Uint256, Uint512,
 };
 use itertools::Itertools;
 use utils::ensure;
@@ -70,17 +70,16 @@ fn calculate_new_target(
     prev_target: &Uint256,
     average_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
-    let average_block_time = Uint256::from_u64(average_block_time);
-    let target_block_time = Uint256::from_u64(pos_config.target_block_time().get());
+    let average_block_time = Uint512::from_u64(average_block_time);
+    let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
+    let prev_target: Uint512 = (*prev_target).into();
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
-    let new_target = *prev_target / target_block_time * average_block_time;
+    let new_target = prev_target * average_block_time / target_block_time;
+    let new_target = Uint256::try_from(new_target)?;
 
-    if new_target > pos_config.target_limit() {
-        Ok(Compact::from(pos_config.target_limit()))
-    } else {
-        Ok(Compact::from(new_target))
-    }
+    let new_target = std::cmp::min(new_target, pos_config.target_limit());
+    Ok(Compact::from(new_target))
 }
 
 pub fn calculate_target_required(
