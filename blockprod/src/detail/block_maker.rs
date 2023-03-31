@@ -15,11 +15,12 @@
 
 use std::sync::Arc;
 
-use chainstate::ChainstateHandle;
+use chainstate::{ChainstateHandle, PropertyQueryError};
+use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward},
-        Block, ChainConfig,
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        Block, ChainConfig, Destination, GenBlock, SignedTransaction,
     },
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -46,7 +47,8 @@ pub struct BlockMaker {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
-    current_tip_id: Id<Block>,
+    _reward_destination: Destination,
+    current_tip_id: Id<GenBlock>,
     current_tip_height: BlockHeight,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
 }
@@ -58,12 +60,14 @@ enum BlockSubmitResult {
 }
 
 impl BlockMaker {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
-        current_tip_id: Id<Block>,
+        _reward_destination: Destination,
+        current_tip_id: Id<GenBlock>,
         current_tip_height: BlockHeight,
         block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
     ) -> Self {
@@ -72,6 +76,7 @@ impl BlockMaker {
             chainstate_handle,
             mempool_handle,
             time_getter,
+            _reward_destination,
             current_tip_id,
             current_tip_height,
             block_maker_rx,
@@ -92,20 +97,73 @@ impl BlockMaker {
         Ok(returned_accumulator)
     }
 
-    pub fn make_block(
+    pub async fn generate_block(
         &self,
-        current_tip_id: Id<Block>,
-        accumulator: &dyn TransactionAccumulator,
+        transactions: Vec<SignedTransaction>,
     ) -> Result<Block, BlockProductionError> {
-        // TODO: this isn't efficient. We have to create the header first, then see if it obeys consensus rules, then construct the full block
-        let current_time = self.time_getter.get_time();
-        let block = Block::new(
-            accumulator.transactions().clone(),
-            current_tip_id.into(),
-            BlockTimestamp::from_duration_since_epoch(current_time),
-            common::chain::block::ConsensusData::None,
-            BlockReward::new(vec![]), // TODO: define consensus and rewards through NetworkUpgrades
+        // TODO: instead of the following static value, look at
+        // self.chain_config for the current block reward, then send
+        // it to self.reward_destination
+        let block_reward = BlockReward::new(vec![]);
+
+        let mut block = Block::new(
+            transactions,
+            self.current_tip_id,
+            BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
+            ConsensusData::None,
+            block_reward,
         )?;
+
+        let consensus_data = self
+            .chainstate_handle
+            .call({
+                let chain_config = Arc::clone(&self.chain_config);
+                let current_tip_height = self.current_tip_height;
+                let header = block.header().clone();
+
+                move |this| {
+                    let get_block_index = |&prev_block_id: &Id<Block>| {
+                        this.get_block_index(&prev_block_id).map_err(|_| {
+                            PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.into())
+                        })
+                    };
+
+                    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+                        this.get_ancestor(
+                            &block_index.clone().into_gen_block_index(),
+                            ancestor_height,
+                        )
+                        .map_err(|_| {
+                            PropertyQueryError::GetAncestorError(
+                                GetAncestorError::InvalidAncestorHeight {
+                                    block_height: block_index.block_height(),
+                                    ancestor_height,
+                                },
+                            )
+                        })
+                    };
+
+                    consensus::generate_consensus_data(
+                        &chain_config,
+                        &header,
+                        current_tip_height.next_height(),
+                        get_block_index,
+                        get_ancestor,
+                    )
+                }
+            })
+            .await?
+            .map_err(BlockProductionError::FailedConsensusInitialization)?;
+
+        block.update_consensus_data(consensus_data);
+
+        // TODO: use a separate executor for this loop to avoid starving tokio tasks
+        consensus::finalize_consensus_data(
+            &self.chain_config,
+            &mut block,
+            self.current_tip_height,
+        )?;
+
         Ok(block)
     }
 
@@ -147,10 +205,10 @@ impl BlockMaker {
     /// 2. A new tip is now on chainstate, indicating that there's no point in continuing to mine/stake at that tip
     pub async fn run(&mut self) -> Result<(), BlockProductionError> {
         let accumulator = self.collect_transactions().await?;
+        let transactions = accumulator.transactions();
 
-        // TODO: do we want to introduce a separate executor for this loop to avoid starving other tasks?
         loop {
-            let block = self.make_block(self.current_tip_id, &*accumulator)?;
+            let block = self.generate_block(transactions.clone()).await?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),
@@ -244,6 +302,7 @@ mod tests {
                 chainstate.clone(),
                 mock_mempool_subsystem,
                 Default::default(),
+                Destination::AnyoneCanSpend,
                 Id::new(H256::random_using(&mut make_pseudo_rng())),
                 BlockHeight::one(),
                 rx_builder,
@@ -292,6 +351,7 @@ mod tests {
                     chainstate.clone(),
                     mock_mempool_subsystem,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
@@ -337,6 +397,7 @@ mod tests {
                     chainstate.clone(),
                     mock_mempool_subsystem,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
@@ -387,6 +448,7 @@ mod tests {
                 chainstate,
                 mempool,
                 Default::default(),
+                Destination::AnyoneCanSpend,
                 Id::new(H256::random_using(&mut make_pseudo_rng())),
                 BlockHeight::one(),
                 rx_builder,
@@ -442,6 +504,7 @@ mod tests {
                     mock_chainstate_subsystem,
                     mempool,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
@@ -498,6 +561,7 @@ mod tests {
                     mock_chainstate_subsystem,
                     mempool,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
@@ -549,6 +613,7 @@ mod tests {
                     mock_chainstate_subsystem,
                     mempool,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
@@ -614,6 +679,7 @@ mod tests {
                     mock_chainstate_subsystem,
                     mempool,
                     Default::default(),
+                    Destination::AnyoneCanSpend,
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,

@@ -19,9 +19,10 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig},
+    chain::{block::BlockCreationError, ChainConfig, Destination},
     time_getter::TimeGetter,
 };
+use consensus::ConsensusVerificationError;
 use detail::{builder::PerpetualBlockBuilder, BlockProduction};
 use interface::BlockProductionInterface;
 use mempool::MempoolHandle;
@@ -42,6 +43,8 @@ pub enum BlockProductionError {
     SubsystemCallError(#[from] CallError),
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
+    #[error("Initialization of consensus failed: {0}")]
+    FailedConsensusInitialization(#[from] ConsensusVerificationError),
 }
 
 mod detail;
@@ -65,14 +68,21 @@ pub async fn make_blockproduction(
         let chainstate_handle = chainstate_handle.clone();
         let mempool_handle = mempool_handle.clone();
         let time_getter = time_getter.clone();
+
+        // TODO: change the following two values from static values to
+        // what's set in BlockProductionConfig
+        let reward_destination = Destination::AnyoneCanSpend;
+        let is_enabled = true;
+
         tokio::spawn(async move {
             PerpetualBlockBuilder::new(
                 chain_config,
                 chainstate_handle,
                 mempool_handle,
                 time_getter,
+                reward_destination,
                 rx_builder,
-                true, // TODO: take this from BlockProductionConfig
+                is_enabled,
             )
             .run()
             .await

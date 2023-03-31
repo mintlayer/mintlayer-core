@@ -87,6 +87,8 @@ fn calculate_generic_merkle_root(
 pub enum BlockCreationError {
     #[error("Merkle tree calculation error: {0}")]
     MerkleTreeError(MerkleTreeFormError),
+    #[error("Error finding current tip")]
+    CurrentTipRetrievalError,
 }
 
 impl From<MerkleTreeFormError> for BlockCreationError {

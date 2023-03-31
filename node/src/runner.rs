@@ -25,6 +25,7 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
 
+use blockprod::rpc::BlockProductionRpcServer;
 use chainstate::rpc::ChainstateRpcServer;
 use common::{
     chain::config::{
@@ -100,7 +101,7 @@ pub async fn initialize(
     );
 
     // Block production
-    let _block_prod = manager.add_subsystem(
+    let block_prod = manager.add_subsystem(
         "blockprod",
         blockprod::make_blockproduction(
             Arc::clone(&chain_config),
@@ -123,6 +124,7 @@ pub async fn initialize(
                     manager.make_shutdown_trigger(),
                     chain_config,
                 ))
+                .register(block_prod.into_rpc())
                 .register(chainstate.clone().into_rpc())
                 .register(mempool.into_rpc())
                 .register(p2p.clone().into_rpc())

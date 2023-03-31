@@ -115,6 +115,7 @@ impl PoWData {
     pub fn new(bits: Compact, nonce: u128) -> Self {
         PoWData { bits, nonce }
     }
+
     pub fn bits(&self) -> Compact {
         self.bits
     }

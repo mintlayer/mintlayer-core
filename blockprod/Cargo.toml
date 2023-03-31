@@ -9,14 +9,18 @@ rust-version.workspace = true
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
+chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
+consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
 mempool = { path = "../mempool/" }
+serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }
 logging = {path = '../logging'}
 utils = {path = '../utils'}
 rpc = { path = "../rpc/" }
 
+hex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 futures.workspace = true

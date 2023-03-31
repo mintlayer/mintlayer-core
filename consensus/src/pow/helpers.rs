@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::block::timestamp::BlockTimestamp,
     primitives::{BlockHeight, Compact},
@@ -30,11 +30,14 @@ pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: Block
 
 /// The block time of the first block, based on the difficulty adjustment interval,
 /// where first block = height of given block - difficulty adjustment interval - 1 (off by one)
-pub fn get_starting_block_time(
+pub fn get_starting_block_time<F>(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
-    db_accessor: &dyn BlockIndexHandle,
-) -> Result<BlockTimestamp, ConsensusPoWError> {
+    get_ancestor: F,
+) -> Result<BlockTimestamp, ConsensusPoWError>
+where
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
     let retarget_height = {
         let height: u64 = block_index.block_height().into();
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
@@ -42,7 +45,7 @@ pub fn get_starting_block_time(
         BlockHeight::new(old_block_height)
     };
 
-    let retarget_block_index = match db_accessor.get_ancestor(block_index, retarget_height) {
+    let retarget_block_index = match get_ancestor(block_index, retarget_height) {
         Ok(bi) => bi,
         Err(err) => {
             return Err(ConsensusPoWError::AncestorAtHeightNotFound(

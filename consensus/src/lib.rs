@@ -15,15 +15,72 @@
 
 //! A consensus related logic.
 
+mod error;
 mod pos;
 mod pow;
+mod validator;
+
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::block::{consensus_data::PoWData, BlockHeader, ConsensusData},
+    chain::{Block, ChainConfig, RequiredConsensus},
+    primitives::{BlockHeight, Id},
+};
 
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
-    pow::{check_proof_of_work, mine, ConsensusPoWError},
+    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError},
     validator::validate_consensus,
 };
 
-mod error;
-mod validator;
+#[allow(unreachable_code)]
+pub fn generate_consensus_data<F, G>(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    block_height: BlockHeight,
+    get_block_index: F,
+    get_ancestor: G,
+) -> Result<ConsensusData, ConsensusVerificationError>
+where
+    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
+    match chain_config.net_upgrade().consensus_status(block_height) {
+        RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
+        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoW(pow_status) => {
+            let work_required = calculate_work_required(
+                chain_config,
+                header,
+                &pow_status,
+                get_block_index,
+                get_ancestor,
+            )
+            .map_err(ConsensusVerificationError::PoWError)?;
+
+            Ok(ConsensusData::PoW(PoWData::new(work_required, 0)))
+        }
+    }
+}
+
+pub fn finalize_consensus_data(
+    chain_config: &ChainConfig,
+    block: &mut Block,
+    block_height: BlockHeight,
+) -> Result<(), ConsensusVerificationError> {
+    match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
+        RequiredConsensus::IgnoreConsensus => Ok(()),
+        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoW(_) => match block.consensus_data() {
+            ConsensusData::None => Ok(()),
+            ConsensusData::PoS(_) => unimplemented!(),
+            ConsensusData::PoW(pow_data) => {
+                mine(block, u128::MAX, pow_data.bits())
+                    .map_err(ConsensusVerificationError::PoWError)?;
+
+                Ok(())
+            }
+        },
+    }
+}

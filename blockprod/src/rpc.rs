@@ -15,6 +15,14 @@
 
 //! Block production subsystem RPC handler
 
+use common::{
+    chain::Block,
+    chain::{Destination, SignedTransaction},
+};
+
+use hex::FromHexError;
+use serialization::{DecodeAll, Encode};
+
 use crate::BlockProductionError;
 use subsystem::subsystem::CallError;
 
@@ -27,6 +35,14 @@ trait BlockProductionRpc {
     /// Start block production on the next chance (when new tip is available)
     #[method(name = "start")]
     async fn start(&self) -> rpc::Result<()>;
+
+    /// Generate a block with the supplied transactions to the specified reward destination
+    #[method(name = "generate_block")]
+    async fn generate_block(
+        &self,
+        reward_destination_hex: String,
+        transactions_hex: Vec<String>,
+    ) -> rpc::Result<String>;
 }
 
 #[async_trait::async_trait]
@@ -37,6 +53,38 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn start(&self) -> rpc::Result<()> {
         handle_error(self.call(|this| this.start()).await)
+    }
+
+    async fn generate_block(
+        &self,
+        reward_destination_hex: String,
+        transactions_hex: Vec<String>,
+    ) -> rpc::Result<String> {
+        let reward_destination = hex::decode(reward_destination_hex)
+            .map_err(rpc::Error::to_call_error)
+            .map(|reward_destination_data| {
+                Destination::decode_all(&mut &reward_destination_data[..])
+            })?
+            .map_err(rpc::Error::to_call_error)?;
+
+        let signed_transactions = transactions_hex
+            .iter()
+            .map(hex::decode)
+            .collect::<Result<Vec<Vec<u8>>, FromHexError>>()
+            .map_err(rpc::Error::to_call_error)?
+            .iter()
+            .map(|transactions_data| SignedTransaction::decode_all(&mut &transactions_data[..]))
+            .collect::<Result<Vec<SignedTransaction>, serialization::Error>>()
+            .map_err(rpc::Error::to_call_error)?;
+
+        let block = handle_error(
+            self.call_async(move |this| {
+                this.generate_block(reward_destination, signed_transactions)
+            })
+            .await,
+        )?;
+
+        Ok(hex::encode(Block::encode(&block)))
     }
 }
 
