@@ -66,10 +66,9 @@ pub fn create_utxo_data(
             TxOutput::Transfer(OutputValue::Coin(new_value), anyonecanspend_address())
         }
         OutputValue::Token(token_data) => match &*token_data {
-            TokenData::TokenTransfer(_transfer) => TxOutput::Transfer(
-                OutputValue::Token(token_data.clone()),
-                anyonecanspend_address(),
-            ),
+            TokenData::TokenTransfer(_transfer) => {
+                TxOutput::Transfer(OutputValue::Token(token_data), anyonecanspend_address())
+            }
             TokenData::TokenIssuance(issuance) => {
                 new_token_transfer_output(chainstate, &outsrc, issuance.amount_to_issue)
             }
@@ -179,7 +178,7 @@ pub fn create_multiple_utxo_data(
                     } else {
                         // transfer with a single output
                         vec![TxOutput::Transfer(
-                            OutputValue::Token(token_data.clone()),
+                            OutputValue::Token(token_data),
                             anyonecanspend_address(),
                         )]
                     }

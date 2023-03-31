@@ -377,10 +377,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
             Transaction::new(
                 0,
                 vec![TxInput::new(tf.genesis().get_id().into(), 0)],
-                vec![TxOutput::Transfer(
-                    tf.genesis().utxos()[0].value().clone(),
-                    anyonecanspend_address(),
-                )],
+                vec![TxOutput::Transfer(tf.genesis().utxos()[0].value(), anyonecanspend_address())],
                 0,
             )
             .unwrap(),
@@ -394,7 +391,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
                 0,
                 vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
-                    tx1.transaction().outputs()[0].value().clone(),
+                    tx1.transaction().outputs()[0].value(),
                     anyonecanspend_address(),
                 )],
                 0,

@@ -631,7 +631,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
-        let coins_value = (tf.genesis().utxos()[0].value().clone().coin_amount().unwrap()
+        let coins_value = (tf.genesis().utxos()[0].value().coin_amount().unwrap()
             - token_min_issuance_fee)
             .unwrap();
         let genesis_outpoint_id = tf.genesis().get_id().into();
