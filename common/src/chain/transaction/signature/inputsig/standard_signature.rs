@@ -19,7 +19,7 @@ use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{
-        signature::{sighashtype::SigHashType, signature_hash, TransactionSigError},
+        signature::{sighash::signature_hash, sighashtype::SigHashType, TransactionSigError},
         ChainConfig, Destination, Transaction, TxOutput,
     },
     primitives::H256,
@@ -213,7 +213,7 @@ mod test {
 
     use super::*;
     use crate::chain::signature::tests::utils::generate_inputs_utxos;
-    use crate::chain::signature::{signature_hash, TransactionSigError};
+    use crate::chain::signature::{sighash::signature_hash, TransactionSigError};
     use crate::chain::Destination;
     use crypto::key::{KeyKind, PrivateKey};
     use itertools::Itertools;

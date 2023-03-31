@@ -31,7 +31,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
-use common::chain::signature::signature_hash;
+use common::chain::signature::sighash::signature_hash;
 use crypto::random::{Rng, SliceRandom};
 use rstest::rstest;
 use serialization::Encode;
