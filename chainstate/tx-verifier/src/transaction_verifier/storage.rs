@@ -63,10 +63,12 @@ pub enum TransactionVerifierStorageError {
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
 pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
+    type Error;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
-    ) -> Result<Option<TokenId>, TransactionVerifierStorageError>;
+    ) -> Result<Option<TokenId>, <Self as TransactionVerifierStorageRef>::Error>;
 
     // TODO: Study whether moving this to a closure on tx_verifier construction is helpful.
     //       The issue here is that looking into history prevents testing the tx_verifier independently
@@ -81,21 +83,23 @@ pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
     fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError>;
+    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>;
+    ) -> Result<Option<TokenAuxiliaryData>, <Self as TransactionVerifierStorageRef>::Error>;
 
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>;
+    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 pub trait TransactionVerifierStorageMut:
-    TransactionVerifierStorageRef + FlushableUtxoView + FlushablePoSAccountingView
+    TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>
+    + FlushableUtxoView
+    + FlushablePoSAccountingView
 {
     fn set_mainchain_tx_index(
         &mut self,
@@ -163,10 +167,12 @@ impl<T: Deref> TransactionVerifierStorageRef for T
 where
     T::Target: TransactionVerifierStorageRef,
 {
+    type Error = <T::Target as TransactionVerifierStorageRef>::Error;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
-    ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
+    ) -> Result<Option<TokenId>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_token_id_from_issuance_tx(tx_id)
     }
 
@@ -180,21 +186,21 @@ where
     fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
+    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_mainchain_tx_index(tx_id)
     }
 
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
+    ) -> Result<Option<TokenAuxiliaryData>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_token_aux_data(token_id)
     }
 
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_accounting_undo(id)
     }
 }

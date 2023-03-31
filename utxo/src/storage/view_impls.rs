@@ -54,7 +54,9 @@ impl<S: UtxosStorageWrite> FlushableUtxoView for UtxosDB<S> {
                 };
             }
         }
-        self.0.set_best_block_for_utxos(&utxos.best_block).map_err(|_| Error::StorageWrite)?;
+        self.0
+            .set_best_block_for_utxos(&utxos.best_block)
+            .map_err(|_| Error::StorageWrite)?;
         Ok(())
     }
 }

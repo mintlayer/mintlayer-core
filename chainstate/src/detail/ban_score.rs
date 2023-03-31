@@ -115,6 +115,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidOutputTypeInReward(_) => 100,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
+            ConnectTransactionError::TxVerifierStorage => 0,
         }
     }
 }

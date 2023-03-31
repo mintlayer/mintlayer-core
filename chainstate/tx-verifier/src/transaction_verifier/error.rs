@@ -107,6 +107,8 @@ pub enum ConnectTransactionError {
     // TODO The following should contain more granullar inner error information
     #[error("Fetching undo data failed")]
     UndoFetchFailure,
+    #[error("Some transaction verifier storage error")]
+    TxVerifierStorage,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

@@ -21,6 +21,7 @@ use chainstate::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
     BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
+    TransactionVerifierStorageError,
 };
 use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
@@ -78,7 +79,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
     where
         C: AsRef<ChainConfig>,
         H: BlockIndexHandle,
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
@@ -114,7 +115,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
     ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         C: AsRef<ChainConfig>,
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
@@ -146,7 +147,7 @@ impl RandomizedTransactionVerificationStrategy {
         median_time_past: &BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
@@ -262,7 +263,7 @@ impl RandomizedTransactionVerificationStrategy {
     ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,

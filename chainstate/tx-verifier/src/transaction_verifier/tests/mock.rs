@@ -39,6 +39,8 @@ mockall::mock! {
     pub Store {}
 
     impl TransactionVerifierStorageRef for Store {
+        type Error = TransactionVerifierStorageError;
+
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: Id<Transaction>,

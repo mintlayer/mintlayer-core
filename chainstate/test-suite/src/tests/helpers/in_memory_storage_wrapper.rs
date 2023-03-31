@@ -46,6 +46,8 @@ impl InMemoryStorageWrapper {
 }
 
 impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
+    type Error = TransactionVerifierStorageError;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,

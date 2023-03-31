@@ -42,10 +42,12 @@ use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRea
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A>
 {
+    type Error = <S as TransactionVerifierStorageRef>::Error;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
-    ) -> Result<Option<TokenId>, TransactionVerifierStorageError> {
+    ) -> Result<Option<TokenId>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.token_issuance_cache.txid_from_issuance().get(&tx_id) {
             Some(v) => match v {
                 CachedTokenIndexOp::Write(id) => Ok(Some(*id)),
@@ -66,11 +68,8 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,
-    ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError> {
-        let tx_index_cache = self
-            .tx_index_cache
-            .as_ref()
-            .ok_or(TransactionVerifierStorageError::TransactionIndexDisabled)?;
+    ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error> {
+        let tx_index_cache = self.tx_index_cache.as_ref().ok_or_else(|| todo!())?;
         match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
                 CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),
@@ -84,7 +83,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn get_token_aux_data(
         &self,
         token_id: &TokenId,
-    ) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError> {
+    ) -> Result<Option<TokenAuxiliaryData>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.token_issuance_cache.data().get(token_id) {
             Some(v) => match v {
                 CachedAuxDataOp::Write(t) => Ok(Some(t.clone())),
@@ -98,7 +97,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     fn get_accounting_undo(
         &self,
         id: Id<Block>,
-    ) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError> {
+    ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage.get_accounting_undo(id),
@@ -127,8 +126,10 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
     }
 }
 
-impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
-    TransactionVerifierStorageMut for TransactionVerifier<C, S, U, A>
+impl<C, S, U: UtxosView, A: PoSAccountingView> TransactionVerifierStorageMut
+    for TransactionVerifier<C, S, U, A>
+where
+    S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
 {
     fn set_mainchain_tx_index(
         &mut self,

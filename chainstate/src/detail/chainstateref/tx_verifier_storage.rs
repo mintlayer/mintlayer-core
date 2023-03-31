@@ -43,6 +43,8 @@ use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosS
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, V>
 {
+    type Error = TransactionVerifierStorageError;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,

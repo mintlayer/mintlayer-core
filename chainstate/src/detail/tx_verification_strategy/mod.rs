@@ -27,7 +27,9 @@ use common::{
     primitives::id::WithId,
 };
 use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, storage::TransactionVerifierStorageRef, TransactionVerifier,
+    config::TransactionVerifierConfig,
+    storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
+    TransactionVerifier,
 };
 
 // TODO: replace with trait_alias when stabilized
@@ -62,7 +64,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         H: BlockIndexHandle,
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         C: AsRef<ChainConfig>,
         A: PoSAccountingView,
@@ -84,7 +86,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
     ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         C: AsRef<ChainConfig>,
-        S: TransactionVerifierStorageRef,
+        S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>;
