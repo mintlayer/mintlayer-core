@@ -17,6 +17,7 @@ use crypto::hash::StreamHasher;
 use serialization::Encode;
 
 mod hashable;
+pub mod sighashtype;
 
 use crate::{
     chain::TxOutput,
@@ -28,7 +29,7 @@ use crate::{
 
 use self::hashable::{SignatureHashableElement, SignatureHashableInputs};
 
-use super::{sighashtype, Signable, TransactionSigError};
+use super::{Signable, TransactionSigError};
 
 fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
     match val {

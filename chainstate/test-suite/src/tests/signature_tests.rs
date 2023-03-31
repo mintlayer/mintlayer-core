@@ -20,7 +20,7 @@ use common::chain::signed_transaction::SignedTransaction;
 use common::primitives::Idable;
 use common::{
     chain::{
-        signature::{inputsig::InputWitness, sighashtype::SigHashType},
+        signature::{inputsig::InputWitness, sighash::sighashtype::SigHashType},
         tokens::OutputValue,
         Destination, OutPointSourceId, TxInput, TxOutput,
     },

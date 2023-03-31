@@ -15,7 +15,7 @@
 
 use crate::{
     chain::{
-        signature::{sighashtype, TransactionSigError},
+        signature::{sighash::sighashtype, TransactionSigError},
         TxInput, TxOutput,
     },
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
@@ -137,7 +137,8 @@ mod tests {
 
     use crate::{
         chain::{
-            signature::sighashtype::SigHashType, tokens::OutputValue, Destination, OutPointSourceId,
+            signature::sighash::sighashtype::SigHashType, tokens::OutputValue, Destination,
+            OutPointSourceId,
         },
         primitives::{Amount, Id, H256},
     };

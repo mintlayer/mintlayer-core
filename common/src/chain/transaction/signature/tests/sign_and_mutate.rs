@@ -22,7 +22,7 @@ use crate::{
     chain::{
         config::create_mainnet,
         signature::{
-            sighashtype::{OutputsMode, SigHashType},
+            sighash::sighashtype::{OutputsMode, SigHashType},
             tests::{
                 check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
                 sign_mutate_then_verify,

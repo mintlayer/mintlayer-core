@@ -24,7 +24,7 @@ use crate::chain::tokens::OutputValue;
 use crate::{
     chain::{
         block::{BlockReward, ConsensusData},
-        signature::{inputsig::InputWitness, sighashtype::SigHashType},
+        signature::{inputsig::InputWitness, sighash::sighashtype::SigHashType},
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, H256},

@@ -19,7 +19,9 @@ use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{
-        signature::{sighash::signature_hash, sighashtype::SigHashType, TransactionSigError},
+        signature::{
+            sighash::sighashtype::SigHashType, sighash::signature_hash, TransactionSigError,
+        },
         ChainConfig, Destination, Transaction, TxOutput,
     },
     primitives::H256,

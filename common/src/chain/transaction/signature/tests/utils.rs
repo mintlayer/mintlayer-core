@@ -26,7 +26,7 @@ use crate::{
     chain::{
         signature::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighashtype::SigHashType,
+            sighash::sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
         signed_transaction::SignedTransaction,

@@ -29,7 +29,6 @@ use self::{
 
 pub mod inputsig;
 pub mod sighash;
-pub mod sighashtype;
 
 use thiserror::Error;
 

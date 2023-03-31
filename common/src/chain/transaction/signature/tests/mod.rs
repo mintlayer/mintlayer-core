@@ -19,7 +19,7 @@ use itertools::Itertools;
 use rstest::rstest;
 
 use self::utils::*;
-use super::{inputsig::InputWitness, sighashtype::SigHashType};
+use super::{inputsig::InputWitness, sighash::sighashtype::SigHashType};
 use crate::{
     chain::{
         config::create_mainnet,
