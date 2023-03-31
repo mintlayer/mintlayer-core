@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::FusedIterator;
+
 use crate::BlockIndexHandle;
 
 use common::{chain::GenBlock, primitives::Id};
@@ -36,6 +38,8 @@ impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
         }
     }
 }
+
+impl<'a, H: BlockIndexHandle> FusedIterator for BlockIndexHistoryIterator<'a, H> {}
 
 impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
     type Item = GenBlockIndex;

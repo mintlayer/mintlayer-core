@@ -13,54 +13,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndexHandle, BlockIndexHistoryIterator};
+use chainstate_types::{BlockIndex, BlockIndexHandle};
 use common::{
     chain::{
-        block::ConsensusData, Block, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
+        block::ConsensusData, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
         RequiredConsensus,
     },
-    primitives::{BlockHeight, Compact, Id},
+    primitives::{BlockDistance, BlockHeight, Compact, Id},
     Uint256, Uint512,
 };
-use itertools::Itertools;
-use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
 fn calculate_average_block_time(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
-    block_id: Id<Block>,
-    block_height: BlockHeight,
+    block_index: &BlockIndex,
     block_index_handle: &impl BlockIndexHandle,
 ) -> Result<u64, ConsensusPoSError> {
-    let history_iter = BlockIndexHistoryIterator::new(block_id.into(), block_index_handle);
-
     // Determine net upgrade version that current block belongs to.
     // Across versions config parameters might change so it's invalid to mix versions for target calculations
     let (_, net_version) = chain_config
         .net_upgrade()
-        .version_at_height(block_height)
+        .version_at_height(block_index.block_height())
         .expect("NetUpgrade must've been initialized");
     let net_version_range = chain_config
         .net_upgrade()
         .height_range(net_version)
         .expect("NetUpgrade must've been initialized");
 
-    // Get timestamps from the history but make sure they belong to the same consensus version.
-    // Then calculate differences of adjacent elements.
-    let block_diffs = history_iter
-        .take(pos_config.block_count_to_average_for_blocktime())
-        .filter(|block_index| net_version_range.contains(&block_index.block_height()))
-        .map(|block_index| block_index.block_timestamp().as_int_seconds())
-        .tuple_windows::<(u64, u64)>()
-        .map(|t| t.0 - t.1);
+    // Average is calculated based on 2 timestamps and then is divided by number of blocks in between.
+    // Choose a block from the history that would be the start of a timespan.
+    // It shouldn't cross net version range or genesis.
+    let timespan_start_height = std::cmp::max(
+        net_version_range.start,
+        (block_index.block_height()
+            - BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64))
+        .unwrap_or(BlockHeight::zero()),
+    );
 
-    let (sum, count) = block_diffs.fold((0u64, 0u64), |(sum, count), curr| (sum + curr, count + 1));
+    let time_span_start = block_index_handle
+        .get_ancestor(block_index, timespan_start_height)?
+        .block_timestamp()
+        .as_int_seconds();
+    let current_block_time = block_index.block_timestamp().as_int_seconds();
 
-    ensure!(count > 0, ConsensusPoSError::NotEnoughTimestampsToAverage);
+    let blocks_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
+        .expect("cannot be negative")
+        .into();
 
-    let average = sum / count;
+    let average = (current_block_time - time_span_start) / blocks_in_timespan as u64;
 
     Ok(average)
 }
@@ -132,8 +134,7 @@ pub fn calculate_target_required(
     let average_block_time = calculate_average_block_time(
         chain_config,
         pos_config,
-        *prev_block_index.block_id(),
-        prev_block_index.block_height(),
+        &prev_block_index,
         block_index_handle,
     )?;
     calculate_new_target(pos_config, &prev_target, average_block_time)
@@ -143,13 +144,13 @@ pub fn calculate_target_required(
 mod tests {
     use std::sync::Arc;
 
-    use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+    use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError, PropertyQueryError};
     use common::{
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
             config::Builder as ConfigBuilder,
-            create_unittest_pos_config, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades, PoolId,
-            UpgradeVersion,
+            create_unittest_pos_config, Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades,
+            PoolId, UpgradeVersion,
         },
         primitives::{Idable, H256},
     };
@@ -187,7 +188,7 @@ mod tests {
 
     struct TestBlockIndexHandle<'a> {
         chain_config: &'a ChainConfig,
-        blocks: Vec<(Id<Block>, BlockIndex)>,
+        blocks: Vec<(BlockHeight, BlockIndex)>,
     }
 
     impl<'a> TestBlockIndexHandle<'a> {
@@ -219,7 +220,7 @@ mod tests {
                         timestamp,
                     );
                     best_block = block.get_id().into();
-                    (block.get_id(), block_index)
+                    (height.into(), block_index)
                 })
                 .collect::<Vec<_>>();
 
@@ -229,23 +230,11 @@ mod tests {
             }
         }
 
-        pub fn new_with_single_block(chain_config: &'a ChainConfig, block: &Block) -> Self {
-            let block_index = BlockIndex::new(
-                block,
-                Uint256::ZERO,
-                block.prev_block_id(),
-                0.into(),
-                BlockTimestamp::from_int_seconds(1),
-            );
-
-            Self {
-                blocks: vec![(block.get_id(), block_index)],
-                chain_config,
-            }
-        }
-
-        pub fn get_block_index_by_height(&self, height: usize) -> Option<&BlockIndex> {
-            self.blocks.get(height - 1).map(|(_, block_index)| block_index)
+        pub fn get_block_index_by_height(&self, height: BlockHeight) -> Option<&BlockIndex> {
+            self.blocks
+                .iter()
+                .find(|(block_height, _)| height == *block_height)
+                .map(|(_, b)| b)
         }
     }
 
@@ -254,31 +243,45 @@ mod tests {
             &self,
             block_id: &Id<Block>,
         ) -> Result<Option<BlockIndex>, PropertyQueryError> {
-            Ok(self.blocks.iter().find(|(id, _)| id == block_id).map(|(_, b)| b.clone()))
+            Ok(self
+                .blocks
+                .iter()
+                .find(|(_, block)| block_id == block.block_id())
+                .map(|(_, b)| b.clone()))
         }
 
         fn get_gen_block_index(
             &self,
-            block_id: &Id<GenBlock>,
+            _block_id: &Id<GenBlock>,
         ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-            match block_id.classify(self.chain_config) {
-                GenBlockId::Genesis(_) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                    self.chain_config.genesis_block(),
-                )))),
-                GenBlockId::Block(id) => Ok(self
-                    .blocks
-                    .iter()
-                    .find(|(current_id, _)| *current_id == id)
-                    .map(|(_, b)| b.clone().into_gen_block_index())),
-            }
+            unimplemented!()
         }
 
         fn get_ancestor(
             &self,
-            _block_index: &BlockIndex,
-            _ancestor_height: common::primitives::BlockHeight,
+            block_index: &BlockIndex,
+            ancestor_height: BlockHeight,
         ) -> Result<GenBlockIndex, PropertyQueryError> {
-            unimplemented!()
+            if !self.blocks.iter().any(|(_, block)| block_index.block_id() == block.block_id()) {
+                // if block is not in the current index then it cannot have ancestor
+                return Err(PropertyQueryError::GetAncestorError(
+                    GetAncestorError::PrevBlockIndexNotFound((*block_index.block_id()).into()),
+                ));
+            }
+
+            if ancestor_height == BlockHeight::new(0) {
+                Ok(GenBlockIndex::Genesis(Arc::clone(
+                    self.chain_config.genesis_block(),
+                )))
+            } else {
+                Ok(self
+                    .get_block_index_by_height(ancestor_height)
+                    .ok_or(GetAncestorError::PrevBlockIndexNotFound(
+                        (*block_index.block_id()).into(),
+                    ))?
+                    .clone()
+                    .into_gen_block_index())
+            }
         }
 
         fn get_block_reward(
@@ -356,44 +359,53 @@ mod tests {
             ))
             .build();
 
-        let block_index_handle =
-            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[1, 2, 6, 8, 10]);
+        let block_index_handle = TestBlockIndexHandle::new_with_blocks(
+            &mut rng,
+            &chain_config,
+            &[10, 20, 60, 80, 100, 101, 102, 103],
+        );
 
         let average_block_time = calculate_average_block_time(
             &chain_config,
             &pos_config,
-            *block_index_handle.get_block_index_by_height(1).unwrap().block_id(),
-            BlockHeight::new(1),
+            block_index_handle.get_block_index_by_height(BlockHeight::new(1)).unwrap(),
             &block_index_handle,
         )
         .unwrap();
-        assert_eq!(average_block_time, 1);
+        assert_eq!(average_block_time, 10);
 
         let average_block_time = calculate_average_block_time(
             &chain_config,
             &pos_config,
-            *block_index_handle.get_block_index_by_height(2).unwrap().block_id(),
-            BlockHeight::new(2),
+            block_index_handle.get_block_index_by_height(BlockHeight::new(2)).unwrap(),
             &block_index_handle,
         )
         .unwrap();
-        assert_eq!(average_block_time, 1);
+        assert_eq!(average_block_time, 10);
 
         let average_block_time = calculate_average_block_time(
             &chain_config,
             &pos_config,
-            *block_index_handle.get_block_index_by_height(5).unwrap().block_id(),
-            BlockHeight::new(5),
+            block_index_handle.get_block_index_by_height(BlockHeight::new(5)).unwrap(),
             &block_index_handle,
         )
         .unwrap();
-        assert_eq!(average_block_time, 2);
+        assert_eq!(average_block_time, 20);
+
+        let average_block_time = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            block_index_handle.get_block_index_by_height(BlockHeight::new(8)).unwrap(),
+            &block_index_handle,
+        )
+        .unwrap();
+        assert_eq!(average_block_time, 8);
     }
 
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn calculate_average_block_time_less_than_2_test(#[case] seed: Seed) {
+    fn calculate_average_block_time_no_ancestor(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let pos_config = create_unittest_pos_config();
         let upgrades = vec![(
@@ -406,51 +418,31 @@ mod tests {
         let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
         let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
 
-        {
-            // check that having zero timestamps is not enough to calculate average
-            let block_index_handle = TestBlockIndexHandle::new(&chain_config);
-            let random_block_id = Id::<Block>::new(H256::random_using(&mut rng));
-            assert_eq!(
-                0,
-                BlockIndexHistoryIterator::new(random_block_id.into(), &block_index_handle).count()
-            );
+        let block_index_handle = TestBlockIndexHandle::new(&chain_config);
+        let timestamp = BlockTimestamp::from_int_seconds(100);
+        let random_block_id = Id::<Block>::new(H256::random_using(&mut rng));
+        let random_block = make_block(&mut rng, random_block_id.into(), timestamp);
+        let random_block_index = BlockIndex::new(
+            &random_block,
+            Uint256::ZERO,
+            random_block_id.into(),
+            BlockHeight::new(1),
+            timestamp,
+        );
 
-            let res = calculate_average_block_time(
-                &chain_config,
-                &pos_config,
-                random_block_id,
-                BlockHeight::new(0),
-                &block_index_handle,
-            )
-            .unwrap_err();
-            assert_eq!(res, ConsensusPoSError::NotEnoughTimestampsToAverage);
-        }
-
-        {
-            // check that having a single timestamp is not enough to calculate average
-            let prev_block_id = Id::<Block>::new(H256::random_using(&mut rng));
-            let block = make_block(
-                &mut rng,
-                prev_block_id.into(),
-                BlockTimestamp::from_int_seconds(1),
-            );
-            let block_index_handle =
-                TestBlockIndexHandle::new_with_single_block(&chain_config, &block);
-            assert_eq!(
-                1,
-                BlockIndexHistoryIterator::new(block.get_id().into(), &block_index_handle).count()
-            );
-
-            let res = calculate_average_block_time(
-                &chain_config,
-                &pos_config,
-                *block_index_handle.get_block_index_by_height(1).unwrap().block_id(),
-                BlockHeight::new(0),
-                &block_index_handle,
-            )
-            .unwrap_err();
-            assert_eq!(res, ConsensusPoSError::NotEnoughTimestampsToAverage);
-        }
+        let res = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            &random_block_index,
+            &block_index_handle,
+        )
+        .unwrap_err();
+        assert_eq!(
+            res,
+            ConsensusPoSError::PropertyQueryError(PropertyQueryError::GetAncestorError(
+                GetAncestorError::PrevBlockIndexNotFound(random_block.get_id().into())
+            ))
+        );
     }
 
     fn get_pos_status(chain_config: &ChainConfig, height: BlockHeight) -> PoSStatus {
@@ -506,8 +498,10 @@ mod tests {
         {
             // check with prev genesis
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(1));
-            let block_header =
-                block_index_handle.get_block_index_by_height(1).unwrap().block_header();
+            let block_header = block_index_handle
+                .get_block_index_by_height(BlockHeight::new(1))
+                .unwrap()
+                .block_header();
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
@@ -521,8 +515,10 @@ mod tests {
         {
             // check with ongoing net upgrade
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(2));
-            let block_header =
-                block_index_handle.get_block_index_by_height(2).unwrap().block_header();
+            let block_header = block_index_handle
+                .get_block_index_by_height(BlockHeight::new(2))
+                .unwrap()
+                .block_header();
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
@@ -536,8 +532,10 @@ mod tests {
         {
             // check net version threshold
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(3));
-            let block_header =
-                block_index_handle.get_block_index_by_height(3).unwrap().block_header();
+            let block_header = block_index_handle
+                .get_block_index_by_height(BlockHeight::new(3))
+                .unwrap()
+                .block_header();
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,
@@ -551,8 +549,10 @@ mod tests {
         {
             // check with ongoing net upgrade
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(7));
-            let block_header =
-                block_index_handle.get_block_index_by_height(7).unwrap().block_header();
+            let block_header = block_index_handle
+                .get_block_index_by_height(BlockHeight::new(7))
+                .unwrap()
+                .block_header();
             let target = calculate_target_required(
                 &chain_config,
                 &pos_status,

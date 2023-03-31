@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use chainstate::PropertyQueryError;
 use chainstate_storage::BlockchainStorageRead;
-use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex};
+use chainstate_types::{storage_result, BlockIndex, BlockIndexHandle, GenBlockIndex};
 use common::{
-    chain::{Block, ChainConfig, GenBlockId},
+    chain::{Block, ChainConfig, GenBlock, GenBlockId},
     primitives::Id,
 };
 
@@ -35,6 +35,20 @@ impl<'a, S: BlockchainStorageRead> TestBlockIndexHandle<'a, S> {
             chain_config,
         }
     }
+
+    fn gen_block_index_getter(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, storage_result::Error> {
+        match block_id.classify(self.chain_config) {
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
+                self.chain_config.genesis_block(),
+            )))),
+            GenBlockId::Block(id) => {
+                self.db_tx.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block))
+            }
+        }
+    }
 }
 
 impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a, S> {
@@ -47,26 +61,29 @@ impl<'a, S: BlockchainStorageRead> BlockIndexHandle for TestBlockIndexHandle<'a,
 
     fn get_gen_block_index(
         &self,
-        block_id: &Id<common::chain::GenBlock>,
+        block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
-        match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
-                self.chain_config.genesis_block(),
-            )))),
-            GenBlockId::Block(id) => self
-                .db_tx
-                .get_block_index(&id)
-                .map(|b| b.map(GenBlockIndex::Block))
-                .map_err(PropertyQueryError::StorageError),
-        }
+        self.gen_block_index_getter(block_id).map_err(PropertyQueryError::StorageError)
     }
 
     fn get_ancestor(
         &self,
-        _block_index: &BlockIndex,
-        _ancestor_height: common::primitives::BlockHeight,
+        block_index: &BlockIndex,
+        ancestor_height: common::primitives::BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
-        unimplemented!()
+        let block_index_getter = |_db_tx: &S, _chain_config: &ChainConfig, id: &Id<GenBlock>| {
+            self.gen_block_index_getter(id)
+        };
+
+        let get_block_id = Id::<GenBlock>::from(*block_index.block_id());
+        chainstate_types::block_index_ancestor_getter(
+            block_index_getter,
+            &self.db_tx,
+            self.chain_config,
+            (&get_block_id).into(),
+            ancestor_height,
+        )
+        .map_err(PropertyQueryError::GetAncestorError)
     }
 
     fn get_block_reward(
