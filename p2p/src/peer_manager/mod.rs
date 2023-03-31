@@ -451,10 +451,12 @@ where
             .collect::<Vec<peers_eviction::EvictionCandidate>>();
 
         if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
+            log::info!("peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, None);
 
             true
         } else {
+            log::info!("no peer is selected for eviction, new connection is dropped");
             false
         }
     }

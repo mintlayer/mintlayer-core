@@ -28,6 +28,8 @@ use super::{address_groups::AddressGroup, peer_context::PeerContext};
 struct NetGroupKeyed(u64);
 
 /// A copy of `PeerContext` with fields relevant to the eviction logic
+///
+/// See `select_for_eviction` for more details.
 #[derive(Debug, PartialEq, Eq)]
 pub struct EvictionCandidate {
     peer_id: PeerId,
