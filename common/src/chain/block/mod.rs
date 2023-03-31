@@ -226,7 +226,7 @@ mod tests {
     use crate::{
         chain::{
             signature::inputsig::InputWitness, tokens::OutputValue, transaction::Transaction,
-            Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+            Destination, OutPointSourceId, TxInput, TxOutput,
         },
         primitives::{id, Amount},
     };
@@ -311,9 +311,9 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let reward = BlockReward::new(vec![TxOutput::new(
+        let reward = BlockReward::new(vec![TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         )]);
         let body = BlockBody {
             reward,

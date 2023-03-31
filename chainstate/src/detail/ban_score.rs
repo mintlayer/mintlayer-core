@@ -110,10 +110,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::AttemptToUseInvalidOutputInTx => 100,
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
-            ConnectTransactionError::TokenOutputInPoSAccountingOperation(_) => 100,
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
-            ConnectTransactionError::InvalidOutputPurposeInReward(_) => 100,
+            ConnectTransactionError::InvalidOutputTypeInReward(_) => 100,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
         }
     }
@@ -297,7 +296,7 @@ impl BanScore for ConsensusPoSError {
 impl BanScore for PoSRandomnessError {
     fn ban_score(&self) -> u32 {
         match self {
-            PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            PoSRandomnessError::InvalidOutputTypeInStakeKernel(_) => 100,
             PoSRandomnessError::VRFDataVerificationFailed(_) => 100,
         }
     }

@@ -21,7 +21,6 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use crate::chain::signed_transaction::SignedTransaction;
 use crate::chain::tokens::OutputValue;
-use crate::chain::OutputPurpose;
 use crate::{
     chain::{
         block::{BlockReward, ConsensusData},
@@ -245,9 +244,9 @@ fn generate_random_invalid_input(rng: &mut impl Rng) -> TxInput {
 
 fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    TxOutput::new(
+    TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128)),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        Destination::PublicKey(pub_key),
     )
 }
 

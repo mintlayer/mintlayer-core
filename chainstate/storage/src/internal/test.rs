@@ -16,7 +16,7 @@
 use super::*;
 use common::chain::tokens::OutputValue;
 use common::chain::transaction::signed_transaction::SignedTransaction;
-use common::chain::{Block, Destination, OutputPurpose, TxOutput};
+use common::chain::{Block, Destination, TxOutput};
 use common::primitives::{Amount, Idable, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{CryptoRng, Rng};
@@ -252,9 +252,9 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utx
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.gen_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
-    let output = TxOutput::new(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(random_value)),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        Destination::PublicKey(pub_key),
     );
     let is_block_reward = random_value % 3 == 0;
 

@@ -61,9 +61,9 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -75,9 +75,9 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..2000))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -89,9 +89,9 @@ fn coins_homomorphism(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100..200))),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
 
@@ -146,7 +146,7 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenIssuance {
                     token_ticker: "XXXX".as_bytes().to_vec(),
                     amount_to_issue: Amount::from_atoms(rng.gen_range(100_000..u128::MAX)),
@@ -154,12 +154,11 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                     metadata_uri: "http://uri".as_bytes().to_vec(),
                 }
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
-            .add_output(TxOutput::new(
-                OutputValue::Coin(tf.chainstate.get_chain_config().token_min_issuance_fee()),
-                OutputPurpose::Burn,
-            ))
+            .add_output(TxOutput::Burn(OutputValue::Coin(
+                tf.chainstate.get_chain_config().token_min_issuance_fee(),
+            )))
             .build();
         let token_id = token_id(tx_1.transaction()).unwrap();
 
@@ -171,13 +170,13 @@ fn tokens_homomorphism(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 TokenData::TokenTransfer(TokenTransfer {
                     token_id,
                     amount: Amount::from_atoms(rng.gen_range(1..100_000)),
                 })
                 .into(),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
 

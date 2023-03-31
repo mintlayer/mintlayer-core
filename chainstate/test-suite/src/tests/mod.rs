@@ -20,10 +20,7 @@ use chainstate::BlockSource;
 use chainstate_test_framework::TestFramework;
 use common::chain::Destination;
 use common::{
-    chain::{
-        config::create_regtest, signature::inputsig::InputWitness, Block, GenBlock, Genesis,
-        OutputPurpose,
-    },
+    chain::{config::create_regtest, signature::inputsig::InputWitness, Block, GenBlock, Genesis},
     primitives::{BlockHeight, Id},
     Uint256,
 };

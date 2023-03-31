@@ -31,7 +31,7 @@ use common::{
         signature::inputsig::InputWitness,
         tokens::OutputValue,
         transaction::{Destination, TxInput, TxOutput},
-        OutPointSourceId, OutputPurpose, Transaction,
+        OutPointSourceId, Transaction,
     },
     primitives::{Id, H256},
 };
@@ -75,9 +75,9 @@ fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     );
 
     for _ in 0..400 {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
 
@@ -149,9 +149,9 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
         empty_witness(&mut rng),
     );
     for i in 0..target_txs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
     }
     let initial_tx = tx_builder.build();
@@ -163,9 +163,9 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
                 TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(0)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         mempool.add_transaction(tx.clone()).await?;
@@ -399,9 +399,9 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
 
-    let single_output_size = TxOutput::new(
+    let single_output_size = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(100)),
-        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        Destination::AnyoneCanSpend,
     )
     .encoded_size();
     let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
@@ -410,9 +410,9 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
         empty_witness(&mut rng),
     );
     for _ in 0..too_many_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
     }
     let tx = tx_builder.build();
@@ -498,14 +498,8 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
         flags,
         inputs.clone(),
         vec![
-            TxOutput::new(
-                OutputValue::Coin(spent),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-            ),
-            TxOutput::new(
-                OutputValue::Coin(change),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-            ),
+            TxOutput::Transfer(OutputValue::Coin(spent), Destination::AnyoneCanSpend),
+            TxOutput::Transfer(OutputValue::Coin(change), Destination::AnyoneCanSpend),
         ],
         locktime,
     )
@@ -530,9 +524,9 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let num_outputs = 2;
 
     for _ in 0..num_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(2_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
     let tx = tx_builder.build();
@@ -580,9 +574,9 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
 
     // TODO compute minimum necessary relay fee instead of just overestimating it
     let original_fee: Fee = Amount::from_atoms(200).into();
-    let dummy_output = TxOutput::new(
+    let dummy_output = TxOutput::Transfer(
         OutputValue::Coin(*original_fee),
-        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        Destination::AnyoneCanSpend,
     );
     let replaced_tx = tx_spend_several_inputs(
         &mempool,
@@ -751,9 +745,9 @@ async fn test_bip125_max_replacements(
         .with_flags(1);
 
     for _ in 0..(num_potential_replacements - 1) {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(999_999_999_000_000_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
 
@@ -846,9 +840,9 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
         .with_flags(1);
 
     for _ in 0..2 {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
 
@@ -931,9 +925,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let num_outputs = 3;
     for _ in 0..num_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(999_999_999_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
     let parent = tx_builder.build();
@@ -1097,9 +1091,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(499999999105 - 84)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
     log::debug!(
@@ -1154,9 +1148,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::Transaction(child_1_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(499999999105 - 77)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
 
@@ -1186,9 +1180,9 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
         empty_witness(&mut rng),
     );
     for _ in 0..10_000 {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
     }
     let initial_tx = tx_builder.build();
@@ -1220,9 +1214,9 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 
         let before_outputs = Instant::now();
         for _ in 0..num_outputs {
-            tx_builder = tx_builder.add_output(TxOutput::new(
+            tx_builder = tx_builder.add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
         }
         log::debug!(
@@ -1259,13 +1253,13 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(10_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(10_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
     let tx_id = tx.transaction().get_id();
@@ -1414,13 +1408,13 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(10_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(10_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
     let tx_id = tx.transaction().get_id();
@@ -1551,9 +1545,9 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .build();
     log::debug!(
@@ -1583,9 +1577,9 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let num_outputs = 100;
     for _ in 0..num_outputs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(2_000)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ));
     }
     let parent = tx_builder.build();
@@ -1653,9 +1647,9 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
         empty_witness(&mut rng),
     );
     for i in 0..target_txs {
-        tx_builder = tx_builder.add_output(TxOutput::new(
+        tx_builder = tx_builder.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1000 * (target_txs + 1 - i))),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
     }
     let initial_tx = tx_builder.build();
@@ -1667,9 +1661,9 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
                 TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(0)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build();
         mempool.add_transaction(tx.clone()).await?;

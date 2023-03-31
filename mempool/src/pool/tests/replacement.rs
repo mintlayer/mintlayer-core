@@ -188,9 +188,9 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(2_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .with_flags(1)
         .build();
@@ -243,9 +243,9 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
             TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1_000)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .with_flags(1)
         .build();

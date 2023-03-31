@@ -34,8 +34,8 @@ use common::{
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
         tokens::OutputValue,
-        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, OutputPurpose, PoolId, TxInput,
-        TxOutput, UpgradeVersion,
+        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
+        UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Idable, H256},
     Uint256,
@@ -58,9 +58,14 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 };
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
-fn create_stake_pool_data(rng: &mut (impl Rng + CryptoRng), vrf_pk: VRFPublicKey) -> StakePoolData {
+fn create_stake_pool_data(
+    rng: &mut (impl Rng + CryptoRng),
+    amount: Amount,
+    vrf_pk: VRFPublicKey,
+) -> StakePoolData {
     let destination = super::new_pub_key_destination(rng);
     StakePoolData::new(
+        amount,
         anyonecanspend_address(),
         vrf_pk,
         destination,
@@ -80,10 +85,7 @@ fn add_block_with_stake_pool(
             TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
-        .add_output(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::StakePool(Box::new(stake_pool_data)),
-        ))
+        .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
         .build();
     let tx_id = tx.transaction().get_id();
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
@@ -111,13 +113,10 @@ fn add_block_with_2_stake_pools(
     );
     let tx1 = TransactionBuilder::new()
         .add_input(TxInput::from(outpoint_genesis.clone()), empty_witness(rng))
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::StakePool(Box::new(stake_pool_data1)))
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::StakePool(Box::new(stake_pool_data1)),
-        ))
-        .add_output(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::Transfer(anyonecanspend_address()),
+            anyonecanspend_address(),
         ))
         .build();
     let stake_outpoint1 =
@@ -130,10 +129,7 @@ fn add_block_with_2_stake_pools(
             TxInput::from(transfer_outpoint1.clone()),
             empty_witness(rng),
         )
-        .add_output(TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::StakePool(Box::new(stake_pool_data2)),
-        ))
+        .add_output(TxOutput::StakePool(Box::new(stake_pool_data2)))
         .build();
     let outpoint2 = OutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
@@ -217,7 +213,7 @@ fn setup_test_chain_with_staked_pool(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let stake_pool_data = create_stake_pool_data(rng, vrf_pk);
+    let stake_pool_data = create_stake_pool_data(rng, Amount::from_atoms(1), vrf_pk);
     let (stake_pool_outpoint, pool_id) = add_block_with_stake_pool(rng, &mut tf, stake_pool_data);
 
     (tf, stake_pool_outpoint, pool_id)
@@ -269,10 +265,8 @@ fn pos_basic(#[case] seed: Seed) {
     );
 
     // valid case
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
         .with_timestamp(block_timestamp)
@@ -349,7 +343,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
             CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
                 ConsensusPoSError::RandomnessError(
-                    PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_)
+                    PoSRandomnessError::InvalidOutputTypeInStakeKernel(_)
                 )
             ))
         ))
@@ -495,9 +489,10 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     {
         // valid case
         let consensus_data = ConsensusData::PoS(Box::new(valid_pos_data));
-        let reward_output = TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(1)),
-            OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
+        let reward_output = TxOutput::ProduceBlockFromStake(
+            Amount::from_atoms(1),
+            anyonecanspend_address(),
+            pool_id,
         );
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
@@ -563,10 +558,8 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     );
 
     // test valid case
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(valid_pos_data)))
         .with_reward(vec![reward_output])
@@ -603,7 +596,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let stake_pool_data = create_stake_pool_data(&mut rng, vrf_pk.clone());
+    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk.clone());
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
@@ -672,10 +665,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         1,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -700,10 +691,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         1,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -735,10 +724,8 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         2,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -787,8 +774,9 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
 
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
-    let stake_pool_data1 = create_stake_pool_data(&mut rng, vrf_pk_1.clone());
-    let stake_pool_data2 = create_stake_pool_data(&mut rng, vrf_pk_2);
+    let stake_pool_data1 =
+        create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1.clone());
+    let stake_pool_data2 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_2);
     let (stake_pool_outpoint1, pool_id1, _, pool_id2) =
         add_block_with_2_stake_pools(&mut rng, &mut tf, stake_pool_data1, stake_pool_data2);
 
@@ -810,10 +798,8 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         1,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id2),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id2);
     let res = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -843,12 +829,8 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let stake_pool_data = create_stake_pool_data(&mut rng, vrf_pk);
-
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::StakePool(Box::new(stake_pool_data)),
-    );
+    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk);
+    let reward_output = TxOutput::StakePool(Box::new(stake_pool_data));
     let block = tf.make_block_builder().with_reward(vec![reward_output]).build();
     let block_id = block.get_id();
     assert_eq!(
@@ -896,10 +878,8 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         1,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -925,10 +905,8 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         1,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     let block_c_index = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -963,10 +941,8 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         2,
     )
     .expect("should be able to mine");
-    let reward_output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        OutputPurpose::ProduceBlockFromStake(anyonecanspend_address(), pool_id),
-    );
+    let reward_output =
+        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])

@@ -30,7 +30,7 @@ use crate::vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoSRandomnessError {
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
-    InvalidOutputPurposeInStakeKernel(Id<Block>),
+    InvalidOutputTypeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
     VRFDataVerificationFailed(#[from] ProofOfStakeVRFError),
 }

@@ -16,7 +16,7 @@
 use common::{
     chain::{
         signature::inputsig::InputWitness, signed_transaction::SignedTransaction,
-        tokens::OutputValue, Destination, OutputPurpose, Transaction, TxInput, TxOutput,
+        tokens::OutputValue, Destination, Transaction, TxInput, TxOutput,
     },
     primitives::Amount,
 };
@@ -75,9 +75,9 @@ impl TransactionBuilder {
 
     /// Adds an output with the "anyone can spend" destination.
     pub fn add_anyone_can_spend_output(self, amount: u128) -> Self {
-        self.add_output(TxOutput::new(
+        self.add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(amount)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
     }
 
@@ -119,13 +119,13 @@ fn build_transaction(#[case] seed: test_utils::random::Seed) {
         .with_inputs(vec![input.clone()])
         .with_witnesses(vec![InputWitness::NoSignature(None)])
         .add_input(input.clone(), witness)
-        .with_outputs(vec![TxOutput::new(
+        .with_outputs(vec![TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(100)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         )])
-        .add_output(TxOutput::new(
+        .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(200)),
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            Destination::AnyoneCanSpend,
         ))
         .with_lock_time(lock_time)
         .build();

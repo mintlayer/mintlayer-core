@@ -75,16 +75,14 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                     empty_witness(&mut rng),
                 )
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                    OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                        anyonecanspend_address(),
-                        vrf_pub_key_a,
-                        destination_a,
-                        0,
-                        Amount::ZERO,
-                    ))),
-                ))
+                .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                    Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                    anyonecanspend_address(),
+                    vrf_pub_key_a,
+                    destination_a,
+                    0,
+                    Amount::ZERO,
+                ))))
                 .build();
             let pool_id_a = pos_accounting::make_pool_id(&OutPoint::new(
                 OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -97,9 +95,9 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                     empty_witness(&mut rng),
                 )
-                .add_output(TxOutput::new(
+                .add_output(TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
+                    anyonecanspend_address(),
                 ))
                 .build();
 
@@ -114,16 +112,14 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     ),
                     empty_witness(&mut rng),
                 )
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(1000..100_000))),
-                    OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                        anyonecanspend_address(),
-                        vrf_pub_key_c,
-                        destination_c,
-                        0,
-                        Amount::ZERO,
-                    ))),
-                ))
+                .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                    Amount::from_atoms(rng.gen_range(1000..100_000)),
+                    anyonecanspend_address(),
+                    vrf_pub_key_c,
+                    destination_c,
+                    0,
+                    Amount::ZERO,
+                ))))
                 .build();
 
             // create block a

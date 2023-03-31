@@ -37,8 +37,7 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        Destination, OutPoint, OutPointSourceId, OutputPurpose, PoolId, Transaction, TxInput,
-        TxOutput,
+        Destination, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -615,10 +614,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, u, false).unwrap();
 
     // burn output in a tx
-    let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(10)),
-        OutputPurpose::Burn,
-    );
+    let output = TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)));
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output], 0x01).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
@@ -799,10 +795,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
     let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
-    let outputs = vec![TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(10)),
-        OutputPurpose::Burn,
-    )];
+    let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)))];
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
@@ -849,14 +842,11 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, u, false).unwrap();
 
     // create burn output at index 0
-    let output1 = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(10)),
-        OutputPurpose::Burn,
-    );
+    let output1 = TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)));
     // create transfer output at index 1
-    let output2 = TxOutput::new(
+    let output2 = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(10)),
-        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        Destination::AnyoneCanSpend,
     );
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output1, output2], 0x01).unwrap();

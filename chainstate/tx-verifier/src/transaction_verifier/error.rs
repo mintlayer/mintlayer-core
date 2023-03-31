@@ -97,12 +97,10 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
-    #[error("No token outputs are allowed in PoS accounting operations {0}")]
-    TokenOutputInPoSAccountingOperation(Id<Transaction>),
     #[error("Error during stake spending")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Attempted to use a non-locked stake as output in block reward {0}")]
-    InvalidOutputPurposeInReward(Id<Block>),
+    InvalidOutputTypeInReward(Id<Block>),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 }

@@ -22,7 +22,7 @@ use common::{
     chain::{
         signature::{inputsig::InputWitness, sighashtype::SigHashType},
         tokens::OutputValue,
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::Amount,
 };
@@ -61,9 +61,9 @@ fn signed_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
+                Destination::PublicKey(public_key.clone()),
             ))
             .build();
 
@@ -75,9 +75,9 @@ fn signed_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
+                Destination::PublicKey(public_key.clone()),
             ))
             .build()
             .transaction()
@@ -147,9 +147,9 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(destination),
+                destination,
             ))
             .build();
 
@@ -161,9 +161,9 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build()
             .transaction()
@@ -252,9 +252,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(destination),
+                destination,
             ))
             .build();
 
@@ -266,9 +266,9 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                 ),
                 InputWitness::NoSignature(None),
             )
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(100)),
-                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                Destination::AnyoneCanSpend,
             ))
             .build()
             .transaction()

@@ -25,7 +25,7 @@ use common::chain::OutPointSourceId;
 use common::chain::{
     signature::inputsig::InputWitness,
     tokens::{Metadata, NftIssuance},
-    Destination, OutputPurpose, TxInput, TxOutput,
+    Destination, TxInput, TxOutput,
 };
 use common::primitives::Idable;
 use crypto::random::{CryptoRng, Rng};
@@ -59,7 +59,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -77,7 +77,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -116,7 +116,7 @@ fn nft_empty_name(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -130,7 +130,7 @@ fn nft_empty_name(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -180,7 +180,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -195,7 +195,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -237,7 +237,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -255,7 +255,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -295,7 +295,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -309,7 +309,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -359,7 +359,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -374,7 +374,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -416,7 +416,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -434,7 +434,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -474,7 +474,7 @@ fn nft_empty_description(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -488,7 +488,7 @@ fn nft_empty_description(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -538,7 +538,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -552,7 +552,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -594,7 +594,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -611,7 +611,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -667,14 +667,11 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value.clone(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -691,7 +688,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), &output_value);
+        assert_eq!(issuance_output.value(), output_value);
     })
 }
 
@@ -728,7 +725,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -743,7 +740,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -786,7 +783,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -803,7 +800,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -858,14 +855,11 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value.clone(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -882,7 +876,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), &output_value);
+        assert_eq!(issuance_output.value(), output_value);
     })
 }
 
@@ -919,7 +913,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -934,7 +928,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -977,7 +971,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         NftIssuance {
                             metadata: Metadata {
                                 creator: Some(random_creator(&mut rng)),
@@ -994,7 +988,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
                             },
                         }
                         .into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
                     .build(),
             )
@@ -1051,14 +1045,11 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value.clone(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -1075,7 +1066,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), &output_value);
+        assert_eq!(issuance_output.value(), output_value);
     })
 }
 
@@ -1112,7 +1103,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                             TxInput::new(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
-                        .add_output(TxOutput::new(
+                        .add_output(TxOutput::Transfer(
                             NftIssuance {
                                 metadata: Metadata {
                                     creator: Some(random_creator(&mut rng)),
@@ -1127,7 +1118,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                                 },
                             }
                             .into(),
-                            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                            Destination::AnyoneCanSpend,
                         ))
                         .build(),
                 )
@@ -1170,7 +1161,7 @@ fn new_block_with_media_hash(
                     TxInput::new(input_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::new(
+                .add_output(TxOutput::Transfer(
                     NftIssuance {
                         metadata: Metadata {
                             creator: Some(random_creator(rng)),
@@ -1184,12 +1175,9 @@ fn new_block_with_media_hash(
                         },
                     }
                     .into(),
-                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    Destination::AnyoneCanSpend,
                 ))
-                .add_output(TxOutput::new(
-                    OutputValue::Coin(token_min_issuance_fee),
-                    OutputPurpose::Burn,
-                ))
+                .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                 .build(),
         )
         .build()
@@ -1344,14 +1332,11 @@ fn nft_valid_case(#[case] seed: Seed) {
                         TxInput::new(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
-                    .add_output(TxOutput::new(
+                    .add_output(TxOutput::Transfer(
                         output_value.clone().into(),
-                        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                        Destination::AnyoneCanSpend,
                     ))
-                    .add_output(TxOutput::new(
-                        OutputValue::Coin(token_min_issuance_fee),
-                        OutputPurpose::Burn,
-                    ))
+                    .add_output(TxOutput::Burn(OutputValue::Coin(token_min_issuance_fee)))
                     .build(),
             )
             .build_and_process()
@@ -1368,6 +1353,6 @@ fn nft_valid_case(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), &output_value.into());
+        assert_eq!(issuance_output.value(), output_value.into());
     })
 }

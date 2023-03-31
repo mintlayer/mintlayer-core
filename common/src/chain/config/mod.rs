@@ -24,7 +24,7 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
-use crate::chain::OutputPurpose;
+use crate::chain::TxOutput;
 use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
@@ -294,8 +294,6 @@ const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 
 fn create_mainnet_genesis() -> Genesis {
-    use crate::chain::transaction::TxOutput;
-
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
     // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
@@ -311,9 +309,9 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_message = String::new();
 
     // TODO: replace this with the real genesis mint value
-    let output = TxOutput::new(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(100_000_000_000_000)),
-        OutputPurpose::Transfer(genesis_mint_destination),
+        genesis_mint_destination,
     );
 
     Genesis::new(
@@ -324,13 +322,11 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
-    use crate::chain::transaction::TxOutput;
-
     let genesis_message = String::new();
 
-    let output = TxOutput::new(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(100_000_000_000_000_000_000)),
-        OutputPurpose::Transfer(premine_destination),
+        premine_destination,
     );
 
     Genesis::new(

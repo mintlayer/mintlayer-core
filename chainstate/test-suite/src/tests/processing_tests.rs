@@ -37,7 +37,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::OutputValue,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        OutputPurpose, OutputSpentState, TxInput, TxOutput, UpgradeVersion,
+        OutputSpentState, TxInput, TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable},
     Uint256,
@@ -71,10 +71,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 1: reward is a simple transfer
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
-                coins.clone(),
-                OutputPurpose::Transfer(destination.clone()),
-            )])
+            .with_reward(vec![TxOutput::Transfer(coins.clone(), destination.clone())])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
 
@@ -89,12 +86,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 2: reward is locked until height
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
-                OutputPurpose::LockThenTransfer(
-                    destination.clone(),
-                    OutputTimeLock::UntilHeight(BlockHeight::max()),
-                ),
+                destination.clone(),
+                OutputTimeLock::UntilHeight(BlockHeight::max()),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -110,12 +105,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 3: reward is locked until a specific time
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
-                OutputPurpose::LockThenTransfer(
-                    destination.clone(),
-                    OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
-                ),
+                destination.clone(),
+                OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(u64::MAX)),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -131,12 +124,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 4: reward is locked for an amount of seconds
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
-                OutputPurpose::LockThenTransfer(
-                    destination.clone(),
-                    OutputTimeLock::ForSeconds(u64::MAX),
-                ),
+                destination.clone(),
+                OutputTimeLock::ForSeconds(u64::MAX),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -152,12 +143,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 5: reward is locked for an invalid number
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
-                OutputPurpose::LockThenTransfer(
-                    destination.clone(),
-                    OutputTimeLock::ForBlockCount(u64::MAX),
-                ),
+                destination.clone(),
+                OutputTimeLock::ForBlockCount(u64::MAX),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -179,12 +168,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins.clone(),
-                OutputPurpose::LockThenTransfer(
-                    destination.clone(),
-                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
-                ),
+                destination.clone(),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64 - 1),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -206,16 +193,14 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
-                coins.clone(),
-                OutputPurpose::StakePool(Box::new(StakePoolData::new(
-                    anyonecanspend_address(),
-                    vrf_pub_key,
-                    decommission_destination,
-                    0,
-                    Amount::ZERO,
-                ))),
-            )])
+            .with_reward(vec![TxOutput::StakePool(Box::new(StakePoolData::new(
+                Amount::from_atoms(10),
+                anyonecanspend_address(),
+                vrf_pub_key,
+                decommission_destination,
+                0,
+                Amount::ZERO,
+            )))])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
 
@@ -235,12 +220,10 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
 
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 coins,
-                OutputPurpose::LockThenTransfer(
-                    destination,
-                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
-                ),
+                destination,
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
@@ -394,10 +377,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
             Transaction::new(
                 0,
                 vec![TxInput::new(tf.genesis().get_id().into(), 0)],
-                vec![TxOutput::new(
-                    tf.genesis().utxos()[0].value().clone(),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                )],
+                vec![TxOutput::Transfer(tf.genesis().utxos()[0].value(), anyonecanspend_address())],
                 0,
             )
             .unwrap(),
@@ -410,9 +390,9 @@ fn transaction_processing_order(#[case] seed: Seed) {
             Transaction::new(
                 0,
                 vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
-                vec![TxOutput::new(
-                    tx1.transaction().outputs()[0].value().clone(),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
+                vec![TxOutput::Transfer(
+                    tx1.transaction().outputs()[0].value(),
+                    anyonecanspend_address(),
                 )],
                 0,
             )
@@ -773,12 +753,10 @@ fn consensus_type(#[case] seed: Seed) {
         let mut mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::LockThenTransfer(
-                    Destination::PublicKey(pub_key),
-                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
-                ),
+                Destination::PublicKey(pub_key),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -843,12 +821,10 @@ fn consensus_type(#[case] seed: Seed) {
         let mut mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
-            .with_reward(vec![TxOutput::new(
+            .with_reward(vec![TxOutput::LockThenTransfer(
                 OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::LockThenTransfer(
-                    Destination::PublicKey(pub_key),
-                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
-                ),
+                Destination::PublicKey(pub_key),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -902,12 +878,10 @@ fn pow(#[case] seed: Seed) {
     let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let mut random_invalid_block = tf
         .make_block_builder()
-        .with_reward(vec![TxOutput::new(
+        .with_reward(vec![TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::from_atoms(10)),
-            OutputPurpose::LockThenTransfer(
-                Destination::PublicKey(pub_key),
-                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
-            ),
+            Destination::PublicKey(pub_key),
+            OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
         )])
         .add_test_transaction_from_best_block(&mut rng)
         .build();
@@ -974,12 +948,10 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         .map(|_| {
             let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
             let pub_key = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr).1;
-            TxOutput::new(
+            TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount),
-                OutputPurpose::LockThenTransfer(
-                    Destination::PublicKey(pub_key),
-                    OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
-                ),
+                Destination::PublicKey(pub_key),
+                OutputTimeLock::ForBlockCount(reward_lock_distance as u64),
             )
         })
         .collect::<Vec<_>>();
@@ -1149,9 +1121,9 @@ fn empty_outputs_in_tx(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let first_tx = TransactionBuilder::new()
-            .add_output(TxOutput::new(
+            .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(1)),
-                OutputPurpose::Transfer(anyonecanspend_address()),
+                anyonecanspend_address(),
             ))
             .build();
         let first_tx_id = first_tx.transaction().get_id();

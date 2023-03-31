@@ -67,7 +67,7 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output.value() {
-                OutputValue::Coin(coin) => Some(*coin),
+                OutputValue::Coin(coin) => Some(coin),
                 OutputValue::Token(_) => None,
             })
             .sum::<Option<_>>()

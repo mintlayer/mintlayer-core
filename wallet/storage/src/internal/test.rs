@@ -16,7 +16,7 @@
 use super::*;
 use crate::DefaultBackend;
 use common::chain::tokens::OutputValue;
-use common::chain::{Destination, OutPointSourceId, OutputPurpose, TxOutput};
+use common::chain::{Destination, OutPointSourceId, TxOutput};
 use common::primitives::{Amount, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::Rng;
@@ -44,9 +44,9 @@ fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
 
     // generate a utxo and outpoint
     let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let output = TxOutput::new(
+    let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(rng.gen_range(0..(u128::MAX - 1)))),
-        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        Destination::PublicKey(pub_key),
     );
     let utxo = Utxo::new_for_mempool(output, false);
     let outpoint = OutPoint::new(

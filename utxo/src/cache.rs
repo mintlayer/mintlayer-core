@@ -147,7 +147,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .enumerate()
             // burned outputs should not be included into utxo set
-            .filter(|(_, output)| !output.purpose().is_burn())
+            .filter(|(_, output)| !output.is_burn())
             .try_for_each(|(idx, output)| {
                 let outpoint = OutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.
@@ -190,7 +190,7 @@ impl<P: UtxosView> UtxosCache<P> {
         for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
 
-            if !output.purpose().is_burn() {
+            if !output.is_burn() {
                 self.spend_utxo(&tx_outpoint)?;
             }
         }
@@ -221,7 +221,7 @@ impl<P: UtxosView> UtxosCache<P> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
-                if output.purpose().is_burn() {
+                if output.is_burn() {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);

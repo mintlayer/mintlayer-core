@@ -16,8 +16,7 @@
 use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::Transactable, ChainConfig, GenBlock,
-        OutputPurpose, TxOutput,
+        block::timestamp::BlockTimestamp, signature::Transactable, ChainConfig, GenBlock, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -37,12 +36,12 @@ fn check_timelock(
 ) -> Result<(), ConnectTransactionError> {
     use common::chain::timelock::OutputTimeLock;
 
-    let timelock = match output.purpose() {
-        OutputPurpose::Transfer(_)
-        | OutputPurpose::Burn
-        | OutputPurpose::StakePool(_)
-        | OutputPurpose::ProduceBlockFromStake(_, _) => return Ok(()),
-        OutputPurpose::LockThenTransfer(_, tl) => tl,
+    let timelock = match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::Burn(_)
+        | TxOutput::StakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
+        TxOutput::LockThenTransfer(_, _, tl) => tl,
     };
 
     let source_block_height = source_block_index.block_height();

@@ -31,8 +31,7 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        ChainConfig, Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput,
-        TxOutput,
+        ChainConfig, Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
@@ -44,10 +43,7 @@ pub fn generate_input_utxo(
     let destination = Destination::PublicKey(public_key);
     let output_value =
         crate::chain::tokens::OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
-    let utxo = TxOutput::new(
-        output_value,
-        crate::chain::OutputPurpose::Transfer(destination),
-    );
+    let utxo = TxOutput::Transfer(output_value, destination);
     (utxo, private_key)
 }
 
@@ -111,9 +107,9 @@ pub fn generate_unsigned_tx(
     .collect();
 
     let outputs = std::iter::from_fn(|| {
-        Some(TxOutput::new(
+        Some(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(rng.gen::<UnsignedIntType>())),
-            OutputPurpose::Transfer(destination.clone()),
+            destination.clone(),
         ))
     })
     .take(outputs_count)

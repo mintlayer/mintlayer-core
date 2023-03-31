@@ -235,7 +235,7 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
     use common::{
         chain::{
             signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock,
-            OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+            OutPointSourceId, TxInput, TxOutput,
         },
         primitives::{Amount, Id, Idable},
     };
@@ -254,9 +254,9 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
                     ),
                     InputWitness::NoSignature(None),
                 )
-                .add_output(TxOutput::new(
+                .add_output(TxOutput::Transfer(
                     OutputValue::Coin(Amount::from_atoms(0)),
-                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                    Destination::AnyoneCanSpend,
                 ))
                 .build(),
         )
