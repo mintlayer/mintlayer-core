@@ -78,6 +78,7 @@ pub fn sign_address_spending(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::chain::signature::tests::utils::generate_inputs_utxos;
     use crate::chain::{
         signature::{inputsig::StandardInputSignature, signature_hash},
         transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
@@ -102,7 +103,10 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&mut rng, &destination, 1, 2).unwrap();
+
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
+
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let res = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -110,6 +114,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 1,
             );
             assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
@@ -126,7 +131,10 @@ mod test {
         let (private_key, public_key) =
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
+
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -134,7 +142,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                rng.gen_range(0..INPUTS),
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                rng.gen_range(0..inputs_utxos.len()),
             )
             .unwrap();
             assert!(
@@ -157,7 +166,10 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
+
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
@@ -165,7 +177,8 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                rng.gen_range(0..INPUTS),
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                rng.gen_range(0..inputs_utxos.len()),
             )
             .unwrap();
 
@@ -195,7 +208,10 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
+
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
             let input = rng.gen_range(0..INPUTS);
@@ -204,12 +220,19 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 input,
             )
             .unwrap();
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
-            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+            let sighash = signature_hash(
+                witness.sighash_type(),
+                &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                input,
+            )
+            .unwrap();
 
             verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
@@ -226,19 +249,29 @@ mod test {
             PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let tx = generate_unsigned_tx(&mut rng, &destination, INPUTS, OUTPUTS).unwrap();
+
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+
+        let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
         for sighash_type in sig_hash_types() {
-            let input = rng.gen_range(0..INPUTS);
+            let input = rng.gen_range(0..inputs_utxos.len());
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
                 input,
             )
             .unwrap();
-            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+            let sighash = signature_hash(
+                witness.sighash_type(),
+                &tx,
+                &inputs_utxos.iter().collect::<Vec<_>>(),
+                input,
+            )
+            .unwrap();
 
             sign_address_spending(&private_key, &pubkey_hash, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));

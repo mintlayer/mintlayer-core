@@ -90,6 +90,7 @@ fn signed_tx(#[case] seed: Seed) {
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
                 Destination::PublicKey(public_key),
                 &tx,
+                &[&tx_1.transaction().outputs()[0]],
                 0,
             )
             .unwrap();
@@ -171,8 +172,13 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
         let authorization = {
             let mut authorization = AuthorizedClassicalMultisigSpend::new_empty(challenge);
 
-            let sighash =
-                signature_hash(SigHashType::try_from(SigHashType::ALL).unwrap(), &tx, 0).unwrap();
+            let sighash = signature_hash(
+                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                &tx,
+                &[&tx_1.transaction().outputs()[0]],
+                0,
+            )
+            .unwrap();
             let sighash = sighash.encode();
 
             for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
@@ -191,6 +197,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
                     &authorization,
                     SigHashType::try_from(SigHashType::ALL).unwrap(),
                     &tx,
+                    &[&tx_1.transaction().outputs()[0]],
                     0,
                 )
                 .unwrap();
@@ -275,8 +282,13 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         // So: Element number N has N signatures
         let mut authrorizations = vec![authorization.clone()];
 
-        let sighash =
-            signature_hash(SigHashType::try_from(SigHashType::ALL).unwrap(), &tx, 0).unwrap();
+        let sighash = signature_hash(
+            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            &tx,
+            &[&tx_1.transaction().outputs()[0]],
+            0,
+        )
+        .unwrap();
         let sighash = sighash.encode();
 
         for key_index in key_indexes.iter().take(min_required_signatures.get() as usize) {
@@ -294,6 +306,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                         &authorization,
                         SigHashType::try_from(SigHashType::ALL).unwrap(),
                         &tx,
+                        &[&tx_1.transaction().outputs()[0]],
                         0,
                     )
                     .unwrap();

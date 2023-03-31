@@ -92,6 +92,10 @@ impl Utxo {
         &self.output
     }
 
+    pub fn take_output(self) -> TxOutput {
+        self.output
+    }
+
     pub fn set_height(&mut self, value: UtxoSource) {
         self.source = value
     }

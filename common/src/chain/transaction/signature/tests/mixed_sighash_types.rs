@@ -46,6 +46,7 @@ fn mixed_sighash_types(#[case] seed: Seed) {
         sig_hash_types(),
         sig_hash_types()
     ) {
+        let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 6);
         let tx = generate_unsigned_tx(&mut rng, &destination, 6, 6).unwrap();
 
         let sigs = [
@@ -60,15 +61,27 @@ fn mixed_sighash_types(#[case] seed: Seed) {
         .enumerate()
         .map(|(input, sighash_type)| {
             InputWitness::Standard(
-                make_signature(&tx, input, &private_key, sighash_type, destination.clone())
-                    .unwrap(),
+                make_signature(
+                    &tx,
+                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    input,
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                )
+                .unwrap(),
             )
         })
         .collect::<Vec<_>>();
 
         let signed_tx = tx.with_signatures(sigs).unwrap();
 
-        verify_signed_tx(&chain_config, &signed_tx, &destination)
-            .expect("Signature verification failed")
+        verify_signed_tx(
+            &chain_config,
+            &signed_tx,
+            &inputs_utxos.iter().collect::<Vec<_>>(),
+            &destination,
+        )
+        .expect("Signature verification failed")
     }
 }

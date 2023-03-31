@@ -16,8 +16,8 @@
 use itertools::Itertools;
 
 use crypto::{
-    key::{PrivateKey, PublicKey},
-    random::Rng,
+    key::{KeyKind, PrivateKey, PublicKey},
+    random::{CryptoRng, Rng},
 };
 use script::Script;
 
@@ -36,6 +36,27 @@ use crate::{
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
+
+pub fn generate_input_utxo(
+    rng: &mut (impl Rng + CryptoRng),
+) -> (TxOutput, crypto::key::PrivateKey) {
+    let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+    let destination = Destination::PublicKey(public_key);
+    let output_value =
+        crate::chain::tokens::OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
+    let utxo = TxOutput::new(
+        output_value,
+        crate::chain::OutputPurpose::Transfer(destination),
+    );
+    (utxo, private_key)
+}
+
+pub fn generate_inputs_utxos(
+    rng: &mut (impl Rng + CryptoRng),
+    input_count: usize,
+) -> (Vec<TxOutput>, Vec<PrivateKey>) {
+    (0..input_count).map(|_| generate_input_utxo(rng)).unzip()
+}
 
 // This is required because we can't access private fields of the Transaction class
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +125,7 @@ pub fn generate_unsigned_tx(
 
 pub fn sign_whole_tx(
     tx: Transaction,
+    inputs_utxos: &[&TxOutput],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -112,7 +134,16 @@ pub fn sign_whole_tx(
         .inputs()
         .iter()
         .enumerate()
-        .map(|(i, _input)| make_signature(&tx, i, private_key, sighash_type, destination.clone()))
+        .map(|(i, _input)| {
+            make_signature(
+                &tx,
+                inputs_utxos,
+                i,
+                private_key,
+                sighash_type,
+                destination.clone(),
+            )
+        })
         .collect();
     let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect_vec();
 
@@ -121,17 +152,18 @@ pub fn sign_whole_tx(
 
 pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs: usize,
+    inputs_utxos: &[&TxOutput],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, inputs, outputs).unwrap();
-    let signed_tx = sign_whole_tx(tx, private_key, sighash_type, destination).unwrap();
+    let tx = generate_unsigned_tx(rng, destination, inputs_utxos.len(), outputs).unwrap();
+    let signed_tx =
+        sign_whole_tx(tx, inputs_utxos, private_key, sighash_type, destination).unwrap();
     assert_eq!(
-        verify_signed_tx(chain_config, &signed_tx, destination),
+        verify_signed_tx(chain_config, &signed_tx, inputs_utxos, destination),
         Ok(())
     );
     Ok(signed_tx)
@@ -139,6 +171,7 @@ pub fn generate_and_sign_tx(
 
 pub fn make_signature(
     tx: &Transaction,
+    inputs_utxos: &[&TxOutput],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -149,6 +182,7 @@ pub fn make_signature(
         sighash_type,
         outpoint_dest,
         tx,
+        inputs_utxos,
         input_num,
     )?;
     Ok(input_sig)
@@ -157,10 +191,11 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
+    inputs_utxos: &[&TxOutput],
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.inputs().len() {
-        verify_signature(chain_config, destination, tx, i)?
+        verify_signature(chain_config, destination, tx, inputs_utxos, i)?
     }
     Ok(())
 }
