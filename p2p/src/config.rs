@@ -32,6 +32,7 @@ make_config_setting!(HeaderLimit, usize, 2000);
 make_config_setting!(MaxLocatorSize, usize, 101);
 make_config_setting!(RequestedBlocksLimit, usize, 500);
 make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
+make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -105,4 +106,6 @@ pub struct P2pConfig {
     pub user_agent: UserAgent,
     /// A maximum size of a p2p message in bytes.
     pub max_message_size: MaxMessageSize,
+    /// A maximum number of announcements (hashes) for which we haven't receive transactions.
+    pub max_peer_tx_announcements: MaxPeerTxAnnouncements,
 }

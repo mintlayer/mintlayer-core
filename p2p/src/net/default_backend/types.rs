@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::{semver::SemVer, user_agent::UserAgent};
+use common::{
+    chain::{SignedTransaction, Transaction},
+    primitives::{semver::SemVer, user_agent::UserAgent, Id},
+};
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -116,6 +119,10 @@ pub enum Message {
     BlockListRequest(BlockListRequest),
     #[codec(index = 7)]
     BlockResponse(BlockResponse),
+    #[codec(index = 11)]
+    TransactionRequest(Id<Transaction>),
+    #[codec(index = 12)]
+    TransactionResponse(SignedTransaction),
 
     #[codec(index = 8)]
     AnnounceAddrRequest(AnnounceAddrRequest),
@@ -144,6 +151,8 @@ impl From<SyncMessage> for Message {
             SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
             SyncMessage::HeaderListResponse(r) => Message::HeaderListResponse(r),
             SyncMessage::BlockResponse(r) => Message::BlockResponse(r),
+            SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
+            SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
         }
     }
 }

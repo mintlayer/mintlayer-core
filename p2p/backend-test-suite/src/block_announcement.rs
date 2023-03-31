@@ -151,6 +151,7 @@ where
         max_request_blocks_count: Default::default(),
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
