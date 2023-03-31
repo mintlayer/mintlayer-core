@@ -218,6 +218,8 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<Box<dyn P2pInterface>> {
+    assert!(cfg!(not(feature = "testing_utils")));
+
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,
         chain_config.p2p_port(),
