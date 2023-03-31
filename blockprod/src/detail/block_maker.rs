@@ -107,7 +107,7 @@ impl BlockMaker {
         let block_reward = BlockReward::new(vec![]);
 
         let mut block = Block::new(
-            transactions.clone(),
+            transactions,
             self.current_tip_id,
             BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
             ConsensusData::None,
