@@ -324,7 +324,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        true, // Fails because the signature commits to all `inputs_utxos`
+        false,
     );
     check_mutate_input(
         &chain_config,
@@ -435,7 +435,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        true, // Fails because the signature commits to all `inputs_utxos`
+        false,
     );
     check_mutate_input(
         &chain_config,
@@ -546,7 +546,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         &original_tx,
         &inputs_utxos.iter().collect::<Vec<_>>(),
         &outpoint_dest,
-        true, // Fails because the signature commits to all `inputs_utxos`
+        false,
     );
     check_mutate_input(
         &chain_config,

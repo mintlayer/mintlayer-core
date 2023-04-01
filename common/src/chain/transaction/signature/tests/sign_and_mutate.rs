@@ -195,7 +195,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            true, // Fails because the signature commits to all `inputs_utxos`
+            false,
         );
         check_mutate_input(
             &chain_config,
@@ -284,7 +284,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            true, // Fails because the signature commits to all `inputs_utxos`
+            false,
         );
         check_mutate_input(
             &chain_config,
@@ -373,7 +373,7 @@ fn modify_and_verify(#[case] seed: Seed) {
             &tx,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             &destination,
-            true, // Fails because the signature commits to all `inputs_utxos`
+            false,
         );
         check_mutate_input(
             &chain_config,
@@ -474,10 +474,6 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
     .unwrap();
 
     let mutations = [
-        add_input,           // Fails because the signature commits to all `inputs_utxos`
-        remove_first_input,  // Fails because the signature commits to all `inputs_utxos`
-        remove_middle_input, // Fails because the signature commits to all `inputs_utxos`
-        remove_last_input,   // Fails because the signature commits to all `inputs_utxos`
         add_output,
         mutate_output,
         remove_first_output,
@@ -512,7 +508,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
         );
     }
 
-    let mutations = [];
+    let mutations = [add_input, remove_first_input, remove_middle_input, remove_last_input];
     check_mutations(
         &chain_config,
         &mut rng,
@@ -638,12 +634,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
         }
     }
 
-    let mutations = [
-        add_input,           // Fails because the signature commits to all `inputs_utxos`
-        remove_first_input,  // Fails because the signature commits to all `inputs_utxos`
-        remove_middle_input, // Fails because the signature commits to all `inputs_utxos`
-        remove_last_input,   // Fails because the signature commits to all `inputs_utxos`
-    ];
+    let mutations = [];
     check_mutations(
         &chain_config,
         &mut rng,
@@ -655,6 +646,10 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
     );
 
     let mutations = [
+        add_input,
+        remove_first_input,
+        remove_middle_input,
+        remove_last_input,
         add_output,
         mutate_output,
         remove_first_output,
@@ -832,7 +827,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let mutations = [add_output, remove_last_output];
+    let mutations = [add_input, remove_last_input, add_output, remove_last_output];
     let tx = SignedTransactionWithUtxo {
         tx,
         inputs_utxos: inputs_utxos.clone(),
@@ -908,12 +903,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         );
     }
 
-    let mutations = [
-        add_input,         // Fails because the signature commits to all `inputs_utxos`
-        remove_last_input, // Fails because the signature commits to all `inputs_utxos`
-        remove_first_input,
-        remove_first_output,
-    ];
+    let mutations = [remove_first_input, remove_first_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let inputs = tx.tx.inputs().len();
