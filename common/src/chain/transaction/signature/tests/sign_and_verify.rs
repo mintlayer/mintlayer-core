@@ -26,7 +26,7 @@ use crate::{
     chain::{
         config::create_mainnet,
         signature::{
-            sighashtype::{OutputsMode, SigHashType},
+            sighash::sighashtype::{OutputsMode, SigHashType},
             TransactionSigError,
         },
         Destination,

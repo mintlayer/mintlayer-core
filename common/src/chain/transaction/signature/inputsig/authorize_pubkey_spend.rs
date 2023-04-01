@@ -67,11 +67,12 @@ pub fn sign_pubkey_spending(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::chain::signature::sighash::signature_hash;
     use crate::chain::signature::tests::utils::generate_inputs_utxos;
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
-            signature::{inputsig::StandardInputSignature, signature_hash},
+            signature::inputsig::StandardInputSignature,
             transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
             Destination,
         },
