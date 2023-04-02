@@ -45,6 +45,7 @@ members = [
   "utils",                        # Various utilities.
   "utxo",                         # Utxo and related utilities (cache, undo, etc.).
   "wallet",                       # Wallet executable.
+  "wallet/node-comm",             # Wallet-to-node communication tools.
   "wasm-crypto",                  # WASM bindings for the crypto crate.
 ]
 
