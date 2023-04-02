@@ -8,3 +8,6 @@ rust-version.workspace = true
 [dependencies]
 serialization-core = { path = 'core' }
 serialization-tagged = { path = 'tagged' }
+
+thiserror.workspace = true
+hex.workspace = true
