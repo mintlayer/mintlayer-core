@@ -21,7 +21,7 @@ use common::{
     chain::{Block, GenBlock},
     primitives::Id,
 };
-use serialization::Decode;
+use serialization::hex::HexDecode;
 use ureq::serde::de::Error;
 
 #[derive(thiserror::Error, Debug)]
@@ -86,9 +86,7 @@ impl NodeRpcClient {
 
         // TODO: deal with expects
         let optional_block_hex = json_response["result"].as_str().expect("Must be string");
-        let optional_block_data = hex::decode(optional_block_hex).expect("Must be hex");
-        let block =
-            Option::<Block>::decode(&mut optional_block_data.as_slice()).expect("Must be block");
+        let block = Option::<Block>::hex_decode_all(optional_block_hex).expect("Must be block");
         Ok(block)
     }
 
@@ -104,9 +102,7 @@ impl NodeRpcClient {
 
         // TODO: deal with expects
         let block_id_hex = json_response["result"].as_str().expect("Must be string");
-        let block_id_data = hex::decode(block_id_hex).expect("Must be hex");
-        let block_id =
-            Id::<GenBlock>::decode(&mut block_id_data.as_slice()).expect("Must be block id");
+        let block_id = Id::<GenBlock>::hex_decode_all(block_id_hex).expect("Must be block id");
         Ok(block_id)
     }
 }
