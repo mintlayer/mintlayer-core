@@ -146,13 +146,13 @@ impl subsystem::Subsystem for Rpc {
     async fn shutdown(self) {
         if let Some(obj) = self.http {
             match obj.1.stop() {
-                Ok(_) => (),
+                Ok(()) => obj.1.stopped().await,
                 Err(e) => log::error!("Http RPC stop handle acquisition failed: {}", e),
             }
         }
         if let Some(obj) = self.websocket {
             match obj.1.stop() {
-                Ok(_) => (),
+                Ok(()) => obj.1.stopped().await,
                 Err(e) => log::error!("Websocket RPC stop handle acquisition failed: {}", e),
             }
         }
