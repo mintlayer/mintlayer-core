@@ -32,6 +32,10 @@ pub enum NodeRpcError {
     JsonResponseError(#[from] serde_json::Error),
     #[error("Response json interpretation error: {0}")]
     ResponseJsonInterpretationError(std::io::Error),
+    #[error("Decoding error: {0}")]
+    DecodingError(#[from] serialization::hex::HexError),
+    #[error("Json response type error")]
+    JsonResponseTypeError,
 }
 
 pub struct NodeRpcClient {
@@ -84,9 +88,10 @@ impl NodeRpcClient {
 
         let json_response = self.make_request(req_data)?;
 
-        // TODO: deal with expects
-        let optional_block_hex = json_response["result"].as_str().expect("Must be string");
-        let block = Option::<Block>::hex_decode_all(optional_block_hex).expect("Must be block");
+        let optional_block_hex =
+            json_response["result"].as_str().ok_or(NodeRpcError::JsonResponseTypeError)?;
+
+        let block = Option::<Block>::hex_decode_all(optional_block_hex)?;
         Ok(block)
     }
 
@@ -100,9 +105,10 @@ impl NodeRpcClient {
 
         let json_response = self.make_request(req_data)?;
 
-        // TODO: deal with expects
-        let block_id_hex = json_response["result"].as_str().expect("Must be string");
-        let block_id = Id::<GenBlock>::hex_decode_all(block_id_hex).expect("Must be block id");
+        let block_id_hex =
+            json_response["result"].as_str().ok_or(NodeRpcError::JsonResponseTypeError)?;
+
+        let block_id = Id::<GenBlock>::hex_decode_all(block_id_hex)?;
         Ok(block_id)
     }
 }
