@@ -768,8 +768,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
 
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
-    let stake_pool_data1 =
-        create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1);
+    let stake_pool_data1 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1);
     let stake_pool_data2 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_2);
     let (stake_pool_outpoint1, pool_id1, _, pool_id2) =
         add_block_with_2_stake_pools(&mut rng, &mut tf, stake_pool_data1, stake_pool_data2);

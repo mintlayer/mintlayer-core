@@ -78,7 +78,7 @@ fn calculate_new_target(
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = prev_target * average_block_time / target_block_time;
-    let new_target = Uint256::try_from(new_target)?;
+    let new_target = Uint256::try_from(new_target).unwrap_or(pos_config.target_limit());
 
     let new_target = std::cmp::min(new_target, pos_config.target_limit());
     Ok(Compact::from(new_target))
@@ -332,6 +332,15 @@ mod tests {
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
             calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
+
+        assert_eq!(new_target, Compact::from(config.target_limit()));
+    }
+
+    #[test]
+    fn calculate_new_target_with_overflow() {
+        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 2).unwrap();
+        let prev_target = Uint256::MAX;
+        let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
 
         assert_eq!(new_target, Compact::from(config.target_limit()));
     }
