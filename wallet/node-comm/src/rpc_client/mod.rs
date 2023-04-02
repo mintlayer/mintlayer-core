@@ -47,8 +47,8 @@ pub struct NodeRpcClient {
 static REQ_ID: AtomicU64 = AtomicU64::new(0);
 
 impl NodeRpcClient {
-    pub fn new(address: String, port: u16) -> Result<Self, NodeRpcError> {
-        let host = format!("http://{address}:{port}");
+    pub fn new(remote_socket_address: String) -> Result<Self, NodeRpcError> {
+        let host = format!("http://{remote_socket_address}");
         let client = Self { host };
 
         // Attempt to communicate with the node to make sure connection works
@@ -61,7 +61,8 @@ impl NodeRpcClient {
 
     fn make_request(&self, req_data: serde_json::Value) -> Result<serde_json::Value, NodeRpcError> {
         let resp = ureq::post(self.host.as_str())
-            .set("Accepts", "application/json")
+            .set("User-Agent", "AuthServiceProxy/0.1")
+            .set("Content-type", "application/json")
             .send_json(req_data)
             .map_err(|e| NodeRpcError::RequestError(Box::new(e)))?;
         let json_response = resp
@@ -106,7 +107,7 @@ impl NodeRpcClient {
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, NodeRpcError> {
         let req_data = ureq::json!({
-            "method": "chainstate_get_best_block_id",
+            "method": "chainstate_best_block_id",
             "jsonrpc": "2.0",
             "id": REQ_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
             "params": ureq::json!({}),
