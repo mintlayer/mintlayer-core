@@ -64,7 +64,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let signed_transactions = transactions_hex
             .iter()
-            .map(|d| HexDecode::hex_decode_all(d))
+            .map(HexDecode::hex_decode_all)
             .collect::<Result<Vec<SignedTransaction>, _>>()
             .map_err(rpc::Error::to_call_error)?;
 
