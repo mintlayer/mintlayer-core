@@ -26,6 +26,8 @@ use ureq::serde::de::Error;
 
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
+    #[error("Initialization error: {0}")]
+    InitializationError(Box<NodeRpcError>),
     #[error("Request error: {0}")]
     RequestError(Box<ureq::Error>),
     #[error("Response error: {0}")]
@@ -45,9 +47,16 @@ pub struct NodeRpcClient {
 static REQ_ID: AtomicU64 = AtomicU64::new(0);
 
 impl NodeRpcClient {
-    pub fn new(address: String, port: u16) -> Self {
+    pub fn new(address: String, port: u16) -> Result<Self, NodeRpcError> {
         let host = format!("http://{address}:{port}");
-        Self { host }
+        let client = Self { host };
+
+        // Attempt to communicate with the node to make sure connection works
+        client
+            .get_best_block_id()
+            .map_err(|e| NodeRpcError::InitializationError(Box::new(e)))?;
+
+        Ok(client)
     }
 
     fn make_request(&self, req_data: serde_json::Value) -> Result<serde_json::Value, NodeRpcError> {
