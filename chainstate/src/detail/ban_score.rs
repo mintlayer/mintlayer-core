@@ -293,6 +293,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::DecodingBitsFailed(_) => 100,
             ConsensusPoSError::NotEnoughTimestampsToAverage => 100,
             ConsensusPoSError::TargetConversionError(_) => 100,
+            ConsensusPoSError::InvalidTargetBlockTime => 100,
+            ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
         }
     }
 }

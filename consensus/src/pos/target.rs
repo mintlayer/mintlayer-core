@@ -22,6 +22,7 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Compact, Id},
     Uint256, Uint512,
 };
+use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
@@ -45,12 +46,12 @@ fn calculate_average_block_time(
     // Average is calculated based on 2 timestamps and then is divided by number of blocks in between.
     // Choose a block from the history that would be the start of a timespan.
     // It shouldn't cross net version range or genesis.
-    let timespan_start_height = std::cmp::max(
-        net_version_range.start,
-        (block_index.block_height()
-            - BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64))
-        .unwrap_or(BlockHeight::zero()),
-    );
+    let block_count_to_average =
+        BlockDistance::new(pos_config.block_count_to_average_for_blocktime() as i64);
+    let block_height_to_stare_averaging =
+        (block_index.block_height() - block_count_to_average).unwrap_or(BlockHeight::zero());
+    let timespan_start_height =
+        std::cmp::max(net_version_range.start, block_height_to_stare_averaging);
 
     let time_span_start = block_index_handle
         .get_ancestor(block_index, timespan_start_height)?
@@ -58,11 +59,14 @@ fn calculate_average_block_time(
         .as_int_seconds();
     let current_block_time = block_index.block_timestamp().as_int_seconds();
 
+    let timespan_difference = current_block_time
+        .checked_sub(time_span_start)
+        .ok_or(ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime)?;
     let blocks_in_timespan: i64 = (block_index.block_height() - timespan_start_height)
         .expect("cannot be negative")
         .into();
 
-    let average = (current_block_time - time_span_start) / blocks_in_timespan as u64;
+    let average = timespan_difference / blocks_in_timespan as u64;
 
     Ok(average)
 }
@@ -70,14 +74,18 @@ fn calculate_average_block_time(
 fn calculate_new_target(
     pos_config: &PoSChainConfig,
     prev_target: &Uint256,
-    average_block_time: u64,
+    actual_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
-    let average_block_time = Uint512::from_u64(average_block_time);
+    let actual_block_time = Uint512::from_u64(actual_block_time);
     let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
+    ensure!(
+        target_block_time > Uint512::ZERO,
+        ConsensusPoSError::InvalidTargetBlockTime
+    );
     let prev_target: Uint512 = (*prev_target).into();
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
-    let new_target = prev_target * average_block_time / target_block_time;
+    let new_target = prev_target * actual_block_time / target_block_time;
     let new_target = Uint256::try_from(new_target).unwrap_or(pos_config.target_limit());
 
     let new_target = std::cmp::min(new_target, pos_config.target_limit());
@@ -571,5 +579,47 @@ mod tests {
             .unwrap();
             assert_ne!(target, Compact::from(target_limit_2));
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn not_monotonic_block_time(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let pos_config = create_unittest_pos_config();
+        let upgrades = vec![
+            (
+                BlockHeight::new(0),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+            ),
+            (
+                BlockHeight::new(1),
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                    initial_difficulty: Uint256::MAX.into(),
+                    config: pos_config.clone(),
+                }),
+            ),
+        ];
+        let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+        let chain_config = ConfigBuilder::test_chain()
+            .net_upgrades(net_upgrades)
+            .genesis_custom(Genesis::new(
+                "msg".to_owned(),
+                BlockTimestamp::from_int_seconds(0),
+                vec![],
+            ))
+            .build();
+
+        let block_index_handle =
+            TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[30, 20, 10]);
+
+        let res = calculate_average_block_time(
+            &chain_config,
+            &pos_config,
+            block_index_handle.get_block_index_by_height(BlockHeight::new(3)).unwrap(),
+            &block_index_handle,
+        )
+        .unwrap_err();
+        assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);
     }
 }

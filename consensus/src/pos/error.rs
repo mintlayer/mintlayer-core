@@ -52,8 +52,12 @@ pub enum ConsensusPoSError {
     InvalidTarget(Compact),
     #[error("Decoding bits of block failed: `{0:?}`")]
     DecodingBitsFailed(Compact),
-    #[error("Failed to conver target type: `{0:?}`")]
+    #[error("Failed to convert target type: `{0:?}`")]
     TargetConversionError(#[from] UintConversionError),
     #[error("Not enough timestamps to calculate block time average")]
     NotEnoughTimestampsToAverage,
+    #[error("CRITICAL: Target block time must be > 0")]
+    InvalidTargetBlockTime,
+    #[error("CRITICAL: Block time must be monotonic")]
+    InvariantBrokenNotMonotonicBlockTime,
 }
