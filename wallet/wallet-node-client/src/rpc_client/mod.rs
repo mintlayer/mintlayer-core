@@ -19,9 +19,9 @@ use std::sync::atomic::AtomicU64;
 
 use common::{
     chain::{Block, GenBlock},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
-use serialization::hex::HexDecode;
+use serialization::hex::{HexDecode, HexEncode};
 use ureq::serde::de::Error;
 
 #[derive(thiserror::Error, Debug)]
@@ -85,24 +85,28 @@ impl NodeRpcClient {
     }
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, NodeRpcError> {
-        let block_id_hex = hex::encode(block_id);
+        let block_id_hex = block_id.hex_encode();
 
         let req_data = ureq::json!({
             "method": "chainstate_get_block",
             "jsonrpc": "2.0",
             "id": REQ_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
             "params": ureq::json!({
-                "block_id": block_id_hex,
+                "id": block_id_hex,
             }),
         });
 
         let json_response = self.make_request(req_data)?;
 
-        let optional_block_hex =
-            json_response["result"].as_str().ok_or(NodeRpcError::JsonResponseTypeError)?;
+        if json_response["result"].is_null() {
+            Ok(None)
+        } else {
+            let optional_block_hex =
+                json_response["result"].as_str().ok_or(NodeRpcError::JsonResponseTypeError)?;
 
-        let block = Option::<Block>::hex_decode_all(optional_block_hex)?;
-        Ok(block)
+            let block = Block::hex_decode_all(optional_block_hex)?;
+            Ok(Some(block))
+        }
     }
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, NodeRpcError> {
@@ -120,5 +124,47 @@ impl NodeRpcClient {
 
         let block_id = Id::<GenBlock>::hex_decode_all(block_id_hex)?;
         Ok(block_id)
+    }
+
+    fn get_best_block_height(&self) -> Result<BlockHeight, NodeRpcError> {
+        let req_data = ureq::json!({
+            "method": "chainstate_best_block_height",
+            "jsonrpc": "2.0",
+            "id": REQ_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            "params": ureq::json!({}),
+        });
+
+        let json_response = self.make_request(req_data)?;
+
+        let block_height =
+            json_response["result"].as_u64().ok_or(NodeRpcError::JsonResponseTypeError)?;
+
+        Ok(block_height.into())
+    }
+
+    fn get_block_id_at_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, NodeRpcError> {
+        let req_data = ureq::json!({
+            "method": "chainstate_block_id_at_height",
+            "jsonrpc": "2.0",
+            "id": REQ_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            "params": ureq::json!({
+                "height": height,
+            }),
+        });
+
+        let json_response = self.make_request(req_data)?;
+
+        if json_response["result"].is_null() {
+            Ok(None)
+        } else {
+            let block_id_hex =
+                json_response["result"].as_str().ok_or(NodeRpcError::JsonResponseTypeError)?;
+
+            let block_id = Id::<GenBlock>::hex_decode_all(block_id_hex)?;
+            Ok(Some(block_id))
+        }
     }
 }

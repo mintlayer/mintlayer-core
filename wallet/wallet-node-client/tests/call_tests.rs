@@ -19,7 +19,13 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, rpc::ChainstateRpcServer,
     ChainstateConfig, DefaultTransactionVerificationStrategy,
 };
-use common::chain::ChainConfig;
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        Block, ChainConfig,
+    },
+    primitives::Idable,
+};
 use node_comm::{make_rpc_client, node_traits::NodeInterface};
 use rpc::RpcConfig;
 use subsystem::manager::ShutdownTrigger;
@@ -75,15 +81,65 @@ pub async fn start_subsystems(
 
 // TODO: why do we need multi_thread? Otherwise, rpc calls block forever.
 #[tokio::test(flavor = "multi_thread")]
-async fn wallet_basic_rpc_communication() {
+async fn wallet_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, _chainstate_handle, rpc_bind_address) =
-        start_subsystems(chain_config, "127.0.0.1:0".to_string()).await;
+    let (_shutdown_trigger, chainstate_handle, rpc_bind_address) =
+        start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     let rpc_client = make_rpc_client(rpc_bind_address.to_string()).unwrap();
 
-    let _best_block_id = rpc_client.get_best_block_id().unwrap();
+    let best_height = rpc_client.get_best_block_height().unwrap();
+
+    assert_eq!(best_height.into_int(), 0);
+
+    let best_block_id = rpc_client.get_best_block_id().unwrap();
+
+    assert_eq!(best_block_id, chain_config.genesis_block_id());
+
+    // Submit a block and check that the best block height and id are updated.
+
+    let block = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        BlockTimestamp::from_int_seconds(
+            chain_config.genesis_block().timestamp().as_int_seconds() + 1,
+        ),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+
+    let block_1_id = block.get_id();
+
+    let block_index_1 = chainstate_handle
+        .call_mut(|c| c.process_block(block, chainstate::BlockSource::Local).unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let best_height = rpc_client.get_best_block_height().unwrap();
+
+    assert_eq!(best_height.into_int(), 1);
+
+    let best_block_id = rpc_client.get_best_block_id().unwrap();
+
+    assert_eq!(best_block_id, block_1_id);
+    assert_eq!(&best_block_id, block_index_1.block_id());
+
+    assert_eq!(
+        rpc_client.get_block_id_at_height(0.into()).unwrap().unwrap(),
+        chain_config.genesis_block_id()
+    );
+
+    assert_eq!(
+        rpc_client.get_block_id_at_height(1.into()).unwrap().unwrap(),
+        block_1_id
+    );
+
+    let block_1 = rpc_client.get_block(best_block_id.get().into()).unwrap().unwrap();
+
+    assert_eq!(block_1.get_id(), block_1_id);
 }

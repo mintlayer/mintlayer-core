@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, GenBlock},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 
 pub trait NodeInterface {
@@ -23,4 +23,9 @@ pub trait NodeInterface {
 
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
+    fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
+    fn get_block_id_at_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, Self::Error>;
 }

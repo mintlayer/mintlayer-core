@@ -15,7 +15,7 @@
 
 use common::{
     chain::{Block, GenBlock},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 
 use crate::node_traits::NodeInterface;
@@ -33,5 +33,18 @@ impl NodeInterface for NodeRpcClient {
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         let best_block_id = self.get_best_block_id()?;
         Ok(best_block_id)
+    }
+
+    fn get_best_block_height(&self) -> Result<common::primitives::BlockHeight, Self::Error> {
+        let best_block_height = self.get_best_block_height()?;
+        Ok(best_block_height)
+    }
+
+    fn get_block_id_at_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, Self::Error> {
+        let block_id_at_height = self.get_block_id_at_height(height)?;
+        Ok(block_id_at_height)
     }
 }

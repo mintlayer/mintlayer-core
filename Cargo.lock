@@ -2258,7 +2258,6 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "common",
- "hex",
  "rpc",
  "serde_json",
  "serialization",
