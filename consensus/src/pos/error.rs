@@ -19,6 +19,7 @@ use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, PoolId},
     primitives::{Compact, Id},
+    UintConversionError,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -47,4 +48,16 @@ pub enum ConsensusPoSError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS randomness error: `{0}`")]
     RandomnessError(#[from] PoSRandomnessError),
+    #[error("Invalid target value: `{0:?}`")]
+    InvalidTarget(Compact),
+    #[error("Decoding bits of block failed: `{0:?}`")]
+    DecodingBitsFailed(Compact),
+    #[error("Failed to convert target type: `{0:?}`")]
+    TargetConversionError(#[from] UintConversionError),
+    #[error("Not enough timestamps to calculate block time average")]
+    NotEnoughTimestampsToAverage,
+    #[error("CRITICAL: Target block time must be > 0")]
+    InvalidTargetBlockTime,
+    #[error("CRITICAL: Block time must be monotonic")]
+    InvariantBrokenNotMonotonicBlockTime,
 }

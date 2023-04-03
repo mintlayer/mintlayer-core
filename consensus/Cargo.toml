@@ -14,7 +14,9 @@ pos_accounting = {path = '../pos_accounting'}
 utxo = {path = '../utxo'}
 
 thiserror.workspace = true
+itertools.workspace = true
 num = "0.4.0"
 
 [dev-dependencies]
 rstest.workspace = true
+test-utils = {path = '../test-utils'}

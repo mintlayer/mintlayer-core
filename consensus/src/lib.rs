@@ -29,7 +29,10 @@ use common::{
 
 pub use crate::{
     error::ConsensusVerificationError,
-    pos::{check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output},
+    pos::{
+        check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output,
+        target::calculate_target_required,
+    },
     pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError},
     validator::validate_consensus,
 };
@@ -48,7 +51,7 @@ where
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
-        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoS(_) => unimplemented!(),
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
@@ -71,7 +74,7 @@ pub fn finalize_consensus_data(
 ) -> Result<(), ConsensusVerificationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
-        RequiredConsensus::DSA | RequiredConsensus::PoS => unimplemented!(),
+        RequiredConsensus::PoS(_) => unimplemented!(),
         RequiredConsensus::PoW(_) => match block.consensus_data() {
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),

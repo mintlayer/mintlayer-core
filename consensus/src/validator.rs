@@ -18,7 +18,7 @@ use common::{
     chain::{
         block::{BlockHeader, ConsensusData},
         config::ChainConfig,
-        PoWStatus, RequiredConsensus,
+        PoSStatus, PoWStatus, RequiredConsensus,
     },
     primitives::Idable,
 };
@@ -61,14 +61,14 @@ where
             validate_pow_consensus(chain_config, header, &pow_status, block_index_handle)
         }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => validate_pos_consensus(
+        RequiredConsensus::PoS(pos_status) => validate_pos_consensus(
             chain_config,
+            &pos_status,
             block_index_handle,
             utxos_view,
             pos_accounting_view,
             header,
         ),
-        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
     }
 }
 
@@ -106,6 +106,7 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
 
 fn validate_pos_consensus<H, U, P>(
     chain_config: &ChainConfig,
+    pos_status: &PoSStatus,
     block_index_handle: &H,
     utxos_view: &U,
     pos_accounting_view: &P,
@@ -124,6 +125,7 @@ where
         }
         ConsensusData::PoS(pos_data) => check_proof_of_stake(
             chain_config,
+            pos_status,
             header,
             pos_data,
             block_index_handle,

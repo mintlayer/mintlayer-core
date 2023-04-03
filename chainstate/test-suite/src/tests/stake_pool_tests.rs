@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
+use super::helpers::new_pub_key_destination;
+
+use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
@@ -22,12 +24,19 @@ use common::{
     chain::{
         stakelock::StakePoolData,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        OutPointSourceId, PoolId, TxInput, TxOutput,
+        GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable, H256},
 };
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
-use test_utils::nft_utils::random_token_issuance;
+use crypto::{
+    random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
+use rstest::rstest;
+use test_utils::{
+    nft_utils::random_token_issuance,
+    random::{make_seedable_rng, Seed},
+};
 
 #[rstest]
 #[trace]

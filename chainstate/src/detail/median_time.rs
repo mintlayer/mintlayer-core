@@ -21,7 +21,7 @@ use common::{
     primitives::Id,
 };
 
-use crate::detail::block_index_history_iter::BlockIndexHistoryIterator;
+use chainstate_types::BlockIndexHistoryIterator;
 
 const MEDIAN_TIME_SPAN: usize = 11;
 

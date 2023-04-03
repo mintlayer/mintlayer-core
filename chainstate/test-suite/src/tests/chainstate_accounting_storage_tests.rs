@@ -16,24 +16,28 @@
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 
-use super::*;
+use super::helpers::new_pub_key_destination;
+
 use accounting::{DataDelta, DeltaAmountCollection, DeltaDataCollection};
+use chainstate::BlockSource;
 use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, OutPoint,
-        OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
+        config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
+        Destination, OutPoint, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
     },
     primitives::{signed_amount::SignedAmount, Amount, Idable},
 };
 use crypto::{
-    random::CryptoRng,
+    random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
 use pos_accounting::PoolData;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 use utxo::UtxosStorageRead;
 
 fn create_pool_data(

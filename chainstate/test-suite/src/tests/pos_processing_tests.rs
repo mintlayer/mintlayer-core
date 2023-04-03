@@ -15,6 +15,11 @@
 
 use std::num::NonZeroU64;
 
+use super::helpers::{
+    new_pub_key_destination,
+    pos::{calculate_new_target, pos_mine},
+};
+
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
     ConnectTransactionError, SpendStakeError,
@@ -31,13 +36,13 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
         config::{Builder as ConfigBuilder, EpochIndex},
-        signature::inputsig::InputWitness,
+        create_unittest_pos_config,
         stakelock::StakePoolData,
         tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
         UpgradeVersion,
     },
-    primitives::{Amount, BlockHeight, Compact, Idable, H256},
+    primitives::{Amount, BlockHeight, Idable, H256},
     Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
@@ -58,12 +63,14 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 };
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
+const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
+
 fn create_stake_pool_data(
     rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
     vrf_pk: VRFPublicKey,
 ) -> StakePoolData {
-    let destination = super::new_pub_key_destination(rng);
+    let destination = new_pub_key_destination(rng);
     StakePoolData::new(
         amount,
         anyonecanspend_address(),
@@ -144,50 +151,6 @@ fn add_block_with_2_stake_pools(
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn mine(
-    initial_timestamp: BlockTimestamp,
-    kernel_outpoint: OutPoint,
-    vrf_pk: &VRFPublicKey,
-    vrf_sk: &VRFPrivateKey,
-    sealed_epoch_randomness: PoSRandomness,
-    pool_id: PoolId,
-    pool_balance: Amount,
-    epoch_index: EpochIndex,
-) -> Option<(PoSData, BlockTimestamp)> {
-    let difficulty = Uint256::MAX;
-    let mut timestamp = initial_timestamp;
-
-    for _ in 0..1000 {
-        let transcript =
-            construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp);
-        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
-        let pos_data = PoSData::new(
-            vec![kernel_outpoint.clone().into()],
-            vec![InputWitness::NoSignature(None)],
-            pool_id,
-            vrf_data,
-            Compact::from(difficulty),
-        );
-
-        if consensus::check_pos_hash(
-            epoch_index,
-            &sealed_epoch_randomness,
-            &pos_data,
-            vrf_pk,
-            timestamp,
-            pool_balance,
-        )
-        .is_ok()
-        {
-            return Some((pos_data, timestamp));
-        }
-
-        timestamp = timestamp.add_int_seconds(1).unwrap();
-    }
-    None
-}
-
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
 fn setup_test_chain_with_staked_pool(
@@ -201,7 +164,10 @@ fn setup_test_chain_with_staked_pool(
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -230,22 +196,24 @@ fn pos_basic(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let sealed_pool_balance =
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
         sealed_pool_balance,
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let consensus_data = ConsensusData::PoS(Box::new(pos_data));
@@ -299,7 +267,10 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -311,7 +282,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     let genesis_id = tf.genesis().get_id();
-    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
@@ -319,15 +290,17 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
 
     let invalid_kernel_input = OutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         invalid_kernel_input,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
         Amount::from_atoms(1),
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
 
@@ -362,7 +335,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let expected_error = ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
         CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
@@ -382,15 +355,17 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (valid_pos_data, valid_block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (valid_pos_data, valid_block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(valid_prev_randomness),
         pool_id,
         sealed_pool_balance,
         valid_epoch,
+        current_difficulty,
     )
     .expect("should be able to mine");
 
@@ -405,7 +380,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -428,7 +403,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -453,7 +428,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -474,7 +449,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
             valid_pos_data.kernel_witness().to_owned(),
             pool_id,
             vrf_data,
-            *valid_pos_data.compact_target(),
+            valid_pos_data.compact_target(),
         );
 
         let res = tf
@@ -514,22 +489,24 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let sealed_pool_balance =
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (valid_pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (valid_pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
         sealed_pool_balance,
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
 
@@ -539,7 +516,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
         valid_pos_data.kernel_witness().to_owned(),
         random_pool_id,
         valid_pos_data.vrf_data().clone(),
-        *valid_pos_data.compact_target(),
+        valid_pos_data.compact_target(),
     );
 
     let res = tf
@@ -585,7 +562,10 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -596,20 +576,22 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk.clone());
+    let stake_pool_data = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk);
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         PoSRandomness::new(initial_randomness),
         pool_id,
         Amount::from_atoms(1),
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
 
@@ -649,20 +631,23 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let target_block_time = create_unittest_pos_config().target_block_time().get();
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
         Amount::from_atoms(1),
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -673,22 +658,25 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
 
     // prepare and process block_3 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_2_reward_outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
-    let (pos_data, block_timestamp) = mine(
-        block_timestamp,
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_2_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
         Amount::from_atoms(1),
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -699,6 +687,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
 
     // prepare and process block_4 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
     let block_3_reward_outpoint = OutPoint::new(
@@ -706,22 +695,24 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         0,
     );
 
-    // both sealed epoch and pre block randomness can be used
+    // sealed epoch randomness can be used
     let sealed_epoch_randomness =
         tf.storage.transaction_ro().unwrap().get_epoch_data(1).unwrap().unwrap();
     let sealed_pool_balance =
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
-        block_timestamp,
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         block_3_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         *sealed_epoch_randomness.randomness(),
         pool_id,
         sealed_pool_balance,
         2,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -761,7 +752,10 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         ),
         (
             BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
@@ -774,8 +768,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
 
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
-    let stake_pool_data1 =
-        create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1.clone());
+    let stake_pool_data1 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1);
     let stake_pool_data2 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_2);
     let (stake_pool_outpoint1, pool_id1, _, pool_id2) =
         add_block_with_2_stake_pools(&mut rng, &mut tf, stake_pool_data1, stake_pool_data2);
@@ -787,15 +780,17 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id1)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
-        &vrf_pk_1,
         &vrf_sk_1,
         PoSRandomness::new(initial_randomness),
         pool_id1,
         sealed_pool_balance,
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -857,7 +852,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     // create initial chain: genesis <- block_a
     let (mut tf, stake_pool_outpoint, pool_id) =
-        setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
     let block_a_id = tf.best_block_id();
 
     // prepare and process block_b with StakePool -> ProduceBlockFromStake kernel
@@ -866,16 +861,18 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
         sealed_pool_balance,
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -893,16 +890,18 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         block_timestamp,
         block_a_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
         PoSRandomness::new(initial_randomness),
         pool_id,
         sealed_pool_balance,
         1,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =
@@ -930,15 +929,17 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let (pos_data, block_timestamp) = mine(
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
         block_timestamp,
         block_3_reward_outpoint,
-        &vrf_pk,
         &vrf_sk,
         *sealed_epoch_randomness.randomness(),
         pool_id,
         sealed_pool_balance,
         2,
+        current_difficulty,
     )
     .expect("should be able to mine");
     let reward_output =

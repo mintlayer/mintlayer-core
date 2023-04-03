@@ -19,7 +19,6 @@ pub mod query;
 pub mod tokens;
 pub mod tx_verification_strategy;
 
-mod block_index_history_iter;
 mod chainstateref;
 mod error;
 mod median_time;
@@ -46,7 +45,7 @@ use itertools::Itertools;
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{BlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockHeader},

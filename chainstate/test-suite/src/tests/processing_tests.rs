@@ -16,6 +16,8 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use super::helpers::new_pub_key_destination;
+
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
     make_chainstate, BlockError, BlockSource, ChainstateConfig, ChainstateError, CheckBlockError,
@@ -189,7 +191,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         );
 
         // Case 7: reward is a stake lock
-        let decommission_destination = super::new_pub_key_destination(&mut rng);
+        let decommission_destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()

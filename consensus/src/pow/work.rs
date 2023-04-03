@@ -69,9 +69,10 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     )?;
 
     // TODO: add test for a block with invalid target
-    if work_required != block_pow_data.bits() {
-        return Err(ConsensusPoWError::InvalidTargetBits(block_pow_data.bits()));
-    }
+    utils::ensure!(
+        work_required == block_pow_data.bits(),
+        ConsensusPoWError::InvalidTargetBits(block_pow_data.bits())
+    );
 
     if check_proof_of_work(header.block_id().get(), work_required)? {
         Ok(())
@@ -101,20 +102,13 @@ where
                 .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
 
             // TODO: this should use get_gen_block_index() because the previous block could be genesis
-            let prev_block_index = match get_block_index(&prev_block_id) {
-                Ok(id) => id,
-                Err(err) => {
-                    return Err(ConsensusPoWError::PrevBlockLoadError(
-                        prev_block_id,
-                        header.get_id(),
-                        err,
-                    ))
-                }
-            };
-
-            let prev_block_index = prev_block_index.ok_or_else(|| {
-                ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
-            })?;
+            let prev_block_index = get_block_index(&prev_block_id)
+                .map_err(|err| {
+                    ConsensusPoWError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
+                })?
+                .ok_or_else(|| {
+                    ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
+                })?;
 
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
