@@ -19,6 +19,7 @@ use utils::ensure;
 
 use super::error::{ConnectTransactionError, SpendStakeError};
 
+/// Not all `TxOutput` combinations can be used in a block reward.
 pub fn check_reward_inputs_outputs_purposes(
     reward: &BlockRewardTransactable,
     utxo_view: &impl utxo::UtxosView,
@@ -36,6 +37,8 @@ pub fn check_reward_inputs_outputs_purposes(
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
+            // the rule for single input/output boils down to that the pair should satisfy:
+            // `StakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake` | `DecommissionPool`
             match inputs.as_slice() {
                 // no inputs
                 [] => Err(ConnectTransactionError::SpendStakeError(
@@ -54,8 +57,9 @@ pub fn check_reward_inputs_outputs_purposes(
                             reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::NoBlockRewardOutputs,
                             ))?;
+                        // in case kernel input is present it is allowed to have a single output
                         ensure!(
-                            outputs.len() != 0,
+                            !outputs.is_empty(),
                             ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::NoBlockRewardOutputs,
                             )
@@ -85,6 +89,7 @@ pub fn check_reward_inputs_outputs_purposes(
             }
         }
         None => {
+            // if no kernel input is present it's allowed to have multiple `LockThenTransfer` outputs
             let all_lock_then_transfer = reward
                 .outputs()
                 .ok_or(ConnectTransactionError::SpendStakeError(
@@ -108,9 +113,76 @@ pub fn check_reward_inputs_outputs_purposes(
     }
 }
 
+/// Not all `TxOutput` combinations can be used in a transaction.
+pub fn check_tx_inputs_outputs_purposes(
+    tx: &Transaction,
+    utxo_view: &impl utxo::UtxosView,
+) -> Result<(), ConnectTransactionError> {
+    let inputs = tx
+        .inputs()
+        .iter()
+        .map(|input| {
+            utxo_view
+                .utxo(input.outpoint())
+                .map_err(|_| utxo::Error::ViewRead)?
+                .map(|u| u.output().clone())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    match inputs.as_slice() {
+        // no inputs
+        [] => return Err(ConnectTransactionError::MissingTxInputs),
+        // single input
+        [input] => match tx.outputs() {
+            // no outputs
+            [] => { /* do nothing */ }
+            // single output
+            [output] => {
+                ensure!(
+                    is_valid_one_to_one_combination(input, output),
+                    ConnectTransactionError::InvalidOutputTypeInTx
+                );
+            }
+            // multiple outputs
+            _ => {
+                let valid_input = are_inputs_valid_for_tx(std::slice::from_ref(input));
+                let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
+                ensure!(
+                    valid_input && valid_outputs,
+                    ConnectTransactionError::InvalidOutputTypeInTx
+                );
+            }
+        },
+        // multiple inputs
+        _ => match tx.outputs() {
+            // no inputs
+            [] => { /* do nothing, it's ok to burn outputs in this way */ }
+            // single output
+            [output] => {
+                ensure!(
+                    is_valid_many_to_one_combination(inputs.as_slice(), output),
+                    ConnectTransactionError::InvalidOutputTypeInTx
+                );
+            }
+            // multiple outputs
+            _ => {
+                let valid_inputs = are_inputs_valid_for_tx(inputs.as_slice());
+                let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
+                ensure!(
+                    valid_inputs && valid_outputs,
+                    ConnectTransactionError::InvalidOutputTypeInTx
+                );
+            }
+        },
+    };
+
+    Ok(())
+}
+
 #[rustfmt::skip]
 #[allow(clippy::unnested_or_patterns)]
-pub fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool {
+fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool {
     match (input, output){
         (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _)) |
         (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _)) |
@@ -146,16 +218,30 @@ pub fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> b
     }
 }
 
-pub fn is_valid_many_to_one_combination(inputs: &[TxOutput], output: &TxOutput) -> bool {
-    let valid_inputs = inputs.iter().all(|input| match input {
+fn are_inputs_valid_for_tx(inputs: &[TxOutput]) -> bool {
+    inputs.iter().all(|input| match input {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _) => true,
         TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
             false
         }
-    });
+    })
+}
 
+fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
+    outputs.iter().all(|output| match output {
+        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => true,
+        TxOutput::StakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _, _)
+        | TxOutput::DecommissionPool(_, _, _, _) => false,
+    })
+}
+
+fn is_valid_many_to_one_combination(inputs: &[TxOutput], output: &TxOutput) -> bool {
+    let valid_inputs = are_inputs_valid_for_tx(inputs);
+
+    // Note this rule is different from others because we don't allow multiple StakePool outputs
     let valid_output = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
@@ -165,111 +251,6 @@ pub fn is_valid_many_to_one_combination(inputs: &[TxOutput], output: &TxOutput) 
     };
 
     valid_inputs && valid_output
-}
-
-pub fn is_valid_one_to_many_combination(input: &TxOutput, outputs: &[TxOutput]) -> bool {
-    let valid_input = match input {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::DecommissionPool(_, _, _, _) => true,
-        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
-            false
-        }
-    };
-
-    let valid_outputs = outputs.iter().all(|output| match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::StakePool(_) => true,
-        TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
-    });
-
-    valid_input && valid_outputs
-}
-
-pub fn is_valid_many_to_many_combination(inputs: &[TxOutput], outputs: &[TxOutput]) -> bool {
-    let valid_inputs = inputs.iter().all(|input| match input {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::DecommissionPool(_, _, _, _) => true,
-        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _, _) => {
-            false
-        }
-    });
-
-    let valid_outputs = outputs.iter().all(|output| match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::StakePool(_) => true,
-        TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
-    });
-
-    valid_inputs && valid_outputs
-}
-
-/// Not all `OutputPurposes` combinations can be used in a transaction.
-pub fn check_tx_inputs_outputs_purposes(
-    tx: &Transaction,
-    utxo_view: &impl utxo::UtxosView,
-) -> Result<(), ConnectTransactionError> {
-    let inputs = tx
-        .inputs()
-        .iter()
-        .map(|input| {
-            utxo_view
-                .utxo(input.outpoint())
-                .map_err(|_| utxo::Error::ViewRead)?
-                .map(|u| u.output().clone())
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    match inputs.as_slice() {
-        // no inputs
-        [] => return Err(ConnectTransactionError::MissingTxInputs),
-        // single input
-        [input] => match tx.outputs() {
-            // no inputs
-            [] => { /* do nothing */ }
-            // single input
-            [output] => {
-                ensure!(
-                    is_valid_one_to_one_combination(input, output),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-            // multiple inputs
-            _ => {
-                ensure!(
-                    is_valid_one_to_many_combination(input, tx.outputs()),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-        },
-        // multiple inputs
-        _ => match tx.outputs() {
-            // no inputs
-            [] => { /* do nothing */ }
-            // single input
-            [output] => {
-                ensure!(
-                    is_valid_many_to_one_combination(inputs.as_slice(), output),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-            // multiple inputs
-            _ => {
-                ensure!(
-                    is_valid_many_to_many_combination(inputs.as_slice(), tx.outputs()),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-        },
-    };
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -295,32 +276,51 @@ mod tests {
     use itertools::Itertools;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::Utxo;
+    use utxo::{Utxo, UtxosView};
 
     use super::*;
 
-    mockall::mock! {
-        pub UtxoView{}
+    struct TestUtxosDB {
+        store: BTreeMap<OutPoint, Utxo>,
+    }
 
-        impl utxo::UtxosView for UtxoView {
-            type Error = utxo::Error;
-
-            fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error>;
-            fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, utxo::Error>;
-            fn best_block_hash(&self) -> Result<Id<GenBlock>, utxo::Error>;
-            fn estimated_size(&self) -> Option<usize>;
+    impl TestUtxosDB {
+        fn new(initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
+            Self {
+                store: initial_utxos,
+            }
         }
     }
 
-    pub fn transfer() -> TxOutput {
+    impl UtxosView for TestUtxosDB {
+        type Error = std::convert::Infallible;
+
+        fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+            Ok(self.store.get(outpoint).cloned())
+        }
+
+        fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+            Ok(self.store.get(outpoint).is_some())
+        }
+
+        fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
+            unimplemented!()
+        }
+
+        fn estimated_size(&self) -> Option<usize> {
+            None
+        }
+    }
+
+    fn transfer() -> TxOutput {
         TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)
     }
 
-    pub fn burn() -> TxOutput {
+    fn burn() -> TxOutput {
         TxOutput::Burn(OutputValue::Coin(Amount::ZERO))
     }
 
-    pub fn lock_then_transfer() -> TxOutput {
+    fn lock_then_transfer() -> TxOutput {
         TxOutput::LockThenTransfer(
             OutputValue::Coin(Amount::ZERO),
             Destination::AnyoneCanSpend,
@@ -328,7 +328,7 @@ mod tests {
         )
     }
 
-    pub fn stake_pool() -> TxOutput {
+    fn stake_pool() -> TxOutput {
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         TxOutput::StakePool(Box::new(StakePoolData::new(
             Amount::ZERO,
@@ -340,7 +340,7 @@ mod tests {
         )))
     }
 
-    pub fn produce_block() -> TxOutput {
+    fn produce_block() -> TxOutput {
         TxOutput::ProduceBlockFromStake(
             Amount::ZERO,
             Destination::AnyoneCanSpend,
@@ -348,7 +348,7 @@ mod tests {
         )
     }
 
-    pub fn decommission_pool() -> TxOutput {
+    fn decommission_pool() -> TxOutput {
         TxOutput::DecommissionPool(
             Amount::ZERO,
             Destination::AnyoneCanSpend,
@@ -371,8 +371,38 @@ mod tests {
             .nth(rng.gen_range(0..all_combinations_len))
             .unwrap()
             .into_iter()
-            .map(|output| output.clone())
+            .cloned()
             .collect::<Vec<_>>()
+    }
+
+    fn make_block(kernels: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Block {
+        let (sk, _) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        Block::new(
+            vec![],
+            Id::<GenBlock>::new(H256::zero()),
+            BlockTimestamp::from_int_seconds(0),
+            ConsensusData::PoS(Box::new(PoSData::new(
+                kernels,
+                vec![],
+                PoolId::new(H256::zero()),
+                vrf_data,
+                Compact(1),
+            ))),
+            BlockReward::new(reward_outputs),
+        )
+        .unwrap()
+    }
+
+    fn make_block_no_kernel(reward_outputs: Vec<TxOutput>) -> Block {
+        Block::new(
+            vec![],
+            Id::<GenBlock>::new(H256::zero()),
+            BlockTimestamp::from_int_seconds(0),
+            ConsensusData::None,
+            BlockReward::new(reward_outputs),
+        )
+        .unwrap()
     }
 
     #[rstest]
@@ -435,82 +465,143 @@ mod tests {
         };
 
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let mut mocked_view = MockUtxoView::new();
-        mocked_view
-            .expect_utxo()
-            .return_once(move |_| Ok(Some(Utxo::new_for_mempool(input, false))));
+        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(input, false),
+        )]));
 
         let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
-        assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &mocked_view));
+        assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &utxo_db));
     }
 
-    // FIXME: more tests
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_one_to_many(#[case] seed: Seed) {
+        let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+            let mut rng = make_seedable_rng(seed);
+            let inputs = get_random_outputs(&mut rng, source_inputs, 1);
+            let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+            let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+                outpoint.clone(),
+                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+            )]));
 
-    //#[rstest]
-    //#[trace]
-    //#[case(Seed::from_entropy())]
-    //fn tx_one_to_many(#[case] seed: Seed) {
-    //    let mut rng = make_seedable_rng(seed);
-    //    let every_purpose = [
-    //        transfer(),
-    //        lock_then_transfer(),
-    //        burn(),
-    //        stake_pool(),
-    //        produce_block(),
-    //        decommission_pool(),
-    //    ];
+            let number_of_outputs = rng.gen_range(2..10);
+            let outputs = get_random_outputs(&mut rng, source_outputs, number_of_outputs);
 
-    //    let t = every_purpose
-    //        .iter()
-    //        .combinations_with_replacement(rng.gen_range(1..10))
-    //        .collect::<Vec<_>>();
-    //    let outputs = t
-    //        .get(rng.gen_range(0..t.len()))
-    //        .unwrap()
-    //        .iter()
-    //        .map(|purpose| TxOutput::new(OutputValue::Coin(Amount::ZERO), **purpose));
+            let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+            let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
+            assert_eq!(result, expected_result)
+        };
 
-    //    let input = TxOutput::new(OutputValue::Coin(Amount::ZERO), in_purpose);
-    //    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-    //    let mut mocked_view = MockUtxoView::new();
-    //    mocked_view
-    //        .expect_utxo()
-    //        .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+        // valid cases
+        let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let valid_outputs = [lock_then_transfer(), transfer(), burn()];
+        check(&valid_inputs, &valid_outputs, Ok(()));
 
-    //    let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
-    //    assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &mocked_view));
-    //}
-
-    // FIXME: tx_many_to_one, tx_one_to_many, tx_mane_to_many
-
-    fn make_block(kernels: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Block {
-        let (sk, _) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
-        Block::new(
-            vec![],
-            Id::<GenBlock>::new(H256::zero()),
-            BlockTimestamp::from_int_seconds(0),
-            ConsensusData::PoS(Box::new(PoSData::new(
-                kernels,
-                vec![],
-                PoolId::new(H256::zero()),
-                vrf_data,
-                Compact(1),
-            ))),
-            BlockReward::new(reward_outputs),
-        )
-        .unwrap()
+        // TODO: this doesn't prove that EVERY other case is invalid
+        // invalid cases
+        let invalid_inputs = [burn(), stake_pool(), produce_block()];
+        let invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        check(
+            &invalid_inputs,
+            &invalid_outputs,
+            Err(ConnectTransactionError::InvalidOutputTypeInTx),
+        );
     }
 
-    fn make_block_no_kernel(reward_outputs: Vec<TxOutput>) -> Block {
-        Block::new(
-            vec![],
-            Id::<GenBlock>::new(H256::zero()),
-            BlockTimestamp::from_int_seconds(0),
-            ConsensusData::None,
-            BlockReward::new(reward_outputs),
-        )
-        .unwrap()
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_many_to_one(#[case] seed: Seed) {
+        let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+            let mut rng = make_seedable_rng(seed);
+            let number_of_inputs = rng.gen_range(2..10);
+            let utxos = get_random_outputs(&mut rng, source_inputs, number_of_inputs)
+                .into_iter()
+                .enumerate()
+                .map(|(i, output)| {
+                    (
+                        OutPoint::new(
+                            OutPointSourceId::Transaction(Id::new(H256::zero())),
+                            i as u32,
+                        ),
+                        Utxo::new_for_mempool(output, false),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let inputs: Vec<TxInput> = utxos.keys().map(|k| k.clone().into()).collect();
+            let utxo_db = TestUtxosDB::new(utxos);
+
+            let outputs = get_random_outputs(&mut rng, source_outputs, 1);
+
+            let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+            let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
+            assert_eq!(result, expected_result);
+        };
+
+        // valid cases
+        let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let valid_outputs = [lock_then_transfer(), transfer(), burn(), stake_pool()];
+        check(&valid_inputs, &valid_outputs, Ok(()));
+
+        // TODO: this doesn't prove that EVERY other case is invalid
+        // invalid cases
+        let invalid_inputs = [burn(), stake_pool(), produce_block()];
+        let invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        check(
+            &invalid_inputs,
+            &invalid_outputs,
+            Err(ConnectTransactionError::InvalidOutputTypeInTx),
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_many_to_many(#[case] seed: Seed) {
+        let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+            let mut rng = make_seedable_rng(seed);
+            let number_of_inputs = rng.gen_range(2..10);
+            let utxos = get_random_outputs(&mut rng, source_inputs, number_of_inputs)
+                .into_iter()
+                .enumerate()
+                .map(|(i, output)| {
+                    (
+                        OutPoint::new(
+                            OutPointSourceId::Transaction(Id::new(H256::zero())),
+                            i as u32,
+                        ),
+                        Utxo::new_for_mempool(output, false),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
+            let inputs: Vec<TxInput> = utxos.keys().map(|k| k.clone().into()).collect();
+            let utxo_db = TestUtxosDB::new(utxos);
+
+            let number_of_outputs = rng.gen_range(2..10);
+            let outputs = get_random_outputs(&mut rng, source_outputs, number_of_outputs);
+
+            let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+            let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
+            assert_eq!(result, expected_result);
+        };
+
+        // valid cases
+        let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let valid_outputs = [lock_then_transfer(), transfer(), burn()];
+        check(&valid_inputs, &valid_outputs, Ok(()));
+
+        // TODO: this doesn't prove that EVERY other case is invalid
+        // invalid cases
+        let invalid_inputs = [burn(), stake_pool(), produce_block()];
+        let invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        check(
+            &invalid_inputs,
+            &invalid_outputs,
+            Err(ConnectTransactionError::InvalidOutputTypeInTx),
+        );
     }
 
     #[rstest]
@@ -573,14 +664,14 @@ mod tests {
         };
 
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let mut mocked_view = MockUtxoView::new();
-        mocked_view
-            .expect_utxo()
-            .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(input, false),
+        )]));
 
         let block = make_block(vec![outpoint.into()], vec![output]);
 
-        assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view));
+        assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db));
     }
 
     #[rstest]
@@ -594,15 +685,15 @@ mod tests {
         let input = get_random_outputs(&mut rng, &valid_kernels, 1).into_iter().next().unwrap();
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
-        let mut mocked_view = MockUtxoView::new();
-        mocked_view
-            .expect_utxo()
-            .return_once(move |_| Some(Utxo::new_for_mempool(input, false)));
+        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(input, false),
+        )]));
 
         let block = make_block(vec![outpoint.into()], vec![]);
 
         let res =
-            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
                 .unwrap_err();
         assert_eq!(
             res,
@@ -615,6 +706,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn reward_none_to_any(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
+        let utxo_db = TestUtxosDB::new(BTreeMap::new());
 
         {
             // valid cases
@@ -622,11 +714,9 @@ mod tests {
 
             let number_of_outputs = rng.gen_range(1..10);
             let outputs = get_random_outputs(&mut rng, &valid_purposes, number_of_outputs);
-
-            let mocked_view = MockUtxoView::new();
             let block = make_block_no_kernel(outputs);
 
-            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
                 .unwrap();
         }
 
@@ -637,15 +727,11 @@ mod tests {
 
             let number_of_outputs = rng.gen_range(1..10);
             let outputs = get_random_outputs(&mut rng, &invalid_purposes, number_of_outputs);
-
-            let mocked_view = MockUtxoView::new();
             let block = make_block_no_kernel(outputs);
 
-            let res = check_reward_inputs_outputs_purposes(
-                &block.block_reward_transactable(),
-                &mocked_view,
-            )
-            .unwrap_err();
+            let res =
+                check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
+                    .unwrap_err();
             assert_eq!(res, ConnectTransactionError::InvalidOutputTypeInReward);
         }
     }
@@ -675,22 +761,18 @@ mod tests {
                         OutPointSourceId::BlockReward(Id::new(H256::zero())),
                         i as u32,
                     ),
-                    output,
+                    Utxo::new_for_mempool(output, false),
                 )
             })
             .collect::<BTreeMap<_, _>>();
 
-        let inputs: Vec<TxInput> = kernel_outputs.iter().map(|(k, _)| k.clone().into()).collect();
-
-        let mut mocked_view = MockUtxoView::new();
-        mocked_view.expect_utxo().returning(move |outpoint| {
-            kernel_outputs.get(outpoint).map(|v| Utxo::new_for_mempool(v.clone(), false))
-        });
+        let inputs: Vec<TxInput> = kernel_outputs.keys().map(|k| k.clone().into()).collect();
+        let utxo_db = TestUtxosDB::new(kernel_outputs);
 
         let block = make_block(inputs, vec![]);
 
         let res =
-            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &mocked_view)
+            check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
                 .unwrap_err();
         assert_eq!(
             res,
