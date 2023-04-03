@@ -20,8 +20,7 @@ use common::{
     chain::{Destination, SignedTransaction},
 };
 
-use hex::FromHexError;
-use serialization::{DecodeAll, Encode};
+use serialization::{hex::HexDecode, hex::HexEncode};
 
 use crate::BlockProductionError;
 use subsystem::subsystem::CallError;
@@ -60,21 +59,13 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         reward_destination_hex: String,
         transactions_hex: Vec<String>,
     ) -> rpc::Result<String> {
-        let reward_destination = hex::decode(reward_destination_hex)
-            .map_err(rpc::Error::to_call_error)
-            .map(|reward_destination_data| {
-                Destination::decode_all(&mut &reward_destination_data[..])
-            })?
+        let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
 
         let signed_transactions = transactions_hex
             .iter()
-            .map(hex::decode)
-            .collect::<Result<Vec<Vec<u8>>, FromHexError>>()
-            .map_err(rpc::Error::to_call_error)?
-            .iter()
-            .map(|transactions_data| SignedTransaction::decode_all(&mut &transactions_data[..]))
-            .collect::<Result<Vec<SignedTransaction>, serialization::Error>>()
+            .map(HexDecode::hex_decode_all)
+            .collect::<Result<Vec<SignedTransaction>, _>>()
             .map_err(rpc::Error::to_call_error)?;
 
         let block = handle_error(
@@ -84,7 +75,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
             .await,
         )?;
 
-        Ok(hex::encode(Block::encode(&block)))
+        Ok(Block::hex_encode(&block))
     }
 }
 

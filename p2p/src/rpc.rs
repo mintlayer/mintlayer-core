@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::SignedTransaction;
-use serialization::DecodeAll;
+use serialization::hex::HexDecode;
 
 use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
 use subsystem::subsystem::CallError;
@@ -95,8 +95,7 @@ impl P2pRpcServer for super::P2pHandle {
     }
 
     async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
-        let tx = hex::decode(tx_hex).map_err(rpc::Error::to_call_error)?;
-        let tx = SignedTransaction::decode_all(&mut &tx[..]).map_err(rpc::Error::to_call_error)?;
+        let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
         handle_error(self.call_async_mut(|s| s.submit_transaction(tx)).await)
     }
 }

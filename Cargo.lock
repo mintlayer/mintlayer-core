@@ -3485,8 +3485,10 @@ dependencies = [
 name = "serialization"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "serialization-core",
  "serialization-tagged",
+ "thiserror",
 ]
 
 [[package]]
