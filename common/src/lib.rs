@@ -19,7 +19,4 @@ pub mod primitives;
 pub mod time_getter;
 pub mod uint;
 
-#[macro_use]
-mod fixed_hash;
-
 pub use uint::{Uint128, Uint256, Uint512, UintConversionError};

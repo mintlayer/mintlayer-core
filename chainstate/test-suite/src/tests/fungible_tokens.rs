@@ -1833,7 +1833,7 @@ fn chosen_hashes_for_token_data() {
     };
     id::hash_encoded_to(&token_issuance, &mut hash_stream);
     expect![[r#"
-            0xa63a4ae4146ff43096baa2b8e648edca108abf34960e746def28443957ffe04e
+            0x4ee0ff57394428ef6d740e9634bf8a10caed48e6b8a2ba9630f46f14e44a3aa6
         "#]]
     .assert_debug_eq(&Id::<TokenIssuance>::new(hash_stream.finalize().into()).get());
 
@@ -1854,7 +1854,7 @@ fn chosen_hashes_for_token_data() {
     };
     id::hash_encoded_to(&nft_issuance, &mut hash_stream);
     expect![[r#"
-            0xbe6ad7ed36c9f898fae21bf5f3164c090c979a5b4083643a60276028012db15a
+            0x5ab12d01286027603a6483405b9a970c094c16f3f51be2fa98f8c936edd76abe
         "#]]
     .assert_debug_eq(&Id::<NftIssuance>::new(hash_stream.finalize().into()).get());
 
@@ -1865,7 +1865,7 @@ fn chosen_hashes_for_token_data() {
     });
     id::hash_encoded_to(&token_data, &mut hash_stream);
     expect![[r#"
-            0x988fb6c034fd307d609c24c2b9534c7bf370c198bf5229f83343d22669e84d4f
+            0x4f4de86926d24333f82952bf98c170f37b4c53b9c2249c607d30fd34c0b68f98
         "#]]
     .assert_debug_eq(&Id::<TokenData>::new(hash_stream.finalize().into()).get());
 }

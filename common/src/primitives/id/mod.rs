@@ -20,12 +20,12 @@ pub use with_id::WithId;
 
 use std::fmt::{Debug, Display};
 
-use crate::{construct_fixed_hash, Uint256};
+use crate::Uint256;
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
-construct_fixed_hash! {
+fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
 }
@@ -257,12 +257,7 @@ mod tests {
     #[test]
     fn h256_and_uint256_from_bytes_and_bytes_form() {
         fn check(hex: &str) {
-            // reverse pairs of bytes as hex
-            let hex_reversed =
-                String::from_utf8(hex.as_bytes().chunks(2).rev().collect::<Vec<&[u8]>>().concat())
-                    .unwrap();
-
-            let bytes: Vec<u8> = FromHex::from_hex(hex_reversed).unwrap();
+            let bytes: Vec<u8> = FromHex::from_hex(hex).unwrap();
             let bytes = bytes.as_slice();
             let h = H256::from_str(hex).unwrap();
             let u = Uint256::from_bytes(bytes.try_into().unwrap());
