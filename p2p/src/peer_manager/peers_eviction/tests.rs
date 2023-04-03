@@ -302,16 +302,16 @@ fn random_eviction_candidate(rng: &mut impl Rng) -> EvictionCandidate {
     }
 }
 
-fn test_protected_ping(index: usize, candidate: &mut EvictionCandidate) -> bool {
-    // Check that `PROTECTED_COUNT_PING` peers with the lowest ping times are protected
+fn test_preserved_by_ping(index: usize, candidate: &mut EvictionCandidate) -> bool {
+    // Check that `PRESERVED_COUNT_PING` peers with the lowest ping times are preserved
     candidate.ping_min = index as i64;
-    index < PROTECTED_COUNT_PING
+    index < PRESERVED_COUNT_PING
 }
 
-fn test_protected_address_group(index: usize, candidate: &mut EvictionCandidate) -> bool {
-    // Check that `PROTECTED_COUNT_ADDRESS_GROUP` peers with the highest net_group_keyed values are protected
+fn test_preserved_by_address_group(index: usize, candidate: &mut EvictionCandidate) -> bool {
+    // Check that `PRESERVED_COUNT_ADDRESS_GROUP` peers with the highest net_group_keyed values are preserved
     candidate.net_group_keyed = NetGroupKeyed(u64::MAX - index as u64);
-    index < PROTECTED_COUNT_ADDRESS_GROUP
+    index < PRESERVED_COUNT_ADDRESS_GROUP
 }
 
 #[rstest]
@@ -320,7 +320,7 @@ fn test_protected_address_group(index: usize, candidate: &mut EvictionCandidate)
 fn test_randomized(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
-    let tests = [test_protected_ping, test_protected_address_group];
+    let tests = [test_preserved_by_ping, test_preserved_by_address_group];
 
     for _ in 0..10 {
         for test in tests {
@@ -329,23 +329,23 @@ fn test_randomized(#[case] seed: Seed) {
                 (0..count).map(|_| random_eviction_candidate(&mut rng)).collect::<Vec<_>>();
             candidates.shuffle(&mut rng);
 
-            let mut protected = BTreeSet::new();
+            let mut preserved = BTreeSet::new();
             for (index, candidate) in candidates.iter_mut().enumerate() {
-                let is_protected = test(index, candidate);
-                if is_protected {
-                    protected.insert(candidate.peer_id);
+                let is_preserved = test(index, candidate);
+                if is_preserved {
+                    preserved.insert(candidate.peer_id);
                 }
             }
 
             candidates.shuffle(&mut rng);
             let peer_id = select_for_eviction(candidates.clone());
             assert_eq!(
-                count > PROTECTED_COUNT_TOTAL,
+                count > PRESERVED_COUNT_TOTAL,
                 peer_id.is_some(),
                 "unexpected result, candidates: {candidates:?}, peer_id: {peer_id:?}"
             );
             if let Some(peer_id) = peer_id {
-                assert!(!protected.contains(&peer_id));
+                assert!(!preserved.contains(&peer_id));
             }
         }
     }

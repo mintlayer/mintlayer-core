@@ -435,16 +435,23 @@ where
             && self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
         {
             let evicted = self.try_evict_random_connection();
-            ensure!(evicted, P2pError::PeerError(PeerError::TooManyPeers));
+            if !evicted {
+                log::info!("no peer is selected for eviction, new connection is dropped");
+                return Err(P2pError::PeerError(PeerError::TooManyPeers));
+            }
         }
 
         Ok(())
     }
 
+    /// Try to disconnect a random peer, making it difficult for attackers to control all inbound peers.
+    /// It's called when a new inbound connection is received, but the connection limit has been reached.
+    /// Returns true if a random peer has been disconnected.
     fn try_evict_random_connection(&mut self) -> bool {
         let candidates = self
             .peers
             .values()
+            .filter(|peer| !self.pending_disconnects.contains_key(&peer.info.peer_id))
             .map(|peer| {
                 peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state)
             })
@@ -453,10 +460,8 @@ where
         if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
             log::info!("peer {peer_id} is selected for eviction");
             self.disconnect(peer_id, None);
-
             true
         } else {
-            log::info!("no peer is selected for eviction, new connection is dropped");
             false
         }
     }
@@ -679,7 +684,7 @@ where
         log::debug!("DNS seed records found: {total}");
     }
 
-    fn get_all_outbound(&self, reserved: bool) -> BTreeSet<T::Address> {
+    fn outbound_peers(&self, reserved: bool) -> BTreeSet<T::Address> {
         let pending_outbound = self
             .pending_outbound_connects
             .keys()
@@ -721,7 +726,7 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let all_normal_outbound = self.get_all_outbound(false);
+        let all_normal_outbound = self.outbound_peers(false);
         let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
@@ -736,7 +741,7 @@ where
             new_addresses
         };
 
-        let all_reserved_outbound = self.get_all_outbound(true);
+        let all_reserved_outbound = self.outbound_peers(true);
         let reserved_addresses =
             self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
 
