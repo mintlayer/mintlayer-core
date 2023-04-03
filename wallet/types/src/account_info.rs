@@ -45,29 +45,67 @@ pub enum AccountInfo {
 // TODO tbd what metadata we need to store
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct DeterministicAccountInfo {
-    pub root_hierarchy_key: Option<ExtendedPublicKey>,
-    pub account_key: ExtendedPublicKey,
-    pub lookahead_size: u16,
+    root_hierarchy_key: Option<ExtendedPublicKey>,
+    account_key: ExtendedPublicKey,
+    lookahead_size: u16,
     // TODO store separately
-    pub last_used: [Option<ChildNumber>; 2],
-    pub last_issued: [Option<ChildNumber>; 2],
+    last_used: [Option<ChildNumber>; 2],
+    last_issued: [Option<ChildNumber>; 2],
+}
+
+impl DeterministicAccountInfo {
+    pub fn new(
+        root_hierarchy_key: Option<ExtendedPublicKey>,
+        account_key: ExtendedPublicKey,
+        lookahead_size: u16,
+        last_used: [Option<ChildNumber>; 2],
+        last_issued: [Option<ChildNumber>; 2],
+    ) -> Self {
+        Self {
+            root_hierarchy_key,
+            account_key,
+            lookahead_size,
+            last_used,
+            last_issued,
+        }
+    }
+
+    pub fn get_root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
+        &self.root_hierarchy_key
+    }
+
+    pub fn get_account_key(&self) -> &ExtendedPublicKey {
+        &self.account_key
+    }
+
+    pub fn get_lookahead_size(&self) -> u16 {
+        self.lookahead_size
+    }
+
+    pub fn get_last_used(&self) -> [Option<ChildNumber>; 2] {
+        self.last_used
+    }
+
+    pub fn get_last_issued(&self) -> [Option<ChildNumber>; 2] {
+        self.last_issued
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct AccountPrefixedId<ID: Encode> {
+pub struct AccountPrefixedId<Id> {
     account_id: AccountId,
-    item_id: ID,
+    item_id: Id,
 }
 
-impl<ID: Encode> AccountPrefixedId<ID> {
-    pub fn new(account_id: AccountId, item_id: ID) -> AccountPrefixedId<ID> {
+impl<Id: Encode> AccountPrefixedId<Id> {
+    pub fn new(account_id: AccountId, item_id: Id) -> AccountPrefixedId<Id> {
         Self {
             account_id,
             item_id,
         }
     }
 
-    pub fn into_item_id(self) -> ID {
+    pub fn into_item_id(self) -> Id {
         self.item_id
     }
 }

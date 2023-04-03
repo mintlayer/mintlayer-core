@@ -17,10 +17,9 @@ use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use serialization::{Decode, Encode};
 use storage::HasPrefix;
 
-/// The key class is referring to the type of the key, for example a deterministic root
-/// This can be used as a prefix for searching specific kinds of keys
+/// The key id prefix is used for searching specific kinds of keys
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum KeyType {
+pub enum KeyIdPrefix {
     #[codec(index = 0)]
     DeterministicRoot,
 }
@@ -32,7 +31,7 @@ pub enum KeyId {
     DeterministicRoot(ExtendedPublicKey),
 }
 
-impl HasPrefix<KeyType> for KeyId {}
+impl HasPrefix<KeyIdPrefix> for KeyId {}
 
 /// The useful content of this key e.g. a private key or an address depending on the usage
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

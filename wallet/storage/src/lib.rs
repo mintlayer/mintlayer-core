@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 use utxo::Utxo;
 use wallet_types::{
     AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyType, WalletTx,
+    KeyIdPrefix, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -38,15 +38,14 @@ pub trait WalletStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
     fn get_utxo(&self, outpoint: &AccountOutPointId) -> Result<Option<Utxo>>;
-    fn read_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
+    fn get_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
-    fn read_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
+    fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
     fn get_account(&self, id: &AccountId) -> Result<Option<AccountInfo>>;
     fn get_address(&self, id: &AccountAddressId) -> Result<Option<Address>>;
-    fn read_addresses(&self, account_id: &AccountId)
-        -> Result<BTreeMap<AccountAddressId, Address>>;
+    fn get_addresses(&self, account_id: &AccountId) -> Result<BTreeMap<AccountAddressId, Address>>;
     fn get_key(&self, id: &KeyId) -> Result<Option<KeyContent>>;
-    fn get_key_by_type(&self, key_type: &KeyType) -> Result<BTreeMap<KeyId, KeyContent>>;
+    fn get_key_by_type(&self, key_type: &KeyIdPrefix) -> Result<BTreeMap<KeyId, KeyContent>>;
 }
 
 /// Modifying operations on persistent wallet data

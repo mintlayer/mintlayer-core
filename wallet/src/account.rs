@@ -25,8 +25,8 @@ use utxo::Utxo;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{AccountId, AccountOutPointId, AccountTxId, TxState, WalletTx};
 
-#[allow(dead_code)] // TODO remove
 pub struct Account {
+    #[allow(dead_code)] // TODO remove
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txs: BTreeMap<Id<Transaction>, WalletTx>,
@@ -43,13 +43,13 @@ impl Account {
             AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id.clone())?;
 
         let utxo: BTreeMap<OutPoint, Utxo> = db_tx
-            .read_utxo_set(&id)?
+            .get_utxo_set(&id)?
             .into_iter()
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();
 
         let txs: BTreeMap<Id<Transaction>, WalletTx> = db_tx
-            .read_transactions(&id)?
+            .get_transactions(&id)?
             .into_iter()
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();

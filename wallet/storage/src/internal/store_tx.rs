@@ -21,7 +21,7 @@ use storage::schema;
 use utxo::Utxo;
 use wallet_types::{
     AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyType, WalletTx,
+    KeyIdPrefix, WalletTx,
 };
 
 use crate::{
@@ -72,7 +72,7 @@ macro_rules! impl_read_ops {
             }
 
             /// Collect and return all utxos from the storage
-            fn read_utxo_set(
+            fn get_utxo_set(
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>> {
@@ -94,7 +94,7 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBAddresses, _, _>(id)
             }
 
-            fn read_addresses(
+            fn get_addresses(
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountAddressId, Address>> {
@@ -111,7 +111,7 @@ macro_rules! impl_read_ops {
             /// Collect and return all keys from the storage
             fn get_key_by_type(
                 &self,
-                key_type: &KeyType,
+                key_type: &KeyIdPrefix,
             ) -> crate::Result<BTreeMap<KeyId, KeyContent>> {
                 self.0
                     .get::<db::DBKeys, _>()
@@ -120,7 +120,7 @@ macro_rules! impl_read_ops {
             }
 
             /// Collect and return all transactions from the storage
-            fn read_transactions(
+            fn get_transactions(
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountTxId, WalletTx>> {

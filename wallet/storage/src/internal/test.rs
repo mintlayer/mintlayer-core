@@ -16,7 +16,7 @@
 use super::*;
 use crate::DefaultBackend;
 use common::chain::tokens::OutputValue;
-use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
+use common::chain::{Destination, OutPoint, OutPointSourceId, TxOutput};
 use common::primitives::{Amount, Id, H256};
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::key::{KeyKind, PrivateKey};

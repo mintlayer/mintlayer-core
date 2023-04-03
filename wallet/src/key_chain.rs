@@ -42,7 +42,8 @@ use std::sync::Arc;
 use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, DeterministicAccountInfo, KeyContent, KeyId, KeyType,
+    AccountAddressId, AccountId, AccountInfo, DeterministicAccountInfo, KeyContent, KeyId,
+    KeyIdPrefix,
 };
 use zeroize::Zeroize;
 
@@ -163,7 +164,7 @@ impl MasterKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
     ) -> KeyChainResult<Self> {
-        let mut root_keys = db_tx.get_key_by_type(&KeyType::DeterministicRoot)?;
+        let mut root_keys = db_tx.get_key_by_type(&KeyIdPrefix::DeterministicRoot)?;
 
         if root_keys.len() != 1 {
             return Err(KeyChainError::OnlyOneRootKeyIsSupported);
@@ -203,7 +204,6 @@ impl MasterKeyChain {
 #[allow(dead_code)] // TODO remove
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
-    // pub struct AccountKeyChain<B: Backend> {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
 
@@ -220,16 +220,15 @@ pub struct AccountKeyChain {
     /// corresponding entry would be None, otherwise it would be that last used ChildNumber
     last_used: [Option<ChildNumber>; KeyPurpose::ALL.len()],
 
-    /// Last issued address to the user
+    /// Last issued address to the user. Those addresses can be issued until the
+    /// last used index + lookahead size.
     last_issued: [Option<ChildNumber>; KeyPurpose::ALL.len()],
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: u16,
 }
 
-#[allow(dead_code)] // TODO remove
 impl AccountKeyChain {
-    // impl<B: Backend> AccountKeyChain<B> {
     fn new_from_root_key<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
@@ -273,7 +272,7 @@ impl AccountKeyChain {
 
         let addresses = {
             let mut addresses = KeyPurpose::ALL.map(|_| BTreeMap::new());
-            for (address_id, address) in db_tx.read_addresses(&id)? {
+            for (address_id, address) in db_tx.get_addresses(&id)? {
                 // Check that derivation path has the expected number of nodes
                 let derivation_path = address_id.into_item_id();
                 if derivation_path.len() != BIP44_PATH_LENGTH {
@@ -291,12 +290,12 @@ impl AccountKeyChain {
 
         Ok(AccountKeyChain {
             chain_config,
-            account_pubkey: account_info.account_key,
-            root_hierarchy_key: account_info.root_hierarchy_key,
+            account_pubkey: account_info.get_account_key().clone(),
+            root_hierarchy_key: account_info.get_root_hierarchy_key().clone(),
             addresses,
-            last_used: account_info.last_used,
-            last_issued: account_info.last_issued,
-            lookahead_size: account_info.lookahead_size,
+            last_used: account_info.get_last_used(),
+            last_issued: account_info.get_last_issued(),
+            lookahead_size: account_info.get_lookahead_size(),
         })
     }
 
@@ -349,6 +348,7 @@ impl AccountKeyChain {
     }
 
     /// Get the private key that corresponds to the provided public key
+    #[allow(dead_code)] // TODO remove
     pub(crate) fn get_private_key(
         &self,
         parent_key: &ExtendedPrivateKey,
@@ -379,13 +379,13 @@ impl AccountKeyChain {
     }
 
     pub(crate) fn get_account_info(&self) -> AccountInfo {
-        AccountInfo::Deterministic(DeterministicAccountInfo {
-            root_hierarchy_key: self.root_hierarchy_key.clone(),
-            account_key: self.account_pubkey.clone(),
-            lookahead_size: self.lookahead_size,
-            last_used: self.last_used,
-            last_issued: self.last_issued,
-        })
+        AccountInfo::Deterministic(DeterministicAccountInfo::new(
+            self.root_hierarchy_key.clone(),
+            self.account_pubkey.clone(),
+            self.lookahead_size,
+            self.last_used,
+            self.last_issued,
+        ))
     }
 }
 

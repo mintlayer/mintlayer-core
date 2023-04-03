@@ -27,7 +27,7 @@ mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 use wallet_types::{
     AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyType, WalletTx,
+    KeyIdPrefix, WalletTx,
 };
 
 /// Store for wallet data, parametrized over the backend B
@@ -99,14 +99,14 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>>;
-        fn read_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
+        fn get_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
         fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
-        fn read_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
+        fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
         fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>>;
         fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>>;
-        fn read_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountAddressId, Address>>;
+        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountAddressId, Address>>;
         fn get_key(&self, id: &KeyId) -> crate::Result<Option<KeyContent>>;
-        fn get_key_by_type(&self, key_type: &KeyType) -> crate::Result<BTreeMap<KeyId, KeyContent>>;
+        fn get_key_by_type(&self, key_type: &KeyIdPrefix) -> crate::Result<BTreeMap<KeyId, KeyContent>>;
 
     }
 }
