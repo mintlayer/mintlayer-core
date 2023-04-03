@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use super::{
     cached_inputs_operation::CachedInputsOperation,
     storage::{
-        TransactionVerifierStorageError, TransactionVerifierStorageMut,
+        HasTxIndexDisabledError, TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
@@ -69,7 +69,9 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, <Self as TransactionVerifierStorageRef>::Error> {
-        let tx_index_cache = self.tx_index_cache.as_ref().ok_or_else(|| todo!())?;
+        let tx_index_cache = self.tx_index_cache.as_ref().ok_or_else(|| {
+            <<Self as TransactionVerifierStorageRef>::Error>::tx_index_disabled_error()
+        })?;
         match tx_index_cache.get_from_cached(tx_id) {
             Some(v) => match v {
                 CachedInputsOperation::Write(idx) => Ok(Some(idx.clone())),

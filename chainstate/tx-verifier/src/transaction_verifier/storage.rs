@@ -60,10 +60,23 @@ pub enum TransactionVerifierStorageError {
     AccountingBlockUndoError(#[from] pos_accounting::AccountingBlockUndoError),
 }
 
+pub trait HasTxIndexDisabledError {
+    fn tx_index_disabled_error() -> Self;
+}
+
+impl HasTxIndexDisabledError for TransactionVerifierStorageError {
+    fn tx_index_disabled_error() -> Self {
+        Self::TransactionIndexDisabled
+    }
+}
+
 // TODO(Gosha): PoSAccountingView should be replaced with PoSAccountingStorageRead in which the
 //              return error type can handle both storage_result::Error and pos_accounting::Error
-pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView {
-    type Error;
+pub trait TransactionVerifierStorageRef: UtxosStorageRead + PoSAccountingView
+where
+    <Self as TransactionVerifierStorageRef>::Error: HasTxIndexDisabledError,
+{
+    type Error: std::error::Error;
 
     fn get_token_id_from_issuance_tx(
         &self,
