@@ -15,9 +15,11 @@
 
 //! Peer manager
 
+pub mod address_groups;
 pub mod global_ip;
 pub mod peer_context;
 pub mod peerdb;
+mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -132,6 +134,8 @@ where
 
     /// List of connected peers that subscribed to PeerAddresses topic
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
+
+    peer_eviction_random_state: peers_eviction::RandomState,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -148,6 +152,7 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> crate::Result<Self> {
+        let mut rng = make_pseudo_rng();
         let peerdb =
             peerdb::PeerDb::new(Arc::clone(&p2p_config), time_getter.clone(), peerdb_storage)?;
         assert!(!p2p_config.outbound_connection_timeout.is_zero());
@@ -163,6 +168,7 @@ where
             peers: BTreeMap::new(),
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
+            peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
         })
     }
 
@@ -393,7 +399,6 @@ where
         role: Role,
         info: &PeerInfo,
     ) -> crate::Result<()> {
-        // TODO: Allow only one connection per IP address
         ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
@@ -420,18 +425,45 @@ where
             !self.peerdb.is_address_banned(&address.as_bannable()),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
+
         // If the maximum number of inbound connections is reached,
         // the new inbound connection cannot be accepted even if it's valid.
         // Outbound peer count is not checked because the node initiates new connections
         // only when needed or from RPC requests.
         // TODO: Always allow connections from the whitelisted IPs
-        ensure!(
-            self.inbound_peer_count() < *self.p2p_config.max_inbound_connections
-                || role != Role::Inbound,
-            P2pError::PeerError(PeerError::TooManyPeers),
-        );
+        if role == Role::Inbound
+            && self.inbound_peer_count() >= *self.p2p_config.max_inbound_connections
+        {
+            let evicted = self.try_evict_random_connection();
+            if !evicted {
+                log::info!("no peer is selected for eviction, new connection is dropped");
+                return Err(P2pError::PeerError(PeerError::TooManyPeers));
+            }
+        }
 
         Ok(())
+    }
+
+    /// Try to disconnect a random peer, making it difficult for attackers to control all inbound peers.
+    /// It's called when a new inbound connection is received, but the connection limit has been reached.
+    /// Returns true if a random peer has been disconnected.
+    fn try_evict_random_connection(&mut self) -> bool {
+        let candidates = self
+            .peers
+            .values()
+            .filter(|peer| !self.pending_disconnects.contains_key(&peer.info.peer_id))
+            .map(|peer| {
+                peers_eviction::EvictionCandidate::new(peer, &self.peer_eviction_random_state)
+            })
+            .collect::<Vec<peers_eviction::EvictionCandidate>>();
+
+        if let Some(peer_id) = peers_eviction::select_for_eviction(candidates) {
+            log::info!("peer {peer_id} is selected for eviction");
+            self.disconnect(peer_id, None);
+            true
+        } else {
+            false
+        }
     }
 
     /// Try accept new connection
@@ -652,6 +684,23 @@ where
         log::debug!("DNS seed records found: {total}");
     }
 
+    fn outbound_peers(&self, reserved: bool) -> BTreeSet<T::Address> {
+        let pending_outbound = self
+            .pending_outbound_connects
+            .keys()
+            .filter(|addr| self.peerdb.is_reserved_node(addr) == reserved)
+            .cloned();
+        let connected_outbound = self
+            .peers
+            .values()
+            .filter(|peer| {
+                peer.role == Role::Outbound
+                    && self.peerdb.is_reserved_node(&peer.address) == reserved
+            })
+            .map(|peer| peer.address.clone());
+        pending_outbound.chain(connected_outbound).collect()
+    }
+
     /// Maintains the peer manager state.
     ///
     /// `PeerManager::heartbeat()` is called every time a network/control event is received
@@ -677,19 +726,8 @@ where
         // Expired banned addresses are dropped here, keep this call!
         self.peerdb.heartbeat();
 
-        let pending_outbound = self.pending_outbound_connects.keys().cloned().collect();
-        let connected_outbound_count = self
-            .peers
-            .values()
-            .filter(|peer| {
-                // Do not take into account reserved nodes
-                peer.role == Role::Outbound && !self.peerdb.is_reserved_node(&peer.address)
-            })
-            .count();
-
-        let new_addresses = self
-            .peerdb
-            .select_new_outbound_addresses(&pending_outbound, connected_outbound_count);
+        let all_normal_outbound = self.outbound_peers(false);
+        let new_addresses = self.peerdb.select_new_outbound_addresses(&all_normal_outbound);
 
         // Try to get some records from DNS servers if there are no addresses to connect.
         // Do this only if no peers are currently connected.
@@ -698,13 +736,14 @@ where
             && self.pending_outbound_connects.is_empty()
         {
             self.reload_dns_seed().await;
-            self.peerdb
-                .select_new_outbound_addresses(&pending_outbound, connected_outbound_count)
+            self.peerdb.select_new_outbound_addresses(&all_normal_outbound)
         } else {
             new_addresses
         };
 
-        let reserved_addresses = self.peerdb.select_reserved_outbound_addresses(&pending_outbound);
+        let all_reserved_outbound = self.outbound_peers(true);
+        let reserved_addresses =
+            self.peerdb.select_reserved_outbound_addresses(&all_reserved_outbound);
 
         for address in new_addresses.into_iter().chain(reserved_addresses.into_iter()) {
             self.connect(address, None);
@@ -967,8 +1006,14 @@ where
         self.peers.values().any(|peer| peer.address == *address)
     }
 
+    /// The number of active inbound peers (all inbound connected peers that are not in `pending_disconnects`)
     fn inbound_peer_count(&self) -> usize {
-        self.peers.values().filter(|peer| peer.role == Role::Inbound).count()
+        self.peers
+            .iter()
+            .filter(|(peer_id, peer)| {
+                peer.role == Role::Inbound && !self.pending_disconnects.contains_key(peer_id)
+            })
+            .count()
     }
 
     /// Sends ping requests and disconnects peers that do not respond in time

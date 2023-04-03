@@ -71,8 +71,6 @@ pub enum Event {
     SendMessage(Box<Message>),
 }
 
-// TODO: Decide what to do about protocol upgrades.
-// For example adding new address type to PeerAddress might break handshakes with older nodes.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {

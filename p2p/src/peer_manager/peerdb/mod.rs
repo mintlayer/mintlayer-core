@@ -37,10 +37,15 @@ use std::{
 };
 
 use common::time_getter::TimeGetter;
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom};
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, SliceRandom};
+use itertools::Itertools;
 use logging::log;
 
-use crate::{config, error::P2pError, net::AsBannableAddress};
+use crate::{
+    config,
+    error::P2pError,
+    net::{default_backend::transport::TransportAddress, AsBannableAddress},
+};
 
 use self::{
     address_data::{AddressData, AddressStateTransitionTo},
@@ -48,7 +53,7 @@ use self::{
     storage_load::LoadedStorage,
 };
 
-use super::MAX_OUTBOUND_CONNECTIONS;
+use super::{address_groups::AddressGroup, MAX_OUTBOUND_CONNECTIONS};
 
 pub struct PeerDb<A, B, S> {
     /// P2P configuration
@@ -75,7 +80,7 @@ pub struct PeerDb<A, B, S> {
 
 impl<A, B, S> PeerDb<A, B, S>
 where
-    A: Ord + FromStr + ToString + Clone + AsBannableAddress<BannableAddress = B>,
+    A: Ord + FromStr + ToString + Clone + TransportAddress + AsBannableAddress<BannableAddress = B>,
     B: Ord + FromStr + ToString,
     S: PeerDbStorage,
 {
@@ -141,23 +146,29 @@ where
         self.addresses.keys()
     }
 
-    /// Selects peer addresses for outbound connections (except reserved)
-    pub fn select_new_outbound_addresses(
-        &self,
-        pending_outbound: &BTreeSet<A>,
-        connected_outbound_count: usize,
-    ) -> Vec<A> {
-        let now = self.time_getter.get_time();
-        let count = MAX_OUTBOUND_CONNECTIONS
-            .saturating_sub(pending_outbound.len())
-            .saturating_sub(connected_outbound_count);
+    /// Selects peer addresses for outbound connections (except reserved).
+    /// Only one outbound connection is allowed per address group.
+    pub fn select_new_outbound_addresses(&self, all_normal_outbound: &BTreeSet<A>) -> Vec<A> {
+        let count = MAX_OUTBOUND_CONNECTIONS.saturating_sub(all_normal_outbound.len());
+        if count == 0 {
+            return Vec::new();
+        }
 
-        // TODO: Allow only one connection per IP address
-        self.addresses
+        let now = self.time_getter.get_time();
+
+        // Only consider outbound connections, as inbound connections are open to attackers
+        let all_outbound_groups = all_normal_outbound
+            .iter()
+            .map(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
+            .collect::<BTreeSet<_>>();
+
+        let mut selected = self
+            .addresses
             .iter()
             .filter_map(|(addr, address_data)| {
                 if address_data.connect_now(now)
-                    && !pending_outbound.contains(addr)
+                    && !all_outbound_groups
+                        .contains(&AddressGroup::from_peer_address(&addr.as_peer_address()))
                     && !address_data.reserved()
                     && !self.banned_addresses.contains_key(&addr.as_bannable())
                 {
@@ -166,11 +177,21 @@ where
                     None
                 }
             })
-            .choose_multiple(&mut make_pseudo_rng(), count)
+            .choose_multiple(&mut make_pseudo_rng(), count);
+
+        // Drop duplicate address groups as needed (shuffle selected addresses first to make the selection fair)
+        selected.shuffle(&mut make_pseudo_rng());
+        selected
+            .into_iter()
+            .unique_by(|a| AddressGroup::from_peer_address(&a.as_peer_address()))
+            .collect()
     }
 
     /// Selects reserved peer addresses for outbound connections
-    pub fn select_reserved_outbound_addresses(&self, pending_outbound: &BTreeSet<A>) -> Vec<A> {
+    pub fn select_reserved_outbound_addresses(
+        &self,
+        all_reserved_outbound: &BTreeSet<A>,
+    ) -> Vec<A> {
         let now = self.time_getter.get_time();
         self.reserved_nodes
             .iter()
@@ -179,7 +200,7 @@ where
                     .addresses
                     .get(addr)
                     .expect("reserved nodes must always be in the addresses map");
-                if address_data.connect_now(now) && !pending_outbound.contains(addr) {
+                if address_data.connect_now(now) && !all_reserved_outbound.contains(addr) {
                     Some(addr.clone())
                 } else {
                     None

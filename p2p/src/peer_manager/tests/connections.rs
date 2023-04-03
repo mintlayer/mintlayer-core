@@ -763,9 +763,7 @@ async fn connection_reserved_node_channel() {
 }
 
 // Verify that peers announce own addresses and are discovered by other peers.
-// All listening addresses are discovered and multiple connections are made:
-// For example, A makes outbound connections to B and C and accepts connections from B and C.
-// So there will be 4 connections reported for A.
+// All listening addresses are discovered and multiple connections are made.
 async fn discovered_node<A, T>()
 where
     A: TestTransportMaker<Transport = T::Transport, Address = T::Address>,
@@ -880,15 +878,20 @@ where
 
     // All peers should discover each other
     loop {
-        let connected_peers_1 = get_connected_peers(&tx1).await.len();
-        let connected_peers_2 = get_connected_peers(&tx2).await.len();
-        let connected_peers_3 = get_connected_peers(&tx3).await.len();
+        let connected_peers = tokio::join!(
+            get_connected_peers(&tx1),
+            get_connected_peers(&tx2),
+            get_connected_peers(&tx3)
+        );
+        let counts = [connected_peers.0.len(), connected_peers.1.len(), connected_peers.2.len()];
 
-        const EXPECTED_COUNT: usize = 4;
-        if connected_peers_1 == EXPECTED_COUNT
-            && connected_peers_2 == EXPECTED_COUNT
-            && connected_peers_3 == EXPECTED_COUNT
-        {
+        // There should be:
+        // - 2 outbound and 2 inbound connections to/from reserved peers.
+        // - 3 outbound connections to the discovered addresses
+        //   (each peer can make only one outbound connection because all discovered addresses are in the same address group).
+        // - 3 inbound connections to the discovered addresses.
+        // Since outbound connections are random, we don't know which peer will get 4 connections.
+        if counts == [3, 3, 4] || counts == [3, 4, 3] || counts == [4, 3, 3] {
             break;
         }
 
@@ -897,7 +900,7 @@ where
 
         assert!(
             Instant::now().duration_since(started_at) < Duration::from_secs(60),
-            "Unexpected peer counts: {connected_peers_1}, {connected_peers_2}, {connected_peers_3}, expected: {EXPECTED_COUNT}"
+            "Unexpected peer counts: {counts:?}"
         );
     }
 }

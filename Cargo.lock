@@ -2444,6 +2444,7 @@ dependencies = [
  "rstest",
  "serde",
  "serialization",
+ "siphasher",
  "snowstorm",
  "socket2 0.5.1",
  "sscanf",
