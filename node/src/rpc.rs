@@ -15,7 +15,7 @@
 
 //! Node RPC methods
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
 use subsystem::manager::ShutdownTrigger;
@@ -50,7 +50,14 @@ impl NodeRpc {
 
 impl NodeRpcServer for NodeRpc {
     fn shutdown(&self) -> rpc::Result<()> {
-        self.shutdown_trigger.initiate();
+        // There is no easy way to gracefully shut down the jsonrpsee server to make it finish existing RPC requests first.
+        // So it's possible that the current RPC call will return an error because the process is terminated before the response is sent.
+        // As a workaround, shutdown is started in background with some delay.
+        let shutdown_trigger = self.shutdown_trigger.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            shutdown_trigger.initiate();
+        });
         Ok(())
     }
 
