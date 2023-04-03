@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod comm_impl;
+pub mod client_impl;
 
 use std::sync::atomic::AtomicU64;
 
