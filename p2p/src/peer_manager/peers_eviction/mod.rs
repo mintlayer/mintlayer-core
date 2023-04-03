@@ -27,10 +27,16 @@ use super::{address_groups::AddressGroup, peer_context::PeerContext};
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 struct NetGroupKeyed(u64);
 
+const PROTECTED_COUNT_ADDRESS_GROUP: usize = 4;
+const PROTECTED_COUNT_PING: usize = 8;
+
+#[cfg(test)]
+const PROTECTED_COUNT_TOTAL: usize = PROTECTED_COUNT_ADDRESS_GROUP + PROTECTED_COUNT_PING;
+
 /// A copy of `PeerContext` with fields relevant to the eviction logic
 ///
 /// See `select_for_eviction` for more details.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub struct EvictionCandidate {
     peer_id: PeerId,
 
@@ -129,12 +135,13 @@ fn find_group_most_connections(candidates: Vec<EvictionCandidate>) -> Option<Pee
 /// distinct, difficult-to-forge characteristics. The preservation logic picks out
 /// fixed numbers of desirable peers per various criteria.
 /// If any eviction candidates remain, the selection logic chooses a peer to evict.
+#[must_use]
 pub fn select_for_eviction(candidates: Vec<EvictionCandidate>) -> Option<PeerId> {
     // TODO: Preserve connections from whitelisted IPs
 
     let candidates = filter_inbound(candidates);
-    let candidates = filter_address_group(candidates, 4);
-    let candidates = filter_fast_ping(candidates, 8);
+    let candidates = filter_address_group(candidates, PROTECTED_COUNT_ADDRESS_GROUP);
+    let candidates = filter_fast_ping(candidates, PROTECTED_COUNT_PING);
 
     // TODO: Preserve 4 nodes that most recently sent us novel transactions accepted into our mempool.
     // TODO: Preserve up to 8 peers that have sent us novel blocks.

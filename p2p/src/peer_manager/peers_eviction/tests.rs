@@ -13,6 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
+
+use crypto::random::SliceRandom;
+use rstest::rstest;
+use test_utils::random::Seed;
+
 use super::*;
 
 #[test]
@@ -243,7 +249,7 @@ fn test_find_group_most_connections() {
         Some(peer1)
     );
 
-    // The yungest peer is selected (with the latest id)
+    // The youngest peer is selected (with the latest id)
     assert_eq!(
         find_group_most_connections(vec![
             EvictionCandidate {
@@ -285,4 +291,62 @@ fn test_find_group_most_connections() {
         ]),
         Some(peer2)
     );
+}
+
+fn random_eviction_candidate(rng: &mut impl Rng) -> EvictionCandidate {
+    EvictionCandidate {
+        peer_id: PeerId::new(),
+        net_group_keyed: NetGroupKeyed(rng.gen()),
+        ping_min: rng.gen_range(0..100),
+        role: Role::Inbound,
+    }
+}
+
+fn test_protected_ping(index: usize, candidate: &mut EvictionCandidate) -> bool {
+    // Check that `PROTECTED_COUNT_PING` peers with the lowest ping times are protected
+    candidate.ping_min = index as i64;
+    index < PROTECTED_COUNT_PING
+}
+
+fn test_protected_address_group(index: usize, candidate: &mut EvictionCandidate) -> bool {
+    // Check that `PROTECTED_COUNT_ADDRESS_GROUP` peers with the highest net_group_keyed values are protected
+    candidate.net_group_keyed = NetGroupKeyed(u64::MAX - index as u64);
+    index < PROTECTED_COUNT_ADDRESS_GROUP
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+fn test_randomized(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let tests = [test_protected_ping, test_protected_address_group];
+
+    for _ in 0..10 {
+        for test in tests {
+            let count = rng.gen_range(0..150usize);
+            let mut candidates =
+                (0..count).map(|_| random_eviction_candidate(&mut rng)).collect::<Vec<_>>();
+            candidates.shuffle(&mut rng);
+
+            let mut protected = BTreeSet::new();
+            for (index, candidate) in candidates.iter_mut().enumerate() {
+                let is_protected = test(index, candidate);
+                if is_protected {
+                    protected.insert(candidate.peer_id);
+                }
+            }
+
+            candidates.shuffle(&mut rng);
+            let peer_id = select_for_eviction(candidates.clone());
+            assert_eq!(
+                count > PROTECTED_COUNT_TOTAL,
+                peer_id.is_some(),
+                "unexpected result, candidates: {candidates:?}, peer_id: {peer_id:?}"
+            );
+            if let Some(peer_id) = peer_id {
+                assert!(!protected.contains(&peer_id));
+            }
+        }
+    }
 }
