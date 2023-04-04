@@ -62,6 +62,7 @@ pub enum ConsensusPoSError {
     InvariantBrokenNotMonotonicBlockTime,
 
     // TODO the following error should include the corresponding error from UtxosView
+    //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("Failed to fetch utxo")]
     FailedToFetchUtxo,
 }

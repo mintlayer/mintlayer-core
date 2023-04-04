@@ -104,7 +104,8 @@ pub enum ConnectTransactionError {
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 
-    // TODO The following should contain more granullar inner error information
+    // TODO The following should contain more granular inner error information
+    //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("Fetching undo data failed")]
     UndoFetchFailure,
     #[error("Some transaction verifier storage error")]

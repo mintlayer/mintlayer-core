@@ -80,7 +80,8 @@ pub enum Error {
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
 
-    // TODO: Need a more granular error reporting in the following
+    // TODO Need a more granular error reporting in the following
+    //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("PoS accounting view query failed")]
     ViewFail,
 }

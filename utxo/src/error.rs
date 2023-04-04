@@ -38,12 +38,13 @@ pub enum Error {
     #[error("Block reward type is invalid `{0}`")]
     InvalidBlockRewardOutputType(Id<GenBlock>),
 
-    // TODO: This is a temporary solution. It does not provide much information, the exact utxo
-    //       view error is lost. The concrete error type depends on the UtxoView used. The error
-    //       enum here should be parametrized by the error type rather than hide it, so the error
-    //       type information is available at compilation time and the exact error emitted from
-    //       UtxoView is available to the caller at run time. That, however, leads to many call
-    //       sites having to be updated so it's left for future improvements.
+    // TODO This is a temporary solution. It does not provide much information, the exact utxo
+    //      view error is lost. The concrete error type depends on the UtxoView used. The error
+    //      enum here should be parametrized by the error type rather than hide it, so the error
+    //      type information is available at compilation time and the exact error emitted from
+    //      UtxoView is available to the caller at run time. That, however, leads to many call
+    //      sites having to be updated so it's left for future improvements.
+    //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("UTXO view query failed `for some reason (TM)`")]
     ViewRead,
     #[error("UTXO storage write failed `for some reason (TM)`")]
