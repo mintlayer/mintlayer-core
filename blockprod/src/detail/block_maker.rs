@@ -19,10 +19,13 @@ use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
-        Block, ChainConfig, Destination, GenBlock, SignedTransaction,
+        block::{
+            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
+            BlockBody, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
+        },
+        Block, ChainConfig, Destination, GenBlock,
     },
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{BlockHeight, Id, Idable, H256},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -149,29 +152,25 @@ impl BlockMaker {
     pub fn solve_block(
         &self,
         consensus_data: ConsensusData,
-        transactions: Vec<SignedTransaction>,
-    ) -> Result<Block, BlockProductionError> {
-        // TODO: instead of the following static value, look at
-        // self.chain_config for the current block reward, then send
-        // it to self.reward_destination
-        let block_reward = BlockReward::new(vec![]);
-
-        let mut block = Block::new(
-            transactions,
+        tx_merkle_root: H256,
+        witness_merkle_root: H256,
+    ) -> Result<BlockHeader, BlockProductionError> {
+        let mut block_header = BlockHeader::new(
             self.current_tip_id,
+            tx_merkle_root,
+            witness_merkle_root,
             BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
             consensus_data,
-            block_reward,
-        )?;
+        );
 
         // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(
             &self.chain_config,
-            &mut block,
+            &mut block_header,
             self.current_tip_height,
         )?;
 
-        Ok(block)
+        Ok(block_header)
     }
 
     async fn attempt_submit_new_block(
@@ -214,6 +213,18 @@ impl BlockMaker {
         let accumulator = self.collect_transactions().await?;
         let transactions = accumulator.transactions();
 
+        // TODO: instead of the following static value, look at
+        // self.chain_config for the current block reward, then send
+        // it to self.reward_destination
+        let block_reward = BlockReward::new(vec![]);
+
+        let block_body = BlockBody::new(block_reward, transactions.clone());
+
+        let tx_merkle_root =
+            calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&block_body)
+            .map_err(BlockCreationError::MerkleTreeError)?;
+
         loop {
             let consensus_data = self
                 .pull_consensus_data(
@@ -222,7 +233,10 @@ impl BlockMaker {
                 )
                 .await?;
 
-            let block = self.solve_block(consensus_data, transactions.clone())?;
+            let block_header =
+                self.solve_block(consensus_data, tx_merkle_root, witness_merkle_root)?;
+
+            let block = Block::new_from_header(block_header, block_body.clone())?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),

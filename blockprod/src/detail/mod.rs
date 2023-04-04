@@ -21,7 +21,10 @@ use std::sync::Arc;
 use chainstate::ChainstateHandle;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockCreationError},
+        block::{
+            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
+            BlockBody, BlockCreationError, BlockReward,
+        },
         Block, ChainConfig, Destination, SignedTransaction,
     },
     time_getter::TimeGetter,
@@ -126,7 +129,20 @@ impl BlockProductionInterface for BlockProduction {
             )
             .await?;
 
-        Ok(block_maker.solve_block(consensus_data, transactions)?)
+        let block_reward = BlockReward::new(vec![]);
+
+        let block_body = BlockBody::new(block_reward, transactions.clone());
+
+        let tx_merkle_root =
+            calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&block_body)
+            .map_err(BlockCreationError::MerkleTreeError)?;
+        let block_header =
+            block_maker.solve_block(consensus_data, tx_merkle_root, witness_merkle_root)?;
+
+        let block = Block::new_from_header(block_header, block_body)?;
+
+        Ok(block)
     }
 }
 

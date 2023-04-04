@@ -23,7 +23,10 @@ mod validator;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::block::{consensus_data::PoWData, ConsensusData},
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, RequiredConsensus},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockHeader},
+        Block, ChainConfig, GenBlock, RequiredConsensus,
+    },
     primitives::{BlockHeight, Id},
 };
 
@@ -70,17 +73,17 @@ where
 
 pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
-    block: &mut Block,
+    block_header: &mut BlockHeader,
     block_height: BlockHeight,
 ) -> Result<(), ConsensusVerificationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
         RequiredConsensus::PoS(_) => unimplemented!(),
-        RequiredConsensus::PoW(_) => match block.consensus_data() {
+        RequiredConsensus::PoW(_) => match block_header.consensus_data() {
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),
             ConsensusData::PoW(pow_data) => {
-                mine(block, u128::MAX, pow_data.bits())
+                mine(block_header, u128::MAX, pow_data.bits())
                     .map_err(ConsensusVerificationError::PoWError)?;
 
                 Ok(())

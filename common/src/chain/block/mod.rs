@@ -35,12 +35,10 @@ use std::iter;
 use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 
+pub use crate::chain::block::block_v1::BlockBody;
+
 use crate::{
-    chain::block::{
-        block_size::BlockSize,
-        block_v1::{BlockBody, BlockV1},
-        timestamp::BlockTimestamp,
-    },
+    chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
     primitives::{
         id::{self, WithId},
         merkle_tools::MerkleHasher,
@@ -89,6 +87,10 @@ pub enum BlockCreationError {
     MerkleTreeError(MerkleTreeFormError),
     #[error("Error finding current tip")]
     CurrentTipRetrievalError,
+    #[error("Merkle tree mismatch: Provided {0} vs calculated {1}")]
+    MerkleTreeMismatch(H256, H256),
+    #[error("Witness merkle tree mismatch: Provided {0} vs calculated {1}")]
+    WitnessMerkleTreeMismatch(H256, H256),
 }
 
 impl From<MerkleTreeFormError> for BlockCreationError {
@@ -126,6 +128,32 @@ impl Block {
             tx_merkle_root,
             witness_merkle_root,
         };
+
+        let block = Block::V1(BlockV1 { header, body });
+
+        Ok(block)
+    }
+
+    pub fn new_from_header(
+        header: BlockHeader,
+        body: BlockBody,
+    ) -> Result<Self, BlockCreationError> {
+        let tx_merkle_root = calculate_tx_merkle_root(&body)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&body)?;
+
+        if header.tx_merkle_root != tx_merkle_root {
+            return Err(BlockCreationError::MerkleTreeMismatch(
+                header.tx_merkle_root,
+                tx_merkle_root,
+            ));
+        }
+
+        if header.witness_merkle_root != witness_merkle_root {
+            return Err(BlockCreationError::WitnessMerkleTreeMismatch(
+                header.witness_merkle_root,
+                witness_merkle_root,
+            ));
+        }
 
         let block = Block::V1(BlockV1 { header, body });
 
