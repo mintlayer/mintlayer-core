@@ -36,7 +36,7 @@ impl H256 {
     /// does it.
     ///
     /// Notice that the internal representation does not really matter in this. What matters is how we view the contents.
-    /// If the contents is viewed as a number, then serializing the number will result in little-endian encoding because
+    /// If the content is viewed as a number, then serializing the number will result in little-endian encoding because
     /// scale-codec (and bitcoin) use little-endian encoding/serialization by default. On the other hand, if the contents
     /// are viewed as a byte-array (as is the case with H256), then serializing the type will result in whatever that
     /// byte-array is with no regard to endianness, which is done as big-endian in H256 if seen as a number.
