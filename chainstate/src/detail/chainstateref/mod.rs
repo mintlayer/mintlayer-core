@@ -838,7 +838,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .log_err()?
             .expect("Inconsistent DB");
 
-        if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
+        let new_block_chaintrust: Uint256 = (*new_block_index.chain_trust()).into();
+        let current_best_block_chaintrust: Uint256 = current_best_block_index.chain_trust().into();
+
+        if new_block_chaintrust > current_best_block_chaintrust {
             self.reorganize(&best_block_id, &new_block_index).log_err()?;
             return Ok(Some(new_block_index));
         }
@@ -876,9 +879,10 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
         // Set Chain Trust
-        let chain_trust =
-            *prev_block_index.chain_trust() + self.get_block_proof(block).log_err()?;
-        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
+        let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust().into();
+        let chain_trust = prev_block_chaintrust + self.get_block_proof(block).log_err()?;
+        let block_index =
+            BlockIndex::new(block, chain_trust.into(), some_ancestor, height, time_max);
         Ok(block_index)
     }
 

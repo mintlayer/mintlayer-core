@@ -17,8 +17,7 @@ use std::sync::Arc;
 
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock, Genesis},
-    primitives::{id::WithId, BlockHeight, Id, Idable},
-    Uint256,
+    primitives::{id::WithId, BlockHeight, Id, Idable, H256},
 };
 
 use crate::block_index::BlockIndex;
@@ -60,10 +59,10 @@ impl GenBlockIndex {
         }
     }
 
-    pub fn chain_trust(&self) -> &Uint256 {
+    pub fn chain_trust(&self) -> H256 {
         match self {
-            GenBlockIndex::Block(b) => b.chain_trust(),
-            GenBlockIndex::Genesis(_g) => &Uint256::ZERO,
+            GenBlockIndex::Block(b) => *b.chain_trust(),
+            GenBlockIndex::Genesis(_g) => H256::zero(),
         }
     }
 

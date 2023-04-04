@@ -19,8 +19,8 @@
 //! Implementation of various large-but-fixed sized unsigned integer types.
 //! The functions here are designed to be fast.
 
-use crate::primitives::{Amount, H256};
-use serialization::{Decode, Encode};
+use crate::primitives::Amount;
+use serialization::Encode;
 use thiserror::Error;
 
 macro_rules! construct_uint {
@@ -555,28 +555,6 @@ construct_uint!(Uint512, 8);
 construct_uint!(Uint256, 4);
 construct_uint!(Uint128, 2);
 
-impl Encode for Uint256 {
-    fn size_hint(&self) -> usize {
-        32
-    }
-
-    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
-        let v: H256 = (*self).into();
-        v.encode_to(dest)
-    }
-
-    fn encoded_size(&self) -> usize {
-        32
-    }
-}
-
-impl Decode for Uint256 {
-    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
-        let v = <H256>::decode(input)?;
-        Ok(v.into())
-    }
-}
-
 /// Invalid slice length
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 /// Invalid slice length
@@ -638,29 +616,11 @@ impl TryFrom<Uint512> for Uint256 {
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
-    use serialization::DecodeAll;
 
     use super::*;
     use crate::uint::BitArray;
     use crypto::random::Rng;
     use test_utils::random::{make_seedable_rng, Seed};
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    pub fn uint256_serialization(#[case] seed: Seed) {
-        let mut rng = make_seedable_rng(seed);
-
-        let h256val = H256::random_using(&mut rng);
-        let uint256val: Uint256 = h256val.into();
-        let encoded_h256 = h256val.encode();
-        let encoded_uint256val = uint256val.encode();
-        assert_eq!(encoded_uint256val.len(), 32);
-        assert_eq!(encoded_h256, encoded_uint256val);
-
-        let decoded_uint256 = Uint256::decode_all(&mut encoded_uint256val.as_slice()).unwrap();
-        assert_eq!(decoded_uint256, uint256val);
-    }
 
     #[test]
     pub fn uint256_bits_test() {

@@ -43,6 +43,10 @@ impl H256 {
     pub fn as_bitcoin_uint256_hex(&self) -> String {
         self.as_bytes().iter().rev().map(|b| format!("{:02x}", b)).collect()
     }
+
+    pub fn into_arith_uint256(self) -> Uint256 {
+        Uint256::from(self)
+    }
 }
 
 impl From<GenericArray<u8, typenum::U32>> for H256 {
