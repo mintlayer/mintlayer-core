@@ -146,7 +146,7 @@ impl BlockMaker {
         Ok(consensus_data)
     }
 
-    pub fn generate_block(
+    pub fn solve_block(
         &self,
         consensus_data: ConsensusData,
         transactions: Vec<SignedTransaction>,
@@ -222,7 +222,7 @@ impl BlockMaker {
                 )
                 .await?;
 
-            let block = self.generate_block(consensus_data, transactions.clone())?;
+            let block = self.solve_block(consensus_data, transactions.clone())?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),

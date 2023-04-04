@@ -126,7 +126,7 @@ impl BlockProductionInterface for BlockProduction {
             )
             .await?;
 
-        Ok(block_maker.generate_block(consensus_data, transactions)?)
+        Ok(block_maker.solve_block(consensus_data, transactions)?)
     }
 }
 
