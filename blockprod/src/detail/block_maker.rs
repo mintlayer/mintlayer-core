@@ -267,6 +267,7 @@ mod tests {
         },
         primitives::{BlockHeight, Id, H256},
         time_getter::TimeGetter,
+        Uint256,
     };
 
     use super::*;
@@ -653,7 +654,7 @@ mod tests {
                 move |block, _| {
                     let block_index = BlockIndex::new(
                         &block,
-                        H256::zero(),
+                        Uint256::ZERO,
                         chain_config.genesis_block_id(),
                         BlockHeight::one(),
                         BlockTimestamp::from_duration_since_epoch(TimeGetter::default().get_time()),

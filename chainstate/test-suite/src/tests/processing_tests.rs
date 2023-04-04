@@ -31,7 +31,7 @@ use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::{
     signed_transaction::SignedTransaction, stakelock::StakePoolData, OutPoint, Transaction,
 };
-use common::primitives::{BlockDistance, H256};
+use common::primitives::BlockDistance;
 use common::{
     chain::{
         block::{consensus_data::PoWData, timestamp::BlockTimestamp, ConsensusData},
@@ -432,7 +432,7 @@ fn straight_chain(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
-        assert_eq!(genesis_index.chain_trust(), H256::zero());
+        assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let chain_config_clone = tf.chainstate.get_chain_config();
@@ -454,10 +454,7 @@ fn straight_chain(#[case] seed: Seed) {
                 tf.process_block(new_block.clone(), BlockSource::Peer).unwrap().unwrap();
 
             assert_eq!(new_block_index.prev_block_id(), &prev_block_id);
-            assert!(
-                new_block_index.chain_trust().into_arith_uint256()
-                    > block_index.chain_trust().into_arith_uint256()
-            );
+            assert!(new_block_index.chain_trust() > block_index.chain_trust());
             assert_eq!(
                 new_block_index.block_height(),
                 block_index.block_height().next_height()

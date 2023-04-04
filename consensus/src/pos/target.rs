@@ -220,8 +220,13 @@ mod tests {
                     let height = i as u64 + 1;
                     let timestamp = BlockTimestamp::from_int_seconds(*t);
                     let block = make_block(rng, best_block, timestamp);
-                    let block_index =
-                        BlockIndex::new(&block, H256::zero(), best_block, height.into(), timestamp);
+                    let block_index = BlockIndex::new(
+                        &block,
+                        Uint256::ZERO,
+                        best_block,
+                        height.into(),
+                        timestamp,
+                    );
                     best_block = block.get_id().into();
                     (height.into(), block_index)
                 })
@@ -436,7 +441,7 @@ mod tests {
         let random_block = make_block(&mut rng, random_block_id.into(), timestamp);
         let random_block_index = BlockIndex::new(
             &random_block,
-            H256::zero(),
+            Uint256::ZERO,
             random_block_id.into(),
             BlockHeight::new(1),
             timestamp,
