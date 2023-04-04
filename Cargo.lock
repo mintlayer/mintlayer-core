@@ -350,6 +350,7 @@ dependencies = [
  "mocks",
  "rpc",
  "serialization",
+ "slave-pool",
  "subsystem",
  "thiserror",
  "tokio",

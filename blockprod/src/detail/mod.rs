@@ -45,6 +45,7 @@ pub struct BlockProduction {
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
+    mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
 impl BlockProduction {
@@ -54,6 +55,7 @@ impl BlockProduction {
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
         builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
+        mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
         let block_production = Self {
             chain_config,
@@ -61,6 +63,7 @@ impl BlockProduction {
             mempool_handle,
             time_getter,
             builder_tx,
+            mining_thread_pool,
         };
         Ok(block_production)
     }
@@ -120,6 +123,7 @@ impl BlockProductionInterface for BlockProduction {
             current_tip_id,
             current_tip_height,
             dummy_rx,
+            Arc::clone(&self.mining_thread_pool),
         );
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
@@ -143,7 +147,12 @@ impl BlockProductionInterface for BlockProduction {
             consensus_data,
         );
 
-        let block_header = block_maker.solve_block(block_header, Arc::new(false.into()))?;
+        let block_header = BlockMaker::solve_block(
+            self.chain_config.clone(),
+            block_header,
+            current_tip_height,
+            Arc::new(false.into()),
+        )?;
 
         let block = Block::new_from_header(block_header, block_body)?;
 
@@ -156,7 +165,7 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::*;
-    use crate::tests::setup_blockprod_test;
+    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
 
     #[tokio::test]
     async fn stop() {
@@ -170,6 +179,7 @@ mod tests {
             mempool,
             Default::default(),
             builder_tx,
+            prepare_thread_pool(1),
         )
         .expect("Error initializing Block Builder");
 
@@ -197,6 +207,7 @@ mod tests {
             mempool,
             Default::default(),
             builder_tx,
+            prepare_thread_pool(1),
         )
         .expect("Error initializing Block Builder");
 
@@ -224,6 +235,7 @@ mod tests {
             mempool,
             Default::default(),
             builder_tx,
+            prepare_thread_pool(1),
         )
         .expect("Error initializing Block Builder");
 

@@ -41,6 +41,7 @@ pub struct PerpetualBlockBuilder {
     block_makers_tx: crossbeam_channel::Sender<BlockMakerControlCommand>,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
     enabled: bool,
+    mining_thread_pool: Arc<slave_pool::ThreadPool>,
     _block_makers_destroyer: BlockMakersDestroyer,
 }
 
@@ -50,6 +51,7 @@ pub enum BlockBuilderControlCommand {
 }
 
 impl PerpetualBlockBuilder {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: ChainstateHandle,
@@ -58,6 +60,7 @@ impl PerpetualBlockBuilder {
         reward_destination: Destination,
         builder_rx: mpsc::UnboundedReceiver<BlockBuilderControlCommand>,
         enabled: bool,
+        mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Self {
         let (block_makers_tx, block_maker_rx) = crossbeam_channel::unbounded();
         Self {
@@ -70,6 +73,7 @@ impl PerpetualBlockBuilder {
             block_makers_tx: block_makers_tx.clone(),
             block_maker_rx,
             enabled,
+            mining_thread_pool,
             _block_makers_destroyer: BlockMakersDestroyer(block_makers_tx),
         }
     }
@@ -108,6 +112,7 @@ impl PerpetualBlockBuilder {
         let time_getter = self.time_getter.clone();
         let reward_destination = self.reward_destination.clone();
         let command_receiver = self.block_maker_rx.clone();
+        let mining_thread_pool = Arc::clone(&self.mining_thread_pool);
         tokio::spawn(async move {
             BlockMaker::new(
                 chain_config,
@@ -118,6 +123,7 @@ impl PerpetualBlockBuilder {
                 current_tip_id,
                 current_tip_height,
                 command_receiver,
+                mining_thread_pool,
             )
             .run()
             .await
@@ -222,6 +228,7 @@ impl Drop for BlockMakersDestroyer {
 
 #[cfg(test)]
 mod tests {
+    use crate::prepare_thread_pool;
     use crate::tests::setup_blockprod_test;
     use chainstate::BlockSource;
     use crypto::random::make_pseudo_rng;
@@ -251,6 +258,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             rx_builder,
             true,
+            prepare_thread_pool(1),
         );
 
         let block_id = Id::new(H256::random_using(&mut make_pseudo_rng()));
@@ -290,6 +298,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             rx_builder,
             true,
+            prepare_thread_pool(1),
         );
 
         block_builder.stop_all_block_makers().expect("Error stopping all Block Makers");
@@ -318,6 +327,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             rx_builder,
             true,
+            prepare_thread_pool(1),
         );
 
         let block_maker_rx = block_builder.block_maker_rx.clone();
@@ -425,6 +435,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             rx_builder,
             true,
+            prepare_thread_pool(1),
         );
 
         let shutdown = manager.make_shutdown_trigger();
@@ -481,6 +492,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             rx_builder,
             true,
+            prepare_thread_pool(1),
         );
 
         let shutdown = manager.make_shutdown_trigger();

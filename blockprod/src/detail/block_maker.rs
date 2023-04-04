@@ -54,6 +54,7 @@ pub struct BlockMaker {
     current_tip_id: Id<GenBlock>,
     current_tip_height: BlockHeight,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
+    _mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
 #[must_use]
@@ -73,6 +74,7 @@ impl BlockMaker {
         current_tip_id: Id<GenBlock>,
         current_tip_height: BlockHeight,
         block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
+        mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Self {
         Self {
             chain_config,
@@ -83,6 +85,7 @@ impl BlockMaker {
             current_tip_id,
             current_tip_height,
             block_maker_rx,
+            _mining_thread_pool: mining_thread_pool,
         }
     }
 
@@ -150,15 +153,16 @@ impl BlockMaker {
     }
 
     pub fn solve_block(
-        &self,
+        chain_config: Arc<ChainConfig>,
         mut block_header: BlockHeader,
+        current_tip_height: BlockHeight,
         stop_flag: Arc<AtomicBool>,
     ) -> Result<BlockHeader, BlockProductionError> {
         // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(
-            &self.chain_config,
+            &chain_config,
             &mut block_header,
-            self.current_tip_height,
+            current_tip_height,
             stop_flag,
         )?;
 
@@ -217,6 +221,8 @@ impl BlockMaker {
         let witness_merkle_root = calculate_witness_merkle_root(&block_body)
             .map_err(BlockCreationError::MerkleTreeError)?;
 
+        let stop_flag = Arc::new(false.into());
+
         loop {
             let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
             let consensus_data = self.pull_consensus_data(self.current_tip_id, timestamp).await?;
@@ -229,7 +235,12 @@ impl BlockMaker {
                 consensus_data,
             );
 
-            let block_header = self.solve_block(block_header, Arc::new(false.into()))?;
+            let block_header = Self::solve_block(
+                Arc::clone(&self.chain_config),
+                block_header,
+                self.current_tip_height,
+                Arc::clone(&stop_flag),
+            )?;
 
             let block = Block::new_from_header(block_header, block_body.clone())?;
 
@@ -269,7 +280,7 @@ impl BlockMaker {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::setup_blockprod_test;
+    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
     use chainstate_types::BlockIndex;
     use crypto::random::make_pseudo_rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
@@ -329,6 +340,7 @@ mod tests {
                 Id::new(H256::random_using(&mut make_pseudo_rng())),
                 BlockHeight::one(),
                 rx_builder,
+                prepare_thread_pool(1),
             );
 
             let accumulator = block_maker.collect_transactions().await;
@@ -378,6 +390,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let accumulator = block_maker.collect_transactions().await;
@@ -424,6 +437,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let accumulator = block_maker.collect_transactions().await;
@@ -475,6 +489,7 @@ mod tests {
                 Id::new(H256::random_using(&mut make_pseudo_rng())),
                 BlockHeight::one(),
                 rx_builder,
+                prepare_thread_pool(1),
             );
 
             let block = Block::new(
@@ -531,6 +546,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let block = Block::new(
@@ -588,6 +604,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let block = Block::new(
@@ -640,6 +657,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let block = Block::new(
@@ -706,6 +724,7 @@ mod tests {
                     Id::new(H256::random_using(&mut make_pseudo_rng())),
                     BlockHeight::one(),
                     rx_builder,
+                    prepare_thread_pool(1),
                 );
 
                 let block = Block::new(
