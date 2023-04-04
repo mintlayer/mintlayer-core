@@ -20,6 +20,8 @@ mod pos;
 mod pow;
 mod validator;
 
+use std::sync::{atomic::AtomicBool, Arc};
+
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::block::{consensus_data::PoWData, ConsensusData},
@@ -75,6 +77,7 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
+    stop_flag: Arc<AtomicBool>,
 ) -> Result<(), ConsensusVerificationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
@@ -83,7 +86,7 @@ pub fn finalize_consensus_data(
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),
             ConsensusData::PoW(pow_data) => {
-                mine(block_header, u128::MAX, pow_data.bits())
+                mine(block_header, u128::MAX, pow_data.bits(), stop_flag)
                     .map_err(ConsensusVerificationError::PoWError)?;
 
                 Ok(())

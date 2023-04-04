@@ -143,7 +143,7 @@ impl BlockProductionInterface for BlockProduction {
             consensus_data,
         );
 
-        let block_header = block_maker.solve_block(block_header)?;
+        let block_header = block_maker.solve_block(block_header, Arc::new(false.into()))?;
 
         let block = Block::new_from_header(block_header, block_body)?;
 

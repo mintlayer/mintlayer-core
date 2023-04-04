@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GetAncestorError};
@@ -152,12 +152,14 @@ impl BlockMaker {
     pub fn solve_block(
         &self,
         mut block_header: BlockHeader,
+        stop_flag: Arc<AtomicBool>,
     ) -> Result<BlockHeader, BlockProductionError> {
         // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(
             &self.chain_config,
             &mut block_header,
             self.current_tip_height,
+            stop_flag,
         )?;
 
         Ok(block_header)
@@ -227,7 +229,7 @@ impl BlockMaker {
                 consensus_data,
             );
 
-            let block_header = self.solve_block(block_header)?;
+            let block_header = self.solve_block(block_header, Arc::new(false.into()))?;
 
             let block = Block::new_from_header(block_header, block_body.clone())?;
 
