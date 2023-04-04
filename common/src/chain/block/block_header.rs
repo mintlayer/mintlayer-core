@@ -31,6 +31,23 @@ pub struct BlockHeader {
 }
 
 impl BlockHeader {
+    pub fn new(
+        prev_block_id: Id<GenBlock>,
+        tx_merkle_root: H256,
+        witness_merkle_root: H256,
+        timestamp: BlockTimestamp,
+        consensus_data: ConsensusData,
+    ) -> Self {
+        Self {
+            version: VersionTag::default(),
+            prev_block_id,
+            tx_merkle_root,
+            witness_merkle_root,
+            timestamp,
+            consensus_data,
+        }
+    }
+
     pub fn consensus_data(&self) -> &ConsensusData {
         &self.consensus_data
     }
@@ -49,6 +66,10 @@ impl BlockHeader {
 
     pub fn header_size(&self) -> usize {
         self.encoded_size()
+    }
+
+    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
+        self.consensus_data = consensus_data;
     }
 }
 

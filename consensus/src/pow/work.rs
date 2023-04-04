@@ -224,14 +224,18 @@ impl PoW {
     }
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<bool, ConsensusPoWError> {
+pub fn mine(
+    block_header: &mut BlockHeader,
+    max_nonce: u128,
+    bits: Compact,
+) -> Result<bool, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
         data.update_nonce(nonce);
-        block.update_consensus_data(ConsensusData::PoW(data.clone()));
+        block_header.update_consensus_data(ConsensusData::PoW(data.clone()));
 
-        if check_proof_of_work(block.get_id().get(), bits)? {
+        if check_proof_of_work(block_header.get_id().get(), bits)? {
             return Ok(true);
         }
     }
