@@ -23,7 +23,7 @@ use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-            BlockBody, BlockCreationError, BlockReward,
+            BlockBody, BlockCreationError, BlockHeader, BlockReward,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
@@ -122,12 +122,9 @@ impl BlockProductionInterface for BlockProduction {
             dummy_rx,
         );
 
-        let consensus_data = block_maker
-            .pull_consensus_data(
-                current_tip_id,
-                BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-            )
-            .await?;
+        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
+
+        let consensus_data = block_maker.pull_consensus_data(current_tip_id, timestamp).await?;
 
         let block_reward = BlockReward::new(vec![]);
 
@@ -137,8 +134,16 @@ impl BlockProductionInterface for BlockProduction {
             calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
         let witness_merkle_root = calculate_witness_merkle_root(&block_body)
             .map_err(BlockCreationError::MerkleTreeError)?;
-        let block_header =
-            block_maker.solve_block(consensus_data, tx_merkle_root, witness_merkle_root)?;
+
+        let block_header = BlockHeader::new(
+            current_tip_id,
+            tx_merkle_root,
+            witness_merkle_root,
+            timestamp,
+            consensus_data,
+        );
+
+        let block_header = block_maker.solve_block(block_header)?;
 
         let block = Block::new_from_header(block_header, block_body)?;
 

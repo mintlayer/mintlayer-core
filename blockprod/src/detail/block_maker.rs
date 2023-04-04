@@ -25,7 +25,7 @@ use common::{
         },
         Block, ChainConfig, Destination, GenBlock,
     },
-    primitives::{BlockHeight, Id, Idable, H256},
+    primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -151,18 +151,8 @@ impl BlockMaker {
 
     pub fn solve_block(
         &self,
-        consensus_data: ConsensusData,
-        tx_merkle_root: H256,
-        witness_merkle_root: H256,
+        mut block_header: BlockHeader,
     ) -> Result<BlockHeader, BlockProductionError> {
-        let mut block_header = BlockHeader::new(
-            self.current_tip_id,
-            tx_merkle_root,
-            witness_merkle_root,
-            BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-            consensus_data,
-        );
-
         // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(
             &self.chain_config,
@@ -226,15 +216,18 @@ impl BlockMaker {
             .map_err(BlockCreationError::MerkleTreeError)?;
 
         loop {
-            let consensus_data = self
-                .pull_consensus_data(
-                    self.current_tip_id,
-                    BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-                )
-                .await?;
+            let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
+            let consensus_data = self.pull_consensus_data(self.current_tip_id, timestamp).await?;
 
-            let block_header =
-                self.solve_block(consensus_data, tx_merkle_root, witness_merkle_root)?;
+            let block_header = BlockHeader::new(
+                self.current_tip_id,
+                tx_merkle_root,
+                witness_merkle_root,
+                timestamp,
+                consensus_data,
+            );
+
+            let block_header = self.solve_block(block_header)?;
 
             let block = Block::new_from_header(block_header, block_body.clone())?;
 
