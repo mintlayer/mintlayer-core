@@ -542,8 +542,8 @@ macro_rules! construct_uint {
             fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 let &$name(ref data) = self;
                 write!(f, "0x")?;
-                for ch in data {
-                    write!(f, "{:016x}", ch.to_be())?;
+                for ch in data.iter().rev() {
+                    write!(f, "{:016x}", ch)?;
                 }
                 Ok(())
             }
@@ -691,11 +691,11 @@ mod tests {
     pub fn uint256_display_test() {
         assert_eq!(
             format!("{:?}", Uint256::from_u64(0xDEADBEEF)),
-            "0xefbeadde00000000000000000000000000000000000000000000000000000000"
+            "0x00000000000000000000000000000000000000000000000000000000deadbeef"
         );
         assert_eq!(
             format!("{:?}", Uint256::from_u64(u64::MAX)),
-            "0xffffffffffffffff000000000000000000000000000000000000000000000000"
+            "0x000000000000000000000000000000000000000000000000ffffffffffffffff"
         );
 
         let max_val = Uint256([

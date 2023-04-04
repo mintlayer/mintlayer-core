@@ -30,6 +30,21 @@ fixed_hash::construct_fixed_hash! {
     pub struct H256(32);
 }
 
+impl H256 {
+    /// Encoding H256 will result in big-endian encoding of the bytes. Bitcoin uses little-endian for displaying hashes.
+    /// This method fills that gap, where we make it possible to print the hash in little-endian to conform to how bitcoin
+    /// does it.
+    ///
+    /// Notice that the internal representation does not really matter in this. What matters is how we view the contents.
+    /// If the contents is viewed as a number, then serializing the number will result in little-endian encoding because
+    /// scale-codec (and bitcoin) use little-endian encoding/serialization by default. On the other hand, if the contents
+    /// are viewed as a byte-array (as is the case with H256), then serializing the type will result in whatever that
+    /// byte-array is with no regard to endianness, which is done as big-endian in H256 if seen as a number.
+    pub fn as_bitcoin_uint256_hex(&self) -> String {
+        self.as_bytes().iter().rev().map(|b| format!("{:02x}", b)).collect()
+    }
+}
+
 impl From<GenericArray<u8, typenum::U32>> for H256 {
     fn from(val: GenericArray<u8, typenum::U32>) -> Self {
         Self(val.into())
@@ -242,7 +257,7 @@ mod tests {
             let hash_value = H256::from_str(value).expect("nothing wrong");
             let uint_value = Uint256::from(hash_value);
 
-            let hash_str = format!("{hash_value:?}");
+            let hash_str = "0x".to_string() + &hash_value.as_bitcoin_uint256_hex();
             let uint_str = format!("{uint_value:?}");
             assert_eq!(hash_str, uint_str);
 
@@ -295,5 +310,32 @@ mod tests {
             );
         }
         SAMPLE_HASHES.iter().cloned().for_each(check)
+    }
+
+    #[test]
+    fn display_test() {
+        fn check(hash: &str) {
+            let h256 = H256::from_str(hash).expect("should not fail");
+
+            let debug = format!("{h256:?}");
+            assert_eq!(debug, format!("0x{hash}"));
+
+            let display = format!("{h256}");
+            let (_, last_value) = hash.split_at(hash.len() - 4);
+            assert_eq!(display, format!("0x{}…{}", &hash[0..4], last_value));
+
+            let no_0x = format!("{h256:x}");
+            assert_eq!(no_0x, hash.to_string());
+
+            let sharp = format!("{h256:#x}");
+            assert_eq!(sharp, debug);
+
+            let upper_hex = format!("{h256:#010X}");
+            assert_eq!(upper_hex, format!("0X{}", hash.to_uppercase()));
+        }
+
+        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
+        check("000000000000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
+        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
     }
 }
