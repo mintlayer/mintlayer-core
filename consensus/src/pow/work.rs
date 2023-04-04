@@ -21,7 +21,7 @@ use common::{
         block::consensus_data::PoWData,
         block::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData},
         config::ChainConfig,
-        PoWStatus,
+        GenBlock, PoWStatus,
     },
     primitives::{BlockHeight, Compact, Id, Idable, H256},
     Uint256,
@@ -62,7 +62,8 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
 
     let work_required = calculate_work_required(
         chain_config,
-        header,
+        header.prev_block_id(),
+        header.timestamp(),
         pow_status,
         get_block_index,
         get_ancestor,
@@ -83,7 +84,8 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
 
 pub fn calculate_work_required<F, G>(
     chain_config: &ChainConfig,
-    header: &BlockHeader,
+    prev_block_id: &Id<GenBlock>,
+    block_timestamp: BlockTimestamp,
     pow_status: &PoWStatus,
     get_block_index: F,
     get_ancestor: G,
@@ -95,8 +97,7 @@ where
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
-            let prev_block_id = header
-                .prev_block_id()
+            let prev_block_id = prev_block_id
                 .classify(chain_config)
                 .chain_block_id()
                 .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
@@ -104,15 +105,13 @@ where
             // TODO: this should use get_gen_block_index() because the previous block could be genesis
             let prev_block_index = get_block_index(&prev_block_id)
                 .map_err(|err| {
-                    ConsensusPoWError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
+                    ConsensusPoWError::PrevBlockLoadError(prev_block_id, prev_block_id, err)
                 })?
-                .ok_or_else(|| {
-                    ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
-                })?;
+                .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_block_id))?;
 
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
-                header.timestamp(),
+                block_timestamp,
                 get_ancestor,
             )
         }

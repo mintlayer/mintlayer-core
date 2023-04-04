@@ -19,7 +19,7 @@ use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockHeader, BlockReward, ConsensusData},
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         Block, ChainConfig, Destination, GenBlock, SignedTransaction,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -99,7 +99,8 @@ impl BlockMaker {
 
     pub async fn pull_consensus_data(
         &self,
-        block_header: BlockHeader,
+        prev_block_id: Id<GenBlock>,
+        block_timestamp: BlockTimestamp,
     ) -> Result<ConsensusData, BlockProductionError> {
         let consensus_data = self
             .chainstate_handle
@@ -131,7 +132,8 @@ impl BlockMaker {
 
                     consensus::generate_consensus_data(
                         &chain_config,
-                        &block_header,
+                        &prev_block_id,
+                        block_timestamp,
                         current_tip_height.next_height(),
                         get_block_index,
                         get_ancestor,
@@ -153,17 +155,20 @@ impl BlockMaker {
         // it to self.reward_destination
         let block_reward = BlockReward::new(vec![]);
 
+        let consensus_data = self
+            .pull_consensus_data(
+                self.current_tip_id,
+                BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
+            )
+            .await?;
+
         let mut block = Block::new(
             transactions,
             self.current_tip_id,
             BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-            ConsensusData::None,
+            consensus_data,
             block_reward,
         )?;
-
-        let consensus_data = self.pull_consensus_data(block.header().clone()).await?;
-
-        block.update_consensus_data(consensus_data);
 
         // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(

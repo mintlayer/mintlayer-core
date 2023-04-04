@@ -22,8 +22,8 @@ mod validator;
 
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::block::{consensus_data::PoWData, BlockHeader, ConsensusData},
-    chain::{Block, ChainConfig, RequiredConsensus},
+    chain::block::{consensus_data::PoWData, ConsensusData},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, RequiredConsensus},
     primitives::{BlockHeight, Id},
 };
 
@@ -39,7 +39,8 @@ pub use crate::{
 
 pub fn generate_consensus_data<F, G>(
     chain_config: &ChainConfig,
-    header: &BlockHeader,
+    prev_block_id: &Id<GenBlock>,
+    block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_block_index: F,
     get_ancestor: G,
@@ -54,7 +55,8 @@ where
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
-                header,
+                prev_block_id,
+                block_timestamp,
                 &pow_status,
                 get_block_index,
                 get_ancestor,
