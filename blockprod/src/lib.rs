@@ -54,6 +54,14 @@ impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {}
 
 pub type BlockProductionHandle = subsystem::Handle<Box<dyn BlockProductionInterface>>;
 
+fn prepare_thread_pool(thread_count: u16) -> Arc<slave_pool::ThreadPool> {
+    let mining_thread_pool = Arc::new(slave_pool::ThreadPool::new());
+    mining_thread_pool
+        .set_threads(thread_count)
+        .expect("Event thread-pool starting failed");
+    mining_thread_pool
+}
+
 pub async fn make_blockproduction(
     chain_config: Arc<ChainConfig>,
     // blockprod_config: BlockProductionConfig,
@@ -62,6 +70,10 @@ pub async fn make_blockproduction(
     time_getter: TimeGetter,
 ) -> Result<Box<dyn BlockProductionInterface>, BlockProductionError> {
     let (tx_builder, rx_builder) = mpsc::unbounded_channel();
+
+    // TODO: make the number of threads configurable
+    let thread_count = 2;
+    let mining_thread_pool = prepare_thread_pool(thread_count);
 
     {
         let chain_config = Arc::clone(&chain_config);
@@ -74,6 +86,8 @@ pub async fn make_blockproduction(
         let reward_destination = Destination::AnyoneCanSpend;
         let is_enabled = true;
 
+        let mining_thread_pool = Arc::clone(&mining_thread_pool);
+
         tokio::spawn(async move {
             PerpetualBlockBuilder::new(
                 chain_config,
@@ -83,6 +97,7 @@ pub async fn make_blockproduction(
                 reward_destination,
                 rx_builder,
                 is_enabled,
+                mining_thread_pool,
             )
             .run()
             .await
@@ -95,6 +110,7 @@ pub async fn make_blockproduction(
         mempool_handle,
         time_getter,
         tx_builder,
+        mining_thread_pool,
     )?;
 
     Ok(Box::new(result))
