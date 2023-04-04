@@ -14,19 +14,23 @@
 // limitations under the License.
 
 use chainstate_storage::Transactional;
-use chainstate_test_framework::TestFramework;
+use chainstate_test_framework::{anyonecanspend_address, TestFramework};
 use chainstate_types::{pos_randomness::PoSRandomness, vrf_tools::construct_transcript};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp},
         config::EpochIndex,
         signature::inputsig::InputWitness,
+        stakelock::StakePoolData,
         OutPoint, PoolId, RequiredConsensus,
     },
     primitives::{Amount, BlockHeight, Compact},
 };
 use consensus::ConsensusPoSError;
-use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use crypto::{
+    random::{CryptoRng, Rng},
+    vrf::{VRFPrivateKey, VRFPublicKey},
+};
 
 use super::block_index_handle_impl::TestBlockIndexHandle;
 
@@ -95,5 +99,21 @@ pub fn calculate_new_target(
         &pos_status,
         tf.best_block_id(),
         &block_index_handle,
+    )
+}
+
+pub fn create_stake_pool_data(
+    rng: &mut (impl Rng + CryptoRng),
+    amount: Amount,
+    vrf_pk: VRFPublicKey,
+) -> StakePoolData {
+    let destination = super::new_pub_key_destination(rng);
+    StakePoolData::new(
+        amount,
+        anyonecanspend_address(),
+        vrf_pk,
+        destination,
+        0,
+        Amount::ZERO,
     )
 }

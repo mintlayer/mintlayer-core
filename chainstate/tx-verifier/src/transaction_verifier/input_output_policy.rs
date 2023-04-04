@@ -19,6 +19,8 @@ use utils::ensure;
 
 use super::error::{ConnectTransactionError, SpendStakeError};
 
+// FIXME: more granular errors
+
 /// Not all `TxOutput` combinations can be used in a block reward.
 pub fn check_reward_inputs_outputs_purposes(
     reward: &BlockRewardTransactable,
@@ -136,7 +138,7 @@ pub fn check_tx_inputs_outputs_purposes(
         // single input
         [input] => match tx.outputs() {
             // no outputs
-            [] => { /* do nothing */ }
+            [] => { /* do nothing, it's ok to burn outputs in this way */ }
             // single output
             [output] => {
                 ensure!(
@@ -155,26 +157,14 @@ pub fn check_tx_inputs_outputs_purposes(
             }
         },
         // multiple inputs
-        _ => match tx.outputs() {
-            // no inputs
-            [] => { /* do nothing, it's ok to burn outputs in this way */ }
-            // single output
-            [output] => {
-                ensure!(
-                    is_valid_many_to_one_combination(inputs.as_slice(), output),
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-            // multiple outputs
-            _ => {
-                let valid_inputs = are_inputs_valid_for_tx(inputs.as_slice());
-                let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
-                ensure!(
-                    valid_inputs && valid_outputs,
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
-            }
-        },
+        _ => {
+            let valid_inputs = are_inputs_valid_for_tx(inputs.as_slice());
+            let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
+            ensure!(
+                valid_inputs && valid_outputs,
+                ConnectTransactionError::InvalidOutputTypeInTx
+            );
+        }
     };
 
     Ok(())
@@ -230,27 +220,28 @@ fn are_inputs_valid_for_tx(inputs: &[TxOutput]) -> bool {
 }
 
 fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
-    outputs.iter().all(|output| match output {
-        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => true,
-        TxOutput::StakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _, _)
-        | TxOutput::DecommissionPool(_, _, _, _) => false,
-    })
-}
-
-fn is_valid_many_to_one_combination(inputs: &[TxOutput], output: &TxOutput) -> bool {
-    let valid_inputs = are_inputs_valid_for_tx(inputs);
-
-    // Note this rule is different from others because we don't allow multiple StakePool outputs
-    let valid_output = match output {
+    let valid_outputs_types = outputs.iter().all(|output| match output {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_) => true,
         TxOutput::ProduceBlockFromStake(_, _, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
-    };
+    });
 
-    valid_inputs && valid_output
+    let is_stake_pool_unique = outputs
+        .iter()
+        .filter(|output| match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _)
+            | TxOutput::DecommissionPool(_, _, _, _) => false,
+            TxOutput::StakePool(_) => true,
+        })
+        .count()
+        < 2;
+
+    valid_outputs_types && is_stake_pool_unique
 }
 
 #[cfg(test)]
@@ -270,7 +261,7 @@ mod tests {
         primitives::{Amount, Compact, Id, H256},
     };
     use crypto::{
-        random::Rng,
+        random::{seq::IteratorRandom, Rng},
         vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
     };
     use itertools::Itertools;
@@ -357,18 +348,15 @@ mod tests {
         )
     }
 
-    fn get_random_outputs(
+    fn get_random_outputs_combination(
         rng: &mut impl Rng,
         source: &[TxOutput],
         result_len: usize,
     ) -> Vec<TxOutput> {
-        let all_combinations =
-            source.iter().combinations_with_replacement(result_len).collect::<Vec<_>>();
-        let all_combinations_len = all_combinations.len();
-
-        all_combinations
-            .into_iter()
-            .nth(rng.gen_range(0..all_combinations_len))
+        source
+            .iter()
+            .combinations_with_replacement(result_len)
+            .choose(rng)
             .unwrap()
             .into_iter()
             .cloned()
@@ -453,17 +441,6 @@ mod tests {
         #[case] output: TxOutput,
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
-        match input {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::StakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _, _) => {
-                /* this is a compile guard: after adding new arm don't forget to reconsider the test */
-            },
-        };
-
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
             outpoint.clone(),
@@ -480,7 +457,7 @@ mod tests {
     fn tx_one_to_many(#[case] seed: Seed) {
         let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
-            let inputs = get_random_outputs(&mut rng, source_inputs, 1);
+            let inputs = get_random_outputs_combination(&mut rng, source_inputs, 1);
             let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
             let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
                 outpoint.clone(),
@@ -488,7 +465,12 @@ mod tests {
             )]));
 
             let number_of_outputs = rng.gen_range(2..10);
-            let outputs = get_random_outputs(&mut rng, source_outputs, number_of_outputs);
+            let mut outputs =
+                get_random_outputs_combination(&mut rng, source_outputs, number_of_outputs);
+            // add single StakePool output
+            if rng.gen::<bool>() {
+                outputs.push(stake_pool());
+            }
 
             let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
@@ -500,15 +482,41 @@ mod tests {
         let valid_outputs = [lock_then_transfer(), transfer(), burn()];
         check(&valid_inputs, &valid_outputs, Ok(()));
 
-        // TODO: this doesn't prove that EVERY other case is invalid
-        // invalid cases
-        let invalid_inputs = [burn(), stake_pool(), produce_block()];
-        let invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        // invalid input
+        let invalid_inputs = [stake_pool(), burn(), produce_block()];
         check(
             &invalid_inputs,
-            &invalid_outputs,
+            &valid_outputs,
             Err(ConnectTransactionError::InvalidOutputTypeInTx),
         );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_one_to_many_invalid_outputs(#[case] seed: Seed) {
+        let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let source_valid_outputs = [lock_then_transfer(), transfer(), burn()];
+        let source_invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+
+        let mut rng = make_seedable_rng(seed);
+        let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+        )]));
+
+        let number_of_outputs = rng.gen_range(1..10);
+        let mut outputs =
+            get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_outputs);
+        let mut invalid_outputs =
+            get_random_outputs_combination(&mut rng, &source_invalid_outputs, number_of_outputs);
+        outputs.append(&mut invalid_outputs);
+
+        let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+        let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
+        assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
     }
 
     #[rstest]
@@ -518,7 +526,7 @@ mod tests {
         let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
             let number_of_inputs = rng.gen_range(2..10);
-            let utxos = get_random_outputs(&mut rng, source_inputs, number_of_inputs)
+            let utxos = get_random_outputs_combination(&mut rng, source_inputs, number_of_inputs)
                 .into_iter()
                 .enumerate()
                 .map(|(i, output)| {
@@ -534,7 +542,7 @@ mod tests {
             let inputs: Vec<TxInput> = utxos.keys().map(|k| k.clone().into()).collect();
             let utxo_db = TestUtxosDB::new(utxos);
 
-            let outputs = get_random_outputs(&mut rng, source_outputs, 1);
+            let outputs = get_random_outputs_combination(&mut rng, source_outputs, 1);
 
             let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
@@ -546,12 +554,10 @@ mod tests {
         let valid_outputs = [lock_then_transfer(), transfer(), burn(), stake_pool()];
         check(&valid_inputs, &valid_outputs, Ok(()));
 
-        // TODO: this doesn't prove that EVERY other case is invalid
-        // invalid cases
-        let invalid_inputs = [burn(), stake_pool(), produce_block()];
-        let invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        // invalid outputs
+        let invalid_outputs = [produce_block(), decommission_pool()];
         check(
-            &invalid_inputs,
+            &valid_inputs,
             &invalid_outputs,
             Err(ConnectTransactionError::InvalidOutputTypeInTx),
         );
@@ -564,7 +570,7 @@ mod tests {
         let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
             let number_of_inputs = rng.gen_range(2..10);
-            let utxos = get_random_outputs(&mut rng, source_inputs, number_of_inputs)
+            let utxos = get_random_outputs_combination(&mut rng, source_inputs, number_of_inputs)
                 .into_iter()
                 .enumerate()
                 .map(|(i, output)| {
@@ -581,7 +587,8 @@ mod tests {
             let utxo_db = TestUtxosDB::new(utxos);
 
             let number_of_outputs = rng.gen_range(2..10);
-            let outputs = get_random_outputs(&mut rng, source_outputs, number_of_outputs);
+            let outputs =
+                get_random_outputs_combination(&mut rng, source_outputs, number_of_outputs);
 
             let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
@@ -652,17 +659,6 @@ mod tests {
         #[case] output: TxOutput,
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
-        match input {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::StakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _, _) => {
-                /* this is a compile guard: after adding new arm don't forget to reconsider the test */
-            },
-        };
-
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
             outpoint.clone(),
@@ -682,7 +678,10 @@ mod tests {
 
         let valid_kernels = [stake_pool(), produce_block()];
 
-        let input = get_random_outputs(&mut rng, &valid_kernels, 1).into_iter().next().unwrap();
+        let input = get_random_outputs_combination(&mut rng, &valid_kernels, 1)
+            .into_iter()
+            .next()
+            .unwrap();
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
         let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
@@ -713,7 +712,8 @@ mod tests {
             let valid_purposes = [lock_then_transfer()];
 
             let number_of_outputs = rng.gen_range(1..10);
-            let outputs = get_random_outputs(&mut rng, &valid_purposes, number_of_outputs);
+            let outputs =
+                get_random_outputs_combination(&mut rng, &valid_purposes, number_of_outputs);
             let block = make_block_no_kernel(outputs);
 
             check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db)
@@ -726,7 +726,8 @@ mod tests {
                 [transfer(), burn(), stake_pool(), produce_block(), decommission_pool()];
 
             let number_of_outputs = rng.gen_range(1..10);
-            let outputs = get_random_outputs(&mut rng, &invalid_purposes, number_of_outputs);
+            let outputs =
+                get_random_outputs_combination(&mut rng, &invalid_purposes, number_of_outputs);
             let block = make_block_no_kernel(outputs);
 
             let res =
@@ -752,19 +753,20 @@ mod tests {
         ];
 
         let number_of_outputs = rng.gen_range(2..10);
-        let kernel_outputs = get_random_outputs(&mut rng, &all_purposes, number_of_outputs)
-            .into_iter()
-            .enumerate()
-            .map(|(i, output)| {
-                (
-                    OutPoint::new(
-                        OutPointSourceId::BlockReward(Id::new(H256::zero())),
-                        i as u32,
-                    ),
-                    Utxo::new_for_mempool(output, false),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
+        let kernel_outputs =
+            get_random_outputs_combination(&mut rng, &all_purposes, number_of_outputs)
+                .into_iter()
+                .enumerate()
+                .map(|(i, output)| {
+                    (
+                        OutPoint::new(
+                            OutPointSourceId::BlockReward(Id::new(H256::zero())),
+                            i as u32,
+                        ),
+                        Utxo::new_for_mempool(output, false),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>();
 
         let inputs: Vec<TxInput> = kernel_outputs.keys().map(|k| k.clone().into()).collect();
         let utxo_db = TestUtxosDB::new(kernel_outputs);

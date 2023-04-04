@@ -15,10 +15,7 @@
 
 use std::num::NonZeroU64;
 
-use super::helpers::{
-    new_pub_key_destination,
-    pos::{calculate_new_target, pos_mine},
-};
+use super::helpers::pos::{calculate_new_target, create_stake_pool_data, pos_mine};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
@@ -64,22 +61,6 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
-
-fn create_stake_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
-    amount: Amount,
-    vrf_pk: VRFPublicKey,
-) -> StakePoolData {
-    let destination = new_pub_key_destination(rng);
-    StakePoolData::new(
-        amount,
-        anyonecanspend_address(),
-        vrf_pk,
-        destination,
-        0,
-        Amount::ZERO,
-    )
-}
 
 fn add_block_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
@@ -964,3 +945,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         res_pool_balance
     );
 }
+
+// FIXME: ProduceBlock -> Decommission Pool in tx/reward
+// FIXME: StakePool -> Decommission reward
+// FIXME: StakePool -> Decommission unsealed epoch
