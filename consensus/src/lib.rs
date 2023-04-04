@@ -37,7 +37,6 @@ pub use crate::{
     validator::validate_consensus,
 };
 
-#[allow(unreachable_code)]
 pub fn generate_consensus_data<F, G>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
