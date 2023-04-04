@@ -41,6 +41,8 @@ use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosStorageRea
 
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
     TransactionVerifierStorageRef for TransactionVerifier<C, S, U, A>
+where
+    <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     type Error = <S as TransactionVerifierStorageRef>::Error;
 
@@ -109,11 +111,13 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView>
 
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
     for TransactionVerifier<C, S, U, A>
+where
+    <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
-    type Error = U::Error;
+    type Error = <S as utxo::UtxosStorageRead>::Error;
 
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
-        self.utxo_cache.utxo(outpoint)
+        self.utxo_cache.utxo(outpoint).map_err(|e| e.into())
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
@@ -123,7 +127,7 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {
         match self.utxo_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
-            None => self.storage.get_undo_data(id).map_err(|_| todo!("PR")),
+            None => self.storage.get_undo_data(id),
         }
     }
 }
@@ -132,6 +136,7 @@ impl<C, S, U: UtxosView, A: PoSAccountingView> TransactionVerifierStorageMut
     for TransactionVerifier<C, S, U, A>
 where
     S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
+    <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     fn set_mainchain_tx_index(
         &mut self,

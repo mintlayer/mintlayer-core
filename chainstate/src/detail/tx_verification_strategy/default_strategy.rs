@@ -67,6 +67,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -138,6 +139,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 

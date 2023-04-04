@@ -83,6 +83,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past =
@@ -119,6 +120,7 @@ impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrate
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = self.disconnect_with_base(
             tx_verifier_maker,
@@ -151,6 +153,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let block_subsidy =
             chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
@@ -224,6 +227,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         let mut total_fee = Amount::ZERO;
@@ -267,6 +271,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
         let mut tx_num = i32::try_from(block.transactions().len()).unwrap() - 1;
@@ -307,6 +312,7 @@ impl RandomizedTransactionVerificationStrategy {
         U: UtxosView,
         A: PoSAccountingView,
         S: TransactionVerifierStorageRef,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
         while tx_num >= 0 {

@@ -255,6 +255,7 @@ where
     S: TransactionVerifierStorageRef,
     U: UtxosView,
     A: PoSAccountingView,
+    <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     pub fn derive_child(
         &self,

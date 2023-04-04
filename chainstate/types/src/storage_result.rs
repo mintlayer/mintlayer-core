@@ -26,5 +26,11 @@ impl From<storage::Error> for Error {
     }
 }
 
+impl From<std::convert::Infallible> for Error {
+    fn from(inf: std::convert::Infallible) -> Self {
+        match inf {}
+    }
+}
+
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = core::result::Result<T, Error>;

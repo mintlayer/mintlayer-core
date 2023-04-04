@@ -68,7 +68,8 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         U: UtxosView,
         C: AsRef<ChainConfig>,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>;
+        M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>;
 
     /// Disconnect the transactions given by block and block_index,
     /// and return a TransactionVerifier with an internal state
@@ -89,5 +90,6 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
-        M: TransactionVerifierMakerFn<C, S, U, A>;
+        M: TransactionVerifierMakerFn<C, S, U, A>,
+        <S as utxo::UtxosStorageRead>::Error: From<U::Error>;
 }
