@@ -34,7 +34,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::eq_op)]
     fn initialize_twice() {
         init_logging::<&std::path::Path>(None);
         init_logging::<&std::path::Path>(None);

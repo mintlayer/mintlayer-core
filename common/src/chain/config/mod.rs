@@ -55,6 +55,15 @@ pub enum ChainType {
 }
 
 impl ChainType {
+    pub const fn name(&self) -> &'static str {
+        match self {
+            ChainType::Mainnet => "mainnet",
+            ChainType::Testnet => "testnet",
+            ChainType::Regtest => "regtest",
+            ChainType::Signet => "signet",
+        }
+    }
+
     const fn default_address_prefix(&self) -> &'static str {
         match self {
             ChainType::Mainnet => "mtc",
