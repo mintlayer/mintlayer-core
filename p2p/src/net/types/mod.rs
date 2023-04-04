@@ -24,6 +24,7 @@ use common::{
 
 use crate::{
     message::{Announcement, PeerManagerMessage, SyncMessage},
+    protocol::NetworkProtocol,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
 };
@@ -50,6 +51,8 @@ pub struct PeerInfo {
     /// Unique ID of the peer
     pub peer_id: PeerId,
 
+    pub protocol: NetworkProtocol,
+
     /// Peer network
     pub network: [u8; 4],
 
@@ -65,7 +68,7 @@ pub struct PeerInfo {
 
 impl PeerInfo {
     pub fn is_compatible(&self, chain_config: &ChainConfig) -> bool {
-        // TODO: Check version here
+        // Check node version here if necessary
         self.network == *chain_config.magic_bytes()
     }
 }
@@ -74,6 +77,7 @@ impl Display for PeerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Peer information:")?;
         writeln!(f, "--> Peer ID: {:?}", self.peer_id)?;
+        writeln!(f, "--> Protocol: {:?}", self.protocol)?;
         writeln!(f, "--> Network: {:x?}", self.network)?;
         writeln!(f, "--> Software version: {}", self.version)?;
         writeln!(f, "--> User agent: {}", self.user_agent)?;

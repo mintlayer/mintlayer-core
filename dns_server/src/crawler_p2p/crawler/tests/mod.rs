@@ -26,6 +26,7 @@ use p2p::{
     config::NodeType,
     error::{DialError, P2pError},
     net::types::PeerInfo,
+    protocol::NETWORK_PROTOCOL_CURRENT,
     types::peer_id::PeerId,
 };
 use rstest::rstest;
@@ -59,6 +60,7 @@ fn basic(#[case] seed: Seed) {
             address: node1,
             peer_info: PeerInfo {
                 peer_id: peer1,
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -90,6 +92,7 @@ fn basic(#[case] seed: Seed) {
             address: node2,
             peer_info: PeerInfo {
                 peer_id: peer2,
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: mintlayer_core_user_agent(),
@@ -168,6 +171,7 @@ fn randomized(#[case] seed: Seed) {
                     address,
                     peer_info: PeerInfo {
                         peer_id: PeerId::new(),
+                        protocol: NETWORK_PROTOCOL_CURRENT,
                         network: *chain_config.magic_bytes(),
                         version: *chain_config.version(),
                         user_agent: mintlayer_core_user_agent(),
@@ -186,6 +190,7 @@ fn randomized(#[case] seed: Seed) {
                     address,
                     peer_info: PeerInfo {
                         peer_id: PeerId::new(),
+                        protocol: NETWORK_PROTOCOL_CURRENT,
                         network: [255, 255, 255, 255],
                         version: *chain_config.version(),
                         user_agent: mintlayer_core_user_agent(),
@@ -236,6 +241,7 @@ fn incompatible_node(#[case] seed: Seed) {
             address: node1,
             peer_info: PeerInfo {
                 peer_id: peer1,
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: [255, 255, 255, 255],
                 version: *chain_config.version(),
                 user_agent: mintlayer_core_user_agent(),

@@ -76,6 +76,8 @@ from test_framework.util import (
 
 logger = logging.getLogger("TestFramework.p2p")
 
+P2P_NETWORK_PROTOCOL = 1
+
 # The P2P user agent string that this test framework sends in its `handshake` message
 P2P_USER_AGENT = "PythonTesterP2P"
 
@@ -330,14 +332,15 @@ class P2PInterface(P2PConnection):
         vt = {
             "handshake": {
                 "Hello": {
+                    "protocol": P2P_NETWORK_PROTOCOL,
+                    "network": [0xaa, 0xbb, 0xcc, 0xdd],
+                    "services": services,
+                    "user_agent": P2P_USER_AGENT,
                     "version": {
                         "major": 0,
                         "minor": 1,
                         "patch": 0,
                     },
-                    "network": [0xaa, 0xbb, 0xcc, 0xdd],
-                    "user_agent": P2P_USER_AGENT,
-                    "services": services,
                     "receiver_address": None,
                     "handshake_nonce": 123,
                 }

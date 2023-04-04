@@ -33,7 +33,7 @@ use tokio::sync::mpsc;
 use chainstate::ban_score::BanScore;
 use common::{
     chain::{config::ChainType, ChainConfig},
-    primitives::{semver::SemVer, time::duration_to_int},
+    primitives::time::duration_to_int,
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -54,6 +54,7 @@ use crate::{
         types::{services::Service, ConnectivityEvent, Role},
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
+    protocol::{NetworkProtocol, NETWORK_PROTOCOL_MIN},
     types::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
@@ -172,12 +173,11 @@ where
         })
     }
 
-    /// Verify software version compatibility
+    /// Verify network protocol compatibility
     ///
-    /// Make sure that local and remote peer have the same software version
-    fn validate_version(&self, version: &SemVer) -> bool {
-        // TODO: handle upgrades of versions
-        version == self.chain_config.version()
+    /// Make sure that the local and remote peers have compatible network protocols
+    fn validate_network_protocol(&self, protocol: NetworkProtocol) -> bool {
+        protocol >= NETWORK_PROTOCOL_MIN
     }
 
     /// Verify that the peer address has a public routable IP and any valid (non-zero) port.
@@ -400,17 +400,14 @@ where
         info: &PeerInfo,
     ) -> crate::Result<()> {
         ensure!(
+            self.validate_network_protocol(info.protocol),
+            P2pError::ProtocolError(ProtocolError::UnsupportedProtocol(info.protocol))
+        );
+        ensure!(
             info.is_compatible(&self.chain_config),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                 *self.chain_config.magic_bytes(),
                 info.network,
-            ))
-        );
-        ensure!(
-            self.validate_version(&info.version),
-            P2pError::ProtocolError(ProtocolError::InvalidVersion(
-                *self.chain_config.version(),
-                info.version
             ))
         );
         ensure!(

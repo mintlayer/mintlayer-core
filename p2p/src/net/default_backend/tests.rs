@@ -16,6 +16,7 @@
 use super::{transport::NoiseTcpTransport, *};
 use crate::config::NodeType;
 use crate::error::DialError;
+use crate::protocol::NETWORK_PROTOCOL_CURRENT;
 use crate::testing_utils::{
     test_p2p_config, TestTransportChannel, TestTransportMaker, TestTransportTcp,
 };
@@ -23,7 +24,6 @@ use crate::{
     net::default_backend::transport::{MpscChannelTransport, TcpTransportSocket},
     testing_utils::TestTransportNoise,
 };
-use common::primitives::semver::SemVer;
 use std::fmt::Debug;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -66,7 +66,7 @@ where
     {
         assert_eq!(address, conn2.local_addresses()[0]);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
+        assert_eq!(peer_info.version, *config.version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(peer_info.services, NodeType::Full.into());
     } else {
@@ -125,7 +125,7 @@ where
             receiver_address: _,
         } => {
             assert_eq!(peer_info.network, *config.magic_bytes());
-            assert_eq!(peer_info.version, SemVer::new(0, 1, 0),);
+            assert_eq!(peer_info.version, *config.version());
             assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         }
         _ => panic!("invalid event received, expected incoming connection"),
@@ -250,8 +250,9 @@ where
     }) = conn1.poll_next().await
     {
         assert_eq!(address, conn2.local_addresses()[0]);
+        assert_eq!(peer_info.protocol, NETWORK_PROTOCOL_CURRENT);
         assert_eq!(peer_info.network, *config.magic_bytes());
-        assert_eq!(peer_info.version, SemVer::new(0, 1, 0));
+        assert_eq!(peer_info.version, *config.version());
         assert_eq!(peer_info.user_agent, p2p_config.user_agent);
         assert_eq!(peer_info.services, NodeType::Full.into());
     } else {

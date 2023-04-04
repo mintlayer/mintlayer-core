@@ -28,6 +28,7 @@ use crate::{
         ConnectivityService, NetworkingService,
     },
     peer_manager::tests::make_peer_manager_custom,
+    protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
         TestTransportChannel, TestTransportMaker,
@@ -59,6 +60,7 @@ where
     let peer_id = PeerId::new();
     let peer_info = PeerInfo {
         peer_id,
+        protocol: NETWORK_PROTOCOL_CURRENT,
         network: *config.magic_bytes(),
         version: *config.version(),
         user_agent: mintlayer_core_user_agent(),

@@ -20,12 +20,14 @@ pub mod interface;
 pub mod message;
 pub mod net;
 pub mod peer_manager;
+pub mod protocol;
 pub mod rpc;
 pub mod sync;
-#[cfg(feature = "testing_utils")]
-pub mod testing_utils;
 pub mod types;
 pub mod utils;
+
+#[cfg(feature = "testing_utils")]
+pub mod testing_utils;
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},

@@ -54,10 +54,11 @@ def init_p2p_types():
             "HandshakeHello": {
                 "type": "struct",
                 "type_mapping": [
-                    ["version", "SemVer"],
+                    ["protocol", "u32"],
                     ["network", "[u8; 4]"],
                     ["services", "u64"],
                     ["user_agent", "String"],
+                    ["version", "SemVer"],
                     ["receiver_address", "Option<PeerAddress>"],
                     ["handshake_nonce", "u64"],
                 ]
@@ -66,10 +67,11 @@ def init_p2p_types():
             "HandshakeHelloAck": {
                 "type": "struct",
                 "type_mapping": [
-                    ["version", "SemVer"],
+                    ["protocol", "u32"],
                     ["network", "[u8; 4]"],
                     ["services", "u64"],
                     ["user_agent", "String"],
+                    ["version", "SemVer"],
                     ["receiver_address", "Option<PeerAddress>"],
                 ]
             },

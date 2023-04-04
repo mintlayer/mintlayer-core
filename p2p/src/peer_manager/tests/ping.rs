@@ -31,6 +31,7 @@ use crate::{
         types::{ConnectivityEvent, PeerInfo},
     },
     peer_manager::{tests::send_and_sync, PeerManager},
+    protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{peerdb_inmemory_store, P2pTokioTestTimeGetter},
     types::peer_id::PeerId,
 };
@@ -95,6 +96,7 @@ async fn ping_timeout() {
             address: "123.123.123.123:12345".parse().unwrap(),
             peer_info: PeerInfo {
                 peer_id: PeerId::new(),
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
                 version: *chain_config.version(),
                 user_agent: p2p_config.user_agent.clone(),
