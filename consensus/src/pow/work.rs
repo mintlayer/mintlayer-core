@@ -15,6 +15,8 @@
 
 #![allow(dead_code)]
 
+use std::sync::{atomic::AtomicBool, Arc};
+
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
@@ -228,6 +230,7 @@ pub fn mine(
     block_header: &mut BlockHeader,
     max_nonce: u128,
     bits: Compact,
+    stop_flag: Arc<AtomicBool>,
 ) -> Result<bool, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
@@ -237,6 +240,10 @@ pub fn mine(
 
         if check_proof_of_work(block_header.get_id().get(), bits)? {
             return Ok(true);
+        }
+
+        if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(false);
         }
     }
 
