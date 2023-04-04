@@ -260,8 +260,12 @@ where
                 biased;
 
                 // Handle commands.
-                command = self.cmd_rx.recv() => {
-                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
+                command_res = self.cmd_rx.recv() => {
+                    let Some(command) = command_res
+                    else {
+                        return Ok(());
+                    };
+                    self.handle_command(command);
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {

@@ -29,7 +29,10 @@ pub mod utils;
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use interface::p2p_interface::P2pInterface;
@@ -37,7 +40,6 @@ use net::default_backend::transport::{
     NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
-use tap::TapFallible;
 use tokio::sync::mpsc;
 
 use ::utils::ensure;
@@ -46,7 +48,6 @@ use common::{
     chain::{config::ChainType, ChainConfig},
     time_getter::TimeGetter,
 };
-use logging::log;
 use mempool::MempoolHandle;
 
 use crate::{
@@ -70,6 +71,7 @@ struct P2p<T: NetworkingService> {
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
+    shutdown_flag: Arc<AtomicBool>,
 }
 
 impl<T> P2p<T>
@@ -110,19 +112,28 @@ where
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
         let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
+        let shutdown_flag: Arc<AtomicBool> = Default::default();
 
-        let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
-            conn,
-            rx_peer_manager,
-            time_getter,
-            peerdb_storage,
-        )?;
-        tokio::spawn(async move {
-            // TODO: Shutdown p2p if PeerManager unexpectedly quits
-            peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
-        });
+        {
+            let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
+                Arc::clone(&chain_config),
+                Arc::clone(&p2p_config),
+                conn,
+                rx_peer_manager,
+                time_getter,
+                peerdb_storage,
+            )?;
+            let shutdown_flag = Arc::clone(&shutdown_flag);
+
+            tokio::spawn(async move {
+                let err = peer_manager.run().await.expect_err("run returns on error only");
+
+                assert!(
+                    shutdown_flag.load(Ordering::SeqCst),
+                    "PeerManager failed: {err}"
+                );
+            });
+        }
 
         {
             let chainstate_handle = chainstate_handle.clone();
@@ -130,10 +141,10 @@ where
             let chain_config = Arc::clone(&chain_config);
             let mempool_handle_ = mempool_handle.clone();
             let messaging_handle_ = messaging_handle.clone();
+            let shutdown_flag = Arc::clone(&shutdown_flag);
 
             tokio::spawn(async move {
-                // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
-                sync::BlockSyncManager::<T>::new(
+                let err = sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     messaging_handle_,
@@ -144,7 +155,12 @@ where
                 )
                 .run()
                 .await
-                .tap_err(|err| log::error!("SyncManager failed: {err}"))
+                .expect_err("run returns on error only");
+
+                assert!(
+                    shutdown_flag.load(Ordering::SeqCst),
+                    "BlockSyncManager failed: {err}"
+                );
             });
         }
 
@@ -152,11 +168,18 @@ where
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
+            shutdown_flag,
         })
     }
 }
 
 impl subsystem::Subsystem for Box<dyn P2pInterface> {}
+
+impl<T: NetworkingService> Drop for P2p<T> {
+    fn drop(&mut self) {
+        self.shutdown_flag.store(true, Ordering::SeqCst);
+    }
+}
 
 pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
 

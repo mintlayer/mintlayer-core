@@ -110,14 +110,14 @@ where
     async fn handshake(&mut self) -> crate::Result<()> {
         match self.peer_role {
             PeerRole::Inbound => {
-                let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
+                let types::Message::Handshake(types::HandshakeMessage::Hello {
                     version,
                     network,
                     services,
                     receiver_address,
                     handshake_nonce,
                     user_agent,
-                })) = self.socket.recv().await
+                }) = self.socket.recv().await?
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
@@ -163,13 +163,13 @@ where
                     }))
                     .await?;
 
-                let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                let types::Message::Handshake(types::HandshakeMessage::HelloAck {
                     version,
                     network,
                     user_agent,
                     services,
                     receiver_address,
-                })) = self.socket.recv().await
+                }) = self.socket.recv().await?
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
