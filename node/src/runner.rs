@@ -201,6 +201,16 @@ fn prepare_data_dir<F: Fn() -> PathBuf>(
     Ok(data_dir)
 }
 
+/// Creates an exclusive lock file in the specified directory.
+/// Fails if the lock file cannot be created or is already locked.
+fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
+    let lock = std::fs::File::create(data_dir.join(".lock"))
+        .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
+    fs4::FileExt::try_lock_exclusive(&lock)
+        .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
+    Ok(lock)
+}
+
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<PathBuf>,
@@ -219,10 +229,12 @@ async fn start(
         datadir_path_opt,
     )
     .expect("Failed to prepare data directory");
+    let _lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
     let manager = initialize(chain_config, data_dir, node_config).await?;
     manager.main().await;
+
     Ok(())
 }
 

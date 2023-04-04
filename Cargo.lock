@@ -2245,6 +2245,7 @@ dependencies = [
  "common",
  "crypto",
  "directories 4.0.1",
+ "fs4",
  "jsonrpsee",
  "logging",
  "mempool",
