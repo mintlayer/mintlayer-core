@@ -20,7 +20,10 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, Block, ChainConfig, Destination, SignedTransaction},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockCreationError},
+        Block, ChainConfig, Destination, SignedTransaction,
+    },
     time_getter::TimeGetter,
 };
 use mempool::MempoolHandle;
@@ -116,7 +119,14 @@ impl BlockProductionInterface for BlockProduction {
             dummy_rx,
         );
 
-        Ok(block_maker.generate_block(transactions).await?)
+        let consensus_data = block_maker
+            .pull_consensus_data(
+                current_tip_id,
+                BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
+            )
+            .await?;
+
+        Ok(block_maker.generate_block(consensus_data, transactions)?)
     }
 }
 

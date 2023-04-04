@@ -146,21 +146,15 @@ impl BlockMaker {
         Ok(consensus_data)
     }
 
-    pub async fn generate_block(
+    pub fn generate_block(
         &self,
+        consensus_data: ConsensusData,
         transactions: Vec<SignedTransaction>,
     ) -> Result<Block, BlockProductionError> {
         // TODO: instead of the following static value, look at
         // self.chain_config for the current block reward, then send
         // it to self.reward_destination
         let block_reward = BlockReward::new(vec![]);
-
-        let consensus_data = self
-            .pull_consensus_data(
-                self.current_tip_id,
-                BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-            )
-            .await?;
 
         let mut block = Block::new(
             transactions,
@@ -221,7 +215,14 @@ impl BlockMaker {
         let transactions = accumulator.transactions();
 
         loop {
-            let block = self.generate_block(transactions.clone()).await?;
+            let consensus_data = self
+                .pull_consensus_data(
+                    self.current_tip_id,
+                    BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
+                )
+                .await?;
+
+            let block = self.generate_block(consensus_data, transactions.clone())?;
 
             match self.attempt_submit_new_block(block).await? {
                 BlockSubmitResult::Failed => (),
