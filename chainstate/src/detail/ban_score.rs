@@ -110,6 +110,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
+            ConnectTransactionError::InvalidInputTypeInTx => 100,
+            ConnectTransactionError::InvalidInputTypeInReward => 100,
             ConnectTransactionError::InvalidOutputTypeInTx => 100,
             ConnectTransactionError::InvalidOutputTypeInReward => 100,
             ConnectTransactionError::PoolDataNotFound(_) => 0,

@@ -97,8 +97,12 @@ pub enum ConnectTransactionError {
     MissingPoSAccountingUndo(Id<Transaction>),
     #[error("Error during stake spending")]
     SpendStakeError(#[from] SpendStakeError),
+    #[error("Attempt to use invalid input type in a transaction")]
+    InvalidInputTypeInTx,
     #[error("Attempt to use invalid output type in a transaction")]
     InvalidOutputTypeInTx,
+    #[error("Attempted to use a invalid input type in block reward")]
+    InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
     InvalidOutputTypeInReward,
     #[error("Data of pool {0} not found")]
