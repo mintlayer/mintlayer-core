@@ -432,7 +432,7 @@ fn straight_chain(#[case] seed: Seed) {
             .unwrap();
 
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
-        assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(0));
+        assert_eq!(genesis_index.chain_trust(), Uint256::ZERO);
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let chain_config_clone = tf.chainstate.get_chain_config();

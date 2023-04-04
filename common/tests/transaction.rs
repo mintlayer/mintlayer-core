@@ -40,21 +40,21 @@ fn transaction_id_snapshots() {
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0x28d1bb2ad7ae6ef483389ca2435b137a21cf362c9d697b24a356a3b5dc4a7ea8
+        0xa87e4adcb5a356a3247b699d2c36cf217a135b43a29c3883f46eaed72abbd128
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x02).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0x62c656b7cfff992d9a57822cd53bb4443422deabcc80c57e64153e9954ea8f22
+        0x228fea54993e15647ec580ccabde223444b43bd52c82579a2d99ffcfb756c662
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0xfc685449a89c79298273e765eceaa0f81f6b3863b70429820a07626b9d271852
+        0x5218279d6b62070a822904b763386b1ff8a0eaec65e7738229799ca8495468fc
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -68,14 +68,14 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0xb54806907fa4d0763489320a6fd9f3836c560f06313a41318c32d321973ad944
+        0x44d93a9721d3328c31413a31060f566c83f3d96f0a32893476d0a47f900648b5
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0xc702999390064f5bec31b087007abbffc764da468abf6f092897b846df995456
+        0x565499df46b89728096fbf8a46da64c7ffbb7a0087b031ec5b4f0690939902c7
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -89,7 +89,7 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0x502421db45587e3d733bdeb495a32540fec6f6d8697e502e69233a2dd211f423
+        0x23f411d22d3a23692e507e69d8f6c6fe4025a395b4de3b733d7e5845db212450
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

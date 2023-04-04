@@ -60,10 +60,10 @@ impl GenBlockIndex {
         }
     }
 
-    pub fn chain_trust(&self) -> &Uint256 {
+    pub fn chain_trust(&self) -> Uint256 {
         match self {
             GenBlockIndex::Block(b) => b.chain_trust(),
-            GenBlockIndex::Genesis(_g) => &Uint256::ZERO,
+            GenBlockIndex::Genesis(_g) => Uint256::ZERO,
         }
     }
 

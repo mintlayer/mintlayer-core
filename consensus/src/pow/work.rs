@@ -254,15 +254,15 @@ mod tests {
     #[case(0, "0000000000000000000000000000000000000000000000000000000000000000")]
     #[case(
         386_567_092,
-        "000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c"
+        "6c13667de68cb99b4ca3b8aaabe5513e68b90301a59f05000000000000000000"
     )] // block 722731
     #[case(
         386_568_320,
-        "0000000000000000000838523baafc5f5904e472de7ffba2a431b53179a03eb3"
+        "b33ea07931b531a42afbff7e2d474e905faafcb2385308000000000000000000"
     )] // block 721311
     #[case(
         486_604_799,
-        "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd"
+        "bdd99dc9fda39da1b108ce1a5d7030d0a9607bacb68b6b63605f626a00000000"
     )] // block 2
     fn pow_ok(#[case] bits: u32, #[case] hash: H256) {
         assert!(check_proof_of_work(hash, Compact(bits)).unwrap());
@@ -286,7 +286,7 @@ mod tests {
 
         let bits = Compact::from(pow_limit.mul_u32(2));
         let hash =
-            H256::from_str("1000000000000000000000000000000000000000000000000000000000000000")
+            H256::from_str("0000000000000000000000000000000000000000000000000000000000000010")
                 .unwrap();
 
         assert!(!check_proof_of_work(hash, bits).unwrap());

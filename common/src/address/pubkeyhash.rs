@@ -17,10 +17,7 @@ use crypto::key::PublicKey;
 use generic_array::sequence::Split;
 use serialization::{Decode, Encode};
 
-use crate::{
-    chain::classic_multisig::ClassicMultisigChallenge, construct_fixed_hash,
-    primitives::id::DefaultHashAlgo,
-};
+use crate::{chain::classic_multisig::ClassicMultisigChallenge, primitives::id::DefaultHashAlgo};
 
 #[derive(thiserror::Error, Debug, Clone, Copy, Eq, PartialEq)]
 pub enum PublicKeyHashError {
@@ -30,7 +27,7 @@ pub enum PublicKeyHashError {
 
 const HASH_SIZE: usize = 20;
 
-construct_fixed_hash! {
+fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct PublicKeyHash(HASH_SIZE);
 }
