@@ -257,7 +257,7 @@ impl BanScore for ConsensusPoWError {
         match self {
             ConsensusPoWError::InvalidPoW(_) => 100,
             ConsensusPoWError::PrevBlockLoadError(_, _, _) => 0,
-            ConsensusPoWError::PrevBlockNotFound(_, _) => 100,
+            ConsensusPoWError::PrevBlockNotFound(_) => 100,
             ConsensusPoWError::AncestorAtHeightNotFound(_, _, _) => 0,
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
