@@ -29,8 +29,9 @@ use crate::types::peer_address::PeerAddress;
 pub enum SyncMessage {
     HeaderListRequest(HeaderListRequest),
     BlockListRequest(BlockListRequest),
-    HeaderListResponse(HeaderListResponse),
+    HeaderList(HeaderList),
     BlockResponse(BlockResponse),
+    NewTransaction(Id<Transaction>),
     TransactionRequest(Id<Transaction>),
     TransactionResponse(SignedTransaction),
 }
@@ -95,13 +96,18 @@ pub struct PingRequest {
     pub nonce: u64,
 }
 
+/// A list of block headers.
+///
+/// This messages is sent as a response to the the `HeaderListRequest` message or as a new block
+/// announcement. This list should never be empty.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct HeaderListResponse {
+pub struct HeaderList {
     headers: Vec<BlockHeader>,
 }
 
-impl HeaderListResponse {
+impl HeaderList {
     pub fn new(headers: Vec<BlockHeader>) -> Self {
+        assert!(!headers.is_empty());
         Self { headers }
     }
 
@@ -145,10 +151,8 @@ pub struct PingResponse {
     pub nonce: u64,
 }
 
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Announcement {
-    #[codec(index = 0)]
-    Block(Box<BlockHeader>),
-    #[codec(index = 1)]
+    Block(HeaderList),
     Transaction(Id<Transaction>),
 }

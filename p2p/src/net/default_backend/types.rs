@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 use crate::{
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, Announcement, BlockListRequest,
-        BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage, PingRequest,
+        BlockResponse, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
         PingResponse, SyncMessage,
     },
     net::types::services::{Service, Services},
@@ -35,7 +35,7 @@ pub enum Command<A> {
     Accept { peer_id: PeerId },
     Disconnect { peer_id: PeerId },
     SendMessage { peer: PeerId, message: Message },
-    AnnounceData { service: Service, message: Vec<u8> },
+    AnnounceData { service: Service, message: Message },
 }
 
 /// Random nonce sent in outbound handshake.
@@ -107,12 +107,11 @@ pub enum Message {
     PingResponse(PingResponse),
 
     #[codec(index = 3)]
-    Announcement(Box<Announcement>),
-
+    NewTransaction(Id<Transaction>),
     #[codec(index = 4)]
     HeaderListRequest(HeaderListRequest),
     #[codec(index = 5)]
-    HeaderListResponse(HeaderListResponse),
+    HeaderList(HeaderList),
     #[codec(index = 6)]
     BlockListRequest(BlockListRequest),
     #[codec(index = 7)]
@@ -147,10 +146,19 @@ impl From<SyncMessage> for Message {
         match message {
             SyncMessage::HeaderListRequest(r) => Message::HeaderListRequest(r),
             SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
-            SyncMessage::HeaderListResponse(r) => Message::HeaderListResponse(r),
+            SyncMessage::HeaderList(r) => Message::HeaderList(r),
             SyncMessage::BlockResponse(r) => Message::BlockResponse(r),
             SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
             SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
+        }
+    }
+}
+
+impl From<Announcement> for Message {
+    fn from(announcement: Announcement) -> Self {
+        match announcement {
+            Announcement::Block(l) => Self::HeaderList(l),
+            Announcement::Transaction(id) => Self::NewTransaction(id),
         }
     }
 }

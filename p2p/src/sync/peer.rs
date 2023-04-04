@@ -43,8 +43,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{
-        Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
-        SyncMessage,
+        Announcement, BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
     },
     net::{
         types::services::{Service, Services},

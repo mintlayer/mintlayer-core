@@ -24,7 +24,6 @@ use async_trait::async_trait;
 use tokio::sync::mpsc;
 
 use logging::log;
-use serialization::Encode;
 
 use crate::{
     error::P2pError,
@@ -75,18 +74,11 @@ impl<S: NetworkingService, T: TransportSocket> ConnectivityHandle<S, T> {
 #[derive(Debug)]
 pub struct MessagingHandle<T: TransportSocket> {
     command_sender: mpsc::UnboundedSender<types::Command<T::Address>>,
-    p2p_config: Arc<P2pConfig>,
 }
 
 impl<T: TransportSocket> MessagingHandle<T> {
-    pub fn new(
-        command_sender: mpsc::UnboundedSender<types::Command<T::Address>>,
-        p2p_config: Arc<P2pConfig>,
-    ) -> Self {
-        Self {
-            command_sender,
-            p2p_config,
-        }
+    pub fn new(command_sender: mpsc::UnboundedSender<types::Command<T::Address>>) -> Self {
+        Self { command_sender }
     }
 }
 
@@ -94,7 +86,6 @@ impl<T: TransportSocket> Clone for MessagingHandle<T> {
     fn clone(&self) -> Self {
         Self {
             command_sender: self.command_sender.clone(),
-            p2p_config: self.p2p_config.clone(),
         }
     }
 }
@@ -149,7 +140,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
-            MessagingHandle::new(cmd_tx, p2p_config),
+            MessagingHandle::new(cmd_tx),
             Self::SyncingEventReceiver { sync_rx },
         ))
     }
@@ -216,10 +207,11 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
             Announcement::Transaction(_) => Service::Transactions,
         };
 
-        let message = announcement.encode();
-        assert!(message.len() < *self.p2p_config.max_message_size);
         self.command_sender
-            .send(types::Command::AnnounceData { service, message })
+            .send(types::Command::AnnounceData {
+                service,
+                message: announcement.into(),
+            })
             .map_err(P2pError::from)
     }
 }

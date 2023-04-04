@@ -42,7 +42,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     event::PeerManagerEvent,
-    message::Announcement,
+    message::{Announcement, HeaderList},
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::{Peer, PeerEvent},
     types::peer_id::PeerId,
@@ -216,7 +216,8 @@ where
             .expect("A new tip block unavailable")
             .header()
             .clone();
-        self.messaging_handle.make_announcement(Announcement::Block(Box::new(header)))
+        self.messaging_handle
+            .make_announcement(Announcement::Block(HeaderList::new(vec![header])))
     }
 
     /// Sends an event to the corresponding peer.
