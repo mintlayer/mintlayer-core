@@ -19,7 +19,7 @@ use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GetAncestorError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        block::{timestamp::BlockTimestamp, BlockHeader, BlockReward, ConsensusData},
         Block, ChainConfig, Destination, GenBlock, SignedTransaction,
     },
     primitives::{BlockHeight, Id, Idable},
@@ -97,29 +97,15 @@ impl BlockMaker {
         Ok(returned_accumulator)
     }
 
-    pub async fn generate_block(
+    pub async fn pull_consensus_data(
         &self,
-        transactions: Vec<SignedTransaction>,
-    ) -> Result<Block, BlockProductionError> {
-        // TODO: instead of the following static value, look at
-        // self.chain_config for the current block reward, then send
-        // it to self.reward_destination
-        let block_reward = BlockReward::new(vec![]);
-
-        let mut block = Block::new(
-            transactions,
-            self.current_tip_id,
-            BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
-            ConsensusData::None,
-            block_reward,
-        )?;
-
+        block_header: BlockHeader,
+    ) -> Result<ConsensusData, BlockProductionError> {
         let consensus_data = self
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
                 let current_tip_height = self.current_tip_height;
-                let header = block.header().clone();
 
                 move |this| {
                     let get_block_index = |&prev_block_id: &Id<Block>| {
@@ -145,7 +131,7 @@ impl BlockMaker {
 
                     consensus::generate_consensus_data(
                         &chain_config,
-                        &header,
+                        &block_header,
                         current_tip_height.next_height(),
                         get_block_index,
                         get_ancestor,
@@ -154,6 +140,28 @@ impl BlockMaker {
             })
             .await?
             .map_err(BlockProductionError::FailedConsensusInitialization)?;
+
+        Ok(consensus_data)
+    }
+
+    pub async fn generate_block(
+        &self,
+        transactions: Vec<SignedTransaction>,
+    ) -> Result<Block, BlockProductionError> {
+        // TODO: instead of the following static value, look at
+        // self.chain_config for the current block reward, then send
+        // it to self.reward_destination
+        let block_reward = BlockReward::new(vec![]);
+
+        let mut block = Block::new(
+            transactions,
+            self.current_tip_id,
+            BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time()),
+            ConsensusData::None,
+            block_reward,
+        )?;
+
+        let consensus_data = self.pull_consensus_data(block.header().clone()).await?;
 
         block.update_consensus_data(consensus_data);
 
