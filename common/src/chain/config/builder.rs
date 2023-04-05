@@ -30,7 +30,7 @@ impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
         match self {
             ChainType::Mainnet => GenesisBlockInit::Mainnet,
-            ChainType::Testnet => todo!("Testnet genesis"),
+            ChainType::Testnet => unimplemented!("Testnet genesis"),
             ChainType::Regtest => GenesisBlockInit::TEST,
             ChainType::Signet => GenesisBlockInit::TEST,
         }
@@ -54,7 +54,7 @@ impl ChainType {
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
-            ChainType::Testnet => todo!("Testnet upgrades"),
+            ChainType::Testnet => unimplemented!("Testnet upgrades"),
             ChainType::Signet => NetUpgrades::unit_tests(),
         }
     }
