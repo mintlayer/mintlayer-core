@@ -18,6 +18,7 @@
 use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
+use common::chain::config::ChainType;
 use directories::UserDirs;
 
 use crate::{
@@ -158,15 +159,19 @@ impl Options {
     }
 
     /// Returns a path to the config file
-    pub fn config_path(&self) -> PathBuf {
-        self.data_dir.clone().unwrap_or_else(default_data_dir).join(CONFIG_NAME)
+    pub fn config_path(&self, chain_type: ChainType) -> PathBuf {
+        self.data_dir
+            .clone()
+            .unwrap_or_else(|| default_data_dir(chain_type))
+            .join(CONFIG_NAME)
     }
 }
 
-pub fn default_data_dir() -> PathBuf {
+pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
     UserDirs::new()
         // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
         .expect("Unable to get home directory")
         .home_dir()
         .join(DATA_DIR_NAME)
+        .join(chain_type.name())
 }

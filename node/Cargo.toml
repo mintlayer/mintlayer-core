@@ -29,6 +29,7 @@ serde = { workspace = true, features = ["derive"] }
 toml = "0.7"
 directories = "4.0"
 paste = "1.0"
+fs4 = "0.6.3"
 
 [dev-dependencies]
 crypto = { path = "../crypto" }

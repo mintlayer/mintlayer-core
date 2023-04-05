@@ -142,7 +142,7 @@ pub async fn run(options: Options) -> Result<()> {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();
             start(
-                &options.config_path(),
+                &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
                 run_options,
                 chain_config,
@@ -152,7 +152,7 @@ pub async fn run(options: Options) -> Result<()> {
         Command::Testnet(ref run_options) => {
             let chain_config = ChainConfigBuilder::new(ChainType::Testnet).build();
             start(
-                &options.config_path(),
+                &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
                 run_options,
                 chain_config,
@@ -162,7 +162,7 @@ pub async fn run(options: Options) -> Result<()> {
         Command::Regtest(ref regtest_options) => {
             let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
             start(
-                &options.config_path(),
+                &options.config_path(*chain_config.chain_type()),
                 &options.data_dir,
                 &regtest_options.run_options,
                 chain_config,
@@ -201,6 +201,16 @@ fn prepare_data_dir<F: Fn() -> PathBuf>(
     Ok(data_dir)
 }
 
+/// Creates an exclusive lock file in the specified directory.
+/// Fails if the lock file cannot be created or is already locked.
+fn lock_data_dir(data_dir: &PathBuf) -> Result<std::fs::File> {
+    let lock = std::fs::File::create(data_dir.join(".lock"))
+        .map_err(|e| anyhow!("Cannot create lock file in {data_dir:?}: {e}"))?;
+    fs4::FileExt::try_lock_exclusive(&lock)
+        .map_err(|e| anyhow!("Cannot lock directory {data_dir:?}: {e}"))?;
+    Ok(lock)
+}
+
 async fn start(
     config_path: &Path,
     datadir_path_opt: &Option<PathBuf>,
@@ -214,12 +224,17 @@ async fn start(
     let node_config =
         NodeConfigFile::read(config_path, run_options).context("Failed to initialize config")?;
 
-    let data_dir = prepare_data_dir(default_data_dir, datadir_path_opt)
-        .expect("Failed to prepare data directory");
+    let data_dir = prepare_data_dir(
+        || default_data_dir(*chain_config.chain_type()),
+        datadir_path_opt,
+    )
+    .expect("Failed to prepare data directory");
+    let _lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
     let manager = initialize(chain_config, data_dir, node_config).await?;
     manager.main().await;
+
     Ok(())
 }
 
