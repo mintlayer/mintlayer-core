@@ -38,6 +38,7 @@ use p2p::{
 
 // Test announcements with multiple peers and verify that the message validation is done and peers
 // don't automatically forward the messages.
+// TODO: Implement announcements resending in partially connected networks.
 async fn block_announcement_3_peers<A, S>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
@@ -151,7 +152,6 @@ where
     ));
 }
 
-// TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_tcp() {
@@ -159,7 +159,6 @@ async fn block_announcement_3_peers_tcp() {
         .await;
 }
 
-// TODO: Implement announcements resending in partially connected networks.
 #[tokio::test]
 #[ignore]
 async fn block_announcement_3_peers_channels() {
@@ -170,7 +169,6 @@ async fn block_announcement_3_peers_channels() {
     .await;
 }
 
-// TODO: Implement announcements resending in partially connected networks.
 #[ignore]
 #[tokio::test]
 async fn block_announcement_3_peers_noise() {

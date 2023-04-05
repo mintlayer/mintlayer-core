@@ -456,17 +456,19 @@ where
     fn handle_peer_event(&mut self, peer_id: PeerId, event: PeerEvent) -> crate::Result<()> {
         match event {
             PeerEvent::PeerInfoReceived {
+                protocol,
                 network,
-                version,
                 services,
+                user_agent,
+                version,
                 receiver_address,
                 handshake_nonce,
-                user_agent,
             } => self.create_peer(
                 peer_id,
                 handshake_nonce,
                 PeerInfo {
                     peer_id,
+                    protocol,
                     network,
                     version,
                     user_agent,

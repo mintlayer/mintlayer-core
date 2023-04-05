@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,29 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use log;
+/// Network protocol version
+///
+/// When two nodes connect, they exchange protocol versions,
+/// and the minimum version is selected as the negotiated network protocol version.
+pub type NetworkProtocol = u32;
 
-pub fn is_only_terminal_output_logging() -> bool {
-    true
-}
+/// Initial protocol version
+pub const NETWORK_PROTOCOL_V1: NetworkProtocol = 1;
 
-pub fn is_file_output_supported() -> bool {
-    false
-}
+/// Latest known network protocol version
+pub const NETWORK_PROTOCOL_CURRENT: NetworkProtocol = NETWORK_PROTOCOL_V1;
 
-static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
-
-pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
-    INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn initialize_twice() {
-        init_logging::<&std::path::Path>(None);
-        init_logging::<&std::path::Path>(None);
-    }
-}
+/// Minimum supported network protocol version
+pub const NETWORK_PROTOCOL_MIN: NetworkProtocol = NETWORK_PROTOCOL_V1;

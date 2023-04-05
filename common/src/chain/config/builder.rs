@@ -30,7 +30,7 @@ impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
         match self {
             ChainType::Mainnet => GenesisBlockInit::Mainnet,
-            ChainType::Testnet => todo!("Testnet genesis"),
+            ChainType::Testnet => unimplemented!("Testnet genesis"),
             ChainType::Regtest => GenesisBlockInit::TEST,
             ChainType::Signet => GenesisBlockInit::TEST,
         }
@@ -54,7 +54,7 @@ impl ChainType {
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
-            ChainType::Testnet => todo!("Testnet upgrades"),
+            ChainType::Testnet => unimplemented!("Testnet upgrades"),
             ChainType::Signet => NetUpgrades::unit_tests(),
         }
     }
@@ -123,7 +123,8 @@ impl Builder {
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
-            version: SemVer::new(0, 1, 0),
+            version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
+                .expect("invalid CARGO_PKG_VERSION value"),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
