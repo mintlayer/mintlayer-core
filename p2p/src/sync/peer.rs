@@ -29,7 +29,7 @@ use void::Void;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
-    chain::{block::BlockHeader, Block, SignedTransaction, Transaction},
+    chain::{block::BlockHeader, Block, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -44,7 +44,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     message::{
         Announcement, BlockListRequest, BlockResponse, HeaderListRequest, HeaderListResponse,
-        SyncMessage,
+        SyncMessage, TransactionResponse,
     },
     net::{
         types::services::{Service, Services},
@@ -88,7 +88,7 @@ pub struct Peer<T: NetworkingService> {
     best_known_block: Option<BlockHeight>,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
-    /// identifier is announced and removed when the actual transaction is received.
+    /// identifier is announced and removed when the actual transaction or not found response is received.
     announced_transactions: BTreeSet<Id<Transaction>>,
 }
 
@@ -390,20 +390,26 @@ where
             )));
         }
 
-        if let Some(tx) = self
+        let tx = self
             .mempool_handle
             .call_async(move |m| Box::pin(async move { m.transaction(&id).await }))
-            .await??
-        {
-            self.messaging_handle
-                .send_message(self.id(), SyncMessage::TransactionResponse(tx))?;
-        }
+            .await??;
+        let res = match tx {
+            Some(tx) => TransactionResponse::Found(tx),
+            None => TransactionResponse::NotFound(id),
+        };
+
+        self.messaging_handle
+            .send_message(self.id(), SyncMessage::TransactionResponse(res))?;
 
         Ok(())
     }
 
-    async fn handle_transaction_response(&mut self, tx: SignedTransaction) -> Result<()> {
-        let id = tx.serialized_hash();
+    async fn handle_transaction_response(&mut self, resp: TransactionResponse) -> Result<()> {
+        let (id, tx) = match resp {
+            TransactionResponse::NotFound(id) => (id, None),
+            TransactionResponse::Found(tx) => (tx.transaction().get_id(), Some(tx)),
+        };
 
         if self.announced_transactions.take(&id).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
@@ -411,8 +417,12 @@ where
             )));
         }
 
-        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
-        self.messaging_handle.make_announcement(Announcement::Transaction(id))
+        if let Some(tx) = tx {
+            self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+            self.messaging_handle.make_announcement(Announcement::Transaction(id))?;
+        }
+
+        Ok(())
     }
 
     async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
