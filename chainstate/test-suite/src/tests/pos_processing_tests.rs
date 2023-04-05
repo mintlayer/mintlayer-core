@@ -1038,7 +1038,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
             Amount::from_atoms(1),
             anyonecanspend_address(),
             pool_id1,
-            OutputTimeLock::ForBlockCount(1),
+            OutputTimeLock::ForBlockCount(1), // FIXME: this should fail
         ))
         .build();
 

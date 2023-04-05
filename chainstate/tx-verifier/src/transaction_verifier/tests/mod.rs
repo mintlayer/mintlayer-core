@@ -27,7 +27,6 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
-use pos_accounting::PoolData;
 
 fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (OutPoint, Utxo) {
     let outpoint = OutPoint::new(
@@ -50,16 +49,18 @@ fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
 
 fn create_pool_data(
     rng: &mut (impl Rng + CryptoRng),
+    staker: Destination,
     decomission_destination: Destination,
     pledged_amount: Amount,
-) -> PoolData {
+) -> StakePoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ration = rng.gen_range(0u64..1000);
     let cost_per_epoch = Amount::from_atoms(rng.gen_range(0..1000));
-    PoolData::new(
-        decomission_destination,
+    StakePoolData::new(
         pledged_amount,
+        staker,
         vrf_pk,
+        decomission_destination,
         margin_ration,
         cost_per_epoch,
     )
