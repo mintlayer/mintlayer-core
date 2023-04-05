@@ -402,7 +402,7 @@ where
     }
 
     async fn handle_transaction_response(&mut self, tx: SignedTransaction) -> Result<()> {
-        let id = tx.serialized_hash();
+        let id = tx.transaction().get_id();
 
         if self.announced_transactions.take(&id).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
