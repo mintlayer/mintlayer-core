@@ -32,6 +32,8 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
+const POW_MAX_NONCE: u128 = 10_000;
+
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{
@@ -86,7 +88,7 @@ pub fn finalize_consensus_data(
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),
             ConsensusData::PoW(pow_data) => {
-                mine(block_header, u128::MAX, pow_data.bits(), stop_flag)
+                mine(block_header, POW_MAX_NONCE, pow_data.bits(), stop_flag)
                     .map_err(ConsensusVerificationError::PoWError)?;
 
                 Ok(())
