@@ -55,6 +55,7 @@ fn unban_peer() {
             user_agent: mintlayer_core_user_agent(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            max_unconnected_headers: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,

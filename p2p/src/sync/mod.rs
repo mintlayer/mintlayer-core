@@ -42,9 +42,9 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     event::PeerManagerEvent,
-    message::{Announcement, HeaderList},
+    message::{Announcement, HeaderList, SyncMessage},
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
-    sync::peer::{Peer, PeerEvent},
+    sync::peer::Peer,
     types::peer_id::PeerId,
     Result,
 };
@@ -71,7 +71,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AtomicBool>,
 
     /// A mapping from a peer identifier to the channel.
-    peers: HashMap<PeerId, UnboundedSender<PeerEvent>>,
+    peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
 }
 
 /// Syncing manager
@@ -222,7 +222,7 @@ where
 
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
-        let (peer, event) = match event {
+        let (peer, message) = match event {
             SyncingEvent::Connected { peer_id } => {
                 self.register_peer(peer_id)?;
                 return Ok(());
@@ -231,18 +231,14 @@ where
                 self.unregister_peer(peer_id);
                 return Ok(());
             }
-            SyncingEvent::Message { peer, message } => (peer, PeerEvent::Message { message }),
-            SyncingEvent::Announcement { peer, announcement } => {
-                (peer, PeerEvent::Announcement { announcement })
-            }
+            SyncingEvent::Message { peer, message } => (peer, message),
         };
 
-        let peer_channel = self
-            .peers
-            .get(&peer)
-            .unwrap_or_else(|| panic!("Received a message from unknown peer ({peer}): {event:?}"));
+        let peer_channel = self.peers.get(&peer).unwrap_or_else(|| {
+            panic!("Received a message from unknown peer ({peer}): {message:?}")
+        });
 
-        if let Err(e) = peer_channel.send(event) {
+        if let Err(e) = peer_channel.send(message) {
             log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");
             self.unregister_peer(peer);
         }

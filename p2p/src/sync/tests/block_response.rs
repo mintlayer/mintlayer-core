@@ -24,7 +24,7 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    message::{Announcement, BlockListRequest, BlockResponse, HeaderListResponse, SyncMessage},
+    message::{BlockListRequest, BlockResponse, HeaderList, SyncMessage},
     net::types::SyncingEvent,
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
@@ -121,10 +121,7 @@ async fn valid_response(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -143,33 +140,35 @@ async fn valid_response(#[case] seed: Seed) {
         // A peer would request headers after the last block.
         if i < num_blocks - 1 {
             assert_eq!(
-                handle.announcement().await,
-                Announcement::Block(Box::new(block.header().clone()))
+                handle.message().await.1,
+                SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()]))
             );
         } else {
             // The order of receiving the block announcement and header list request is nondeterministic.
-            let (announcement, request) = match (handle.event().await, handle.event().await) {
+            let header_list = match (handle.event().await, handle.event().await) {
                 (
-                    SyncingEvent::Announcement {
+                    SyncingEvent::Message {
                         peer: _,
-                        announcement,
+                        message: SyncMessage::HeaderListRequest(_),
                     },
-                    SyncingEvent::Message { peer: _, message },
-                ) => (*announcement, message),
+                    SyncingEvent::Message {
+                        peer: _,
+                        message: SyncMessage::HeaderList(l),
+                    },
+                ) => l.into_headers(),
                 (
-                    SyncingEvent::Message { peer: _, message },
-                    SyncingEvent::Announcement {
+                    SyncingEvent::Message {
                         peer: _,
-                        announcement,
+                        message: SyncMessage::HeaderList(l),
                     },
-                ) => (*announcement, message),
+                    SyncingEvent::Message {
+                        peer: _,
+                        message: SyncMessage::HeaderListRequest(_),
+                    },
+                ) => l.into_headers(),
                 (e1, e2) => panic!("Unexpected events: {e1:?} {e2:?}"),
             };
-            assert_eq!(
-                announcement,
-                Announcement::Block(Box::new(block.header().clone()))
-            );
-            assert!(matches!(request, SyncMessage::HeaderListRequest(_)));
+            assert_eq!(header_list, vec![block.header().clone()]);
         }
     }
 

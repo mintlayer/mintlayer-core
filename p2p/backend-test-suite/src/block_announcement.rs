@@ -22,7 +22,7 @@ use common::{
 
 use p2p::{
     config::{NodeType, P2pConfig},
-    message::Announcement,
+    message::{Announcement, HeaderList, SyncMessage},
     net::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
@@ -70,7 +70,9 @@ where
     )
     .unwrap();
     messaging_handle1
-        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+            .header()
+            .clone()])))
         .unwrap();
 
     match sync2.poll_next().await.unwrap() {
@@ -80,11 +82,11 @@ where
 
     // Poll an event from the network for server2.
     let header = match sync2.poll_next().await.unwrap() {
-        SyncingEvent::Announcement {
-            peer: _,
-            announcement,
-        } => match *announcement {
-            Announcement::Block(h) => *h,
+        SyncingEvent::Message { peer: _, message } => match message {
+            SyncMessage::HeaderList(l) => {
+                assert_eq!(l.headers().len(), 1);
+                l.into_headers().pop().unwrap()
+            }
             a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
@@ -101,7 +103,9 @@ where
     )
     .unwrap();
     messaging_handle2
-        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+            .header()
+            .clone()])))
         .unwrap();
 
     match sync1.poll_next().await.unwrap() {
@@ -110,11 +114,11 @@ where
     };
 
     let header = match sync1.poll_next().await.unwrap() {
-        SyncingEvent::Announcement {
-            peer: _,
-            announcement,
-        } => match *announcement {
-            Announcement::Block(h) => *h,
+        SyncingEvent::Message { peer: _, message } => match message {
+            SyncMessage::HeaderList(l) => {
+                assert_eq!(l.headers().len(), 1);
+                l.into_headers().pop().unwrap()
+            }
             a => panic!("Unexpected announcement: {a:?}"),
         },
         event => panic!("Unexpected event: {event:?}"),
@@ -152,6 +156,7 @@ where
         user_agent: mintlayer_core_user_agent(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),
@@ -181,6 +186,8 @@ where
     )
     .unwrap();
     messaging_handle1
-        .make_announcement(Announcement::Block(Box::new(block.header().clone())))
+        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+            .header()
+            .clone()])))
         .unwrap();
 }

@@ -104,6 +104,7 @@ impl From<P2pConfigFile> for P2pConfig {
             user_agent: mintlayer_core_user_agent(),
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
+            max_unconnected_headers: Default::default(),
         }
     }
 }

@@ -110,7 +110,7 @@ mod tests {
     use super::*;
     use crate::{
         error::DialError,
-        message::{AddrListRequest, AnnounceAddrRequest, HeaderListResponse, PingRequest},
+        message::{AddrListRequest, AnnounceAddrRequest, HeaderList, PingRequest},
     };
 
     #[rstest::rstest]
@@ -179,7 +179,7 @@ mod tests {
 
         let messages = [
             Message::PingRequest(PingRequest { nonce: 1 }),
-            Message::HeaderListResponse(HeaderListResponse::new(Vec::new())),
+            Message::HeaderList(HeaderList::new(Vec::new())),
             Message::AnnounceAddrRequest(AnnounceAddrRequest {
                 address: SocketAddr::new(
                     IpAddr::V4(Ipv4Addr::new(rng.gen(), rng.gen(), rng.gen(), rng.gen())),

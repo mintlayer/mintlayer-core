@@ -25,7 +25,7 @@ use p2p::testing_utils::{
     TestTransportNoise, TestTransportTcp,
 };
 use p2p::{
-    message::Announcement,
+    message::{Announcement, HeaderList, SyncMessage},
     net::{
         default_backend::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
@@ -84,27 +84,25 @@ where
     connect_and_accept_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
     messaging_handle1
-        .make_announcement(Announcement::Block(Box::new(
-            Block::new(
-                vec![],
-                Id::new(H256([0x03; 32])),
-                BlockTimestamp::from_int_seconds(1337u64),
-                ConsensusData::None,
-                BlockReward::new(Vec::new()),
-            )
-            .unwrap()
-            .header()
-            .clone(),
-        )))
+        .make_announcement(Announcement::Block(HeaderList::new(vec![Block::new(
+            vec![],
+            Id::new(H256([0x03; 32])),
+            BlockTimestamp::from_int_seconds(1337u64),
+            ConsensusData::None,
+            BlockReward::new(Vec::new()),
+        )
+        .unwrap()
+        .header()
+        .clone()])))
         .unwrap();
 
     // Verify that all peers received the message even though they weren't directly connected.
     let event = peer1.1.poll_next().await.unwrap();
     assert!(matches!(
         event,
-        SyncingEvent::Announcement {
+        SyncingEvent::Message {
             peer: _,
-            announcement: _
+            message: SyncMessage::HeaderList(_),
         }
     ));
 
@@ -128,9 +126,9 @@ where
     let event = peer2.1.poll_next().await.unwrap();
     assert!(matches!(
         event,
-        SyncingEvent::Announcement {
+        SyncingEvent::Message {
             peer: _,
-            announcement: _
+            message: SyncMessage::HeaderList(_),
         }
     ));
 
@@ -146,7 +144,10 @@ where
     let res = peer3.1.poll_next().await;
     assert!(std::matches!(
         res.unwrap(),
-        SyncingEvent::Announcement { .. }
+        SyncingEvent::Message {
+            peer: _,
+            message: SyncMessage::HeaderList(_)
+        }
     ));
 }
 

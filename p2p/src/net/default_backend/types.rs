@@ -148,6 +148,7 @@ impl From<SyncMessage> for Message {
             SyncMessage::BlockListRequest(r) => Message::BlockListRequest(r),
             SyncMessage::HeaderList(r) => Message::HeaderList(r),
             SyncMessage::BlockResponse(r) => Message::BlockResponse(r),
+            SyncMessage::NewTransaction(id) => Message::NewTransaction(id),
             SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
             SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
         }

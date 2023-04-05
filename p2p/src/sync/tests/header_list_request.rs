@@ -119,7 +119,7 @@ async fn valid_request(#[case] seed: Seed) {
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
     let headers = match message {
-        SyncMessage::HeaderListResponse(r) => r.into_headers(),
+        SyncMessage::HeaderList(l) => l.into_headers(),
         m => panic!("Unexpected message: {m:?}"),
     };
     assert_eq!(headers.len(), 1);

@@ -99,7 +99,7 @@ pub struct PingRequest {
 /// A list of block headers.
 ///
 /// This messages is sent as a response to the the `HeaderListRequest` message or as a new block
-/// announcement. This list should never be empty.
+/// announcement.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderList {
     headers: Vec<BlockHeader>,
@@ -107,7 +107,6 @@ pub struct HeaderList {
 
 impl HeaderList {
     pub fn new(headers: Vec<BlockHeader>) -> Self {
-        assert!(!headers.is_empty());
         Self { headers }
     }
 
@@ -155,4 +154,13 @@ pub struct PingResponse {
 pub enum Announcement {
     Block(HeaderList),
     Transaction(Id<Transaction>),
+}
+
+impl From<Announcement> for SyncMessage {
+    fn from(announcement: Announcement) -> Self {
+        match announcement {
+            Announcement::Block(l) => Self::HeaderList(l),
+            Announcement::Transaction(id) => Self::NewTransaction(id),
+        }
+    }
 }

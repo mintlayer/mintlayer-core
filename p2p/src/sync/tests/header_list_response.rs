@@ -23,7 +23,7 @@ use test_utils::random::Seed;
 
 use crate::{
     error::ProtocolError,
-    message::{BlockListRequest, HeaderListResponse, SyncMessage},
+    message::{BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -37,10 +37,7 @@ async fn nonexistent_peer() {
 
     let peer = PeerId::new();
 
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(Vec::new())),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(Vec::new())));
 
     handle.resume_panic().await;
 }
@@ -74,10 +71,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let headers = iter::repeat(block.header().clone())
         .take(*p2p_config.msg_header_count_limit + 1)
         .collect();
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -118,10 +112,7 @@ async fn unordered_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -160,10 +151,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -199,10 +187,7 @@ async fn valid_headers(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let headers = blocks.iter().map(|b| b.header().clone()).collect();
-    handle.send_message(
-        peer,
-        SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-    );
+    handle.send_message(peer, SyncMessage::HeaderList(HeaderList::new(headers)));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);

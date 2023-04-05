@@ -139,9 +139,9 @@ impl SyncManagerHandle {
     /// Sends an announcement to the sync manager.
     pub fn make_announcement(&mut self, peer: PeerId, announcement: Announcement) {
         self.sync_event_sender
-            .send(SyncingEvent::Announcement {
+            .send(SyncingEvent::Message {
                 peer,
-                announcement: Box::new(announcement),
+                message: announcement.into(),
             })
             .unwrap();
     }
@@ -150,17 +150,6 @@ impl SyncManagerHandle {
     pub async fn message(&mut self) -> (PeerId, SyncMessage) {
         match self.event().await {
             SyncingEvent::Message { peer, message } => (peer, message),
-            e => panic!("Unexpected event: {e:?}"),
-        }
-    }
-
-    /// Receives an announcement from the sync manager.
-    pub async fn announcement(&mut self) -> Announcement {
-        match self.event().await {
-            SyncingEvent::Announcement {
-                peer: _,
-                announcement,
-            } => *announcement,
             e => panic!("Unexpected event: {e:?}"),
         }
     }
@@ -316,9 +305,9 @@ impl MessagingService for MessagingHandleMock {
 
     fn make_announcement(&mut self, announcement: Announcement) -> Result<()> {
         self.events_sender
-            .send(SyncingEvent::Announcement {
+            .send(SyncingEvent::Message {
                 peer: "0".parse().unwrap(),
-                announcement: Box::new(announcement),
+                message: announcement.into(),
             })
             .unwrap();
         Ok(())

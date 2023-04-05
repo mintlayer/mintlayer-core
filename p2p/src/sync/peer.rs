@@ -54,12 +54,6 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-#[derive(Debug)]
-pub enum PeerEvent {
-    Message { message: SyncMessage },
-    Announcement { announcement: Box<Announcement> },
-}
-
 // TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
 // TODO: Track the block availability for a peer.
 // TODO: Track the best known block for a peer and take into account the chain work when syncing.
@@ -74,7 +68,7 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
-    events_receiver: UnboundedReceiver<PeerEvent>,
+    message_receiver: UnboundedReceiver<SyncMessage>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -89,6 +83,9 @@ pub struct Peer<T: NetworkingService> {
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction is received.
     announced_transactions: BTreeSet<Id<Transaction>>,
+    /// A number of consecutive unconnected headers received from a peer. This counter is reset
+    /// after receiving a valid header.
+    unconnected_headers: usize,
 }
 
 impl<T> Peer<T>
@@ -104,7 +101,7 @@ where
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         messaging_handle: T::MessagingHandle,
-        events_receiver: UnboundedReceiver<PeerEvent>,
+        message_receiver: UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
     ) -> Self {
         let services = (*p2p_config.node_type).into();
@@ -117,13 +114,14 @@ where
             mempool_handle,
             peer_manager_sender,
             messaging_handle,
-            events_receiver,
+            message_receiver,
             is_initial_block_download,
             known_headers: Vec::new(),
             requested_blocks: BTreeSet::new(),
             blocks_queue: VecDeque::new(),
             best_known_block: None,
             announced_transactions: BTreeSet::new(),
+            unconnected_headers: 0,
         }
     }
 
@@ -133,15 +131,13 @@ where
     }
 
     pub async fn run(&mut self) -> Result<Void> {
-        // TODO: Improve the initial header exchange. See the
-        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
         self.request_headers().await?;
 
         loop {
             tokio::select! {
-                event = self.events_receiver.recv() => {
-                    let event = event.ok_or(P2pError::ChannelClosed)?;
-                    self.handle_event(event).await?;
+                message = self.message_receiver.recv() => {
+                    let message = message.ok_or(P2pError::ChannelClosed)?;
+                    self.handle_message(message).await?;
                 },
 
                 block_to_send_to_peer = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
@@ -152,8 +148,6 @@ where
     }
 
     async fn request_headers(&mut self) -> Result<()> {
-        // TODO: Improve the initial header exchange. See the
-        // https://github.com/mintlayer/mintlayer-core/issues/747 issue for details.
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
@@ -163,27 +157,17 @@ where
         )
     }
 
-    async fn handle_event(&mut self, event: PeerEvent) -> Result<()> {
-        let res = match event {
-            PeerEvent::Message { message } => self.handle_message(message).await,
-            PeerEvent::Announcement { announcement } => {
-                self.handle_announcement(*announcement).await
-            }
-        };
-        self.handle_result(res).await
-    }
-
     async fn handle_message(&mut self, message: SyncMessage) -> Result<()> {
-        match message {
+        let res = match message {
             SyncMessage::HeaderListRequest(r) => self.handle_header_request(r.into_locator()).await,
             SyncMessage::BlockListRequest(r) => self.handle_block_request(r.into_block_ids()).await,
-            SyncMessage::HeaderListResponse(r) => {
-                self.handle_header_response(r.into_headers()).await
-            }
+            SyncMessage::HeaderList(l) => self.handle_header_list(l.into_headers()).await,
             SyncMessage::BlockResponse(r) => self.handle_block_response(r.into_block()).await,
+            SyncMessage::NewTransaction(id) => self.handle_transaction_announcement(id).await,
             SyncMessage::TransactionRequest(id) => self.handle_transaction_request(id).await,
             SyncMessage::TransactionResponse(tx) => self.handle_transaction_response(tx).await,
-        }
+        };
+        self.handle_result(res).await
     }
 
     /// Processes a header request by sending requested data to the peer.
@@ -207,10 +191,8 @@ where
         let limit = *self.p2p_config.msg_header_count_limit;
         let headers = self.chainstate_handle.call(move |c| c.get_headers(locator, limit)).await??;
         debug_assert!(headers.len() <= limit);
-        self.messaging_handle.send_message(
-            self.id(),
-            SyncMessage::HeaderListResponse(HeaderListResponse::new(headers)),
-        )
+        self.messaging_handle
+            .send_message(self.id(), SyncMessage::HeaderList(HeaderList::new(headers)))
     }
 
     /// Processes the blocks request.
@@ -271,12 +253,19 @@ where
         Ok(())
     }
 
-    async fn handle_header_response(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
-        log::debug!("Headers response from peer {}", self.id());
+    async fn handle_header_list(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
+        log::debug!("Headers list from peer {}", self.id());
 
         if !self.known_headers.is_empty() {
+            // The headers list contains exactly one header when a new block is announced.
+            if headers.len() == 1 {
+                // We are already requesting blocks from the peer and will download a new one as
+                // part of that process.
+                return Ok(());
+            }
+
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "headers response",
+                "Headers list",
             )));
         }
 
@@ -290,8 +279,7 @@ where
         }
         log::trace!("Received headers: {headers:#?}");
 
-        // TODO: Should the empty headers response be treated as misbehavior if we are going to
-        // send a locator starting with the block preceding the tip?
+        // The empty headers list means that the peer doesn't have more blocks.
         if headers.is_empty() {
             return Ok(());
         }
@@ -317,6 +305,17 @@ where
             .await??
             .is_none()
         {
+            // It is possible to receive a new block announcement that isn't connected to our chain.
+            if headers.len() == 1 {
+                // In order to prevent spam from malicious peers we have the `unconnected_headers`
+                // counter.
+                self.unconnected_headers += 1;
+                if self.unconnected_headers < *self.p2p_config.max_unconnected_headers {
+                    self.request_headers().await?;
+                    return Ok(());
+                }
+            }
+
             return Err(P2pError::ProtocolError(ProtocolError::DisconnectedHeaders));
         }
 
@@ -342,6 +341,7 @@ where
         self.chainstate_handle
             .call(|c| c.preliminary_header_check(first_header))
             .await??;
+        self.unconnected_headers = 0;
 
         self.request_blocks(headers)
     }
@@ -412,52 +412,6 @@ where
 
         self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
         self.messaging_handle.make_announcement(Announcement::Transaction(id))
-    }
-
-    async fn handle_announcement(&mut self, announcement: Announcement) -> Result<()> {
-        match announcement {
-            Announcement::Block(header) => self.handle_block_announcement(*header).await,
-            Announcement::Transaction(tx) => self.handle_transaction_announcement(tx).await,
-        }
-    }
-
-    async fn handle_block_announcement(&mut self, header: BlockHeader) -> Result<()> {
-        let block_id = header.block_id();
-        log::debug!(
-            "Block announcement from peer {}: {block_id}: {header:?}",
-            self.id()
-        );
-
-        if !self.requested_blocks.is_empty() {
-            // We will download this block as part of syncing anyway.
-            return Ok(());
-        }
-
-        // Do not request the block if it is already known
-        if self
-            .chainstate_handle
-            .call(move |c| c.get_block_index(&block_id))
-            .await??
-            .is_some()
-        {
-            return Ok(());
-        }
-
-        let prev_id = *header.prev_block_id();
-        if self
-            .chainstate_handle
-            .call(move |c| c.get_gen_block_index(&prev_id))
-            .await??
-            .is_none()
-        {
-            // TODO: Investigate this case. This can be used by malicious peers for a DoS attack.
-            self.request_headers().await?;
-            return Ok(());
-        }
-
-        let header_ = header.clone();
-        self.chainstate_handle.call(|c| c.preliminary_header_check(header_)).await??;
-        self.request_blocks(vec![header])
     }
 
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {

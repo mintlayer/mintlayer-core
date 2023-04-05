@@ -30,7 +30,7 @@ use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
-    message::{Announcement, BlockListRequest, SyncMessage},
+    message::{Announcement, BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pError,
@@ -60,7 +60,10 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     let peer = PeerId::new();
 
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.make_announcement(
+        peer,
+        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+    );
 
     handle.resume_panic().await;
 }
@@ -93,7 +96,7 @@ async fn unknown_prev_block(#[case] seed: Seed) {
 
     handle.make_announcement(
         peer,
-        Announcement::Block(Box::new(block_2.header().clone())),
+        Announcement::Block(HeaderList::new(vec![block_2.header().clone()])),
     );
 
     let (sent_to, message) = handle.message().await;
@@ -122,7 +125,10 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.make_announcement(
+        peer,
+        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -161,7 +167,10 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.make_announcement(
+        peer,
+        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -202,7 +211,10 @@ async fn valid_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.make_announcement(
+        peer,
+        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
