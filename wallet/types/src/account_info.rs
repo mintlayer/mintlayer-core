@@ -42,6 +42,47 @@ pub enum AccountInfo {
     Deterministic(DeterministicAccountInfo),
 }
 
+/// Struct that holds information for account addresses
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub struct KeychainUsageState {
+    /// Last used address index. An address might not be used so the corresponding entry would be
+    /// None, otherwise it would be that last used ChildNumber
+    last_used: Option<ChildNumber>,
+    /// Last issued address to the user. Those addresses can be issued until the
+    /// last used index + lookahead size.
+    last_issued: Option<ChildNumber>,
+}
+
+impl KeychainUsageState {
+    pub fn new(last_used: Option<ChildNumber>, last_issued: Option<ChildNumber>) -> Self {
+        Self {
+            last_used,
+            last_issued,
+        }
+    }
+
+    /// Get the last index used in the blockchain
+    pub fn get_last_used(&self) -> Option<ChildNumber> {
+        self.last_used
+    }
+
+    /// Set the last index used in the blockchain
+    pub fn set_last_used(&mut self, new_last_used: Option<ChildNumber>) {
+        self.last_used = new_last_used;
+    }
+
+    /// Get the last index issued to the user
+    pub fn get_last_issued(&self) -> Option<ChildNumber> {
+        self.last_issued
+    }
+
+    /// Set the last index issued to the user
+    pub fn set_last_issued(&mut self, new_last_issued: Option<ChildNumber>) {
+        self.last_issued = new_last_issued;
+    }
+}
+
+/// Serialized data for deterministic accounts. The fields are documented in `AccountKeyChain`.
 // TODO tbd what metadata we need to store
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct DeterministicAccountInfo {
@@ -49,8 +90,8 @@ pub struct DeterministicAccountInfo {
     account_key: ExtendedPublicKey,
     lookahead_size: u16,
     // TODO store separately
-    last_used: [Option<ChildNumber>; 2],
-    last_issued: [Option<ChildNumber>; 2],
+    receiving_state: KeychainUsageState,
+    change_state: KeychainUsageState,
 }
 
 impl DeterministicAccountInfo {
@@ -58,15 +99,15 @@ impl DeterministicAccountInfo {
         root_hierarchy_key: Option<ExtendedPublicKey>,
         account_key: ExtendedPublicKey,
         lookahead_size: u16,
-        last_used: [Option<ChildNumber>; 2],
-        last_issued: [Option<ChildNumber>; 2],
+        receiving_state: KeychainUsageState,
+        change_state: KeychainUsageState,
     ) -> Self {
         Self {
             root_hierarchy_key,
             account_key,
             lookahead_size,
-            last_used,
-            last_issued,
+            receiving_state,
+            change_state,
         }
     }
 
@@ -82,12 +123,12 @@ impl DeterministicAccountInfo {
         self.lookahead_size
     }
 
-    pub fn get_last_used(&self) -> [Option<ChildNumber>; 2] {
-        self.last_used
+    pub fn get_receiving_state(&self) -> &KeychainUsageState {
+        &self.receiving_state
     }
 
-    pub fn get_last_issued(&self) -> [Option<ChildNumber>; 2] {
-        self.last_issued
+    pub fn get_change_state(&self) -> &KeychainUsageState {
+        &self.change_state
     }
 }
 

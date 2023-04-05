@@ -741,7 +741,6 @@ dependencies = [
  "parity-scale-codec",
  "proptest",
  "rstest 0.17.0",
- "rustc-hex",
  "script",
  "serde",
  "serde_json",

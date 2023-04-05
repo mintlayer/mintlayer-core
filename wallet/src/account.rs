@@ -39,8 +39,7 @@ impl Account {
         db_tx: &StoreTxRo<B>,
         id: AccountId,
     ) -> WalletResult<Account> {
-        let key_chain =
-            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id.clone())?;
+        let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, &id)?;
 
         let utxo: BTreeMap<OutPoint, Utxo> = db_tx
             .get_utxo_set(&id)?
@@ -92,7 +91,7 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> WalletResult<Address> {
-        Ok(self.key_chain.get_new_address(db_tx, purpose)?)
+        Ok(self.key_chain.issue_new_address(db_tx, purpose)?)
     }
 
     #[allow(dead_code)] // TODO remove
