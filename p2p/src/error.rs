@@ -18,7 +18,7 @@ use thiserror::Error;
 use chainstate::{ban_score::BanScore, ChainstateError};
 use common::{
     chain::{Block, Transaction},
-    primitives::{semver::SemVer, Id},
+    primitives::Id,
 };
 use mempool::error::Error as MempoolError;
 
@@ -32,8 +32,6 @@ pub enum ProtocolError {
     UnsupportedProtocol(NetworkProtocol),
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
     DifferentNetwork([u8; 4], [u8; 4]),
-    #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
-    UnsupportedVersion(SemVer, SemVer),
     #[error("Peer is unresponsive")]
     Unresponsive,
     #[error("Locator size ({0}) exceeds allowed limit ({1})")]
@@ -199,7 +197,6 @@ impl BanScore for ProtocolError {
         match self {
             ProtocolError::UnsupportedProtocol(_) => 0,
             ProtocolError::DifferentNetwork(_, _) => 100,
-            ProtocolError::UnsupportedVersion(_, _) => 0,
             ProtocolError::Unresponsive => 100,
             ProtocolError::LocatorSizeExceeded(_, _) => 20,
             ProtocolError::BlocksRequestLimitExceeded(_, _) => 20,
