@@ -17,6 +17,7 @@ use super::helpers::pos::create_stake_pool_data;
 
 use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
+use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
@@ -32,6 +33,7 @@ use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use pos_accounting::PoSAccountingStorageRead;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_token_issuance,
@@ -50,14 +52,14 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
         let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
 
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
+
         let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
 
@@ -66,6 +68,12 @@ fn stake_pool_basic(#[case] seed: Seed) {
 
         tf.process_block(block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block_id));
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap();
+        assert_eq!(amount_to_stake, pool_balance);
     });
 }
 
@@ -362,5 +370,58 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
             .build();
 
         tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap();
+        assert!(pool_balance.is_none());
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .build();
+        let stake_pool_tx_id = tx1.transaction().get_id();
+
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let tx2 = TransactionBuilder::new()
+            .add_input(
+                TxInput::new(OutPointSourceId::Transaction(stake_pool_tx_id), 0),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DecommissionPool(
+                amount_to_stake,
+                anyonecanspend_address(),
+                pool_id,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap();
+        assert!(pool_balance.is_none());
     });
 }

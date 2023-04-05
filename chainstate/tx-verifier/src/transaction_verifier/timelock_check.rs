@@ -16,7 +16,8 @@
 use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::Transactable, ChainConfig, GenBlock, TxOutput,
+        block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
+        ChainConfig, GenBlock, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -28,24 +29,46 @@ use super::{
     TransactionSourceForConnect,
 };
 
-fn check_timelock(
+fn check_timelock<C: AsRef<ChainConfig>>(
+    chain_config: &C,
     source_block_index: &GenBlockIndex,
     output: &TxOutput,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError> {
-    use common::chain::timelock::OutputTimeLock;
+    let source_block_height = source_block_index.block_height();
+    let source_block_time = source_block_index.block_timestamp();
 
     let timelock = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
+        TxOutput::LockThenTransfer(_, _, tl) => tl,
+        TxOutput::DecommissionPool(_, _, _, timelock) => {
+            match timelock {
+                OutputTimeLock::ForBlockCount(c) => {
+                    let cs: i64 = (*c).try_into().map_err(|_| {
+                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
+                    })?;
+                    let given = BlockDistance::new(cs);
+                    let required = chain_config
+                        .as_ref()
+                        .decommission_pool_maturity_distance(source_block_height);
+                    ensure!(
+                        given >= required,
+                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
+                    );
+                }
+                OutputTimeLock::UntilHeight(_)
+                | OutputTimeLock::UntilTime(_)
+                | OutputTimeLock::ForSeconds(_) => {
+                    return Err(ConnectTransactionError::InvalidDecommissionMaturityType);
+                }
+            }
+            timelock
+        }
     };
-
-    let source_block_height = source_block_index.block_height();
-    let source_block_time = source_block_index.block_timestamp();
 
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
@@ -131,6 +154,7 @@ pub fn check_timelocks<
             })?;
 
             check_timelock(
+                chain_config,
                 &source_block_index,
                 utxo.output(),
                 &tx_source.expected_block_height(),

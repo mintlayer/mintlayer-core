@@ -118,6 +118,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
+            ConnectTransactionError::InvalidDecommissionMaturityType => 100,
+            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue => 100,
         }
     }
 }
