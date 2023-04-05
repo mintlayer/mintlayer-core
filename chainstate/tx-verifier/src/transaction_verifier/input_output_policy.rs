@@ -38,7 +38,7 @@ pub fn check_reward_inputs_outputs_purposes(
                 .collect::<Result<Vec<_>, _>>()?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
-            // `StakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake` | `DecommissionPool`
+            // `StakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
             match inputs.as_slice() {
                 // no inputs
                 [] => Err(ConnectTransactionError::SpendStakeError(
@@ -65,11 +65,11 @@ pub fn check_reward_inputs_outputs_purposes(
                                 TxOutput::Transfer(_, _)
                                 | TxOutput::LockThenTransfer(_, _, _)
                                 | TxOutput::Burn(_)
-                                | TxOutput::StakePool(_) => {
+                                | TxOutput::StakePool(_)
+                                | TxOutput::DecommissionPool(_, _, _, _) => {
                                     Err(ConnectTransactionError::InvalidOutputTypeInReward)
                                 }
-                                TxOutput::ProduceBlockFromStake(_, _, _)
-                                | TxOutput::DecommissionPool(_, _, _, _) => Ok(()),
+                                TxOutput::ProduceBlockFromStake(_, _, _) => Ok(()),
                             },
                             _ => Err(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::MultipleBlockRewardOutputs,
@@ -638,14 +638,14 @@ mod tests {
     #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), produce_block(),      Ok(()))]
-    #[case(stake_pool(), decommission_pool(),  Ok(()))]
+    #[case(stake_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
     #[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), produce_block(),      Ok(()))]
-    #[case(produce_block(), decommission_pool(),  Ok(()))]
+    #[case(produce_block(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
     #[case(decommission_pool(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(decommission_pool(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
