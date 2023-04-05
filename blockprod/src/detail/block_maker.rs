@@ -54,7 +54,7 @@ pub struct BlockMaker {
     current_tip_id: Id<GenBlock>,
     current_tip_height: BlockHeight,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
-    _mining_thread_pool: Arc<slave_pool::ThreadPool>,
+    mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
 #[must_use]
@@ -85,7 +85,7 @@ impl BlockMaker {
             current_tip_id,
             current_tip_height,
             block_maker_rx,
-            _mining_thread_pool: mining_thread_pool,
+            mining_thread_pool,
         }
     }
 
@@ -235,48 +235,90 @@ impl BlockMaker {
                 consensus_data,
             );
 
-            let block_header = Self::solve_block(
-                Arc::clone(&self.chain_config),
-                block_header,
-                self.current_tip_height,
-                Arc::clone(&stop_flag),
-            )?;
+            is_send(block_header.clone());
 
-            let block = Block::new_from_header(block_header, block_body.clone())?;
-
-            match self.attempt_submit_new_block(block).await? {
-                BlockSubmitResult::Failed => (),
-                BlockSubmitResult::Success => break,
+            // TODO: find a way to use a oneshot channel. It doesn't seem to be supported in crossbeam.
+            let (result_sender, result_receiver) = crossbeam_channel::unbounded();
+            {
+                let chain_config = Arc::clone(&self.chain_config);
+                let current_tip_height = self.current_tip_height;
+                let stop_flag = Arc::clone(&stop_flag);
+                self.mining_thread_pool.spawn(move || {
+                    let block_header = Self::solve_block(
+                        chain_config,
+                        block_header,
+                        current_tip_height,
+                        stop_flag,
+                    );
+                    result_sender.send(block_header).unwrap();
+                });
             }
 
-            // attempt to receive new commands from the perpetual Block Builder
-            let new_info = match self.block_maker_rx.try_recv() {
-                Ok(cmd) => cmd,
-                Err(e) => match e {
-                    // if there's nothing from the channel, then we can keep trying to build the block
-                    crossbeam_channel::TryRecvError::Empty => continue,
-                    // if the channel is lost, that means the perpetual Block Builder is destroyed.
-                    // No point in continuing since it seems that the node exited.
-                    crossbeam_channel::TryRecvError::Disconnected => {
-                        log::error!("Block Maker control channel lost. Exiting Block Maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
-                        break;
-                    }
-                },
-            };
+            // In this we store the successfully mined block, if any.
+            // This is necessary because a no futures can be awaited inside `select!` macro
+            // TODO: is there a better way to get the value from the `select!` macro below instead of mutating this value?
+            let mut block_to_submit = None;
 
-            match new_info {
-                BlockMakerControlCommand::NewTip(block_id, _) => {
-                    // if there is a new tip, no point in continuing to mine this block
-                    if block_id != self.current_tip_id {
-                        break;
+            // We wait for one of the following to happen:
+            // 1. `self.block_maker_rx` to tell us that the chainstate has a new tip, or that we should stop for some other reason
+            // 2. the mining thread to finish, and tell us whether it was successful or not,
+            //    in which case we can attempt to submit the block to chainstate
+            crossbeam_channel::select! {
+                recv(self.block_maker_rx) -> new_info => {
+                    // attempt to receive new commands from the perpetual Block Builder
+                    let new_info = match new_info {
+                        Ok(cmd) => cmd,
+                        Err(_) => {
+                            log::error!("Block Maker control channel lost. Exiting Block Maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
+                            break;
+                        },
+                    };
+
+                    match new_info {
+                        BlockMakerControlCommand::NewTip(block_id, _) => {
+                            // if there is a new tip, no point in continuing to mine this block
+                            if block_id != self.current_tip_id {
+                                break;
+                            }
+                        }
+                        BlockMakerControlCommand::Stop => break,
                     }
                 }
-                BlockMakerControlCommand::Stop => break,
+                recv(result_receiver) -> solve_receive_result => {
+                    let mining_result = match solve_receive_result {
+                        Ok(mining_result) => mining_result,
+                        Err(_) => {
+                            log::error!("Mining thread pool channel lost on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
+                            continue;
+                        }
+                    };
+                    let block_header = match mining_result {
+                        Ok(header) => header,
+                        Err(e) => {
+                            log::error!("Solving block in thread-pool returned an error on tip {} on best height {}: {e}", self.current_tip_id, self.current_tip_height);
+                            continue;
+                        }
+                    };
+                    let block = Block::new_from_header(block_header, block_body.clone())?;
+
+                    block_to_submit = Some(block);
+                }
+            }
+
+            // If we successfully have found a block, attempt to submit it to chainstate
+            if let Some(block) = block_to_submit {
+                match self.attempt_submit_new_block(block).await? {
+                    BlockSubmitResult::Failed => (),
+                    BlockSubmitResult::Success => break,
+                }
             }
         }
+
         Ok(())
     }
 }
+
+fn is_send(_x: impl Send) {}
 
 #[cfg(test)]
 mod tests {
