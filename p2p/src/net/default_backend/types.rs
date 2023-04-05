@@ -26,6 +26,7 @@ use crate::{
         PingResponse, SyncMessage,
     },
     net::types::services::{Service, Services},
+    protocol::NetworkProtocol,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -46,10 +47,11 @@ pub type HandshakeNonce = u64;
 pub enum PeerEvent {
     /// Peer information received from remote
     PeerInfoReceived {
+        protocol: NetworkProtocol,
         network: [u8; 4],
-        version: SemVer,
-        user_agent: UserAgent,
         services: Services,
+        user_agent: UserAgent,
+        version: SemVer,
         receiver_address: Option<PeerAddress>,
 
         /// For outbound connections that is what we sent.
@@ -74,10 +76,11 @@ pub enum Event {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
-        version: SemVer,
+        protocol: NetworkProtocol,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
+        version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,
@@ -86,10 +89,11 @@ pub enum HandshakeMessage {
         handshake_nonce: HandshakeNonce,
     },
     HelloAck {
-        version: SemVer,
+        protocol: NetworkProtocol,
         network: [u8; 4],
         services: Services,
         user_agent: UserAgent,
+        version: SemVer,
 
         /// Socket address of the remote peer as seen by this node (addr_you in bitcoin)
         receiver_address: Option<PeerAddress>,

@@ -123,7 +123,8 @@ impl Builder {
             coin_decimals: Mlt::DECIMALS,
             magic_bytes: chain_type.default_magic_bytes(),
             p2p_port: chain_type.default_p2p_port(),
-            version: SemVer::new(0, 1, 0),
+            version: SemVer::try_from(env!("CARGO_PKG_VERSION"))
+                .expect("invalid CARGO_PKG_VERSION value"),
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use crate::{
     net::types::{services::Service, Role},
+    protocol::{NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN},
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event, RandomAddressMaker,
         TestChannelAddressMaker, TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
@@ -210,188 +211,107 @@ async fn connect_to_banned_peer_noise() {
         .await;
 }
 
-async fn validate_invalid_outbound_connection<A, S, B>(peer_id: PeerId)
+async fn validate_invalid_connection<A, S, B>()
 where
     A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
     S: NetworkingService + 'static + std::fmt::Debug,
     S::ConnectivityHandle: ConnectivityService<S>,
     B: RandomAddressMaker<Address = S::Address>,
 {
-    let config = Arc::new(config::create_mainnet());
-    let mut peer_manager =
-        make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
+    for role in [Role::Outbound, Role::Inbound] {
+        let config = Arc::new(config::create_mainnet());
+        let mut peer_manager =
+            make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
+                .await;
 
-    // invalid magic bytes
-    let res = peer_manager.try_accept_connection(
-        B::new(),
-        Role::Outbound,
-        net::types::PeerInfo {
-            peer_id,
-            network: [1, 2, 3, 4],
-            version: SemVer::new(0, 1, 0),
-            user_agent: mintlayer_core_user_agent(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-        },
-        None,
-    );
-    assert!(res.is_err());
-    assert!(!peer_manager.is_peer_connected(peer_id));
-
-    // invalid version
-    let address = B::new();
-    let res = peer_manager.try_accept_connection(
-        address,
-        Role::Outbound,
-        net::types::PeerInfo {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(1, 1, 1),
-            user_agent: mintlayer_core_user_agent(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-        },
-        None,
-    );
-    assert!(res.is_err());
-    assert!(!peer_manager.is_peer_connected(peer_id));
-
-    // valid connection
-    let address = B::new();
-    let res = peer_manager.try_accept_connection(
-        address.clone(),
-        Role::Outbound,
-        net::types::PeerInfo {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(0, 1, 0),
-            user_agent: mintlayer_core_user_agent(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-        },
-        None,
-    );
-    assert!(res.is_ok());
-    assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
-}
-
-#[tokio::test]
-async fn validate_invalid_outbound_connection_tcp() {
-    validate_invalid_outbound_connection::<
-        TestTransportTcp,
-        DefaultNetworkingService<TcpTransportSocket>,
-        TestTcpAddressMaker,
-    >(PeerId::new())
-    .await;
-}
-
-#[tokio::test]
-async fn validate_invalid_outbound_connection_channels() {
-    validate_invalid_outbound_connection::<
-        TestTransportChannel,
-        DefaultNetworkingService<MpscChannelTransport>,
-        TestChannelAddressMaker,
-    >(PeerId::new())
-    .await;
-}
-
-#[tokio::test]
-async fn validate_invalid_outbound_connection_noise() {
-    validate_invalid_outbound_connection::<
-        TestTransportNoise,
-        DefaultNetworkingService<NoiseTcpTransport>,
-        TestTcpAddressMaker,
-    >(PeerId::new())
-    .await;
-}
-
-async fn validate_invalid_inbound_connection<A, S, B>(peer_id: PeerId)
-where
-    A: TestTransportMaker<Transport = S::Transport, Address = S::Address>,
-    S: NetworkingService + 'static + std::fmt::Debug,
-    S::ConnectivityHandle: ConnectivityService<S>,
-    B: RandomAddressMaker<Address = S::Address>,
-{
-    let config = Arc::new(config::create_mainnet());
-    let mut peer_manager =
-        make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config)).await;
-
-    // invalid magic bytes
-    let res = peer_manager.try_accept_connection(
-        B::new(),
-        Role::Inbound,
-        net::types::PeerInfo {
-            peer_id,
-            network: [1, 2, 3, 4],
-            version: SemVer::new(0, 1, 0),
-            user_agent: mintlayer_core_user_agent(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-        },
-        None,
-    );
-    assert!(res.is_err());
-    assert!(!peer_manager.is_peer_connected(peer_id));
-
-    // invalid version
-    peer_manager.accept_connection(
-        B::new(),
-        Role::Inbound,
-        net::types::PeerInfo {
-            peer_id,
-            network: *config.magic_bytes(),
-            version: SemVer::new(1, 1, 1),
-            user_agent: mintlayer_core_user_agent(),
-            services: [Service::Blocks, Service::Transactions].as_slice().into(),
-        },
-        None,
-    );
-    assert!(!peer_manager.is_peer_connected(peer_id));
-
-    // valid connection
-    let address = B::new();
-    peer_manager
-        .try_accept_connection(
-            address.clone(),
-            Role::Inbound,
+        // invalid protocol
+        let peer_id = PeerId::new();
+        let res = peer_manager.try_accept_connection(
+            B::new(),
+            role,
             net::types::PeerInfo {
                 peer_id,
+                protocol: 0,
                 network: *config.magic_bytes(),
-                version: SemVer::new(0, 1, 0),
+                version: *config.version(),
                 user_agent: mintlayer_core_user_agent(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
             },
             None,
-        )
-        .unwrap();
-    assert!(peer_manager.is_peer_connected(peer_id));
-    assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
+        );
+        assert!(res.is_err());
+        assert!(!peer_manager.is_peer_connected(peer_id));
+
+        // invalid magic bytes
+        let peer_id = PeerId::new();
+        let res = peer_manager.try_accept_connection(
+            B::new(),
+            role,
+            net::types::PeerInfo {
+                peer_id,
+                protocol: NETWORK_PROTOCOL_CURRENT,
+                network: [1, 2, 3, 4],
+                version: *config.version(),
+                user_agent: mintlayer_core_user_agent(),
+                services: [Service::Blocks, Service::Transactions].as_slice().into(),
+            },
+            None,
+        );
+        assert!(res.is_err());
+        assert!(!peer_manager.is_peer_connected(peer_id));
+
+        // valid connections
+        const NETWORK_PROTOCOL_FUTURE: u32 = u32::MAX; // Some future version of the node is trying to connect to us
+        for protocol in [NETWORK_PROTOCOL_CURRENT, NETWORK_PROTOCOL_MIN, NETWORK_PROTOCOL_FUTURE] {
+            let address = B::new();
+            let peer_id = PeerId::new();
+            let res = peer_manager.try_accept_connection(
+                address.clone(),
+                role,
+                net::types::PeerInfo {
+                    peer_id,
+                    protocol,
+                    network: *config.magic_bytes(),
+                    version: SemVer::new(123, 123, 12345),
+                    user_agent: mintlayer_core_user_agent(),
+                    services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                },
+                None,
+            );
+            assert!(res.is_ok());
+            assert!(peer_manager.is_peer_connected(peer_id));
+            assert!(!peer_manager.peerdb.is_address_banned(&address.as_bannable()));
+        }
+    }
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_tcp() {
-    validate_invalid_inbound_connection::<
+async fn validate_invalid_connection_tcp() {
+    validate_invalid_connection::<
         TestTransportTcp,
         DefaultNetworkingService<TcpTransportSocket>,
         TestTcpAddressMaker,
-    >(PeerId::new())
+    >()
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_channels() {
-    validate_invalid_inbound_connection::<
+async fn validate_invalid_connection_channels() {
+    validate_invalid_connection::<
         TestTransportChannel,
         DefaultNetworkingService<MpscChannelTransport>,
         TestChannelAddressMaker,
-    >(PeerId::new())
+    >()
     .await;
 }
 
 #[tokio::test]
-async fn validate_invalid_inbound_connection_noise() {
-    validate_invalid_inbound_connection::<
+async fn validate_invalid_connection_noise() {
+    validate_invalid_connection::<
         TestTransportNoise,
         DefaultNetworkingService<NoiseTcpTransport>,
         TestTcpAddressMaker,
-    >(PeerId::new())
+    >()
     .await;
 }
 

@@ -38,6 +38,7 @@ use p2p::{
         types::{ConnectivityEvent, PeerInfo, SyncingEvent},
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
+    protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
 };
@@ -136,6 +137,7 @@ impl ConnectivityService<MockNetworkingService> for MockConnectivityHandle {
             let peer_id = PeerId::new();
             let peer_info = PeerInfo {
                 peer_id,
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: *node.chain_config.magic_bytes(),
                 version: SemVer::new(1, 2, 3),
                 user_agent: mintlayer_core_user_agent(),

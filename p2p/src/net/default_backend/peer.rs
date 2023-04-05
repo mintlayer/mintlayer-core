@@ -31,6 +31,7 @@ use crate::{
         },
         types::Role,
     },
+    protocol::NETWORK_PROTOCOL_CURRENT,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
 
@@ -111,12 +112,13 @@ where
         match self.peer_role {
             PeerRole::Inbound => {
                 let Ok(types::Message::Handshake(types::HandshakeMessage::Hello {
-                    version,
+                    protocol,
                     network,
                     services,
+                    user_agent,
+                    version,
                     receiver_address,
                     handshake_nonce,
-                    user_agent,
                 })) = self.socket.recv().await
                 else {
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
@@ -129,12 +131,13 @@ where
                     .send((
                         self.peer_id,
                         PeerEvent::PeerInfoReceived {
+                            protocol,
                             network,
-                            version,
                             services,
+                            user_agent,
+                            version,
                             receiver_address,
                             handshake_nonce,
-                            user_agent,
                         },
                     ))
                     .map_err(P2pError::from)?;
@@ -142,9 +145,10 @@ where
                 self.socket
                     .send(types::Message::Handshake(
                         types::HandshakeMessage::HelloAck {
-                            version: *self.chain_config.version(),
+                            protocol: NETWORK_PROTOCOL_CURRENT,
                             network: *self.chain_config.magic_bytes(),
                             user_agent: self.p2p_config.user_agent.clone(),
+                            version: *self.chain_config.version(),
                             services: (*self.p2p_config.node_type).into(),
                             receiver_address: self.receiver_address.clone(),
                         },
@@ -154,19 +158,21 @@ where
             PeerRole::Outbound { handshake_nonce } => {
                 self.socket
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
-                        version: *self.chain_config.version(),
+                        protocol: NETWORK_PROTOCOL_CURRENT,
                         network: *self.chain_config.magic_bytes(),
-                        user_agent: self.p2p_config.user_agent.clone(),
                         services: (*self.p2p_config.node_type).into(),
+                        user_agent: self.p2p_config.user_agent.clone(),
+                        version: *self.chain_config.version(),
                         receiver_address: self.receiver_address.clone(),
                         handshake_nonce,
                     }))
                     .await?;
 
                 let Ok(types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                    version,
+                    protocol,
                     network,
                     user_agent,
+                    version,
                     services,
                     receiver_address,
                 })) = self.socket.recv().await
@@ -178,10 +184,11 @@ where
                     .send((
                         self.peer_id,
                         PeerEvent::PeerInfoReceived {
+                            protocol,
                             network,
-                            version,
-                            user_agent,
                             services,
+                            user_agent,
+                            version,
                             receiver_address,
                             handshake_nonce,
                         },
@@ -297,6 +304,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 version: *chain_config.version(),
                 network: *chain_config.magic_bytes(),
                 user_agent: p2p_config.user_agent.clone(),
@@ -311,10 +319,11 @@ mod tests {
         assert_eq!(
             rx1.try_recv().unwrap().1,
             PeerEvent::PeerInfoReceived {
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 network: *chain_config.magic_bytes(),
-                version: *chain_config.version(),
-                user_agent: p2p_config.user_agent.clone(),
                 services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                user_agent: p2p_config.user_agent.clone(),
+                version: *chain_config.version(),
                 receiver_address: None,
                 handshake_nonce: 123,
             }
@@ -369,6 +378,7 @@ mod tests {
         assert!(socket2
             .send(types::Message::Handshake(
                 types::HandshakeMessage::HelloAck {
+                    protocol: NETWORK_PROTOCOL_CURRENT,
                     version: *chain_config.version(),
                     network: *chain_config.magic_bytes(),
                     user_agent: p2p_config.user_agent.clone(),
@@ -385,10 +395,11 @@ mod tests {
             Ok((
                 peer_id3,
                 PeerEvent::PeerInfoReceived {
+                    protocol: NETWORK_PROTOCOL_CURRENT,
                     network: *chain_config.magic_bytes(),
-                    version: *chain_config.version(),
-                    user_agent: p2p_config.user_agent.clone(),
                     services: [Service::Blocks, Service::Transactions].as_slice().into(),
+                    user_agent: p2p_config.user_agent.clone(),
+                    version: *chain_config.version(),
                     receiver_address: None,
                     handshake_nonce: 1,
                 }
@@ -440,6 +451,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                protocol: NETWORK_PROTOCOL_CURRENT,
                 version: *chain_config.version(),
                 network: [1, 2, 3, 4],
                 user_agent: p2p_config.user_agent.clone(),
