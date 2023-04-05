@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GetAncestorError};
@@ -28,11 +31,13 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
+use futures::TryFutureExt;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
+use tokio;
 use utils::tap_error_log::LogError;
 
 use crate::BlockProductionError;
@@ -54,7 +59,7 @@ pub struct BlockMaker {
     current_tip_id: Id<GenBlock>,
     current_tip_height: BlockHeight,
     block_maker_rx: crossbeam_channel::Receiver<BlockMakerControlCommand>,
-    _mining_thread_pool: Arc<slave_pool::ThreadPool>,
+    mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
 #[must_use]
@@ -85,7 +90,7 @@ impl BlockMaker {
             current_tip_id,
             current_tip_height,
             block_maker_rx,
-            _mining_thread_pool: mining_thread_pool,
+            mining_thread_pool,
         }
     }
 
@@ -221,8 +226,6 @@ impl BlockMaker {
         let witness_merkle_root = calculate_witness_merkle_root(&block_body)
             .map_err(BlockCreationError::MerkleTreeError)?;
 
-        let stop_flag = Arc::new(false.into());
-
         loop {
             let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
             let consensus_data = self.pull_consensus_data(self.current_tip_id, timestamp).await?;
@@ -235,46 +238,75 @@ impl BlockMaker {
                 consensus_data,
             );
 
-            let block_header = Self::solve_block(
-                Arc::clone(&self.chain_config),
-                block_header,
-                self.current_tip_height,
-                Arc::clone(&stop_flag),
-            )?;
+            let stop_flag = Arc::new(false.into());
 
-            let block = Block::new_from_header(block_header, block_body.clone())?;
+            let block_solver = tokio::task::spawn(
+                self.mining_thread_pool
+                    .spawn_handle({
+                        let chain_config = Arc::clone(&self.chain_config);
+                        let stop_flag = Arc::clone(&stop_flag);
+                        let current_tip_height = self.current_tip_height.clone();
+                        move || {
+                            Self::solve_block(
+                                chain_config,
+                                block_header,
+                                current_tip_height,
+                                stop_flag,
+                            )
+                        }
+                    })
+                    .into_future(),
+            );
 
-            match self.attempt_submit_new_block(block).await? {
-                BlockSubmitResult::Failed => (),
-                BlockSubmitResult::Success => break,
+            while !stop_flag.load(Ordering::Relaxed) {
+                if block_solver.is_finished() {
+                    break;
+                }
+
+                // Since there are no awaits within the loop, we yield
+                // each iteration as to not starve other Tokio futures
+                tokio::task::yield_now().await;
+
+                // attempt to receive new commands from the perpetual Block Builder
+                let new_info = match self.block_maker_rx.try_recv() {
+                    Ok(cmd) => cmd,
+                    Err(e) => match e {
+                        // if there's nothing from the channel, then we can keep trying to build the block
+                        crossbeam_channel::TryRecvError::Empty => continue,
+                        // if the channel is lost, that means the perpetual Block Builder is destroyed.
+                        // No point in continuing since it seems that the node exited.
+                        crossbeam_channel::TryRecvError::Disconnected => {
+                            log::error!("Block Maker control channel lost. Exiting Block Maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
+                            break;
+                        }
+                    },
+                };
+
+                match new_info {
+                    BlockMakerControlCommand::NewTip(block_id, _) => {
+                        // if there is a new tip, no point in continuing to mine this block
+                        if block_id != self.current_tip_id {
+                            break;
+                        }
+                    }
+                    BlockMakerControlCommand::Stop => break,
+                }
             }
 
-            // attempt to receive new commands from the perpetual Block Builder
-            let new_info = match self.block_maker_rx.try_recv() {
-                Ok(cmd) => cmd,
-                Err(e) => match e {
-                    // if there's nothing from the channel, then we can keep trying to build the block
-                    crossbeam_channel::TryRecvError::Empty => continue,
-                    // if the channel is lost, that means the perpetual Block Builder is destroyed.
-                    // No point in continuing since it seems that the node exited.
-                    crossbeam_channel::TryRecvError::Disconnected => {
-                        log::error!("Block Maker control channel lost. Exiting Block Maker task on tip {} on best height {}", self.current_tip_id, self.current_tip_height);
-                        break;
-                    }
-                },
-            };
+            if block_solver.is_finished() {
+                // TODO replace unwrap with proper error handling
+                if let Ok(solved_block_header) = block_solver.await.unwrap().unwrap() {
+                    let block = Block::new_from_header(solved_block_header, block_body.clone())?;
 
-            match new_info {
-                BlockMakerControlCommand::NewTip(block_id, _) => {
-                    // if there is a new tip, no point in continuing to mine this block
-                    if block_id != self.current_tip_id {
-                        break;
+                    match self.attempt_submit_new_block(block).await? {
+                        BlockSubmitResult::Failed => {}
+                        BlockSubmitResult::Success => return Ok(()),
                     }
                 }
-                BlockMakerControlCommand::Stop => break,
             }
+
+            stop_flag.store(true, Ordering::Relaxed);
         }
-        Ok(())
     }
 }
 
