@@ -139,7 +139,7 @@ def check_todos():
 
         with open(path) as file:
             file_data = file.read()
-            if 'TODO(PR)' in file_data or 'FIXME' in file_data or 'todo!()' in file_data:
+            if 'TODO(PR)' in file_data or 'FIXME' in file_data:
                 ok = False
                 print("{}: Found TODO(PR) or FIXME or todo!() instances".format(path))
 

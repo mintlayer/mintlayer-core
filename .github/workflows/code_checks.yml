@@ -35,6 +35,7 @@ jobs:
             -W clippy::manual_assert
             -W clippy::unused_async
             -W clippy::mut_mut
+            -W clippy::todo
 
       # Checks that only apply to production code
       - uses: actions-rs/clippy-check@v1
