@@ -141,10 +141,9 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 sync_tx,
             );
 
-            let res = backend.run().await;
-            if let Err(err) = res {
-                // A false error may occur when the node is shutting down
-                log::error!("backend failed: {err}");
+            // TODO: Shutdown p2p if the backend unexpectedly quits
+            if let Err(err) = backend.run().await {
+                log::error!("failed to run backend: {err}");
             }
         });
 
