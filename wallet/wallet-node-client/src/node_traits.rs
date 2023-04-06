@@ -18,13 +18,14 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
+#[async_trait::async_trait]
 pub trait NodeInterface {
     type Error: std::error::Error;
 
-    fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
-    fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
-    fn get_block_id_at_height(
+    async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
+    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
+    async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
+    async fn get_block_id_at_height(
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;

@@ -87,13 +87,13 @@ async fn wallet_rpc_communication() {
     let (_shutdown_trigger, chainstate_handle, rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    let rpc_client = make_rpc_client(rpc_bind_address.to_string()).unwrap();
+    let rpc_client = make_rpc_client(rpc_bind_address.to_string()).await.unwrap();
 
-    let best_height = rpc_client.get_best_block_height().unwrap();
+    let best_height = rpc_client.get_best_block_height().await.unwrap();
 
     assert_eq!(best_height.into_int(), 0);
 
-    let best_block_id = rpc_client.get_best_block_id().unwrap();
+    let best_block_id = rpc_client.get_best_block_id().await.unwrap();
 
     assert_eq!(best_block_id, chain_config.genesis_block_id());
 
@@ -118,26 +118,26 @@ async fn wallet_rpc_communication() {
         .unwrap()
         .unwrap();
 
-    let best_height = rpc_client.get_best_block_height().unwrap();
+    let best_height = rpc_client.get_best_block_height().await.unwrap();
 
     assert_eq!(best_height.into_int(), 1);
 
-    let best_block_id = rpc_client.get_best_block_id().unwrap();
+    let best_block_id = rpc_client.get_best_block_id().await.unwrap();
 
     assert_eq!(best_block_id, block_1_id);
     assert_eq!(&best_block_id, block_index_1.block_id());
 
     assert_eq!(
-        rpc_client.get_block_id_at_height(0.into()).unwrap().unwrap(),
+        rpc_client.get_block_id_at_height(0.into()).await.unwrap().unwrap(),
         chain_config.genesis_block_id()
     );
 
     assert_eq!(
-        rpc_client.get_block_id_at_height(1.into()).unwrap().unwrap(),
+        rpc_client.get_block_id_at_height(1.into()).await.unwrap().unwrap(),
         block_1_id
     );
 
-    let block_1 = rpc_client.get_block(best_block_id.get().into()).unwrap().unwrap();
+    let block_1 = rpc_client.get_block(best_block_id.get().into()).await.unwrap().unwrap();
 
     assert_eq!(block_1.get_id(), block_1_id);
 }

@@ -2255,6 +2255,7 @@ dependencies = [
 name = "node-comm"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chainstate",
  "chainstate-storage",
  "common",

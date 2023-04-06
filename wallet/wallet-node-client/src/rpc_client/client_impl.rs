@@ -22,25 +22,26 @@ use crate::node_traits::NodeInterface;
 
 use super::{NodeRpcClient, NodeRpcError};
 
+#[async_trait::async_trait]
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
+    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         let block = self.get_block(block_id)?;
         Ok(block)
     }
 
-    fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
+    async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         let best_block_id = self.get_best_block_id()?;
         Ok(best_block_id)
     }
 
-    fn get_best_block_height(&self) -> Result<common::primitives::BlockHeight, Self::Error> {
+    async fn get_best_block_height(&self) -> Result<common::primitives::BlockHeight, Self::Error> {
         let best_block_height = self.get_best_block_height()?;
         Ok(best_block_height)
     }
 
-    fn get_block_id_at_height(
+    async fn get_block_id_at_height(
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {

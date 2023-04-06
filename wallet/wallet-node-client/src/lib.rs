@@ -19,6 +19,8 @@ use rpc_client::NodeRpcError;
 pub mod node_traits;
 pub mod rpc_client;
 
-pub fn make_rpc_client(remote_socket_address: String) -> Result<impl NodeInterface, NodeRpcError> {
-    rpc_client::NodeRpcClient::new(remote_socket_address)
+pub async fn make_rpc_client(
+    remote_socket_address: String,
+) -> Result<impl NodeInterface, NodeRpcError> {
+    rpc_client::NodeRpcClient::new(remote_socket_address).await
 }

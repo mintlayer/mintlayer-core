@@ -47,7 +47,7 @@ pub struct NodeRpcClient {
 static REQ_ID: AtomicU64 = AtomicU64::new(0);
 
 impl NodeRpcClient {
-    pub fn new(remote_socket_address: String) -> Result<Self, NodeRpcError> {
+    pub async fn new(remote_socket_address: String) -> Result<Self, NodeRpcError> {
         let host = format!("http://{remote_socket_address}");
         let client = Self { host };
 
