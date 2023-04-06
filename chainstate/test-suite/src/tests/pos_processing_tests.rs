@@ -967,10 +967,6 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     );
 }
 
-// FIXME: ProduceBlock -> Decommission Pool in tx/reward
-// FIXME: StakePool -> Decommission reward
-// FIXME: StakePool -> Decommission unsealed epoch
-
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1006,7 +1002,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id1);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-        .with_reward(vec![produce_block_output.clone()])
+        .with_reward(vec![produce_block_output])
         .with_timestamp(block_timestamp)
         .build_and_process()
         .unwrap();
@@ -1038,7 +1034,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
             Amount::from_atoms(1),
             anyonecanspend_address(),
             pool_id1,
-            OutputTimeLock::ForBlockCount(1), // FIXME: this should fail
+            OutputTimeLock::ForBlockCount(2000),
         ))
         .build();
 

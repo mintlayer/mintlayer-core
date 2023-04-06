@@ -237,8 +237,8 @@ pub enum SpendStakeError {
     NoBlockRewardOutputs,
     #[error("Block reward output has multiple outputs")]
     MultipleBlockRewardOutputs,
-    #[error("Invalid purpose used in block reward")]
-    InvalidBlockRewardPurpose,
+    #[error("Invalid output type used in block reward")]
+    InvalidBlockRewardOutputType,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
     #[error("Consensus PoS error")]

@@ -61,7 +61,6 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
-        stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxMainChainIndex,
         TxOutput,
@@ -71,6 +70,7 @@ use common::{
 use consensus::ConsensusPoSError;
 use pos_accounting::{
     AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingView,
+    PoolData,
 };
 use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
@@ -368,28 +368,18 @@ where
     fn get_stake_pool_data_from_output(
         &self,
         output: &TxOutput,
-    ) -> Result<StakePoolData, ConnectTransactionError> {
+    ) -> Result<PoolData, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
-            TxOutput::StakePool(d) => Ok(d.as_ref().clone()),
-            TxOutput::ProduceBlockFromStake(v, d, pool_id)
-            | TxOutput::DecommissionPool(v, d, pool_id, _) => {
-                let pool_data = self
-                    .accounting_delta_adapter
-                    .get_accounting_delta()
-                    .get_pool_data(*pool_id)?
-                    .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
-                Ok(StakePoolData::new(
-                    *v,
-                    d.clone(), // FIXME: is this correct??? what if owner and decommission differ?
-                    pool_data.vrf_public_key().clone(),
-                    pool_data.decommission_destination().clone(),
-                    pool_data.margin_ratio_per_thousand(),
-                    pool_data.cost_per_epoch(),
-                ))
-            }
+            TxOutput::StakePool(d) => Ok(d.as_ref().clone().into()),
+            TxOutput::ProduceBlockFromStake(_, _, pool_id)
+            | TxOutput::DecommissionPool(_, _, pool_id, _) => self
+                .accounting_delta_adapter
+                .get_accounting_delta()
+                .get_pool_data(*pool_id)?
+                .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
         }
     }
 
@@ -535,22 +525,18 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+
         let tx_undo = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
                 TxOutput::StakePool(data) => {
-                    let input0 = tx.inputs().get(0);
-                    match input0 {
-                        Some(input0) => {
-                            let res = self
-                                .accounting_delta_adapter
-                                .create_pool(tx_source, data.as_ref(), input0.outpoint())
-                                .map(|(_, undo)| undo);
-                            Some(res)
-                        }
-                        None => Some(Err(ConnectTransactionError::MissingOutputOrSpent)),
-                    }
+                    let res = self
+                        .accounting_delta_adapter
+                        .create_pool(tx_source, data.as_ref(), input0.outpoint())
+                        .map(|(_, undo)| undo);
+                    Some(res)
                 }
                 TxOutput::DecommissionPool(_, _, pool_id, _) => {
                     let res = self.accounting_delta_adapter.decommission_pool(tx_source, *pool_id);

@@ -147,7 +147,7 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         | TxOutput::Burn(_)
         | TxOutput::DecommissionPool(_, _, _, _) => {
             return Err(BlockError::SpendStakeError(
-                SpendStakeError::InvalidBlockRewardPurpose,
+                SpendStakeError::InvalidBlockRewardOutputType,
             ));
         }
         TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),

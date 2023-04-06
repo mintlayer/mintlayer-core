@@ -29,8 +29,7 @@ use super::{
     TransactionSourceForConnect,
 };
 
-fn check_timelock<C: AsRef<ChainConfig>>(
-    chain_config: &C,
+fn check_timelock(
     source_block_index: &GenBlockIndex,
     output: &TxOutput,
     spend_height: &BlockHeight,
@@ -44,30 +43,7 @@ fn check_timelock<C: AsRef<ChainConfig>>(
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) => tl,
-        TxOutput::DecommissionPool(_, _, _, timelock) => {
-            match timelock {
-                OutputTimeLock::ForBlockCount(c) => {
-                    let cs: i64 = (*c).try_into().map_err(|_| {
-                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
-                    })?;
-                    let given = BlockDistance::new(cs);
-                    let required = chain_config
-                        .as_ref()
-                        .decommission_pool_maturity_distance(source_block_height);
-                    ensure!(
-                        given >= required,
-                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
-                    );
-                }
-                OutputTimeLock::UntilHeight(_)
-                | OutputTimeLock::UntilTime(_)
-                | OutputTimeLock::ForSeconds(_) => {
-                    return Err(ConnectTransactionError::InvalidDecommissionMaturityType);
-                }
-            }
-            timelock
-        }
+        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };
 
     let past_lock = match timelock {
@@ -113,6 +89,11 @@ pub fn check_timelocks<
         None => return Ok(()),
     };
 
+    let starting_point: &BlockIndex = match tx_source {
+        TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
+        TransactionSourceForConnect::Mempool { current_best } => current_best,
+    };
+
     for input in inputs {
         let outpoint = input.outpoint();
         let utxo = utxos_view
@@ -137,11 +118,6 @@ pub fn check_timelocks<
                 db_tx.get_gen_block_index(id)
             };
 
-            let starting_point: &BlockIndex = match tx_source {
-                TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
-                TransactionSourceForConnect::Mempool { current_best } => current_best,
-            };
-
             let source_block_index = block_index_ancestor_getter(
                 block_index_getter,
                 storage,
@@ -154,13 +130,47 @@ pub fn check_timelocks<
             })?;
 
             check_timelock(
-                chain_config,
                 &source_block_index,
                 utxo.output(),
                 &tx_source.expected_block_height(),
                 spending_time,
             )?;
         }
+    }
+
+    let outputs = match tx.outputs() {
+        Some(outputs) => outputs,
+        None => return Ok(()),
+    };
+
+    for output in outputs {
+        match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::StakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _, _)
+            | TxOutput::LockThenTransfer(_, _, _) => {}
+            TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
+                OutputTimeLock::ForBlockCount(c) => {
+                    let cs: i64 = (*c).try_into().map_err(|_| {
+                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
+                    })?;
+                    let given = BlockDistance::new(cs);
+                    let required = chain_config
+                        .as_ref()
+                        .decommission_pool_maturity_distance(starting_point.block_height());
+                    ensure!(
+                        given >= required,
+                        ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
+                    );
+                }
+                OutputTimeLock::UntilHeight(_)
+                | OutputTimeLock::UntilTime(_)
+                | OutputTimeLock::ForSeconds(_) => {
+                    return Err(ConnectTransactionError::InvalidDecommissionMaturityType);
+                }
+            },
+        };
     }
 
     Ok(())
