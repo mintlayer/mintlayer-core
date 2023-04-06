@@ -64,32 +64,37 @@ fn sum_maps<K: Ord + Copy>(
 }
 
 impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
+    type Error = Error;
+
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
         Ok(self
             .get_pool_data(pool_id)?
             .ok_or_else(|| self.parent.get_pool_data(pool_id))
             .is_ok())
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        let parent_balance = self.parent.get_pool_balance(pool_id)?;
+    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        let parent_balance = self.parent.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?;
         let local_delta = self.data.pool_balances.data().get(&pool_id).cloned();
         combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
+    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         match self.data.pool_data.get_data(&pool_id) {
             accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
             accounting::GetDataResult::Deleted => Ok(None),
-            accounting::GetDataResult::Missing => self.parent.get_pool_data(pool_id),
+            accounting::GetDataResult::Missing => {
+                Ok(self.parent.get_pool_data(pool_id).map_err(|_| Error::ViewFail)?)
+            }
         }
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        let parent_shares = self.parent.get_pool_delegations_shares(pool_id)?;
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
+        let parent_shares =
+            self.parent.get_pool_delegations_shares(pool_id).map_err(|_| Error::ViewFail)?;
         let local_shares = self.get_cached_delegations_shares(pool_id);
 
         match (parent_shares, local_shares) {
@@ -104,8 +109,12 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         }
     }
 
-    fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        let parent_amount = self.parent.get_delegation_balance(delegation_id)?;
+    fn get_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        let parent_amount =
+            self.parent.get_delegation_balance(delegation_id).map_err(|_| Error::ViewFail)?;
         let local_amount = self.data.delegation_balances.data().get(&delegation_id).copied();
         combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)
     }
@@ -113,11 +122,13 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<DelegationData>, Error> {
+    ) -> Result<Option<DelegationData>, Self::Error> {
         match self.data.delegation_data.get_data(&delegation_id) {
             accounting::GetDataResult::Present(d) => Ok(Some(d.clone())),
             accounting::GetDataResult::Deleted => Ok(None),
-            accounting::GetDataResult::Missing => self.parent.get_delegation_data(delegation_id),
+            accounting::GetDataResult::Missing => {
+                Ok(self.parent.get_delegation_data(delegation_id).map_err(|_| Error::ViewFail)?)
+            }
         }
     }
 
@@ -125,8 +136,11 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
-    ) -> Result<Option<Amount>, Error> {
-        let parent_amount = self.parent.get_pool_delegation_share(pool_id, delegation_id)?;
+    ) -> Result<Option<Amount>, Self::Error> {
+        let parent_amount = self
+            .parent
+            .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(|_| Error::ViewFail)?;
         let local_amount =
             self.data.pool_delegation_shares.data().get(&(pool_id, delegation_id)).copied();
         combine_amount_delta(&parent_amount, &local_amount).map_err(Error::AccountingError)

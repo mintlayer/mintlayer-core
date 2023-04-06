@@ -40,7 +40,7 @@ pub fn validate_consensus<H, U, P>(
 where
     H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingView,
+    P: PoSAccountingView<Error = pos_accounting::Error>,
 {
     let prev_block_id = *header.prev_block_id();
 
@@ -115,7 +115,7 @@ fn validate_pos_consensus<H, U, P>(
 where
     H: BlockIndexHandle,
     U: UtxosView,
-    P: PoSAccountingView,
+    P: PoSAccountingView<Error = pos_accounting::Error>,
 {
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_) => {

@@ -46,6 +46,8 @@ impl InMemoryStorageWrapper {
 }
 
 impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
+    type Error = TransactionVerifierStorageError;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
@@ -96,6 +98,8 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
+    type Error = storage_result::Error;
+
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
@@ -116,6 +120,8 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 }
 
 impl PoSAccountingView for InMemoryStorageWrapper {
+    type Error = pos_accounting::Error;
+
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }

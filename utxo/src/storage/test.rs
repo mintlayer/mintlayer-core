@@ -147,7 +147,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         .iter()
         .map(|input| {
             let outpoint = input.outpoint();
-            assert!(db.has_utxo(outpoint));
+            assert!(db.has_utxo(outpoint).unwrap());
 
             db.utxo(outpoint).expect("utxo should exist.")
         })
@@ -156,12 +156,12 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // test the spend
     let (block, block_undo) = {
         // create a cache based on the db.
-        let mut cache = UtxosCache::new(&db);
+        let mut cache = UtxosCache::new(&db).unwrap();
 
         // create a new block to spend.
         let block = create_block(
             &mut rng,
-            cache.best_block_hash(),
+            cache.best_block_hash().unwrap(),
             expected_tx_inputs.clone(),
             0,
             num_of_txs,
@@ -193,7 +193,10 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         {
             block_undo.tx_undos().iter().enumerate().for_each(|(b_idx, (_tx_id, tx_undo))| {
                 tx_undo.inner().iter().enumerate().for_each(|(t_idx, utxo)| {
-                    assert_eq!(Some(utxo), spent_utxos.get(b_idx + t_idx));
+                    assert_eq!(
+                        Some(Some(utxo)),
+                        spent_utxos.get(b_idx + t_idx).map(|x| x.as_ref())
+                    );
                 })
             })
         }
@@ -208,7 +211,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // check that all in tx_inputs do NOT exist
     expected_tx_inputs.iter().for_each(|input| {
-        assert_eq!(db.utxo(input.outpoint()), None);
+        assert_eq!(db.utxo(input.outpoint()), Ok(None));
     });
 
     // save the undo data to the db.
@@ -223,7 +226,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     {
         block.transactions().iter().for_each(|tx| {
             tx.inputs().iter().for_each(|input| {
-                assert_eq!(db.utxo(input.outpoint()), None);
+                assert_eq!(db.utxo(input.outpoint()), Ok(None));
             });
         });
     }
@@ -231,7 +234,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     // let's try to reverse the spending.
     {
         // get the best_block_id
-        let current_best_block_id = db.best_block_hash();
+        let current_best_block_id = db.best_block_hash().unwrap();
 
         // the current best_block_id should be the block id..
         assert_eq!(&current_best_block_id, &block.get_id());
@@ -246,7 +249,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
         // let's create a view.
-        let mut cache = UtxosCache::new(&db);
+        let mut cache = UtxosCache::new(&db).unwrap();
 
         // get the block tx inputs, and add them to the view.
         block.transactions().iter().enumerate().for_each(|(_idx, tx)| {
@@ -275,7 +278,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         let res = db.utxo(input.outpoint());
 
         let expected_utxo = spent_utxos.get(idx);
-        assert_eq!(res.as_ref(), expected_utxo);
+        assert_eq!(res.ok().as_ref(), expected_utxo);
     });
 }
 
@@ -300,11 +303,11 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
         })
         .collect();
 
-    let id = db.best_block_hash();
+    let id = db.best_block_hash().unwrap();
 
     // Create a block with 1 tx and 0 outputs in txs
     let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
-    let mut view = UtxosCache::new(&db);
+    let mut view = UtxosCache::new(&db).unwrap();
     let tx = block.transactions().get(0).unwrap();
 
     assert_eq!(
@@ -337,15 +340,15 @@ fn test_batch_write(#[case] seed: Seed) {
     let outpoint = keys[key_index].clone();
 
     // test the get_utxo
-    let utxo_opt = utxo_db.utxo(&outpoint);
+    let utxo_opt = utxo_db.utxo(&outpoint).unwrap();
     let utxo_entry = utxos.container.get(&outpoint).expect("an entry should be found");
     assert_eq!(utxo_entry.utxo(), utxo_opt.as_ref());
 
     // check has_utxo
-    assert!(utxo_db.has_utxo(&outpoint));
+    assert!(utxo_db.has_utxo(&outpoint).unwrap());
 
     //check the best block hash
-    assert_eq!(utxo_db.best_block_hash(), new_best_block_hash);
+    assert_eq!(utxo_db.best_block_hash().unwrap(), new_best_block_hash);
 }
 
 #[rstest]
@@ -370,7 +373,7 @@ fn try_flush_non_dirty_utxo(#[case] seed: Seed) {
 
     utxo_db.batch_write(cache).unwrap();
 
-    assert!(!utxo_db.has_utxo(&outpoint));
+    assert!(!utxo_db.has_utxo(&outpoint).unwrap());
 }
 
 #[rstest]
@@ -398,5 +401,5 @@ fn try_flush_spent_utxo(#[case] seed: Seed) {
 
     utxo_db.batch_write(cache).unwrap();
 
-    assert!(!utxo_db.has_utxo(&outpoint));
+    assert!(!utxo_db.has_utxo(&outpoint).unwrap());
 }

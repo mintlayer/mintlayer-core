@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
+
 use crate::{
     utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     Utxo, UtxosCache, UtxosView,
@@ -30,21 +32,35 @@ use crypto::{
 };
 use itertools::Itertools;
 
+pub trait UnwrapInfallible {
+    type Output;
+    fn unwrap_infallible(self) -> Self::Output;
+}
+
+impl<T> UnwrapInfallible for Result<T, Infallible> {
+    type Output = T;
+    fn unwrap_infallible(self) -> Self::Output {
+        self.map_or_else(|inf| match inf {}, |x| x)
+    }
+}
+
 struct EmptyUtxosView {
     best_block_hash: Id<GenBlock>,
 }
 
 impl UtxosView for EmptyUtxosView {
-    fn utxo(&self, _outpoint: &OutPoint) -> Option<Utxo> {
-        None
+    type Error = Infallible;
+
+    fn utxo(&self, _outpoint: &OutPoint) -> Result<Option<Utxo>, Infallible> {
+        Ok(None)
     }
 
-    fn has_utxo(&self, _outpoint: &OutPoint) -> bool {
-        false
+    fn has_utxo(&self, _outpoint: &OutPoint) -> Result<bool, Infallible> {
+        Ok(false)
     }
 
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        self.best_block_hash
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Infallible> {
+        Ok(self.best_block_hash)
     }
 
     fn estimated_size(&self) -> Option<usize> {
@@ -52,7 +68,9 @@ impl UtxosView for EmptyUtxosView {
     }
 }
 
-pub fn empty_test_utxos_view(best_block_hash: Id<GenBlock>) -> Box<dyn UtxosView> {
+pub fn empty_test_utxos_view(
+    best_block_hash: Id<GenBlock>,
+) -> Box<dyn UtxosView<Error = Infallible>> {
     Box::new(EmptyUtxosView { best_block_hash })
 }
 

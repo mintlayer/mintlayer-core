@@ -15,9 +15,7 @@
 
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use super::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageError, TransactionSource,
-};
+use super::{error::ConnectTransactionError, TransactionSource};
 use common::{
     chain::{Block, Transaction},
     primitives::Id,
@@ -58,13 +56,14 @@ impl AccountingBlockUndoCache {
         self.data
     }
 
-    pub fn fetch_block_undo<F>(
+    pub fn fetch_block_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
     ) -> Result<&mut AccountingBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         match self.data.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
@@ -84,14 +83,15 @@ impl AccountingBlockUndoCache {
         }
     }
 
-    pub fn take_tx_undo<F>(
+    pub fn take_tx_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
     ) -> Result<AccountingTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
 
@@ -100,13 +100,14 @@ impl AccountingBlockUndoCache {
             .ok_or(ConnectTransactionError::MissingPoSAccountingUndo(*tx_id))
     }
 
-    pub fn take_block_reward_undo<F>(
+    pub fn take_block_reward_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
     ) -> Result<Option<AccountingBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, TransactionVerifierStorageError>,
+        F: Fn(Id<Block>) -> Result<Option<AccountingBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         Ok(self.fetch_block_undo(tx_source, fetcher_func)?.take_reward_undos())
     }

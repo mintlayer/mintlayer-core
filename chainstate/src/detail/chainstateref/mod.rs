@@ -143,7 +143,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     }
 
     // TODO: When the mempool incorporates the transaction-verifier, this won't be needed anymore
-    pub fn make_utxo_view(&self) -> impl UtxosView + '_ {
+    pub fn make_utxo_view(&self) -> impl UtxosView<Error = S::Error> + '_ {
         UtxosDB::new(&self.db_tx)
     }
 

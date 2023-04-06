@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::storage_result;
 use common::{
     chain::{block::GenBlock, OutPointSourceId},
     primitives::Id,
@@ -38,6 +37,16 @@ pub enum Error {
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Block reward type is invalid `{0}`")]
     InvalidBlockRewardOutputType(Id<GenBlock>),
-    #[error("Database error: `{0}`")]
-    DBError(#[from] storage_result::Error),
+
+    // TODO This is a temporary solution. It does not provide much information, the exact utxo
+    //      view error is lost. The concrete error type depends on the UtxoView used. The error
+    //      enum here should be parametrized by the error type rather than hide it, so the error
+    //      type information is available at compilation time and the exact error emitted from
+    //      UtxoView is available to the caller at run time. That, however, leads to many call
+    //      sites having to be updated so it's left for future improvements.
+    //      https://github.com/mintlayer/mintlayer-core/issues/811
+    #[error("UTXO view query failed `for some reason (TM)`")]
+    ViewRead,
+    #[error("UTXO storage write failed `for some reason (TM)`")]
+    StorageWrite,
 }

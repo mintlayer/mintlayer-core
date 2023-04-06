@@ -33,7 +33,7 @@ pub enum SyncMessage {
     BlockResponse(BlockResponse),
     NewTransaction(Id<Transaction>),
     TransactionRequest(Id<Transaction>),
-    TransactionResponse(SignedTransaction),
+    TransactionResponse(TransactionResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,6 +138,14 @@ impl BlockResponse {
     pub fn into_block(self) -> Block {
         *self.block
     }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum TransactionResponse {
+    #[codec(index = 0)]
+    NotFound(Id<Transaction>),
+    #[codec(index = 1)]
+    Found(SignedTransaction),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

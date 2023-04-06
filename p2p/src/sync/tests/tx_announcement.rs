@@ -31,7 +31,7 @@ use test_utils::random::Seed;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{Announcement, SyncMessage},
+    message::{Announcement, SyncMessage, TransactionResponse},
     sync::tests::helpers::SyncManagerHandle,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -90,7 +90,10 @@ async fn invalid_transaction(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.send_message(peer, SyncMessage::TransactionResponse(tx));
+    handle.send_message(
+        peer,
+        SyncMessage::TransactionResponse(TransactionResponse::Found(tx)),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -331,7 +334,10 @@ async fn valid_transaction(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.send_message(peer, SyncMessage::TransactionResponse(tx.clone()));
+    handle.send_message(
+        peer,
+        SyncMessage::TransactionResponse(TransactionResponse::Found(tx.clone())),
+    );
 
     assert_eq!(
         SyncMessage::NewTransaction(tx.transaction().get_id()),

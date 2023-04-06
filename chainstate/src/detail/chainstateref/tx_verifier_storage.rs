@@ -43,6 +43,8 @@ use utxo::{ConsumedUtxoCache, FlushableUtxoView, UtxosBlockUndo, UtxosDB, UtxosS
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> TransactionVerifierStorageRef
     for ChainstateRef<'a, S, V>
 {
+    type Error = TransactionVerifierStorageError;
+
     fn get_token_id_from_issuance_tx(
         &self,
         tx_id: Id<Transaction>,
@@ -103,6 +105,8 @@ pub fn gen_block_index_getter<S: BlockchainStorageRead>(
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStorageRead
     for ChainstateRef<'a, S, V>
 {
+    type Error = storage_result::Error;
+
     fn get_utxo(
         &self,
         outpoint: &common::chain::OutPoint,
@@ -293,6 +297,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
 impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> PoSAccountingView
     for ChainstateRef<'a, S, V>
 {
+    type Error = pos_accounting::Error;
+
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
         self.get_pool_data(pool_id).map(|v| v.is_some())
     }

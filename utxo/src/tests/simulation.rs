@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::{create_utxo, empty_test_utxos_view};
+use std::convert::Infallible;
+
+use super::test_helper::{create_utxo, empty_test_utxos_view, UnwrapInfallible};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
 use common::chain::OutPoint;
 use crypto::random::{CryptoRng, Rng};
@@ -35,7 +37,7 @@ fn cache_simulation_test(
     let mut rng = make_seedable_rng(seed);
     let mut result: Vec<OutPoint> = Vec::new();
     let test_view = empty_test_utxos_view(common::primitives::H256::zero().into());
-    let mut base = UtxosCache::new(test_view);
+    let mut base = UtxosCache::new(test_view).unwrap_infallible();
 
     let new_consumed_cache = simulation_step(
         &mut rng,
@@ -48,8 +50,8 @@ fn cache_simulation_test(
     base.batch_write(new_consumed_cache).expect("batch write must succeed");
 
     for outpoint in &result {
-        let has_utxo = base.has_utxo(outpoint);
-        let utxo = base.utxo(outpoint);
+        let has_utxo = base.has_utxo(outpoint).unwrap_infallible();
+        let utxo = base.utxo(outpoint).unwrap_infallible();
         assert_eq!(has_utxo, utxo.is_some());
         if utxo.is_some() {
             assert!(base.has_utxo_in_cache(outpoint));
@@ -65,7 +67,7 @@ fn cache_simulation_test(
 /// 4. Create a child from current cache by calling this function again (recursion)
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
-fn simulation_step<P: UtxosView>(
+fn simulation_step<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
     all_outputs: &mut Vec<OutPoint>,
     parent_cache: &UtxosCache<P>,
@@ -77,8 +79,8 @@ fn simulation_step<P: UtxosView>(
     }
 
     // notice that we're using a reference of a reference
-    let parent: &dyn UtxosView = parent_cache;
-    let mut current_cache = UtxosCache::new(&parent);
+    let parent: &dyn UtxosView<Error = Infallible> = parent_cache;
+    let mut current_cache = UtxosCache::new(&parent).unwrap_infallible();
 
     // fill a global list of outputs
     let mut current_cache_outputs =
@@ -105,7 +107,7 @@ fn simulation_step<P: UtxosView>(
 }
 
 // Perform random modification on a cache (add new, spend existing, uncache), tracking the coverage
-fn populate_cache<P: UtxosView>(
+fn populate_cache<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
@@ -138,7 +140,7 @@ fn populate_cache<P: UtxosView>(
         };
 
         // spend utxo or add new random one
-        if cache.has_utxo(&outpoint) {
+        if cache.has_utxo(&outpoint).unwrap_infallible() {
             assert!(cache.spend_utxo(&outpoint).is_ok());
             spent_an_entry = true;
         } else if utxo.is_some() {
@@ -162,8 +164,8 @@ fn populate_cache<P: UtxosView>(
         // every 100 iterations check full cache
         if i % 100 == 0 {
             for outpoint in &result {
-                let has_utxo = cache.has_utxo(outpoint);
-                let utxo = cache.utxo(outpoint);
+                let has_utxo = cache.has_utxo(outpoint).unwrap_infallible();
+                let utxo = cache.utxo(outpoint).unwrap_infallible();
                 assert_eq!(has_utxo, utxo.is_some());
                 if utxo.is_some() {
                     assert!(cache.has_utxo_in_cache(outpoint));

@@ -20,14 +20,17 @@ use common::{
 };
 
 pub trait UtxosView {
+    /// Error that can occur during utxo queries
+    type Error: std::error::Error;
+
     /// Retrieves utxo.
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;
 
     /// Checks whether outpoint is unspent.
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool;
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error>;
 
     /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Id<GenBlock>;
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error>;
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;

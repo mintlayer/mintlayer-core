@@ -49,7 +49,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
 
-        if self.get_pool_balance(pool_id)?.is_some() {
+        if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
         }
