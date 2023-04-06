@@ -16,7 +16,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use super::{error::ConnectTransactionError, TransactionSource};
-use chainstate_types::storage_result;
 use common::{
     chain::{Block, Transaction},
     primitives::Id,
@@ -55,13 +54,14 @@ impl UtxosBlockUndoCache {
         self.data
     }
 
-    pub fn read_block_undo<F>(
+    pub fn read_block_undo<F, E>(
         &self,
         tx_source: &TransactionSource,
         fetcher_func: F,
     ) -> Result<UtxosBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         match self.data.get(tx_source) {
             Some(entry) => Ok(entry.undo.clone()),
@@ -76,13 +76,14 @@ impl UtxosBlockUndoCache {
         }
     }
 
-    pub fn fetch_block_undo<F>(
+    pub fn fetch_block_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
     ) -> Result<&mut UtxosBlockUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         match self.data.entry(*tx_source) {
             Entry::Occupied(entry) => Ok(&mut entry.into_mut().undo),
@@ -102,14 +103,15 @@ impl UtxosBlockUndoCache {
         }
     }
 
-    pub fn take_tx_undo<F>(
+    pub fn take_tx_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
         fetcher_func: F,
     ) -> Result<UtxosTxUndo, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         let block_undo = self.fetch_block_undo(tx_source, fetcher_func)?;
 
@@ -122,13 +124,14 @@ impl UtxosBlockUndoCache {
         }
     }
 
-    pub fn take_block_reward_undo<F>(
+    pub fn take_block_reward_undo<F, E>(
         &mut self,
         tx_source: &TransactionSource,
         fetcher_func: F,
     ) -> Result<Option<UtxosBlockRewardUndo>, ConnectTransactionError>
     where
-        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, storage_result::Error>,
+        F: Fn(Id<Block>) -> Result<Option<UtxosBlockUndo>, E>,
+        ConnectTransactionError: From<E>,
     {
         Ok(self.fetch_block_undo(tx_source, fetcher_func)?.take_block_reward_undo())
     }

@@ -194,7 +194,8 @@ pub struct TransactionVerifier<C, S, U, A> {
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
         let accounting_delta = PoSAccountingDelta::new(S::clone(&storage));
-        let utxo_cache = UtxosCache::new(UtxosDB::new(S::clone(&storage)));
+        let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
+            .expect("Utxo cache setup failed");
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
@@ -239,7 +240,7 @@ where
             best_block,
             tx_index_cache,
             token_issuance_cache: TokenIssuanceCache::new(),
-            utxo_cache: UtxosCache::new(utxos), // TODO: take utxos from handle
+            utxo_cache: UtxosCache::new(utxos).expect("Utxo cache setup failed"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta: PoSAccountingDelta::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
@@ -254,6 +255,7 @@ where
     S: TransactionVerifierStorageRef,
     U: UtxosView,
     A: PoSAccountingView,
+    <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
 {
     pub fn derive_child(
         &self,
@@ -262,7 +264,7 @@ where
             storage: self,
             chain_config: self.chain_config.as_ref(),
             tx_index_cache: OptionalTxIndexCache::new(self.tx_index_cache.enabled()),
-            utxo_cache: UtxosCache::new(&self.utxo_cache),
+            utxo_cache: UtxosCache::new(&self.utxo_cache).expect("construct"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
@@ -283,7 +285,7 @@ where
                     || -> Result<Option<TokenId>, ConnectTransactionError> {
                         // issuance transactions are unique, so we use them to get the token id
                         self.get_token_id_from_issuance_tx(tx_id)
-                            .map_err(ConnectTransactionError::TransactionVerifierError)
+                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                     };
                 let (key, amount) = get_input_token_id_and_amount(
                     &utxo.output().value(),
@@ -310,6 +312,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(input.outpoint())
+                .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
             self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
         });
@@ -499,6 +502,7 @@ where
                 let outpoint = input.outpoint();
                 self.utxo_cache
                     .utxo(outpoint)
+                    .map_err(|_| utxo::Error::ViewRead)?
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)
                     .map(|utxo| utxo.take_output())
             })
@@ -509,6 +513,7 @@ where
             let utxo = self
                 .utxo_cache
                 .utxo(outpoint)
+                .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
             // TODO: see if a different treatment should be done for different output purposes
@@ -596,7 +601,11 @@ where
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
             TxOutput::StakePool(_) => {
-                let block_undo_fetcher = |id: Id<Block>| self.storage.get_accounting_undo(id);
+                let block_undo_fetcher = |id: Id<Block>| {
+                    self.storage
+                        .get_accounting_undo(id)
+                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+                };
                 self.accounting_block_undo
                     .take_tx_undo(&tx_source, &tx.get_id(), block_undo_fetcher)?
                     .into_inner()
@@ -633,8 +642,14 @@ where
         input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
 
         // pre-cache token ids to check ensure it's not in the db when issuing
-        self.token_issuance_cache
-            .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
+        self.token_issuance_cache.precache_token_issuance(
+            |id| {
+                self.storage
+                    .get_token_aux_data(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            },
+            tx.transaction(),
+        )?;
 
         // check for attempted money printing
         let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
@@ -677,7 +692,9 @@ where
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
                     tx_index_cache.precache_inputs(tx.inputs(), |tx_id: &OutPointSourceId| {
-                        self.storage.get_mainchain_tx_index(tx_id)
+                        self.storage
+                            .get_mainchain_tx_index(tx_id)
+                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                     })?;
 
                     // mark tx index as spent
@@ -701,7 +718,9 @@ where
             // pre-cache all inputs
             if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                 tx_index_cache.precache_inputs(inputs, |tx_id: &OutPointSourceId| {
-                    self.storage.get_mainchain_tx_index(tx_id)
+                    self.storage
+                        .get_mainchain_tx_index(tx_id)
+                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                 })?;
             }
 
@@ -797,7 +816,11 @@ where
         tx_source: &TransactionSource,
         tx_id: &Id<Transaction>,
     ) -> Result<bool, ConnectTransactionError> {
-        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
         match tx_source {
             TransactionSource::Chain(block_id) => {
                 let current_block_height = self
@@ -836,7 +859,11 @@ where
         tx_source: &TransactionSource,
         tx: &SignedTransaction,
     ) -> Result<(), ConnectTransactionError> {
-        let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
         let tx_undo = self.utxo_block_undo.take_tx_undo(
             tx_source,
             &tx.transaction().get_id(),
@@ -845,8 +872,11 @@ where
 
         match tx_source {
             TransactionSource::Chain(_) => {
-                let tx_index_fetcher =
-                    |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
+                let tx_index_fetcher = |tx_id: &OutPointSourceId| {
+                    self.storage
+                        .get_mainchain_tx_index(tx_id)
+                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+                };
                 // update tx index only for txs from main chain
                 if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
                     // pre-cache all inputs
@@ -864,8 +894,14 @@ where
         self.utxo_cache.disconnect_transaction(tx.transaction(), tx_undo)?;
 
         // pre-cache token ids before removing them
-        self.token_issuance_cache
-            .precache_token_issuance(|id| self.storage.get_token_aux_data(id), tx.transaction())?;
+        self.token_issuance_cache.precache_token_issuance(
+            |id| {
+                self.storage
+                    .get_token_aux_data(id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            },
+            tx.transaction(),
+        )?;
 
         // Remove issued tokens
         self.token_issuance_cache.unregister(tx.transaction())?;
@@ -893,7 +929,11 @@ where
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
 
-                let block_undo_fetcher = |id: Id<Block>| self.storage.get_undo_data(id);
+                let block_undo_fetcher = |id: Id<Block>| {
+                    self.storage
+                        .get_undo_data(id)
+                        .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+                };
                 let reward_undo = self.utxo_block_undo.take_block_reward_undo(
                     &TransactionSource::Chain(block.get_id()),
                     block_undo_fetcher,
@@ -908,8 +948,11 @@ where
                     (reward_transactable.inputs(), self.tx_index_cache.as_mut())
                 {
                     // pre-cache all inputs
-                    let tx_index_fetcher =
-                        |tx_id: &OutPointSourceId| self.storage.get_mainchain_tx_index(tx_id);
+                    let tx_index_fetcher = |tx_id: &OutPointSourceId| {
+                        self.storage
+                            .get_mainchain_tx_index(tx_id)
+                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+                    };
                     tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
 
                     // unspend inputs
@@ -919,8 +962,11 @@ where
                 match block.header().consensus_data() {
                     ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
                     ConsensusData::PoS(_) => {
-                        let block_undo_fetcher =
-                            |id: Id<Block>| self.storage.get_accounting_undo(id);
+                        let block_undo_fetcher = |id: Id<Block>| {
+                            self.storage
+                                .get_accounting_undo(id)
+                                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+                        };
                         let reward_undo = self.accounting_block_undo.take_block_reward_undo(
                             &TransactionSource::Chain(block.get_id()),
                             block_undo_fetcher,

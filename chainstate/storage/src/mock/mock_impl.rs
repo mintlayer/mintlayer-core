@@ -90,6 +90,7 @@ mockall::mock! {
     }
 
     impl UtxosStorageRead for Store {
+        type Error = crate::Error;
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
@@ -328,6 +329,7 @@ mockall::mock! {
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
+        type Error = crate::Error;
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
@@ -434,6 +436,7 @@ mockall::mock! {
     }
 
     impl UtxosStorageRead for StoreTxRw {
+        type Error = crate::Error;
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;

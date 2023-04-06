@@ -16,9 +16,9 @@
 use std::collections::btree_map::Entry;
 
 use super::{
+    cached_inputs_operation::CachedInputsOperation,
     error::{ConnectTransactionError, TxIndexError},
-    storage::TransactionVerifierStorageError,
-    {cached_inputs_operation::CachedInputsOperation, BlockTransactableRef},
+    BlockTransactableRef,
 };
 use common::{
     chain::{signature::Signable, OutPointSourceId, Spender, TxInput, TxMainChainIndex},
@@ -160,15 +160,14 @@ impl TxIndexCache {
         Ok(())
     }
 
-    pub fn precache_inputs<F>(
+    pub fn precache_inputs<F, E>(
         &mut self,
         inputs: &[TxInput],
         fetcher_func: F,
     ) -> Result<(), ConnectTransactionError>
     where
-        F: Fn(
-            &OutPointSourceId,
-        ) -> Result<Option<TxMainChainIndex>, TransactionVerifierStorageError>,
+        F: Fn(&OutPointSourceId) -> Result<Option<TxMainChainIndex>, E>,
+        ConnectTransactionError: From<E>,
     {
         inputs.iter().try_for_each(|input| {
             let outpoint = input.outpoint();

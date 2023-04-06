@@ -39,6 +39,8 @@ mockall::mock! {
     pub Store {}
 
     impl TransactionVerifierStorageRef for Store {
+        type Error = TransactionVerifierStorageError;
+
         fn get_token_id_from_issuance_tx(
             &self,
             tx_id: Id<Transaction>,
@@ -121,6 +123,7 @@ mockall::mock! {
     }
 
     impl UtxosStorageRead for Store {
+        type Error = storage_result::Error;
         fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>,storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;
@@ -131,6 +134,7 @@ mockall::mock! {
     }
 
     impl PoSAccountingView for Store {
+        type Error = pos_accounting::Error;
         fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error>;
         fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error>;
         fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error>;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::test_helper::{create_tx_outputs, empty_test_utxos_view};
+use super::test_helper::{create_tx_outputs, empty_test_utxos_view, UnwrapInfallible};
 use crate::{
     ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
 };
@@ -23,7 +23,7 @@ use common::{
 };
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, convert::Infallible};
 use test_utils::random::{make_seedable_rng, Seed};
 
 // Structure to store outpoints of current utxo set and info for undo
@@ -53,7 +53,7 @@ fn cache_simulation_with_undo(
     let mut rng = make_seedable_rng(seed);
     let mut result: ResultWithUndo = Default::default();
     let test_view = empty_test_utxos_view(H256::zero().into());
-    let mut base = UtxosCache::new(test_view);
+    let mut base = UtxosCache::new(test_view).unwrap_infallible();
 
     let new_consumed_cache = simulation_step(
         &mut rng,
@@ -66,8 +66,8 @@ fn cache_simulation_with_undo(
     base.batch_write(new_consumed_cache).expect("batch write must succeed");
 
     for outpoint in &result.utxo_outpoints {
-        let has_utxo = base.has_utxo(outpoint);
-        let utxo = base.utxo(outpoint);
+        let has_utxo = base.has_utxo(outpoint).unwrap_infallible();
+        let utxo = base.utxo(outpoint).unwrap_infallible();
         assert_eq!(has_utxo, utxo.is_some());
         if utxo.is_some() {
             assert!(base.has_utxo_in_cache(outpoint));
@@ -83,7 +83,7 @@ fn cache_simulation_with_undo(
 /// 4. Create a child from current cache by calling this function again (recursion)
 /// 5. Flush the child into current cache
 /// 6. Consume the current cache, and return it
-fn simulation_step<P: UtxosView>(
+fn simulation_step<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
     all_outputs: &mut ResultWithUndo,
     parent_cache: &UtxosCache<P>,
@@ -95,8 +95,8 @@ fn simulation_step<P: UtxosView>(
     }
 
     // notice that we're using a reference of a reference
-    let parent: &dyn UtxosView = parent_cache;
-    let mut current_cache = UtxosCache::new(&parent);
+    let parent: &dyn UtxosView<Error = Infallible> = parent_cache;
+    let mut current_cache = UtxosCache::new(&parent).unwrap_infallible();
 
     // fill a global list of outputs
     let mut current_cache_outputs =
@@ -125,7 +125,7 @@ fn simulation_step<P: UtxosView>(
     Some(consumed_cache)
 }
 
-fn populate_cache_with_undo<P: UtxosView>(
+fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
@@ -202,7 +202,7 @@ fn populate_cache_with_undo<P: UtxosView>(
                     .add_utxo(
                         &undo_info.prev_outpoint,
                         undo_info.tx_undo.utxos()[0].clone(),
-                        cache.has_utxo(&undo_info.prev_outpoint),
+                        cache.has_utxo(&undo_info.prev_outpoint).unwrap_infallible(),
                     )
                     .unwrap();
 
@@ -214,8 +214,8 @@ fn populate_cache_with_undo<P: UtxosView>(
         // every 100 iterations check full cache
         if i % 100 == 0 {
             for outpoint in &result.utxo_outpoints {
-                let has_utxo = cache.has_utxo(outpoint);
-                let utxo = cache.utxo(outpoint);
+                let has_utxo = cache.has_utxo(outpoint).unwrap_infallible();
+                let utxo = cache.utxo(outpoint).unwrap_infallible();
                 assert_eq!(has_utxo, utxo.is_some());
             }
         }

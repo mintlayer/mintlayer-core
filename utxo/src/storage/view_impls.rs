@@ -14,26 +14,25 @@
 // limitations under the License.
 
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
-use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosView};
+use crate::{ConsumedUtxoCache, Error, FlushableUtxoView, Utxo, UtxosView};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
 };
 
 impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+    type Error = S::Error;
+
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.get_utxo(outpoint)
-            .expect("Database error while attempting to retrieve utxo")
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.utxo(outpoint).is_some()
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+        self.utxo(outpoint).map(|u| u.is_some())
     }
 
-    fn best_block_hash(&self) -> Id<GenBlock> {
-        self.get_best_block_for_utxos()
-            .expect("Database error while attempting to retrieve utxo set best block hash")
-            .expect("Failed to get best block hash")
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
+        Ok(self.get_best_block_for_utxos()?.expect("Failed to get best block hash"))
     }
 
     fn estimated_size(&self) -> Option<usize> {
@@ -42,20 +41,22 @@ impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
 }
 
 impl<S: UtxosStorageWrite> FlushableUtxoView for UtxosDB<S> {
-    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), crate::Error> {
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {
             let outpoint = &key;
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
-                    self.0.set_utxo(outpoint, utxo.clone())?;
+                    self.0.set_utxo(outpoint, utxo.clone()).map_err(|_| Error::StorageWrite)?;
                 } else {
                     // entry is spent
-                    self.0.del_utxo(outpoint)?;
+                    self.0.del_utxo(outpoint).map_err(|_| Error::StorageWrite)?;
                 };
             }
         }
-        self.0.set_best_block_for_utxos(&utxos.best_block)?;
+        self.0
+            .set_best_block_for_utxos(&utxos.best_block)
+            .map_err(|_| Error::StorageWrite)?;
         Ok(())
     }
 }

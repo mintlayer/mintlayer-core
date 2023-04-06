@@ -342,12 +342,11 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
         let utxo_view = chainstate_ref.make_utxo_view();
-        let available_inputs = tx
-            .inputs()
+        tx.inputs()
             .iter()
-            .map(|input| utxo_view.utxo(input.outpoint()).map(|_| input).cloned())
-            .collect();
-        Ok(available_inputs)
+            .map(|input| utxo_view.utxo(input.outpoint()).map(|x| x.map(|_| input).cloned()))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
     fn get_inputs_outpoints_values(
@@ -363,7 +362,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
             Vec::new(),
             |mut values, outpoint| {
-                if let Some(utxo) = utxo_view.utxo(outpoint) {
+                let opt_utxo = utxo_view
+                    .utxo(outpoint)
+                    .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
+                if let Some(utxo) = opt_utxo {
                     match utxo.output().value() {
                         OutputValue::Coin(amount) => values.push(Some(amount)),
                         _ => {
@@ -444,7 +446,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
         let utxo_view = chainstate_ref.make_utxo_view();
-        Ok(utxo_view.utxo(outpoint))
+        utxo_view
+            .utxo(outpoint)
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {

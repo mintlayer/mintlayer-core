@@ -54,7 +54,7 @@ impl pos_accounting::StorageTag for SealedStorageTag {}
 
 /// Queries on persistent blockchain data
 pub trait BlockchainStorageRead:
-    UtxosStorageRead
+    UtxosStorageRead<Error = crate::Error>
     + PoSAccountingStorageRead<SealedStorageTag>
     + PoSAccountingStorageRead<TipStorageTag>
 {

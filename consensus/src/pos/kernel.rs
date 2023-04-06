@@ -26,8 +26,10 @@ pub fn get_kernel_output<U: UtxosView>(
         [] => Err(ConsensusPoSError::NoKernel),
         [kernel_input] => {
             let kernel_outpoint = kernel_input.outpoint();
-            let kernel_output =
-                utxos_view.utxo(kernel_outpoint).ok_or(ConsensusPoSError::NoKernel)?;
+            let kernel_output = utxos_view
+                .utxo(kernel_outpoint)
+                .map_err(|_| ConsensusPoSError::FailedToFetchUtxo)?
+                .ok_or(ConsensusPoSError::NoKernel)?;
 
             Ok(kernel_output.output().clone())
         }

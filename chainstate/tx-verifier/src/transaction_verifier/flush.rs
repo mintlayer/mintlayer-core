@@ -73,8 +73,8 @@ fn flush_tokens(
     Ok(())
 }
 
-pub fn flush_to_storage(
-    storage: &mut impl TransactionVerifierStorageMut,
+pub fn flush_to_storage<S: TransactionVerifierStorageMut>(
+    storage: &mut S,
     consumed: TransactionVerifierDelta,
 ) -> Result<(), TransactionVerifierStorageError> {
     for (tx_id, tx_index_op) in consumed.tx_index_cache {

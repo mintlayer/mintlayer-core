@@ -25,7 +25,6 @@ use common::{
 
 use super::{
     error::{ConnectTransactionError, TokensError},
-    storage::TransactionVerifierStorageError,
     CachedOperation,
 };
 
@@ -139,13 +138,14 @@ impl TokenIssuanceCache {
         Ok(())
     }
 
-    pub fn precache_token_issuance<
-        F: Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, TransactionVerifierStorageError>,
-    >(
+    pub fn precache_token_issuance<E>(
         &mut self,
-        token_data_getter: F,
+        token_data_getter: impl Fn(&TokenId) -> Result<Option<TokenAuxiliaryData>, E>,
         tx: &Transaction,
-    ) -> Result<(), ConnectTransactionError> {
+    ) -> Result<(), ConnectTransactionError>
+    where
+        ConnectTransactionError: From<E>,
+    {
         let has_token_issuance =
             tx.outputs().iter().any(|output| is_tokens_issuance(&output.value()));
         if has_token_issuance {
