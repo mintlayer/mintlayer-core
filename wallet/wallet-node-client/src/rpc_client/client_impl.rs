@@ -27,17 +27,17 @@ impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        let block = self.get_block(block_id)?;
+        let block = self.get_block(block_id).await?;
         Ok(block)
     }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
-        let best_block_id = self.get_best_block_id()?;
+        let best_block_id = self.get_best_block_id().await?;
         Ok(best_block_id)
     }
 
     async fn get_best_block_height(&self) -> Result<common::primitives::BlockHeight, Self::Error> {
-        let best_block_height = self.get_best_block_height()?;
+        let best_block_height = self.get_best_block_height().await?;
         Ok(best_block_height)
     }
 
@@ -45,7 +45,7 @@ impl NodeInterface for NodeRpcClient {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        let block_id_at_height = self.get_block_id_at_height(height)?;
+        let block_id_at_height = self.get_block_id_at_height(height).await?;
         Ok(block_id_at_height)
     }
 }

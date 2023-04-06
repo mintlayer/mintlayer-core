@@ -24,7 +24,7 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         Block, ChainConfig,
     },
-    primitives::Idable,
+    primitives::{Idable, H256},
 };
 use node_comm::{make_rpc_client, node_traits::NodeInterface};
 use rpc::RpcConfig;
@@ -79,8 +79,7 @@ pub async fn start_subsystems(
     (shutdown_trigger, chainstate_subsys, rpc_bind_address)
 }
 
-// TODO: why do we need multi_thread? Otherwise, rpc calls block forever.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn wallet_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
@@ -137,7 +136,16 @@ async fn wallet_rpc_communication() {
         block_1_id
     );
 
+    assert_eq!(
+        rpc_client.get_block_id_at_height(2.into()).await.unwrap(),
+        None
+    );
+
     let block_1 = rpc_client.get_block(best_block_id.get().into()).await.unwrap().unwrap();
 
     assert_eq!(block_1.get_id(), block_1_id);
+
+    let block_2 = rpc_client.get_block(H256::zero().into()).await.unwrap();
+
+    assert_eq!(block_2, None);
 }
