@@ -25,6 +25,8 @@ use serialization::hex::{HexDecode, HexEncode};
 
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
+    #[error("Initialization error: {0}")]
+    InitializationError(Box<NodeRpcError>),
     #[error("Decoding error: {0}")]
     DecodingError(#[from] serialization::hex::HexError),
     #[error("Client creation error: {0}")]
@@ -41,10 +43,15 @@ impl NodeRpcClient {
     pub async fn new(remote_socket_address: String) -> Result<Self, NodeRpcError> {
         let host = format!("http://{remote_socket_address}");
         let http_client = HttpClientBuilder::default()
-            .build(&host)
+            .build(host)
             .map_err(NodeRpcError::ClientCreationError)?;
 
         let client = Self { http_client };
+
+        client
+            .get_best_block_id()
+            .await
+            .map_err(|e| NodeRpcError::InitializationError(Box::new(e)))?;
 
         Ok(client)
     }
