@@ -35,7 +35,7 @@ use p2p_test_utils::start_subsystems;
 use crate::{
     message::SyncMessage,
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
-    sync::{Announcement, BlockSyncManager},
+    sync::BlockSyncManager,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
@@ -137,13 +137,8 @@ impl SyncManagerHandle {
     }
 
     /// Sends an announcement to the sync manager.
-    pub fn make_announcement(&mut self, peer: PeerId, announcement: Announcement) {
-        self.sync_event_sender
-            .send(SyncingEvent::Message {
-                peer,
-                message: announcement.into(),
-            })
-            .unwrap();
+    pub fn broadcast_message(&mut self, peer: PeerId, message: SyncMessage) {
+        self.sync_event_sender.send(SyncingEvent::Message { peer, message }).unwrap();
     }
 
     /// Receives a message from the sync manager.
@@ -303,11 +298,11 @@ impl MessagingService for MessagingHandleMock {
         Ok(())
     }
 
-    fn make_announcement(&mut self, announcement: Announcement) -> Result<()> {
+    fn broadcast_message(&mut self, message: SyncMessage) -> Result<()> {
         self.events_sender
             .send(SyncingEvent::Message {
                 peer: "0".parse().unwrap(),
-                message: announcement.into(),
+                message,
             })
             .unwrap();
         Ok(())

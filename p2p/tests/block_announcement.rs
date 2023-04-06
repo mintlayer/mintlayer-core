@@ -25,7 +25,7 @@ use p2p::testing_utils::{
     TestTransportNoise, TestTransportTcp,
 };
 use p2p::{
-    message::{Announcement, HeaderList, SyncMessage},
+    message::{HeaderList, SyncMessage},
     net::{
         default_backend::{
             transport::{MpscChannelTransport, NoiseTcpTransport, TcpTransportSocket},
@@ -85,7 +85,7 @@ where
     connect_and_accept_services::<S>(&mut peer2.0, &mut peer3.0).await;
 
     messaging_handle1
-        .make_announcement(Announcement::Block(HeaderList::new(vec![Block::new(
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![Block::new(
             vec![],
             Id::new(H256([0x03; 32])),
             BlockTimestamp::from_int_seconds(1337u64),

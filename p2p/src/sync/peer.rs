@@ -43,8 +43,8 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
     message::{
-        Announcement, BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
-        SyncMessage, TransactionResponse,
+        BlockListRequest, BlockResponse, HeaderList, HeaderListRequest, SyncMessage,
+        TransactionResponse,
     },
     net::{
         types::services::{Service, Services},
@@ -266,7 +266,7 @@ where
             }
 
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "Headers list",
+                "Headers list".to_owned(),
             )));
         }
 
@@ -352,7 +352,7 @@ where
 
         if self.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "block response",
+                "block response".to_owned(),
             )));
         }
 
@@ -386,7 +386,7 @@ where
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
         if !self.services.has_service(Service::Transactions) {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "A transaction request is received, but this node doesn't have the corresponding service",
+                "A transaction request is received, but this node doesn't have the corresponding service".to_owned(),
             )));
         }
 
@@ -413,13 +413,13 @@ where
 
         if self.announced_transactions.take(&id).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "Unexpected transaction response",
+                "Unexpected transaction response".to_owned(),
             )));
         }
 
         if let Some(tx) = tx {
             self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
-            self.messaging_handle.make_announcement(Announcement::Transaction(id))?;
+            self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))?;
         }
 
         Ok(())
@@ -437,7 +437,7 @@ where
 
         if !self.services.has_service(Service::Transactions) {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
-                "A transaction announcement is received, but this node doesn't have the corresponding service",
+                "A transaction announcement is received, but this node doesn't have the corresponding service".to_owned(),
             )));
         }
 

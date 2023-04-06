@@ -22,7 +22,7 @@ use common::{
 
 use p2p::{
     config::{NodeType, P2pConfig},
-    message::{Announcement, HeaderList, SyncMessage},
+    message::{HeaderList, SyncMessage},
     net::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
         SyncingEventReceiver,
@@ -70,7 +70,7 @@ where
     )
     .unwrap();
     messaging_handle1
-        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
         .unwrap();
@@ -103,7 +103,7 @@ where
     )
     .unwrap();
     messaging_handle2
-        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
         .unwrap();
@@ -186,7 +186,7 @@ where
     )
     .unwrap();
     messaging_handle1
-        .make_announcement(Announcement::Block(HeaderList::new(vec![block
+        .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![block
             .header()
             .clone()])))
         .unwrap();

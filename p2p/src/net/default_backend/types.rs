@@ -21,9 +21,9 @@ use serialization::{Decode, Encode};
 
 use crate::{
     message::{
-        AddrListRequest, AddrListResponse, AnnounceAddrRequest, Announcement, BlockListRequest,
-        BlockResponse, HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest,
-        PingResponse, SyncMessage, TransactionResponse,
+        AddrListRequest, AddrListResponse, AnnounceAddrRequest, BlockListRequest, BlockResponse,
+        HeaderList, HeaderListRequest, PeerManagerMessage, PingRequest, PingResponse, SyncMessage,
+        TransactionResponse,
     },
     net::types::services::{Service, Services},
     protocol::NetworkProtocol,
@@ -155,15 +155,6 @@ impl From<SyncMessage> for Message {
             SyncMessage::NewTransaction(id) => Message::NewTransaction(id),
             SyncMessage::TransactionRequest(id) => Message::TransactionRequest(id),
             SyncMessage::TransactionResponse(tx) => Message::TransactionResponse(tx),
-        }
-    }
-}
-
-impl From<Announcement> for Message {
-    fn from(announcement: Announcement) -> Self {
-        match announcement {
-            Announcement::Block(l) => Self::HeaderList(l),
-            Announcement::Transaction(id) => Self::NewTransaction(id),
         }
     }
 }

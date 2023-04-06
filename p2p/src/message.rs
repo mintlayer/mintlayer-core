@@ -157,18 +157,3 @@ pub struct AddrListResponse {
 pub struct PingResponse {
     pub nonce: u64,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Announcement {
-    Block(HeaderList),
-    Transaction(Id<Transaction>),
-}
-
-impl From<Announcement> for SyncMessage {
-    fn from(announcement: Announcement) -> Self {
-        match announcement {
-            Announcement::Block(l) => Self::HeaderList(l),
-            Announcement::Transaction(id) => Self::NewTransaction(id),
-        }
-    }
-}

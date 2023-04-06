@@ -27,7 +27,8 @@ use logging::log;
 
 use crate::{
     error::P2pError,
-    message::{Announcement, PeerManagerMessage, SyncMessage},
+    error::ProtocolError,
+    message::{PeerManagerMessage, SyncMessage},
     net::{
         default_backend::transport::{TransportListener, TransportSocket},
         types::{ConnectivityEvent, SyncingEvent},
@@ -201,16 +202,25 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
             .map_err(Into::into)
     }
 
-    fn make_announcement(&mut self, announcement: Announcement) -> crate::Result<()> {
-        let service = match &announcement {
-            Announcement::Block(_) => Service::Blocks,
-            Announcement::Transaction(_) => Service::Transactions,
+    fn broadcast_message(&mut self, message: SyncMessage) -> crate::Result<()> {
+        let service = match &message {
+            SyncMessage::HeaderList(_) => Service::Blocks,
+            SyncMessage::NewTransaction(_) => Service::Transactions,
+            SyncMessage::HeaderListRequest(_)
+            | SyncMessage::BlockListRequest(_)
+            | SyncMessage::BlockResponse(_)
+            | SyncMessage::TransactionRequest(_)
+            | SyncMessage::TransactionResponse(_) => {
+                return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                    format!("Unable to broadcast message: {message:?}"),
+                )))
+            }
         };
 
         self.command_sender
             .send(types::Command::AnnounceData {
                 service,
-                message: announcement.into(),
+                message: message.into(),
             })
             .map_err(P2pError::from)
     }

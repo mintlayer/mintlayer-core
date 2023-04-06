@@ -32,7 +32,7 @@ use test_utils::random::Seed;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{Announcement, BlockListRequest, HeaderList, SyncMessage},
+    message::{BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
     P2pConfig, P2pError,
@@ -62,9 +62,9 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     let peer = PeerId::new();
 
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
     );
 
     handle.resume_panic().await;
@@ -96,9 +96,9 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![block_2.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![block_2.header().clone()])),
     );
 
     let (sent_to, message) = handle.message().await;
@@ -127,9 +127,9 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
     );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -169,9 +169,9 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
     );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -238,9 +238,9 @@ async fn unconnected_headers(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     // First announcement: the peer score shouldn't be changed.
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![orphan_block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
     );
 
     let (sent_to, message) = handle.message().await;
@@ -249,9 +249,9 @@ async fn unconnected_headers(#[case] seed: Seed) {
     handle.assert_no_peer_manager_event().await;
 
     // Second announcement: misbehavior.
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![orphan_block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
     );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
@@ -287,9 +287,9 @@ async fn valid_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(HeaderList::new(vec![block.header().clone()])),
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
     );
 
     let (sent_to, message) = handle.message().await;

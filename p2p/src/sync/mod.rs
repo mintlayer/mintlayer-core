@@ -42,7 +42,7 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     event::PeerManagerEvent,
-    message::{Announcement, HeaderList, SyncMessage},
+    message::{HeaderList, SyncMessage},
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::Peer,
     types::peer_id::PeerId,
@@ -217,7 +217,7 @@ where
             .header()
             .clone();
         self.messaging_handle
-            .make_announcement(Announcement::Block(HeaderList::new(vec![header])))
+            .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![header])))
     }
 
     /// Sends an event to the corresponding peer.
