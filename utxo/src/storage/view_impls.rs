@@ -41,6 +41,8 @@ impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
 }
 
 impl<S: UtxosStorageWrite> FlushableUtxoView for UtxosDB<S> {
+    type Error = Error;
+
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {

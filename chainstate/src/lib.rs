@@ -19,6 +19,7 @@ pub use detail::tx_verification_strategy::*;
 pub use interface::chainstate_interface;
 use interface::chainstate_interface_impl;
 pub use interface::chainstate_interface_impl_delegation;
+use tx_verifier::transaction_verifier::storage::HasTxIndexDisabledError;
 
 pub mod rpc;
 
@@ -63,6 +64,12 @@ pub enum ChainstateError {
     FailedToReadProperty(#[from] PropertyQueryError),
     #[error("Block import error {0}")]
     BootstrapError(#[from] BootstrapError),
+}
+
+impl HasTxIndexDisabledError for ChainstateError {
+    fn tx_index_disabled_error() -> Self {
+        BlockError::tx_index_disabled_error().into()
+    }
 }
 
 impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
