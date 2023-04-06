@@ -90,7 +90,7 @@ impl SignedTransaction {
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn serialized_hash(&self) -> Id<SignedTransaction> {
+    pub fn serialized_hash(&self) -> Id<Transaction> {
         Id::new(id::hash_encoded(self))
     }
 }
