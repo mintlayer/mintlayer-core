@@ -87,8 +87,6 @@ async fn wallet_rpc_communication() {
     let (_shutdown_trigger, chainstate_handle, rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    std::thread::sleep(std::time::Duration::from_secs(2));
-
     let rpc_client = make_rpc_client(rpc_bind_address.to_string()).unwrap();
 
     let best_height = rpc_client.get_best_block_height().unwrap();
