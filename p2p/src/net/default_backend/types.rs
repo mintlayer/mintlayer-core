@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::Transaction,
     primitives::{semver::SemVer, user_agent::UserAgent, Id},
 };
 use serialization::{Decode, Encode};
@@ -23,7 +23,7 @@ use crate::{
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, Announcement, BlockListRequest,
         BlockResponse, HeaderListRequest, HeaderListResponse, PeerManagerMessage, PingRequest,
-        PingResponse, SyncMessage,
+        PingResponse, SyncMessage, TransactionResponse,
     },
     net::types::services::{Service, Services},
     protocol::NetworkProtocol,
@@ -124,7 +124,7 @@ pub enum Message {
     #[codec(index = 11)]
     TransactionRequest(Id<Transaction>),
     #[codec(index = 12)]
-    TransactionResponse(SignedTransaction),
+    TransactionResponse(TransactionResponse),
 
     #[codec(index = 8)]
     AnnounceAddrRequest(AnnounceAddrRequest),
