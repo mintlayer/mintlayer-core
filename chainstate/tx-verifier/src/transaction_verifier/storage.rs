@@ -110,70 +110,68 @@ where
 }
 
 pub trait TransactionVerifierStorageMut:
-    TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>
-    + FlushableUtxoView
-    + FlushablePoSAccountingView
+    TransactionVerifierStorageRef + FlushableUtxoView + FlushablePoSAccountingView
 {
     fn set_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_mainchain_tx_index(
         &mut self,
         tx_id: &OutPointSourceId,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn set_token_aux_data(
         &mut self,
         token_id: &TokenId,
         data: &TokenAuxiliaryData,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_token_aux_data(
         &mut self,
         token_id: &TokenId,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn set_token_id(
         &mut self,
         issuance_tx_id: &Id<Transaction>,
         token_id: &TokenId,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_token_id(
         &mut self,
         issuance_tx_id: &Id<Transaction>,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn set_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
         undo: &utxo::UtxosBlockUndo,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_utxo_undo_data(
         &mut self,
         tx_source: TransactionSource,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn set_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
         undo: &AccountingBlockUndo,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn del_accounting_undo_data(
         &mut self,
         tx_source: TransactionSource,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 
     fn apply_accounting_delta(
         &mut self,
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
-    ) -> Result<(), TransactionVerifierStorageError>;
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T

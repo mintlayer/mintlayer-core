@@ -28,7 +28,10 @@ use common::{
 use consensus::ConsensusVerificationError;
 
 use thiserror::Error;
-use tx_verifier::transaction_verifier::error::{SpendStakeError, TxIndexError};
+use tx_verifier::transaction_verifier::{
+    error::{SpendStakeError, TxIndexError},
+    storage::HasTxIndexDisabledError,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -157,5 +160,11 @@ impl From<OrphanAddError> for Result<(), OrphanCheckError> {
         match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => Ok(()),
         }
+    }
+}
+
+impl HasTxIndexDisabledError for BlockError {
+    fn tx_index_disabled_error() -> Self {
+        TransactionVerifierStorageError::tx_index_disabled_error().into()
     }
 }

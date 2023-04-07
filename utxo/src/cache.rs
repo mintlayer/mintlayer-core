@@ -413,6 +413,8 @@ impl<P: UtxosView> UtxosView for UtxosCache<P> {
 }
 
 impl<P> FlushableUtxoView for UtxosCache<P> {
+    type Error = Error;
+
     fn batch_write(&mut self, utxo_entries: ConsumedUtxoCache) -> Result<(), Error> {
         for (key, entry) in utxo_entries.container {
             // Ignore non-dirty entries (optimization).

@@ -14,17 +14,17 @@
 // limitations under the License.
 
 use super::{
-    storage::{TransactionVerifierStorageError, TransactionVerifierStorageMut},
+    storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
     CachedInputsOperation, TransactionVerifierDelta,
 };
 use common::chain::OutPointSourceId;
 
-fn flush_tx_indexes(
-    storage: &mut impl TransactionVerifierStorageMut,
+fn flush_tx_indexes<S: TransactionVerifierStorageMut>(
+    storage: &mut S,
     tx_id: OutPointSourceId,
     tx_index_op: CachedInputsOperation,
-) -> Result<(), TransactionVerifierStorageError> {
+) -> Result<(), <S as TransactionVerifierStorageRef>::Error> {
     match tx_index_op {
         CachedInputsOperation::Write(ref tx_index) => {
             storage.set_mainchain_tx_index(&tx_id, tx_index)?
@@ -35,14 +35,14 @@ fn flush_tx_indexes(
     Ok(())
 }
 
-fn flush_tokens(
-    storage: &mut impl TransactionVerifierStorageMut,
+fn flush_tokens<S: TransactionVerifierStorageMut>(
+    storage: &mut S,
     token_cache: &ConsumedTokenIssuanceCache,
-) -> Result<(), TransactionVerifierStorageError> {
+) -> Result<(), <S as TransactionVerifierStorageRef>::Error> {
     debug_assert_eq!(token_cache.data.len(), token_cache.txid_vs_tokenid.len());
 
     token_cache.data.iter().try_for_each(
-        |(token_id, aux_data_op)| -> Result<(), TransactionVerifierStorageError> {
+        |(token_id, aux_data_op)| -> Result<(), <S as TransactionVerifierStorageRef>::Error> {
             match aux_data_op {
                 CachedAuxDataOp::Write(aux_data) => {
                     storage.set_token_aux_data(token_id, aux_data)?;
@@ -57,7 +57,7 @@ fn flush_tokens(
     )?;
 
     token_cache.txid_vs_tokenid.iter().try_for_each(
-        |(tx_id, token_index_op)| -> Result<(), TransactionVerifierStorageError> {
+        |(tx_id, token_index_op)| -> Result<(), <S as TransactionVerifierStorageRef>::Error> {
             match token_index_op {
                 CachedTokenIndexOp::Write(token_id) => {
                     storage.set_token_id(tx_id, token_id)?;
@@ -76,7 +76,11 @@ fn flush_tokens(
 pub fn flush_to_storage<S: TransactionVerifierStorageMut>(
     storage: &mut S,
     consumed: TransactionVerifierDelta,
-) -> Result<(), TransactionVerifierStorageError> {
+) -> Result<(), <S as TransactionVerifierStorageRef>::Error>
+where
+    <S as TransactionVerifierStorageRef>::Error: From<<S as utxo::FlushableUtxoView>::Error>,
+    <S as TransactionVerifierStorageRef>::Error: From<pos_accounting::Error>,
+{
     for (tx_id, tx_index_op) in consumed.tx_index_cache {
         flush_tx_indexes(storage, tx_id, tx_index_op)?;
     }

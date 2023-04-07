@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{ConsumedUtxoCache, Error, Utxo, UtxosCache};
+use crate::{ConsumedUtxoCache, Utxo, UtxosCache};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
@@ -37,8 +37,11 @@ pub trait UtxosView {
 }
 
 pub trait FlushableUtxoView {
+    /// Errors potentially triggered by flushing the view
+    type Error: std::error::Error;
+
     /// Performs bulk modification
-    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error>;
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Self::Error>;
 }
 
 /// Flush the cache into the provided base. This will consume the cache and throw it away.
@@ -46,7 +49,7 @@ pub trait FlushableUtxoView {
 pub fn flush_to_base<T: FlushableUtxoView, P: UtxosView>(
     cache: UtxosCache<P>,
     base: &mut T,
-) -> Result<(), Error> {
+) -> Result<(), T::Error> {
     let consumed_cache = cache.consume();
     base.batch_write(consumed_cache)
 }

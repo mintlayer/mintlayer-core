@@ -129,6 +129,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
 impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> FlushableUtxoView
     for ChainstateRef<'a, S, V>
 {
+    type Error = utxo::Error;
+
     fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error> {
         let mut db = UtxosDB::new(&mut self.db_tx);
         db.batch_write(utxos)

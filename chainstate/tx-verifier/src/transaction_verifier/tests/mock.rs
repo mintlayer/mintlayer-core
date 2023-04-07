@@ -130,6 +130,7 @@ mockall::mock! {
     }
 
     impl FlushableUtxoView for Store {
+        type Error = utxo::Error;
         fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), utxo::Error>;
     }
 
