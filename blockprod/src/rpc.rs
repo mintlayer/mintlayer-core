@@ -69,7 +69,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
             .map_err(rpc::Error::to_call_error)?;
 
         let block = handle_error(
-            self.call_async(move |this| {
+            self.call_async_mut(move |this| {
                 this.generate_block(reward_destination, signed_transactions)
             })
             .await,

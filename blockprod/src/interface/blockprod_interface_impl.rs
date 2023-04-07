@@ -13,18 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common::chain::{
-    block::{
-        calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-        BlockBody, BlockCreationError, BlockHeader, BlockReward,
-    },
-    Block, Destination, SignedTransaction,
-};
+use common::chain::{Block, Destination, SignedTransaction};
 
 use crate::{
-    detail::{block_maker::BlockMaker, builder::BlockBuilderControlCommand, BlockProduction},
+    detail::{builder::BlockBuilderControlCommand, BlockProduction},
     BlockProductionError,
 };
 
@@ -51,72 +43,10 @@ impl BlockProductionInterface for BlockProduction {
     }
 
     async fn generate_block(
-        &self,
+        &mut self,
         reward_destination: Destination,
         transactions: Vec<SignedTransaction>,
     ) -> Result<Block, BlockProductionError> {
-        let (current_tip_id, current_tip_height) = self
-            .chainstate_handle()
-            .call(|this| {
-                if let Ok(current_tip_id) = this.get_best_block_id() {
-                    if let Ok(Some(current_tip_height)) =
-                        this.get_block_height_in_main_chain(&current_tip_id)
-                    {
-                        return Some((current_tip_id, current_tip_height));
-                    }
-                }
-
-                None
-            })
-            .await?
-            .ok_or(BlockProductionError::FailedToConstructBlock(
-                BlockCreationError::CurrentTipRetrievalError,
-            ))?;
-
-        let (_tx, dummy_rx) = crossbeam_channel::unbounded();
-
-        let block_maker = BlockMaker::new(
-            Arc::clone(self.chain_config()),
-            self.chainstate_handle().clone(),
-            self.mempool_handle().clone(),
-            self.time_getter().clone(),
-            reward_destination,
-            current_tip_id,
-            current_tip_height,
-            dummy_rx,
-            Arc::clone(self.mining_thread_pool()),
-        );
-
-        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
-
-        let consensus_data = block_maker.pull_consensus_data(current_tip_id, timestamp).await?;
-
-        let block_reward = BlockReward::new(vec![]);
-
-        let block_body = BlockBody::new(block_reward, transactions.clone());
-
-        let tx_merkle_root =
-            calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&block_body)
-            .map_err(BlockCreationError::MerkleTreeError)?;
-
-        let block_header = BlockHeader::new(
-            current_tip_id,
-            tx_merkle_root,
-            witness_merkle_root,
-            timestamp,
-            consensus_data,
-        );
-
-        let block_header = BlockMaker::solve_block(
-            Arc::clone(self.chain_config()),
-            block_header,
-            current_tip_height,
-            Arc::new(false.into()),
-        )?;
-
-        let block = Block::new_from_header(block_header, block_body)?;
-
-        Ok(block)
+        self.generate_block(reward_destination, transactions).await
     }
 }

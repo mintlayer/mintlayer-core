@@ -32,7 +32,7 @@ pub trait BlockProductionInterface: Send {
 
     /// Generate a block with the given transactions to the specified reward destination
     async fn generate_block(
-        &self,
+        &mut self,
         reward_destination: Destination,
         transactions: Vec<SignedTransaction>,
     ) -> Result<Block, BlockProductionError>;
