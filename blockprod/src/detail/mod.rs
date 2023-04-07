@@ -29,12 +29,20 @@ use common::{
     },
     time_getter::TimeGetter,
 };
-use mempool::MempoolHandle;
+use mempool::{
+    tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
+    MempoolHandle,
+};
 use tokio::sync::mpsc;
 
 use crate::BlockProductionError;
 
 use self::{block_maker::BlockMaker, builder::BlockBuilderControlCommand};
+
+pub enum TransactionsSource {
+    Mempool,
+    Provided(Vec<SignedTransaction>),
+}
 
 #[allow(dead_code)]
 pub struct BlockProduction {
@@ -90,10 +98,24 @@ impl BlockProduction {
         &self.mining_thread_pool
     }
 
+    pub async fn collect_transactions(
+        &self,
+    ) -> Result<Box<dyn TransactionAccumulator>, BlockProductionError> {
+        let max_block_size = self.chain_config.max_block_size_from_txs();
+        let returned_accumulator = self
+            .mempool_handle
+            .call_async(move |mempool| {
+                mempool.collect_txs(Box::new(DefaultTxAccumulator::new(max_block_size)))
+            })
+            .await?
+            .map_err(|_| BlockProductionError::MempoolChannelClosed)?;
+        Ok(returned_accumulator)
+    }
+
     pub async fn generate_block(
         &mut self,
         reward_destination: Destination,
-        transactions: Vec<SignedTransaction>,
+        transactions_source: TransactionsSource,
     ) -> Result<Block, BlockProductionError> {
         let (current_tip_id, current_tip_height) = self
             .chainstate_handle()
@@ -133,7 +155,15 @@ impl BlockProduction {
 
         let block_reward = BlockReward::new(vec![]);
 
-        let block_body = BlockBody::new(block_reward, transactions.clone());
+        // TODO: see if we can simplify this
+        let transactions = match transactions_source {
+            TransactionsSource::Mempool => {
+                self.collect_transactions().await?.transactions().clone()
+            }
+            TransactionsSource::Provided(txs) => txs,
+        };
+
+        let block_body = BlockBody::new(block_reward, transactions);
 
         let tx_merkle_root =
             calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;

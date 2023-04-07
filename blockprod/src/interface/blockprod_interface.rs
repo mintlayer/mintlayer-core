@@ -31,9 +31,10 @@ pub trait BlockProductionInterface: Send {
     fn is_connected(&self) -> bool;
 
     /// Generate a block with the given transactions to the specified reward destination
+    /// If transactions are None, the block will be generated with available transactions in the mempool
     async fn generate_block(
         &mut self,
         reward_destination: Destination,
-        transactions: Vec<SignedTransaction>,
+        transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError>;
 }

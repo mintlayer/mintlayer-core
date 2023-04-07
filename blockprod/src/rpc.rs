@@ -36,11 +36,12 @@ trait BlockProductionRpc {
     async fn start(&self) -> rpc::Result<()>;
 
     /// Generate a block with the supplied transactions to the specified reward destination
+    /// If transactions are None, the block will be generated with available transactions in the mempool
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
         reward_destination_hex: String,
-        transactions_hex: Vec<String>,
+        transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String>;
 }
 
@@ -57,16 +58,20 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
     async fn generate_block(
         &self,
         reward_destination_hex: String,
-        transactions_hex: Vec<String>,
+        transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String> {
         let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
 
-        let signed_transactions = transactions_hex
-            .iter()
-            .map(HexDecode::hex_decode_all)
-            .collect::<Result<Vec<SignedTransaction>, _>>()
-            .map_err(rpc::Error::to_call_error)?;
+        let signed_transactions = match transactions_hex {
+            Some(txs) => Some(
+                txs.into_iter()
+                    .map(SignedTransaction::hex_decode_all)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(rpc::Error::to_call_error)?,
+            ),
+            None => None,
+        };
 
         let block = handle_error(
             self.call_async_mut(move |this| {
