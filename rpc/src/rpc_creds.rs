@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::{Path, PathBuf};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use crypto::random::{make_true_rng, CryptoRng, Rng};
@@ -36,6 +39,18 @@ fn gen_password<R: Rng + CryptoRng>(rng: &mut R, len: usize) -> String {
         .collect()
 }
 
+fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
+    let mut options = std::fs::OpenOptions::new();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::prelude::OpenOptionsExt;
+        options.mode(0o600);
+    }
+
+    options.create(true).write(true).open(&path)?.write_all(data.as_bytes())
+}
+
 impl RpcCreds {
     pub fn new(
         data_dir: &Path,
@@ -54,7 +69,7 @@ impl RpcCreds {
                 let cookie_file = data_dir.join(COOKIE_FILENAME);
                 let cookie = format!("{username}:{password}");
 
-                std::fs::write(&cookie_file, cookie)
+                write_file(&cookie_file, &cookie)
                     .with_context(|| format!("Failed to create cookie file {cookie_file:?}"))?;
 
                 Ok(Self {
