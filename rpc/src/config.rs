@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr};
+use std::{fmt::Debug, net::SocketAddr, str::FromStr};
 
 use utils::make_config_setting;
 
@@ -33,6 +33,20 @@ make_config_setting!(
 
 make_config_setting!(WebsocketRpcEnabled, bool, true);
 
+pub struct RpcCredentials {
+    pub username: String,
+    pub password: String,
+}
+
+impl Debug for RpcCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RpcAuth")
+            .field("username", &self.username)
+            .field("password", &"<...>")
+            .finish()
+    }
+}
+
 /// The rpc subsystem configuration.
 #[derive(Debug, Default)]
 pub struct RpcConfig {
@@ -47,4 +61,6 @@ pub struct RpcConfig {
 
     /// Whether websocket RPC is enabled
     pub ws_enabled: WebsocketRpcEnabled,
+
+    pub credentials: Option<RpcCredentials>,
 }

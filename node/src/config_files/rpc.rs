@@ -42,6 +42,7 @@ impl From<RpcConfigFile> for RpcConfig {
             http_enabled: c.http_enabled.into(),
             ws_bind_address: c.ws_bind_address.into(),
             ws_enabled: c.ws_enabled.into(),
+            credentials: None,
         }
     }
 }

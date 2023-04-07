@@ -13,8 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod config;
+mod rpc_auth;
+
 use std::net::SocketAddr;
 
+use config::RpcCredentials;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 
 use logging::log;
@@ -23,8 +27,7 @@ pub use config::RpcConfig;
 pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
-
-mod config;
+use rpc_auth::RpcAuth;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -47,6 +50,7 @@ pub struct Builder {
     http_bind_address: Option<SocketAddr>,
     ws_bind_address: Option<SocketAddr>,
     methods: Methods,
+    credentials: Option<RpcCredentials>,
 }
 
 impl Builder {
@@ -60,6 +64,7 @@ impl Builder {
             http_bind_address,
             ws_bind_address,
             methods,
+            credentials: None,
         }
     }
 
@@ -92,6 +97,7 @@ impl Builder {
             self.http_bind_address.as_ref(),
             self.ws_bind_address.as_ref(),
             self.methods,
+            self.credentials.as_ref(),
         )
         .await
     }
@@ -108,10 +114,23 @@ impl Rpc {
         http_bind_addr: Option<&SocketAddr>,
         ws_bind_addr: Option<&SocketAddr>,
         methods: Methods,
+        credentials: Option<&RpcCredentials>,
     ) -> anyhow::Result<Self> {
+        let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(
+            credentials.map(|creds| {
+                tower::ServiceBuilder::new().layer(
+                    tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(creds)),
+                )
+            }),
+        ));
+
         let http = match http_bind_addr {
             Some(bind_addr) => {
-                let http_server = ServerBuilder::default().http_only().build(bind_addr).await?;
+                let http_server = ServerBuilder::new()
+                    .set_middleware(middleware.clone())
+                    .http_only()
+                    .build(bind_addr)
+                    .await?;
                 let http_address = http_server.local_addr()?;
                 let http_handle = http_server.start(methods.clone())?;
                 Some((http_address, http_handle))
@@ -121,7 +140,11 @@ impl Rpc {
 
         let websocket = match ws_bind_addr {
             Some(bind_addr) => {
-                let ws_server = ServerBuilder::default().ws_only().build(bind_addr).await?;
+                let ws_server = ServerBuilder::new()
+                    .set_middleware(middleware)
+                    .ws_only()
+                    .build(bind_addr)
+                    .await?;
                 let ws_address = ws_server.local_addr()?;
                 let ws_handle = ws_server.start(methods)?;
                 Some((ws_address, ws_handle))
@@ -195,6 +218,7 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: false.into(),
+            credentials: None,
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
@@ -221,6 +245,7 @@ mod tests {
             http_enabled: false.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
+            credentials: None,
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
@@ -247,6 +272,7 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:3033".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
+            credentials: None,
         };
 
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;

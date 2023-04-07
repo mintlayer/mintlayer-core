@@ -12,11 +12,17 @@ rust-version.workspace = true
 subsystem = { path = "../subsystem" }
 logging = { path = "../logging" }
 utils = { path = "../utils/" }
+crypto = { path = "../crypto/" }
 
 # External dependencies
 anyhow = "1.0"
 async-trait.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
+tower-http = { version = "0.3", features = ["auth"] }
+tower = { version = "0.4", features = ["util"] }
+hyper = "0.14"
+http = "0.2"
+base64 = "0.21"
 
 [dev-dependencies]
 tokio.workspace = true
