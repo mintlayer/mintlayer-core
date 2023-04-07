@@ -24,7 +24,7 @@ use common::{
 };
 use consensus::ConsensusVerificationError;
 use detail::{builder::PerpetualBlockBuilder, BlockProduction};
-use interface::BlockProductionInterface;
+use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
 use tokio::sync::mpsc;
