@@ -13,28 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_maker;
+pub mod block_maker;
 pub mod builder;
 
 use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
-use common::{
-    chain::{
-        block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-            BlockBody, BlockCreationError, BlockHeader, BlockReward,
-        },
-        Block, ChainConfig, Destination, SignedTransaction,
-    },
-    time_getter::TimeGetter,
-};
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use mempool::MempoolHandle;
 use tokio::sync::mpsc;
 
-use crate::{
-    detail::block_maker::BlockMaker, interface::BlockProductionInterface, BlockProductionError,
-};
+use crate::BlockProductionError;
 
 use self::builder::BlockBuilderControlCommand;
 
@@ -67,96 +56,29 @@ impl BlockProduction {
         };
         Ok(block_production)
     }
-}
 
-#[async_trait::async_trait]
-impl BlockProductionInterface for BlockProduction {
-    fn stop(&self) -> Result<(), BlockProductionError> {
-        self.builder_tx
-            .send(BlockBuilderControlCommand::Stop)
-            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
-        Ok(())
+    pub fn chain_config(&self) -> &Arc<ChainConfig> {
+        &self.chain_config
     }
 
-    fn start(&self) -> Result<(), BlockProductionError> {
-        self.builder_tx
-            .send(BlockBuilderControlCommand::Start)
-            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
-        Ok(())
+    pub fn chainstate_handle(&self) -> &ChainstateHandle {
+        &self.chainstate_handle
     }
 
-    fn is_connected(&self) -> bool {
-        !self.builder_tx.is_closed()
+    pub fn mempool_handle(&self) -> &MempoolHandle {
+        &self.mempool_handle
     }
 
-    async fn generate_block(
-        &self,
-        reward_destination: Destination,
-        transactions: Vec<SignedTransaction>,
-    ) -> Result<Block, BlockProductionError> {
-        let (current_tip_id, current_tip_height) = self
-            .chainstate_handle
-            .call(|this| {
-                if let Ok(current_tip_id) = this.get_best_block_id() {
-                    if let Ok(Some(current_tip_height)) =
-                        this.get_block_height_in_main_chain(&current_tip_id)
-                    {
-                        return Some((current_tip_id, current_tip_height));
-                    }
-                }
+    pub fn time_getter(&self) -> &TimeGetter {
+        &self.time_getter
+    }
 
-                None
-            })
-            .await?
-            .ok_or(BlockProductionError::FailedToConstructBlock(
-                BlockCreationError::CurrentTipRetrievalError,
-            ))?;
+    pub fn builder_tx(&self) -> &mpsc::UnboundedSender<BlockBuilderControlCommand> {
+        &self.builder_tx
+    }
 
-        let (_tx, dummy_rx) = crossbeam_channel::unbounded();
-
-        let block_maker = BlockMaker::new(
-            self.chain_config.clone(),
-            self.chainstate_handle.clone(),
-            self.mempool_handle.clone(),
-            self.time_getter.clone(),
-            reward_destination,
-            current_tip_id,
-            current_tip_height,
-            dummy_rx,
-            Arc::clone(&self.mining_thread_pool),
-        );
-
-        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter.get_time());
-
-        let consensus_data = block_maker.pull_consensus_data(current_tip_id, timestamp).await?;
-
-        let block_reward = BlockReward::new(vec![]);
-
-        let block_body = BlockBody::new(block_reward, transactions.clone());
-
-        let tx_merkle_root =
-            calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&block_body)
-            .map_err(BlockCreationError::MerkleTreeError)?;
-
-        let block_header = BlockHeader::new(
-            current_tip_id,
-            tx_merkle_root,
-            witness_merkle_root,
-            timestamp,
-            consensus_data,
-        );
-
-        let block_header = BlockMaker::solve_block(
-            self.chain_config.clone(),
-            block_header,
-            current_tip_height,
-            Arc::new(false.into()),
-        )?;
-
-        let block = Block::new_from_header(block_header, block_body)?;
-
-        Ok(block)
+    pub fn mining_thread_pool(&self) -> &Arc<slave_pool::ThreadPool> {
+        &self.mining_thread_pool
     }
 }
 
@@ -165,7 +87,10 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::*;
-    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
+    use crate::{
+        interface::blockprod_interface::BlockProductionInterface, prepare_thread_pool,
+        tests::setup_blockprod_test,
+    };
 
     #[tokio::test]
     async fn stop() {

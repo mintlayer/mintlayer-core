@@ -250,7 +250,9 @@ impl BlockMaker {
                         current_tip_height,
                         stop_flag,
                     );
-                    result_sender.send(block_header).unwrap();
+                    result_sender
+                        .send(block_header)
+                        .expect("Failed to send block header back to main thread");
                 });
             }
 
