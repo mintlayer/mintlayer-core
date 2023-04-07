@@ -18,7 +18,6 @@ mod rpc_auth;
 
 use std::net::SocketAddr;
 
-use config::RpcCredentials;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 
 use logging::log;
@@ -50,7 +49,8 @@ pub struct Builder {
     http_bind_address: Option<SocketAddr>,
     ws_bind_address: Option<SocketAddr>,
     methods: Methods,
-    credentials: Option<RpcCredentials>,
+    username: Option<String>,
+    password: Option<String>,
 }
 
 impl Builder {
@@ -64,7 +64,8 @@ impl Builder {
             http_bind_address,
             ws_bind_address,
             methods,
-            credentials: None,
+            username: None,
+            password: None,
         }
     }
 
@@ -82,7 +83,14 @@ impl Builder {
             None
         };
 
-        Self::new_empty(http_bind_address, ws_bind_address).register(RpcInfo.into_rpc())
+        Self {
+            http_bind_address,
+            ws_bind_address,
+            methods: Methods::new(),
+            username: rpc_config.username.clone(),
+            password: rpc_config.password.clone(),
+        }
+        .register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -97,7 +105,8 @@ impl Builder {
             self.http_bind_address.as_ref(),
             self.ws_bind_address.as_ref(),
             self.methods,
-            self.credentials.as_ref(),
+            self.username.as_deref(),
+            self.password.as_deref(),
         )
         .await
     }
@@ -114,15 +123,20 @@ impl Rpc {
         http_bind_addr: Option<&SocketAddr>,
         ws_bind_addr: Option<&SocketAddr>,
         methods: Methods,
-        credentials: Option<&RpcCredentials>,
+        username: Option<&str>,
+        password: Option<&str>,
     ) -> anyhow::Result<Self> {
-        let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(
-            credentials.map(|creds| {
-                tower::ServiceBuilder::new().layer(
-                    tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(creds)),
-                )
-            }),
-        ));
+        let auth_layer = match (username, password) {
+            (Some(username), Some(password)) => {
+                Some(tower_http::auth::RequireAuthorizationLayer::custom(
+                    RpcAuth::new(username, password),
+                ))
+            }
+            (None, None) => None,
+            _ => anyhow::bail!("both username and password must be set"),
+        };
+
+        let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(auth_layer));
 
         let http = match http_bind_addr {
             Some(bind_addr) => {
@@ -218,7 +232,8 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: false.into(),
-            credentials: None,
+            username: None,
+            password: None,
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
@@ -245,7 +260,8 @@ mod tests {
             http_enabled: false.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
-            credentials: None,
+            username: None,
+            password: None,
         };
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
@@ -272,7 +288,8 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:3033".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
-            credentials: None,
+            username: None,
+            password: None,
         };
 
         let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;

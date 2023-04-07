@@ -25,8 +25,6 @@ use crypto::{
 use hyper::{Body, Request, Response};
 use tower_http::auth::AuthorizeRequest;
 
-use crate::config::RpcCredentials;
-
 #[derive(Clone)]
 pub struct RpcAuth {
     username: String,
@@ -50,16 +48,13 @@ const RPC_KDF_CONFIG: KdfConfig = KdfConfig::Argon2id {
 };
 
 impl RpcAuth {
-    pub fn new(creds: &RpcCredentials) -> Self {
-        let password_hash = hash_password(
-            &mut make_true_rng(),
-            RPC_KDF_CONFIG,
-            creds.password.as_bytes(),
-        )
-        .expect("hash_password failed unexpectedly");
+    pub fn new(username: &str, password: &str) -> Self {
+        let password_hash =
+            hash_password(&mut make_true_rng(), RPC_KDF_CONFIG, password.as_bytes())
+                .expect("hash_password failed unexpectedly");
 
         Self {
-            username: creds.username.clone(),
+            username: username.to_owned(),
             password_hash,
         }
     }

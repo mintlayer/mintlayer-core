@@ -33,6 +33,10 @@ pub struct RpcConfigFile {
 
     /// Whether websocket RPC is enabled
     pub ws_enabled: Option<bool>,
+
+    pub username: Option<String>,
+
+    pub password: Option<String>,
 }
 
 impl From<RpcConfigFile> for RpcConfig {
@@ -42,7 +46,8 @@ impl From<RpcConfigFile> for RpcConfig {
             http_enabled: c.http_enabled.into(),
             ws_bind_address: c.ws_bind_address.into(),
             ws_enabled: c.ws_enabled.into(),
-            credentials: None,
+            username: c.username.clone(),
+            password: c.password.clone(),
         }
     }
 }

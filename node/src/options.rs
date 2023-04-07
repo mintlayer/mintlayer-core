@@ -143,6 +143,14 @@ pub struct RunOptions {
     /// Enable/Disable websocket RPC.
     #[clap(long)]
     pub ws_rpc_enabled: Option<bool>,
+
+    /// Optional username for RPC HTTP and WebSocket basic authorization.
+    #[clap(long)]
+    pub rpc_username: Option<String>,
+
+    /// Optional password for RPC HTTP and WebSocket basic authorization.
+    #[clap(long)]
+    pub rpc_password: Option<String>,
 }
 
 impl Options {
