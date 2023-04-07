@@ -258,8 +258,12 @@ fn pos_basic(#[case] seed: Seed) {
     );
 
     // valid case
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = Amount::from_atoms(1);
+    let total_reward = (subsidy + initially_staked).unwrap();
+
     let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+        TxOutput::ProduceBlockFromStake(total_reward, anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
         .with_timestamp(block_timestamp)
@@ -271,9 +275,7 @@ fn pos_basic(#[case] seed: Seed) {
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
-    let initially_staked = Amount::from_atoms(1);
-    assert_eq!((subsidy + initially_staked).unwrap(), res_pool_balance);
+    assert_eq!(total_reward, res_pool_balance);
 }
 
 // PoS consensus activates on height 1.
@@ -998,8 +1000,12 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     )
     .expect("should be able to mine");
 
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = Amount::from_atoms(1);
+    let total_reward = (subsidy + initially_staked).unwrap();
+
     let produce_block_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id1);
+        TxOutput::ProduceBlockFromStake(total_reward, anyonecanspend_address(), pool_id1);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![produce_block_output])
@@ -1031,7 +1037,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let tx = TransactionBuilder::new()
         .add_input(block_2_reward_outpoint.into(), empty_witness(&mut rng))
         .add_output(TxOutput::DecommissionPool(
-            Amount::from_atoms(1),
+            total_reward,
             anyonecanspend_address(),
             pool_id1,
             OutputTimeLock::ForBlockCount(2000),
