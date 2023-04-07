@@ -31,7 +31,7 @@ use test_utils::random::Seed;
 use crate::{
     config::NodeType,
     error::ProtocolError,
-    message::{Announcement, SyncMessage, TransactionResponse},
+    message::{SyncMessage, TransactionResponse},
     sync::tests::helpers::SyncManagerHandle,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
@@ -47,7 +47,7 @@ async fn nonexistent_peer() {
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     handle.resume_panic().await;
 }
@@ -81,7 +81,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -119,7 +119,7 @@ async fn initial_block_download() {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     handle.assert_no_event().await;
     handle.assert_no_peer_manager_event().await;
@@ -162,6 +162,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
         user_agent: "test".try_into().unwrap(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -174,13 +175,13 @@ async fn no_transaction_service(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
-        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
+        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
     );
     handle.assert_no_event().await;
 }
@@ -221,6 +222,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         user_agent: "test".try_into().unwrap(),
         max_message_size: Default::default(),
         max_peer_tx_announcements: 0.into(),
+        max_unconnected_headers: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -233,7 +235,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -272,7 +274,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -281,7 +283,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         SyncMessage::TransactionRequest(tx.transaction().get_id())
     );
 
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -323,7 +325,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     handle.connect_peer(peer).await;
 
     let tx = transaction(chain_config.genesis_block_id());
-    handle.make_announcement(peer, Announcement::Transaction(tx.transaction().get_id()));
+    handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(peer, sent_to);
@@ -338,8 +340,8 @@ async fn valid_transaction(#[case] seed: Seed) {
     );
 
     assert_eq!(
-        Announcement::Transaction(tx.transaction().get_id()),
-        handle.announcement().await
+        SyncMessage::NewTransaction(tx.transaction().get_id()),
+        handle.message().await.1
     );
 }
 

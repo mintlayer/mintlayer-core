@@ -822,7 +822,9 @@ where
         );
         ensure!(
             peer.expect_addr_list_response,
-            P2pError::ProtocolError(ProtocolError::UnexpectedMessage("AddrListResponse"))
+            P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
+                "AddrListResponse".to_owned()
+            ))
         );
 
         peer.expect_addr_list_response = false;

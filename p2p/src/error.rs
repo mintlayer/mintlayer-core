@@ -47,7 +47,7 @@ pub enum ProtocolError {
     #[error("Headers aren't connected")]
     DisconnectedHeaders,
     #[error("Received a message ({0}) that wasn't expected")]
-    UnexpectedMessage(&'static str),
+    UnexpectedMessage(String),
     #[error("Empty block list requested")]
     ZeroBlocksInRequest,
     #[error("Handshake expected")]

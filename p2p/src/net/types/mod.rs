@@ -23,7 +23,7 @@ use common::{
 };
 
 use crate::{
-    message::{Announcement, PeerManagerMessage, SyncMessage},
+    message::{PeerManagerMessage, SyncMessage},
     protocol::NetworkProtocol,
     types::{peer_address::PeerAddress, peer_id::PeerId},
     P2pError,
@@ -158,10 +158,5 @@ pub enum SyncingEvent {
     Message {
         peer: PeerId,
         message: SyncMessage,
-    },
-    /// An announcement that is broadcast to all peers.
-    Announcement {
-        peer: PeerId,
-        announcement: Box<Announcement>,
     },
 }

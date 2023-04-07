@@ -236,6 +236,6 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
-        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("")).ban_score()
+        P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
     );
 }

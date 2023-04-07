@@ -25,7 +25,6 @@ use tokio::{sync::mpsc, time::timeout};
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
-use serialization::DecodeAll;
 use utils::set_flag::SetFlag;
 
 use crate::{
@@ -42,7 +41,6 @@ use crate::{
             services::{Service, Services},
             ConnectivityEvent, PeerInfo, SyncingEvent,
         },
-        Announcement,
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
@@ -213,9 +211,7 @@ where
     /// Sends the announcement to all peers.
     ///
     /// It is not an error if there are no peers that subscribed to the related topic.
-    fn announce_data(&mut self, topic: Service, message: Vec<u8>) -> crate::Result<()> {
-        let announcement = Announcement::decode_all(&mut &message[..])?;
-
+    fn announce_data(&mut self, topic: Service, message: Message) -> crate::Result<()> {
         // Send the message to peers in pseudorandom order.
         let mut peers: Vec<_> = self
             .peers
@@ -225,29 +221,10 @@ where
         peers.shuffle(&mut make_pseudo_rng());
 
         for (peer_id, peer) in peers {
-            let res = peer.tx.send(Event::SendMessage(Box::new(Message::Announcement(
-                Box::new(announcement.clone()),
-            ))));
-            if let Err(e) = res {
+            if let Err(e) = peer.tx.send(Event::SendMessage(Box::new(message.clone()))) {
                 log::error!("Failed to send announcement to peer {peer_id}: {e:?}")
             }
         }
-
-        Ok(())
-    }
-
-    fn handle_announcement(
-        &mut self,
-        peer_id: PeerId,
-        announcement: Announcement,
-    ) -> crate::Result<()> {
-        Self::send_sync_event(
-            &self.sync_tx,
-            SyncingEvent::Announcement {
-                peer: peer_id,
-                announcement: Box::new(announcement),
-            },
-        );
 
         Ok(())
     }
@@ -587,11 +564,11 @@ where
                 peer,
                 message: PeerManagerMessage::PingRequest(r),
             })?,
-            Message::HeaderListResponse(r) => Self::send_sync_event(
+            Message::HeaderList(r) => Self::send_sync_event(
                 &self.sync_tx,
                 SyncingEvent::Message {
                     peer,
-                    message: SyncMessage::HeaderListResponse(r),
+                    message: SyncMessage::HeaderList(r),
                 },
             ),
             Message::BlockResponse(r) => Self::send_sync_event(
@@ -599,6 +576,13 @@ where
                 SyncingEvent::Message {
                     peer,
                     message: SyncMessage::BlockResponse(r),
+                },
+            ),
+            Message::NewTransaction(id) => Self::send_sync_event(
+                &self.sync_tx,
+                SyncingEvent::Message {
+                    peer,
+                    message: SyncMessage::NewTransaction(id),
                 },
             ),
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
@@ -609,7 +593,6 @@ where
                 peer,
                 message: PeerManagerMessage::PingResponse(r),
             })?,
-            Message::Announcement(announcement) => self.handle_announcement(peer, *announcement)?,
         }
         Ok(())
     }

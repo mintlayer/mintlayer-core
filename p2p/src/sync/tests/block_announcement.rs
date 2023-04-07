@@ -30,10 +30,12 @@ use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
-    message::{Announcement, BlockListRequest, SyncMessage},
+    config::NodeType,
+    error::ProtocolError,
+    message::{BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     types::peer_id::PeerId,
-    P2pError,
+    P2pConfig, P2pError,
 };
 
 #[rstest::rstest]
@@ -60,7 +62,10 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 
     let peer = PeerId::new();
 
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    );
 
     handle.resume_panic().await;
 }
@@ -91,9 +96,9 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(
+    handle.broadcast_message(
         peer,
-        Announcement::Block(Box::new(block_2.header().clone())),
+        SyncMessage::HeaderList(HeaderList::new(vec![block_2.header().clone()])),
     );
 
     let (sent_to, message) = handle.message().await;
@@ -122,7 +127,10 @@ async fn invalid_timestamp() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -161,7 +169,10 @@ async fn invalid_consensus_data() {
         BlockReward::new(Vec::new()),
     )
     .unwrap();
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
     assert_eq!(peer, adjusted_peer);
@@ -176,6 +187,80 @@ async fn invalid_consensus_data() {
     );
     handle.assert_no_event().await;
     handle.assert_no_error().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test]
+async fn unconnected_headers(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = Arc::new(create_unit_test_config());
+    let mut tf = TestFramework::builder(&mut rng)
+        .with_chain_config(chain_config.as_ref().clone())
+        .build();
+    let block = tf.make_block_builder().build();
+    let orphan_block = tf.make_block_builder().with_parent(block.get_id().into()).build();
+    let (chainstate, mempool) =
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+
+    let p2p_config = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: NodeType::Full.into(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: "test".try_into().unwrap(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: 1.into(),
+    });
+    let mut handle = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_subsystems(chainstate, mempool)
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    // First announcement: the peer score shouldn't be changed.
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
+    );
+
+    let (sent_to, message) = handle.message().await;
+    assert_eq!(sent_to, peer);
+    assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
+    handle.assert_no_peer_manager_event().await;
+
+    // Second announcement: misbehavior.
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![orphan_block.header().clone()])),
+    );
+
+    let (adjusted_peer, score) = handle.adjust_peer_score_event().await;
+    assert_eq!(peer, adjusted_peer);
+    assert_eq!(
+        score,
+        P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
+    );
+    handle.assert_no_event().await;
 }
 
 #[rstest::rstest]
@@ -202,7 +287,10 @@ async fn valid_block(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    handle.make_announcement(peer, Announcement::Block(Box::new(block.header().clone())));
+    handle.broadcast_message(
+        peer,
+        SyncMessage::HeaderList(HeaderList::new(vec![block.header().clone()])),
+    );
 
     let (sent_to, message) = handle.message().await;
     assert_eq!(sent_to, peer);
