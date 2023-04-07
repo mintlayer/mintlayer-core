@@ -145,10 +145,12 @@ pub struct RunOptions {
     pub ws_rpc_enabled: Option<bool>,
 
     /// Optional username for RPC HTTP and WebSocket basic authorization.
+    /// If not, set the cookie file will be created.
     #[clap(long)]
     pub rpc_username: Option<String>,
 
     /// Optional password for RPC HTTP and WebSocket basic authorization.
+    /// If not, set the cookie file will be created.
     #[clap(long)]
     pub rpc_password: Option<String>,
 }

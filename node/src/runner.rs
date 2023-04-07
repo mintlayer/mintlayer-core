@@ -38,6 +38,7 @@ use logging::log;
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
 use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
+use rpc::rpc_creds::RpcCreds;
 
 use crate::{
     config_files::NodeConfigFile,
@@ -116,10 +117,15 @@ pub async fn initialize(
 
     // RPC subsystem
     if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
+        let rpc_creds = RpcCreds::new(
+            &data_dir,
+            rpc_config.username.as_deref(),
+            rpc_config.password.as_deref(),
+        )?;
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
-            rpc::Builder::new(rpc_config.into())
+            rpc::Builder::new(rpc_config.into(), Some(rpc_creds))?
                 .register(crate::rpc::init(
                     manager.make_shutdown_trigger(),
                     chain_config,

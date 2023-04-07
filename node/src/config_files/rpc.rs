@@ -46,8 +46,8 @@ impl From<RpcConfigFile> for RpcConfig {
             http_enabled: c.http_enabled.into(),
             ws_bind_address: c.ws_bind_address.into(),
             ws_enabled: c.ws_enabled.into(),
-            username: c.username.clone(),
-            password: c.password.clone(),
+            username: c.username,
+            password: c.password,
         }
     }
 }

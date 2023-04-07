@@ -15,6 +15,7 @@
 
 mod config;
 mod rpc_auth;
+pub mod rpc_creds;
 
 use std::net::SocketAddr;
 
@@ -27,6 +28,7 @@ pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 use rpc_auth::RpcAuth;
+use rpc_creds::RpcCreds;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -49,8 +51,7 @@ pub struct Builder {
     http_bind_address: Option<SocketAddr>,
     ws_bind_address: Option<SocketAddr>,
     methods: Methods,
-    username: Option<String>,
-    password: Option<String>,
+    creds: Option<RpcCreds>,
 }
 
 impl Builder {
@@ -64,13 +65,12 @@ impl Builder {
             http_bind_address,
             ws_bind_address,
             methods,
-            username: None,
-            password: None,
+            creds: None,
         }
     }
 
     /// New builder pre-populated with RPC info methods
-    pub fn new(rpc_config: RpcConfig) -> Self {
+    pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> anyhow::Result<Self> {
         let http_bind_address = if *rpc_config.http_enabled {
             Some(*rpc_config.http_bind_address)
         } else {
@@ -83,14 +83,13 @@ impl Builder {
             None
         };
 
-        Self {
+        Ok(Self {
             http_bind_address,
             ws_bind_address,
             methods: Methods::new(),
-            username: rpc_config.username.clone(),
-            password: rpc_config.password.clone(),
+            creds,
         }
-        .register(RpcInfo.into_rpc())
+        .register(RpcInfo.into_rpc()))
     }
 
     /// Add methods handlers to the RPC server
@@ -105,8 +104,7 @@ impl Builder {
             self.http_bind_address.as_ref(),
             self.ws_bind_address.as_ref(),
             self.methods,
-            self.username.as_deref(),
-            self.password.as_deref(),
+            self.creds,
         )
         .await
     }
@@ -116,6 +114,7 @@ impl Builder {
 pub struct Rpc {
     http: Option<(SocketAddr, ServerHandle)>,
     websocket: Option<(SocketAddr, ServerHandle)>,
+    _creds: Option<RpcCreds>,
 }
 
 impl Rpc {
@@ -123,18 +122,14 @@ impl Rpc {
         http_bind_addr: Option<&SocketAddr>,
         ws_bind_addr: Option<&SocketAddr>,
         methods: Methods,
-        username: Option<&str>,
-        password: Option<&str>,
+        creds: Option<RpcCreds>,
     ) -> anyhow::Result<Self> {
-        let auth_layer = match (username, password) {
-            (Some(username), Some(password)) => {
-                Some(tower_http::auth::RequireAuthorizationLayer::custom(
-                    RpcAuth::new(username, password),
-                ))
-            }
-            (None, None) => None,
-            _ => anyhow::bail!("both username and password must be set"),
-        };
+        let auth_layer = creds.as_ref().map(|creds| {
+            tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(
+                creds.username(),
+                creds.password(),
+            ))
+        });
 
         let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(auth_layer));
 
@@ -166,7 +161,11 @@ impl Rpc {
             None => None,
         };
 
-        Ok(Self { http, websocket })
+        Ok(Self {
+            http,
+            websocket,
+            _creds: creds,
+        })
     }
 
     pub fn http_address(&self) -> Option<&SocketAddr> {
@@ -235,7 +234,11 @@ mod tests {
             username: None,
             password: None,
         };
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+        let rpc = Builder::new(rpc_config, None)
+            .unwrap()
+            .register(SubsystemRpcImpl.into_rpc())
+            .build()
+            .await?;
 
         let url = format!("http://{}", rpc.http_address().unwrap());
         let client = HttpClientBuilder::default().build(url)?;
@@ -263,7 +266,11 @@ mod tests {
             username: None,
             password: None,
         };
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+        let rpc = Builder::new(rpc_config, None)
+            .unwrap()
+            .register(SubsystemRpcImpl.into_rpc())
+            .build()
+            .await?;
 
         let url = format!("ws://{}", rpc.websocket_address().unwrap());
         let client = WsClientBuilder::default().build(url).await?;
@@ -292,7 +299,11 @@ mod tests {
             password: None,
         };
 
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+        let rpc = Builder::new(rpc_config, None)
+            .unwrap()
+            .register(SubsystemRpcImpl.into_rpc())
+            .build()
+            .await?;
 
         {
             let url = format!("http://{}", rpc.http_address().unwrap());
