@@ -149,7 +149,7 @@ def check_todos():
 def run_checks():
     return all([
             disallow(SCALECODEC_RE, exclude = ['serialization/core', 'merkletree']),
-            disallow(JSONRPSEE_RE, exclude = ['rpc']),
+            disallow(JSONRPSEE_RE, exclude = ['rpc', 'wallet/wallet-node-client']),
             check_local_licenses(),
             check_crate_versions(),
             check_workspace_and_package_versions_equal(),

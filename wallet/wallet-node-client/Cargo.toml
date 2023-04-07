@@ -1,0 +1,24 @@
+[package]
+name = "node-comm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = '../../common' }
+serialization = {path = "../../serialization"}
+
+async-trait.workspace = true
+thiserror.workspace = true
+
+jsonrpsee = { version = "0.16" }
+serde_json = "1.0"
+
+[dev-dependencies]
+chainstate = { path = "../../chainstate/" }
+chainstate-storage = { path = "../../chainstate/storage" }
+rpc = { path = "../../rpc/" }
+subsystem = { path = "../../subsystem/" }
+
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

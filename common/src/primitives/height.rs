@@ -158,6 +158,10 @@ impl BlockHeight {
     pub fn prev_height(&self) -> Option<BlockHeight> {
         self.0.checked_sub(1).map(Self)
     }
+
+    pub fn into_int(self) -> HeightIntType {
+        self.0
+    }
 }
 
 /////////////////////////////
