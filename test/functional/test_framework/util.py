@@ -330,10 +330,13 @@ def p2p_url(n):
 def rpc_port(n):
     return PORT_MIN + PORT_RANGE + n + (MAX_NODES * PortSeed.n) % (PORT_RANGE - 1 - MAX_NODES)
 
+def rpc_addr(n):
+    return "127.0.0.1:" + str(rpc_port(n))
 
 def rpc_url(datadir, i, chain, rpchost):
-    # TODO re-enable authentication
-    #rpc_u, rpc_p = get_auth_cookie(datadir, chain)
+    rpc_u, rpc_p = get_auth_cookie(datadir, chain)
+    print(rpc_u)
+    print(rpc_p)
     host = '127.0.0.1'
     port = rpc_port(i)
     if rpchost:
@@ -342,9 +345,7 @@ def rpc_url(datadir, i, chain, rpchost):
             host, port = parts
         else:
             host = rpchost
-    # TODO re-enable authentication
-    #return "http://%s:%s@%s:%d" % (rpc_u, rpc_p, host, int(port))
-    return "http://%s:%d" % (host, int(port))
+    return "http://%s:%s@%s:%d" % (rpc_u, rpc_p, host, int(port))
 
 
 # Node functions
@@ -422,7 +423,7 @@ def get_auth_cookie(datadir, chain):
                     assert password is None  # Ensure that there is only one rpcpassword line
                     password = line.split("=")[1].strip("\n")
     try:
-        with open(os.path.join(datadir, chain, ".cookie"), 'r', encoding="ascii") as f:
+        with open(os.path.join(datadir, ".cookie"), 'r', encoding="ascii") as f:
             userpass = f.read()
             split_userpass = userpass.split(':')
             user = split_userpass[0]

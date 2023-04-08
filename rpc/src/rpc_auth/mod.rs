@@ -23,6 +23,7 @@ use crypto::{
     util::eq::SliceEqualityCheckMethod,
 };
 use hyper::{Body, Request, Response};
+use logging::log;
 use tower_http::auth::AuthorizeRequest;
 
 #[derive(Clone)]
@@ -93,15 +94,21 @@ impl<B> AuthorizeRequest<B> for RpcAuth {
         let res = self.check_auth(request);
         match res {
             Ok(true) => Ok(()),
-            Ok(false) => Err(Response::builder()
-                .status(http::StatusCode::UNAUTHORIZED)
-                .header(http::header::WWW_AUTHENTICATE, "Basic")
-                .body(Body::empty())
-                .expect("must be valid")),
-            Err(e) => Err(Response::builder()
-                .status(http::StatusCode::BAD_REQUEST)
-                .body(e.to_string().into())
-                .expect("must be valid")),
+            Ok(false) => {
+                log::error!("unauthorized RPC request {:?}", request.uri());
+                Err(Response::builder()
+                    .status(http::StatusCode::UNAUTHORIZED)
+                    .header(http::header::WWW_AUTHENTICATE, "Basic")
+                    .body(Body::empty())
+                    .expect("must be valid"))
+            }
+            Err(e) => {
+                log::error!("invalid RPC request {:?}: {e}", request.uri());
+                Err(Response::builder()
+                    .status(http::StatusCode::BAD_REQUEST)
+                    .body(e.to_string().into())
+                    .expect("must be valid"))
+            }
         }
     }
 }

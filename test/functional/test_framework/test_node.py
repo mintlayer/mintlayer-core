@@ -32,6 +32,7 @@ from .util import (
     delete_cookie_file,
     get_auth_cookie,
     get_rpc_proxy,
+    rpc_addr,
     rpc_url,
     wait_until_helper,
     p2p_port,
@@ -86,7 +87,6 @@ class TestNode():
         self.coverage_dir = coverage_dir
         self.cwd = cwd
         self.descriptors = descriptors
-        self.init_rpc_url = rpc_url(self.datadir, self.index, self.chain, self.rpchost)
         if extra_conf is not None:
             append_config(datadir, extra_conf)
         # Most callers will just need to add extra args to the standard list below.
@@ -96,7 +96,7 @@ class TestNode():
         self.version = version
 
         # Calculate RPC address to be passed into the command line
-        rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
+        rpc_address = rpc_addr(self.index)
         p2p_addr = p2p_url(self.index)
 
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
@@ -106,7 +106,7 @@ class TestNode():
             self.binary,
             "--datadir={}".format(datadir),
             "regtest",
-            "--http-rpc-addr={}".format(rpc_addr),
+            "--http-rpc-addr={}".format(rpc_address),
             "--p2p-addr={}".format(p2p_addr),
             #"-X",
             #"-logtimemicros",
@@ -236,7 +236,7 @@ class TestNode():
                     'bitcoind exited with status {} during initialization'.format(self.process.returncode)))
             try:
                 rpc = get_rpc_proxy(
-                    self.init_rpc_url,
+                    rpc_url(self.datadir, self.index, self.chain, self.rpchost),
                     self.index,
                     timeout=self.rpc_timeout // 2,  # Shorter timeout to allow for one retry in case of ETIMEDOUT
                     coveragedir=self.coverage_dir,

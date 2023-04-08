@@ -48,7 +48,7 @@ fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
         options.mode(0o600);
     }
 
-    options.create(true).write(true).open(&path)?.write_all(data.as_bytes())
+    options.create(true).write(true).open(path)?.write_all(data.as_bytes())
 }
 
 impl RpcCreds {
