@@ -22,14 +22,18 @@ use common::{
 
 use serialization::{hex::HexDecode, hex::HexEncode};
 
-use crate::BlockProductionError;
+use crate::{detail::JobKey, BlockProductionError};
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "blockprod")]
 trait BlockProductionRpc {
     /// Stop block production
-    #[method(name = "stop")]
-    async fn stop(&self) -> rpc::Result<()>;
+    #[method(name = "stop_all")]
+    async fn stop_all(&self) -> rpc::Result<()>;
+
+    // Stop a specific job
+    #[method(name = "stop_job")]
+    async fn stop_job(&self, job_id: JobKey) -> rpc::Result<()>;
 
     /// Generate a block with the supplied transactions to the specified reward destination
     /// If transactions are None, the block will be generated with available transactions in the mempool
@@ -43,8 +47,12 @@ trait BlockProductionRpc {
 
 #[async_trait::async_trait]
 impl BlockProductionRpcServer for super::BlockProductionHandle {
-    async fn stop(&self) -> rpc::Result<()> {
-        handle_error(self.call_mut(|this| this.stop()).await)
+    async fn stop_all(&self) -> rpc::Result<()> {
+        handle_error(self.call_mut(|this| this.stop_all()).await)
+    }
+
+    async fn stop_job(&self, job_id: JobKey) -> rpc::Result<()> {
+        handle_error(self.call_mut(move |this| this.stop_job(job_id)).await)
     }
 
     async fn generate_block(

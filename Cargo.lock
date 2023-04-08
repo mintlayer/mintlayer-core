@@ -349,6 +349,7 @@ dependencies = [
  "mocks",
  "parity-scale-codec",
  "rpc",
+ "serde",
  "serialization",
  "slave-pool",
  "subsystem",

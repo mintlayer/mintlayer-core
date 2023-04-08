@@ -15,14 +15,16 @@
 
 use common::chain::{Block, Destination, SignedTransaction};
 
-use crate::BlockProductionError;
+use crate::{detail::JobKey, BlockProductionError};
 
 #[async_trait::async_trait]
 pub trait BlockProductionInterface: Send {
     /// When called, the Block Builder will cancel all current attempts to create blocks
     /// and won't attempt to do it again for new tips in chainstate or mempool
     /// Call start() to enable again
-    fn stop(&mut self) -> Result<(), BlockProductionError>;
+    fn stop_all(&mut self) -> Result<(), BlockProductionError>;
+
+    fn stop_job(&mut self, job_id: JobKey) -> Result<(), BlockProductionError>;
 
     /// Generate a block with the given transactions to the specified reward destination
     /// If transactions are None, the block will be generated with available transactions in the mempool

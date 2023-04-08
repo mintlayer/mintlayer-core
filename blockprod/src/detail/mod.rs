@@ -47,7 +47,18 @@ pub enum TransactionsSource {
     Provided(Vec<SignedTransaction>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct JobKey {
     current_tip: Id<GenBlock>,
     // TODO: in proof of stake, we also add some identifier of the current key so that we don't stake twice from the same key.
@@ -102,6 +113,16 @@ impl BlockProduction {
         for (key, handle) in all_jobs.drain(..) {
             let _ = handle.cancel_signal.send(());
             log::info!("Stopped mining job for tip {}", key.current_tip);
+        }
+    }
+
+    pub fn stop_job(&mut self, key: &JobKey) -> bool {
+        if let Some(handle) = self.all_jobs.remove(key) {
+            let _ = handle.cancel_signal.send(());
+            log::info!("Stopped mining job for tip {}", key.current_tip);
+            return true;
+        } else {
+            return false;
         }
     }
 
