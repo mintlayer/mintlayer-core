@@ -182,6 +182,7 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         ws_enabled,
         username,
         password,
+        cookie_file,
     } = config;
 
     let http_bind_address = options
@@ -198,6 +199,7 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         .unwrap_or_else(|| ws_enabled.unwrap_or(DEFAULT_WS_RPC_ENABLED));
     let username = username.or(options.rpc_username.clone());
     let password = password.or(options.rpc_password.clone());
+    let cookie_file = cookie_file.or(options.rpc_cookie_file.clone());
 
     RpcConfigFile {
         http_bind_address: Some(http_bind_address),
@@ -206,6 +208,7 @@ fn rpc_config(config: RpcConfigFile, options: &RunOptions) -> RpcConfigFile {
         ws_enabled: Some(ws_enabled),
         username,
         password,
+        cookie_file,
     }
 }
 

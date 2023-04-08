@@ -121,6 +121,7 @@ pub async fn initialize(
             &data_dir,
             rpc_config.username.as_deref(),
             rpc_config.password.as_deref(),
+            rpc_config.cookie_file.as_deref(),
         )?;
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(

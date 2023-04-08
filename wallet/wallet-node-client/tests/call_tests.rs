@@ -64,6 +64,7 @@ pub async fn start_subsystems(
         ws_enabled: false.into(),
         username: None,
         password: None,
+        cookie_file: None,
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)

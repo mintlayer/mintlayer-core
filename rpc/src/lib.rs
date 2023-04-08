@@ -233,6 +233,7 @@ mod tests {
             ws_enabled: false.into(),
             username: None,
             password: None,
+            cookie_file: None,
         };
         let rpc = Builder::new(rpc_config, None)
             .unwrap()
@@ -265,6 +266,7 @@ mod tests {
             ws_enabled: true.into(),
             username: None,
             password: None,
+            cookie_file: None,
         };
         let rpc = Builder::new(rpc_config, None)
             .unwrap()
@@ -297,6 +299,7 @@ mod tests {
             ws_enabled: true.into(),
             username: None,
             password: None,
+            cookie_file: None,
         };
 
         let rpc = Builder::new(rpc_config, None)

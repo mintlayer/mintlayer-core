@@ -51,4 +51,6 @@ pub struct RpcConfig {
     pub username: Option<String>,
 
     pub password: Option<String>,
+
+    pub cookie_file: Option<String>,
 }

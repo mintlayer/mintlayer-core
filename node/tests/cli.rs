@@ -114,6 +114,7 @@ fn read_config_override_values() {
     let max_tip_age = 1000;
     let rpc_username = "username";
     let rpc_password = "password";
+    let rpc_cookie_file = "cookie_file";
 
     let options = RunOptions {
         storage_backend: Some(backend_type.clone()),
@@ -139,6 +140,7 @@ fn read_config_override_values() {
         ws_rpc_enabled: Some(false),
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
+        rpc_cookie_file: Some(rpc_cookie_file.to_owned()),
     };
     let config = NodeConfigFile::read(&config_path, &options).unwrap();
 
@@ -220,6 +222,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.rpc.as_ref().unwrap().password.as_deref(),
         Some(rpc_password)
+    );
+    assert_eq!(
+        config.rpc.as_ref().unwrap().cookie_file.as_deref(),
+        Some(rpc_cookie_file)
     );
 
     assert_eq!(config.chainstate.unwrap().storage_backend, backend_type);

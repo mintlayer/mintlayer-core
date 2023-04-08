@@ -56,6 +56,7 @@ impl RpcCreds {
         data_dir: &Path,
         username: Option<&str>,
         password: Option<&str>,
+        cookie_file: Option<&str>,
     ) -> anyhow::Result<Self> {
         match (username, password) {
             (Some(username), Some(password)) => Ok(Self {
@@ -63,10 +64,14 @@ impl RpcCreds {
                 password: password.to_owned(),
                 cookie_file: None,
             }),
+
             (None, None) => {
                 let username = COOKIE_USERNAME.to_owned();
                 let password = gen_password(&mut make_true_rng(), COOKIE_PASSWORD_LEN);
-                let cookie_file = data_dir.join(COOKIE_FILENAME);
+                let cookie_file = match cookie_file {
+                    Some(cookie_file) => cookie_file.into(),
+                    None => data_dir.join(COOKIE_FILENAME),
+                };
                 let cookie = format!("{username}:{password}");
 
                 write_file(&cookie_file, &cookie)
@@ -78,6 +83,7 @@ impl RpcCreds {
                     cookie_file: Some(cookie_file),
                 })
             }
+
             _ => anyhow::bail!("both RPC username and password must be set"),
         }
     }

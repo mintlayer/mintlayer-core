@@ -153,6 +153,9 @@ pub struct RunOptions {
     /// If not, set the cookie file will be created.
     #[clap(long)]
     pub rpc_password: Option<String>,
+
+    #[clap(long)]
+    pub rpc_cookie_file: Option<String>,
 }
 
 impl Options {

@@ -37,6 +37,8 @@ pub struct RpcConfigFile {
     pub username: Option<String>,
 
     pub password: Option<String>,
+
+    pub cookie_file: Option<String>,
 }
 
 impl From<RpcConfigFile> for RpcConfig {
@@ -48,6 +50,7 @@ impl From<RpcConfigFile> for RpcConfig {
             ws_enabled: c.ws_enabled.into(),
             username: c.username,
             password: c.password,
+            cookie_file: c.cookie_file,
         }
     }
 }
