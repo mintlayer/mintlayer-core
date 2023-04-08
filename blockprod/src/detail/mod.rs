@@ -120,9 +120,9 @@ impl BlockProduction {
         if let Some(handle) = self.all_jobs.remove(key) {
             let _ = handle.cancel_signal.send(());
             log::info!("Stopped mining job for tip {}", key.current_tip);
-            return true;
+            true
         } else {
-            return false;
+            false
         }
     }
 
