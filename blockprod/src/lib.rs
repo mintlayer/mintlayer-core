@@ -62,7 +62,7 @@ fn prepare_thread_pool(thread_count: u16) -> Arc<slave_pool::ThreadPool> {
     mining_thread_pool
 }
 
-pub async fn make_blockproduction(
+pub fn make_blockproduction(
     chain_config: Arc<ChainConfig>,
     // blockprod_config: BlockProductionConfig,
     chainstate_handle: ChainstateHandle,
