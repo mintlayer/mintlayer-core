@@ -25,7 +25,6 @@ futures.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 void = "1.0"
-crossbeam-channel = "0.5"
 jsonrpsee = { workspace = true, features = ["macros"] }
 async-trait.workspace = true
 slave-pool = "0.2"

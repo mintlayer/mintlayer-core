@@ -23,9 +23,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use blockprod::rpc::BlockProductionRpcServer;
 use paste::paste;
 
-use blockprod::rpc::BlockProductionRpcServer;
 use chainstate::rpc::ChainstateRpcServer;
 use common::{
     chain::config::{
@@ -108,8 +108,7 @@ pub async fn initialize(
             chainstate.clone(),
             mempool.clone(),
             Default::default(),
-        )
-        .await?,
+        )?,
     );
 
     let rpc_config = node_config.rpc.unwrap_or_default();

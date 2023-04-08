@@ -15,45 +15,27 @@
 
 use common::chain::{Block, Destination, SignedTransaction};
 
-use crate::{
-    detail::{builder::BlockBuilderControlCommand, BlockProduction},
-    BlockProductionError,
-};
+use crate::{detail::BlockProduction, BlockProductionError};
 
 use super::blockprod_interface::BlockProductionInterface;
 
 #[async_trait::async_trait]
 impl BlockProductionInterface for BlockProduction {
-    fn start(&self) -> Result<(), BlockProductionError> {
-        self.builder_tx()
-            .send(BlockBuilderControlCommand::Start)
-            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
+    fn stop(&mut self) -> Result<(), BlockProductionError> {
+        self.stop_all_jobs();
         Ok(())
-    }
-
-    fn stop(&self) -> Result<(), BlockProductionError> {
-        self.builder_tx()
-            .send(BlockBuilderControlCommand::Stop)
-            .map_err(|_| BlockProductionError::BlockBuilderChannelClosed)?;
-        Ok(())
-    }
-
-    fn is_connected(&self) -> bool {
-        !self.builder_tx().is_closed()
     }
 
     async fn generate_block(
         &mut self,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
-        submit_to_chainstate: bool,
     ) -> Result<Block, BlockProductionError> {
         let transactions = match transactions {
             Some(txs) => crate::detail::TransactionsSource::Provided(txs),
             None => crate::detail::TransactionsSource::Mempool,
         };
 
-        self.generate_block(reward_destination, transactions, submit_to_chainstate)
-            .await
+        self.generate_block(reward_destination, transactions).await
     }
 }

@@ -19,16 +19,10 @@ use crate::BlockProductionError;
 
 #[async_trait::async_trait]
 pub trait BlockProductionInterface: Send {
-    /// When called, the Block Builder will start creating blocks at the next tip in chainstate
-    fn start(&self) -> Result<(), BlockProductionError>;
-
     /// When called, the Block Builder will cancel all current attempts to create blocks
     /// and won't attempt to do it again for new tips in chainstate or mempool
     /// Call start() to enable again
-    fn stop(&self) -> Result<(), BlockProductionError>;
-
-    /// Check if the Block Builder is currently connected
-    fn is_connected(&self) -> bool;
+    fn stop(&mut self) -> Result<(), BlockProductionError>;
 
     /// Generate a block with the given transactions to the specified reward destination
     /// If transactions are None, the block will be generated with available transactions in the mempool
@@ -37,6 +31,5 @@ pub trait BlockProductionInterface: Send {
         &mut self,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
-        submit_to_chainstate: bool,
     ) -> Result<Block, BlockProductionError>;
 }

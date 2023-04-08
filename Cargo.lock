@@ -340,7 +340,6 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
- "crossbeam-channel",
  "crypto",
  "futures",
  "hex",

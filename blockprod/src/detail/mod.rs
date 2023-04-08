@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_maker;
-pub mod builder;
-
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    collections::BTreeMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
@@ -26,9 +26,9 @@ use common::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
             BlockBody, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, Destination, SignedTransaction,
+        Block, ChainConfig, Destination, GenBlock, SignedTransaction,
     },
-    primitives::{BlockHeight, Idable},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use futures::channel::oneshot;
@@ -37,12 +37,8 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
-use tokio::sync::mpsc;
-use utils::tap_error_log::LogError;
 
 use crate::BlockProductionError;
-
-use self::builder::BlockBuilderControlCommand;
 
 #[derive(Debug, Clone)]
 pub enum TransactionsSource {
@@ -50,10 +46,15 @@ pub enum TransactionsSource {
     Provided(Vec<SignedTransaction>),
 }
 
-#[must_use]
-enum BlockSubmitResult {
-    Failed,
-    Success,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct JobKey {
+    current_tip: Id<GenBlock>,
+    // TODO: in proof of stake, we also add some identifier of the current key so that we don't stake twice from the same key.
+    //       This is because in PoS, there could be penalties for creating multiple blocks by the same staker.
+}
+
+pub struct JobHandle {
+    cancel_signal: oneshot::Sender<()>,
 }
 
 #[allow(dead_code)]
@@ -62,8 +63,7 @@ pub struct BlockProduction {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
-    builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
-    // running_miners: BTreeMap<>, // TODO(PR)
+    all_jobs: BTreeMap<JobKey, JobHandle>,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
@@ -73,7 +73,6 @@ impl BlockProduction {
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
         time_getter: TimeGetter,
-        builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
         let block_production = Self {
@@ -81,7 +80,7 @@ impl BlockProduction {
             chainstate_handle,
             mempool_handle,
             time_getter,
-            builder_tx,
+            all_jobs: BTreeMap::new(),
             mining_thread_pool,
         };
         Ok(block_production)
@@ -91,8 +90,18 @@ impl BlockProduction {
         &self.time_getter
     }
 
-    pub fn builder_tx(&self) -> &mpsc::UnboundedSender<BlockBuilderControlCommand> {
-        &self.builder_tx
+    pub fn stop_all_jobs(&mut self) {
+        let mut all_jobs = Vec::new();
+        while let Some((key, handle)) = self.all_jobs.pop_first() {
+            all_jobs.push((key, handle));
+        }
+
+        log::info!("Cancelling {} jobs", all_jobs.len());
+
+        for (key, handle) in all_jobs.drain(..) {
+            let _ = handle.cancel_signal.send(());
+            log::info!("Stopped mining job for tip {}", key.current_tip);
+        }
     }
 
     pub async fn collect_transactions(
@@ -171,53 +180,49 @@ impl BlockProduction {
         Ok(block_header)
     }
 
-    async fn attempt_submit_new_block(
-        &mut self,
-        block: Block,
-        current_tip_index: &GenBlockIndex,
-    ) -> Result<BlockSubmitResult, BlockProductionError> {
-        let block_check_result = self
-            .chainstate_handle
-            .call(|chainstate| chainstate.preliminary_block_check(block))
-            .await
-            .log_err()?;
-        if let Ok(block) = block_check_result {
-            let block_id = block.get_id();
-            let block_submit_result = self
-                .chainstate_handle
-                .call_mut(|chainstate| {
-                    chainstate.process_block(block, chainstate::BlockSource::Local)
-                })
-                .await
-                .log_err()?;
-            if let Ok(_new_block_index) = block_submit_result {
-                log::info!(
-                "Success in submitting block {} at height {}. Exiting Block Maker at tip {} and height {}",
-                block_id,
-                current_tip_index.block_height().next_height(),
-                current_tip_index.block_id(),
-                current_tip_index.block_height()
-            );
-                return Ok(BlockSubmitResult::Success);
-            }
-        }
-
-        Ok(BlockSubmitResult::Failed)
-    }
-
     pub async fn generate_block(
         &mut self,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
-        submit_block_to_chainstate: bool,
     ) -> Result<Block, BlockProductionError> {
         let stop_flag = Arc::new(false.into());
+
+        let (cancel_sender, mut cancel_receiver) = oneshot::channel::<()>();
+
+        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+
+        let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
+
+        self.all_jobs.insert(
+            JobKey {
+                current_tip: tip_at_start.block_id(),
+            },
+            JobHandle {
+                cancel_signal: cancel_sender,
+            },
+        );
 
         loop {
             let timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
             let (consensus_data, current_tip_index) = self.pull_consensus_data(timestamp).await?;
+
+            if current_tip_index.block_id() != tip_at_start.block_id() {
+                log::info!(
+                    "Current tip changed from {} with height {} to {} with height {} while mining, cancelling",
+                    tip_at_start.block_id(),
+                    tip_at_start.block_height(),
+                    current_tip_index.block_id(),
+                    current_tip_index.block_height(),
+                );
+                return Err(BlockProductionError::TipChanged(
+                    tip_at_start.block_id(),
+                    tip_at_start.block_height(),
+                    current_tip_index.block_id(),
+                    current_tip_index.block_height(),
+                ));
+            }
 
             // TODO: instead of the following static value, look at
             // self.chain_config for the current block reward, then send
@@ -247,7 +252,6 @@ impl BlockProduction {
                 consensus_data,
             );
 
-            // TODO: find a way to use a oneshot channel. It doesn't seem to be supported in crossbeam.
             let (result_sender, mut result_receiver) = oneshot::channel();
             {
                 let chain_config = Arc::clone(&self.chain_config);
@@ -267,7 +271,10 @@ impl BlockProduction {
             }
 
             tokio::select! {
-                // TODO(PR): receive a signal from BlockProduction to stop if there's a new block
+                _ = &mut cancel_receiver => {
+                    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return Err(BlockProductionError::Cancelled);
+                }
                 solve_receive_result = &mut result_receiver => {
                     let mining_result = match solve_receive_result {
                         Ok(mining_result) => mining_result,
@@ -285,17 +292,7 @@ impl BlockProduction {
                     };
                     let block = Block::new_from_header(block_header, block_body.clone())?;
 
-                    // If we successfully have found a block, attempt to submit it to chainstate
-                    // TODO(PR): The block should either be submitted or returned to the caller; create another function to wrap the one that returns the block and submit it in there
-                    if submit_block_to_chainstate {
-                        match self.attempt_submit_new_block(block.clone(), &current_tip_index).await? {
-                            BlockSubmitResult::Failed => (), // try again in next iteration
-                            BlockSubmitResult::Success => return Ok(block),
-                        }
-                    } else {
-                        return Ok(block);
-                    }
-
+                    return Ok(block);
                 }
             }
         }
@@ -304,89 +301,38 @@ impl BlockProduction {
 
 #[cfg(test)]
 mod tests {
-    use tokio::time::{timeout, Duration};
+    // use tokio::time::{timeout, Duration};
 
-    use super::*;
-    use crate::{
-        interface::blockprod_interface::BlockProductionInterface, prepare_thread_pool,
-        tests::setup_blockprod_test,
-    };
+    // use super::*;
+    // use crate::{
+    //     interface::blockprod_interface::BlockProductionInterface, prepare_thread_pool,
+    //     tests::setup_blockprod_test,
+    // };
 
     #[tokio::test]
     async fn stop() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+        // let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
-        let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
+        // let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
 
-        let block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            builder_tx,
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing Block Builder");
+        // let block_production = BlockProduction::new(
+        //     chain_config,
+        //     chainstate,
+        //     mempool,
+        //     Default::default(),
+        //     prepare_thread_pool(1),
+        // )
+        // .expect("Error initializing Block Builder");
 
-        block_production.stop().expect("Error stopping Block Builder");
+        // block_production.stop().expect("Error stopping Block Builder");
 
-        let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
+        // let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
 
-        tokio::select! {
-            msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
-                BlockBuilderControlCommand::Stop => {},
-                _ => panic!("Invalid message received from Block Builder"),
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn start() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
-
-        let block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            builder_tx,
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing Block Builder");
-
-        block_production.start().expect("Error starting Block Builder");
-
-        let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
-
-        tokio::select! {
-            msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
-                BlockBuilderControlCommand::Start => {},
-                _ => panic!("Invalid message received from Block Builder"),
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn is_connected() {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let (builder_tx, _builder_rx) = mpsc::unbounded_channel();
-
-        let block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            builder_tx,
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing Block Builder");
-
-        assert!(
-            block_production.is_connected(),
-            "Block Builder is not connected"
-        );
+        // tokio::select! {
+        //     msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
+        //         BlockBuilderControlCommand::Stop => {},
+        //         _ => panic!("Invalid message received from Block Builder"),
+        //     }
+        // }
     }
 }

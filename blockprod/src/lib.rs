@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig},
+    chain::{block::BlockCreationError, ChainConfig, GenBlock},
+    primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use consensus::ConsensusVerificationError;
@@ -27,7 +28,6 @@ use detail::BlockProduction;
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
-use tokio::sync::mpsc;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
@@ -45,6 +45,10 @@ pub enum BlockProductionError {
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
     FailedConsensusInitialization(#[from] ConsensusVerificationError),
+    #[error("Block production cancelled")]
+    Cancelled,
+    #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
+    TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
 }
 
 mod detail;
@@ -69,48 +73,15 @@ pub fn make_blockproduction(
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn BlockProductionInterface>, BlockProductionError> {
-    // TODO(PR): remove all traces of the perpetual block builder
-    let (tx_builder, _rx_builder) = mpsc::unbounded_channel();
-
     // TODO: make the number of threads configurable
     let thread_count = 2;
     let mining_thread_pool = prepare_thread_pool(thread_count);
-
-    // {
-    //     let chain_config = Arc::clone(&chain_config);
-    //     let chainstate_handle = chainstate_handle.clone();
-    //     let mempool_handle = mempool_handle.clone();
-    //     let time_getter = time_getter.clone();
-
-    //     // TODO: change the following two values from static values to
-    //     // what's set in BlockProductionConfig
-    //     let reward_destination = Destination::AnyoneCanSpend;
-    //     let is_enabled = true;
-
-    //     let mining_thread_pool = Arc::clone(&mining_thread_pool);
-
-    //     tokio::spawn(async move {
-    //         PerpetualBlockBuilder::new(
-    //             chain_config,
-    //             chainstate_handle,
-    //             mempool_handle,
-    //             time_getter,
-    //             reward_destination,
-    //             rx_builder,
-    //             is_enabled,
-    //             mining_thread_pool,
-    //         )
-    //         .run()
-    //         .await
-    //     });
-    // }
 
     let result = BlockProduction::new(
         chain_config,
         chainstate_handle,
         mempool_handle,
         time_getter,
-        tx_builder,
         mining_thread_pool,
     )?;
 
@@ -119,46 +90,46 @@ pub fn make_blockproduction(
 
 #[cfg(test)]
 mod tests {
-    use chainstate::{ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy};
-    use chainstate_storage::inmemory::Store;
-    use common::chain::{config::create_unit_test_config, ChainConfig};
-    use mempool::{MempoolHandle, MempoolSubsystemInterface};
-    use subsystem::Manager;
+    // use chainstate::{ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy};
+    // use chainstate_storage::inmemory::Store;
+    // use common::chain::{config::create_unit_test_config, ChainConfig};
+    // use mempool::{MempoolHandle, MempoolSubsystemInterface};
+    // use subsystem::Manager;
 
-    use super::*;
+    // use super::*;
 
-    pub fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
-        let mut manager = Manager::new("blockprod-unit-test");
-        manager.install_signal_handlers();
+    // pub fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
+    //     let mut manager = Manager::new("blockprod-unit-test");
+    //     manager.install_signal_handlers();
 
-        let chain_config = Arc::new(create_unit_test_config());
+    //     let chain_config = Arc::new(create_unit_test_config());
 
-        let chainstate = chainstate::make_chainstate(
-            Arc::clone(&chain_config),
-            ChainstateConfig::new(),
-            Store::new_empty().expect("Error initializing empty store"),
-            DefaultTransactionVerificationStrategy::new(),
-            None,
-            Default::default(),
-        )
-        .expect("Error initializing chainstate");
+    //     let chainstate = chainstate::make_chainstate(
+    //         Arc::clone(&chain_config),
+    //         ChainstateConfig::new(),
+    //         Store::new_empty().expect("Error initializing empty store"),
+    //         DefaultTransactionVerificationStrategy::new(),
+    //         None,
+    //         Default::default(),
+    //     )
+    //     .expect("Error initializing chainstate");
 
-        let chainstate = manager.add_subsystem("chainstate", chainstate);
+    //     let chainstate = manager.add_subsystem("chainstate", chainstate);
 
-        let mempool = mempool::make_mempool(
-            Arc::clone(&chain_config),
-            chainstate.clone(),
-            Default::default(),
-            mempool::SystemUsageEstimator {},
-        );
+    //     let mempool = mempool::make_mempool(
+    //         Arc::clone(&chain_config),
+    //         chainstate.clone(),
+    //         Default::default(),
+    //         mempool::SystemUsageEstimator {},
+    //     );
 
-        let mempool = manager
-            .add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
-                mempool.run(call, shutdn)
-            });
+    //     let mempool = manager
+    //         .add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
+    //             mempool.run(call, shutdn)
+    //         });
 
-        (manager, chain_config, chainstate, mempool)
-    }
+    //     (manager, chain_config, chainstate, mempool)
+    // }
 
     // #[tokio::test]
     // async fn test_make_blockproduction() {
