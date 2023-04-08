@@ -35,14 +35,14 @@ once_cell.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
-snowstorm = "0.4.0"
+snowstorm = "0.4"
 serde.workspace = true
 socket2 = { version = "0.5", features = ["all"] }
-tokio-socks = { version = "0.5.1" }
+tokio-socks = { version = "0.5" }
 hex.workspace = true
-rlimit = { version = "0.9.1", optional = true}
-ctor = { version = "0.2.0", optional = true}
-siphasher = "0.3.10"
+rlimit = { version = "0.9", optional = true}
+ctor = { version = "0.2", optional = true}
+siphasher = "0.3"
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../chainstate/test-framework" }

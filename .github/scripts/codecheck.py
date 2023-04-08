@@ -38,6 +38,17 @@ def rs_sources(exclude = []):
             if os.path.splitext(file)[1].lower() == '.rs':
                 yield os.path.join(top, file)
 
+# Cargo.toml files
+def cargo_toml_files(exclude = []):
+    exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
+    is_excluded = lambda top, d: os.path.normpath(os.path.join(top, d).lower()) in exclude
+
+    for top, dirs, files in os.walk('.', topdown=True):
+        dirs[:] = [ d for d in dirs if not is_excluded(top, d) ]
+        for file in files:
+            if file == 'Cargo.toml':
+                yield os.path.join(top, file)
+
 # Disallow certain pattern in source files, with exceptions
 def disallow(pat, exclude = []):
     print("==== Searching for '{}':".format(pat))
@@ -79,6 +90,74 @@ def check_workspace_and_package_versions_equal():
 
     if not result:
         print("Workspace vs package versions mismatch in Cargo.toml: '{}' != '{}'".format(workspace_version, package_version))
+    print()
+
+    return result
+
+def internal_check_dependency_versions(root_node, dependencies_name: str, file_path) -> bool:
+    '''
+    Both dependencies and dev-dependencies have the same structure, so we check the versions the same way for both
+    root_node is the root node of the Cargo.toml file
+    file_path is the path of the Cargo.toml file, for logging
+    '''
+
+    res = True
+
+    # list of crates, whose version can have build version
+    exempted_crates = [
+       # 'ctor'    # left here as an example, remove if you ever add one crated that is exempted
+    ]
+
+    if dependencies_name in root_node:
+        deps = root_node[dependencies_name]
+        for dep in deps:
+            # skip exempted crates
+            if dep in exempted_crates:
+                continue
+
+            # versions that look late `tokio = { version = "1.2.3" }`
+            if 'version' in deps[dep]:
+                version = deps[dep]['version']
+                if len(version.split('.')) > 2:
+                    print("In {}, {} Version '{}' in '{}' has build version".format(dependencies_name, dep, version, file_path))
+                    res = False
+
+            # versions that look late `tokio = "1.2.3"`
+            elif type(deps[dep]) == str:
+                version = deps[dep]
+                if len(version.split('.')) > 2:
+                    print("In {}, {} Version '{}' in '{}' has build version".format(dependencies_name, dep, version, file_path))
+                    res = False
+
+    return res
+
+
+# Ensure that the versions in all Cargo.toml don't have build version
+def check_dependency_versions_build_version():
+    print("==== Ensuring that all versions in Cargo.toml don't have build version")
+
+    # list of files exempted from license check
+    exempted_files = [
+        "./Cargo.toml"
+    ]
+
+    result = True
+
+    for path in cargo_toml_files():
+        if any(os.path.samefile(path, exempted) for exempted in exempted_files):
+            continue
+
+        # load the file
+        root = toml.load(path)
+
+        # check dependencies
+        intermediary_result = internal_check_dependency_versions(root, 'dependencies', path)
+        result = result and intermediary_result
+
+        # check dev-dependencies
+        intermediary_result = internal_check_dependency_versions(root, 'dev-dependencies', path)
+        result = result and intermediary_result
+
     print()
 
     return result
@@ -153,6 +232,7 @@ def run_checks():
             check_local_licenses(),
             check_crate_versions(),
             check_workspace_and_package_versions_equal(),
+            check_dependency_versions_build_version(),
             check_todos()
         ])
 

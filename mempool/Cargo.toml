@@ -20,7 +20,7 @@ anyhow = "1.0"
 async-trait.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 thiserror.workspace = true
-mockall = "0.11.0"
+mockall = "0.11"
 parking_lot = "0.12"
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 
