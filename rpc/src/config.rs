@@ -47,10 +47,4 @@ pub struct RpcConfig {
 
     /// Whether websocket RPC is enabled
     pub ws_enabled: WebsocketRpcEnabled,
-
-    pub username: Option<String>,
-
-    pub password: Option<String>,
-
-    pub cookie_file: Option<String>,
 }

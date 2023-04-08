@@ -62,9 +62,6 @@ pub async fn start_subsystems(
             .expect("Address must be correct")
             .into(),
         ws_enabled: false.into(),
-        username: None,
-        password: None,
-        cookie_file: None,
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)

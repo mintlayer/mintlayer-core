@@ -231,9 +231,6 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: false.into(),
-            username: None,
-            password: None,
-            cookie_file: None,
         };
         let rpc = Builder::new(rpc_config, None)
             .unwrap()
@@ -264,9 +261,6 @@ mod tests {
             http_enabled: false.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
-            username: None,
-            password: None,
-            cookie_file: None,
         };
         let rpc = Builder::new(rpc_config, None)
             .unwrap()
@@ -297,9 +291,6 @@ mod tests {
             http_enabled: true.into(),
             ws_bind_address: "127.0.0.1:3033".parse::<SocketAddr>().unwrap().into(),
             ws_enabled: true.into(),
-            username: None,
-            password: None,
-            cookie_file: None,
         };
 
         let rpc = Builder::new(rpc_config, None)

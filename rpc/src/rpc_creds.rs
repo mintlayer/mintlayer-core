@@ -59,11 +59,17 @@ impl RpcCreds {
         cookie_file: Option<&str>,
     ) -> anyhow::Result<Self> {
         match (username, password) {
-            (Some(username), Some(password)) => Ok(Self {
-                username: username.to_owned(),
-                password: password.to_owned(),
-                cookie_file: None,
-            }),
+            (Some(username), Some(password)) => {
+                anyhow::ensure!(
+                    cookie_file.is_none(),
+                    "cookie file can't be used with username/password"
+                );
+                Ok(Self {
+                    username: username.to_owned(),
+                    password: password.to_owned(),
+                    cookie_file: None,
+                })
+            }
 
             (None, None) => {
                 let username = COOKIE_USERNAME.to_owned();
@@ -75,7 +81,7 @@ impl RpcCreds {
                 let cookie = format!("{username}:{password}");
 
                 write_file(&cookie_file, &cookie)
-                    .with_context(|| format!("Failed to create cookie file {cookie_file:?}"))?;
+                    .with_context(|| format!("failed to create cookie file {cookie_file:?}"))?;
 
                 Ok(Self {
                     username,
