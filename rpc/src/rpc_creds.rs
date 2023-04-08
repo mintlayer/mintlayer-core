@@ -26,6 +26,8 @@ const COOKIE_PASSWORD_LEN: usize = 32;
 const COOKIE_FILENAME: &str = ".cookie";
 const COOKIE_USERNAME: &str = "__cookie__";
 
+// TODO: Add support for hashed passwords (--rpcauth in Bitcoin Core)
+
 pub struct RpcCreds {
     username: String,
     password: String,
@@ -64,6 +66,10 @@ impl RpcCreds {
                 anyhow::ensure!(
                     cookie_file.is_none(),
                     "cookie file can't be used with username/password"
+                );
+                anyhow::ensure!(
+                    username.find(':').is_none(),
+                    "invalid symbol ':' in RPC username"
                 );
                 Ok(Self {
                     username: username.to_owned(),

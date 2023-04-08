@@ -203,7 +203,10 @@ impl subsystem::Subsystem for Rpc {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
+    use base64::Engine;
     use jsonrpsee::core::client::ClientT;
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
@@ -285,5 +288,87 @@ mod tests {
 
         subsystem::Subsystem::shutdown(rpc).await;
         Ok(())
+    }
+
+    fn get_headers(username_password: Option<(&str, &str)>) -> http::HeaderMap {
+        let mut headers = http::HeaderMap::new();
+        if let Some((username, password)) = username_password {
+            headers.append(
+                http::header::AUTHORIZATION,
+                http::HeaderValue::from_str(&format!(
+                    "Basic {}",
+                    base64::engine::general_purpose::STANDARD
+                        .encode(format!("{username}:{password}"))
+                ))
+                .unwrap(),
+            );
+        }
+        headers
+    }
+
+    async fn http_request(
+        rpc: &Rpc,
+        username_password: Option<(&str, &str)>,
+    ) -> anyhow::Result<()> {
+        let url = format!("http://{}", rpc.http_address().unwrap());
+        let client = HttpClientBuilder::default()
+            .set_headers(get_headers(username_password))
+            .build(url)?;
+        let response: String =
+            client.request("example_server_protocol_version", rpc_params!()).await?;
+        anyhow::ensure!(response == "version1");
+        Ok(())
+    }
+
+    async fn ws_request(rpc: &Rpc, username_password: Option<(&str, &str)>) -> anyhow::Result<()> {
+        let url = format!("ws://{}", rpc.websocket_address().unwrap());
+        let client = WsClientBuilder::default()
+            .set_headers(get_headers(username_password))
+            .build(url)
+            .await?;
+        let response: String =
+            client.request("example_server_protocol_version", rpc_params!()).await?;
+        anyhow::ensure!(response == "version1");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rpc_server_auth() {
+        const GOOD_USERNAME: &str = "correct_username";
+        const GOOD_PASSWORD: &str = "correct_password";
+        const BAD_USERNAME: &str = "wrong_username";
+        const BAD_PASSWORD: &str = "wrong_password";
+
+        let rpc_config = RpcConfig {
+            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+            http_enabled: true.into(),
+            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+            ws_enabled: true.into(),
+        };
+
+        let data_dir: PathBuf = ".".into();
+        let rpc = Builder::new(
+            rpc_config,
+            Some(RpcCreds::new(&data_dir, Some(GOOD_USERNAME), Some(GOOD_PASSWORD), None).unwrap()),
+        )
+        .unwrap()
+        .register(SubsystemRpcImpl.into_rpc())
+        .build()
+        .await
+        .unwrap();
+
+        // Valid requests
+        http_request(&rpc, Some((GOOD_USERNAME, GOOD_PASSWORD))).await.unwrap();
+        ws_request(&rpc, Some((GOOD_USERNAME, GOOD_PASSWORD))).await.unwrap();
+
+        // Invalid requests
+        http_request(&rpc, None).await.unwrap_err();
+        ws_request(&rpc, None).await.unwrap_err();
+        http_request(&rpc, Some((GOOD_USERNAME, BAD_PASSWORD))).await.unwrap_err();
+        ws_request(&rpc, Some((GOOD_USERNAME, BAD_PASSWORD))).await.unwrap_err();
+        http_request(&rpc, Some((BAD_USERNAME, GOOD_PASSWORD))).await.unwrap_err();
+        ws_request(&rpc, Some((BAD_USERNAME, GOOD_PASSWORD))).await.unwrap_err();
+
+        subsystem::Subsystem::shutdown(rpc).await;
     }
 }

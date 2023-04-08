@@ -26,7 +26,11 @@ use hyper::{Body, Request, Response};
 use logging::log;
 use tower_http::auth::AuthorizeRequest;
 
-/// HTTP authentication helper
+/// Custom HTTP authentication layer implementation
+///
+/// Custom authorization is not really needed, because `tower_http`
+/// already supports it (see [`tower_http::auth::RequireAuthorizationLayer::basic`]),
+/// but it can simply things if we want to support hashed passwords.
 #[derive(Clone)]
 pub struct RpcAuth {
     username: String,
