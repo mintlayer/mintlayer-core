@@ -12,5 +12,5 @@ parity-scale-codec = { workspace = true, features = ["derive", "chain-error"] }
 
 [dev-dependencies]
 arraytools = "0.1"
-hex-literal = "0.3"
+hex-literal = "0.4"
 rand = "0.8"

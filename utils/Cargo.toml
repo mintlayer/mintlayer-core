@@ -18,7 +18,7 @@ probabilistic-collections = "0.7"
 test-utils = { path = "../test-utils" }
 
 static_assertions.workspace = true
-criterion = "0.3"
+criterion = "0.4"
 rstest.workspace = true
 
 [target.'cfg(loom)'.dependencies]

@@ -19,7 +19,7 @@ logging = { path = '../logging' }
 
 flate2 = "1.0"
 hex.workspace = true
-hex-literal = "0.3"
+hex-literal = "0.4"
 proptest = "1.0"
 
 [features]
