@@ -287,6 +287,7 @@ impl BlockProduction {
 
             tokio::select! {
                 _ = &mut cancel_receiver => {
+                    // TODO: test cancellations
                     stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
                     return Err(BlockProductionError::Cancelled);
                 }
