@@ -62,7 +62,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     let work_required = match header.prev_block_id().classify(chain_config) {
         GenBlockId::Genesis(_) => match pow_status {
             PoWStatus::Ongoing => unreachable!(),
-            PoWStatus::Threshold { initial_difficulty } => initial_difficulty.clone(),
+            PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
         },
         GenBlockId::Block(prev_id) => {
             let prev_block_index = block_index_handle
@@ -106,14 +106,14 @@ where
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => match prev_block_index {
             GenBlockIndex::Block(prev_block_index) => PoW::new(chain_config).get_work_required(
-                &prev_block_index,
+                prev_block_index,
                 block_timestamp,
                 get_ancestor,
             ),
             GenBlockIndex::Genesis(_) => match pow_status {
                 // If this is genesis, then the status can't be on-going
                 PoWStatus::Ongoing => unreachable!(),
-                PoWStatus::Threshold { initial_difficulty } => Ok(initial_difficulty.clone()),
+                PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
             },
         },
     }

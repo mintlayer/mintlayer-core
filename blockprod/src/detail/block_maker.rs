@@ -120,9 +120,7 @@ impl BlockMaker {
                 move |this| {
                     let best_block_index = this
                         .get_best_block_index()
-                        .map_err(|_| {
-                            PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.into())
-                        })
+                        .map_err(|_| PropertyQueryError::PrevBlockIndexNotFound(prev_block_id))
                         .expect("Best block index retrieval failed in block production");
 
                     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
