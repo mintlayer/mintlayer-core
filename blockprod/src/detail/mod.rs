@@ -37,6 +37,7 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
+use serialization::{Decode, Encode};
 
 use crate::BlockProductionError;
 
@@ -46,7 +47,7 @@ pub enum TransactionsSource {
     Provided(Vec<SignedTransaction>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct JobKey {
     current_tip: Id<GenBlock>,
     // TODO: in proof of stake, we also add some identifier of the current key so that we don't stake twice from the same key.
@@ -180,6 +181,12 @@ impl BlockProduction {
         Ok(block_header)
     }
 
+    pub fn make_job_key(tip_at_start: &GenBlockIndex) -> JobKey {
+        JobKey {
+            current_tip: tip_at_start.block_id(),
+        }
+    }
+
     pub async fn generate_block(
         &mut self,
         _reward_destination: Destination,
@@ -193,14 +200,22 @@ impl BlockProduction {
 
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
-        self.all_jobs.insert(
-            JobKey {
-                current_tip: tip_at_start.block_id(),
-            },
-            JobHandle {
-                cancel_signal: cancel_sender,
-            },
-        );
+        {
+            // define the job and insert it into the map of all jobs
+            let job_key = Self::make_job_key(&tip_at_start);
+
+            #[allow(clippy::map_entry)]
+            if !self.all_jobs.contains_key(&job_key) {
+                self.all_jobs.insert(
+                    job_key,
+                    JobHandle {
+                        cancel_signal: cancel_sender,
+                    },
+                );
+            } else {
+                return Err(BlockProductionError::JobAlreadyExists(job_key));
+            }
+        }
 
         loop {
             let timestamp =

@@ -20,14 +20,15 @@ logging = {path = '../logging'}
 utils = {path = '../utils'}
 rpc = { path = "../rpc/" }
 
+async-trait.workspace = true
 hex.workspace = true
 futures.workspace = true
+jsonrpsee = { workspace = true, features = ["macros"] }
+parity-scale-codec.workspace = true
+slave-pool = "0.2"
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 void = "1.0"
-jsonrpsee = { workspace = true, features = ["macros"] }
-async-trait.workspace = true
-slave-pool = "0.2"
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage/" }

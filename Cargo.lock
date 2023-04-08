@@ -347,6 +347,7 @@ dependencies = [
  "logging",
  "mempool",
  "mocks",
+ "parity-scale-codec",
  "rpc",
  "serialization",
  "slave-pool",

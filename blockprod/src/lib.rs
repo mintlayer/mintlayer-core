@@ -24,7 +24,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use consensus::ConsensusVerificationError;
-use detail::BlockProduction;
+use detail::{BlockProduction, JobKey};
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
@@ -49,6 +49,8 @@ pub enum BlockProductionError {
     Cancelled,
     #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
     TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
+    #[error("Job already exists")]
+    JobAlreadyExists(JobKey),
 }
 
 mod detail;
