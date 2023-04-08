@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO(PR) this file has to go
+#![allow(dead_code)]
+
 use std::sync::{atomic::AtomicBool, Arc};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
@@ -115,11 +118,12 @@ impl BlockMaker {
                 let current_tip_height = self.current_tip_height;
 
                 move |this| {
-                    let get_block_index = |&prev_block_id: &Id<Block>| {
-                        this.get_block_index(&prev_block_id).map_err(|_| {
+                    let best_block_index = this
+                        .get_best_block_index()
+                        .map_err(|_| {
                             PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.into())
                         })
-                    };
+                        .expect("Best block index retrieval failed in block production");
 
                     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
                         this.get_ancestor(
@@ -138,10 +142,9 @@ impl BlockMaker {
 
                     consensus::generate_consensus_data(
                         &chain_config,
-                        &prev_block_id,
+                        &best_block_index,
                         block_timestamp,
                         current_tip_height.next_height(),
-                        get_block_index,
                         get_ancestor,
                     )
                 }
@@ -235,8 +238,6 @@ impl BlockMaker {
                 consensus_data,
             );
 
-            is_send(block_header.clone());
-
             // TODO: find a way to use a oneshot channel. It doesn't seem to be supported in crossbeam.
             let (result_sender, result_receiver) = crossbeam_channel::unbounded();
             {
@@ -319,8 +320,6 @@ impl BlockMaker {
         Ok(())
     }
 }
-
-fn is_send(_x: impl Send) {}
 
 #[cfg(test)]
 mod tests {

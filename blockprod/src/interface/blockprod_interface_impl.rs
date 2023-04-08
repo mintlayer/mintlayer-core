@@ -46,12 +46,14 @@ impl BlockProductionInterface for BlockProduction {
         &mut self,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
+        submit_to_chainstate: bool,
     ) -> Result<Block, BlockProductionError> {
         let transactions = match transactions {
             Some(txs) => crate::detail::TransactionsSource::Provided(txs),
             None => crate::detail::TransactionsSource::Mempool,
         };
 
-        self.generate_block(reward_destination, transactions).await
+        self.generate_block(reward_destination, transactions, submit_to_chainstate)
+            .await
     }
 }

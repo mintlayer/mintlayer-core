@@ -42,6 +42,7 @@ trait BlockProductionRpc {
         &self,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
+        submit_to_chainstate: bool,
     ) -> rpc::Result<String>;
 }
 
@@ -59,6 +60,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         &self,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
+        submit_to_chainstate: bool,
     ) -> rpc::Result<String> {
         let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
@@ -75,7 +77,11 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(reward_destination, signed_transactions)
+                this.generate_block(
+                    reward_destination,
+                    signed_transactions,
+                    submit_to_chainstate,
+                )
             })
             .await,
         )?;

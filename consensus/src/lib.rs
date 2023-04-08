@@ -27,9 +27,9 @@ use common::{
     chain::block::{consensus_data::PoWData, ConsensusData},
     chain::{
         block::{timestamp::BlockTimestamp, BlockHeader},
-        Block, ChainConfig, GenBlock, RequiredConsensus,
+        ChainConfig, RequiredConsensus,
     },
-    primitives::{BlockHeight, Id},
+    primitives::BlockHeight,
 };
 
 pub use crate::{
@@ -42,16 +42,14 @@ pub use crate::{
     validator::validate_consensus,
 };
 
-pub fn generate_consensus_data<F, G>(
+pub fn generate_consensus_data<G>(
     chain_config: &ChainConfig,
-    prev_block_id: &Id<GenBlock>,
+    prev_block_index: &GenBlockIndex,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
-    get_block_index: F,
     get_ancestor: G,
 ) -> Result<ConsensusData, ConsensusVerificationError>
 where
-    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
@@ -60,10 +58,9 @@ where
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
-                prev_block_id,
+                prev_block_index,
                 block_timestamp,
                 &pow_status,
-                get_block_index,
                 get_ancestor,
             )
             .map_err(ConsensusVerificationError::PoWError)?;

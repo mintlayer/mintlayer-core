@@ -21,11 +21,11 @@ use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQuer
 use common::{
     chain::{
         block::consensus_data::PoWData,
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData},
+        block::{timestamp::BlockTimestamp, BlockHeader, ConsensusData},
         config::ChainConfig,
-        GenBlock, PoWStatus,
+        GenBlockId, PoWStatus,
     },
-    primitives::{BlockHeight, Compact, Id, Idable, H256},
+    primitives::{BlockHeight, Compact, Idable, H256},
     Uint256,
 };
 
@@ -55,21 +55,29 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     pow_status: &PoWStatus,
     block_index_handle: &H,
 ) -> Result<(), ConsensusPoWError> {
-    let get_block_index =
-        |&prev_block_id: &Id<Block>| block_index_handle.get_block_index(&prev_block_id);
-
     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
         block_index_handle.get_ancestor(block_index, ancestor_height)
     };
 
-    let work_required = calculate_work_required(
-        chain_config,
-        header.prev_block_id(),
-        header.timestamp(),
-        pow_status,
-        get_block_index,
-        get_ancestor,
-    )?;
+    let work_required = match header.prev_block_id().classify(chain_config) {
+        GenBlockId::Genesis(_) => match pow_status {
+            PoWStatus::Ongoing => unreachable!(),
+            PoWStatus::Threshold { initial_difficulty } => initial_difficulty.clone(),
+        },
+        GenBlockId::Block(prev_id) => {
+            let prev_block_index = block_index_handle
+                .get_block_index(&prev_id)
+                .map_err(|e| ConsensusPoWError::PrevBlockLoadError(prev_id, e))?
+                .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_id))?;
+            calculate_work_required(
+                chain_config,
+                &prev_block_index.into(),
+                header.timestamp(),
+                pow_status,
+                get_ancestor,
+            )?
+        }
+    };
 
     // TODO: add test for a block with invalid target
     utils::ensure!(
@@ -84,39 +92,30 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     }
 }
 
-pub fn calculate_work_required<F, G>(
+pub fn calculate_work_required<G>(
     chain_config: &ChainConfig,
-    prev_block_id: &Id<GenBlock>,
+    prev_block_index: &GenBlockIndex,
     block_timestamp: BlockTimestamp,
     pow_status: &PoWStatus,
-    get_block_index: F,
     get_ancestor: G,
 ) -> Result<Compact, ConsensusPoWError>
 where
-    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
-        PoWStatus::Ongoing => {
-            let prev_block_id = prev_block_id
-                .classify(chain_config)
-                .chain_block_id()
-                .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
-
-            // TODO: this should use get_gen_block_index() because the previous block could be genesis
-            let prev_block_index = get_block_index(&prev_block_id)
-                .map_err(|err| {
-                    ConsensusPoWError::PrevBlockLoadError(prev_block_id, prev_block_id, err)
-                })?
-                .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_block_id))?;
-
-            PoW::new(chain_config).get_work_required(
+        PoWStatus::Ongoing => match prev_block_index {
+            GenBlockIndex::Block(prev_block_index) => PoW::new(chain_config).get_work_required(
                 &prev_block_index,
                 block_timestamp,
                 get_ancestor,
-            )
-        }
+            ),
+            GenBlockIndex::Genesis(_) => match pow_status {
+                // If this is genesis, then the status can't be on-going
+                PoWStatus::Ongoing => unreachable!(),
+                PoWStatus::Threshold { initial_difficulty } => Ok(initial_difficulty.clone()),
+            },
+        },
     }
 }
 
