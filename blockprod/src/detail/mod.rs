@@ -16,32 +16,44 @@
 pub mod block_maker;
 pub mod builder;
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
-use chainstate::ChainstateHandle;
+use chainstate::{ChainstateHandle, PropertyQueryError};
+use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-            BlockBody, BlockCreationError, BlockHeader, BlockReward,
+            BlockBody, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
+    primitives::{BlockHeight, Idable},
     time_getter::TimeGetter,
 };
+use futures::channel::oneshot;
+use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
 use tokio::sync::mpsc;
+use utils::tap_error_log::LogError;
 
 use crate::BlockProductionError;
 
-use self::{block_maker::BlockMaker, builder::BlockBuilderControlCommand};
+use self::builder::BlockBuilderControlCommand;
 
+#[derive(Debug, Clone)]
 pub enum TransactionsSource {
     Mempool,
     Provided(Vec<SignedTransaction>),
+}
+
+#[must_use]
+enum BlockSubmitResult {
+    Failed,
+    Success,
 }
 
 #[allow(dead_code)]
@@ -51,6 +63,7 @@ pub struct BlockProduction {
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     builder_tx: mpsc::UnboundedSender<BlockBuilderControlCommand>,
+    // running_miners: BTreeMap<>, // TODO(PR)
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
@@ -74,28 +87,12 @@ impl BlockProduction {
         Ok(block_production)
     }
 
-    pub fn chain_config(&self) -> &Arc<ChainConfig> {
-        &self.chain_config
-    }
-
-    pub fn chainstate_handle(&self) -> &ChainstateHandle {
-        &self.chainstate_handle
-    }
-
-    pub fn mempool_handle(&self) -> &MempoolHandle {
-        &self.mempool_handle
-    }
-
     pub fn time_getter(&self) -> &TimeGetter {
         &self.time_getter
     }
 
     pub fn builder_tx(&self) -> &mpsc::UnboundedSender<BlockBuilderControlCommand> {
         &self.builder_tx
-    }
-
-    pub fn mining_thread_pool(&self) -> &Arc<slave_pool::ThreadPool> {
-        &self.mining_thread_pool
     }
 
     pub async fn collect_transactions(
@@ -112,82 +109,196 @@ impl BlockProduction {
         Ok(returned_accumulator)
     }
 
-    pub async fn generate_block(
-        &mut self,
-        reward_destination: Destination,
-        transactions_source: TransactionsSource,
-    ) -> Result<Block, BlockProductionError> {
-        let (current_tip_id, current_tip_height) = self
-            .chainstate_handle()
-            .call(|this| {
-                if let Ok(current_tip_id) = this.get_best_block_id() {
-                    if let Ok(Some(current_tip_height)) =
-                        this.get_block_height_in_main_chain(&current_tip_id)
-                    {
-                        return Some((current_tip_id, current_tip_height));
-                    }
-                }
+    async fn pull_consensus_data(
+        &self,
+        block_timestamp: BlockTimestamp,
+    ) -> Result<(ConsensusData, GenBlockIndex), BlockProductionError> {
+        let consensus_data = self
+            .chainstate_handle
+            .call({
+                let chain_config = Arc::clone(&self.chain_config);
 
-                None
+                move |this| {
+                    let best_block_index = this
+                        .get_best_block_index()
+                        .expect("Best block index retrieval failed in block production");
+
+                    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+                        this.get_ancestor(
+                            &block_index.clone().into_gen_block_index(),
+                            ancestor_height,
+                        )
+                        .map_err(|_| {
+                            PropertyQueryError::GetAncestorError(
+                                GetAncestorError::InvalidAncestorHeight {
+                                    block_height: block_index.block_height(),
+                                    ancestor_height,
+                                },
+                            )
+                        })
+                    };
+
+                    let consensus_data = consensus::generate_consensus_data(
+                        &chain_config,
+                        &best_block_index,
+                        block_timestamp,
+                        best_block_index.block_height().next_height(),
+                        get_ancestor,
+                    );
+                    consensus_data.map(|cons_data| (cons_data, best_block_index))
+                }
             })
             .await?
-            .ok_or(BlockProductionError::FailedToConstructBlock(
-                BlockCreationError::CurrentTipRetrievalError,
-            ))?;
+            .map_err(BlockProductionError::FailedConsensusInitialization)?;
 
-        let (_tx, dummy_rx) = crossbeam_channel::unbounded();
+        Ok(consensus_data)
+    }
 
-        let block_maker = BlockMaker::new(
-            Arc::clone(self.chain_config()),
-            self.chainstate_handle().clone(),
-            self.mempool_handle().clone(),
-            self.time_getter().clone(),
-            reward_destination,
-            current_tip_id,
+    fn solve_block(
+        chain_config: Arc<ChainConfig>,
+        mut block_header: BlockHeader,
+        current_tip_height: BlockHeight,
+        stop_flag: Arc<AtomicBool>,
+    ) -> Result<BlockHeader, BlockProductionError> {
+        // TODO: use a separate executor for this loop to avoid starving tokio tasks
+        consensus::finalize_consensus_data(
+            &chain_config,
+            &mut block_header,
             current_tip_height,
-            dummy_rx,
-            Arc::clone(self.mining_thread_pool()),
-        );
-
-        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
-
-        let consensus_data = block_maker.pull_consensus_data(current_tip_id, timestamp).await?;
-
-        let block_reward = BlockReward::new(vec![]);
-
-        // TODO: see if we can simplify this
-        let transactions = match transactions_source {
-            TransactionsSource::Mempool => {
-                self.collect_transactions().await?.transactions().clone()
-            }
-            TransactionsSource::Provided(txs) => txs,
-        };
-
-        let block_body = BlockBody::new(block_reward, transactions);
-
-        let tx_merkle_root =
-            calculate_tx_merkle_root(&block_body).map_err(BlockCreationError::MerkleTreeError)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&block_body)
-            .map_err(BlockCreationError::MerkleTreeError)?;
-
-        let block_header = BlockHeader::new(
-            current_tip_id,
-            tx_merkle_root,
-            witness_merkle_root,
-            timestamp,
-            consensus_data,
-        );
-
-        let block_header = BlockMaker::solve_block(
-            Arc::clone(self.chain_config()),
-            block_header,
-            current_tip_height,
-            Arc::new(false.into()),
+            stop_flag,
         )?;
 
-        let block = Block::new_from_header(block_header, block_body)?;
+        Ok(block_header)
+    }
 
-        Ok(block)
+    async fn attempt_submit_new_block(
+        &mut self,
+        block: Block,
+        current_tip_index: &GenBlockIndex,
+    ) -> Result<BlockSubmitResult, BlockProductionError> {
+        let block_check_result = self
+            .chainstate_handle
+            .call(|chainstate| chainstate.preliminary_block_check(block))
+            .await
+            .log_err()?;
+        if let Ok(block) = block_check_result {
+            let block_id = block.get_id();
+            let block_submit_result = self
+                .chainstate_handle
+                .call_mut(|chainstate| {
+                    chainstate.process_block(block, chainstate::BlockSource::Local)
+                })
+                .await
+                .log_err()?;
+            if let Ok(_new_block_index) = block_submit_result {
+                log::info!(
+                "Success in submitting block {} at height {}. Exiting Block Maker at tip {} and height {}",
+                block_id,
+                current_tip_index.block_height().next_height(),
+                current_tip_index.block_id(),
+                current_tip_index.block_height()
+            );
+                return Ok(BlockSubmitResult::Success);
+            }
+        }
+
+        Ok(BlockSubmitResult::Failed)
+    }
+
+    pub async fn generate_block(
+        &mut self,
+        _reward_destination: Destination,
+        transactions_source: TransactionsSource,
+        submit_block_to_chainstate: bool,
+    ) -> Result<Block, BlockProductionError> {
+        let stop_flag = Arc::new(false.into());
+
+        loop {
+            let timestamp =
+                BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+
+            let (consensus_data, current_tip_index) = self.pull_consensus_data(timestamp).await?;
+
+            // TODO: instead of the following static value, look at
+            // self.chain_config for the current block reward, then send
+            // it to self.reward_destination
+            let block_reward = BlockReward::new(vec![]);
+
+            // TODO: see if we can simplify this
+            let transactions = match transactions_source.clone() {
+                TransactionsSource::Mempool => {
+                    self.collect_transactions().await?.transactions().clone()
+                }
+                TransactionsSource::Provided(txs) => txs,
+            };
+
+            let block_body = BlockBody::new(block_reward, transactions);
+
+            let tx_merkle_root = calculate_tx_merkle_root(&block_body)
+                .map_err(BlockCreationError::MerkleTreeError)?;
+            let witness_merkle_root = calculate_witness_merkle_root(&block_body)
+                .map_err(BlockCreationError::MerkleTreeError)?;
+
+            let block_header = BlockHeader::new(
+                current_tip_index.block_id(),
+                tx_merkle_root,
+                witness_merkle_root,
+                timestamp,
+                consensus_data,
+            );
+
+            // TODO: find a way to use a oneshot channel. It doesn't seem to be supported in crossbeam.
+            let (result_sender, mut result_receiver) = oneshot::channel();
+            {
+                let chain_config = Arc::clone(&self.chain_config);
+                let current_tip_height = current_tip_index.block_height();
+                let stop_flag = Arc::clone(&stop_flag);
+                self.mining_thread_pool.spawn(move || {
+                    let block_header = Self::solve_block(
+                        chain_config,
+                        block_header,
+                        current_tip_height,
+                        stop_flag,
+                    );
+                    result_sender
+                        .send(block_header)
+                        .expect("Failed to send block header back to main thread");
+                });
+            }
+
+            tokio::select! {
+                // TODO(PR): receive a signal from BlockProduction to stop if there's a new block
+                solve_receive_result = &mut result_receiver => {
+                    let mining_result = match solve_receive_result {
+                        Ok(mining_result) => mining_result,
+                        Err(_) => {
+                            log::error!("Mining thread pool channel lost on tip {} on best height {}", current_tip_index.block_id(), current_tip_index.block_height());
+                            continue;
+                        }
+                    };
+                    let block_header = match mining_result {
+                        Ok(header) => header,
+                        Err(e) => {
+                            log::error!("Solving block in thread-pool returned an error on tip {} on best height {}: {e}", current_tip_index.block_id(), current_tip_index.block_height());
+                            continue;
+                        }
+                    };
+                    let block = Block::new_from_header(block_header, block_body.clone())?;
+
+                    // If we successfully have found a block, attempt to submit it to chainstate
+                    // TODO(PR): The block should either be submitted or returned to the caller; create another function to wrap the one that returns the block and submit it in there
+                    if submit_block_to_chainstate {
+                        match self.attempt_submit_new_block(block.clone(), &current_tip_index).await? {
+                            BlockSubmitResult::Failed => (), // try again in next iteration
+                            BlockSubmitResult::Success => return Ok(block),
+                        }
+                    } else {
+                        return Ok(block);
+                    }
+
+                }
+            }
+        }
     }
 }
 

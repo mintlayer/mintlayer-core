@@ -19,11 +19,11 @@ use std::sync::Arc;
 
 use chainstate::ChainstateHandle;
 use common::{
-    chain::{block::BlockCreationError, ChainConfig, Destination},
+    chain::{block::BlockCreationError, ChainConfig},
     time_getter::TimeGetter,
 };
 use consensus::ConsensusVerificationError;
-use detail::{builder::PerpetualBlockBuilder, BlockProduction};
+use detail::BlockProduction;
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
@@ -69,40 +69,41 @@ pub async fn make_blockproduction(
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn BlockProductionInterface>, BlockProductionError> {
-    let (tx_builder, rx_builder) = mpsc::unbounded_channel();
+    // TODO(PR): remove all traces of the perpetual block builder
+    let (tx_builder, _rx_builder) = mpsc::unbounded_channel();
 
     // TODO: make the number of threads configurable
     let thread_count = 2;
     let mining_thread_pool = prepare_thread_pool(thread_count);
 
-    {
-        let chain_config = Arc::clone(&chain_config);
-        let chainstate_handle = chainstate_handle.clone();
-        let mempool_handle = mempool_handle.clone();
-        let time_getter = time_getter.clone();
+    // {
+    //     let chain_config = Arc::clone(&chain_config);
+    //     let chainstate_handle = chainstate_handle.clone();
+    //     let mempool_handle = mempool_handle.clone();
+    //     let time_getter = time_getter.clone();
 
-        // TODO: change the following two values from static values to
-        // what's set in BlockProductionConfig
-        let reward_destination = Destination::AnyoneCanSpend;
-        let is_enabled = true;
+    //     // TODO: change the following two values from static values to
+    //     // what's set in BlockProductionConfig
+    //     let reward_destination = Destination::AnyoneCanSpend;
+    //     let is_enabled = true;
 
-        let mining_thread_pool = Arc::clone(&mining_thread_pool);
+    //     let mining_thread_pool = Arc::clone(&mining_thread_pool);
 
-        tokio::spawn(async move {
-            PerpetualBlockBuilder::new(
-                chain_config,
-                chainstate_handle,
-                mempool_handle,
-                time_getter,
-                reward_destination,
-                rx_builder,
-                is_enabled,
-                mining_thread_pool,
-            )
-            .run()
-            .await
-        });
-    }
+    //     tokio::spawn(async move {
+    //         PerpetualBlockBuilder::new(
+    //             chain_config,
+    //             chainstate_handle,
+    //             mempool_handle,
+    //             time_getter,
+    //             reward_destination,
+    //             rx_builder,
+    //             is_enabled,
+    //             mining_thread_pool,
+    //         )
+    //         .run()
+    //         .await
+    //     });
+    // }
 
     let result = BlockProduction::new(
         chain_config,
@@ -159,32 +160,32 @@ mod tests {
         (manager, chain_config, chainstate, mempool)
     }
 
-    #[tokio::test]
-    async fn test_make_blockproduction() {
-        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    // #[tokio::test]
+    // async fn test_make_blockproduction() {
+    //     let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
-        let blockprod = make_blockproduction(
-            Arc::clone(&chain_config),
-            chainstate.clone(),
-            mempool.clone(),
-            Default::default(),
-        )
-        .await
-        .expect("Error initializing blockprod");
+    //     let blockprod = make_blockproduction(
+    //         Arc::clone(&chain_config),
+    //         chainstate.clone(),
+    //         mempool.clone(),
+    //         Default::default(),
+    //     )
+    //     .await
+    //     .expect("Error initializing blockprod");
 
-        let blockprod = manager.add_subsystem("blockprod", blockprod);
-        let shutdown = manager.make_shutdown_trigger();
+    //     let blockprod = manager.add_subsystem("blockprod", blockprod);
+    //     let shutdown = manager.make_shutdown_trigger();
 
-        tokio::spawn(async move {
-            blockprod
-                .call(move |this| {
-                    assert!(this.is_connected(), "Block Builder is not connected");
-                    shutdown.initiate();
-                })
-                .await
-                .expect("Error initializing Block Builder");
-        });
+    //     tokio::spawn(async move {
+    //         blockprod
+    //             .call(move |this| {
+    //                 assert!(this.is_connected(), "Block Builder is not connected");
+    //                 shutdown.initiate();
+    //             })
+    //             .await
+    //             .expect("Error initializing Block Builder");
+    //     });
 
-        manager.main().await;
-    }
+    //     manager.main().await;
+    // }
 }
