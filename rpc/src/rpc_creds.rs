@@ -44,6 +44,7 @@ fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
 
     #[cfg(unix)]
     {
+        // Prevent other users from reading the file
         use std::os::unix::prelude::OpenOptionsExt;
         options.mode(0o600);
     }

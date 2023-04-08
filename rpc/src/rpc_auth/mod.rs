@@ -26,6 +26,7 @@ use hyper::{Body, Request, Response};
 use logging::log;
 use tower_http::auth::AuthorizeRequest;
 
+/// HTTP authentication helper
 #[derive(Clone)]
 pub struct RpcAuth {
     username: String,

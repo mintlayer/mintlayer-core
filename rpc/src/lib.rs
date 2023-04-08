@@ -69,7 +69,9 @@ impl Builder {
         }
     }
 
-    /// New builder pre-populated with RPC info methods
+    /// New builder pre-populated with RPC info methods.
+    ///
+    /// If `creds` is set, basic HTTP authentication is required.
     pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> anyhow::Result<Self> {
         let http_bind_address = if *rpc_config.http_enabled {
             Some(*rpc_config.http_bind_address)
@@ -114,10 +116,14 @@ impl Builder {
 pub struct Rpc {
     http: Option<(SocketAddr, ServerHandle)>,
     websocket: Option<(SocketAddr, ServerHandle)>,
+    // Stored here to remove the cookie file when the node is stopped
     _creds: Option<RpcCreds>,
 }
 
 impl Rpc {
+    /// Rpc constructor.
+    ///
+    /// If `creds` is set, basic HTTP authentication is required.
     async fn new(
         http_bind_addr: Option<&SocketAddr>,
         ws_bind_addr: Option<&SocketAddr>,
