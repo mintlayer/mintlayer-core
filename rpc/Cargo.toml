@@ -26,3 +26,4 @@ base64 = "0.21"
 
 [dev-dependencies]
 tokio.workspace = true
+rstest.workspace = true

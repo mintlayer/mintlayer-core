@@ -208,6 +208,7 @@ mod tests {
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
     use jsonrpsee::ws_client::WsClientBuilder;
+    use rstest::rstest;
 
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
@@ -230,73 +231,18 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[trace]
+    #[case(true, false)]
+    #[case(false, true)]
+    #[case(true, true)]
     #[tokio::test]
-    async fn rpc_server_http() -> anyhow::Result<()> {
+    async fn rpc_server(#[case] http: bool, #[case] ws: bool) -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
             http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: true.into(),
+            http_enabled: http.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: false.into(),
-        };
-        let rpc = Builder::new(rpc_config, None)
-            .unwrap()
-            .register(SubsystemRpcImpl.into_rpc())
-            .build()
-            .await?;
-
-        let url = format!("http://{}", rpc.http_address().unwrap());
-        let client = HttpClientBuilder::default().build(url)?;
-        let response: Result<String> =
-            client.request("example_server_protocol_version", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "version1");
-
-        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "sub1");
-
-        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
-        assert_eq!(response.unwrap(), 7);
-
-        subsystem::Subsystem::shutdown(rpc).await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn rpc_server_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: false.into(),
-            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: true.into(),
-        };
-        let rpc = Builder::new(rpc_config, None)
-            .unwrap()
-            .register(SubsystemRpcImpl.into_rpc())
-            .build()
-            .await?;
-
-        let url = format!("ws://{}", rpc.websocket_address().unwrap());
-        let client = WsClientBuilder::default().build(url).await?;
-        let response: Result<String> =
-            client.request("example_server_protocol_version", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "version1");
-
-        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "sub1");
-
-        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
-        assert_eq!(response.unwrap(), 7);
-
-        subsystem::Subsystem::shutdown(rpc).await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:3032".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: true.into(),
-            ws_bind_address: "127.0.0.1:3033".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: true.into(),
+            ws_enabled: ws.into(),
         };
 
         let rpc = Builder::new(rpc_config, None)
@@ -305,7 +251,7 @@ mod tests {
             .build()
             .await?;
 
-        {
+        if http {
             let url = format!("http://{}", rpc.http_address().unwrap());
             let client = HttpClientBuilder::default().build(url)?;
             let response: Result<String> =
@@ -321,7 +267,7 @@ mod tests {
             assert_eq!(response.unwrap(), 7);
         }
 
-        {
+        if ws {
             let url = format!("ws://{}", rpc.websocket_address().unwrap());
             let client = WsClientBuilder::default().build(url).await?;
             let response: Result<String> =

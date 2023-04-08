@@ -3105,6 +3105,7 @@ dependencies = [
  "hyper",
  "jsonrpsee",
  "logging",
+ "rstest",
  "subsystem",
  "tokio",
  "tower",
