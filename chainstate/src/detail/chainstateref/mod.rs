@@ -378,6 +378,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             CheckBlockError::BlockTimeOrderInvalid,
         );
 
+        let prev_block_timestamp = match prev_block_id.classify(self.chain_config.as_ref()) {
+            GenBlockId::Genesis(_genesis) => self.chain_config.genesis_block().timestamp(),
+            GenBlockId::Block(id) => self
+                .get_block_index(&id)
+                .log_err()
+                .map_err(|e| CheckBlockError::PrevBlockRetrievalError(e, id, header.block_id()))?
+                .expect("msg")
+                .block_timestamp(),
+        };
+        ensure!(
+            header.timestamp() > prev_block_timestamp,
+            CheckBlockError::BlockTimeStrictOrderInvalid
+        );
+
         let max_future_offset = self.chain_config.max_future_block_time_offset();
         let current_time = self.current_time();
         let block_timestamp = header.timestamp();
@@ -826,6 +840,78 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(prev_block_index)
     }
 
+    fn longest_chain(
+        &self,
+        current_best: &'a BlockIndex,
+        possible_new_best: &'a BlockIndex,
+    ) -> Result<&'a BlockIndex, BlockError> {
+        if current_best.block_id() == possible_new_best.block_id() {
+            return Ok(current_best);
+        }
+        if current_best.block_height() == 0.into() {
+            return Ok(possible_new_best);
+        }
+
+        if possible_new_best.block_height() == 0.into() {
+            return Ok(current_best);
+        }
+
+        let common_ancestor = self
+            .last_common_ancestor(
+                &current_best.clone().into(),
+                &possible_new_best.clone().into(),
+            )
+            .map_err(BlockError::FindingCommonAncestorForBestChainError)?;
+
+        let last_time_stamp = std::cmp::max(
+            current_best.block_timestamp(),
+            possible_new_best.block_timestamp(),
+        );
+
+        let time_slots_1 = last_time_stamp
+            .as_int_seconds()
+            .checked_sub(common_ancestor.block_timestamp().as_int_seconds())
+            .expect("The common ancestor is not older than the first chain");
+
+        let time_slots_2 = last_time_stamp
+            .as_int_seconds()
+            .checked_sub(common_ancestor.block_timestamp().as_int_seconds())
+            .expect("The common ancestor is not older than the second chain");
+
+        let filled_slots_1 = current_best
+            .block_height()
+            .into_int()
+            .checked_sub(common_ancestor.block_height().into_int())
+            .expect("The common ancestor is not higher than the first chain");
+
+        let filled_slots_2 = possible_new_best
+            .block_height()
+            .into_int()
+            .checked_sub(common_ancestor.block_height().into_int())
+            .expect("The common ancestor is not higher than the first chain");
+
+        let empty_slots_1 = time_slots_1
+            .checked_sub(filled_slots_1)
+            .expect("The common ancestor is not higher than the first chain");
+        let empty_slots_2 = time_slots_2
+            .checked_sub(filled_slots_2)
+            .expect("The common ancestor is not higher than the second chain");
+
+        // The chain that has less slots is the longest chain
+        match empty_slots_1.cmp(&empty_slots_2) {
+            std::cmp::Ordering::Less => Ok(current_best),
+            std::cmp::Ordering::Greater => Ok(possible_new_best),
+            std::cmp::Ordering::Equal => {
+                // If both chains have the same number of empty slots, longest is the chain with the most blocks
+                match possible_new_best.block_height().cmp(&current_best.block_height()) {
+                    std::cmp::Ordering::Less => Ok(current_best),
+                    std::cmp::Ordering::Equal => Ok(current_best),
+                    std::cmp::Ordering::Greater => Ok(possible_new_best),
+                }
+            }
+        }
+    }
+
     pub fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
@@ -838,7 +924,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .log_err()?
             .expect("Inconsistent DB");
 
-        if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
+        // If the current best is genesis, any new block is good
+        let current_best_block_index = match current_best_block_index {
+            GenBlockIndex::Block(bi) => bi,
+            GenBlockIndex::Genesis(_genesis) => {
+                self.reorganize(&best_block_id, &new_block_index).log_err()?;
+                return Ok(Some(new_block_index));
+            }
+        };
+
+        let longest = self.longest_chain(&current_best_block_index, &new_block_index).log_err()?;
+
+        if longest.block_id() != current_best_block_index.block_id() {
             self.reorganize(&best_block_id, &new_block_index).log_err()?;
             return Ok(Some(new_block_index));
         }
