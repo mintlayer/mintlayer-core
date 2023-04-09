@@ -105,7 +105,7 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
 
     # list of crates, whose version can have build version
     exempted_crates = [
-       # 'ctor'    # left here as an example, remove if you ever add one crated that is exempted
+       # 'ctor'    # left here as an example, remove if you ever add one crated that is exempt
     ]
 
     if dependencies_name in root_node:
@@ -136,7 +136,7 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
 def check_dependency_versions_build_version():
     print("==== Ensuring that all versions in Cargo.toml don't have build version")
 
-    # list of files exempted from license check
+    # list of files exempt from license check
     exempted_files = [
         "./Cargo.toml"
     ]
