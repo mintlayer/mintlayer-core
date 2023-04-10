@@ -12,7 +12,7 @@ crypto = { path = "../crypto/" }
 atomic-traits = "0.3"
 num-traits = "0.2"
 slave-pool = "0.2"
-probabilistic-collections = "0.7.0"
+probabilistic-collections = "0.7"
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
