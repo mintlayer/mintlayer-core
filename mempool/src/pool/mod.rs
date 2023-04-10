@@ -314,7 +314,7 @@ where
             )?
             .ok_or(TxValidationError::FeeNotDetermined)?;
 
-        let tx = TxWithFee::new_with_fee(tx.clone(), fee.into());
+        let tx = TxWithFee::new_with_fee(tx, fee.into());
         self.pays_minimum_relay_fees(&tx)?;
         self.pays_minimum_mempool_fee(&tx)?;
 
