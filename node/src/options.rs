@@ -19,14 +19,15 @@ use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::ChainType;
-use directories::UserDirs;
+use directories::{BaseDirs, UserDirs};
 
 use crate::{
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
     regtest_options::RegtestOptions,
 };
 
-const DATA_DIR_NAME: &str = ".mintlayer";
+const DATA_DIR_NAME_WIN_MAC: &str = "Mintlayer";
+const DATA_DIR_NAME_NIX: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
 
 /// Mintlayer node executable
@@ -168,10 +169,20 @@ impl Options {
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
-    UserDirs::new()
-        // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
-        .expect("Unable to get home directory")
-        .home_dir()
-        .join(DATA_DIR_NAME)
-        .join(chain_type.name())
+    // Windows: C:\Users\Username\AppData\Roaming\Mintlayer
+    // macOS: ~/Library/Application Support/Mintlayer
+    // Unix-like: ~/.mintlayer
+    let data_dir = if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
+        BaseDirs::new()
+            .expect("Unable to get project directory")
+            .data_dir()
+            .join(DATA_DIR_NAME_WIN_MAC)
+    } else {
+        UserDirs::new()
+            // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
+            .expect("Unable to get home directory")
+            .home_dir()
+            .join(DATA_DIR_NAME_NIX)
+    };
+    data_dir.join(chain_type.name())
 }
