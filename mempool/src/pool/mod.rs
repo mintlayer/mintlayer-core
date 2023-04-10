@@ -272,7 +272,58 @@ where
         // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
         // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
 
-        // TODO: The following three checks may each better be discarded or moved to tx verifier
+        self.check_preliminary_mempool_policy(&tx)?;
+
+        let (tx, delta) = self.verify_transaction(tx)?;
+
+        let conflicts = self.check_mempool_policy(&tx)?;
+
+        Ok((conflicts, tx, delta))
+    }
+
+    // Verify the transaction with respect to the consensus rules
+    fn verify_transaction(
+        &self,
+        tx: SignedTransaction,
+    ) -> Result<(TxWithFee, TransactionVerifierDelta), TxValidationError> {
+        let chainstate_handle =
+            subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone());
+
+        for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
+            let tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+
+            let current_best = chainstate_handle
+                .call(move |c| c.get_gen_block_index(&tip))??
+                .ok_or(TxValidationError::InternalError)?;
+
+            let mut tx_verifier = self.tx_verifier.derive_child();
+
+            let fee = tx_verifier
+                .connect_transaction(
+                    &TransactionSourceForConnect::Mempool {
+                        current_best: &current_best,
+                    },
+                    &tx,
+                    &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
+                )?
+                .ok_or(TxValidationError::FeeNotDetermined)?;
+
+            let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+            if tip == final_tip {
+                let tx = TxWithFee::new_with_fee(tx, fee.into());
+                let delta = tx_verifier.consume()?;
+                return Ok((tx, delta));
+            }
+        }
+
+        Err(TxValidationError::TipMoved)
+    }
+
+    // Cheap mempool policy checks that run before anything else
+    fn check_preliminary_mempool_policy(
+        &self,
+        tx: &SignedTransaction,
+    ) -> Result<(), TxValidationError> {
         ensure!(
             !tx.transaction().inputs().is_empty(),
             TxValidationError::NoInputs,
@@ -296,48 +347,24 @@ where
             TxValidationError::TransactionAlreadyInMempool
         );
 
-        let chainstate_handle =
-            subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone());
+        Ok(())
+    }
 
-        let tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+    // Check the transaction against the mempool inclusion policy
+    fn check_mempool_policy(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
+        self.pays_minimum_relay_fees(tx)?;
+        self.pays_minimum_mempool_fee(tx)?;
 
-        let current_best = chainstate_handle
-            .call(move |c| c.get_gen_block_index(&tip))??
-            .ok_or(TxValidationError::InternalError)?;
-
-        let mut tx_verifier = self.tx_verifier.derive_child();
-
-        let fee = tx_verifier
-            .connect_transaction(
-                &TransactionSourceForConnect::Mempool {
-                    current_best: &current_best,
-                },
-                &tx,
-                &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
-            )?
-            .ok_or(TxValidationError::FeeNotDetermined)?;
-
-        let tx = TxWithFee::new_with_fee(tx, fee.into());
-        self.pays_minimum_relay_fees(&tx)?;
-        self.pays_minimum_mempool_fee(&tx)?;
-
-        let conflicts = if ENABLE_RBF {
-            self.rbf_checks(&tx)?
+        if ENABLE_RBF {
+            self.rbf_checks(tx)
         } else {
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
                 self.conflicting_tx_ids(tx.tx()).next().is_none(),
                 TxValidationError::ConflictWithIrreplaceableTransaction
             );
-            Conflicts::new(BTreeSet::new())
-        };
-
-        let delta = tx_verifier.consume()?;
-
-        let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
-        ensure!(tip == final_tip, TxValidationError::TipMoved);
-
-        Ok((conflicts, tx, delta))
+            Ok(Conflicts::new(BTreeSet::new()))
+        }
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
