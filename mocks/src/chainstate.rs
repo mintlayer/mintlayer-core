@@ -138,22 +138,22 @@ mockall::mock! {
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
-        fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
-        fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
-        fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
-        fn get_pool_delegations_shares(
+        fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+        fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+        fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+        fn get_stake_pool_delegations_shares(
             &self,
             pool_id: PoolId,
         ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
-        fn get_delegation_balance(
+        fn get_stake_delegation_balance(
             &self,
             delegation_id: DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
-        fn get_delegation_data(
+        fn get_stake_delegation_data(
             &self,
             delegation_id: DelegationId,
         ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
-        fn get_pool_delegation_share(
+        fn get_stake_pool_delegation_share(
             &self,
             pool_id: PoolId,
             delegation_id: DelegationId,

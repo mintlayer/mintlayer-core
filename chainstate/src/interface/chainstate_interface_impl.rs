@@ -448,7 +448,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
     }
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
@@ -456,7 +456,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
@@ -464,7 +464,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
@@ -472,7 +472,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_pool_delegations_shares(
+    fn get_stake_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
@@ -483,7 +483,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_delegation_balance(
+    fn get_stake_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
@@ -494,7 +494,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_delegation_data(
+    fn get_stake_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, ChainstateError> {
@@ -505,7 +505,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_pool_delegation_share(
+    fn get_stake_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,

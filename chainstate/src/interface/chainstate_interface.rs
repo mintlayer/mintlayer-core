@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
@@ -28,7 +29,7 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use pos_accounting::PoolData;
+use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
 
 use utxo::Utxo;
@@ -167,28 +168,39 @@ pub trait ChainstateInterface: Send {
     /// Returns true if the initial block download isn't finished yet.
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+    /// Check whether stake pool with given ID exists.
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+    /// Get stake pool balance. See [pos_accounting::PoSAccountingView::get_pool_balance].
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+    /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
 
-    fn get_pool_delegations_shares(
+    /// Get all delegation shares for given stake pool.
+    /// See [pos_accounting::PoSAccountingView::get_pool_delegations_shares].
+    fn get_stake_pool_delegations_shares(
         &self,
         pool_id: PoolId,
-    ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError>;
 
-    fn get_delegation_balance(
+    /// Get delegation balance for given stake pool delegation ID.
+    /// See [pos_accounting::PoSAccountingView::get_delegation_balance].
+    fn get_stake_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
 
-    fn get_delegation_data(
+    /// Get data for given stake pool delegation ID.
+    /// See [pos_accounting::PoSAccountingView::get_delegation_data].
+    fn get_stake_delegation_data(
         &self,
         delegation_id: DelegationId,
-    ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
+    ) -> Result<Option<DelegationData>, ChainstateError>;
 
-    fn get_pool_delegation_share(
+    /// Get delegation share for given stake pool and delegation.
+    /// See [pos_accounting::PoSAccountingView::get_pool_delegation_share].
+    fn get_stake_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,

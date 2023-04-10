@@ -268,45 +268,45 @@ where
         self.deref().is_initial_block_download()
     }
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
-        self.deref().pool_exists(pool_id)
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+        self.deref().stake_pool_exists(pool_id)
     }
 
-    fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
-        self.deref().get_pool_balance(pool_id)
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_stake_pool_balance(pool_id)
     }
 
-    fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
-        self.deref().get_pool_data(pool_id)
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+        self.deref().get_stake_pool_data(pool_id)
     }
 
-    fn get_pool_delegations_shares(
+    fn get_stake_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
-        self.deref().get_pool_delegations_shares(pool_id)
+        self.deref().get_stake_pool_delegations_shares(pool_id)
     }
 
-    fn get_delegation_balance(
+    fn get_stake_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
-        self.deref().get_delegation_balance(delegation_id)
+        self.deref().get_stake_delegation_balance(delegation_id)
     }
 
-    fn get_delegation_data(
+    fn get_stake_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, ChainstateError> {
-        self.deref().get_delegation_data(delegation_id)
+        self.deref().get_stake_delegation_data(delegation_id)
     }
 
-    fn get_pool_delegation_share(
+    fn get_stake_pool_delegation_share(
         &self,
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
-        self.deref().get_pool_delegation_share(pool_id, delegation_id)
+        self.deref().get_stake_pool_delegation_share(pool_id, delegation_id)
     }
 }
 

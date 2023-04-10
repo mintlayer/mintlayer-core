@@ -131,33 +131,33 @@ impl<C: 'static + Send + ChainstateInterface> PoSAccountingView for ChainstateHa
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
-        self.call(move |c| c.pool_exists(pool_id))
+        self.call(move |c| c.stake_pool_exists(pool_id))
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_pool_balance(pool_id))
+        self.call(move |c| c.get_stake_pool_balance(pool_id))
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
-        self.call(move |c| c.get_pool_data(pool_id))
+        self.call(move |c| c.get_stake_pool_data(pool_id))
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Error> {
-        self.call(move |c| c.get_pool_delegations_shares(pool_id))
+        self.call(move |c| c.get_stake_pool_delegations_shares(pool_id))
     }
 
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_delegation_balance(delegation_id))
+        self.call(move |c| c.get_stake_delegation_balance(delegation_id))
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Error> {
-        self.call(move |c| c.get_delegation_data(delegation_id))
+        self.call(move |c| c.get_stake_delegation_data(delegation_id))
     }
 
     fn get_pool_delegation_share(
@@ -165,7 +165,7 @@ impl<C: 'static + Send + ChainstateInterface> PoSAccountingView for ChainstateHa
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_pool_delegation_share(pool_id, delegation_id))
+        self.call(move |c| c.get_stake_pool_delegation_share(pool_id, delegation_id))
     }
 }
 
