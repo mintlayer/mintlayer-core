@@ -16,6 +16,7 @@ crypto = { path = "../crypto/" }
 
 # External dependencies
 anyhow = "1.0"
+thiserror.workspace = true
 async-trait.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 tower-http = { version = "0.3", features = ["auth"] }

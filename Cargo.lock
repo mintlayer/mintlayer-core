@@ -3107,6 +3107,7 @@ dependencies = [
  "logging",
  "rstest",
  "subsystem",
+ "thiserror",
  "tokio",
  "tower",
  "tower-http",

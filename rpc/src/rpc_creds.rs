@@ -18,7 +18,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Context;
 use crypto::random::{make_true_rng, CryptoRng, Rng};
 use logging::log;
 
@@ -54,26 +53,38 @@ fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
     options.create(true).write(true).open(path)?.write_all(data.as_bytes())
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum RpcCredsError {
+    #[error("Cookie file cannot be used with username/password")]
+    InvalidCookieFileConfig,
+    #[error("Invalid symbol '{0}' in RPC username")]
+    InvalidSymbolsInUsername(char),
+    #[error("Failed to create cookie file: {0}: {1}")]
+    CookieFileIoError(PathBuf, std::io::Error),
+    #[error("Both RPC username and password must be set or unset, together")]
+    InvalidUsernamePasswordConfig,
+}
+
 impl RpcCreds {
     pub fn new(
-        data_dir: &Path,
-        username: Option<&str>,
-        password: Option<&str>,
+        data_dir: impl AsRef<Path>,
+        username: Option<impl AsRef<str>>,
+        password: Option<impl AsRef<str>>,
         cookie_file: Option<&str>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, RpcCredsError> {
         match (username, password) {
             (Some(username), Some(password)) => {
-                anyhow::ensure!(
+                utils::ensure!(
                     cookie_file.is_none(),
-                    "cookie file can't be used with username/password"
+                    RpcCredsError::InvalidCookieFileConfig
                 );
-                anyhow::ensure!(
-                    username.find(':').is_none(),
-                    "invalid symbol ':' in RPC username"
+                utils::ensure!(
+                    username.as_ref().find(':').is_none(),
+                    RpcCredsError::InvalidSymbolsInUsername(':')
                 );
                 Ok(Self {
-                    username: username.to_owned(),
-                    password: password.to_owned(),
+                    username: username.as_ref().to_owned(),
+                    password: password.as_ref().to_owned(),
                     cookie_file: None,
                 })
             }
@@ -83,12 +94,12 @@ impl RpcCreds {
                 let password = gen_password(&mut make_true_rng(), COOKIE_PASSWORD_LEN);
                 let cookie_file = match cookie_file {
                     Some(cookie_file) => cookie_file.into(),
-                    None => data_dir.join(COOKIE_FILENAME),
+                    None => data_dir.as_ref().join(COOKIE_FILENAME),
                 };
                 let cookie = format!("{username}:{password}");
 
                 write_file(&cookie_file, &cookie)
-                    .with_context(|| format!("failed to create cookie file {cookie_file:?}"))?;
+                    .map_err(|e| RpcCredsError::CookieFileIoError(cookie_file.clone(), e))?;
 
                 Ok(Self {
                     username,
@@ -97,7 +108,7 @@ impl RpcCreds {
                 })
             }
 
-            _ => anyhow::bail!("both RPC username and password must be set"),
+            _ => Err(RpcCredsError::InvalidUsernamePasswordConfig),
         }
     }
 
