@@ -5,7 +5,7 @@
 """Mempool transaction submission test
 
 Check that:
-* Valid transaciton is accepted by the mempool and included in a block as
+* Valid transaction is accepted by the mempool and included in a block as
   appropriate.
 * Invalid transaction gets properly rejected at mempool level.
 """

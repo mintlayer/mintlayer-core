@@ -85,7 +85,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for Me
             self.memory_usage_estimator,
         );
 
-        log::trace!("Subscribing to chaninstate events");
+        log::trace!("Subscribing to chainstate events");
         let mut chainstate_events_rx =
             Self::subscribe_to_chainstate_events(mempool.chainstate_handle())
                 .await

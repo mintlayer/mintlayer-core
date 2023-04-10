@@ -321,7 +321,7 @@ where
         let conflicts = if ENABLE_RBF {
             self.rbf_checks(&tx)?
         } else {
-            // Wihtout RBF enabled, any conflicting transaction results in an error
+            // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
                 self.conflicting_tx_ids(tx.tx()).next().is_none(),
                 TxValidationError::ConflictWithIrreplaceableTransaction

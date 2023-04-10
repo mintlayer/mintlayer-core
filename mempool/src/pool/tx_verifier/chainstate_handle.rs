@@ -79,7 +79,7 @@ impl From<Error> for crate::error::Error {
     }
 }
 
-/// A wrapper over handle to chanistate
+/// A wrapper over handle to chainstate
 pub struct ChainstateHandle<C>(BlockingHandle<C>);
 
 impl<C> ChainstateHandle<C> {
