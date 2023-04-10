@@ -18,6 +18,9 @@ mod accounting_undo_cache;
 mod amounts_map;
 mod cached_inputs_operation;
 mod input_output_policy;
+mod optional_tx_index_cache;
+mod signature_check;
+mod timelock_check;
 mod token_issuance_cache;
 mod tx_index_cache;
 mod utils;
@@ -27,9 +30,13 @@ pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
-mod optional_tx_index_cache;
 pub mod storage;
-pub mod timelock_check;
+
+mod block_transactable;
+pub use block_transactable::{BlockTransactableRef, BlockTransactableWithIndexRef};
+
+mod tx_source;
+pub use tx_source::{TransactionSource, TransactionSourceForConnect};
 
 mod cached_operation;
 pub use cached_operation::CachedOperation;
@@ -59,13 +66,12 @@ use common::{
     amount_sum,
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
-        signature::{verify_signature, Signable, Transactable},
+        signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxMainChainIndex,
-        TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
-    primitives::{id::WithId, Amount, BlockHeight, Id, Idable, H256},
+    primitives::{id::WithId, Amount, Id, Idable, H256},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
@@ -81,86 +87,7 @@ pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
 
-/// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum BlockTransactableRef<'a> {
-    Transaction(&'a WithId<Block>, usize),
-    BlockReward(&'a WithId<Block>),
-}
-
-/// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum BlockTransactableWithIndexRef<'a> {
-    Transaction(&'a WithId<Block>, usize, Option<TxMainChainIndex>),
-    BlockReward(&'a WithId<Block>, Option<TxMainChainIndex>),
-}
-
-impl<'a> BlockTransactableWithIndexRef<'a> {
-    pub fn without_tx_index(&self) -> BlockTransactableRef<'a> {
-        match self {
-            BlockTransactableWithIndexRef::Transaction(block, index, _) => {
-                BlockTransactableRef::Transaction(block, *index)
-            }
-            BlockTransactableWithIndexRef::BlockReward(block, _) => {
-                BlockTransactableRef::BlockReward(block)
-            }
-        }
-    }
-
-    pub fn take_tx_index(self) -> Option<TxMainChainIndex> {
-        match self {
-            BlockTransactableWithIndexRef::Transaction(_, _, idx) => idx,
-            BlockTransactableWithIndexRef::BlockReward(_, idx) => idx,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum TransactionSource {
-    Chain(Id<Block>),
-    Mempool,
-}
-
-impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
-    fn from(t: &TransactionSourceForConnect) -> Self {
-        match t {
-            TransactionSourceForConnect::Chain { new_block_index } => {
-                TransactionSource::Chain(*new_block_index.block_id())
-            }
-            TransactionSourceForConnect::Mempool { current_best: _ } => TransactionSource::Mempool,
-        }
-    }
-}
-
-pub enum TransactionSourceForConnect<'a> {
-    Chain { new_block_index: &'a BlockIndex },
-    Mempool { current_best: &'a BlockIndex },
-}
-
-impl<'a> TransactionSourceForConnect<'a> {
-    /// The block height of the transaction to be connected
-    /// For the mempool, it's the height of the next-to-be block
-    /// For the chain, it's for the block being connected
-    pub fn expected_block_height(&self) -> BlockHeight {
-        match self {
-            TransactionSourceForConnect::Chain { new_block_index } => {
-                new_block_index.block_height()
-            }
-            TransactionSourceForConnect::Mempool {
-                current_best: best_block_index,
-            } => best_block_index.block_height().next_height(),
-        }
-    }
-
-    pub fn chain_block_index(&self) -> Option<&BlockIndex> {
-        match self {
-            TransactionSourceForConnect::Chain { new_block_index } => Some(new_block_index),
-            TransactionSourceForConnect::Mempool { current_best: _ } => None,
-        }
-    }
-}
-
-/// The change that a block has caused to the blockchain state
+/// The change that a set of transactions has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
@@ -283,19 +210,10 @@ where
                         self.get_token_id_from_issuance_tx(tx_id)
                             .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                     };
-                let (key, amount) = get_input_token_id_and_amount(
-                    &utxo.output().value(),
-                    issuance_token_id_getter,
-                )?;
-                Ok((key, amount))
+                get_input_token_id_and_amount(&utxo.output().value(), issuance_token_id_getter)
             }
             OutPointSourceId::BlockReward(_) => {
-                let (key, amount) =
-                    get_input_token_id_and_amount(&utxo.output().value(), || Ok(None))?;
-                match key {
-                    CoinOrTokenId::Coin => Ok((CoinOrTokenId::Coin, amount)),
-                    CoinOrTokenId::TokenId(tid) => Ok((CoinOrTokenId::TokenId(tid), amount)),
-                }
+                get_input_token_id_and_amount(&utxo.output().value(), || Ok(None))
             }
         }
     }
@@ -365,7 +283,7 @@ where
         Ok(())
     }
 
-    fn get_stake_pool_data_from_output(
+    fn get_pool_data_from_output(
         &self,
         output: &TxOutput,
     ) -> Result<PoolData, ConnectTransactionError> {
@@ -399,8 +317,7 @@ where
                     &self.utxo_cache,
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
-                let kernel_stake_pool_data =
-                    self.get_stake_pool_data_from_output(&kernel_output)?;
+                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -410,10 +327,10 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
-                let reward_stake_pool_data = self.get_stake_pool_data_from_output(reward_output)?;
+                let reward_pool_data = self.get_pool_data_from_output(reward_output)?;
 
                 ensure!(
-                    kernel_stake_pool_data == reward_stake_pool_data,
+                    kernel_pool_data == reward_pool_data,
                     SpendStakeError::StakePoolDataMismatch
                 );
 
@@ -467,56 +384,10 @@ where
             amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
                 .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
 
-        if outputs_total > max_allowed_outputs_total {
-            return Err(ConnectTransactionError::AttemptToPrintMoney(
-                inputs_total,
-                outputs_total,
-            ));
-        }
-        Ok(())
-    }
-
-    fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), ConnectTransactionError> {
-        let inputs = match tx.inputs() {
-            Some(ins) => ins,
-            None => return Ok(()),
-        };
-
-        let inputs_utxos = inputs
-            .iter()
-            .map(|input| {
-                let outpoint = input.outpoint();
-                self.utxo_cache
-                    .utxo(outpoint)
-                    .map_err(|_| utxo::Error::ViewRead)?
-                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-                    .map(|utxo| utxo.take_output())
-            })
-            .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
-
-        for (input_idx, input) in inputs.iter().enumerate() {
-            let outpoint = input.outpoint();
-            let utxo = self
-                .utxo_cache
-                .utxo(outpoint)
-                .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-            // TODO: see if a different treatment should be done for different output purposes
-            // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-            match utxo.output().destination() {
-                Some(d) => verify_signature(
-                    self.chain_config.as_ref(),
-                    d,
-                    tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
-                    input_idx,
-                )
-                .map_err(ConnectTransactionError::SignatureVerificationFailed)?,
-                None => return Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
-            }
-        }
-
+        ensure!(
+            outputs_total <= max_allowed_outputs_total,
+            ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total,)
+        );
         Ok(())
     }
 
@@ -631,7 +502,7 @@ where
         )?;
 
         // verify input signatures
-        self.verify_signatures(tx)?;
+        signature_check::verify_signatures(self.chain_config.as_ref(), &self.utxo_cache, tx)?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 
@@ -691,7 +562,11 @@ where
             }
 
             // verify input signatures
-            self.verify_signatures(&reward_transactable)?;
+            signature_check::verify_signatures(
+                self.chain_config.as_ref(),
+                &self.utxo_cache,
+                &reward_transactable,
+            )?;
         }
 
         let block_id = *block_index.block_id();

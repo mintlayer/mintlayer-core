@@ -108,12 +108,13 @@ fn get_output_token_id_and_amount(
     })
 }
 
-pub fn get_input_token_id_and_amount<
-    IssuanceTokenIdGetterFunc: Fn() -> Result<Option<TokenId>, ConnectTransactionError>,
->(
+pub fn get_input_token_id_and_amount<IssuanceTokenIdGetterFunc>(
     output_value: &OutputValue,
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
-) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
+) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError>
+where
+    IssuanceTokenIdGetterFunc: Fn() -> Result<Option<TokenId>, ConnectTransactionError>,
+{
     Ok(match output_value {
         OutputValue::Coin(amount) => (CoinOrTokenId::Coin, *amount),
         OutputValue::Token(token_data) => match &**token_data {
