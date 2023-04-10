@@ -26,7 +26,7 @@ use pos_accounting::{
     PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 
-/// Adapter over `PosAccountingDelta` that mimics `PoSAccountingOperations`.
+/// Adapter over `PosAccountingDelta` that implements `PoSAccountingOperations`.
 /// Main purpose of this struct is to make it impossible to perform operations on current delta
 /// and forget to update cumulative blocks delta.
 pub struct PoSAccountingDeltaAdapter<P> {

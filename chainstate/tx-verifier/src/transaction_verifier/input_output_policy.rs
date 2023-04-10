@@ -26,7 +26,7 @@ pub fn check_reward_inputs_outputs_purposes(
 ) -> Result<(), ConnectTransactionError> {
     match reward.inputs() {
         Some(inputs) => {
-            let inputs = inputs
+            let inputs_utxos = inputs
                 .iter()
                 .map(|input| {
                     utxo_view
@@ -39,13 +39,13 @@ pub fn check_reward_inputs_outputs_purposes(
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `StakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
-            match inputs.as_slice() {
+            match inputs_utxos.as_slice() {
                 // no inputs
                 [] => Err(ConnectTransactionError::SpendStakeError(
                     SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
                 )),
                 // single input
-                [input] => match input {
+                [utxo] => match utxo {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::Burn(_)
@@ -113,7 +113,7 @@ pub fn check_tx_inputs_outputs_purposes(
     tx: &Transaction,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<(), ConnectTransactionError> {
-    let inputs = tx
+    let inputs_utxos = tx
         .inputs()
         .iter()
         .map(|input| {
@@ -125,82 +125,87 @@ pub fn check_tx_inputs_outputs_purposes(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    match inputs.as_slice() {
+    match inputs_utxos.as_slice() {
         // no inputs
         [] => return Err(ConnectTransactionError::MissingTxInputs),
         // single input
-        [input] => match tx.outputs() {
+        [utxo] => match tx.outputs() {
             // no outputs
             [] => { /* do nothing, it's ok to burn outputs in this way */ }
             // single output
             [output] => {
                 ensure!(
-                    is_valid_one_to_one_combination(input, output),
+                    is_valid_one_to_one_combination(utxo, output),
                     ConnectTransactionError::InvalidOutputTypeInTx
                 );
             }
             // multiple outputs
             _ => {
-                let valid_input = are_inputs_valid_for_tx(std::slice::from_ref(input));
-                ensure!(valid_input, ConnectTransactionError::InvalidInputTypeInTx);
-                let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
-                ensure!(
-                    valid_outputs,
-                    ConnectTransactionError::InvalidOutputTypeInTx
-                );
+                is_valid_any_to_any_combination(std::slice::from_ref(utxo), tx.outputs())?;
             }
         },
         // multiple inputs
         _ => {
-            let valid_inputs = are_inputs_valid_for_tx(inputs.as_slice());
-            ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
-            let valid_outputs = are_outputs_valid_for_tx(tx.outputs());
-            ensure!(
-                valid_outputs,
-                ConnectTransactionError::InvalidOutputTypeInTx
-            );
+            is_valid_any_to_any_combination(inputs_utxos.as_slice(), tx.outputs())?;
         }
     };
 
     Ok(())
 }
 
-#[rustfmt::skip]
 #[allow(clippy::unnested_or_patterns)]
 fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool {
-    match (input, output){
-        (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _)) |
-        (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _)) |
-        (TxOutput::Transfer(_, _), TxOutput::Burn(_)) |
-        (TxOutput::Transfer(_, _), TxOutput::StakePool(_)) => true,
-        (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
-        (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _)) |
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _)) |
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_)) |
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::StakePool(_)) => true,
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
-        (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
-        (TxOutput::Burn(_), _) => false,
-        (TxOutput::StakePool(_), TxOutput::Transfer(_, _)) |
-        (TxOutput::StakePool(_), TxOutput::LockThenTransfer(_, _, _)) |
-        (TxOutput::StakePool(_), TxOutput::Burn(_)) |
-        (TxOutput::StakePool(_), TxOutput::StakePool(_)) |
-        (TxOutput::StakePool(_), TxOutput::ProduceBlockFromStake(_, _, _)) => false,
-        (TxOutput::StakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Transfer(_, _)) |
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::LockThenTransfer(_, _, _)) |
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Burn(_)) |
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::StakePool(_)) |
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) => false,
-        (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => true,
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Transfer(_, _)) |
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::LockThenTransfer(_, _, _)) |
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Burn(_)) |
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::StakePool(_)) => true,
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) |
-        (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+    match (input, output) {
+        | (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _))
+        | (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::Transfer(_, _), TxOutput::Burn(_))
+        | (TxOutput::Transfer(_, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _, _))
+        | (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _))
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_))
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _))
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
+        | (TxOutput::Burn(_), _) => false,
+        | (TxOutput::StakePool(_), TxOutput::Transfer(_, _))
+        | (TxOutput::StakePool(_), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::StakePool(_), TxOutput::Burn(_))
+        | (TxOutput::StakePool(_), TxOutput::StakePool(_))
+        | (TxOutput::StakePool(_), TxOutput::ProduceBlockFromStake(_, _, _)) => false,
+        | (TxOutput::StakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Transfer(_, _))
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::Burn(_))
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::StakePool(_))
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::ProduceBlockFromStake(_, _, _)) => {
+            false
+        }
+        | (TxOutput::ProduceBlockFromStake(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => {
+            true
+        }
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Transfer(_, _))
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Burn(_))
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _, _))
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
     }
+}
+
+fn is_valid_any_to_any_combination(
+    inputs: &[TxOutput],
+    outputs: &[TxOutput],
+) -> Result<(), ConnectTransactionError> {
+    let valid_inputs = are_inputs_valid_for_tx(inputs);
+    ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
+    let valid_outputs = are_outputs_valid_for_tx(outputs);
+    ensure!(
+        valid_outputs,
+        ConnectTransactionError::InvalidOutputTypeInTx
+    );
+    Ok(())
 }
 
 fn are_inputs_valid_for_tx(inputs: &[TxOutput]) -> bool {
