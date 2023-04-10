@@ -69,8 +69,8 @@ use common::{
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
-    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingView,
-    PoolData,
+    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
+    PoSAccountingView, PoolData,
 };
 use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
@@ -263,7 +263,7 @@ where
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
             accounting_delta_adapter: PoSAccountingDeltaAdapter::new(
-                self.accounting_delta_adapter.get_accounting_delta(),
+                self.accounting_delta_adapter.accounting_delta(),
             ),
             accounting_block_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
@@ -377,7 +377,7 @@ where
             TxOutput::ProduceBlockFromStake(_, _, pool_id)
             | TxOutput::DecommissionPool(_, _, pool_id, _) => self
                 .accounting_delta_adapter
-                .get_accounting_delta()
+                .accounting_delta()
                 .get_pool_data(*pool_id)?
                 .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
         }
@@ -534,12 +534,16 @@ where
                 TxOutput::StakePool(data) => {
                     let res = self
                         .accounting_delta_adapter
-                        .create_pool(tx_source, data.as_ref(), input0.outpoint())
+                        .operations(tx_source)
+                        .create_pool(input0.outpoint(), data.as_ref().clone().into())
                         .map(|(_, undo)| undo);
                     Some(res)
                 }
                 TxOutput::DecommissionPool(_, _, pool_id, _) => {
-                    let res = self.accounting_delta_adapter.decommission_pool(tx_source, *pool_id);
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .decommission_pool(*pool_id);
                     Some(res)
                 }
                 TxOutput::Transfer(_, _)
@@ -576,7 +580,7 @@ where
                     .into_inner()
                     .into_iter()
                     .try_for_each(|undo| {
-                        self.accounting_delta_adapter.undo(tx_source, undo)?;
+                        self.accounting_delta_adapter.operations(tx_source).undo(undo)?;
                         Ok(())
                     })
             }
@@ -723,11 +727,10 @@ where
             ConsensusData::PoS(pos_data) => {
                 let block_subsidy =
                     self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
-                let undo = self.accounting_delta_adapter.increase_pool_balance(
-                    tx_source,
-                    *pos_data.stake_pool_id(),
-                    block_subsidy,
-                )?;
+                let undo = self
+                    .accounting_delta_adapter
+                    .operations(tx_source)
+                    .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
 
                 self.accounting_block_undo
                     .get_or_create_block_undo(&TransactionSource::Chain(block_id))
@@ -937,7 +940,7 @@ where
                         )?;
                         if let Some(reward_undo) = reward_undo {
                             reward_undo.into_inner().into_iter().try_for_each(|undo| {
-                                self.accounting_delta_adapter.undo(tx_source, undo)
+                                self.accounting_delta_adapter.operations(tx_source).undo(undo)
                             })?;
                         }
                     }

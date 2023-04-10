@@ -824,13 +824,15 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
         TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
     let _ = verifier1
         .accounting_delta_adapter
-        .create_pool(TransactionSource::Mempool, &pool_data1, &outpoint1)
+        .operations(TransactionSource::Mempool)
+        .create_pool(&outpoint1, pool_data1.into())
         .unwrap();
 
     let mut verifier2 = verifier1.derive_child();
     let _ = verifier2
         .accounting_delta_adapter
-        .create_pool(TransactionSource::Mempool, &pool_data2, &outpoint2)
+        .operations(TransactionSource::Mempool)
+        .create_pool(&outpoint2, pool_data2.into())
         .unwrap();
 
     let consumed_verifier2 = verifier2.consume().unwrap();
@@ -893,7 +895,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let (_, undo) = verifier
             .accounting_delta_adapter
-            .create_pool(TransactionSource::Mempool, &pool_data1, &outpoint1)
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint1, pool_data1.into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -917,7 +920,8 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         let (_, undo) = verifier
             .accounting_delta_adapter
-            .create_pool(TransactionSource::Mempool, &pool_data2, &outpoint2)
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint2, pool_data2.into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));

@@ -550,7 +550,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let (_, undo) = verifier
             .accounting_delta_adapter
-            .create_pool(TransactionSource::Mempool, &pool_data1, &outpoint1)
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint1, pool_data1.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -574,7 +575,8 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let mut verifier = verifier1.derive_child();
         let (_, undo) = verifier
             .accounting_delta_adapter
-            .create_pool(TransactionSource::Mempool, &pool_data2, &outpoint2)
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint2, pool_data2.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -638,7 +640,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     );
     assert_eq!(
         verifier2.get_pool_data(pool_id_1).unwrap(),
-        Some(pool_data1.clone().into())
+        Some(pool_data1.into())
     );
     assert_eq!(
         verifier2.get_pool_data(pool_id_2).unwrap(),

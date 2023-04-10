@@ -15,16 +15,15 @@
 
 use std::collections::BTreeMap;
 
-use super::{
-    error::ConnectTransactionError, storage::TransactionVerifierStorageError, TransactionSource,
-};
+use super::{storage::TransactionVerifierStorageError, TransactionSource};
+
 use common::{
-    chain::{stakelock::StakePoolData, OutPoint, PoolId},
+    chain::{OutPoint, PoolId},
     primitives::Amount,
 };
 use pos_accounting::{
     DeltaMergeUndo, FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingDeltaData,
-    PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
+    PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView, PoolData,
 };
 
 /// Adapter over `PosAccountingDelta` that mimics `PoSAccountingOperations`.
@@ -58,91 +57,12 @@ impl<P: PoSAccountingView> PoSAccountingDeltaAdapter<P> {
         )
     }
 
-    pub fn get_accounting_delta(&self) -> &PoSAccountingDelta<P> {
+    pub fn operations(&mut self, tx_source: TransactionSource) -> PoSAccountingOperationImpl<P> {
+        PoSAccountingOperationImpl::new(self, tx_source)
+    }
+
+    pub fn accounting_delta(&self) -> &PoSAccountingDelta<P> {
         &self.accounting_delta
-    }
-
-    pub fn create_pool(
-        &mut self,
-        tx_source: TransactionSource,
-        pool_data: &StakePoolData,
-        input0_outpoint: &OutPoint,
-    ) -> Result<(PoolId, PoSAccountingUndo), ConnectTransactionError> {
-        // TODO: check StakePoolData fields
-        let delegation_amount = pool_data.value();
-
-        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-        let (pool_id, undo) = temp_delta.create_pool(
-            input0_outpoint,
-            delegation_amount,
-            pool_data.decommission_key().clone(),
-            pool_data.vrf_public_key().clone(),
-            pool_data.margin_ratio_per_thousand(),
-            pool_data.cost_per_epoch(),
-        )?;
-
-        let new_delta_data = temp_delta.consume();
-        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-        self.accounting_block_deltas
-            .entry(tx_source)
-            .or_default()
-            .merge_with_delta(new_delta_data)?;
-
-        Ok((pool_id, undo))
-    }
-
-    pub fn decommission_pool(
-        &mut self,
-        tx_source: TransactionSource,
-        pool_id: PoolId,
-    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
-        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-
-        let undo = temp_delta.decommission_pool(pool_id)?;
-
-        let new_delta_data = temp_delta.consume();
-        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-        self.accounting_block_deltas
-            .entry(tx_source)
-            .or_default()
-            .merge_with_delta(new_delta_data)?;
-        Ok(undo)
-    }
-
-    pub fn increase_pool_balance(
-        &mut self,
-        tx_source: TransactionSource,
-        pool_id: PoolId,
-        amount_to_add: Amount,
-    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
-        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-
-        let undo = temp_delta.increase_pool_balance(pool_id, amount_to_add)?;
-
-        let new_delta_data = temp_delta.consume();
-        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-        self.accounting_block_deltas
-            .entry(tx_source)
-            .or_default()
-            .merge_with_delta(new_delta_data)?;
-        Ok(undo)
-    }
-
-    pub fn undo(
-        &mut self,
-        tx_source: TransactionSource,
-        undo: PoSAccountingUndo,
-    ) -> Result<(), ConnectTransactionError> {
-        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-        temp_delta.undo(undo)?;
-        let new_delta_data = temp_delta.consume();
-
-        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-        self.accounting_block_deltas
-            .entry(tx_source)
-            .or_default()
-            .merge_with_delta(new_delta_data)?;
-        Ok(())
     }
 
     pub fn batch_write_delta(
@@ -162,5 +82,101 @@ impl<P: PoSAccountingView> PoSAccountingDeltaAdapter<P> {
             .or_default()
             .merge_with_delta(delta.clone())?;
         Ok(())
+    }
+}
+
+pub struct PoSAccountingOperationImpl<'a, P> {
+    adapter: &'a mut PoSAccountingDeltaAdapter<P>,
+    tx_source: TransactionSource,
+}
+
+impl<'a, P: PoSAccountingView> PoSAccountingOperationImpl<'a, P> {
+    fn new(adapter: &'a mut PoSAccountingDeltaAdapter<P>, tx_source: TransactionSource) -> Self {
+        Self { adapter, tx_source }
+    }
+
+    fn merge_delta(&mut self, delta: PoSAccountingDeltaData) -> Result<(), pos_accounting::Error> {
+        self.adapter.accounting_delta.merge_with_delta(delta.clone())?;
+        self.adapter
+            .accounting_block_deltas
+            .entry(self.tx_source)
+            .or_default()
+            .merge_with_delta(delta)?;
+        Ok(())
+    }
+}
+
+impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperationImpl<'a, P> {
+    fn create_pool(
+        &mut self,
+        input0_outpoint: &OutPoint,
+        pool_data: PoolData,
+    ) -> Result<(PoolId, PoSAccountingUndo), pos_accounting::Error> {
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+        let (pool_id, undo) = delta.create_pool(input0_outpoint, pool_data)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok((pool_id, undo))
+    }
+
+    fn decommission_pool(
+        &mut self,
+        pool_id: PoolId,
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let undo = delta.decommission_pool(pool_id)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok(undo)
+    }
+
+    fn increase_pool_balance(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let undo = delta.increase_pool_balance(pool_id, amount_to_add)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok(undo)
+    }
+
+    fn create_delegation_id(
+        &mut self,
+        _target_pool: PoolId,
+        _spend_key: common::chain::Destination,
+        _input0_outpoint: &OutPoint,
+    ) -> Result<(common::chain::DelegationId, PoSAccountingUndo), pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn delegate_staking(
+        &mut self,
+        _delegation_target: common::chain::DelegationId,
+        _amount_to_delegate: Amount,
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn spend_share_from_delegation_id(
+        &mut self,
+        _delegation_id: common::chain::DelegationId,
+        _amount: Amount,
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        unimplemented!()
+    }
+
+    fn undo(&mut self, undo: PoSAccountingUndo) -> Result<(), pos_accounting::Error> {
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        delta.undo(undo)?;
+
+        self.merge_delta(delta.consume())
     }
 }
