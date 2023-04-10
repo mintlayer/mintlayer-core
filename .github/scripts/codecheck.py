@@ -103,7 +103,7 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
 
     res = True
 
-    # list of crates, whose version can have build version
+    # list of crates, whose version can have patch version
     exempted_crates = [
        # 'ctor'    # left here as an example, remove if you ever add one crated that is exempt
     ]
@@ -115,26 +115,26 @@ def internal_check_dependency_versions(root_node, dependencies_name: str, file_p
             if dep in exempted_crates:
                 continue
 
-            # versions that look late `tokio = { version = "1.2.3" }`
+            # versions that looks like `tokio = { version = "1.2.3" }`
             if 'version' in deps[dep]:
                 version = deps[dep]['version']
                 if len(version.split('.')) > 2:
-                    print("In {}, {} Version '{}' in '{}' has build version".format(dependencies_name, dep, version, file_path))
+                    print("In {}, {} Version '{}' in '{}' has patch version".format(dependencies_name, dep, version, file_path))
                     res = False
 
-            # versions that look late `tokio = "1.2.3"`
+            # versions that looks like late `tokio = "1.2.3"`
             elif type(deps[dep]) == str:
                 version = deps[dep]
                 if len(version.split('.')) > 2:
-                    print("In {}, {} Version '{}' in '{}' has build version".format(dependencies_name, dep, version, file_path))
+                    print("In {}, {} Version '{}' in '{}' has patch version".format(dependencies_name, dep, version, file_path))
                     res = False
 
     return res
 
 
-# Ensure that the versions in all Cargo.toml don't have build version
-def check_dependency_versions_build_version():
-    print("==== Ensuring that all versions in Cargo.toml don't have build version")
+# Ensure that the versions in all Cargo.toml don't have patch version
+def check_dependency_versions_patch_version():
+    print("==== Ensuring that all versions in Cargo.toml don't have patch version")
 
     # list of files exempt from license check
     exempted_files = [
@@ -232,7 +232,7 @@ def run_checks():
             check_local_licenses(),
             check_crate_versions(),
             check_workspace_and_package_versions_equal(),
-            check_dependency_versions_build_version(),
+            check_dependency_versions_patch_version(),
             check_todos()
         ])
 
