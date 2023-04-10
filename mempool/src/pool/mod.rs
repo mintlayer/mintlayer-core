@@ -167,12 +167,15 @@ where
             self.decay_rolling_fee_rate();
             log::debug!(
                 "rolling fee rate after decay_rolling_fee_rate {:?}",
-                self.rolling_fee_rate
+                self.rolling_fee_rate,
             );
 
             if self.rolling_fee_rate.read().rolling_minimum_fee_rate() < INCREMENTAL_RELAY_THRESHOLD
             {
-                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate());
+                log::trace!(
+                    "rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee",
+                    self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+                );
                 self.drop_rolling_fee();
                 return self.rolling_fee_rate.read().rolling_minimum_fee_rate();
             }
@@ -722,11 +725,7 @@ where
         // TODO: turn on mempool new tip broadcasts when ready
         // self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
 
-        log::info!(
-            "new tip with block_id {:?} and block_height {:?}",
-            block_id,
-            block_height
-        );
+        log::info!("new tip with block_id {block_id:?} and block_height {block_height:?}");
 
         self.rolling_fee_rate.write().set_block_since_last_rolling_fee_bump(true);
 

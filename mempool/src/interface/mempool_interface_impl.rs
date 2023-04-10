@@ -77,7 +77,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for Me
         mut call_rq: CallRequest<dyn MempoolInterface>,
         mut shut_rq: ShutdownRequest,
     ) {
-        log::trace!("Starting mempool");
+        log::info!("Starting mempool");
         let mut mempool = Mempool::new(
             self.chain_config,
             self.chainstate_handle,
