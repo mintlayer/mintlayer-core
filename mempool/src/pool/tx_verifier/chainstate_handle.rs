@@ -90,7 +90,7 @@ impl<C> ChainstateHandle<C> {
 
 impl<C: 'static + Send> ChainstateHandle<C> {
     /// Chainstate subsystem call. We assume chainstate is alive here.
-    pub fn call<R: 'static + Send>(
+    fn call<R: 'static + Send>(
         &self,
         func: impl 'static + Send + FnOnce(&C) -> Result<R, ChainstateError>,
     ) -> Result<R, Error> {
