@@ -36,6 +36,8 @@ use subsystem::blocking::BlockingHandle;
 use utils::shallow_clone::ShallowClone;
 use utxo::{Utxo, UtxosBlockUndo, UtxosStorageRead, UtxosView};
 
+pub type Chainstate = Box<dyn ChainstateInterface>;
+
 /// Chainstate handle error includes errors coming from chainstate and inter-subprocess
 /// communication errors.
 #[derive(thiserror::Error, PartialEq, Eq, Debug)]
@@ -80,37 +82,37 @@ impl From<Error> for crate::error::Error {
 }
 
 /// A wrapper over handle to chainstate
-pub struct ChainstateHandle<C>(BlockingHandle<C>);
+pub struct ChainstateHandle(BlockingHandle<Chainstate>);
 
-impl<C> ChainstateHandle<C> {
-    pub fn new(inner: subsystem::Handle<C>) -> Self {
+impl ChainstateHandle {
+    pub fn new(inner: subsystem::Handle<Chainstate>) -> Self {
         Self(BlockingHandle::new(inner))
     }
 }
 
-impl<C: 'static + Send> ChainstateHandle<C> {
+impl ChainstateHandle {
     /// Chainstate subsystem call. We assume chainstate is alive here.
     fn call<R: 'static + Send>(
         &self,
-        func: impl 'static + Send + FnOnce(&C) -> Result<R, ChainstateError>,
+        func: impl 'static + Send + FnOnce(&dyn ChainstateInterface) -> Result<R, ChainstateError>,
     ) -> Result<R, Error> {
-        Ok(self.0.call(func)??)
+        Ok(self.0.call(|c| func(c))??)
     }
 }
 
-impl<C> Clone for ChainstateHandle<C> {
+impl Clone for ChainstateHandle {
     fn clone(&self) -> Self {
         self.shallow_clone()
     }
 }
 
-impl<C> utils::shallow_clone::ShallowClone for ChainstateHandle<C> {
+impl utils::shallow_clone::ShallowClone for ChainstateHandle {
     fn shallow_clone(&self) -> Self {
         Self(self.0.shallow_clone())
     }
 }
 
-impl<C: 'static + Send + ChainstateInterface> UtxosStorageRead for ChainstateHandle<C> {
+impl UtxosStorageRead for ChainstateHandle {
     type Error = Error;
 
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
@@ -127,7 +129,7 @@ impl<C: 'static + Send + ChainstateInterface> UtxosStorageRead for ChainstateHan
     }
 }
 
-impl<C: 'static + Send + ChainstateInterface> PoSAccountingView for ChainstateHandle<C> {
+impl PoSAccountingView for ChainstateHandle {
     type Error = Error;
 
     fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Error> {
@@ -169,9 +171,7 @@ impl<C: 'static + Send + ChainstateInterface> PoSAccountingView for ChainstateHa
     }
 }
 
-impl<C: 'static + Send + ChainstateInterface> TransactionVerifierStorageRef
-    for ChainstateHandle<C>
-{
+impl TransactionVerifierStorageRef for ChainstateHandle {
     type Error = Error;
 
     fn get_token_id_from_issuance_tx(
@@ -221,7 +221,7 @@ impl<C: 'static + Send + ChainstateInterface> TransactionVerifierStorageRef
     }
 }
 
-impl<C: 'static + Send + ChainstateInterface> UtxosView for ChainstateHandle<C> {
+impl UtxosView for ChainstateHandle {
     type Error = Error;
 
     fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {

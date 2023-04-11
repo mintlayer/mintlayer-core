@@ -19,13 +19,11 @@ mod chainstate_handle;
 
 use std::sync::Arc;
 
-use chainstate::chainstate_interface::ChainstateInterface;
 pub use chainstate::tx_verifier::flush_to_storage;
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 
-type Chainstate = Box<dyn ChainstateInterface>;
-type ChainstateHandle = chainstate_handle::ChainstateHandle<Chainstate>;
+use chainstate_handle::{Chainstate, ChainstateHandle};
 
 /// Mempool instantiation of [chainstate::tx_verifier::TransactionVerifier]
 pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<
