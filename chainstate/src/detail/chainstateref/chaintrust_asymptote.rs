@@ -39,6 +39,12 @@ where
 // The value of alpha, 0.025, is chosen such that when a block time is hit (120 seconds), there's 5% of the range of the asymptote left.
 const ALPHA: f64 = 0.025;
 
+// We scale the weights by this factor to ensure that they are resolvable as integers, to avoid using floating-point numbers.
+const SCALING_FACTOR: f64 = 1000000000.;
+
+// The size of the precomputed weights
+const VEC_SIZE: u64 = 240;
+
 fn precompute_asymptote_to_infinity_to_one<F>(alpha: F, size: u64) -> Vec<F>
 where
     F: num::Float + num::cast::FromPrimitive,
@@ -47,7 +53,18 @@ where
 }
 
 lazy_static! {
-    static ref TIMESLOTS_WEIGHTS: Vec<f64> = precompute_asymptote_to_infinity_to_one(ALPHA, 240);
+    static ref TIMESLOTS_WEIGHTS: Vec<f64> =
+        precompute_asymptote_to_infinity_to_one(ALPHA, VEC_SIZE);
+}
+
+// A look-up table for the weights of the time-slots.
+pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
+    let timeslot = timeslot as usize;
+    if timeslot >= TIMESLOTS_WEIGHTS.len() {
+        SCALING_FACTOR as u64
+    } else {
+        (TIMESLOTS_WEIGHTS[timeslot] * SCALING_FACTOR) as u64
+    }
 }
 
 #[cfg(test)]
@@ -59,5 +76,47 @@ mod tests {
         let t = 100000000; // a really large value
         let weight = asymptote_to_infinity_to_one(t, ALPHA);
         assert_eq!(weight, 1.);
+    }
+
+    #[test]
+    fn int_conversion() {
+        // In this test, we ensure that the scaling factor, combined with alpha, is large enough to ensure
+        // that the weights are resolvable as integers.
+
+        let int_weights = TIMESLOTS_WEIGHTS
+            .iter()
+            .map(|v| (v * SCALING_FACTOR) as u64)
+            .collect::<Vec<_>>();
+
+        let diffs = int_weights
+            .iter()
+            .zip(int_weights.iter().skip(1))
+            .map(|(a, b)| b - a)
+            .collect::<Vec<_>>();
+
+        // Differences between every value and the next one should be positive, otherwise the weights are not resolvable as integers.
+        assert!(
+            diffs.iter().all(|v| *v > 0),
+            "The weights be resolvable as integers after scaling"
+        );
+    }
+
+    #[test]
+    fn final_weights_resolvable() {
+        let int_weights = (0..(VEC_SIZE as usize))
+            .map(|t| get_weight_for_timeslot(t as u64))
+            .collect::<Vec<_>>();
+
+        let diffs = int_weights
+            .iter()
+            .zip(int_weights.iter().skip(1))
+            .map(|(a, b)| b - a)
+            .collect::<Vec<_>>();
+
+        // Differences between every value and the next one should be positive, otherwise the weights are not resolvable as integers.
+        assert!(
+            diffs.iter().all(|v| *v > 0),
+            "The weights be resolvable as integers after scaling"
+        );
     }
 }
