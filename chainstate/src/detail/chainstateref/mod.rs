@@ -385,6 +385,20 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             CheckBlockError::BlockTimeOrderInvalid,
         );
 
+        let prev_block_timestamp = match prev_block_id.classify(self.chain_config.as_ref()) {
+            GenBlockId::Genesis(_genesis) => self.chain_config.genesis_block().timestamp(),
+            GenBlockId::Block(id) => self
+                .get_block_index(&id)
+                .log_err()
+                .map_err(|e| CheckBlockError::PrevBlockRetrievalError(e, id, header.block_id()))?
+                .expect("msg")
+                .block_timestamp(),
+        };
+        ensure!(
+            header.timestamp() >= prev_block_timestamp,
+            CheckBlockError::BlockTimeStrictOrderInvalid
+        );
+
         let max_future_offset = self.chain_config.max_future_block_time_offset();
         let current_time = self.current_time();
         let block_timestamp = header.timestamp();

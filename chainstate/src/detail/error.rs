@@ -89,8 +89,12 @@ pub enum CheckBlockError {
     WitnessMerkleRootMismatch,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<Block>, Id<Block>),
+    #[error("Previous block with id {0} retrieval error starting from block {1}")]
+    PrevBlockRetrievalError(PropertyQueryError, Id<Block>, Id<Block>),
     #[error("Block time must be equal or higher than the median of its ancestors")]
     BlockTimeOrderInvalid,
+    #[error("Block time must be a notch higher than the previous block")]
+    BlockTimeStrictOrderInvalid,
     #[error("Block time too far into the future")]
     BlockFromTheFuture,
     #[error("Block size is too large: {0}")]

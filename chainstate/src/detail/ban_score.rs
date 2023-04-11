@@ -195,6 +195,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::InvalidBlockRewardMaturityDistanceValue(_, _) => 100,
             CheckBlockError::InvalidBlockRewardMaturityTimelockType(_) => 100,
             CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
+            CheckBlockError::PrevBlockRetrievalError(_, _, _) => 100,
+            CheckBlockError::BlockTimeStrictOrderInvalid => 100,
         }
     }
 }
