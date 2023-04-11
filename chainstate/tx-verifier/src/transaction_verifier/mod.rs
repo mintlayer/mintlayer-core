@@ -22,8 +22,8 @@ mod optional_tx_index_cache;
 mod signature_check;
 mod timelock_check;
 mod token_issuance_cache;
+mod transferred_amount_check;
 mod tx_index_cache;
-mod utils;
 mod utxos_undo_cache;
 
 pub mod config;
@@ -46,16 +46,14 @@ use std::collections::BTreeMap;
 use self::{
     accounting_delta_adapter::PoSAccountingDeltaAdapter,
     accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
-    amounts_map::AmountsMap,
     cached_inputs_operation::CachedInputsOperation,
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
-    utils::{
-        calculate_total_outputs, check_transferred_amount, get_input_token_id_and_amount,
-        get_total_fee,
+    transferred_amount_check::{
+        calculate_total_inputs, calculate_total_outputs, check_transferred_amounts_and_get_fee,
     },
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
@@ -69,7 +67,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -78,7 +76,7 @@ use pos_accounting::{
     AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
     PoSAccountingView, PoolData,
 };
-use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
+use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
@@ -197,60 +195,6 @@ where
         }
     }
 
-    fn amount_from_outpoint(
-        &self,
-        tx_id: OutPointSourceId,
-        utxo: Utxo,
-    ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError> {
-        match tx_id {
-            OutPointSourceId::Transaction(tx_id) => {
-                let issuance_token_id_getter =
-                    || -> Result<Option<TokenId>, ConnectTransactionError> {
-                        // issuance transactions are unique, so we use them to get the token id
-                        self.get_token_id_from_issuance_tx(tx_id)
-                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-                    };
-                get_input_token_id_and_amount(&utxo.output().value(), issuance_token_id_getter)
-            }
-            OutPointSourceId::BlockReward(_) => {
-                get_input_token_id_and_amount(&utxo.output().value(), || Ok(None))
-            }
-        }
-    }
-
-    fn calculate_total_inputs(
-        &self,
-        inputs: &[TxInput],
-    ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
-        let iter = inputs.iter().map(|input| {
-            let utxo = self
-                .utxo_cache
-                .utxo(input.outpoint())
-                .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-            self.amount_from_outpoint(input.outpoint().tx_id(), utxo)
-        });
-
-        let iter = fallible_iterator::convert(iter);
-
-        let amounts_map = AmountsMap::from_fallible_iter(iter)?;
-
-        Ok(amounts_map.take())
-    }
-
-    fn check_transferred_amounts_and_get_fee(
-        &self,
-        tx: &Transaction,
-    ) -> Result<Fee, ConnectTransactionError> {
-        let inputs_total_map = self.calculate_total_inputs(tx.inputs())?;
-        let outputs_total_map = calculate_total_outputs(tx.outputs(), None)?;
-
-        check_transferred_amount(&inputs_total_map, &outputs_total_map)?;
-        let total_fee = get_total_fee(&inputs_total_map, &outputs_total_map)?;
-
-        Ok(total_fee)
-    }
-
     fn check_issuance_fee_burn(
         &self,
         tx: &Transaction,
@@ -353,17 +297,14 @@ where
         let outputs = block_reward_transactable.outputs();
 
         let inputs_total = inputs.map_or_else(
-            || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
+            || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
             |ins| {
-                Ok(self
-                    .calculate_total_inputs(ins)?
-                    .get(&CoinOrTokenId::Coin)
-                    .cloned()
-                    .unwrap_or(Amount::from_atoms(0)))
+                calculate_total_inputs(&self.utxo_cache, ins, |_| Ok(None))
+                    .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
             },
         )?;
         let outputs_total = outputs.map_or_else(
-            || Ok::<Amount, ConnectTransactionError>(Amount::from_atoms(0)),
+            || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
             |outputs| {
                 if outputs.iter().any(|output| match output.value() {
                     OutputValue::Coin(_) => false,
@@ -373,10 +314,8 @@ where
                         TokensError::TokensInBlockReward,
                     ));
                 }
-                Ok(calculate_total_outputs(outputs, None)?
-                    .get(&CoinOrTokenId::Coin)
-                    .cloned()
-                    .unwrap_or(Amount::from_atoms(0)))
+                calculate_total_outputs(outputs, None)
+                    .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
             },
         )?;
 
@@ -482,8 +421,19 @@ where
             tx.transaction(),
         )?;
 
+        let issuance_token_id_getter =
+            |tx_id: &Id<Transaction>| -> Result<Option<TokenId>, ConnectTransactionError> {
+                // issuance transactions are unique, so we use them to get the token id
+                self.get_token_id_from_issuance_tx(*tx_id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            };
+
         // check for attempted money printing
-        let fee = Some(self.check_transferred_amounts_and_get_fee(tx.transaction())?);
+        let fee = check_transferred_amounts_and_get_fee(
+            &self.utxo_cache,
+            tx.transaction(),
+            issuance_token_id_getter,
+        )?;
 
         // check token issuance fee
         self.check_issuance_fee_burn(tx.transaction(), &block_id)?;
@@ -536,7 +486,7 @@ where
             TransactionSourceForConnect::Mempool { current_best: _ } => { /* do nothing */ }
         };
 
-        Ok(fee)
+        Ok(Some(fee))
     }
 
     fn connect_block_reward(

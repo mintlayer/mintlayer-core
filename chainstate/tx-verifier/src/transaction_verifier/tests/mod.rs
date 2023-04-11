@@ -27,6 +27,7 @@ use crypto::{
     random::{CryptoRng, Rng},
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use utxo::Utxo;
 
 fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (OutPoint, Utxo) {
     let outpoint = OutPoint::new(
