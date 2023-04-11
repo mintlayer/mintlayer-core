@@ -100,7 +100,7 @@ impl<B> AuthorizeRequest<B> for RpcAuth {
         match res {
             Ok(true) => Ok(()),
             Ok(false) => {
-                log::error!("unauthorized RPC request {:?}", request.uri());
+                log::error!("Unauthorized RPC request {:?}", request.uri());
                 Err(Response::builder()
                     .status(http::StatusCode::UNAUTHORIZED)
                     .header(http::header::WWW_AUTHENTICATE, "Basic")
@@ -108,7 +108,7 @@ impl<B> AuthorizeRequest<B> for RpcAuth {
                     .expect("must be valid"))
             }
             Err(e) => {
-                log::error!("invalid RPC request {:?}: {e}", request.uri());
+                log::error!("Invalid RPC request {:?}: {e}", request.uri());
                 Err(Response::builder()
                     .status(http::StatusCode::BAD_REQUEST)
                     .body(e.to_string().into())
@@ -117,3 +117,5 @@ impl<B> AuthorizeRequest<B> for RpcAuth {
         }
     }
 }
+
+// TODO: Write tests

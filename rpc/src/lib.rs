@@ -207,11 +207,16 @@ mod tests {
 
     use super::*;
     use base64::Engine;
+    use crypto::random::{
+        distributions::{Alphanumeric, DistString},
+        Rng,
+    };
     use jsonrpsee::core::client::ClientT;
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
     use jsonrpsee::ws_client::WsClientBuilder;
     use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
@@ -331,12 +336,27 @@ mod tests {
         Ok(())
     }
 
+    fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
+        let len = rng.gen_range(1..20);
+        loop {
+            let val = Alphanumeric.sample_string(rng, len);
+            if not_equal_to != val {
+                return val;
+            }
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test]
-    async fn rpc_server_auth() {
-        const GOOD_USERNAME: &str = "correct_username";
-        const GOOD_PASSWORD: &str = "correct_password";
-        const BAD_USERNAME: &str = "wrong_username";
-        const BAD_PASSWORD: &str = "wrong_password";
+    async fn rpc_server_auth(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let good_username = gen_random_string(&mut rng, "");
+        let good_password = gen_random_string(&mut rng, "");
+        let bad_username = gen_random_string(&mut rng, &good_username);
+        let bad_password = gen_random_string(&mut rng, &good_password);
 
         let rpc_config = RpcConfig {
             http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
@@ -351,8 +371,8 @@ mod tests {
             Some(
                 RpcCreds::new(
                     &data_dir,
-                    Some(GOOD_USERNAME),
-                    Some(GOOD_PASSWORD),
+                    Some(&good_username),
+                    Some(&good_password),
                     Option::<String>::None,
                 )
                 .unwrap(),
@@ -364,16 +384,16 @@ mod tests {
         .unwrap();
 
         // Valid requests
-        http_request(&rpc, Some((GOOD_USERNAME, GOOD_PASSWORD))).await.unwrap();
-        ws_request(&rpc, Some((GOOD_USERNAME, GOOD_PASSWORD))).await.unwrap();
+        http_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
+        ws_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
 
         // Invalid requests
         http_request(&rpc, None).await.unwrap_err();
         ws_request(&rpc, None).await.unwrap_err();
-        http_request(&rpc, Some((GOOD_USERNAME, BAD_PASSWORD))).await.unwrap_err();
-        ws_request(&rpc, Some((GOOD_USERNAME, BAD_PASSWORD))).await.unwrap_err();
-        http_request(&rpc, Some((BAD_USERNAME, GOOD_PASSWORD))).await.unwrap_err();
-        ws_request(&rpc, Some((BAD_USERNAME, GOOD_PASSWORD))).await.unwrap_err();
+        http_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
+        ws_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
+        http_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
+        ws_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
 
         subsystem::Subsystem::shutdown(rpc).await;
     }

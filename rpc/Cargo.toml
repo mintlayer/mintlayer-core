@@ -24,5 +24,7 @@ tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.3", features = ["auth"] }
 
 [dev-dependencies]
+test-utils = { path = "../test-utils" }
+
 rstest.workspace = true
 tokio.workspace = true
