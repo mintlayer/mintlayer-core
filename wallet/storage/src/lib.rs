@@ -25,8 +25,8 @@ use std::collections::BTreeMap;
 
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyIdPrefix, WalletTx,
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -44,8 +44,8 @@ pub trait WalletStorageRead {
     fn get_account(&self, id: &AccountId) -> Result<Option<AccountInfo>>;
     fn get_address(&self, id: &AccountAddressId) -> Result<Option<Address>>;
     fn get_addresses(&self, account_id: &AccountId) -> Result<BTreeMap<AccountAddressId, Address>>;
-    fn get_key(&self, id: &KeyId) -> Result<Option<KeyContent>>;
-    fn get_key_by_type(&self, key_type: &KeyIdPrefix) -> Result<BTreeMap<KeyId, KeyContent>>;
+    fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
+    fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
 }
 
 /// Modifying operations on persistent wallet data
@@ -60,8 +60,8 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> Result<()>;
     fn del_address(&mut self, id: &AccountAddressId) -> Result<()>;
-    fn set_key(&mut self, id: &KeyId, content: &KeyContent) -> Result<()>;
-    fn del_key(&mut self, id: &KeyId) -> Result<()>;
+    fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
+    fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

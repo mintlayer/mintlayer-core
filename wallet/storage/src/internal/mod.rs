@@ -26,8 +26,8 @@ use crate::{
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyIdPrefix, WalletTx,
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 /// Store for wallet data, parametrized over the backend B
@@ -105,8 +105,8 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>>;
         fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountAddressId, Address>>;
-        fn get_key(&self, id: &KeyId) -> crate::Result<Option<KeyContent>>;
-        fn get_key_by_type(&self, key_type: &KeyIdPrefix) -> crate::Result<BTreeMap<KeyId, KeyContent>>;
+        fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;
+        fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent >>;
 
     }
 }
@@ -122,8 +122,8 @@ impl<B: storage::Backend> WalletStorageWrite for Store<B> {
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
         fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> crate::Result<()>;
         fn del_address(&mut self, id: &AccountAddressId) -> crate::Result<()>;
-        fn set_key(&mut self, id: &KeyId, content: &KeyContent) -> crate::Result<()>;
-        fn del_key(&mut self, id: &KeyId) -> crate::Result<()>;
+        fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> crate::Result<()>;
+        fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()>;
     }
 }
 

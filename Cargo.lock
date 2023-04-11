@@ -3146,7 +3146,7 @@ dependencies = [
  "hyper",
  "jsonrpsee",
  "logging",
- "rstest",
+ "rstest 0.17.0",
  "subsystem",
  "test-utils",
  "thiserror",
@@ -4740,7 +4740,7 @@ version = "0.1.0"
 dependencies = [
  "crypto",
  "getrandom 0.2.9",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "test-utils",
  "thiserror",

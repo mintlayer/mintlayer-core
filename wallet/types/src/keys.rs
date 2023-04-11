@@ -15,27 +15,29 @@
 
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use serialization::{Decode, Encode};
-use storage::HasPrefix;
-
-/// The key id prefix is used for searching specific kinds of keys
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum KeyIdPrefix {
-    #[codec(index = 0)]
-    DeterministicRoot,
-}
 
 /// The key id is described by it's public key
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum KeyId {
-    #[codec(index = 0)]
-    DeterministicRoot(ExtendedPublicKey),
-}
+pub struct RootKeyId(ExtendedPublicKey);
 
-impl HasPrefix<KeyIdPrefix> for KeyId {}
+impl From<ExtendedPublicKey> for RootKeyId {
+    fn from(key: ExtendedPublicKey) -> Self {
+        Self(key)
+    }
+}
 
 /// The useful content of this key e.g. a private key or an address depending on the usage
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum KeyContent {
-    #[codec(index = 0)]
-    DeterministicRoot(ExtendedPrivateKey),
+pub struct RootKeyContent(ExtendedPrivateKey);
+
+impl RootKeyContent {
+    pub fn into_key(self) -> ExtendedPrivateKey {
+        self.0
+    }
+}
+
+impl From<ExtendedPrivateKey> for RootKeyContent {
+    fn from(key: ExtendedPrivateKey) -> Self {
+        Self(key)
+    }
 }

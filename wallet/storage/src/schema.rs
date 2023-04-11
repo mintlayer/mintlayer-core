@@ -18,8 +18,8 @@
 use common::address::Address;
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    WalletTx,
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 storage::decl_schema! {
@@ -30,7 +30,7 @@ storage::decl_schema! {
         /// Store for all the accounts in this wallet
         pub DBAccounts: Map<AccountId, AccountInfo>,
         /// Store for all the private keys in this wallet
-        pub DBKeys: Map<KeyId, KeyContent>,
+        pub DBRootKeys: Map<RootKeyId, RootKeyContent>,
         /// Store for all the addresses that belong to an account
         pub DBAddresses: Map<AccountAddressId, Address>,
         /// Store for Utxo Entries

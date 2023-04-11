@@ -50,6 +50,10 @@ impl DerivationPath {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn is_root(&self) -> bool {
+        self.is_empty()
+    }
 }
 
 impl Encode for DerivationPath {
@@ -213,7 +217,6 @@ mod tests {
             DerivationPath(vec![]),
             DerivationPath::from_str("m").unwrap()
         );
-        // assert_eq!(DerivationPath::master(), DerivationPath::default());
         assert_eq!(DerivationPath::from_str("m"), Ok(DerivationPath::empty()));
         assert_eq!(
             DerivationPath::from_str("m/0'"),

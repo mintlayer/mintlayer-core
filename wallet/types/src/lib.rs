@@ -21,5 +21,5 @@ pub use account_info::{
     AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId,
     DeterministicAccountInfo,
 };
-pub use keys::{KeyContent, KeyId, KeyIdPrefix};
+pub use keys::{RootKeyContent, RootKeyId};
 pub use wallet_tx::{TxState, WalletTx};

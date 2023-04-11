@@ -43,8 +43,7 @@ use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::account_info::KeychainUsageState;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, DeterministicAccountInfo, KeyContent, KeyId,
-    KeyIdPrefix,
+    AccountAddressId, AccountId, AccountInfo, DeterministicAccountInfo, RootKeyContent, RootKeyId,
 };
 use zeroize::Zeroize;
 
@@ -87,6 +86,8 @@ pub enum KeyChainError {
     OnlyOneRootKeyIsSupported,
     #[error("Cannot issue more keys, lookahead exceeded")]
     LookAheadExceeded,
+    #[error("The provided key is not a root in a hierarchy")]
+    KeyNotRoot,
 }
 
 /// Result type used for the key chain
@@ -94,17 +95,16 @@ type KeyChainResult<T> = Result<T, KeyChainError>;
 
 /// The usage purpose of a key i.e. if it is for receiving funds or for change
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[allow(clippy::unnecessary_cast)]
 pub enum KeyPurpose {
     /// This is for addresses created for receiving funds that are given to the user
-    #[codec(index = 0)]
-    ReceiveFunds,
+    ReceiveFunds = 0,
     /// This is for the internal usage of the wallet when creating change output for a transaction
-    #[codec(index = 1)]
-    Change,
+    Change = 1,
 }
 
 impl KeyPurpose {
-    const ALL: [KeyPurpose; 2] = [KeyPurpose::ReceiveFunds, KeyPurpose::Change];
+    const ALL: [KeyPurpose; 2] = [ReceiveFunds, Change];
     /// The index for each purpose
     const DETERMINISTIC_INDEX: [ChildNumber; 2] = [
         ChildNumber::from_normal(U31::from_u32_with_msb(0).0),
@@ -136,24 +136,45 @@ pub struct MasterKeyChain {
 
 impl MasterKeyChain {
     #[allow(dead_code)] // TODO remove
+    pub fn mnemonic_to_root_key(
+        mnemonic_str: &str,
+        passphrase: Option<&str>,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
+        let mut mnemonic = bip39::Mnemonic::parse(mnemonic_str).map_err(KeyChainError::Bip39)?;
+        let mut seed = mnemonic.to_seed(passphrase.unwrap_or(""));
+        let root_key = ExtendedPrivateKey::new_master(&seed, DEFAULT_KEY_KIND)?;
+        mnemonic.zeroize();
+        seed.zeroize();
+        Ok(root_key)
+    }
+
+    #[allow(dead_code)] // TODO remove
     pub fn new_from_mnemonic<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
     ) -> KeyChainResult<Self> {
-        let mut mnemonic = bip39::Mnemonic::parse(mnemonic_str).map_err(KeyChainError::Bip39)?;
-        let mut seed = mnemonic.to_seed(passphrase.unwrap_or(""));
-        let root_key = ExtendedPrivateKey::new_master(&seed, DEFAULT_KEY_KIND)?;
-        mnemonic.zeroize();
-        seed.zeroize();
+        let root_key = Self::mnemonic_to_root_key(mnemonic_str, passphrase)?;
+        Self::new_from_root_key(chain_config, db_tx, root_key)
+    }
 
-        let key_id = KeyId::DeterministicRoot(root_key.to_public_key());
-        let key_content = KeyContent::DeterministicRoot(root_key);
+    #[allow(dead_code)] // TODO remove
+    pub fn new_from_root_key<B: Backend>(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &mut StoreTxRw<B>,
+        root_key: ExtendedPrivateKey,
+    ) -> KeyChainResult<Self> {
+        if !root_key.get_derivation_path().is_root() {
+            return Err(KeyChainError::KeyNotRoot);
+        }
 
-        db_tx.set_key(&key_id, &key_content)?;
+        let key_id = RootKeyId::from(root_key.to_public_key());
+        let key_content = RootKeyContent::from(root_key);
 
-        let KeyContent::DeterministicRoot(root_key) = key_content;
+        db_tx.set_root_key(&key_id, &key_content)?;
+
+        let root_key = key_content.into_key();
 
         Ok(MasterKeyChain {
             chain_config,
@@ -167,8 +188,9 @@ impl MasterKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
     ) -> KeyChainResult<Self> {
-        let mut root_keys = db_tx.get_key_by_type(&KeyIdPrefix::DeterministicRoot)?;
+        let mut root_keys = db_tx.get_all_root_keys()?;
 
+        // The current format supports a single root key
         if root_keys.len() != 1 {
             return Err(KeyChainError::OnlyOneRootKeyIsSupported);
         }
@@ -176,7 +198,7 @@ impl MasterKeyChain {
         let (_, key_content) =
             root_keys.pop_first().expect("Should not fail because it contains 1 key/value");
 
-        let KeyContent::DeterministicRoot(root_key) = key_content;
+        let root_key = key_content.into_key();
 
         Ok(MasterKeyChain {
             chain_config,

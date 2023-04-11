@@ -20,8 +20,8 @@ use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, KeyContent, KeyId,
-    KeyIdPrefix, WalletTx,
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 use crate::{
@@ -104,18 +104,15 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
-            fn get_key(&self, id: &KeyId) -> crate::Result<Option<KeyContent>> {
-                self.read::<db::DBKeys, _, _>(id)
+            fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
+                self.read::<db::DBRootKeys, _, _>(id)
             }
 
             /// Collect and return all keys from the storage
-            fn get_key_by_type(
-                &self,
-                key_type: &KeyIdPrefix,
-            ) -> crate::Result<BTreeMap<KeyId, KeyContent>> {
+            fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
                 self.0
-                    .get::<db::DBKeys, _>()
-                    .prefix_iter_decoded(key_type)
+                    .get::<db::DBRootKeys, _>()
+                    .prefix_iter_decoded(&())
                     .map(Iterator::collect)
             }
 
@@ -196,12 +193,12 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
     }
 
-    fn set_key(&mut self, id: &KeyId, tx: &KeyContent) -> crate::Result<()> {
-        self.write::<db::DBKeys, _, _, _>(id, tx)
+    fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
+        self.write::<db::DBRootKeys, _, _, _>(id, tx)
     }
 
-    fn del_key(&mut self, id: &KeyId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBKeys, _>().del(id).map_err(Into::into)
+    fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
     }
 }
 
