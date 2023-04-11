@@ -11,9 +11,9 @@ Check that:
 """
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import (assert_equal, assert_raises_rpc_error)
 from test_framework.authproxy import JSONRPCException
-import test_framework
+from test_framework import mintlayer_hash
 import scalecodec
 
 class MempoolTxSubmissionTest(BitcoinTestFramework):
@@ -51,15 +51,11 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
             'signatures': [],
         }
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
-        self.log.debug("Encoded transaction: {}".format(encoded_tx))
+        tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
+        self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
-        try:
-            node.p2p_submit_transaction(encoded_tx)
-        except JSONRPCException as err:
-            self.log.debug("Error message: {}".format(err))
-            assert 'Transaction has no inputs' in str(err)
-        else:
-            raise AssertionError('Expected the tx submission to fail')
+        assert_raises_rpc_error(None, "Transaction has no inputs", node.p2p_submit_transaction, encoded_tx)
+        assert not node.mempool_contains_tx(tx_id)
 
         # Submit a valid transaction
 
@@ -83,9 +79,11 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
             'signatures': [witness],
         }
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
-        self.log.debug('Encoded transaction: {}'.format(encoded_tx))
+        tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
+        self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
         node.p2p_submit_transaction(encoded_tx)
+        assert node.mempool_contains_tx(tx_id)
 
 
 if __name__ == '__main__':

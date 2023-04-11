@@ -13,7 +13,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import hashlib
 import scalecodec
+
+def mintlayer_hash(data):
+    return hashlib.blake2b(data, digest_size = 64).digest()[0:32]
 
 def init_mintlayer_types():
     custom_types = {

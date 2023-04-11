@@ -675,7 +675,9 @@ where
     M: GetMemoryUsage + Send + Sync,
 {
     pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+        log::debug!("Adding transaction {:?}", tx.transaction().get_id());
         log::trace!("Adding transaction {tx:?}");
+
         let (conflicts, tx, delta) =
             self.validate_transaction(tx).log_err_pfx("Transaction rejected")?;
         if ENABLE_RBF {
