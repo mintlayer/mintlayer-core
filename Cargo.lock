@@ -640,6 +640,7 @@ dependencies = [
  "jsonrpsee",
  "logging",
  "mockall",
+ "num",
  "oneshot",
  "pos_accounting",
  "rpc",

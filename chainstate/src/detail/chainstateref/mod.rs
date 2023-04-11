@@ -54,6 +54,7 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
 };
 
+mod chaintrust_asymptote;
 mod epoch_seal;
 mod tx_verifier_storage;
 

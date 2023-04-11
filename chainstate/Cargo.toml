@@ -12,6 +12,7 @@ tx-verifier = {path = './tx-verifier'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
 logging = {path = '../logging'}
+num = "0.4"
 pos_accounting = {path = '../pos_accounting'}
 rpc = {path = '../rpc'}
 serialization = {path = "../serialization"}
