@@ -29,7 +29,7 @@ use tower_http::auth::AuthorizeRequest;
 ///
 /// Custom authorization is not really needed, because `tower_http`
 /// already supports it (see [`tower_http::auth::RequireAuthorizationLayer::basic`]),
-/// but it can simply things if we want to support hashed passwords.
+/// but it can simplify things if we want to support hashed passwords.
 #[derive(Clone)]
 pub struct RpcAuth {
     username: String,
