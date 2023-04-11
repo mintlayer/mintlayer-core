@@ -138,38 +138,5 @@ pub fn check_timelocks<
         }
     }
 
-    if let Some(outputs) = tx.outputs() {
-        outputs.iter().try_for_each(|output| {
-            match output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::StakePool(_)
-                | TxOutput::ProduceBlockFromStake(_, _, _)
-                | TxOutput::LockThenTransfer(_, _, _) => {}
-                TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
-                    OutputTimeLock::ForBlockCount(c) => {
-                        let cs: i64 = (*c).try_into().map_err(|_| {
-                            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
-                        })?;
-                        let given = BlockDistance::new(cs);
-                        let required = chain_config
-                            .as_ref()
-                            .decommission_pool_maturity_distance(starting_point.block_height());
-                        ensure!(
-                            given >= required,
-                            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue
-                        );
-                    }
-                    OutputTimeLock::UntilHeight(_)
-                    | OutputTimeLock::UntilTime(_)
-                    | OutputTimeLock::ForSeconds(_) => {
-                        return Err(ConnectTransactionError::InvalidDecommissionMaturityType);
-                    }
-                },
-            };
-            Ok(())
-        })?;
-    }
-
     Ok(())
 }

@@ -118,8 +118,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
-            ConnectTransactionError::InvalidDecommissionMaturityType => 100,
-            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue => 100,
         }
     }
 }
@@ -239,6 +237,8 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityType => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue => 100,
         }
     }
 }

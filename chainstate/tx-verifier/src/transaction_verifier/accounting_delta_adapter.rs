@@ -180,3 +180,4 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperatio
         self.merge_delta(delta.consume())
     }
 }
+// TODO: unit tests

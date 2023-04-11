@@ -121,6 +121,10 @@ pub enum CheckBlockTransactionsError {
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
+    #[error("Maturity setting type for the decommission pool output is invalid")]
+    InvalidDecommissionMaturityType,
+    #[error("Maturity setting value for the decommission pool output is invalid")]
+    InvalidDecommissionMaturityDistanceValue,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

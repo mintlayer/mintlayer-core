@@ -45,7 +45,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     SpendStakeError::ConsensusPoSError(ConsensusPoSError::NoKernel),
                 )),
                 // single input
-                [utxo] => match utxo {
+                [intput_utxo] => match intput_utxo {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::Burn(_)
@@ -129,19 +129,19 @@ pub fn check_tx_inputs_outputs_purposes(
         // no inputs
         [] => return Err(ConnectTransactionError::MissingTxInputs),
         // single input
-        [utxo] => match tx.outputs() {
+        [input_utxo] => match tx.outputs() {
             // no outputs
             [] => { /* do nothing, it's ok to burn outputs in this way */ }
             // single output
             [output] => {
                 ensure!(
-                    is_valid_one_to_one_combination(utxo, output),
+                    is_valid_one_to_one_combination(input_utxo, output),
                     ConnectTransactionError::InvalidOutputTypeInTx
                 );
             }
             // multiple outputs
             _ => {
-                is_valid_any_to_any_combination(std::slice::from_ref(utxo), tx.outputs())?;
+                is_valid_any_to_any_combination(std::slice::from_ref(input_utxo), tx.outputs())?;
             }
         },
         // multiple inputs
@@ -154,8 +154,8 @@ pub fn check_tx_inputs_outputs_purposes(
 }
 
 #[allow(clippy::unnested_or_patterns)]
-fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool {
-    match (input, output) {
+fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> bool {
+    match (input_utxo, output) {
         | (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _))
         | (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::Transfer(_, _), TxOutput::Burn(_))
@@ -195,10 +195,10 @@ fn is_valid_one_to_one_combination(input: &TxOutput, output: &TxOutput) -> bool 
 }
 
 fn is_valid_any_to_any_combination(
-    inputs: &[TxOutput],
+    inputs_utxos: &[TxOutput],
     outputs: &[TxOutput],
 ) -> Result<(), ConnectTransactionError> {
-    let valid_inputs = are_inputs_valid_for_tx(inputs);
+    let valid_inputs = are_inputs_valid_for_tx(inputs_utxos);
     ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
     let valid_outputs = are_outputs_valid_for_tx(outputs);
     ensure!(
@@ -208,8 +208,8 @@ fn is_valid_any_to_any_combination(
     Ok(())
 }
 
-fn are_inputs_valid_for_tx(inputs: &[TxOutput]) -> bool {
-    inputs.iter().all(|input| match input {
+fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
+    inputs_utxos.iter().all(|input_utxo| match input_utxo {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _) => true,
@@ -437,14 +437,14 @@ mod tests {
     #[case(decommission_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(decommission_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     fn tx_one_to_one(
-        #[case] input: TxOutput,
+        #[case] input_utxo: TxOutput,
         #[case] output: TxOutput,
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
             outpoint.clone(),
-            Utxo::new_for_mempool(input, false),
+            Utxo::new_for_mempool(input_utxo, false),
         )]));
 
         let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
@@ -455,13 +455,13 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn tx_one_to_many(#[case] seed: Seed) {
-        let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+        let check = |inputs_utxos: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
-            let inputs = get_random_outputs_combination(&mut rng, source_inputs, 1);
+            let inputs_utxos = get_random_outputs_combination(&mut rng, inputs_utxos, 1);
             let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
             let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
                 outpoint.clone(),
-                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+                Utxo::new_for_mempool(inputs_utxos.first().unwrap().clone(), false),
             )]));
 
             let number_of_outputs = rng.gen_range(2..10);
@@ -523,10 +523,10 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn tx_many_to_one(#[case] seed: Seed) {
-        let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+        let check = |inputs_utxos: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
             let number_of_inputs = rng.gen_range(2..10);
-            let utxos = get_random_outputs_combination(&mut rng, source_inputs, number_of_inputs)
+            let utxos = get_random_outputs_combination(&mut rng, inputs_utxos, number_of_inputs)
                 .into_iter()
                 .enumerate()
                 .map(|(i, output)| {
@@ -659,14 +659,14 @@ mod tests {
     #[case(decommission_pool(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(decommission_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     fn reward_one_to_one(
-        #[case] input: TxOutput,
+        #[case] input_utxo: TxOutput,
         #[case] output: TxOutput,
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
             outpoint.clone(),
-            Utxo::new_for_mempool(input, false),
+            Utxo::new_for_mempool(input_utxo, false),
         )]));
 
         let block = make_block(vec![outpoint.into()], vec![output]);

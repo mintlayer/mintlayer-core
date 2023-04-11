@@ -105,10 +105,6 @@ pub enum ConnectTransactionError {
     InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
     InvalidOutputTypeInReward,
-    #[error("Maturity setting type for the decommission pool output is invalid")]
-    InvalidDecommissionMaturityType,
-    #[error("Maturity setting value for the decommission pool output is invalid")]
-    InvalidDecommissionMaturityDistanceValue,
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 
