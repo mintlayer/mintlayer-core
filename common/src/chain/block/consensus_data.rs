@@ -32,11 +32,8 @@ pub enum ConsensusData {
 
 impl ConsensusData {
     pub fn get_block_proof(&self) -> Option<Uint256> {
-        match self {
-            ConsensusData::None => Some(1u64.into()),
-            ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
-            ConsensusData::PoS(_) => Some(1u64.into()),
-        }
+        // TODO(PR): move asymptote functions here and use its get_weight_for_block() here
+        Some(1000000000u64.into())
     }
 
     pub fn reward_maturity_distance(&self, chain_config: &ChainConfig) -> BlockDistance {

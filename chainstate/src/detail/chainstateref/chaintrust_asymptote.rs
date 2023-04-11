@@ -68,12 +68,21 @@ pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     }
 }
 
+pub fn get_weight_for_block() -> u64 {
+    SCALING_FACTOR as u64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn ensure_asymptote_to_infinity_ends_at_one() {
+    fn first_weight_is_zero() {
+        assert_eq!(get_weight_for_timeslot(0), 0);
+    }
+
+    #[test]
+    fn weight_at_infinity_is_one() {
         let t = 100000000; // a really large value
         let weight = asymptote_to_infinity_to_one(t, ALPHA);
         assert_eq!(weight, 1.);
