@@ -52,6 +52,20 @@ const RPC_KDF_CONFIG: KdfConfig = KdfConfig::Argon2id {
     },
 };
 
+#[derive(thiserror::Error, Debug)]
+enum CheckError {
+    #[error("Basic authentication expected")]
+    BasicAuthenticationExpected,
+    #[error("Base64 decoding of the authorization header failed: {0}")]
+    InvalidBase64(base64::DecodeError),
+    #[error("Invalid utf8 in the authorization header: {0}")]
+    InvalidUtf8Value(std::str::Utf8Error),
+    #[error("Invalid authorization header: ':' not found")]
+    ColonNotFound,
+    #[error("Unexpected KDF error: {0}")]
+    KdfError(crypto::kdf::KdfError),
+}
+
 impl RpcAuth {
     pub fn new(username: &str, password: &str) -> Self {
         let password_hash =
@@ -64,7 +78,7 @@ impl RpcAuth {
         }
     }
 
-    fn check_auth<B>(&self, request: &Request<B>) -> Result<bool, String> {
+    fn check_auth<B>(&self, request: &Request<B>) -> Result<bool, CheckError> {
         let header = match request.headers().get(http::header::AUTHORIZATION) {
             Some(v) => v,
             None => return Ok(false),
@@ -72,21 +86,20 @@ impl RpcAuth {
         let username_password_encoded = header
             .as_bytes()
             .strip_prefix("Basic ".as_bytes())
-            .ok_or_else(|| "basic authentication expected".to_owned())?;
+            .ok_or(CheckError::BasicAuthenticationExpected)?;
         let username_password = base64::engine::general_purpose::STANDARD
             .decode(username_password_encoded)
-            .map_err(|e| format!("base64 decoding of the authorization header failed: {e}"))?;
+            .map_err(CheckError::InvalidBase64)?;
         let username_password = std::str::from_utf8(username_password.as_slice())
-            .map_err(|e| format!("invalid utf8 in the authorization header: {e}"))?;
-        let (username, password) = username_password
-            .split_once(':')
-            .ok_or_else(|| ("invalid authorization header: ':' not found").to_owned())?;
+            .map_err(CheckError::InvalidUtf8Value)?;
+        let (username, password) =
+            username_password.split_once(':').ok_or(CheckError::ColonNotFound)?;
         let password_valid = verify_password(
             password.as_bytes(),
             self.password_hash.clone(),
             SliceEqualityCheckMethod::TimingResistant,
         )
-        .map_err(|e| format!("verify_password failed unexpectedly: {e}"))?;
+        .map_err(CheckError::KdfError)?;
         Ok(username == self.username && password_valid)
     }
 }
@@ -110,7 +123,7 @@ impl<B> AuthorizeRequest<B> for RpcAuth {
                 log::error!("Invalid RPC request {:?}: {e}", request.uri());
                 Err(Response::builder()
                     .status(http::StatusCode::BAD_REQUEST)
-                    .body(e.into())
+                    .body(e.to_string().into())
                     .expect("must be valid"))
             }
         }
