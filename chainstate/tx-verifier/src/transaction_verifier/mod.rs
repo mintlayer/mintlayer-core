@@ -51,9 +51,9 @@ use self::{
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
     storage::TransactionVerifierStorageRef,
-    token_issuance_cache::{CoinOrTokenId, ConsumedTokenIssuanceCache, TokenIssuanceCache},
+    token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     transferred_amount_check::{
-        calculate_total_inputs, calculate_total_outputs, check_transferred_amounts_and_get_fee,
+        check_transferred_amount_in_reward, check_transferred_amounts_and_get_fee,
     },
     utxos_undo_cache::{UtxosBlockUndoCache, UtxosBlockUndoEntry},
 };
@@ -61,12 +61,11 @@ use ::utils::{ensure, shallow_clone::ShallowClone};
 
 use chainstate_types::BlockIndex;
 use common::{
-    amount_sum,
     chain::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::Signable,
         signed_transaction::SignedTransaction,
-        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
+        tokens::{get_tokens_issuance_count, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
@@ -289,45 +288,20 @@ where
         total_fees: Fee,
         block_subsidy_at_height: Subsidy,
     ) -> Result<(), ConnectTransactionError> {
+        input_output_policy::check_reward_inputs_outputs_purposes(
+            &block.block_reward_transactable(),
+            &self.utxo_cache,
+        )?;
+
         self.check_stake_outputs_in_reward(block)?;
 
-        let block_reward_transactable = block.block_reward_transactable();
-
-        let inputs = block_reward_transactable.inputs();
-        let outputs = block_reward_transactable.outputs();
-
-        let inputs_total = inputs.map_or_else(
-            || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
-            |ins| {
-                calculate_total_inputs(&self.utxo_cache, ins, |_| Ok(None))
-                    .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
-            },
-        )?;
-        let outputs_total = outputs.map_or_else(
-            || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
-            |outputs| {
-                if outputs.iter().any(|output| match output.value() {
-                    OutputValue::Coin(_) => false,
-                    OutputValue::Token(_) => true,
-                }) {
-                    return Err(ConnectTransactionError::TokensError(
-                        TokensError::TokensInBlockReward,
-                    ));
-                }
-                calculate_total_outputs(outputs, None)
-                    .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
-            },
-        )?;
-
-        let max_allowed_outputs_total =
-            amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
-                .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
-
-        ensure!(
-            outputs_total <= max_allowed_outputs_total,
-            ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total,)
-        );
-        Ok(())
+        check_transferred_amount_in_reward(
+            &self.utxo_cache,
+            &block.block_reward_transactable(),
+            block.get_id(),
+            total_fees,
+            block_subsidy_at_height,
+        )
     }
 
     fn connect_pos_accounting_outputs(
@@ -495,11 +469,6 @@ where
         tx_source: TransactionSource,
         reward_transactable: BlockRewardTransactable,
     ) -> Result<(), ConnectTransactionError> {
-        input_output_policy::check_reward_inputs_outputs_purposes(
-            &reward_transactable,
-            &self.utxo_cache,
-        )?;
-
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
             // pre-cache all inputs

@@ -16,20 +16,24 @@
 use std::collections::BTreeMap;
 
 use common::{
+    amount_sum,
     chain::{
+        block::BlockRewardTransactable,
+        signature::Signable,
         tokens::{token_id, OutputValue, TokenData, TokenId},
-        OutPointSourceId, Transaction, TxInput, TxOutput,
+        Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
 };
 use fallible_iterator::FallibleIterator;
+use utils::ensure;
 use utxo::{Utxo, UtxosView};
 
 use super::{
     amounts_map::AmountsMap,
     error::{ConnectTransactionError, TokensError},
     token_issuance_cache::CoinOrTokenId,
-    Fee,
+    Fee, Subsidy,
 };
 
 fn get_total_fee(
@@ -85,7 +89,7 @@ where
     Ok(total_fee)
 }
 
-pub fn calculate_total_inputs<U: UtxosView, IssuanceTokenIdGetterFunc>(
+fn calculate_total_inputs<U: UtxosView, IssuanceTokenIdGetterFunc>(
     utxo_view: &U,
     inputs: &[TxInput],
     issuance_token_id_getter: IssuanceTokenIdGetterFunc,
@@ -109,7 +113,7 @@ where
     Ok(amounts_map.take())
 }
 
-pub fn calculate_total_outputs(
+fn calculate_total_outputs(
     outputs: &[TxOutput],
     include_issuance: Option<&Transaction>,
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
@@ -200,3 +204,49 @@ where
         }
     }
 }
+
+pub fn check_transferred_amount_in_reward<U: UtxosView>(
+    utxo_view: &U,
+    block_reward_transactable: &BlockRewardTransactable,
+    block_id: Id<Block>,
+    total_fees: Fee,
+    block_subsidy_at_height: Subsidy,
+) -> Result<(), ConnectTransactionError> {
+    let inputs = block_reward_transactable.inputs();
+    let outputs = block_reward_transactable.outputs();
+
+    let inputs_total = inputs.map_or_else(
+        || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
+        |ins| {
+            calculate_total_inputs(&utxo_view, ins, |_| Ok(None))
+                .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
+        },
+    )?;
+    let outputs_total = outputs.map_or_else(
+        || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
+        |outputs| {
+            if outputs.iter().any(|output| match output.value() {
+                OutputValue::Coin(_) => false,
+                OutputValue::Token(_) => true,
+            }) {
+                return Err(ConnectTransactionError::TokensError(
+                    TokensError::TokensInBlockReward,
+                ));
+            }
+            calculate_total_outputs(outputs, None)
+                .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
+        },
+    )?;
+
+    let max_allowed_outputs_total =
+        amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
+            .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?;
+
+    ensure!(
+        outputs_total <= max_allowed_outputs_total,
+        ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total,)
+    );
+    Ok(())
+}
+
+// TODO: unit tests

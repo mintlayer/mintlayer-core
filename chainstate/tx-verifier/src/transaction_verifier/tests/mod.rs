@@ -19,7 +19,7 @@ mod mock;
 
 use super::*;
 use common::{
-    chain::{stakelock::StakePoolData, Destination, OutPoint},
+    chain::{stakelock::StakePoolData, tokens::OutputValue, Destination, OutPoint},
     primitives::{amount::UnsignedIntType, BlockHeight, H256},
 };
 use crypto::{

@@ -24,9 +24,9 @@ use super::error::ConnectTransactionError;
 pub fn verify_signatures<U: UtxosView, T: Transactable>(
     chain_config: &ChainConfig,
     utxo_view: &U,
-    tx: &T,
+    transactable: &T,
 ) -> Result<(), ConnectTransactionError> {
-    let inputs = match tx.inputs() {
+    let inputs = match transactable.inputs() {
         Some(ins) => ins,
         None => return Ok(()),
     };
@@ -46,16 +46,17 @@ pub fn verify_signatures<U: UtxosView, T: Transactable>(
     inputs_utxos.iter().enumerate().try_for_each(|(input_idx, utxo)| {
         // TODO: see if a different treatment should be done for different output purposes
         // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-        match utxo.destination() {
-            Some(d) => verify_signature(
-                chain_config,
-                d,
-                tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
-                input_idx,
-            )
-            .map_err(ConnectTransactionError::SignatureVerificationFailed),
-            None => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
-        }
+        let destination =
+            utxo.destination().ok_or(ConnectTransactionError::AttemptToSpendBurnedAmount)?;
+        verify_signature(
+            chain_config,
+            destination,
+            transactable,
+            &inputs_utxos.iter().collect::<Vec<_>>(),
+            input_idx,
+        )
+        .map_err(ConnectTransactionError::SignatureVerificationFailed)
     })
 }
+
+// TODO: unit tests
