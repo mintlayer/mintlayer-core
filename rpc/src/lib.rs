@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod config;
+mod rpc_auth;
+pub mod rpc_creds;
+
 use std::net::SocketAddr;
 
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
@@ -23,8 +27,8 @@ pub use config::RpcConfig;
 pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
-
-mod config;
+use rpc_auth::RpcAuth;
+use rpc_creds::RpcCreds;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -47,6 +51,7 @@ pub struct Builder {
     http_bind_address: Option<SocketAddr>,
     ws_bind_address: Option<SocketAddr>,
     methods: Methods,
+    creds: Option<RpcCreds>,
 }
 
 impl Builder {
@@ -60,11 +65,14 @@ impl Builder {
             http_bind_address,
             ws_bind_address,
             methods,
+            creds: None,
         }
     }
 
-    /// New builder pre-populated with RPC info methods
-    pub fn new(rpc_config: RpcConfig) -> Self {
+    /// New builder pre-populated with RPC info methods.
+    ///
+    /// If `creds` is set, basic HTTP authentication is required.
+    pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> Self {
         let http_bind_address = if *rpc_config.http_enabled {
             Some(*rpc_config.http_bind_address)
         } else {
@@ -77,7 +85,13 @@ impl Builder {
             None
         };
 
-        Self::new_empty(http_bind_address, ws_bind_address).register(RpcInfo.into_rpc())
+        Self {
+            http_bind_address,
+            ws_bind_address,
+            methods: Methods::new(),
+            creds,
+        }
+        .register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -92,6 +106,7 @@ impl Builder {
             self.http_bind_address.as_ref(),
             self.ws_bind_address.as_ref(),
             self.methods,
+            self.creds,
         )
         .await
     }
@@ -101,17 +116,36 @@ impl Builder {
 pub struct Rpc {
     http: Option<(SocketAddr, ServerHandle)>,
     websocket: Option<(SocketAddr, ServerHandle)>,
+    // Stored here to remove the cookie file when the node is stopped
+    _creds: Option<RpcCreds>,
 }
 
 impl Rpc {
+    /// Rpc constructor.
+    ///
+    /// If `creds` is set, basic HTTP authentication is required.
     async fn new(
         http_bind_addr: Option<&SocketAddr>,
         ws_bind_addr: Option<&SocketAddr>,
         methods: Methods,
+        creds: Option<RpcCreds>,
     ) -> anyhow::Result<Self> {
+        let auth_layer = creds.as_ref().map(|creds| {
+            tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(
+                creds.username(),
+                creds.password(),
+            ))
+        });
+
+        let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(auth_layer));
+
         let http = match http_bind_addr {
             Some(bind_addr) => {
-                let http_server = ServerBuilder::default().http_only().build(bind_addr).await?;
+                let http_server = ServerBuilder::new()
+                    .set_middleware(middleware.clone())
+                    .http_only()
+                    .build(bind_addr)
+                    .await?;
                 let http_address = http_server.local_addr()?;
                 let http_handle = http_server.start(methods.clone())?;
                 Some((http_address, http_handle))
@@ -121,7 +155,11 @@ impl Rpc {
 
         let websocket = match ws_bind_addr {
             Some(bind_addr) => {
-                let ws_server = ServerBuilder::default().ws_only().build(bind_addr).await?;
+                let ws_server = ServerBuilder::new()
+                    .set_middleware(middleware)
+                    .ws_only()
+                    .build(bind_addr)
+                    .await?;
                 let ws_address = ws_server.local_addr()?;
                 let ws_handle = ws_server.start(methods)?;
                 Some((ws_address, ws_handle))
@@ -129,7 +167,11 @@ impl Rpc {
             None => None,
         };
 
-        Ok(Self { http, websocket })
+        Ok(Self {
+            http,
+            websocket,
+            _creds: creds,
+        })
     }
 
     pub fn http_address(&self) -> Option<&SocketAddr> {
@@ -161,11 +203,20 @@ impl subsystem::Subsystem for Rpc {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
+    use base64::Engine;
+    use crypto::random::{
+        distributions::{Alphanumeric, DistString},
+        Rng,
+    };
     use jsonrpsee::core::client::ClientT;
     use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
     use jsonrpsee::ws_client::WsClientBuilder;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[rpc(server, namespace = "some_subsystem")]
     pub trait SubsystemRpc {
@@ -188,70 +239,26 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[trace]
+    #[case(true, false)]
+    #[case(false, true)]
+    #[case(true, true)]
     #[tokio::test]
-    async fn rpc_server_http() -> anyhow::Result<()> {
+    async fn rpc_server(#[case] http: bool, #[case] ws: bool) -> anyhow::Result<()> {
         let rpc_config = RpcConfig {
             http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: true.into(),
+            http_enabled: http.into(),
             ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: false.into(),
-        };
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
-
-        let url = format!("http://{}", rpc.http_address().unwrap());
-        let client = HttpClientBuilder::default().build(url)?;
-        let response: Result<String> =
-            client.request("example_server_protocol_version", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "version1");
-
-        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "sub1");
-
-        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
-        assert_eq!(response.unwrap(), 7);
-
-        subsystem::Subsystem::shutdown(rpc).await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn rpc_server_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: false.into(),
-            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: true.into(),
-        };
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
-
-        let url = format!("ws://{}", rpc.websocket_address().unwrap());
-        let client = WsClientBuilder::default().build(url).await?;
-        let response: Result<String> =
-            client.request("example_server_protocol_version", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "version1");
-
-        let response: Result<String> = client.request("some_subsystem_name", rpc_params!()).await;
-        assert_eq!(response.unwrap(), "sub1");
-
-        let response: Result<u64> = client.request("some_subsystem_add", rpc_params!(2, 5)).await;
-        assert_eq!(response.unwrap(), 7);
-
-        subsystem::Subsystem::shutdown(rpc).await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn rpc_server_http_and_websocket() -> anyhow::Result<()> {
-        let rpc_config = RpcConfig {
-            http_bind_address: "127.0.0.1:3032".parse::<SocketAddr>().unwrap().into(),
-            http_enabled: true.into(),
-            ws_bind_address: "127.0.0.1:3033".parse::<SocketAddr>().unwrap().into(),
-            ws_enabled: true.into(),
+            ws_enabled: ws.into(),
         };
 
-        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+        let rpc = Builder::new(rpc_config, None)
+            .register(SubsystemRpcImpl.into_rpc())
+            .build()
+            .await?;
 
-        {
+        if http {
             let url = format!("http://{}", rpc.http_address().unwrap());
             let client = HttpClientBuilder::default().build(url)?;
             let response: Result<String> =
@@ -267,7 +274,7 @@ mod tests {
             assert_eq!(response.unwrap(), 7);
         }
 
-        {
+        if ws {
             let url = format!("ws://{}", rpc.websocket_address().unwrap());
             let client = WsClientBuilder::default().build(url).await?;
             let response: Result<String> =
@@ -285,5 +292,109 @@ mod tests {
 
         subsystem::Subsystem::shutdown(rpc).await;
         Ok(())
+    }
+
+    fn get_headers(username_password: Option<(&str, &str)>) -> http::HeaderMap {
+        let mut headers = http::HeaderMap::new();
+        if let Some((username, password)) = username_password {
+            headers.append(
+                http::header::AUTHORIZATION,
+                http::HeaderValue::from_str(&format!(
+                    "Basic {}",
+                    base64::engine::general_purpose::STANDARD
+                        .encode(format!("{username}:{password}"))
+                ))
+                .unwrap(),
+            );
+        }
+        headers
+    }
+
+    async fn http_request(
+        rpc: &Rpc,
+        username_password: Option<(&str, &str)>,
+    ) -> anyhow::Result<()> {
+        let url = format!("http://{}", rpc.http_address().unwrap());
+        let client = HttpClientBuilder::default()
+            .set_headers(get_headers(username_password))
+            .build(url)?;
+        let response: String =
+            client.request("example_server_protocol_version", rpc_params!()).await?;
+        anyhow::ensure!(response == "version1");
+        Ok(())
+    }
+
+    async fn ws_request(rpc: &Rpc, username_password: Option<(&str, &str)>) -> anyhow::Result<()> {
+        let url = format!("ws://{}", rpc.websocket_address().unwrap());
+        let client = WsClientBuilder::default()
+            .set_headers(get_headers(username_password))
+            .build(url)
+            .await?;
+        let response: String =
+            client.request("example_server_protocol_version", rpc_params!()).await?;
+        anyhow::ensure!(response == "version1");
+        Ok(())
+    }
+
+    fn gen_random_string(rng: &mut impl Rng, not_equal_to: &str) -> String {
+        let len = rng.gen_range(1..20);
+        loop {
+            let val = Alphanumeric.sample_string(rng, len);
+            if not_equal_to != val {
+                return val;
+            }
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test]
+    async fn rpc_server_auth(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let good_username = gen_random_string(&mut rng, "");
+        let good_password = gen_random_string(&mut rng, "");
+        let bad_username = gen_random_string(&mut rng, &good_username);
+        let bad_password = gen_random_string(&mut rng, &good_password);
+
+        let rpc_config = RpcConfig {
+            http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+            http_enabled: true.into(),
+            ws_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+            ws_enabled: true.into(),
+        };
+
+        let data_dir: PathBuf = ".".into();
+        let rpc = Builder::new(
+            rpc_config,
+            Some(
+                RpcCreds::new(
+                    &data_dir,
+                    Some(&good_username),
+                    Some(&good_password),
+                    Option::<String>::None,
+                )
+                .unwrap(),
+            ),
+        )
+        .register(SubsystemRpcImpl.into_rpc())
+        .build()
+        .await
+        .unwrap();
+
+        // Valid requests
+        http_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
+        ws_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
+
+        // Invalid requests
+        http_request(&rpc, None).await.unwrap_err();
+        ws_request(&rpc, None).await.unwrap_err();
+        http_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
+        ws_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
+        http_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
+        ws_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
+
+        subsystem::Subsystem::shutdown(rpc).await;
     }
 }

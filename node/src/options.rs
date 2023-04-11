@@ -143,6 +143,21 @@ pub struct RunOptions {
     /// Enable/Disable websocket RPC.
     #[clap(long)]
     pub ws_rpc_enabled: Option<bool>,
+
+    /// Username for RPC HTTP and WebSocket server basic authorization.
+    /// If not set, the cookie file is created.
+    #[clap(long)]
+    pub rpc_username: Option<String>,
+
+    /// Password for RPC HTTP and WebSocket server basic authorization.
+    /// If not set, the RPC cookie file is created.
+    #[clap(long)]
+    pub rpc_password: Option<String>,
+
+    /// Custom file path for the RPC cookie file.
+    /// If not set, the cookie file is created in the data dir.
+    #[clap(long)]
+    pub rpc_cookie_file: Option<String>,
 }
 
 impl Options {

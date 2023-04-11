@@ -22,17 +22,26 @@ use serde::{Deserialize, Serialize};
 #[must_use]
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct RpcConfigFile {
-    /// Address to bind http RPC to.
+    /// Address to bind http RPC to
     pub http_bind_address: Option<SocketAddr>,
 
     /// Whether http RPC is enabled
     pub http_enabled: Option<bool>,
 
-    /// Address to bind websocket RPC to.
+    /// Address to bind websocket RPC to
     pub ws_bind_address: Option<SocketAddr>,
 
     /// Whether websocket RPC is enabled
     pub ws_enabled: Option<bool>,
+
+    /// Username for RPC HTTP and WebSocket server basic authorization
+    pub username: Option<String>,
+
+    /// Password for RPC HTTP and WebSocket server basic authorization
+    pub password: Option<String>,
+
+    /// Custom file path for the RPC cookie file
+    pub cookie_file: Option<String>,
 }
 
 impl From<RpcConfigFile> for RpcConfig {

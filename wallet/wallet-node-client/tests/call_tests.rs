@@ -64,7 +64,7 @@ pub async fn start_subsystems(
         ws_enabled: false.into(),
     };
 
-    let rpc_subsys = rpc::Builder::new(rpc_config)
+    let rpc_subsys = rpc::Builder::new(rpc_config, None)
         .register(chainstate_subsys.clone().into_rpc())
         .build()
         .await

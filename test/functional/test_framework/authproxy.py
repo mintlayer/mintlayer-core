@@ -91,8 +91,8 @@ class AuthServiceProxy():
         self.__url = urllib.parse.urlparse(service_url)
         user = None if self.__url.username is None else self.__url.username.encode('utf8')
         passwd = None if self.__url.password is None else self.__url.password.encode('utf8')
-        #authpair = user + b':' + passwd
-        #self.__auth_header = b'Basic ' + base64.b64encode(authpair)
+        authpair = user + b':' + passwd
+        self.__auth_header = b'Basic ' + base64.b64encode(authpair)
         self.timeout = timeout
         self._set_conn(connection)
 
@@ -111,7 +111,7 @@ class AuthServiceProxy():
         '''
         headers = {'Host': self.__url.hostname,
                    'User-Agent': USER_AGENT,
-                   #'Authorization': self.__auth_header,
+                   'Authorization': self.__auth_header,
                    'Content-type': 'application/json'}
         if os.name == 'nt':
             # Windows somehow does not like to re-use connections
