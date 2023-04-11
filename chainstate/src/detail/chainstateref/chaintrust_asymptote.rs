@@ -33,8 +33,7 @@ where
 {
     let t = F::from_u64(t).expect("Cannot fail to convert u64 to F");
     let one = F::from_u64(1).expect("Cannot fail to create 1 as F");
-    let weight = one - (-alpha * t).exp();
-    weight
+    one - (-alpha * t).exp()
 }
 
 // The value of alpha, 0.025, is chosen such that when a block time is hit (120 seconds), there's 5% of the range of the asymptote left.
