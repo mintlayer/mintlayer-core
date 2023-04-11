@@ -70,7 +70,7 @@ impl RpcCreds {
         data_dir: impl AsRef<Path>,
         username: Option<impl AsRef<str>>,
         password: Option<impl AsRef<str>>,
-        cookie_file: Option<&str>,
+        cookie_file: Option<impl AsRef<str>>,
     ) -> Result<Self, RpcCredsError> {
         match (username, password) {
             (Some(username), Some(password)) => {
@@ -93,7 +93,7 @@ impl RpcCreds {
                 let username = COOKIE_USERNAME.to_owned();
                 let password = gen_password(&mut make_true_rng(), COOKIE_PASSWORD_LEN);
                 let cookie_file = match cookie_file {
-                    Some(cookie_file) => cookie_file.into(),
+                    Some(cookie_file) => cookie_file.as_ref().into(),
                     None => data_dir.as_ref().join(COOKIE_FILENAME),
                 };
                 let cookie = format!("{username}:{password}");

@@ -72,7 +72,7 @@ impl Builder {
     /// New builder pre-populated with RPC info methods.
     ///
     /// If `creds` is set, basic HTTP authentication is required.
-    pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> anyhow::Result<Self> {
+    pub fn new(rpc_config: RpcConfig, creds: Option<RpcCreds>) -> Self {
         let http_bind_address = if *rpc_config.http_enabled {
             Some(*rpc_config.http_bind_address)
         } else {
@@ -85,13 +85,13 @@ impl Builder {
             None
         };
 
-        Ok(Self {
+        Self {
             http_bind_address,
             ws_bind_address,
             methods: Methods::new(),
             creds,
         }
-        .register(RpcInfo.into_rpc()))
+        .register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -249,7 +249,6 @@ mod tests {
         };
 
         let rpc = Builder::new(rpc_config, None)
-            .unwrap()
             .register(SubsystemRpcImpl.into_rpc())
             .build()
             .await?;
@@ -349,9 +348,16 @@ mod tests {
         let data_dir: PathBuf = ".".into();
         let rpc = Builder::new(
             rpc_config,
-            Some(RpcCreds::new(&data_dir, Some(GOOD_USERNAME), Some(GOOD_PASSWORD), None).unwrap()),
+            Some(
+                RpcCreds::new(
+                    &data_dir,
+                    Some(GOOD_USERNAME),
+                    Some(GOOD_PASSWORD),
+                    Option::<String>::None,
+                )
+                .unwrap(),
+            ),
         )
-        .unwrap()
         .register(SubsystemRpcImpl.into_rpc())
         .build()
         .await
