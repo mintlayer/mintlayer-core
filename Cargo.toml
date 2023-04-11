@@ -101,7 +101,7 @@ parity-scale-codec = "3.1"
 serde = "1.0"
 static_assertions = "1.1"
 thiserror = "1.0"
-tokio = "1.0"
+tokio = "=1.26" # Use older tokio until fixed jsonrpsee is released, see https://github.com/paritytech/jsonrpsee/pull/1062
 
 rstest = "0.17"
 
