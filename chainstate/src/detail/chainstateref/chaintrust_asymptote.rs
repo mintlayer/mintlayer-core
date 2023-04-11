@@ -61,6 +61,7 @@ lazy_static! {
 pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     let timeslot = timeslot as usize;
     if timeslot >= TIMESLOTS_WEIGHTS.len() {
+        // This is basically 1 times the scaling factor, where the other branch has everything < 1
         SCALING_FACTOR as u64
     } else {
         (TIMESLOTS_WEIGHTS[timeslot] * SCALING_FACTOR) as u64
