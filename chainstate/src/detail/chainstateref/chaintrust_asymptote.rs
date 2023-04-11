@@ -23,7 +23,7 @@ use mockall::lazy_static;
 /// The parameter alpha controls the steepness of the curve; i.e., how fast the function converges.
 ///
 /// Benefits:
-/// This function is to be used to compute the accumulated weight of a chain for chain selection.
+/// This function is to be used to compute the accumulated trust of a chain for chain selection.
 /// Having an asymptotic function that tends to one means that no matter how many empty time-slots
 /// are in the chain, the weight will always be less than one, which is the weight of a single block.
 /// This function can be used to programmatically prefer chains that have denser blocks in time.
