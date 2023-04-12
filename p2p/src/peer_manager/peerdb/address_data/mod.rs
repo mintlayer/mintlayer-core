@@ -15,6 +15,8 @@
 
 use std::time::Duration;
 
+use crypto::random::Rng;
+
 /// When the node drops the unreachable node address. Used for negative caching.
 const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
@@ -34,8 +36,8 @@ pub enum AddressState {
         /// New connection attempts are made after a progressive backoff time.
         fail_count: u32,
 
-        /// Last time the peer disconnected
-        disconnected_at: Duration,
+        /// Next time connect to the peer
+        next_connect_after: Duration,
     },
 
     Unreachable {
@@ -75,7 +77,7 @@ impl AddressData {
             state: AddressState::Disconnected {
                 was_reachable,
                 fail_count: 0,
-                disconnected_at: now,
+                next_connect_after: now,
             },
             reserved,
         }
@@ -91,34 +93,10 @@ impl AddressData {
             AddressState::Connected {} => false,
 
             AddressState::Disconnected {
-                fail_count,
-                disconnected_at,
-                was_reachable,
-            } => {
-                if self.reserved {
-                    // Try to connect to the user reserved nodes more often
-                    match fail_count {
-                        0 => true,
-                        1 => now > disconnected_at + Duration::from_secs(10),
-                        2 => now > disconnected_at + Duration::from_secs(60),
-                        3 => now > disconnected_at + Duration::from_secs(180),
-                        _ => now > disconnected_at + Duration::from_secs(360),
-                    }
-                } else if was_reachable {
-                    match fail_count {
-                        0 => true,
-                        1 => now > disconnected_at + Duration::from_secs(60),
-                        2 => now > disconnected_at + Duration::from_secs(360),
-                        3 => now > disconnected_at + Duration::from_secs(3600),
-                        4 => now > disconnected_at + Duration::from_secs(3 * 3600),
-                        5 => now > disconnected_at + Duration::from_secs(6 * 3600),
-                        6 => now > disconnected_at + Duration::from_secs(12 * 3600),
-                        _ => now > disconnected_at + Duration::from_secs(24 * 3600),
-                    }
-                } else {
-                    fail_count == 0
-                }
-            }
+                fail_count: _,
+                next_connect_after,
+                was_reachable: _,
+            } => now >= next_connect_after,
 
             AddressState::Unreachable { erase_after: _ } => false,
         }
@@ -131,7 +109,7 @@ impl AddressData {
             AddressState::Disconnected {
                 was_reachable: _,
                 fail_count: _,
-                disconnected_at: _,
+                next_connect_after: _,
             } => true,
             AddressState::Unreachable { erase_after } => erase_after < now,
         }
@@ -143,7 +121,7 @@ impl AddressData {
             AddressState::Connected {} => true,
             AddressState::Disconnected {
                 fail_count: _,
-                disconnected_at: _,
+                next_connect_after: _,
                 was_reachable,
             } => was_reachable,
             AddressState::Unreachable { erase_after: _ } => false,
@@ -158,13 +136,52 @@ impl AddressData {
         matches!(self.state, AddressState::Unreachable { .. })
     }
 
-    pub fn transition_to(&mut self, transition: AddressStateTransitionTo, now: Duration) {
+    fn next_connect_delay(fail_count: u32, reserved: bool) -> Duration {
+        if reserved {
+            // Try to connect to reserved nodes more often
+            match fail_count {
+                0 => Duration::ZERO,
+                1 => Duration::from_secs(10),
+                2 => Duration::from_secs(60),
+                3 => Duration::from_secs(180),
+                _ => Duration::from_secs(360),
+            }
+        } else {
+            match fail_count {
+                0 => Duration::ZERO,
+                1 => Duration::from_secs(60),
+                2 => Duration::from_secs(360),
+                3 => Duration::from_secs(3600),
+                4 => Duration::from_secs(3 * 3600),
+                5 => Duration::from_secs(6 * 3600),
+                6 => Duration::from_secs(12 * 3600),
+                _ => Duration::from_secs(24 * 3600),
+            }
+        }
+    }
+
+    fn next_connect_time(
+        now: Duration,
+        fail_count: u32,
+        reserved: bool,
+        rng: &mut impl Rng,
+    ) -> Duration {
+        now + Self::next_connect_delay(fail_count, reserved)
+            .mul_f64(utils::exp_rand::exponential_rand(rng))
+    }
+
+    pub fn transition_to(
+        &mut self,
+        transition: AddressStateTransitionTo,
+        now: Duration,
+        rng: &mut impl Rng,
+    ) {
         self.state = match transition {
             AddressStateTransitionTo::Connected => match self.state {
                 AddressState::Connected {} => unreachable!(),
                 AddressState::Disconnected {
                     fail_count: _,
-                    disconnected_at: _,
+                    next_connect_after: _,
                     was_reachable: _,
                 } => AddressState::Connected {},
                 AddressState::Unreachable { erase_after: _ } => {
@@ -176,12 +193,12 @@ impl AddressData {
             AddressStateTransitionTo::Disconnected => match self.state {
                 AddressState::Connected {} => AddressState::Disconnected {
                     fail_count: 0,
-                    disconnected_at: now,
+                    next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
                     was_reachable: true,
                 },
                 AddressState::Disconnected {
                     fail_count: _,
-                    disconnected_at: _,
+                    next_connect_after: _,
                     was_reachable: _,
                 } => unreachable!(),
                 AddressState::Unreachable { erase_after: _ } => unreachable!(),
@@ -191,13 +208,18 @@ impl AddressData {
                 AddressState::Connected {} => unreachable!(),
                 AddressState::Disconnected {
                     fail_count,
-                    disconnected_at: _,
+                    next_connect_after: _,
                     was_reachable,
                 } => {
                     if self.reserved {
                         AddressState::Disconnected {
                             fail_count: fail_count + 1,
-                            disconnected_at: now,
+                            next_connect_after: Self::next_connect_time(
+                                now,
+                                fail_count + 1,
+                                self.reserved,
+                                rng,
+                            ),
                             was_reachable,
                         }
                     } else if !was_reachable {
@@ -209,7 +231,12 @@ impl AddressData {
                     } else {
                         AddressState::Disconnected {
                             fail_count: fail_count + 1,
-                            disconnected_at: now,
+                            next_connect_after: Self::next_connect_time(
+                                now,
+                                fail_count + 1,
+                                self.reserved,
+                                rng,
+                            ),
                             was_reachable,
                         }
                     }
@@ -229,16 +256,21 @@ impl AddressData {
                     AddressState::Disconnected {
                         was_reachable,
                         fail_count,
-                        disconnected_at,
+                        next_connect_after: _,
                     } => AddressState::Disconnected {
                         was_reachable,
                         fail_count,
-                        disconnected_at,
+                        next_connect_after: Self::next_connect_time(
+                            now,
+                            fail_count,
+                            self.reserved,
+                            rng,
+                        ),
                     },
                     // Reserved nodes should not be in the `Unreachable` state
                     AddressState::Unreachable { erase_after: _ } => AddressState::Disconnected {
                         fail_count: 0,
-                        disconnected_at: now,
+                        next_connect_after: Self::next_connect_time(now, 0, self.reserved, rng),
                         was_reachable: false,
                     },
                 }
@@ -253,11 +285,11 @@ impl AddressData {
                     AddressState::Disconnected {
                         was_reachable,
                         fail_count,
-                        disconnected_at,
+                        next_connect_after,
                     } => AddressState::Disconnected {
                         was_reachable,
                         fail_count,
-                        disconnected_at,
+                        next_connect_after,
                     },
                     AddressState::Unreachable { erase_after } => {
                         AddressState::Unreachable { erase_after }

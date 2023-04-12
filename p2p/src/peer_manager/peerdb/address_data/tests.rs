@@ -51,7 +51,7 @@ fn randomized(#[case] seed: Seed) {
             };
 
             if is_valid_transition {
-                address_data.transition_to(transition, started_at);
+                address_data.transition_to(transition, started_at, &mut rng);
             }
         }
     }

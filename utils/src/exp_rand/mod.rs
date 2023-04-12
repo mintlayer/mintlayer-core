@@ -17,6 +17,7 @@ use crypto::random::Rng;
 
 /// Returns a value sampled from an exponential distribution with a mean of 1.0
 pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
+    #[allow(clippy::float_arithmetic)]
     -rng.gen::<f64>().ln()
 }
 

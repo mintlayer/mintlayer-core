@@ -278,7 +278,7 @@ where
             transition,
         );
 
-        address_data.transition_to(transition, now);
+        address_data.transition_to(transition, now, &mut make_pseudo_rng());
 
         let is_persistent_new = address_data.is_persistent();
 
