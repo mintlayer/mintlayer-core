@@ -238,8 +238,9 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityType => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityType(_) => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(_, _) => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(_, _, _) => 100,
         }
     }
 }

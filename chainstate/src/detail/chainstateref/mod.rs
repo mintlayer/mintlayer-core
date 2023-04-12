@@ -571,7 +571,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {
                             let cs: i64 = (*c).try_into().map_err(|_| {
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue
+                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(tx.transaction().get_id(), *c)
                             })?;
                             let given = BlockDistance::new(cs);
                             let required = self.chain_config
@@ -579,13 +579,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                                 .decommission_pool_maturity_distance(block_height);
                             ensure!(
                                 given >= required,
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue
+                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(tx.transaction().get_id(), given, required)
                             );
                         }
                         OutputTimeLock::UntilHeight(_)
                         | OutputTimeLock::UntilTime(_)
                         | OutputTimeLock::ForSeconds(_) => {
-                            return Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType);
+                            return Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType(tx.transaction().get_id()));
                         }
                     },
                 };
