@@ -143,6 +143,7 @@ impl MasterKeyChain {
         let mut mnemonic = bip39::Mnemonic::parse(mnemonic_str).map_err(KeyChainError::Bip39)?;
         let mut seed = mnemonic.to_seed(passphrase.unwrap_or(""));
         let root_key = ExtendedPrivateKey::new_master(&seed, DEFAULT_KEY_KIND)?;
+        // TODO(SECURITY) confirm that the mnemonic is erased on drop
         mnemonic.zeroize();
         seed.zeroize();
         Ok(root_key)
@@ -467,11 +468,10 @@ impl AccountKeyChain {
     /// Derive addresses for the `purpose` key chain
     fn top_up(&mut self, purpose: KeyPurpose) -> KeyChainResult<()> {
         // TODO add db_tx
-        let dest = match purpose {
+        let _dest = match purpose {
             ReceiveFunds => &mut self.receiving_addresses,
             Change => &mut self.change_addresses,
         };
-        println!("TODO topup {dest:?}");
         Ok(())
     }
 
