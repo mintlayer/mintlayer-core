@@ -37,7 +37,7 @@ use common::{
     time_getter::TimeGetter,
 };
 use logging::log;
-use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure};
+use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 
 use crate::{
     config::P2pConfig,
@@ -463,6 +463,18 @@ where
         }
     }
 
+    /// Should we load addresses from this peer?
+    fn load_addresses_from(role: Role) -> bool {
+        // Load addresses only from outbound peers, like it's done in Bitcoin Core
+        role == Role::Outbound
+    }
+
+    /// Should we send addresses to this peer if it requests them?
+    fn send_addresses_to(role: Role) -> bool {
+        // Send addresses only to inbound peers, like it's done in Bitcoin Core
+        role == Role::Inbound
+    }
+
     /// Try accept new connection
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
@@ -487,11 +499,7 @@ where
             self.subscribed_to_peer_addresses.insert(info.peer_id);
         }
 
-        // For security reasons, the address list is only requested from outbound peers.
-        // (inbound peers are generally less trustworthy than outbound peers).
-        let expect_addr_list_response = role == Role::Outbound;
-
-        if expect_addr_list_response {
+        if Self::load_addresses_from(role) {
             Self::send_peer_message(
                 &mut self.peer_connectivity_handle,
                 peer_id,
@@ -522,7 +530,8 @@ where
                 sent_ping: None,
                 ping_last: None,
                 ping_min: None,
-                expect_addr_list_response,
+                addr_list_req_received: SetFlag::new(),
+                addr_list_resp_received: SetFlag::new(),
                 announced_addresses,
                 address_rate_limiter,
             },
@@ -749,7 +758,7 @@ where
 
     fn handle_incoming_message(&mut self, peer: PeerId, message: PeerManagerMessage) {
         match message {
-            PeerManagerMessage::AddrListRequest(_) => self.handle_add_list_request(peer),
+            PeerManagerMessage::AddrListRequest(_) => self.handle_addr_list_request(peer),
             PeerManagerMessage::AnnounceAddrRequest(r) => {
                 self.handle_announce_addr_request(peer, r.address)
             }
@@ -790,7 +799,14 @@ where
         }
     }
 
-    fn handle_add_list_request(&mut self, peer: PeerId) {
+    fn handle_addr_list_request(&mut self, peer_id: PeerId) {
+        let peer = self.peers.get_mut(&peer_id).expect("peer must be known");
+        // Only one request allowed to reduce load in case of DoS attacks
+        if !Self::send_addresses_to(peer.role) || peer.addr_list_req_received.test_and_set() {
+            log::warn!("Ignore unexpected address list request from peer {peer_id}");
+            return;
+        }
+
         let addresses = self
             .peerdb
             .known_addresses()
@@ -802,7 +818,7 @@ where
 
         Self::send_peer_message(
             &mut self.peer_connectivity_handle,
-            peer,
+            peer_id,
             PeerManagerMessage::AddrListResponse(AddrListResponse { addresses }),
         );
     }
@@ -821,13 +837,11 @@ where
             P2pError::ProtocolError(ProtocolError::AddressListLimitExceeded)
         );
         ensure!(
-            peer.expect_addr_list_response,
+            Self::load_addresses_from(peer.role) && !peer.addr_list_resp_received.test_and_set(),
             P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "AddrListResponse".to_owned()
             ))
         );
-
-        peer.expect_addr_list_response = false;
 
         for address in addresses {
             if let Some(address) = TransportAddress::from_peer_address(
