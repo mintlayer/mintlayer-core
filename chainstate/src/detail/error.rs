@@ -45,6 +45,8 @@ pub enum BlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
+    #[error("Failed to load block")]
+    BlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]

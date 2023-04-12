@@ -285,14 +285,15 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .get_best_block_id()
                 .map_err(BlockError::BestBlockLoadError)
                 .log_err()?;
-            let best_block_height = chainstate_ref
-                .get_block_height_in_main_chain(&best_block_id)
-                .map_err(BlockError::BestBlockLoadError)
+
+            let prev_block_height = chainstate_ref
+                .get_block_height_in_main_chain(&block.prev_block_id())
+                .map_err(BlockError::BlockLoadError)
                 .log_err()?
-                .expect("best block height doesn't exist");
+                .ok_or(BlockError::PrevBlockNotFound)?;
 
             chainstate_ref
-                .check_block(&block, best_block_height.next_height())
+                .check_block(&block, prev_block_height.next_height())
                 .map_err(BlockError::CheckBlockFailed)
                 .log_err()?;
 
@@ -436,16 +437,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
     ) -> Result<WithId<Block>, BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
 
-        let best_block_id = chainstate_ref
-            .get_best_block_id()
-            .map_err(BlockError::BestBlockLoadError)
-            .log_err()?;
-        let best_block_height = chainstate_ref
-            .get_block_height_in_main_chain(&best_block_id)
-            .map_err(BlockError::BestBlockLoadError)
+        let prev_block_height = chainstate_ref
+            .get_block_height_in_main_chain(&block.prev_block_id())
+            .map_err(BlockError::BlockLoadError)
             .log_err()?
-            .expect("best block height doesn't exist");
-        chainstate_ref.check_block(&block, best_block_height.next_height()).log_err()?;
+            .ok_or(BlockError::PrevBlockNotFound)?;
+        chainstate_ref.check_block(&block, prev_block_height.next_height()).log_err()?;
         Ok(block)
     }
 

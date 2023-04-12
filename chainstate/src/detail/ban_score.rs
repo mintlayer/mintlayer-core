@@ -41,6 +41,7 @@ impl BanScore for BlockError {
             BlockError::CheckBlockFailed(err) => err.ban_score(),
             BlockError::StateUpdateFailed(err) => err.ban_score(),
             BlockError::BestBlockLoadError(_) => 0,
+            BlockError::BlockLoadError(_) => 0,
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
