@@ -94,13 +94,17 @@ impl RpcAuth {
             .map_err(CheckError::InvalidUtf8Value)?;
         let (username, password) =
             username_password.split_once(':').ok_or(CheckError::ColonNotFound)?;
+        let username_valid = SliceEqualityCheckMethod::timing_resistant_equal(
+            self.username.as_bytes(),
+            username.as_bytes(),
+        );
         let password_valid = verify_password(
             password.as_bytes(),
             self.password_hash.clone(),
             SliceEqualityCheckMethod::TimingResistant,
         )
         .map_err(CheckError::KdfError)?;
-        Ok(username == self.username && password_valid)
+        Ok(username_valid && password_valid)
     }
 }
 
