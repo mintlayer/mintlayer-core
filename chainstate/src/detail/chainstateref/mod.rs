@@ -425,7 +425,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block.block_reward().outputs().iter().try_for_each(|output| {
             match output {
                 TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
-                TxOutput::ProduceBlockFromStake(_, _, _) => {
+                TxOutput::ProduceBlockFromStake(_, _) => {
                     // The output can be reused in block reward right away
                     Ok(())
                 }
@@ -537,9 +537,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Check tokens
             tx.outputs()
                 .iter()
-                .filter_map(|output| match output.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Token(token_data) => Some(token_data),
+                .filter_map(|output| {
+                    output.value().and_then(|value| match value {
+                        OutputValue::Coin(_) => None,
+                        OutputValue::Token(token_data) => Some(token_data),
+                    })
                 })
                 .try_for_each(|token_data| {
                     check_tokens_data(
@@ -566,7 +568,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::Transfer(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::StakePool(_)
-                    | TxOutput::ProduceBlockFromStake(_, _, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::LockThenTransfer(_, _, _) => {}
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {

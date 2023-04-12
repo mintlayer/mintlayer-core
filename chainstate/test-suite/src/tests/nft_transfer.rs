@@ -85,7 +85,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .unwrap();
         let block = tf.block(*block_index.block_id());
         assert_eq!(
-            block.transactions()[0].outputs()[0].value(),
+            block.transactions()[0].outputs()[0].value().unwrap(),
             output_value.into()
         );
         assert!(tf
@@ -172,7 +172,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
         assert_eq!(block.transactions()[0], tx);
-        assert_eq!(tx.outputs()[0].value(), output_value.into());
+        assert_eq!(tx.outputs()[0].value().unwrap(), output_value.into());
 
         // Try to transfer 0 NFT
         let result = tf
@@ -433,7 +433,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
         assert_eq!(
-            block.transactions()[0].outputs()[0].value(),
+            block.transactions()[0].outputs()[0].value().unwrap(),
             output_value.into()
         );
 
@@ -467,6 +467,6 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let transfer_output = &outputs[0];
 
-        assert_eq!(transfer_output.value(), transfer_value.into());
+        assert_eq!(transfer_output.value().unwrap(), transfer_value.into());
     })
 }

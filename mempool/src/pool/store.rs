@@ -161,9 +161,14 @@ impl MempoolStore {
                     .get(outpoint.output_index() as usize)
                     .ok_or_else(make_err)
             })
-            .map(|output| match output.value() {
-                OutputValue::Coin(coin) => coin,
-                OutputValue::Token(_) => Amount::from_atoms(0),
+            .map(|output| {
+                output
+                    .value()
+                    .map(|value| match value {
+                        OutputValue::Coin(coin) => coin,
+                        OutputValue::Token(_) => Amount::ZERO,
+                    })
+                    .unwrap_or(Amount::ZERO)
             })
     }
 

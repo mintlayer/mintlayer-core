@@ -148,11 +148,7 @@ fn stable_block_time(#[case] seed: Seed) {
         )
         .expect("should be able to mine");
 
-        let reward_output = TxOutput::ProduceBlockFromStake(
-            Amount::from_atoms(1),
-            anyonecanspend_address(),
-            pool_id,
-        );
+        let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
         tf.make_block_builder()
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
             .with_timestamp(valid_block_timestamp)
@@ -189,8 +185,7 @@ fn invalid_target(#[case] seed: Seed) {
         invalid_target,
     );
 
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     let res = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))

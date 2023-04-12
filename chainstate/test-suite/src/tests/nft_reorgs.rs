@@ -415,11 +415,11 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
         );
         // Check issuance storage in the chain and in the storage
         assert_eq!(
-            issuance_tx.outputs()[0].value(),
+            issuance_tx.outputs()[0].value().unwrap(),
             issuance_value.clone().into()
         );
         assert_eq!(
-            token_aux_data.issuance_tx().outputs()[0].value(),
+            token_aux_data.issuance_tx().outputs()[0].value().unwrap(),
             issuance_value.into()
         );
 

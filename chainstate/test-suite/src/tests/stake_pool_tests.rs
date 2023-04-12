@@ -274,7 +274,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
             let genesis_tx_output =
                 genesis_outputs.get(&OutPointSourceId::BlockReward(genesis_id)).unwrap();
             assert_eq!(genesis_tx_output.len(), 1);
-            genesis_tx_output.get(0).unwrap().value().coin_amount().unwrap()
+            genesis_tx_output.get(0).unwrap().value().unwrap().coin_amount().unwrap()
         };
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 

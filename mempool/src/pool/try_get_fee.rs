@@ -66,9 +66,11 @@ where
             .transaction()
             .outputs()
             .iter()
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(coin) => Some(coin),
-                OutputValue::Token(_) => None,
+            .filter_map(|output| {
+                output.value().and_then(|value| match value {
+                    OutputValue::Coin(coin) => Some(coin),
+                    OutputValue::Token(_) => None,
+                })
             })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;

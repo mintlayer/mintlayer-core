@@ -355,7 +355,7 @@ fn token_issue_test(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         assert_eq!(
-            block.transactions()[0].transaction().outputs()[0].value(),
+            block.transactions()[0].transaction().outputs()[0].value().unwrap(),
             output_value.into()
         );
     });
@@ -403,7 +403,7 @@ fn token_transfer_test(#[case] seed: Seed) {
         let block = tf.block(*block_index.block_id());
         let token_id = token_id(block.transactions()[0].transaction()).unwrap();
         assert_eq!(
-            block.transactions()[0].transaction().outputs()[0].value(),
+            block.transactions()[0].transaction().outputs()[0].value().unwrap(),
             output_value.clone().into()
         );
         let issuance_outpoint_id: OutPointSourceId =
@@ -616,7 +616,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
 
         let block = tf.block(*block_index.block_id());
         assert_eq!(
-            block.transactions()[0].transaction().outputs()[0].value(),
+            block.transactions()[0].transaction().outputs()[0].value().unwrap(),
             issuance_value.into()
         );
     })
@@ -631,7 +631,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
         let total_funds = Amount::from_atoms(rng.gen_range(1..u128::MAX));
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
-        let coins_value = (tf.genesis().utxos()[0].value().coin_amount().unwrap()
+        let coins_value = (tf.genesis().utxos()[0].value().unwrap().coin_amount().unwrap()
             - token_min_issuance_fee)
             .unwrap();
         let genesis_outpoint_id = tf.genesis().get_id().into();
@@ -1696,11 +1696,11 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
         );
         // Check issuance storage in the chain and in the storage
         assert_eq!(
-            issuance_tx.transaction().outputs()[0].value(),
+            issuance_tx.transaction().outputs()[0].value().unwrap(),
             issuance_value.clone().into()
         );
         assert_eq!(
-            token_aux_data.issuance_tx().outputs()[0].value(),
+            token_aux_data.issuance_tx().outputs()[0].value().unwrap(),
             issuance_value.into()
         );
 

@@ -217,9 +217,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .outputs()
             .iter()
             // Filter tokens
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => Some(token_data),
+            .filter_map(|output| {
+                output.value().and_then(|value| match value {
+                    OutputValue::Coin(_) => None,
+                    OutputValue::Token(token_data) => Some(token_data),
+                })
             })
             // Find issuance data and return RPCTokenInfo
             .find_map(|token_data| match &*token_data {

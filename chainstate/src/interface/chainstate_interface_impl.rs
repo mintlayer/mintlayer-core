@@ -352,29 +352,27 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
         let utxo_view = chainstate_ref.make_utxo_view();
 
-        let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
-            Vec::new(),
-            |mut values, outpoint| {
-                let opt_utxo = utxo_view
-                    .utxo(outpoint)
+        tx.inputs()
+            .iter()
+            .map(|input| {
+                let utxo = utxo_view
+                    .utxo(input.outpoint())
                     .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
-                if let Some(utxo) = opt_utxo {
-                    match utxo.output().value() {
-                        OutputValue::Coin(amount) => values.push(Some(amount)),
-                        _ => {
-                            return Err(ChainstateError::FailedToReadProperty(
+                match utxo {
+                    Some(utxo) => utxo
+                        .output()
+                        .value()
+                        .map(|v| match v {
+                            OutputValue::Coin(amount) => Ok(amount),
+                            OutputValue::Token(_) => Err(ChainstateError::FailedToReadProperty(
                                 PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
-                            ))
-                        }
-                    }
-                } else {
-                    values.push(None)
+                            )),
+                        })
+                        .transpose(),
+                    None => Ok(None),
                 }
-                Ok(values)
-            },
-        );
-
-        outpoint_values
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {

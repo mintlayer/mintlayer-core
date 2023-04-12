@@ -27,7 +27,7 @@ use common::{
 };
 use fallible_iterator::FallibleIterator;
 use utils::ensure;
-use utxo::{Utxo, UtxosView};
+use utxo::UtxosView;
 
 use super::{
     amounts_map::AmountsMap,
@@ -98,13 +98,24 @@ where
     IssuanceTokenIdGetterFunc:
         Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
-    let iter = inputs.iter().map(|input| {
-        let utxo = utxo_view
-            .utxo(input.outpoint())
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-        amount_from_outpoint(input.outpoint().tx_id(), &utxo, &issuance_token_id_getter)
-    });
+    let iter = inputs
+        .iter()
+        .filter_map(|input| {
+            let res = utxo_view
+                .utxo(input.outpoint())
+                .map_err(|_| ConnectTransactionError::UtxoError(utxo::Error::ViewRead));
+            match res {
+                Ok(utxo) => match utxo {
+                    Some(utxo) => utxo.output().value().map(|v| Ok((v, input.outpoint().tx_id()))),
+                    None => Some(Err(ConnectTransactionError::MissingOutputOrSpent)),
+                },
+                Err(e) => Some(Err(e)),
+            }
+        })
+        .map(|value| {
+            let (output_value, tx_id) = value?;
+            amount_from_outpoint(tx_id, &output_value, &issuance_token_id_getter)
+        });
 
     let iter = fallible_iterator::convert(iter);
 
@@ -119,7 +130,8 @@ fn calculate_total_outputs(
 ) -> Result<BTreeMap<CoinOrTokenId, Amount>, ConnectTransactionError> {
     let iter = outputs
         .iter()
-        .map(|output| get_output_token_id_and_amount(&output.value(), include_issuance));
+        .filter_map(|output| output.value())
+        .map(|value| get_output_token_id_and_amount(&value, include_issuance));
     let iter = fallible_iterator::convert(iter).filter_map(Ok).map_err(Into::into);
 
     let result = AmountsMap::from_fallible_iter(iter)?;
@@ -184,7 +196,7 @@ where
 
 fn amount_from_outpoint<IssuanceTokenIdGetterFunc>(
     tx_id: OutPointSourceId,
-    utxo: &Utxo,
+    output_value: &OutputValue,
     issuance_token_id_getter: &IssuanceTokenIdGetterFunc,
 ) -> Result<(CoinOrTokenId, Amount), ConnectTransactionError>
 where
@@ -197,10 +209,10 @@ where
                 || -> Result<Option<TokenId>, ConnectTransactionError> {
                     issuance_token_id_getter(&tx_id)
                 };
-            get_input_token_id_and_amount(&utxo.output().value(), issuance_token_id_getter)
+            get_input_token_id_and_amount(output_value, issuance_token_id_getter)
         }
         OutPointSourceId::BlockReward(_) => {
-            get_input_token_id_and_amount(&utxo.output().value(), || Ok(None))
+            get_input_token_id_and_amount(output_value, || Ok(None))
         }
     }
 }
@@ -225,9 +237,11 @@ pub fn check_transferred_amount_in_reward<U: UtxosView>(
     let outputs_total = outputs.map_or_else(
         || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
         |outputs| {
-            if outputs.iter().any(|output| match output.value() {
-                OutputValue::Coin(_) => false,
-                OutputValue::Token(_) => true,
+            if outputs.iter().any(|output| {
+                output.value().map_or(false, |v| match v {
+                    OutputValue::Coin(_) => false,
+                    OutputValue::Token(_) => true,
+                })
             }) {
                 return Err(ConnectTransactionError::TokensError(
                     TokensError::TokensInBlockReward,
