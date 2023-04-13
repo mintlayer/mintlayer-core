@@ -45,6 +45,9 @@ const SCALING_FACTOR: f64 = 1000000000.;
 // The size of the precomputed weights
 const VEC_SIZE: u64 = 240;
 
+// Epsilon is the smallest positive value that can be represented by the scaled weights.
+const EPSILON: u64 = 1;
+
 fn precompute_asymptote_to_infinity_to_one<F>(alpha: F, size: u64) -> Vec<F>
 where
     F: num::Float + num::cast::FromPrimitive,
@@ -52,22 +55,32 @@ where
     (0..size).map(|t| asymptote_to_infinity_to_one(t, alpha)).collect()
 }
 
+fn precompute_asymptote_to_infinity_to_one_as_int<F>(alpha: F, size: u64) -> Vec<u64>
+where
+    F: num::Float + num::cast::FromPrimitive + num::cast::ToPrimitive,
+{
+    #[allow(clippy::float_arithmetic)]
+    precompute_asymptote_to_infinity_to_one(alpha, size)
+        .into_iter()
+        .map(|x| (x.to_f64().expect("F -> f64 Must succeed") * SCALING_FACTOR) as u64)
+        .collect()
+}
+
 lazy_static! {
-    static ref TIMESLOTS_WEIGHTS: Vec<f64> =
-        precompute_asymptote_to_infinity_to_one(ALPHA, VEC_SIZE);
+    static ref TIMESLOTS_WEIGHTS: Vec<u64> =
+        precompute_asymptote_to_infinity_to_one_as_int(ALPHA, VEC_SIZE);
 }
 
 // A look-up table for the weights of the time-slots.
 pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     let timeslot = timeslot as usize;
 
-    #[allow(clippy::float_arithmetic)]
     if timeslot >= TIMESLOTS_WEIGHTS.len() {
         // This is basically 1 times the scaling factor (minus epsilon), where the other branch has everything < 1
-        // We subtract epsilon (smallest positive value) to ensure that blocks, no matter with how many slots, will have a weight > 0
-        SCALING_FACTOR as u64 - 1
+        // We subtract epsilon (smallest possible positive value) to ensure that blocks, no matter with how many slots, will have a weight > 0
+        SCALING_FACTOR as u64 - EPSILON
     } else {
-        (TIMESLOTS_WEIGHTS[timeslot] * SCALING_FACTOR) as u64
+        TIMESLOTS_WEIGHTS[timeslot]
     }
 }
 
@@ -77,6 +90,8 @@ pub fn get_weight_for_block() -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use common::{primitives::BlockHeight, Uint256};
+
     use super::*;
 
     #[test]
@@ -92,18 +107,21 @@ mod tests {
     }
 
     #[test]
-    fn int_conversion() {
+    fn last_weight_is_larger_than_epsilon() {
+        assert!(
+            TIMESLOTS_WEIGHTS.last().unwrap() > &EPSILON,
+            "The last weight should be larger than epsilon"
+        );
+    }
+
+    #[test]
+    fn final_weights_resolvable_int() {
         // In this test, we ensure that the scaling factor, combined with alpha, is large enough to ensure
         // that the weights are resolvable as integers.
 
-        let int_weights = TIMESLOTS_WEIGHTS
+        let diffs = TIMESLOTS_WEIGHTS
             .iter()
-            .map(|v| (v * SCALING_FACTOR) as u64)
-            .collect::<Vec<_>>();
-
-        let diffs = int_weights
-            .iter()
-            .zip(int_weights.iter().skip(1))
+            .zip(TIMESLOTS_WEIGHTS.iter().skip(1))
             .map(|(a, b)| b - a)
             .collect::<Vec<_>>();
 
@@ -131,5 +149,21 @@ mod tests {
             diffs.iter().all(|v| *v > 0),
             "The weights be resolvable as integers after scaling"
         );
+    }
+
+    #[test]
+    fn highest_possible_chaintrust() {
+        let max_block_height: u64 = BlockHeight::max().into();
+        let max_block_height = Uint256::from(max_block_height);
+        let single_block_weight = Uint256::from(get_weight_for_block());
+
+        // Given that the maximum block weight is 1*SCALING_FACTOR,
+        // and it only goes down when there are empty time-slots in between,
+        // the maximum chain trust is the following:
+        let max_chain_trust = max_block_height * single_block_weight;
+
+        // There should not be any overflow to ensure that the chain trust is always less than the maximum possible value.
+        assert!(max_block_height < max_chain_trust);
+        assert!(single_block_weight < max_chain_trust);
     }
 }
