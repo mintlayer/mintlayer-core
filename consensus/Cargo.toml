@@ -6,11 +6,12 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chainstate-types = {path = '../chainstate/types'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
-utils = {path = "../utils"}
-chainstate-types = {path = '../chainstate/types'}
+lazy_static = "1.4"
 pos_accounting = {path = '../pos_accounting'}
+utils = {path = "../utils"}
 utxo = {path = '../utxo'}
 
 thiserror.workspace = true

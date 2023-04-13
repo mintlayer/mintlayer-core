@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mockall::lazy_static;
-
 /// An asymptote that with its limit to infinity, reaches the value one.
 /// The function is normalized so that the limit as t goes to infinity is one.
 ///
@@ -66,7 +64,7 @@ where
         .collect()
 }
 
-lazy_static! {
+lazy_static::lazy_static! {
     static ref TIMESLOTS_WEIGHTS: Vec<u64> =
         precompute_asymptote_to_infinity_to_one_as_int(ALPHA, VEC_SIZE);
 }

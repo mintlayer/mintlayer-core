@@ -1019,6 +1019,7 @@ dependencies = [
  "common",
  "crypto",
  "itertools",
+ "lazy_static",
  "num",
  "pos_accounting",
  "rstest",

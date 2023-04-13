@@ -36,19 +36,16 @@ use common::{
     time_getter::TimeGetter,
     Uint256,
 };
+use consensus::chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot};
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
-use crate::{
-    detail::chainstateref::chaintrust_asymptote::get_weight_for_block, BlockError, ChainstateConfig,
-};
+use crate::{BlockError, ChainstateConfig};
 
-use self::{
-    chaintrust_asymptote::get_weight_for_timeslot, tx_verifier_storage::gen_block_index_getter,
-};
+use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
     median_time::calculate_median_time_past,
@@ -58,7 +55,6 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError,
 };
 
-mod chaintrust_asymptote;
 mod epoch_seal;
 mod tx_verifier_storage;
 
@@ -963,7 +959,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .expect("Strict time ordering is guaranteed by the consensus rules in check_block");
         let empty_time_slots_weight = get_weight_for_timeslot(timestamp_diff);
 
-        assert!(get_weight_for_block() >= empty_time_slots_weight);
+        debug_assert!(get_weight_for_block() >= empty_time_slots_weight);
 
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();

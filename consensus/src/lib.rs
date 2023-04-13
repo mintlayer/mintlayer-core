@@ -15,6 +15,7 @@
 
 //! A consensus related logic.
 
+pub mod chaintrust;
 mod error;
 mod pos;
 mod pow;
