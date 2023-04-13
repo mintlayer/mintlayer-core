@@ -60,6 +60,8 @@ lazy_static! {
 // A look-up table for the weights of the time-slots.
 pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     let timeslot = timeslot as usize;
+
+    #[allow(clippy::float_arithmetic)]
     if timeslot >= TIMESLOTS_WEIGHTS.len() {
         // This is basically 1 times the scaling factor (minus epsilon), where the other branch has everything < 1
         // We subtract epsilon (smallest positive value) to ensure that blocks, no matter with how many slots, will have a weight > 0
