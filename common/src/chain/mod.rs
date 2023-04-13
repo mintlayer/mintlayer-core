@@ -14,6 +14,7 @@
 // limitations under the License.
 
 pub mod block;
+pub mod chaintrust;
 pub mod config;
 pub mod gen_block;
 pub mod genesis;

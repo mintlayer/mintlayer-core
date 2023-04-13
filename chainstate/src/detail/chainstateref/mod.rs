@@ -27,6 +27,7 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
         },
+        chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot},
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -36,7 +37,6 @@ use common::{
     time_getter::TimeGetter,
     Uint256,
 };
-use consensus::chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot};
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};

@@ -9,7 +9,6 @@ rust-version.workspace = true
 chainstate-types = {path = '../chainstate/types'}
 common = {path = '../common'}
 crypto = {path = '../crypto'}
-lazy_static = "1.4"
 pos_accounting = {path = '../pos_accounting'}
 utils = {path = "../utils"}
 utxo = {path = '../utxo'}

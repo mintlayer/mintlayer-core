@@ -88,7 +88,7 @@ pub fn get_weight_for_block() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use common::{primitives::BlockHeight, Uint256};
+    use crate::{primitives::BlockHeight, Uint256};
 
     use super::*;
 
