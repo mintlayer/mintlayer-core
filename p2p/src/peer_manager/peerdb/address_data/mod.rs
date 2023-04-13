@@ -17,12 +17,21 @@ use std::time::Duration;
 
 use crypto::random::Rng;
 
+/// Maximum delay between reconnection attempts to reserved nodes
+const MAX_DELAY_RESERVED: Duration = Duration::from_secs(360);
+
+/// Maximum delay between reconnection attempts to previously reachable nodes
+const MAX_DELAY_REACHABLE: Duration = Duration::from_secs(3600);
+
 /// When the node drops the unreachable node address. Used for negative caching.
 const PURGE_UNREACHABLE_TIME: Duration = Duration::from_secs(3600);
 
 /// When the server drops the unreachable node address that was once reachable. This should take about a month.
 /// Such a long time is useful if the node itself has prolonged connectivity problems.
-const PURGE_REACHABLE_FAIL_COUNT: u32 = 35;
+const PURGE_REACHABLE_TIME: Duration = Duration::from_secs(3600 * 24 * 7 * 4);
+
+const PURGE_REACHABLE_FAIL_COUNT: u32 =
+    (PURGE_REACHABLE_TIME.as_secs() / MAX_DELAY_REACHABLE.as_secs()) as u32;
 
 pub enum AddressState {
     Connected {},
@@ -137,27 +146,13 @@ impl AddressData {
     }
 
     fn next_connect_delay(fail_count: u32, reserved: bool) -> Duration {
-        if reserved {
-            // Try to connect to reserved nodes more often
-            match fail_count {
-                0 => Duration::ZERO,
-                1 => Duration::from_secs(10),
-                2 => Duration::from_secs(60),
-                3 => Duration::from_secs(180),
-                _ => Duration::from_secs(360),
-            }
+        let max_delay = if reserved {
+            MAX_DELAY_RESERVED
         } else {
-            match fail_count {
-                0 => Duration::ZERO,
-                1 => Duration::from_secs(60),
-                2 => Duration::from_secs(360),
-                3 => Duration::from_secs(3600),
-                4 => Duration::from_secs(3 * 3600),
-                5 => Duration::from_secs(6 * 3600),
-                6 => Duration::from_secs(12 * 3600),
-                _ => Duration::from_secs(24 * 3600),
-            }
-        }
+            MAX_DELAY_REACHABLE
+        };
+
+        std::cmp::min(fail_count * Duration::from_secs(60), max_delay)
     }
 
     fn next_connect_time(
