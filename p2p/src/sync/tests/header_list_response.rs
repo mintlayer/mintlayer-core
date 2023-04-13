@@ -202,21 +202,8 @@ async fn valid_headers(#[case] seed: Seed) {
     handle.assert_no_error().await;
 }
 
-#[rstest::rstest]
-#[trace]
-#[case(Seed::from_entropy())]
 #[tokio::test]
-async fn disconnect(#[case] seed: Seed) {
-    let mut rng = test_utils::random::make_seedable_rng(seed);
-
-    let chain_config = Arc::new(create_unit_test_config());
-    let mut tf = TestFramework::builder(&mut rng)
-        .with_chain_config(chain_config.as_ref().clone())
-        .build();
-    let block = tf.make_block_builder().build();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
-
+async fn disconnect() {
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
         socks5_proxy: Default::default(),
@@ -241,9 +228,7 @@ async fn disconnect(#[case] seed: Seed) {
         sync_stalling_timeout: Duration::from_millis(100).into(),
     });
     let mut handle = SyncManagerHandle::builder()
-        .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
         .build()
         .await;
 

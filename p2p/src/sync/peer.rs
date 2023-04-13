@@ -56,7 +56,6 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-// TODO: FIXME: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
 // TODO: Take into account the chain work when syncing.
 /// A peer context.
 ///
