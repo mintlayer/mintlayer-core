@@ -967,9 +967,8 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
 
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
-        let chain_trust = prev_block_chaintrust
-            + self.get_block_proof(block).log_err()?
-            + empty_time_slots_weight.into(); // TODO(PR): Check if this is correct
+        let chain_trust = prev_block_chaintrust + self.get_block_proof(block).log_err()?
+            - empty_time_slots_weight.into();
         let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }

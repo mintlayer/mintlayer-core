@@ -61,8 +61,9 @@ lazy_static! {
 pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     let timeslot = timeslot as usize;
     if timeslot >= TIMESLOTS_WEIGHTS.len() {
-        // This is basically 1 times the scaling factor, where the other branch has everything < 1
-        SCALING_FACTOR as u64
+        // This is basically 1 times the scaling factor (minus epsilon), where the other branch has everything < 1
+        // We subtract epsilon (smallest positive value) to ensure that blocks, no matter with how many slots, will have a weight > 0
+        SCALING_FACTOR as u64 - 1
     } else {
         (TIMESLOTS_WEIGHTS[timeslot] * SCALING_FACTOR) as u64
     }
