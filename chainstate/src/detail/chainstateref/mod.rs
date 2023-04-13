@@ -25,9 +25,9 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
+            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
+            BlockHeader, BlockReward,
         },
-        chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot},
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -684,11 +684,25 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn get_block_proof(&self, block: &Block) -> Result<Uint256, BlockError> {
+    fn get_block_proof(
+        &self,
+        prev_block_timestamp: BlockTimestamp,
+        block: &Block,
+    ) -> Result<Uint256, BlockError> {
+        let timestamp_diff = block
+            .timestamp()
+            .as_int_seconds()
+            .checked_sub(prev_block_timestamp.as_int_seconds())
+            .ok_or(BlockError::BlockProofCalculationTimeOrderError(
+                block.get_id(),
+                prev_block_timestamp,
+                block.timestamp(),
+            ))?;
+
         block
             .header()
             .consensus_data()
-            .get_block_proof()
+            .get_block_proof(timestamp_diff)
             .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
@@ -952,19 +966,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         // Set Time Max
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
-        let timestamp_diff = block
-            .timestamp()
-            .as_int_seconds()
-            .checked_sub(prev_block_index.block_timestamp().as_int_seconds())
-            .expect("Strict time ordering is guaranteed by the consensus rules in check_block");
-        let empty_time_slots_weight = get_weight_for_timeslot(timestamp_diff);
-
-        debug_assert!(get_weight_for_block() >= empty_time_slots_weight);
+        let current_block_proof =
+            self.get_block_proof(prev_block_index.block_timestamp(), block).log_err()?;
 
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
-        let chain_trust = prev_block_chaintrust + self.get_block_proof(block).log_err()?
-            - empty_time_slots_weight.into();
+        let chain_trust = prev_block_chaintrust + current_block_proof;
         let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }

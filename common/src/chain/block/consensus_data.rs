@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::{ChainConfig, PoolId};
+use crate::chain::{chaintrust, ChainConfig, PoolId};
 use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
 use crypto::vrf::VRFReturn;
 
@@ -31,9 +31,26 @@ pub enum ConsensusData {
 }
 
 impl ConsensusData {
-    pub fn get_block_proof(&self) -> Option<Uint256> {
-        // TODO(PR): move asymptote functions here and use its get_weight_for_block() here
-        Some(1000000000u64.into())
+    /// Block proof is the amount of trust a block adds to the blockchain. It basically quantifies the
+    /// amount of work/trust that was put into the block based on criteria that depend on the consensus
+    /// algorithm.
+    pub fn get_block_proof(&self, timestamp_diff: u64) -> Option<Uint256> {
+        match self {
+            ConsensusData::None => Some(1u64.into()),
+            ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
+            ConsensusData::PoS(_) => {
+                use chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot};
+
+                let empty_time_slots_weight = get_weight_for_timeslot(timestamp_diff);
+
+                debug_assert!(get_weight_for_block() >= empty_time_slots_weight);
+
+                let block_weight = Uint256::from(chaintrust::asymptote::get_weight_for_block());
+                let empty_time_slots_weight = Uint256::from(empty_time_slots_weight);
+
+                Some(block_weight - empty_time_slots_weight)
+            }
+        }
     }
 
     pub fn reward_maturity_distance(&self, chain_config: &ChainConfig) -> BlockDistance {
