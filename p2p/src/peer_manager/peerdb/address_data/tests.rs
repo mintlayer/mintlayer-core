@@ -56,3 +56,34 @@ fn randomized(#[case] seed: Seed) {
         }
     }
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reachable_reconnects(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let started_at = Duration::from_secs(1600000000);
+    let mut now = started_at;
+    let mut address = AddressData::new(true, false, started_at);
+    let mut connection_attempts = 0;
+
+    loop {
+        if address.is_unreachable() {
+            break;
+        }
+        if address.connect_now(now) {
+            address.transition_to(AddressStateTransitionTo::ConnectionFailed, now, &mut rng);
+            connection_attempts += 1;
+        }
+        now += Duration::from_secs(60);
+    }
+
+    // Reachable addresses should be tried for reconnect for a long time
+    let time_until_removed = now - started_at;
+    assert_eq!(connection_attempts, PURGE_REACHABLE_FAIL_COUNT);
+    let week = Duration::from_secs(3600 * 24 * 7);
+    assert!(
+        time_until_removed >= 2 * week && time_until_removed <= 6 * week,
+        "invalid time until removed: {time_until_removed:?}"
+    );
+}
