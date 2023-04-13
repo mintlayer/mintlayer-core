@@ -20,6 +20,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    time::Instant,
 };
 
 use itertools::Itertools;
@@ -55,9 +56,8 @@ use crate::{
     MessagingService, PeerManagerEvent, Result,
 };
 
-// TODO: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
-// TODO: Track the block availability for a peer.
-// TODO: Track the best known block for a peer and take into account the chain work when syncing.
+// TODO: FIXME: Investigate if we need some kind of "timeouts" (waiting for blocks or headers).
+// TODO: Take into account the chain work when syncing.
 /// A peer context.
 ///
 /// Syncing logic runs in a separate task for each peer.
@@ -87,6 +87,9 @@ pub struct Peer<T: NetworkingService> {
     /// A number of consecutive unconnected headers received from a peer. This counter is reset
     /// after receiving a valid header.
     unconnected_headers: usize,
+    /// A time when the last message from the peer is received. This field is equal to `None` if
+    /// we aren't waiting for specific messages.
+    last_activity: Option<Instant>,
 }
 
 impl<T> Peer<T>
@@ -123,6 +126,7 @@ where
             best_known_block: None,
             announced_transactions: BTreeSet::new(),
             unconnected_headers: 0,
+            last_activity: None,
         }
     }
 
@@ -132,7 +136,10 @@ where
     }
 
     pub async fn run(&mut self) -> Result<Void> {
+        let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
+
         self.request_headers().await?;
+        self.last_activity = Some(Instant::now());
 
         loop {
             tokio::select! {
@@ -143,6 +150,10 @@ where
 
                 block_to_send_to_peer = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
                     self.send_block(block_to_send_to_peer).await?;
+                }
+
+                _ = stalling_interval.tick(), if self.last_activity.is_some() => {
+                    self.handle_stalling_interval().await?;
                 }
             }
         }
@@ -256,6 +267,7 @@ where
 
     async fn handle_header_list(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
         log::debug!("Headers list from peer {}", self.id());
+        self.last_activity = Some(Instant::now());
 
         if !self.known_headers.is_empty() {
             // The headers list contains exactly one header when a new block is announced.
@@ -282,6 +294,11 @@ where
 
         // The empty headers list means that the peer doesn't have more blocks.
         if headers.is_empty() {
+            // We don't need anything from this peer unless we are still receiving blocks.
+            if self.requested_blocks.is_empty() {
+                self.last_activity = None;
+            }
+
             return Ok(());
         }
 
@@ -349,6 +366,7 @@ where
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
         log::debug!("Block ({}) from peer {}", block.get_id(), self.id());
+        self.last_activity = Some(Instant::now());
 
         if self.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
@@ -425,6 +443,8 @@ where
         Ok(())
     }
 
+    // TODO: This can be optimized, see https://github.com/mintlayer/mintlayer-core/issues/829
+    // for details.
     async fn handle_transaction_announcement(&mut self, tx: Id<Transaction>) -> Result<()> {
         log::debug!("Transaction announcement from {} peer: {tx}", self.id());
 
@@ -583,5 +603,23 @@ where
             self.id(),
             SyncMessage::BlockResponse(BlockResponse::new(block)),
         )
+    }
+
+    async fn handle_stalling_interval(&mut self) -> Result<()> {
+        // Expect is OK here, because this function should only be called when the `last_activity`
+        // is set to something.
+        if Instant::now()
+            < self.last_activity.expect("Last activity time is missing")
+                + *self.p2p_config.sync_stalling_timeout
+        {
+            return Ok(());
+        }
+
+        let (sender, receiver) = oneshot_nofail::channel();
+        self.peer_manager_sender.send(PeerManagerEvent::Disconnect(self.id(), sender))?;
+        receiver.await?.or_else(|e| match e {
+            P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+            e => Err(e),
+        })
     }
 }

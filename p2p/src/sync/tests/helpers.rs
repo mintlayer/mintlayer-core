@@ -176,6 +176,16 @@ impl SyncManagerHandle {
         }
     }
 
+    pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
+        match self.peer_manager_receiver.recv().await.unwrap() {
+            PeerManagerEvent::Disconnect(peer_id, sender) => {
+                assert_eq!(id, peer_id);
+                sender.send(Ok(()));
+            }
+            e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+        }
+    }
+
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
