@@ -37,8 +37,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::{PoSStatus, RequiredConsensus};
-
-const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
