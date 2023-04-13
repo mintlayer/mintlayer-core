@@ -96,12 +96,13 @@ pub struct MempoolStore {
     // This allows us to recognize conflicts (double-spends) and handle them
     pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 
-    // Track transactions by internal unique sequence number
+    // Track transactions by internal unique sequence number. This is used to recover the order in
+    // which the transacitons have been inserted into the mempool, so they can be re-inserted in
+    // the same order after a reorg. We keep both mapping from transactions to sequence numbers and
+    // the mapping from sequence number back to transaction. The sequence number to be allocated to
+    // the next incoming transaction is kept separately.
     pub txs_by_seq_no: BTreeMap<usize, Id<Transaction>>,
-
     pub seq_nos_by_tx: BTreeMap<Id<Transaction>, usize>,
-
-    // Sequence number allocated to the next transaction
     next_seq_no: usize,
 }
 
@@ -117,7 +118,6 @@ pub enum MempoolRemovalReason {
     Block,
     Expiry,
     SizeLimit,
-    #[allow(unused)]
     Replaced,
 }
 
