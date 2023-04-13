@@ -165,7 +165,10 @@ impl Manager {
             subsystem(call_rq, shutdown_rq).await;
 
             // Signal the intent to shut down to the other parts of the application.
-            shutting_down_tx.send(()).await.expect("Subsystem outlived the manager!?");
+            let res = shutting_down_tx.send(()).await;
+            if res.is_err() {
+                log::error!("Subsystem outlived the manager!?");
+            }
 
             log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
 
