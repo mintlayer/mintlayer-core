@@ -46,7 +46,6 @@ mod test {
         detail::tx_verification_strategy::DefaultTransactionVerificationStrategy, BlockSource,
         Chainstate, ChainstateConfig,
     };
-    use common::primitives::time;
     use test_utils::mock_time_getter::mocked_time_getter_seconds;
 
     use super::*;
@@ -99,7 +98,7 @@ mod test {
             let chainstate_config = ChainstateConfig::new();
             let storage = Store::new_empty().unwrap();
             let mut chainstate = Chainstate::new(
-                chain_config,
+                chain_config.clone(),
                 chainstate_config,
                 storage,
                 DefaultTransactionVerificationStrategy::new(),
@@ -113,7 +112,7 @@ mod test {
             let blocks = chain_blocks(
                 block_count,
                 chainstate.chain_config.genesis_block_id(),
-                time::get_time().as_secs(),
+                chain_config.genesis_block().timestamp().as_int_seconds(),
             );
 
             for block in &blocks {
