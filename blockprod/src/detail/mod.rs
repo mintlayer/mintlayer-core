@@ -345,10 +345,7 @@ mod tests {
     use std::sync::atomic::Ordering::Relaxed;
     use subsystem::CallRequest;
 
-    use crate::{
-        prepare_thread_pool,
-        tests::setup_blockprod_test,
-    };
+    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
 
     use super::*;
 
