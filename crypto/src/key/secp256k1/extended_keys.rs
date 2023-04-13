@@ -28,6 +28,7 @@ use secp256k1;
 use secp256k1::SECP256K1;
 use serialization::{Decode, Encode};
 use sha2::Sha512;
+use std::cmp::Ordering;
 use zeroize::Zeroize;
 
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
@@ -45,6 +46,18 @@ pub struct Secp256k1ExtendedPrivateKey {
 
 fn new_hmac_sha_512(key: &[u8]) -> Hmac<Sha512> {
     Hmac::<Sha512>::new_from_slice(key).expect("HMAC can take key of any size")
+}
+
+impl PartialOrd for Secp256k1ExtendedPrivateKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Secp256k1ExtendedPrivateKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.derivation_path.cmp(&other.derivation_path)
+    }
 }
 
 fn to_key_and_chain_code(
@@ -169,7 +182,7 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
 
 /// Given a tree of keys that are derived from a master key using BIP32 rules, this struct represents
 /// the public key at one of the nodes of this tree.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Secp256k1ExtendedPublicKey {
     /// The absolute derivation path that was used to derive this key
     derivation_path: DerivationPath,
@@ -178,6 +191,18 @@ pub struct Secp256k1ExtendedPublicKey {
     chain_code: ChainCode,
     /// The public key that is used to derive child public keys starting from this node
     public_key: Secp256k1PublicKey,
+}
+
+impl PartialOrd for Secp256k1ExtendedPublicKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Secp256k1ExtendedPublicKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.derivation_path.cmp(&other.derivation_path)
+    }
 }
 
 impl Secp256k1ExtendedPublicKey {

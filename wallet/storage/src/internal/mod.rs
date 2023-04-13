@@ -15,20 +15,20 @@
 
 use std::collections::BTreeMap;
 
-use common::{
-    chain::{OutPoint, Transaction},
-    primitives::Id,
-};
+use common::address::Address;
 use utxo::Utxo;
 
 use crate::{
-    schema::{self as db, Schema},
-    TransactionRw, Transactional, WalletStorage, WalletStorageRead, WalletStorageWrite,
+    schema::Schema, TransactionRw, Transactional, WalletStorage, WalletStorageRead,
+    WalletStorageWrite,
 };
 
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
-use wallet_types::WalletTx;
+use wallet_types::{
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
+};
 
 /// Store for wallet data, parametrized over the backend B
 pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
@@ -36,26 +36,13 @@ pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 impl<B: storage::Backend> Store<B> {
     /// Create a new wallet storage
     pub fn new(backend: B) -> crate::Result<Self> {
-        let mut storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
-        storage.set_storage_version(1)?;
+        let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
         Ok(storage)
     }
 
     /// Dump raw database contents
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
         self.0.dump_raw().map_err(crate::Error::from)
-    }
-
-    /// Collect and return all utxos from the storage
-    pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
-        let db_tx = self.transaction_ro()?;
-        db_tx.0.get::<db::DBUtxo, _>().prefix_iter_decoded(&()).map(Iterator::collect)
-    }
-
-    /// Collect and return all transactions from the storage
-    pub fn read_transactions(&self) -> crate::Result<BTreeMap<Id<Transaction>, WalletTx>> {
-        let db_tx = self.transaction_ro()?;
-        db_tx.0.get::<db::DBTxs, _>().prefix_iter_decoded(&()).map(Iterator::collect)
     }
 }
 
@@ -111,18 +98,32 @@ macro_rules! delegate_to_transaction {
 impl<B: storage::Backend> WalletStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-        fn get_transaction(&self, id: &Id<Transaction>) -> crate::Result<Option<WalletTx>>;
+        fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>>;
+        fn get_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
+        fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
+        fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
+        fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>>;
+        fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>>;
+        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountAddressId, Address>>;
+        fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;
+        fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent >>;
+
     }
 }
 
 impl<B: storage::Backend> WalletStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
-        fn set_transaction(&mut self, id: &Id<Transaction>, tx: &WalletTx) -> crate::Result<()>;
-        fn del_transaction(&mut self, id: &Id<Transaction>) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()>;
+        fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()>;
+        fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()>;
+        fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
+        fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
+        fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> crate::Result<()>;
+        fn del_address(&mut self, id: &AccountAddressId) -> crate::Result<()>;
+        fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> crate::Result<()>;
+        fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()>;
     }
 }
 

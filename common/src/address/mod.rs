@@ -18,7 +18,7 @@ use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 use crypto::key::PublicKey;
 pub mod pubkeyhash;
-use serialization::Encode;
+use serialization::{Decode, Encode};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {
@@ -50,7 +50,7 @@ impl From<Bech32Error> for AddressError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Address {
     address: String,
 }

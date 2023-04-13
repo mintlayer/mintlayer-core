@@ -9,7 +9,7 @@ dependencies = [
  "common",
  "parity-scale-codec",
  "proptest",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "thiserror",
  "utils",
@@ -506,7 +506,7 @@ dependencies = [
  "oneshot",
  "pos_accounting",
  "rpc",
- "rstest",
+ "rstest 0.17.0",
  "serde_json",
  "serialization",
  "static_assertions",
@@ -544,7 +544,7 @@ dependencies = [
  "mockall",
  "num-traits",
  "pos_accounting",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "storage",
  "test-utils",
@@ -566,7 +566,7 @@ dependencies = [
  "itertools",
  "logging",
  "pos_accounting",
- "rstest",
+ "rstest 0.17.0",
  "test-utils",
  "tx-verifier",
  "utils",
@@ -590,7 +590,7 @@ dependencies = [
  "itertools",
  "logging",
  "pos_accounting",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "test-utils",
  "tx-verifier",
@@ -740,7 +740,7 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "proptest",
- "rstest",
+ "rstest 0.17.0",
  "script",
  "serde",
  "serde_json",
@@ -779,7 +779,7 @@ dependencies = [
  "itertools",
  "num",
  "pos_accounting",
- "rstest",
+ "rstest 0.17.0",
  "test-utils",
  "thiserror",
  "utils",
@@ -938,7 +938,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "ripemd",
- "rstest",
+ "rstest 0.17.0",
  "schnorrkel",
  "secp256k1",
  "serialization",
@@ -1090,7 +1090,7 @@ dependencies = [
  "logging",
  "p2p",
  "parity-scale-codec",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "storage",
  "storage-lmdb",
@@ -2148,7 +2148,7 @@ dependencies = [
  "mockall",
  "parking_lot",
  "rpc",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "subsystem",
  "test-utils",
@@ -2167,7 +2167,7 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
- "rstest",
+ "rstest 0.17.0",
  "thiserror",
 ]
 
@@ -2516,7 +2516,7 @@ dependencies = [
  "portpicker",
  "rlimit",
  "rpc",
- "rstest",
+ "rstest 0.17.0",
  "serde",
  "serialization",
  "siphasher",
@@ -2784,7 +2784,7 @@ dependencies = [
  "common",
  "crypto",
  "parity-scale-codec",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "test-utils",
  "thiserror",
@@ -3146,7 +3146,7 @@ dependencies = [
  "hyper",
  "jsonrpsee",
  "logging",
- "rstest",
+ "rstest 0.17.0",
  "subsystem",
  "test-utils",
  "thiserror",
@@ -3158,14 +3158,40 @@ dependencies = [
 
 [[package]]
 name = "rstest"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b07f2d176c472198ec1e6551dc7da28f1c089652f66a7b722676c2238ebc0edf"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "rstest_macros 0.16.0",
+ "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "rstest"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de1bb486a691878cd320c2f0d319ba91eeaa2e894066d8b5f8f117c000e9d962"
 dependencies = [
  "futures",
  "futures-timer",
- "rstest_macros",
+ "rstest_macros 0.17.0",
  "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7229b505ae0706e64f37ffc54a9c163e11022a6636d58fe1f3f52018257ff9f7"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.4.0",
+ "syn 1.0.109",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -3840,7 +3866,7 @@ version = "0.1.0"
 dependencies = [
  "lmdb-mintlayer",
  "logging",
- "rstest",
+ "rstest 0.17.0",
  "storage-backend-test-suite",
  "storage-core",
  "tempfile",
@@ -4374,7 +4400,7 @@ dependencies = [
  "mockall",
  "pos_accounting",
  "replace_with",
- "rstest",
+ "rstest 0.17.0",
  "test-utils",
  "thiserror",
  "utils",
@@ -4502,7 +4528,7 @@ dependencies = [
  "loom",
  "num-traits",
  "probabilistic-collections",
- "rstest",
+ "rstest 0.17.0",
  "slave-pool",
  "static_assertions",
  "test-utils",
@@ -4518,7 +4544,7 @@ dependencies = [
  "itertools",
  "logging",
  "parity-scale-codec",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "test-utils",
  "thiserror",
@@ -4575,6 +4601,8 @@ dependencies = [
  "common",
  "crypto",
  "logging",
+ "parity-scale-codec",
+ "rstest 0.16.0",
  "serialization",
  "storage",
  "tempfile",
@@ -4592,7 +4620,7 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "storage",
  "storage-sqlite",
@@ -4608,8 +4636,11 @@ version = "0.1.0"
 dependencies = [
  "bip39",
  "common",
+ "crypto",
  "parity-scale-codec",
+ "rstest 0.16.0",
  "serialization",
+ "storage",
  "test-utils",
  "thiserror",
  "zeroize",
@@ -4709,7 +4740,7 @@ version = "0.1.0"
 dependencies = [
  "crypto",
  "getrandom 0.2.9",
- "rstest",
+ "rstest 0.17.0",
  "serialization",
  "test-utils",
  "thiserror",
