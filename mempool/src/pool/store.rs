@@ -162,13 +162,10 @@ impl MempoolStore {
                     .ok_or_else(make_err)
             })
             .map(|output| {
-                output
-                    .value()
-                    .map(|value| match value {
-                        OutputValue::Coin(coin) => coin,
-                        OutputValue::Token(_) => Amount::ZERO,
-                    })
-                    .unwrap_or(Amount::ZERO)
+                output.value().map_or(Amount::ZERO, |value| match value {
+                    OutputValue::Coin(coin) => coin,
+                    OutputValue::Token(_) => Amount::ZERO,
+                })
             })
     }
 

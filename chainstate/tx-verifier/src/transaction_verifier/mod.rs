@@ -209,7 +209,7 @@ where
             .outputs()
             .iter()
             .filter(|o| matches!(*o, TxOutput::Burn(_)))
-            .filter_map(|o| o.value().map(|v| v.coin_amount()).flatten())
+            .filter_map(|o| o.value().and_then(|v| v.coin_amount()))
             .try_fold(Amount::ZERO, |so_far, v| {
                 (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
             })?;
@@ -297,6 +297,7 @@ where
 
         check_transferred_amount_in_reward(
             &self.utxo_cache,
+            &self.accounting_delta_adapter.accounting_delta(),
             &block.block_reward_transactable(),
             block.get_id(),
             total_fees,
@@ -405,6 +406,7 @@ where
         // check for attempted money printing
         let fee = check_transferred_amounts_and_get_fee(
             &self.utxo_cache,
+            &self.accounting_delta_adapter.accounting_delta(),
             tx.transaction(),
             issuance_token_id_getter,
         )?;

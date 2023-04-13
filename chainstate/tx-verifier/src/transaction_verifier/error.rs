@@ -105,6 +105,8 @@ pub enum ConnectTransactionError {
     InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
     InvalidOutputTypeInReward,
+    #[error("Balance of pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
 

@@ -15,7 +15,7 @@
 
 use common::{
     chain::{tokens::OutputValue, SignedTransaction},
-    primitives::{Amount, Idable},
+    primitives::Idable,
 };
 
 use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
@@ -44,18 +44,20 @@ where
             .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
             .await??;
 
-        let mut input_values = Vec::<Amount>::new();
-        for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
-            if let Some(value) = chainstate_input_value {
-                input_values.push(*value)
-            } else {
-                let value = self.store.get_unconfirmed_outpoint_value(
-                    &tx.transaction().get_id(),
-                    tx.transaction().inputs().get(i).expect("index").outpoint(),
-                )?;
-                input_values.push(value);
-            }
-        }
+        let input_values = chainstate_input_values
+            .iter()
+            .enumerate()
+            .map(|(i, chainstate_input_value)| {
+                if let Some(value) = chainstate_input_value {
+                    Ok(*value)
+                } else {
+                    self.store.get_unconfirmed_outpoint_value(
+                        &tx.transaction().get_id(),
+                        tx.transaction().inputs().get(i).expect("index").outpoint(),
+                    )
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         let sum_inputs = input_values
             .iter()
