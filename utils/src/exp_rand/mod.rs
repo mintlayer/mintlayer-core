@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,18 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod counttracker;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod newtype;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+use crypto::random::Rng;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+/// Returns a value sampled from an exponential distribution with a mean of 1.0
+pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
+    #[allow(clippy::float_arithmetic)]
+    -rng.gen::<f64>().ln()
+}
+
+#[cfg(test)]
+mod test;
