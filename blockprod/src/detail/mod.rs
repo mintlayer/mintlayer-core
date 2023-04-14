@@ -31,13 +31,13 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use futures::channel::oneshot;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
 use serialization::{Decode, Encode};
+use tokio::sync::oneshot;
 
 use crate::BlockProductionError;
 
