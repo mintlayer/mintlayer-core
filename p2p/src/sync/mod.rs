@@ -85,6 +85,7 @@ where
     T::SyncingEventReceiver: SyncingEventReceiver,
 {
     /// Creates a new sync manager instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
