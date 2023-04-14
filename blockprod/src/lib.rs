@@ -31,14 +31,10 @@ use subsystem::subsystem::CallError;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BlockProductionError {
-    #[error("Initialization error")]
-    FailedToInitializeBlockProduction(String),
     #[error("Mempool channel closed")]
     MempoolChannelClosed,
     #[error("Chainstate channel closed")]
     ChainstateChannelClosed,
-    #[error("Block Builder command channel closed")]
-    BlockBuilderChannelClosed,
     #[error("Subsystem call error")]
     SubsystemCallError(#[from] CallError),
     #[error("Block creation error: {0}")]
