@@ -34,7 +34,7 @@ make_config_setting!(RequestedBlocksLimit, usize, 500);
 make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
-make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(2));
+make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]

@@ -24,7 +24,10 @@ use std::{
 };
 
 use itertools::Itertools;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    time::MissedTickBehavior,
+};
 use void::Void;
 
 use chainstate::chainstate_interface::ChainstateInterface;
@@ -136,6 +139,7 @@ where
 
     pub async fn run(&mut self) -> Result<Void> {
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
+        stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         self.request_headers().await?;
         self.last_activity = Some(Instant::now());
@@ -615,6 +619,7 @@ where
         }
 
         let (sender, receiver) = oneshot_nofail::channel();
+        log::warn!("Disconnecting peer for ignoring requests");
         self.peer_manager_sender.send(PeerManagerEvent::Disconnect(self.id(), sender))?;
         receiver.await?.or_else(|e| match e {
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
