@@ -21,6 +21,7 @@ use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockErr
 use common::{
     chain::block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
     primitives::Idable,
+    time_getter::TimeGetter,
 };
 
 use p2p::{
@@ -70,6 +71,7 @@ where
         chainstate,
         mempool,
         tx_peer_manager,
+        TimeGetter::default(),
     );
 
     let (mut conn2, mut messaging_handle_2, mut sync2) = N::start(

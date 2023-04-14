@@ -33,6 +33,7 @@ use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
     chain::{block::Block, config::ChainConfig},
     primitives::Id,
+    time_getter::TimeGetter,
 };
 use logging::log;
 use mempool::MempoolHandle;
@@ -72,6 +73,8 @@ pub struct BlockSyncManager<T: NetworkingService> {
 
     /// A mapping from a peer identifier to the channel.
     peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
+
+    time_getter: TimeGetter,
 }
 
 /// Syncing manager
@@ -90,6 +93,7 @@ where
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        time_getter: TimeGetter,
     ) -> Self {
         Self {
             _chain_config: chain_config,
@@ -101,6 +105,7 @@ where
             mempool_handle,
             is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
+            time_getter,
         }
     }
 
@@ -167,6 +172,7 @@ where
         let mempool_handle = self.mempool_handle.clone();
         let p2p_config = Arc::clone(&self.p2p_config);
         let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
+        let time_getter = self.time_getter.clone();
         tokio::spawn(async move {
             let mut peer = Peer::<T>::new(
                 peer,
@@ -177,6 +183,7 @@ where
                 messaging_handle,
                 receiver,
                 is_initial_block_download,
+                time_getter,
             );
             if let Err(e) = peer.run().await {
                 log::error!("Sync manager peer ({}) error: {e:?}", peer.id());

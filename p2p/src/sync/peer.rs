@@ -20,7 +20,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    time::Instant,
+    time::Duration,
 };
 
 use itertools::Itertools;
@@ -35,6 +35,7 @@ use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, 
 use common::{
     chain::{block::BlockHeader, Block, Transaction},
     primitives::{BlockHeight, Id, Idable},
+    time_getter::TimeGetter,
 };
 use logging::log;
 use mempool::{
@@ -91,7 +92,8 @@ pub struct Peer<T: NetworkingService> {
     unconnected_headers: usize,
     /// A time when the last message from the peer is received. This field is equal to `None` if
     /// we aren't waiting for specific messages.
-    last_activity: Option<Instant>,
+    last_activity: Option<Duration>,
+    time_getter: TimeGetter,
 }
 
 impl<T> Peer<T>
@@ -109,6 +111,7 @@ where
         messaging_handle: T::MessagingHandle,
         message_receiver: UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
+        time_getter: TimeGetter,
     ) -> Self {
         let services = (*p2p_config.node_type).into();
 
@@ -129,6 +132,7 @@ where
             announced_transactions: BTreeSet::new(),
             unconnected_headers: 0,
             last_activity: None,
+            time_getter,
         }
     }
 
@@ -142,7 +146,7 @@ where
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         self.request_headers().await?;
-        self.last_activity = Some(Instant::now());
+        self.last_activity = Some(self.time_getter.get_time());
 
         loop {
             tokio::select! {
@@ -270,7 +274,7 @@ where
 
     async fn handle_header_list(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
         log::debug!("Headers list from peer {}", self.id());
-        self.last_activity = Some(Instant::now());
+        self.last_activity = Some(self.time_getter.get_time());
 
         if !self.known_headers.is_empty() {
             // The headers list contains exactly one header when a new block is announced.
@@ -369,7 +373,7 @@ where
 
     async fn handle_block_response(&mut self, block: Block) -> Result<()> {
         log::debug!("Block ({}) from peer {}", block.get_id(), self.id());
-        self.last_activity = Some(Instant::now());
+        self.last_activity = Some(self.time_getter.get_time());
 
         if self.requested_blocks.take(&block.get_id()).is_none() {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
@@ -611,7 +615,7 @@ where
     async fn handle_stalling_interval(&mut self) -> Result<()> {
         // Expect is OK here, because this function should only be called when the `last_activity`
         // is set to something.
-        if Instant::now()
+        if self.time_getter.get_time()
             < self.last_activity.expect("Last activity time is missing")
                 + *self.p2p_config.sync_stalling_timeout
         {

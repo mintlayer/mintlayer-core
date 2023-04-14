@@ -28,7 +28,10 @@ use tokio::{
 };
 
 use chainstate::chainstate_interface::ChainstateInterface;
-use common::chain::{config::create_mainnet, ChainConfig};
+use common::{
+    chain::{config::create_mainnet, ChainConfig},
+    time_getter::TimeGetter,
+};
 use mempool::MempoolHandle;
 use p2p_test_utils::start_subsystems;
 
@@ -94,6 +97,7 @@ impl SyncManagerHandle {
             chainstate,
             mempool,
             peer_manager_sender,
+            TimeGetter::default(),
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
