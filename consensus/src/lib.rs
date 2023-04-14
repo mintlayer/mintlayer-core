@@ -38,9 +38,19 @@ pub use crate::{
         check_pos_hash, error::ConsensusPoSError, kernel::get_kernel_output,
         target::calculate_target_required,
     },
-    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError},
+    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError, MiningResult},
     validator::validate_consensus,
 };
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum ConsensusCreationError {
+    #[error("Mining error")]
+    MiningError(#[from] ConsensusPoWError),
+    #[error("Mining stopped")]
+    MiningStopped,
+    #[error("Mining failed")]
+    MiningFailed,
+}
 
 pub fn generate_consensus_data<G>(
     chain_config: &ChainConfig,
@@ -48,7 +58,7 @@ pub fn generate_consensus_data<G>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-) -> Result<ConsensusData, ConsensusVerificationError>
+) -> Result<ConsensusData, ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
@@ -62,8 +72,7 @@ where
                 block_timestamp,
                 &pow_status,
                 get_ancestor,
-            )
-            .map_err(ConsensusVerificationError::PoWError)?;
+            )?;
 
             Ok(ConsensusData::PoW(PoWData::new(work_required, 0)))
         }
@@ -75,7 +84,7 @@ pub fn finalize_consensus_data(
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
     stop_flag: Arc<AtomicBool>,
-) -> Result<(), ConsensusVerificationError> {
+) -> Result<(), ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
         RequiredConsensus::PoS(_) => unimplemented!(),
@@ -83,10 +92,13 @@ pub fn finalize_consensus_data(
             ConsensusData::None => Ok(()),
             ConsensusData::PoS(_) => unimplemented!(),
             ConsensusData::PoW(pow_data) => {
-                mine(block_header, u128::MAX, pow_data.bits(), stop_flag)
-                    .map_err(ConsensusVerificationError::PoWError)?;
+                let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
 
-                Ok(())
+                match mine_result {
+                    MiningResult::Success => Ok(()),
+                    MiningResult::Failed => Err(ConsensusCreationError::MiningFailed),
+                    MiningResult::Stopped => Err(ConsensusCreationError::MiningStopped),
+                }
             }
         },
     }

@@ -92,6 +92,20 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     }
 }
 
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MiningResult {
+    Success,
+    Failed,
+    Stopped,
+}
+
+impl MiningResult {
+    pub fn is_success(&self) -> bool {
+        *self == Self::Success
+    }
+}
+
 pub fn calculate_work_required<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
@@ -230,7 +244,7 @@ pub fn mine(
     max_nonce: u128,
     bits: Compact,
     stop_flag: Arc<AtomicBool>,
-) -> Result<bool, ConsensusPoWError> {
+) -> Result<MiningResult, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
@@ -238,15 +252,15 @@ pub fn mine(
         block_header.update_consensus_data(ConsensusData::PoW(data.clone()));
 
         if check_proof_of_work(block_header.get_id().get(), bits)? {
-            return Ok(true);
+            return Ok(MiningResult::Success);
         }
 
         if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
-            return Ok(false);
+            return Ok(MiningResult::Stopped);
         }
     }
 
-    Ok(false)
+    Ok(MiningResult::Failed)
 }
 
 #[cfg(test)]

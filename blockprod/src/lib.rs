@@ -23,7 +23,7 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use consensus::ConsensusVerificationError;
+use consensus::ConsensusCreationError;
 use detail::{BlockProduction, JobKey};
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
@@ -44,7 +44,7 @@ pub enum BlockProductionError {
     #[error("Block creation error: {0}")]
     FailedToConstructBlock(#[from] BlockCreationError),
     #[error("Initialization of consensus failed: {0}")]
-    FailedConsensusInitialization(#[from] ConsensusVerificationError),
+    FailedConsensusInitialization(#[from] ConsensusCreationError),
     #[error("Block production cancelled")]
     Cancelled,
     #[error("Tip has changed. Stopping block production for previous tip {0} with height {1} to new tip {2} with height {3}")]
