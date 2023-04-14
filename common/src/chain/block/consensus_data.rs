@@ -39,16 +39,8 @@ impl ConsensusData {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
             ConsensusData::PoS(_) => {
-                use chaintrust::asymptote::{get_weight_for_block, get_weight_for_timeslot};
-
-                let empty_time_slots_weight = get_weight_for_timeslot(timestamp_diff);
-
-                debug_assert!(get_weight_for_block() >= empty_time_slots_weight);
-
-                let block_weight = Uint256::from(chaintrust::asymptote::get_weight_for_block());
-                let empty_time_slots_weight = Uint256::from(empty_time_slots_weight);
-
-                Some(block_weight - empty_time_slots_weight)
+                let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
+                Some(block_proof)
             }
         }
     }

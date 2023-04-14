@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::Uint256;
+
 /// An asymptote that with its limit to infinity, reaches the value one.
 /// The function is normalized so that the limit as t goes to infinity is one.
 ///
@@ -70,7 +72,7 @@ lazy_static::lazy_static! {
 }
 
 // A look-up table for the weights of the time-slots.
-pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
+fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     let timeslot = timeslot as usize;
 
     if timeslot >= TIMESLOTS_WEIGHTS.len() {
@@ -82,13 +84,24 @@ pub fn get_weight_for_timeslot(timeslot: u64) -> u64 {
     }
 }
 
-pub fn get_weight_for_block() -> u64 {
+fn get_weight_for_block() -> u64 {
     SCALING_FACTOR as u64
+}
+
+pub fn calculate_block_proof(timestamp_diff: u64) -> Uint256 {
+    let empty_time_slots_weight = get_weight_for_timeslot(timestamp_diff);
+
+    debug_assert!(get_weight_for_block() >= empty_time_slots_weight);
+
+    let block_weight = Uint256::from(get_weight_for_block());
+    let empty_time_slots_weight = Uint256::from(empty_time_slots_weight);
+
+    block_weight - empty_time_slots_weight
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{primitives::BlockHeight, Uint256};
+    use crate::primitives::BlockHeight;
 
     use super::*;
 
@@ -163,5 +176,19 @@ mod tests {
         // There should not be any overflow to ensure that the chain trust is always less than the maximum possible value.
         assert!(max_block_height < max_chain_trust);
         assert!(single_block_weight < max_chain_trust);
+    }
+
+    #[test]
+    fn block_proof() {
+        // Full weight of a block when previous block was 0 time slots ago
+        assert_eq!(calculate_block_proof(0), (SCALING_FACTOR as u64).into());
+
+        for i in 0..TIMESLOTS_WEIGHTS.len() {
+            // Full weight of a block when previous block was i time slots ago
+            assert_eq!(
+                calculate_block_proof(i as u64),
+                (get_weight_for_block() - TIMESLOTS_WEIGHTS[i]).into()
+            );
+        }
     }
 }
