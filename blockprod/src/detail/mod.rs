@@ -338,38 +338,313 @@ impl BlockProduction {
 
 #[cfg(test)]
 mod tests {
-    // use tokio::time::{timeout, Duration};
+    use common::primitives::{Id, H256};
+    use crypto::random::make_pseudo_rng;
+    use mempool::{MempoolInterface, MempoolSubsystemInterface};
+    use mocks::MempoolInterfaceMock;
+    use std::sync::atomic::Ordering::Relaxed;
+    use subsystem::CallRequest;
 
-    // use super::*;
-    // use crate::{
-    //     interface::blockprod_interface::BlockProductionInterface, prepare_thread_pool,
-    //     tests::setup_blockprod_test,
-    // };
+    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
+
+    use super::*;
 
     #[tokio::test]
-    async fn stop() {
-        // let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    async fn collect_transactions_subsystem_error() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
-        // let (builder_tx, mut builder_rx) = mpsc::unbounded_channel();
+        let mock_mempool = MempoolInterfaceMock::new();
 
-        // let block_production = BlockProduction::new(
-        //     chain_config,
-        //     chainstate,
-        //     mempool,
-        //     Default::default(),
-        //     prepare_thread_pool(1),
-        // )
-        // .expect("Error initializing Block Builder");
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call: CallRequest<dyn MempoolInterface>, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
 
-        // block_production.stop().expect("Error stopping Block Builder");
+        mock_mempool_subsystem.call({
+            let shutdown = manager.make_shutdown_trigger();
+            move |_| shutdown.initiate()
+        });
 
-        // let recv = timeout(Duration::from_millis(1000), builder_rx.recv());
+        // shutdown straight after startup, *then* call collect_transactions()
+        manager.main().await;
 
-        // tokio::select! {
-        //     msg = recv => match msg.expect("Block Builder timed out").expect("Error reading from Block Builder") {
-        //         BlockBuilderControlCommand::Stop => {},
-        //         _ => panic!("Invalid message received from Block Builder"),
-        //     }
-        // }
+        // spawn rather than adding a subsystem as manager is moved into main() above
+        tokio::spawn(async move {
+            let block_production = BlockProduction::new(
+                chain_config,
+                chainstate,
+                mock_mempool_subsystem,
+                Default::default(),
+                prepare_thread_pool(1),
+            )
+            .expect("Error initializing blockprod");
+
+            let accumulator = block_production.collect_transactions().await;
+
+            assert!(
+                !mock_mempool.collect_txs_called.load(Relaxed),
+                "Expected collect_tx() to not be called"
+            );
+
+            assert!(
+                matches!(
+                    accumulator,
+                    Err(BlockProductionError::SubsystemCallError(_))
+                ),
+                "Expected a subsystem error"
+            );
+        })
+        .await
+        .expect("Subsystem error thread failed");
+    }
+
+    #[tokio::test]
+    async fn collect_transactions_collect_txs_failed() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+        let mock_mempool = MempoolInterfaceMock::new();
+        mock_mempool.collect_txs_should_error.store(true, Relaxed);
+
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate,
+                    mock_mempool_subsystem,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let accumulator = block_production.collect_transactions().await;
+
+                assert!(
+                    mock_mempool.collect_txs_called.load(Relaxed),
+                    "Expected collect_tx() to be called"
+                );
+
+                assert!(
+                    matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
+                    "Expected collect_tx() to fail"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn collect_transactions_succeeded() {
+        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+        let mock_mempool = MempoolInterfaceMock::new();
+
+        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+            let mock_mempool = mock_mempool.clone();
+            move |call, shutdn| async move {
+                mock_mempool.run(call, shutdn).await;
+            }
+        });
+
+        manager.add_subsystem_with_custom_eventloop(
+            "test-call",
+            move |_: CallRequest<()>, _| async move {
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate,
+                    mock_mempool_subsystem,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let accumulator = block_production.collect_transactions().await;
+
+                assert!(
+                    mock_mempool.collect_txs_called.load(Relaxed),
+                    "Expected collect_tx() to be called"
+                );
+
+                assert!(
+                    accumulator.is_ok(),
+                    "Expected collect_transactions() to succeed"
+                );
+            },
+        );
+
+        manager.main().await;
+    }
+
+    #[tokio::test]
+    async fn stop_job_non_existent_job() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let other_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
+
+        block_production.all_jobs.insert(
+            other_job_key,
+            JobHandle {
+                cancel_signal: other_job_cancel_sender,
+            },
+        );
+
+        let stop_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        assert!(
+            !block_production.stop_job(&stop_job_key),
+            "Stopped a non-existent job"
+        );
+
+        assert!(
+            block_production.all_jobs.len() == 1,
+            "Jobs count is incorrect",
+        );
+
+        assert!(
+            other_job_cancel_receiver.try_recv().unwrap().is_none(),
+            "Other job was stopped"
+        );
+    }
+
+    #[tokio::test]
+    async fn stop_job_existing_job() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let other_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
+
+        block_production.all_jobs.insert(
+            other_job_key,
+            JobHandle {
+                cancel_signal: other_job_cancel_sender,
+            },
+        );
+
+        let stop_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        let (stop_job_cancel_sender, mut stop_job_cancel_receiver) = oneshot::channel::<()>();
+
+        block_production.all_jobs.insert(
+            stop_job_key.clone(),
+            JobHandle {
+                cancel_signal: stop_job_cancel_sender,
+            },
+        );
+
+        assert!(
+            block_production.stop_job(&stop_job_key),
+            "Failed to stop job"
+        );
+
+        assert!(
+            block_production.all_jobs.len() == 1,
+            "Jobs count is incorrect",
+        );
+
+        assert!(
+            stop_job_cancel_receiver.try_recv().unwrap().is_some(),
+            "Failed to stop job",
+        );
+
+        assert!(
+            other_job_cancel_receiver.try_recv().unwrap().is_none(),
+            "Other job was stopped"
+        );
+    }
+
+    #[tokio::test]
+    async fn stop_all_jobs() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let other_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
+
+        block_production.all_jobs.insert(
+            other_job_key,
+            JobHandle {
+                cancel_signal: other_job_cancel_sender,
+            },
+        );
+
+        let stop_job_key = JobKey {
+            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
+        };
+
+        let (stop_job_cancel_sender, mut stop_job_cancel_receiver) = oneshot::channel::<()>();
+
+        block_production.all_jobs.insert(
+            stop_job_key,
+            JobHandle {
+                cancel_signal: stop_job_cancel_sender,
+            },
+        );
+
+        block_production.stop_all_jobs();
+
+        assert!(
+            block_production.all_jobs.is_empty(),
+            "Jobs count is incorrect",
+        );
+
+        assert!(
+            stop_job_cancel_receiver.try_recv().unwrap().is_some(),
+            "Failed to stop job",
+        );
+
+        assert!(
+            other_job_cancel_receiver.try_recv().unwrap().is_some(),
+            "Other job was stopped"
+        );
     }
 }
