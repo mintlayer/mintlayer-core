@@ -161,7 +161,7 @@ where
                 )
             }
             Err(err) => {
-                log::error!("Failed to establish connection: {err}");
+                log::error!("Failed to establish connection to {address:?}: {err}");
 
                 self.conn_tx
                     .send(ConnectivityEvent::ConnectionError {

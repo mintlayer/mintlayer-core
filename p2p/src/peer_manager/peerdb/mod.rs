@@ -253,11 +253,14 @@ where
         self.change_address_state(address, AddressStateTransitionTo::Connected);
     }
 
-    /// Handle peer disconnection event
-    ///
-    /// Close the connection to an active peer.
+    /// Handle peer disconnect event with unspecified reason
     pub fn outbound_peer_disconnected(&mut self, address: A) {
         self.change_address_state(address, AddressStateTransitionTo::Disconnected);
+    }
+
+    /// Handle peer disconnect event after RPC command
+    pub fn outbound_peer_disconnected_by_user(&mut self, address: A) {
+        self.change_address_state(address, AddressStateTransitionTo::DisconnectedByUser);
     }
 
     pub fn change_address_state(&mut self, address: A, transition: AddressStateTransitionTo) {
