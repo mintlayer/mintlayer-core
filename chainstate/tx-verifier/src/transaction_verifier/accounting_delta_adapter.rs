@@ -149,27 +149,46 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperatio
 
     fn create_delegation_id(
         &mut self,
-        _target_pool: PoolId,
-        _spend_key: common::chain::Destination,
-        _input0_outpoint: &OutPoint,
+        target_pool: PoolId,
+        spend_key: common::chain::Destination,
+        input0_outpoint: &OutPoint,
     ) -> Result<(common::chain::DelegationId, PoSAccountingUndo), pos_accounting::Error> {
-        unimplemented!()
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let (delegation_id, undo) =
+            delta.create_delegation_id(target_pool, spend_key, input0_outpoint)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok((delegation_id, undo))
     }
 
     fn delegate_staking(
         &mut self,
-        _delegation_target: common::chain::DelegationId,
-        _amount_to_delegate: Amount,
+        delegation_target: common::chain::DelegationId,
+        amount_to_delegate: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
-        unimplemented!()
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let undo = delta.delegate_staking(delegation_target, amount_to_delegate)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok(undo)
     }
 
     fn spend_share_from_delegation_id(
         &mut self,
-        _delegation_id: common::chain::DelegationId,
-        _amount: Amount,
+        delegation_id: common::chain::DelegationId,
+        amount: Amount,
     ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
-        unimplemented!()
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let undo = delta.spend_share_from_delegation_id(delegation_id, amount)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok(undo)
     }
 
     fn undo(&mut self, undo: PoSAccountingUndo) -> Result<(), pos_accounting::Error> {
@@ -180,4 +199,5 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperatio
         self.merge_delta(delta.consume())
     }
 }
+
 // TODO: unit tests
