@@ -88,8 +88,11 @@ pub enum PoWStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum PoSStatus {
-    Ongoing { config: PoSChainConfig },
-    Threshold { initial_difficulty: Compact },
+    Ongoing(PoSChainConfig),
+    Threshold {
+        initial_difficulty: Compact,
+        config: PoSChainConfig,
+    },
 }
 
 impl From<ConsensusUpgrade> for RequiredConsensus {
@@ -100,8 +103,11 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
             }
             ConsensusUpgrade::PoS {
                 initial_difficulty,
-                config: _,
-            } => RequiredConsensus::PoS(PoSStatus::Threshold { initial_difficulty }),
+                config,
+            } => RequiredConsensus::PoS(PoSStatus::Threshold {
+                initial_difficulty,
+                config,
+            }),
             ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
         }
     }
@@ -178,13 +184,12 @@ impl NetUpgrades<UpgradeVersion> {
                 config,
             } => {
                 if *last_upgrade_height < height {
-                    RequiredConsensus::PoS(PoSStatus::Ongoing {
-                        config: config.clone(),
-                    })
+                    RequiredConsensus::PoS(PoSStatus::Ongoing(config.clone()))
                 } else {
                     debug_assert_eq!(*last_upgrade_height, height);
                     RequiredConsensus::PoS(PoSStatus::Threshold {
                         initial_difficulty: *initial_difficulty,
+                        config: config.clone(),
                     })
                 }
             }
@@ -349,13 +354,12 @@ mod tests {
             upgrades.consensus_status(10_000.into()),
             RequiredConsensus::PoS(PoSStatus::Threshold {
                 initial_difficulty: Uint256::from_u64(1500).into(),
-            })
+                config: create_unittest_pos_config(),
+            },)
         );
         assert_eq!(
             upgrades.consensus_status(14_999.into()),
-            RequiredConsensus::PoS(PoSStatus::Ongoing {
-                config: create_unittest_pos_config(),
-            })
+            RequiredConsensus::PoS(PoSStatus::Ongoing(create_unittest_pos_config()))
         );
         assert_eq!(
             upgrades.consensus_status(15_000.into()),

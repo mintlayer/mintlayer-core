@@ -13,25 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::new_pub_key_destination;
+use super::helpers::pos::create_stake_pool_data;
 
 use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
+use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
 use common::{
     chain::{
-        stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        GenBlock, OutPointSourceId, PoolId, TxInput, TxOutput,
+        GenBlock, OutPoint, OutPointSourceId, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, Idable, H256},
+    primitives::{Amount, Id, Idable},
 };
 use crypto::{
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
+use pos_accounting::PoSAccountingStorageRead;
 use rstest::rstest;
 use test_utils::{
     nft_utils::random_token_issuance,
@@ -46,25 +48,19 @@ fn stake_pool_basic(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -72,6 +68,12 @@ fn stake_pool_basic(#[case] seed: Seed) {
 
         tf.process_block(block, BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block_id));
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap()
+                .unwrap();
+        assert_eq!(amount_to_stake, pool_balance);
     });
 }
 
@@ -83,8 +85,9 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -94,14 +97,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 anyonecanspend_address(),
@@ -124,8 +120,9 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -135,14 +132,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
                 anyonecanspend_address(),
@@ -195,8 +185,9 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
         let tx0_id = tx0.transaction().get_id();
         let token_id = common::chain::tokens::token_id(tx0.transaction()).unwrap();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100..100_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
 
         // stake pool with coin input and transfer tokens with token input
         let tx1 = TransactionBuilder::new()
@@ -216,14 +207,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 .into(),
                 anyonecanspend_address(),
             ))
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100..100_000)),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
 
         let best_block_index = tf
@@ -248,8 +232,9 @@ fn stake_pool_twice(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -259,22 +244,8 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                anyonecanspend_address(),
-                vrf_pub_key.clone(),
-                destination.clone(),
-                0,
-                Amount::ZERO,
-            ))))
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data.clone())))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -282,9 +253,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
         assert_eq!(
             result.unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::PoSAccountingError(
-                    pos_accounting::Error::InvariantErrorPoolBalanceAlreadyExists
-                )
+                ConnectTransactionError::InvalidOutputTypeInTx
             ))
         );
     });
@@ -309,22 +278,15 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         };
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let stake_pool_data = create_stake_pool_data(&mut rng, genesis_overspend_amount, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::new(OutPointSourceId::BlockReward(genesis_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
-                genesis_overspend_amount,
-                anyonecanspend_address(),
-                vrf_pub_key,
-                destination,
-                0,
-                Amount::ZERO,
-            ))))
+            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -341,218 +303,125 @@ fn stake_pool_overspend(#[case] seed: Seed) {
     });
 }
 
-// StakePool -> ProduceBlockFromStake in transaction is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn spend_stake_pool_in_transaction(#[case] seed: Seed) {
+fn decommission_from_stake_pool(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let stake_pool_data = StakePoolData::new(
-            Amount::from_atoms(rng.gen_range(100_000..200_000)),
-            anyonecanspend_address(),
-            vrf_pub_key,
-            destination,
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
-            Amount::ZERO,
         );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx1 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
-        let tx1_id = tx1.transaction().get_id();
-        let pool_id =
-            pos_accounting::make_pool_id(tx1.transaction().inputs().get(0).unwrap().outpoint());
+        let stake_pool_tx_id = tx1.transaction().get_id();
+
         tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        {
+            //try overspend
+            let overspend_amount = (amount_to_stake + Amount::from_atoms(1)).unwrap();
+            let tx2 = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(OutPointSourceId::Transaction(stake_pool_tx_id), 0),
+                    empty_witness(&mut rng),
+                )
+                .add_output(TxOutput::DecommissionPool(
+                    overspend_amount,
+                    anyonecanspend_address(),
+                    pool_id,
+                    OutputTimeLock::ForBlockCount(1),
+                ))
+                .build();
+
+            let result =
+                tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+
+            assert_eq!(
+                result,
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::AttemptToPrintMoney(amount_to_stake, overspend_amount)
+                ))
+            );
+        }
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+                TxInput::new(OutPointSourceId::Transaction(stake_pool_tx_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::ProduceBlockFromStake(
-                Amount::from_atoms(rng.gen_range(1..100_000)),
+            .add_output(TxOutput::DecommissionPool(
+                amount_to_stake,
                 anyonecanspend_address(),
                 pool_id,
+                OutputTimeLock::ForBlockCount(1),
             ))
             .build();
 
-        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
-        assert_eq!(
-            res,
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
-            ))
-        );
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap();
+        assert!(pool_balance.is_none());
     });
 }
 
-// StakePool -> Transfer is forbidden
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn transfer_stake_pool_in_transaction(#[case] seed: Seed) {
+fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let stake_pool_data = StakePoolData::new(
-            Amount::from_atoms(rng.gen_range(100_000..200_000)),
-            anyonecanspend_address(),
-            vrf_pub_key,
-            destination,
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
-            Amount::ZERO,
         );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
 
         let tx1 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
             .build();
-        let tx1_id = tx1.transaction().get_id();
+        let stake_pool_tx_id = tx1.transaction().get_id();
+
         tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+                TxInput::new(OutPointSourceId::Transaction(stake_pool_tx_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..100_000))),
-                anyonecanspend_address(),
-            ))
-            .build();
-
-        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
-        assert_eq!(
-            res,
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
-            ))
-        );
-    });
-}
-
-// ProduceBlockFromStake -> Transfer is forbidden
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn transfer_spend_stake_pool_in_transaction(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-
-        let destination = new_pub_key_destination(&mut rng);
-        let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let stake_pool_data = StakePoolData::new(
-            Amount::from_atoms(rng.gen_range(100_000..200_000)),
-            anyonecanspend_address(),
-            vrf_pub_key,
-            destination,
-            0,
-            Amount::ZERO,
-        );
-
-        let tx1 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
-            .build();
-        let pool_id =
-            pos_accounting::make_pool_id(tx1.transaction().inputs().get(0).unwrap().outpoint());
-        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
-
-        let spend_stake_output = TxOutput::ProduceBlockFromStake(
-            Amount::from_atoms(rng.gen_range(50_000..100_000)),
-            anyonecanspend_address(),
-            pool_id,
-        );
-        let block2_index = tf
-            .make_block_builder()
-            .with_reward(vec![spend_stake_output])
-            .build_and_process()
-            .unwrap()
-            .unwrap();
-
-        let tx2 = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward((*block2_index.block_id()).into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::Transfer(
-                OutputValue::Coin(Amount::from_atoms(rng.gen_range(1..50_000))),
-                anyonecanspend_address(),
-            ))
-            .build();
-        let res = tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
-        assert_eq!(
-            res,
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToSpendInvalidOutputType
-            ))
-        );
-    });
-}
-
-// Transfer -> ProduceBlockFromStake is forbidden
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn use_produce_block_output_in_tx(#[case] seed: Seed) {
-    utils::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let mut tf = TestFramework::builder(&mut rng).build();
-
-        let pool_id = PoolId::new(H256::random_using(&mut rng));
-
-        let tx = TransactionBuilder::new()
-            .add_input(
-                TxInput::new(
-                    OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                    0,
-                ),
-                empty_witness(&mut rng),
-            )
-            .add_output(TxOutput::ProduceBlockFromStake(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+            .add_output(TxOutput::DecommissionPool(
+                amount_to_stake,
                 anyonecanspend_address(),
                 pool_id,
+                OutputTimeLock::ForBlockCount(1),
             ))
             .build();
 
-        let res = tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err();
-        assert_eq!(
-            res,
-            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::AttemptToUseInvalidOutputInTx
-            ))
-        );
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+
+        let pool_balance =
+            PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+                .unwrap();
+        assert!(pool_balance.is_none());
     });
 }

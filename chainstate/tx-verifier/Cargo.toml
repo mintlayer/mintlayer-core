@@ -24,5 +24,6 @@ replace_with = "0.1"
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
 
+itertools.workspace = true
 rstest.workspace = true
 mockall = "0.11"

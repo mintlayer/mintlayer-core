@@ -36,6 +36,8 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 
+use super::{PoSStatus, RequiredConsensus};
+
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
@@ -295,6 +297,24 @@ impl ChainConfig {
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
+    }
+
+    pub fn decommission_pool_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
+        match self.net_upgrades.consensus_status(block_height) {
+            RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
+                self.empty_consensus_reward_maturity_distance
+            }
+            RequiredConsensus::PoS(status) => {
+                let pos_config = match &status {
+                    PoSStatus::Ongoing(config)
+                    | PoSStatus::Threshold {
+                        initial_difficulty: _,
+                        config,
+                    } => config,
+                };
+                pos_config.decommission_maturity_distance()
+            }
+        }
     }
 
     pub fn max_classic_multisig_public_keys_count(&self) -> usize {

@@ -41,6 +41,7 @@ impl BanScore for BlockError {
             BlockError::CheckBlockFailed(err) => err.ban_score(),
             BlockError::StateUpdateFailed(err) => err.ban_score(),
             BlockError::BestBlockLoadError(_) => 0,
+            BlockError::BlockLoadError(_) => 0,
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
@@ -106,14 +107,16 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::UtxoBlockUndoError(_) => 100,
             ConnectTransactionError::BurnAmountSumError(_) => 100,
             ConnectTransactionError::AttemptToSpendBurnedAmount => 100,
-            ConnectTransactionError::AttemptToSpendInvalidOutputType => 100,
-            ConnectTransactionError::AttemptToUseInvalidOutputInTx => 100,
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::PoSAccountingError(err) => err.ban_score(),
             ConnectTransactionError::AccountingBlockUndoError(_) => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
-            ConnectTransactionError::InvalidOutputTypeInReward(_) => 100,
+            ConnectTransactionError::InvalidInputTypeInTx => 100,
+            ConnectTransactionError::InvalidInputTypeInReward => 100,
+            ConnectTransactionError::InvalidOutputTypeInTx => 100,
+            ConnectTransactionError::InvalidOutputTypeInReward => 100,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
+            ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
         }
@@ -235,6 +238,9 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityType(_) => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(_, _) => 100,
+            CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(_, _, _) => 100,
         }
     }
 }

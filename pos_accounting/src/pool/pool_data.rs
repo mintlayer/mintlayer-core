@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{chain::Destination, primitives::Amount};
+use common::{
+    chain::{stakelock::StakePoolData, Destination},
+    primitives::Amount,
+};
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
@@ -62,5 +65,17 @@ impl PoolData {
 
     pub fn cost_per_epoch(&self) -> Amount {
         self.cost_per_epoch
+    }
+}
+
+impl From<StakePoolData> for PoolData {
+    fn from(stake_data: StakePoolData) -> Self {
+        Self {
+            decommission_destination: stake_data.decommission_key().clone(),
+            pledge_amount: stake_data.value(),
+            vrf_public_key: stake_data.vrf_public_key().clone(),
+            margin_ratio_per_thousand: stake_data.margin_ratio_per_thousand(),
+            cost_per_epoch: stake_data.cost_per_epoch(),
+        }
     }
 }

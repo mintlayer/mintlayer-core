@@ -16,7 +16,8 @@
 use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::Transactable, ChainConfig, GenBlock, TxOutput,
+        block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
+        ChainConfig, GenBlock, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -34,18 +35,16 @@ fn check_timelock(
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError> {
-    use common::chain::timelock::OutputTimeLock;
+    let source_block_height = source_block_index.block_height();
+    let source_block_time = source_block_index.block_timestamp();
 
     let timelock = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) => tl,
+        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };
-
-    let source_block_height = source_block_index.block_height();
-    let source_block_time = source_block_index.block_timestamp();
 
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
@@ -90,6 +89,11 @@ pub fn check_timelocks<
         None => return Ok(()),
     };
 
+    let starting_point: &BlockIndex = match tx_source {
+        TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
+        TransactionSourceForConnect::Mempool { current_best } => current_best,
+    };
+
     for input in inputs {
         let outpoint = input.outpoint();
         let utxo = utxos_view
@@ -112,11 +116,6 @@ pub fn check_timelocks<
 
             let block_index_getter = |db_tx: &S, _chain_config: &ChainConfig, id: &Id<GenBlock>| {
                 db_tx.get_gen_block_index(id)
-            };
-
-            let starting_point: &BlockIndex = match tx_source {
-                TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
-                TransactionSourceForConnect::Mempool { current_best } => current_best,
             };
 
             let source_block_index = block_index_ancestor_getter(

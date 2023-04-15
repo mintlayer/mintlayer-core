@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod accounting_delta_adapter;
 mod accounting_undo_cache;
 mod amounts_map;
 mod cached_inputs_operation;
@@ -36,6 +37,7 @@ pub use cached_operation::CachedOperation;
 use std::collections::BTreeMap;
 
 use self::{
+    accounting_delta_adapter::PoSAccountingDeltaAdapter,
     accounting_undo_cache::{AccountingBlockUndoCache, AccountingBlockUndoEntry},
     amounts_map::AmountsMap,
     cached_inputs_operation::CachedInputsOperation,
@@ -59,7 +61,6 @@ use common::{
         block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
         signature::{verify_signature, Signable, Transactable},
         signed_transaction::SignedTransaction,
-        stakelock::StakePoolData,
         tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxInput, TxMainChainIndex,
         TxOutput,
@@ -69,7 +70,7 @@ use common::{
 use consensus::ConsensusPoSError;
 use pos_accounting::{
     AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
-    PoSAccountingUndo, PoSAccountingView,
+    PoSAccountingView, PoolData,
 };
 use utxo::{ConsumedUtxoCache, Utxo, UtxosCache, UtxosDB, UtxosView};
 
@@ -183,17 +184,13 @@ pub struct TransactionVerifier<C, S, U, A> {
     utxo_cache: UtxosCache<U>,
     utxo_block_undo: UtxosBlockUndoCache,
 
-    // represents accumulated delta with all changes done via current verifier object
-    accounting_delta: PoSAccountingDelta<A>,
+    accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
-
-    // stores deltas per block
-    accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
     pub fn new(storage: S, chain_config: C, verifier_config: TransactionVerifierConfig) -> Self {
-        let accounting_delta = PoSAccountingDelta::new(S::clone(&storage));
+        let accounting_delta_adapter = PoSAccountingDeltaAdapter::new(S::clone(&storage));
         let utxo_cache = UtxosCache::new(UtxosDB::new(storage.shallow_clone()))
             .expect("Utxo cache setup failed");
         let best_block = storage
@@ -209,9 +206,8 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             token_issuance_cache: TokenIssuanceCache::new(),
             utxo_cache,
             utxo_block_undo: UtxosBlockUndoCache::new(),
-            accounting_delta,
+            accounting_delta_adapter,
             accounting_block_undo: AccountingBlockUndoCache::new(),
-            accounting_block_deltas: BTreeMap::new(),
         }
     }
 }
@@ -242,9 +238,8 @@ where
             token_issuance_cache: TokenIssuanceCache::new(),
             utxo_cache: UtxosCache::new(utxos).expect("Utxo cache setup failed"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
-            accounting_delta: PoSAccountingDelta::new(accounting),
+            accounting_delta_adapter: PoSAccountingDeltaAdapter::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
-            accounting_block_deltas: BTreeMap::new(),
         }
     }
 }
@@ -267,9 +262,10 @@ where
             utxo_cache: UtxosCache::new(&self.utxo_cache).expect("construct"),
             utxo_block_undo: UtxosBlockUndoCache::new(),
             token_issuance_cache: TokenIssuanceCache::new(),
-            accounting_delta: PoSAccountingDelta::new(&self.accounting_delta),
+            accounting_delta_adapter: PoSAccountingDeltaAdapter::new(
+                self.accounting_delta_adapter.accounting_delta(),
+            ),
             accounting_block_undo: AccountingBlockUndoCache::new(),
-            accounting_block_deltas: BTreeMap::new(),
             best_block: self.best_block,
         }
     }
@@ -372,27 +368,18 @@ where
     fn get_stake_pool_data_from_output(
         &self,
         output: &TxOutput,
-        block_id: Id<Block>,
-    ) -> Result<StakePoolData, ConnectTransactionError> {
+    ) -> Result<PoolData, ConnectTransactionError> {
         match output {
             TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
-                Err(ConnectTransactionError::InvalidOutputTypeInReward(block_id))
+                Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
-            TxOutput::StakePool(d) => Ok(d.as_ref().clone()),
-            TxOutput::ProduceBlockFromStake(v, d, pool_id) => {
-                let pool_data = self
-                    .accounting_delta
-                    .get_pool_data(*pool_id)?
-                    .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?;
-                Ok(StakePoolData::new(
-                    *v,
-                    d.clone(),
-                    pool_data.vrf_public_key().clone(),
-                    pool_data.decommission_destination().clone(),
-                    pool_data.margin_ratio_per_thousand(),
-                    pool_data.cost_per_epoch(),
-                ))
-            }
+            TxOutput::StakePool(d) => Ok(d.as_ref().clone().into()),
+            TxOutput::ProduceBlockFromStake(_, _, pool_id)
+            | TxOutput::DecommissionPool(_, _, pool_id, _) => self
+                .accounting_delta_adapter
+                .accounting_delta()
+                .get_pool_data(*pool_id)?
+                .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
         }
     }
 
@@ -413,7 +400,7 @@ where
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
                 let kernel_stake_pool_data =
-                    self.get_stake_pool_data_from_output(&kernel_output, block.get_id())?;
+                    self.get_stake_pool_data_from_output(&kernel_output)?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -423,8 +410,7 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
-                let reward_stake_pool_data =
-                    self.get_stake_pool_data_from_output(reward_output, block.get_id())?;
+                let reward_stake_pool_data = self.get_stake_pool_data_from_output(reward_output)?;
 
                 ensure!(
                     kernel_stake_pool_data == reward_stake_pool_data,
@@ -539,49 +525,32 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input0_getter =
-            || tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent);
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
         let tx_undo = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::StakePool(data) => Some(data),
+                TxOutput::StakePool(data) => {
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .create_pool(input0.outpoint(), data.as_ref().clone().into())
+                        .map(|(_, undo)| undo);
+                    Some(res)
+                }
+                TxOutput::DecommissionPool(_, _, pool_id, _) => {
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .decommission_pool(*pool_id);
+                    Some(res)
+                }
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
                 | TxOutput::ProduceBlockFromStake(_, _, _) => None,
             })
-            .map(
-                |pool_data| -> Result<PoSAccountingUndo, ConnectTransactionError> {
-                    let input0 = input0_getter()?;
-
-                    // TODO: check StakePoolData fields
-                    let delegation_amount = pool_data.value();
-
-                    let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-                    let (_, undo) = temp_delta
-                        .create_pool(
-                            input0.outpoint(),
-                            delegation_amount,
-                            pool_data.decommission_key().clone(),
-                            pool_data.vrf_public_key().clone(),
-                            pool_data.margin_ratio_per_thousand(),
-                            pool_data.cost_per_epoch(),
-                        )
-                        .map_err(ConnectTransactionError::PoSAccountingError)?;
-                    let new_delta_data = temp_delta.consume();
-
-                    self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-
-                    self.accounting_block_deltas
-                        .entry(tx_source)
-                        .or_default()
-                        .merge_with_delta(new_delta_data)?;
-
-                    Ok(undo)
-                },
-            )
             .collect::<Result<Vec<_>, _>>()?;
 
         if !tx_undo.is_empty() {
@@ -600,7 +569,7 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::StakePool(_) => {
+            TxOutput::StakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
@@ -611,18 +580,9 @@ where
                     .into_inner()
                     .into_iter()
                     .try_for_each(|undo| {
-                        let mut temp_delta = PoSAccountingDelta::new(&self.accounting_delta);
-                        temp_delta.undo(undo)?;
-                        let new_delta_data = temp_delta.consume();
-
-                        self.accounting_delta.merge_with_delta(new_delta_data.clone())?;
-                        self.accounting_block_deltas
-                            .entry(tx_source)
-                            .or_default()
-                            .merge_with_delta(new_delta_data)?;
+                        self.accounting_delta_adapter.operations(tx_source).undo(undo)?;
                         Ok(())
                     })
-                    .map_err(ConnectTransactionError::PoSAccountingError)
             }
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
@@ -711,8 +671,14 @@ where
     fn connect_block_reward(
         &mut self,
         block_index: &BlockIndex,
+        tx_source: TransactionSource,
         reward_transactable: BlockRewardTransactable,
     ) -> Result<(), ConnectTransactionError> {
+        input_output_policy::check_reward_inputs_outputs_purposes(
+            &reward_transactable,
+            &self.utxo_cache,
+        )?;
+
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
             // pre-cache all inputs
@@ -762,7 +728,8 @@ where
                 let block_subsidy =
                     self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
                 let undo = self
-                    .accounting_delta
+                    .accounting_delta_adapter
+                    .operations(tx_source)
                     .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
 
                 self.accounting_block_undo
@@ -780,6 +747,9 @@ where
         spend_ref: BlockTransactableWithIndexRef,
         median_time_past: &BlockTimestamp,
     ) -> Result<Option<Fee>, ConnectTransactionError> {
+        let transaction_source = TransactionSourceForConnect::Chain {
+            new_block_index: block_index,
+        };
         let fee = match spend_ref {
             BlockTransactableWithIndexRef::Transaction(block, tx_num, ref _tx_index) => {
                 let block_id = block.get_id();
@@ -787,16 +757,14 @@ where
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
                 )?;
 
-                self.connect_transaction(
-                    &TransactionSourceForConnect::Chain {
-                        new_block_index: block_index,
-                    },
-                    tx,
-                    median_time_past,
-                )?
+                self.connect_transaction(&transaction_source, tx, median_time_past)?
             }
             BlockTransactableWithIndexRef::BlockReward(block, _) => {
-                self.connect_block_reward(block_index, block.block_reward_transactable())?;
+                self.connect_block_reward(
+                    block_index,
+                    (&transaction_source).into(),
+                    block.block_reward_transactable(),
+                )?;
                 None
             }
         };
@@ -928,16 +896,15 @@ where
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
+                let tx_source = TransactionSource::Chain(block.get_id());
 
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_undo_data(id)
                         .map_err(|_| ConnectTransactionError::UndoFetchFailure)
                 };
-                let reward_undo = self.utxo_block_undo.take_block_reward_undo(
-                    &TransactionSource::Chain(block.get_id()),
-                    block_undo_fetcher,
-                )?;
+                let reward_undo =
+                    self.utxo_block_undo.take_block_reward_undo(&tx_source, block_undo_fetcher)?;
                 self.utxo_cache.disconnect_block_transactable(
                     &reward_transactable,
                     &block.get_id().into(),
@@ -972,10 +939,9 @@ where
                             block_undo_fetcher,
                         )?;
                         if let Some(reward_undo) = reward_undo {
-                            reward_undo
-                                .into_inner()
-                                .into_iter()
-                                .try_for_each(|undo| self.accounting_delta.undo(undo))?;
+                            reward_undo.into_inner().into_iter().try_for_each(|undo| {
+                                self.accounting_delta_adapter.operations(tx_source).undo(undo)
+                            })?;
                         }
                     }
                 }
@@ -990,14 +956,15 @@ where
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
+        let (accounting_delta, accounting_block_deltas) = self.accounting_delta_adapter.consume();
         Ok(TransactionVerifierDelta {
             tx_index_cache: self.tx_index_cache.take_always().consume(),
             utxo_cache: self.utxo_cache.consume(),
             utxo_block_undo: self.utxo_block_undo.consume(),
             token_issuance_cache: self.token_issuance_cache.consume(),
-            accounting_delta: self.accounting_delta.consume(),
+            accounting_delta,
             accounting_delta_undo: self.accounting_block_undo.consume(),
-            accounting_block_deltas: self.accounting_block_deltas,
+            accounting_block_deltas,
         })
     }
 }
