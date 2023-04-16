@@ -31,13 +31,13 @@ use common::{
     primitives::{BlockHeight, Id},
     time_getter::TimeGetter,
 };
-use futures::channel::oneshot;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
 use serialization::{Decode, Encode};
+use tokio::sync::oneshot;
 
 use crate::BlockProductionError;
 
@@ -526,7 +526,7 @@ mod tests {
         );
 
         assert!(
-            other_job_cancel_receiver.try_recv().unwrap().is_none(),
+            other_job_cancel_receiver.try_recv().is_err(),
             "Other job was stopped"
         );
     }
@@ -581,12 +581,12 @@ mod tests {
         );
 
         assert!(
-            stop_job_cancel_receiver.try_recv().unwrap().is_some(),
+            stop_job_cancel_receiver.try_recv().is_ok(),
             "Failed to stop job",
         );
 
         assert!(
-            other_job_cancel_receiver.try_recv().unwrap().is_none(),
+            other_job_cancel_receiver.try_recv().is_err(),
             "Other job was stopped"
         );
     }
@@ -638,12 +638,12 @@ mod tests {
         );
 
         assert!(
-            stop_job_cancel_receiver.try_recv().unwrap().is_some(),
+            stop_job_cancel_receiver.try_recv().is_ok(),
             "Failed to stop job",
         );
 
         assert!(
-            other_job_cancel_receiver.try_recv().unwrap().is_some(),
+            other_job_cancel_receiver.try_recv().is_ok(),
             "Other job was stopped"
         );
     }
