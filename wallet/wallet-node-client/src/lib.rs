@@ -16,6 +16,7 @@
 use node_traits::NodeInterface;
 use rpc_client::NodeRpcError;
 
+pub mod handles_client;
 pub mod node_traits;
 pub mod rpc_client;
 
