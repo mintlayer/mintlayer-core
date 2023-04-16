@@ -55,4 +55,8 @@ impl WalletTx {
     pub fn get_tx(&self) -> &Transaction {
         &self.tx
     }
+
+    pub fn get_state(&self) -> &TxState {
+        &self.state
+    }
 }

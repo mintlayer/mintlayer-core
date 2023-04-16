@@ -20,13 +20,14 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::address::Address;
+use crypto::key::extended::ExtendedPublicKey;
 pub use internal::{Store, StoreTxRo, StoreTxRw};
 use std::collections::BTreeMap;
 
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
+    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -42,10 +43,26 @@ pub trait WalletStorageRead {
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
     fn get_account(&self, id: &AccountId) -> Result<Option<AccountInfo>>;
-    fn get_address(&self, id: &AccountAddressId) -> Result<Option<Address>>;
-    fn get_addresses(&self, account_id: &AccountId) -> Result<BTreeMap<AccountAddressId, Address>>;
+    fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
+    fn get_addresses(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
     fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
     fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+    fn get_keychain_usage_state(
+        &self,
+        id: &AccountKeyPurposeId,
+    ) -> Result<Option<KeychainUsageState>>;
+    fn get_keychain_usage_states(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
+    fn get_public_key(&self, id: &AccountDerivationPathId) -> Result<Option<ExtendedPublicKey>>;
+    fn get_public_keys(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
 }
 
 /// Modifying operations on persistent wallet data
@@ -58,10 +75,22 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn del_transaction(&mut self, id: &AccountTxId) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
-    fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> Result<()>;
-    fn del_address(&mut self, id: &AccountAddressId) -> Result<()>;
+    fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;
+    fn del_address(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
     fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
+    fn set_keychain_usage_state(
+        &mut self,
+        id: &AccountKeyPurposeId,
+        usage_state: &KeychainUsageState,
+    ) -> Result<()>;
+    fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> Result<()>;
+    fn set_public_key(
+        &mut self,
+        id: &AccountDerivationPathId,
+        content: &ExtendedPublicKey,
+    ) -> Result<()>;
+    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

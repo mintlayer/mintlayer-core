@@ -54,6 +54,23 @@ impl DerivationPath {
     pub fn is_root(&self) -> bool {
         self.is_empty()
     }
+
+    /// Get the difference of this path and a sub path.
+    pub fn get_super_path_diff(&self, sub_path: &DerivationPath) -> Option<&[ChildNumber]> {
+        let super_path_vec = self.as_vec();
+        // If the other path is longer or equal to this path then it's not a sub-path
+        if sub_path.len() >= super_path_vec.len() {
+            return None;
+        }
+        // Make sure that the paths have a common sub-path
+        let sub_path_vec = sub_path.as_vec();
+        let (common_path, diff_path) = super_path_vec.split_at(sub_path_vec.len());
+        if common_path != sub_path_vec {
+            return None;
+        }
+
+        Some(diff_path)
+    }
 }
 
 impl Encode for DerivationPath {
@@ -133,6 +150,20 @@ impl fmt::Display for DerivationPath {
 mod tests {
     use super::*;
     use test_utils::{assert_encoded_eq, decode_from_hex};
+
+    #[test]
+    fn path_diff() {
+        let sub_path = DerivationPath::from_str("m/1/2/3").unwrap();
+        let super_path = DerivationPath::from_str("m/1/2/3/4/5").unwrap();
+
+        assert_eq!(
+            super_path.get_super_path_diff(&sub_path).unwrap().to_vec(),
+            vec![
+                ChildNumber::from_normal(4.try_into().unwrap()),
+                ChildNumber::from_normal(5.try_into().unwrap()),
+            ]
+        );
+    }
 
     #[test]
     fn parse_derivation_path() {

@@ -16,12 +16,13 @@
 use std::collections::BTreeMap;
 
 use common::address::Address;
+use crypto::key::extended::ExtendedPublicKey;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
+    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 use crate::{
@@ -90,14 +91,14 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBAccounts, _, _>(id)
             }
 
-            fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>> {
+            fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>> {
                 self.read::<db::DBAddresses, _, _>(id)
             }
 
             fn get_addresses(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountAddressId, Address>> {
+            ) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>> {
                 self.0
                     .get::<db::DBAddresses, _>()
                     .prefix_iter_decoded(account_id)
@@ -123,6 +124,40 @@ macro_rules! impl_read_ops {
             ) -> crate::Result<BTreeMap<AccountTxId, WalletTx>> {
                 self.0
                     .get::<db::DBTxs, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
+            }
+
+            fn get_keychain_usage_state(
+                &self,
+                id: &AccountKeyPurposeId,
+            ) -> crate::Result<Option<KeychainUsageState>> {
+                self.read::<db::DBKeychainUsageStates, _, _>(id)
+            }
+
+            fn get_keychain_usage_states(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>> {
+                self.0
+                    .get::<db::DBKeychainUsageStates, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
+            }
+
+            fn get_public_key(
+                &self,
+                id: &AccountDerivationPathId,
+            ) -> crate::Result<Option<ExtendedPublicKey>> {
+                self.read::<db::DBPubKeys, _, _>(id)
+            }
+
+            fn get_public_keys(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>> {
+                self.0
+                    .get::<db::DBPubKeys, _>()
                     .prefix_iter_decoded(account_id)
                     .map(Iterator::collect)
             }
@@ -185,11 +220,15 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.0.get_mut::<db::DBAccounts, _>().del(id).map_err(Into::into)
     }
 
-    fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> crate::Result<()> {
+    fn set_address(
+        &mut self,
+        id: &AccountDerivationPathId,
+        address: &Address,
+    ) -> crate::Result<()> {
         self.write::<db::DBAddresses, _, _, _>(id, address)
     }
 
-    fn del_address(&mut self, id: &AccountAddressId) -> crate::Result<()> {
+    fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
         self.0.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
     }
 
@@ -199,6 +238,29 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
 
     fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
         self.0.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_keychain_usage_state(
+        &mut self,
+        id: &AccountKeyPurposeId,
+        usage_state: &KeychainUsageState,
+    ) -> crate::Result<()> {
+        self.write::<db::DBKeychainUsageStates, _, _, _>(id, usage_state)
+    }
+
+    fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBKeychainUsageStates, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_public_key(
+        &mut self,
+        id: &AccountDerivationPathId,
+        pub_key: &ExtendedPublicKey,
+    ) -> crate::Result<()> {
+        self.write::<db::DBPubKeys, _, _, _>(id, pub_key)
+    }
+    fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
+        self.0.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
     }
 }
 

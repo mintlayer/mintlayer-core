@@ -25,7 +25,7 @@ pub enum PrivateKeyHolder {
     Secp256k1Schnorr(Secp256k1PrivateKey),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Decode, Encode)]
 pub enum PublicKeyHolder {
     #[codec(index = 0)]
     Secp256k1Schnorr(Secp256k1PublicKey),

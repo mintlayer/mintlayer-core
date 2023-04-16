@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod account_id;
 pub mod account_info;
 pub mod keys;
 pub mod wallet_tx;
 
-pub use account_info::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId,
-    DeterministicAccountInfo,
+pub use account_id::{
+    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountOutPointId, AccountTxId,
 };
-pub use keys::{RootKeyContent, RootKeyId};
+pub use account_info::{AccountInfo, DeterministicAccountInfo};
+pub use keys::{KeyPurpose, KeychainUsageState, RootKeyContent, RootKeyId};
 pub use wallet_tx::{TxState, WalletTx};

@@ -43,18 +43,10 @@ pub trait Derivable: Sized {
     /// - If this (self) key has the path m/1/2/3
     /// - Then the requested path should be m/1/2/3/<rest/of/the/path>
     fn derive_absolute_path(self, path: &DerivationPath) -> Result<Self, DerivationError> {
-        let self_path_vec = self.get_derivation_path().as_vec();
-        // The derivation path must be larger than the path of this key
-        if path.len() <= self_path_vec.len() {
-            return Err(DerivationError::CannotDerivePath(path.clone()));
-        }
-        // Make sure that the paths have a common sub-path
-        let path_vec = path.as_vec();
-        let (common_path, new_path) = path_vec.split_at(self_path_vec.len());
-        if common_path != self_path_vec {
-            return Err(DerivationError::CannotDerivePath(path.clone()));
-        }
-        // Derive the rest of the path
+        let new_path = path
+            .get_super_path_diff(self.get_derivation_path())
+            .ok_or_else(|| DerivationError::CannotDerivePath(path.clone()))?;
+
         new_path.iter().try_fold(self, |key, num| key.derive_child(*num))
     }
 

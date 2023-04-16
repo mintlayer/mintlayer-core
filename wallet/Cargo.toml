@@ -25,5 +25,6 @@ zeroize = "1.5"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
+hex.workspace = true
 rstest = "0.17"
 tempfile = "3.3"
