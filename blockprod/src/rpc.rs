@@ -33,7 +33,7 @@ trait BlockProductionRpc {
 
     // Stop a specific job
     #[method(name = "stop_job")]
-    async fn stop_job(&self, job_id: JobKey) -> rpc::Result<()>;
+    async fn stop_job(&self, job_id: String) -> rpc::Result<()>;
 
     /// Generate a block with the supplied transactions to the specified reward destination
     /// If transactions are None, the block will be generated with available transactions in the mempool
@@ -51,7 +51,9 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         handle_error(self.call_mut(|this| this.stop_all()).await)
     }
 
-    async fn stop_job(&self, job_id: JobKey) -> rpc::Result<()> {
+    async fn stop_job(&self, job_id_hex: String) -> rpc::Result<()> {
+        let job_id = JobKey::hex_decode_all(job_id_hex).map_err(rpc::Error::to_call_error)?;
+
         handle_error(self.call_mut(move |this| this.stop_job(job_id)).await)
     }
 
