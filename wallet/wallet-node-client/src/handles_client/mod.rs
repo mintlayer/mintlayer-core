@@ -34,8 +34,20 @@ pub enum WalletHandlesClientError {
 }
 
 impl WalletHandlesClient {
-    pub fn new(chainstate_handle: ChainstateHandle) -> Self {
-        Self { chainstate_handle }
+    pub async fn new(
+        chainstate_handle: ChainstateHandle,
+    ) -> Result<Self, WalletHandlesClientError> {
+        let result = Self { chainstate_handle };
+        result.basic_start_test().await?;
+        Ok(result)
+    }
+
+    async fn basic_start_test(&self) -> Result<(), WalletHandlesClientError> {
+        // Call an arbitrary function to make sure that connection is established
+        let _best_block =
+            self.chainstate_handle.call(move |this| this.get_best_block_id()).await??;
+
+        Ok(())
     }
 }
 
