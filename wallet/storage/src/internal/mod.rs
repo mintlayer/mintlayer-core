@@ -16,6 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::address::Address;
+use crypto::key::extended::ExtendedPublicKey;
 use utxo::Utxo;
 
 use crate::{
@@ -26,8 +27,8 @@ use crate::{
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
+    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 /// Store for wallet data, parametrized over the backend B
@@ -103,11 +104,14 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
         fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>>;
-        fn get_address(&self, id: &AccountAddressId) -> crate::Result<Option<Address>>;
-        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountAddressId, Address>>;
+        fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
+        fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
         fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;
         fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent >>;
-
+        fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
+        fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
+        fn get_public_key(&self, id: &AccountDerivationPathId) -> crate::Result<Option<ExtendedPublicKey>>;
+        fn get_public_keys(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
     }
 }
 
@@ -120,10 +124,14 @@ impl<B: storage::Backend> WalletStorageWrite for Store<B> {
         fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
-        fn set_address(&mut self, id: &AccountAddressId, address: &Address) -> crate::Result<()>;
-        fn del_address(&mut self, id: &AccountAddressId) -> crate::Result<()>;
+        fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> crate::Result<()>;
+        fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
         fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> crate::Result<()>;
         fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()>;
+        fn set_keychain_usage_state(&mut self, id: &AccountKeyPurposeId, address: &KeychainUsageState) -> crate::Result<()>;
+        fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()>;
+        fn set_public_key(&mut self, id: &AccountDerivationPathId, content: &ExtendedPublicKey) -> crate::Result<()>;
+        fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
     }
 }
 

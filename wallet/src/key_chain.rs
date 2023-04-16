@@ -27,6 +27,7 @@
 //!       `key_index` starts from 0 and it is incremented for each new address
 
 use crate::key_chain::KeyPurpose::{Change, ReceiveFunds};
+use common::address::pubkeyhash::{PublicKeyHash, PublicKeyHashError};
 use common::address::{Address, AddressError};
 use common::chain::config::BIP44_PATH;
 use common::chain::ChainConfig;
@@ -34,16 +35,16 @@ use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey, ExtendedPublicK
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::{Derivable, DerivationError};
 use crypto::key::hdkd::derivation_path::DerivationPath;
-use crypto::key::hdkd::u31::U31;
-use serialization::{Decode, Encode};
-use std::collections::BTreeMap;
+use crypto::key::PublicKey;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::TryInto;
 use std::sync::Arc;
 use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::account_info::KeychainUsageState;
+use wallet_types::keys::{KeyPurpose, KeychainUsageState};
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, DeterministicAccountInfo, RootKeyContent, RootKeyId,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, DeterministicAccountInfo,
+    RootKeyContent, RootKeyId,
 };
 use zeroize::Zeroize;
 
@@ -57,19 +58,23 @@ const BIP44_KEY_INDEX: usize = 4;
 const DEFAULT_KEY_KIND: ExtendedKeyKind = ExtendedKeyKind::Secp256k1Schnorr;
 /// Default size of the number of unused addresses that need to be checked after the
 /// last used address.
-const LOOKAHEAD_SIZE: u16 = 100;
+const LOOKAHEAD_SIZE: u32 = 20;
 
 /// KeyChain errors
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum KeyChainError {
     #[error("Wallet database error: {0}")]
     DatabaseError(#[from] wallet_storage::Error),
+    #[error("Missing database property: {0}")]
+    MissingDatabaseProperty(&'static str),
     #[error("Bip39 error: {0}")]
     Bip39(bip39::Error),
     #[error("Key derivation error: {0}")]
     Derivation(#[from] DerivationError),
     #[error("Address error: {0}")]
     Address(#[from] AddressError),
+    #[error("Public key hash error: {0}")]
+    PubKeyHash(#[from] PublicKeyHashError),
     #[error("Key chain is locked")]
     KeyChainIsLocked,
     #[error("No account found")] // TODO implement display for AccountId
@@ -93,40 +98,8 @@ pub enum KeyChainError {
 /// Result type used for the key chain
 type KeyChainResult<T> = Result<T, KeyChainError>;
 
-/// The usage purpose of a key i.e. if it is for receiving funds or for change
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-#[allow(clippy::unnecessary_cast)]
-pub enum KeyPurpose {
-    /// This is for addresses created for receiving funds that are given to the user
-    ReceiveFunds = 0,
-    /// This is for the internal usage of the wallet when creating change output for a transaction
-    Change = 1,
-}
-
-impl KeyPurpose {
-    const ALL: [KeyPurpose; 2] = [ReceiveFunds, Change];
-    /// The index for each purpose
-    const DETERMINISTIC_INDEX: [ChildNumber; 2] = [
-        ChildNumber::from_normal(U31::from_u32_with_msb(0).0),
-        ChildNumber::from_normal(U31::from_u32_with_msb(1).0),
-    ];
-}
-
-impl TryFrom<ChildNumber> for KeyPurpose {
-    type Error = KeyChainError;
-
-    fn try_from(num: ChildNumber) -> Result<Self, Self::Error> {
-        match num.get_index() {
-            0 => Ok(ReceiveFunds),
-            1 => Ok(Change),
-            _ => Err(KeyChainError::InvalidKeyPurpose(num)),
-        }
-    }
-}
-
 #[allow(dead_code)] // TODO remove
 pub struct MasterKeyChain {
-    // pub struct MasterKeyChain<B: Backend> {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
     /// The master key of this key chain from where all the keys are derived from
@@ -218,6 +191,7 @@ impl MasterKeyChain {
             db_tx,
             &self.root_key,
             account_index,
+            LOOKAHEAD_SIZE,
         )
     }
 
@@ -236,6 +210,380 @@ impl MasterKeyChain {
     }
 }
 
+/// A child key hierarchy for an AccountKeyChain. This normally implements the receiving and change
+/// addresses key chains
+#[allow(dead_code)] // TODO remove
+pub(crate) struct LeafKeyChain {
+    /// The specific chain this KeyChain is based on, this will affect the address format
+    chain_config: Arc<ChainConfig>,
+
+    /// The account id this leaf key chain belongs to
+    account_id: AccountId,
+
+    /// The purpose of this leaf key chain
+    purpose: KeyPurpose,
+
+    /// The parent key of this key chain
+    parent_pubkey: ExtendedPublicKey,
+
+    /// The derived addresses for the receiving funds or change. Those are derived as needed.
+    addresses: BTreeMap<ChildNumber, Address>,
+
+    /// The derived keys for the receiving funds or change. Those are derived as needed.
+    derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
+
+    /// All the public key that this key chain holds
+    public_keys: HashSet<PublicKey>,
+
+    /// All the public key hashes that this key chain holds
+    public_key_hashes: HashSet<PublicKeyHash>,
+
+    /// The usage state of this key chain
+    usage_state: KeychainUsageState,
+
+    /// A copy of the lookahead size of the account
+    lookahead_size: u32,
+}
+
+impl LeafKeyChain {
+    fn new_empty(
+        chain_config: Arc<ChainConfig>,
+        account_id: AccountId,
+        purpose: KeyPurpose,
+        parent_pubkey: ExtendedPublicKey,
+        lookahead_size: u32,
+    ) -> Self {
+        Self {
+            chain_config,
+            account_id,
+            purpose,
+            parent_pubkey,
+            addresses: BTreeMap::new(),
+            derived_public_keys: BTreeMap::new(),
+            public_keys: HashSet::new(),
+            public_key_hashes: HashSet::new(),
+            usage_state: KeychainUsageState::default(),
+            lookahead_size,
+        }
+    }
+
+    // TODO reduce the number of parameters
+    #[allow(clippy::too_many_arguments)]
+    fn new_from_parts(
+        chain_config: Arc<ChainConfig>,
+        account_id: AccountId,
+        purpose: KeyPurpose,
+        parent_pubkey: ExtendedPublicKey,
+        addresses: BTreeMap<ChildNumber, Address>,
+        derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
+        usage_state: KeychainUsageState,
+        lookahead_size: u32,
+    ) -> KeyChainResult<Self> {
+        // TODO optimize for database structure
+        let mut public_key_hashes = HashSet::with_capacity(addresses.len());
+        for address in addresses.values() {
+            let pkh = PublicKeyHash::try_from(address.data(&chain_config)?)?;
+            public_key_hashes.insert(pkh);
+        }
+
+        let mut public_keys = HashSet::with_capacity(derived_public_keys.len());
+        for xpub in derived_public_keys.values() {
+            public_keys.insert(xpub.clone().into_public_key());
+        }
+
+        Ok(Self {
+            chain_config,
+            account_id,
+            purpose,
+            parent_pubkey,
+            addresses,
+            derived_public_keys,
+            public_keys,
+            public_key_hashes,
+            usage_state,
+            lookahead_size,
+        })
+    }
+
+    pub fn issue_address<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> KeyChainResult<Address> {
+        let new_issued_index = self.get_new_issued_index()?;
+
+        // Get address or derive one if necessary
+        let issued_address = match self.addresses.get(&new_issued_index) {
+            Some(address) => address.clone(),
+            None => {
+                self.derive_and_add_key(db_tx, new_issued_index)?;
+                self.addresses
+                    .get(&new_issued_index)
+                    .expect("The address should be derived")
+                    .clone()
+            }
+        };
+
+        self.set_key_index_as_issued(db_tx, new_issued_index)?;
+
+        Ok(issued_address)
+    }
+
+    /// Issue a new key. This does not check if lookahead margins are observed
+    pub fn issue_key<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> KeyChainResult<ExtendedPublicKey> {
+        let new_issued_index = self.get_new_issued_index()?;
+
+        // Get key or derive one if necessary
+        let issued_key = match self.derived_public_keys.get(&new_issued_index) {
+            Some(key) => key.clone(),
+            None => self.derive_and_add_key(db_tx, new_issued_index)?,
+        };
+
+        self.set_key_index_as_issued(db_tx, new_issued_index)?;
+
+        Ok(issued_key)
+    }
+
+    /// Set a specific key index as used
+    fn set_key_index_as_issued<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        new_issued_index: ChildNumber,
+    ) -> KeyChainResult<()> {
+        // Save usage state
+        self.usage_state.set_last_issued(Some(new_issued_index));
+        self.save_usage_state(db_tx)
+    }
+
+    /// Persist the usage state to the database
+    pub(crate) fn save_usage_state<B: Backend>(
+        &self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> KeyChainResult<()> {
+        Ok(db_tx.set_keychain_usage_state(
+            &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
+            &self.usage_state,
+        )?)
+    }
+
+    /// Get a new issued index and check that it is a valid one i.e. not exceeding the lookahead
+    fn get_new_issued_index(&self) -> KeyChainResult<ChildNumber> {
+        // TODO consider last used index as well
+        let new_issued_index = {
+            match self.usage_state.get_last_issued() {
+                None => ChildNumber::ZERO,
+                Some(last_issued) => last_issued.increment()?,
+            }
+        };
+
+        // Check if we can issue a key
+        self.check_issued_lookahead(new_issued_index)?;
+        Ok(new_issued_index)
+    }
+
+    /// Check if a new key can be issued with the provided index
+    fn check_issued_lookahead(&self, new_index_to_issue: ChildNumber) -> KeyChainResult<()> {
+        let usage_state = &self.usage_state;
+
+        let new_issued_index = new_index_to_issue.get_index();
+
+        // Check if the issued addresses are less or equal to lookahead size
+        let lookahead_exceeded = match usage_state.get_last_used() {
+            None => new_issued_index >= self.lookahead_size,
+            Some(last_used_index) => {
+                new_issued_index > last_used_index.get_index() + self.lookahead_size
+            }
+        };
+
+        if lookahead_exceeded {
+            Err(KeyChainError::LookAheadExceeded)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Derives a key or gets it from the precomputed key pool.
+    fn derive_key(&self, key_index: ChildNumber) -> KeyChainResult<ExtendedPublicKey> {
+        // Get the public key from the key pool if available
+        if let Some(pub_key) = self.derived_public_keys.get(&key_index) {
+            return Ok(pub_key.clone());
+        }
+
+        // Create the new key path
+        let key_path = {
+            let mut path = self.parent_pubkey.get_derivation_path().clone().into_vec();
+            path.push(key_index);
+            path.try_into()?
+        };
+
+        // Derive the key
+        Ok(self.parent_pubkey.clone().derive_absolute_path(&key_path)?)
+    }
+
+    /// Derives and adds a key to his key chain. This does not affect the last used and issued state
+    fn derive_and_add_key<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        key_index: ChildNumber,
+    ) -> KeyChainResult<ExtendedPublicKey> {
+        // Get the public key from the key pool if available
+        if let Some(pub_key) = self.derived_public_keys.get(&key_index) {
+            return Ok(pub_key.clone());
+        }
+
+        // Derive the new extended public key
+        let derived_key = self.derive_key(key_index)?;
+        // Just the public key
+        let public_key = derived_key.clone().into_public_key();
+        // Calculate public key hash
+        let public_key_hash = PublicKeyHash::from(&public_key);
+        // Calculate the address
+        let address = Address::from_public_key_hash(&self.chain_config, &public_key_hash)?;
+        // Calculate account derivation path id
+        let account_path_id = AccountDerivationPathId::new(
+            self.account_id.clone(),
+            derived_key.get_derivation_path().clone(),
+        );
+
+        // Save issued key and address
+        db_tx.set_public_key(&account_path_id, &derived_key)?;
+        db_tx.set_address(&account_path_id, &address)?;
+
+        // Add key and address the maps
+        self.derived_public_keys.insert(key_index, derived_key.clone());
+        self.addresses.insert(key_index, address);
+        self.public_keys.insert(public_key);
+        self.public_key_hashes.insert(public_key_hash);
+
+        Ok(derived_key)
+    }
+
+    /// Get the last derived key index
+    pub(crate) fn get_last_derived_index(&self) -> Option<ChildNumber> {
+        self.derived_public_keys.last_key_value().map(|(k, _)| *k)
+    }
+
+    /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
+    /// used key to the last derived key is already `lookahead_size`, this method has no effect
+    fn top_up<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
+        // Find how many keys to derive
+        let (starting_index, up_to_index) = match self.get_last_derived_index() {
+            None => (0u32, self.lookahead_size),
+            Some(last_derived_index) => {
+                let start_index = last_derived_index.increment()?.get_index();
+                let up_to_index = match self.usage_state.get_last_used() {
+                    None => self.lookahead_size,
+                    Some(last_used) => last_used.get_index() + self.lookahead_size + 1,
+                };
+                (start_index, up_to_index)
+            }
+        };
+
+        // If there are any keys that need to be derived
+        if starting_index < up_to_index {
+            // Derive the needed keys
+            for i in starting_index..up_to_index {
+                let index = ChildNumber::from_index_with_hardened_bit(i);
+                self.derive_and_add_key(db_tx, index)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Set the copy of `lookahead_size` of this leaf keychain. This shouldn't be used directly
+    pub(crate) fn set_lookahead_size(&mut self, lookahead_size: u32) {
+        self.lookahead_size = lookahead_size;
+    }
+
+    /// Return true if `public_key` belongs to this key chain's derived pool. If the key can be
+    /// derived from the `parent_pubkey` but is not in the key pool, then this will return false,
+    /// use the `LeafKeyChain::is_pubkey_mine` instead to check membership.
+    pub fn is_pubkey_mine_in_key_pool(&self, public_key: &ExtendedPublicKey) -> bool {
+        self.is_pubkey_mine(public_key, false)
+    }
+
+    /// Return true if `public_key` belongs to this key chain. Set `derive_if_necessary` to true
+    /// for checking membership by deriving the key if necessary.
+    pub fn is_pubkey_mine(
+        &self,
+        public_key: &ExtendedPublicKey,
+        derive_if_necessary: bool,
+    ) -> bool {
+        // The public_key derivation path must be longer than the parent of this key chain
+        if let Some(path_diff) = public_key
+            .get_derivation_path()
+            .get_super_path_diff(self.parent_pubkey.get_derivation_path())
+        {
+            // The path difference must be 1 i.e. the key index
+            if path_diff.len() == 1 {
+                let key_index = path_diff[0];
+                // Check if we expect this key to be derived
+                let is_pub_key_derived = match self.get_last_derived_index() {
+                    None => false,
+                    Some(last_derived_index) => {
+                        key_index.get_index() <= last_derived_index.get_index()
+                    }
+                };
+
+                if is_pub_key_derived {
+                    if let Some(pk) = self.derived_public_keys.get(&key_index) {
+                        return pk == public_key;
+                    }
+                } else if derive_if_necessary {
+                    if let Ok(pk) = &self.derive_key(key_index) {
+                        return pk == public_key;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    pub(crate) fn is_public_key_mine(&self, public_key: &PublicKey) -> bool {
+        self.public_keys.contains(public_key)
+    }
+
+    pub(crate) fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool {
+        self.public_key_hashes.contains(pubkey_hash)
+    }
+
+    /// Mark a specific key as used in the key pool. This will update the last used key index if
+    /// necessary. Returns false if a key was found and set to used.
+    pub(crate) fn mark_key_pool_pubkey_as_used<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        public_key: &ExtendedPublicKey,
+    ) -> KeyChainResult<bool> {
+        // Check if public key is in the key pool
+        if self.is_pubkey_mine_in_key_pool(public_key) {
+            // Get the key index of the public key, this should always be Some
+            let key_index = public_key.get_derivation_path().as_vec().last().expect("The provided public key belongs to this key chain, hence it should always have a key index");
+            self.usage_state.set_last_used(Some(*key_index));
+            db_tx.set_keychain_usage_state(
+                &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
+                &self.usage_state,
+            )?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// Get the index of the last used key or None if no key is used
+    #[allow(dead_code)] // TODO remove
+    pub(crate) fn get_last_used(&self) -> Option<ChildNumber> {
+        self.usage_state.get_last_used()
+    }
+
+    /// Get the index of the last issued key or None if no key is issued
+    #[allow(dead_code)] // TODO remove
+    pub(crate) fn get_last_issued(&self) -> Option<ChildNumber> {
+        self.usage_state.get_last_issued()
+    }
+}
+
 #[allow(dead_code)] // TODO remove
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -248,20 +596,14 @@ pub struct AccountKeyChain {
     /// The master/root key that this account key was derived from
     root_hierarchy_key: Option<ExtendedPublicKey>,
 
-    /// The derived addresses for the receiving funds. Those are derived as needed.
-    receiving_addresses: BTreeMap<ChildNumber, Address>,
+    /// Key chain for receiving funds
+    receiving_key_chain: LeafKeyChain,
 
-    /// Key hierarchy used for receiving funds
-    receiving_state: KeychainUsageState,
-
-    /// The derived addresses for the change. Those are derived as needed.
-    change_addresses: BTreeMap<ChildNumber, Address>,
-
-    /// Key hierarchy used for change
-    change_state: KeychainUsageState,
+    /// Key chain for change addresses
+    change_key_chain: LeafKeyChain,
 
     /// The number of unused addresses that need to be checked after the last used address
-    lookahead_size: u16,
+    lookahead_size: u32,
 }
 
 impl AccountKeyChain {
@@ -270,28 +612,54 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         root_key: &ExtendedPrivateKey,
         index: ChildNumber,
+        lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
         let account_path = make_account_path(&chain_config, index);
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
+        let account_pubkey = account_privkey.to_public_key();
+
+        let account_id = AccountId::new_from_xpub(&account_pubkey);
+
+        let receiving_key_chain = LeafKeyChain::new_empty(
+            chain_config.clone(),
+            account_id.clone(),
+            ReceiveFunds,
+            account_pubkey.clone().derive_child(ReceiveFunds.get_deterministic_index())?,
+            lookahead_size,
+        );
+        receiving_key_chain.save_usage_state(db_tx)?;
+
+        let change_key_chain = LeafKeyChain::new_empty(
+            chain_config.clone(),
+            account_id,
+            Change,
+            account_pubkey.clone().derive_child(Change.get_deterministic_index())?,
+            lookahead_size,
+        );
+        change_key_chain.save_usage_state(db_tx)?;
+
         let mut new_account = AccountKeyChain {
             chain_config,
-            account_pubkey: account_privkey.to_public_key(),
+            account_pubkey,
             root_hierarchy_key: Some(root_key.to_public_key()),
-            receiving_addresses: BTreeMap::new(),
-            receiving_state: KeychainUsageState::default(),
-            change_addresses: BTreeMap::new(),
-            change_state: KeychainUsageState::default(),
-            lookahead_size: LOOKAHEAD_SIZE,
+            receiving_key_chain,
+            change_key_chain,
+            lookahead_size,
         };
 
-        Self::persist_account_info(&mut new_account, db_tx)?;
+        db_tx.set_account(
+            &new_account.get_account_id(),
+            &new_account.get_account_info(),
+        )?;
+
+        new_account.top_up_all(db_tx)?;
 
         Ok(new_account)
     }
 
-    /// Load all
+    /// Load the key chain from the database
     pub fn load_from_database<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
@@ -302,47 +670,89 @@ impl AccountKeyChain {
 
         let AccountInfo::Deterministic(account_info) = account_info;
 
-        let (receiving_addresses, change_addresses) = Self::load_addresses(db_tx, id)?;
+        let account_pubkey = account_info.get_account_key().clone();
+
+        let (receiving_key_chain, change_key_chain) =
+            Self::load_leaf_keys(chain_config.clone(), &account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
             chain_config,
-            account_pubkey: account_info.get_account_key().clone(),
+            account_pubkey,
             root_hierarchy_key: account_info.get_root_hierarchy_key().clone(),
-            receiving_addresses,
-            receiving_state: account_info.get_receiving_state().clone(),
-            change_addresses,
-            change_state: account_info.get_change_state().clone(),
+            receiving_key_chain,
+            change_key_chain,
             lookahead_size: account_info.get_lookahead_size(),
         })
     }
 
-    fn load_addresses<B: Backend>(
+    fn load_leaf_keys<B: Backend>(
+        chain_config: Arc<ChainConfig>,
+        account_info: &DeterministicAccountInfo,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-    ) -> KeyChainResult<(
-        BTreeMap<ChildNumber, Address>,
-        BTreeMap<ChildNumber, Address>,
-    )> {
+    ) -> KeyChainResult<(LeafKeyChain, LeafKeyChain)> {
         let mut receiving_addresses = BTreeMap::new();
         let mut change_addresses = BTreeMap::new();
 
         for (address_id, address) in db_tx.get_addresses(id)? {
-            // Check that derivation path has the expected number of nodes
-            let derivation_path = address_id.into_item_id();
-            if derivation_path.len() != BIP44_PATH_LENGTH {
-                return Err(KeyChainError::InvalidBip44DerivationPath(derivation_path));
-            }
-            let path = derivation_path.as_vec();
-            let purpose = KeyPurpose::try_from(path[BIP44_KEY_PURPOSE_INDEX])?;
+            let (purpose, key_index) = Self::get_purpose_and_index(&address_id.into_item_id())?;
             let old_value = match purpose {
-                ReceiveFunds => receiving_addresses.insert(path[BIP44_KEY_INDEX], address),
-                Change => change_addresses.insert(path[BIP44_KEY_INDEX], address),
+                ReceiveFunds => receiving_addresses.insert(key_index, address),
+                Change => change_addresses.insert(key_index, address),
             };
             if old_value.is_some() {
                 return Err(KeyChainError::CouldNotLoadKeyChain);
             }
         }
-        Ok((receiving_addresses, change_addresses))
+
+        let mut receiving_public_keys = BTreeMap::new();
+        let mut change_public_keys = BTreeMap::new();
+        for (pubkey_id, xpub) in db_tx.get_public_keys(id)? {
+            let (purpose, key_index) = Self::get_purpose_and_index(&pubkey_id.into_item_id())?;
+            let old_value = match purpose {
+                ReceiveFunds => receiving_public_keys.insert(key_index, xpub),
+                Change => change_public_keys.insert(key_index, xpub),
+            };
+            if old_value.is_some() {
+                return Err(KeyChainError::CouldNotLoadKeyChain);
+            }
+        }
+
+        // TODO make db_tx.get_keychain_usage_states return a Map<KeyPurpose, ...>
+        let mut usage_states: BTreeMap<KeyPurpose, KeychainUsageState> = db_tx
+            .get_keychain_usage_states(id)?
+            .into_iter()
+            .map(|(k, v)| (k.into_item_id(), v))
+            .collect();
+
+        let account_pubkey = account_info.get_account_key();
+
+        Ok((
+            LeafKeyChain::new_from_parts(
+                chain_config.clone(),
+                id.clone(),
+                ReceiveFunds,
+                account_pubkey.clone().derive_child(ReceiveFunds.get_deterministic_index())?,
+                receiving_addresses,
+                receiving_public_keys,
+                usage_states.remove(&ReceiveFunds).ok_or(
+                    KeyChainError::MissingDatabaseProperty("ReceiveFunds usage state"),
+                )?,
+                account_info.get_lookahead_size(),
+            )?,
+            LeafKeyChain::new_from_parts(
+                chain_config,
+                id.clone(),
+                Change,
+                account_pubkey.clone().derive_child(Change.get_deterministic_index())?,
+                change_addresses,
+                change_public_keys,
+                usage_states
+                    .remove(&Change)
+                    .ok_or(KeyChainError::MissingDatabaseProperty("Change usage state"))?,
+                account_info.get_lookahead_size(),
+            )?,
+        ))
     }
 
     pub fn get_account_id(&self) -> AccountId {
@@ -354,75 +764,21 @@ impl AccountKeyChain {
     }
 
     /// Issue a new address that hasn't been used before
-    pub fn issue_new_address<B: Backend>(
+    pub fn issue_address<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<Address> {
-        let key = self.issue_new_key(db_tx, purpose)?;
-        let derivation_path = key.get_derivation_path().clone();
-
-        let address = Address::from_public_key(&self.chain_config, &key.into_public_key())?;
-        let id = AccountAddressId::new(self.get_account_id(), derivation_path);
-        db_tx.set_address(&id, &address)?;
-
-        Ok(address)
+        self.get_leaf_key_chain_mut(purpose).issue_address(db_tx)
     }
 
     /// Issue a new derived key that hasn't been used before
-    pub fn issue_new_key<B: Backend>(
+    pub fn issue_key<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
-        let usage_state = self.get_usage_state(purpose);
-        let new_issued = {
-            match usage_state.get_last_issued() {
-                None => ChildNumber::ZERO,
-                Some(last_issued) => last_issued.increment()?,
-            }
-        };
-
-        self.check_issued_lookahead(purpose, new_issued)?;
-
-        // The path of the new key
-        let key_path = {
-            let mut path = self.account_pubkey.get_derivation_path().clone().into_vec();
-            path.push(KeyPurpose::DETERMINISTIC_INDEX[purpose as usize]);
-            path.push(new_issued);
-            path.try_into()?
-        };
-
-        // TODO get key from a precalculated pool
-        let new_key = self.account_pubkey.clone().derive_absolute_path(&key_path)?;
-        // Update the last issued index
-        self.get_usage_state_mut(purpose).set_last_issued(Some(new_issued));
-        Self::persist_account_info(self, db_tx)?;
-
-        Ok(new_key)
-    }
-
-    fn check_issued_lookahead(
-        &self,
-        purpose: KeyPurpose,
-        new_last_issued: ChildNumber,
-    ) -> KeyChainResult<()> {
-        let usage_state = self.get_usage_state(purpose);
-
-        let new_issued_index = new_last_issued.get_index();
-        let lookahead = self.lookahead_size as u32;
-
-        // Check if the issued addresses are less or equal to lookahead size
-        let lookahead_exceeded = match usage_state.get_last_used() {
-            None => new_issued_index >= lookahead,
-            Some(last_used_index) => new_issued_index > last_used_index.get_index() + lookahead,
-        };
-
-        if lookahead_exceeded {
-            Err(KeyChainError::LookAheadExceeded)
-        } else {
-            Ok(())
-        }
+        self.get_leaf_key_chain_mut(purpose).issue_key(db_tx)
     }
 
     /// Get the private key that corresponds to the provided public key
@@ -441,37 +797,48 @@ impl AccountKeyChain {
         }
     }
 
-    fn get_usage_state(&self, purpose: KeyPurpose) -> &KeychainUsageState {
+    /// Get the leaf key chain for a particular key purpose
+    pub(crate) fn get_leaf_key_chain(&self, purpose: KeyPurpose) -> &LeafKeyChain {
         match purpose {
-            ReceiveFunds => &self.receiving_state,
-            Change => &self.change_state,
+            ReceiveFunds => &self.receiving_key_chain,
+            Change => &self.change_key_chain,
         }
     }
 
-    /// Get the mutable usage state, this is used internally with database persistence done
-    /// externally.
-    fn get_usage_state_mut(&mut self, purpose: KeyPurpose) -> &mut KeychainUsageState {
+    /// Get the mutable leaf key chain for a particular key purpose. This is used internally with
+    /// database persistence done externally.
+    fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeyChain {
         match purpose {
-            ReceiveFunds => &mut self.receiving_state,
-            Change => &mut self.change_state,
+            ReceiveFunds => &mut self.receiving_key_chain,
+            Change => &mut self.change_key_chain,
         }
+    }
+
+    // Return true if the provided public key belongs to this key chain
+    pub fn is_public_key_mine(&self, public_key: &PublicKey) -> bool {
+        for purpose in KeyPurpose::ALL {
+            if self.get_leaf_key_chain(purpose).is_public_key_mine(public_key) {
+                return true; // Return early to avoid checking all leaf key chains
+            }
+        }
+        false
+    }
+
+    // Return true if the provided public key hash belongs to this key chain
+    pub fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool {
+        for purpose in KeyPurpose::ALL {
+            if self.get_leaf_key_chain(purpose).is_public_key_hash_mine(pubkey_hash) {
+                return true; // Return early to avoid checking all leaf key chains
+            }
+        }
+        false
     }
 
     /// Derive addresses until there are lookahead unused ones
-    fn top_up_all(&mut self) -> KeyChainResult<()> {
+    fn top_up_all<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
         for purpose in KeyPurpose::ALL {
-            self.top_up(purpose)?
+            self.get_leaf_key_chain_mut(purpose).top_up(db_tx)?;
         }
-        Ok(())
-    }
-
-    /// Derive addresses for the `purpose` key chain
-    fn top_up(&mut self, purpose: KeyPurpose) -> KeyChainResult<()> {
-        // TODO add db_tx
-        let _dest = match purpose {
-            ReceiveFunds => &mut self.receiving_addresses,
-            Change => &mut self.change_addresses,
-        };
         Ok(())
     }
 
@@ -480,30 +847,55 @@ impl AccountKeyChain {
             self.root_hierarchy_key.clone(),
             self.account_pubkey.clone(),
             self.lookahead_size,
-            self.get_usage_state(ReceiveFunds).clone(),
-            self.get_usage_state(Change).clone(),
         ))
     }
 
-    pub fn get_lookahead_size(&self) -> u16 {
+    pub fn get_lookahead_size(&self) -> u32 {
         self.lookahead_size
     }
 
     pub fn set_lookahead_size<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        lookahead_size: u16,
+        lookahead_size: u32,
     ) -> KeyChainResult<()> {
         self.lookahead_size = lookahead_size;
-        Self::persist_account_info(self, db_tx)
+        db_tx.set_account(&self.get_account_id(), &self.get_account_info())?;
+        for purpose in KeyPurpose::ALL {
+            self.get_leaf_key_chain_mut(purpose).set_lookahead_size(lookahead_size);
+        }
+        self.top_up_all(db_tx)
     }
 
-    fn persist_account_info<B: Backend>(
-        account: &mut Self,
+    /// Marks a public key as being used. Returns true if a key was found and set to used.
+    pub fn mark_as_used<B: Backend>(
+        &mut self,
         db_tx: &mut StoreTxRw<B>,
-    ) -> KeyChainResult<()> {
-        db_tx.set_account(&account.get_account_id(), &account.get_account_info())?;
-        account.top_up_all()
+        public_key: &ExtendedPublicKey,
+    ) -> KeyChainResult<bool> {
+        for purpose in KeyPurpose::ALL {
+            let leaf_keys = self.get_leaf_key_chain_mut(purpose);
+            if leaf_keys.mark_key_pool_pubkey_as_used(db_tx, public_key)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    fn get_purpose_and_index(
+        derivation_path: &DerivationPath,
+    ) -> KeyChainResult<(KeyPurpose, ChildNumber)> {
+        // Check that derivation path has the expected number of nodes
+        if derivation_path.len() != BIP44_PATH_LENGTH {
+            return Err(KeyChainError::InvalidBip44DerivationPath(
+                derivation_path.clone(),
+            ));
+        }
+        let path = derivation_path.as_vec();
+        // Calculate the key purpose and index
+        let purpose = KeyPurpose::try_from(path[BIP44_KEY_PURPOSE_INDEX])
+            .map_err(KeyChainError::InvalidKeyPurpose)?;
+        let key_index = path[BIP44_KEY_INDEX];
+        Ok((purpose, key_index))
     }
 }
 
@@ -518,6 +910,9 @@ fn make_account_path(chain_config: &ChainConfig, account_index: ChildNumber) -> 
 mod tests {
     use super::*;
     use common::chain::config::create_unit_test_config;
+    use crypto::key::hdkd::u31::U31;
+    use crypto::key::secp256k1::Secp256k1PublicKey;
+    use crypto::key::PublicKey;
     use rstest::rstest;
     use std::str::FromStr;
     use test_utils::assert_encoded_eq;
@@ -566,7 +961,18 @@ mod tests {
             MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
 
         let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        key_chain.top_up_all(&mut db_tx).unwrap();
         db_tx.commit().unwrap();
+
+        // This public key should belong to the key chain
+        let pk: PublicKey =
+            Secp256k1PublicKey::from_bytes(&hex::decode(public).unwrap()).unwrap().into();
+        let pkh = PublicKeyHash::from(&pk);
+        assert!(key_chain.is_public_key_hash_mine(&pkh));
+
+        // This zeroed pub key hash should not belong to the key chain
+        let pkh = PublicKeyHash::zero();
+        assert!(!key_chain.is_public_key_hash_mine(&pkh));
 
         let mut db_tx = db.transaction_rw(None).unwrap();
         let path = DerivationPath::from_str(path_str).unwrap();
@@ -576,10 +982,10 @@ mod tests {
             // Derive previous key if necessary
             if key_index > 0 {
                 for _ in 0..key_index {
-                    let _ = key_chain.issue_new_key(&mut db_tx, purpose).unwrap();
+                    let _ = key_chain.issue_key(&mut db_tx, purpose).unwrap();
                 }
             }
-            key_chain.issue_new_key(&mut db_tx, purpose).unwrap()
+            key_chain.issue_key(&mut db_tx, purpose).unwrap()
         };
         assert_eq!(pk.get_derivation_path().to_string(), path_str.to_string());
         let sk = key_chain.get_private_key(&master_key_chain.root_key, &pk).unwrap();
@@ -619,10 +1025,10 @@ mod tests {
 
         // Issue new addresses until the lookahead size is reached
         for _ in 0..5 {
-            key_chain.issue_new_address(&mut db_tx, purpose).unwrap();
+            key_chain.issue_address(&mut db_tx, purpose).unwrap();
         }
         assert_eq!(
-            key_chain.issue_new_address(&mut db_tx, purpose),
+            key_chain.issue_address(&mut db_tx, purpose),
             Err(KeyChainError::LookAheadExceeded)
         );
         db_tx.commit().unwrap();
@@ -632,9 +1038,9 @@ mod tests {
             .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
             .unwrap();
         assert_eq!(key_chain.get_lookahead_size(), 5);
-        assert_eq!(key_chain.get_usage_state(purpose).get_last_used(), None);
+        assert_eq!(key_chain.get_leaf_key_chain(purpose).get_last_used(), None);
         assert_eq!(
-            key_chain.get_usage_state(purpose).get_last_issued(),
+            key_chain.get_leaf_key_chain(purpose).get_last_issued(),
             Some(ChildNumber::from_normal(U31::from_u32_with_msb(4).0))
         );
 
@@ -645,13 +1051,108 @@ mod tests {
 
         // Should be able to issue more addresses
         for _ in 0..5 {
-            key_chain.issue_new_address(&mut db_tx, purpose).unwrap();
+            key_chain.issue_address(&mut db_tx, purpose).unwrap();
         }
         assert_eq!(
-            key_chain.issue_new_address(&mut db_tx, purpose),
+            key_chain.issue_address(&mut db_tx, purpose),
             Err(KeyChainError::LookAheadExceeded)
         );
+    }
 
-        // TODO mark an address as used and issue more addresses
+    #[rstest]
+    #[case(KeyPurpose::ReceiveFunds)]
+    #[case(KeyPurpose::Change)]
+    fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
+        let chain_config = Arc::new(create_unit_test_config());
+        let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+        let mut db_tx = db.transaction_rw(None).unwrap();
+        let master_key_chain =
+            MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+        let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        let id = key_chain.get_account_id();
+        db_tx.commit().unwrap();
+        drop(key_chain);
+
+        let mut key_chain = master_key_chain
+            .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
+            .unwrap();
+
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(19);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(leaf_keys.usage_state.get_last_issued(), None);
+            assert_eq!(leaf_keys.usage_state.get_last_used(), None);
+        }
+
+        let mut db_tx = db.transaction_rw(None).unwrap();
+
+        key_chain.set_lookahead_size(&mut db_tx, 5).unwrap();
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(19);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(leaf_keys.usage_state.get_last_issued(), None);
+            assert_eq!(leaf_keys.usage_state.get_last_used(), None);
+        }
+
+        key_chain.set_lookahead_size(&mut db_tx, 30).unwrap();
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(leaf_keys.usage_state.get_last_issued(), None);
+            assert_eq!(leaf_keys.usage_state.get_last_used(), None);
+        }
+
+        key_chain.set_lookahead_size(&mut db_tx, 10).unwrap();
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(leaf_keys.usage_state.get_last_issued(), None);
+            assert_eq!(leaf_keys.usage_state.get_last_used(), None);
+        }
+
+        let mut issued_key = key_chain.issue_key(&mut db_tx, purpose).unwrap();
+
+        // Mark the last key as used
+        assert!(key_chain.mark_as_used(&mut db_tx, &issued_key).unwrap());
+
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(
+                leaf_keys.usage_state.get_last_issued(),
+                Some(ChildNumber::from_index_with_hardened_bit(0))
+            );
+            assert_eq!(
+                leaf_keys.usage_state.get_last_used(),
+                Some(ChildNumber::from_index_with_hardened_bit(0))
+            );
+        }
+
+        // Derive keys until lookahead
+        while let Ok(k) = key_chain.issue_key(&mut db_tx, purpose) {
+            issued_key = k;
+        }
+
+        // Mark the last key as used
+        assert!(key_chain.mark_as_used(&mut db_tx, &issued_key).unwrap());
+
+        {
+            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
+            assert_eq!(
+                leaf_keys.usage_state.get_last_issued(),
+                Some(ChildNumber::from_index_with_hardened_bit(10))
+            );
+            assert_eq!(
+                leaf_keys.usage_state.get_last_used(),
+                Some(ChildNumber::from_index_with_hardened_bit(10))
+            );
+        }
     }
 }

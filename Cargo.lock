@@ -6427,6 +6427,7 @@ dependencies = [
  "bip39",
  "common",
  "crypto",
+ "hex",
  "logging",
  "parity-scale-codec",
  "rstest",

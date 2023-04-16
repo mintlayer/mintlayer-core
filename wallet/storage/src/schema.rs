@@ -16,10 +16,11 @@
 //! Wallet database schema
 
 use common::address::Address;
+use crypto::key::extended::ExtendedPublicKey;
 use utxo::Utxo;
 use wallet_types::{
-    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
+    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 storage::decl_schema! {
@@ -29,10 +30,14 @@ storage::decl_schema! {
         pub DBValue: Map<Vec<u8>, Vec<u8>>,
         /// Store for all the accounts in this wallet
         pub DBAccounts: Map<AccountId, AccountInfo>,
+        /// Store keychain usage states
+        pub DBKeychainUsageStates: Map<AccountKeyPurposeId, KeychainUsageState>,
         /// Store for all the private keys in this wallet
         pub DBRootKeys: Map<RootKeyId, RootKeyContent>,
+        /// Store for all the public keys in this wallet
+        pub DBPubKeys: Map<AccountDerivationPathId, ExtendedPublicKey>,
         /// Store for all the addresses that belong to an account
-        pub DBAddresses: Map<AccountAddressId, Address>,
+        pub DBAddresses: Map<AccountDerivationPathId, Address>,
         /// Store for Utxo Entries
         pub DBUtxo: Map<AccountOutPointId, Utxo>,
         /// Store for Transaction entries

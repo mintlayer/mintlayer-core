@@ -96,7 +96,7 @@ impl Secp256k1PrivateKey {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct Secp256k1PublicKey {
     pubkey_data: secp256k1::PublicKey,
 }
