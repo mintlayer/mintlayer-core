@@ -740,6 +740,7 @@ fn check_mutate_output(
         TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
         TxOutput::StakePool(_) => unreachable!(), // TODO: come back to this later
         TxOutput::ProduceBlockFromStake(_, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
     };
 
     let tx = tx_updater.generate_tx().unwrap();

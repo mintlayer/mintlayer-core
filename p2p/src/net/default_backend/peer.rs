@@ -215,7 +215,7 @@ where
             }
         }
 
-        let mut was_accepted = SetFlag::default();
+        let mut was_accepted = SetFlag::new();
 
         loop {
             tokio::select! {
@@ -226,7 +226,7 @@ where
                     Event::Accepted => was_accepted.set(),
                     Event::SendMessage(message) => self.socket.send(*message).await?,
                 },
-                event = self.socket.recv(), if *was_accepted => match event {
+                event = self.socket.recv(), if was_accepted.test() => match event {
                     Err(err) => {
                         log::info!("peer connection closed, reason {err:?}");
                         return Ok(());

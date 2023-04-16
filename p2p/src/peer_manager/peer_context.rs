@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use utils::bloom_filters::rolling_bloom_filter::RollingBloomFilter;
+use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, set_flag::SetFlag};
 
 use crate::{
     net::types::{self, Role},
@@ -50,10 +50,11 @@ pub struct PeerContext<A> {
     /// Min ping time
     pub ping_min: Option<Duration>,
 
-    /// Whether an address list request was sent and no response was received.
-    ///
-    /// It is used to score peers that send unsolicited address list responses.
-    pub expect_addr_list_response: bool,
+    /// Set if address list request was already received from this peer
+    pub addr_list_req_received: SetFlag,
+
+    /// Set if address list response was already received from this peer
+    pub addr_list_resp_received: SetFlag,
 
     /// All addresses that were announced to or from this peer.
     /// Used to prevent infinity loops while broadcasting addresses.

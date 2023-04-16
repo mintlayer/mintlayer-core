@@ -244,10 +244,8 @@ where
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.accounting_block_deltas
-            .entry(tx_source)
-            .or_default()
-            .merge_with_delta(delta.clone())
+        self.accounting_delta_adapter
+            .apply_accounting_delta(tx_source, delta)
             .map_err(TransactionVerifierStorageError::from)?;
         Ok(())
     }
@@ -268,37 +266,43 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
 {
     type Error = pos_accounting::Error;
 
-    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, Self::Error> {
-        self.accounting_delta.pool_exists(pool_id)
+    fn pool_exists(&self, pool_id: PoolId) -> Result<bool, pos_accounting::Error> {
+        self.accounting_delta_adapter.accounting_delta().pool_exists(pool_id)
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta.get_pool_balance(pool_id)
+        self.accounting_delta_adapter.accounting_delta().get_pool_balance(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
-        self.accounting_delta.get_pool_data(pool_id)
+        self.accounting_delta_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta.get_delegation_balance(delegation_id)
+        self.accounting_delta_adapter
+            .accounting_delta()
+            .get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, Self::Error> {
-        self.accounting_delta.get_delegation_data(delegation_id)
+        self.accounting_delta_adapter
+            .accounting_delta()
+            .get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, Self::Error> {
-        self.accounting_delta.get_pool_delegations_shares(pool_id)
+        self.accounting_delta_adapter
+            .accounting_delta()
+            .get_pool_delegations_shares(pool_id)
     }
 
     fn get_pool_delegation_share(
@@ -306,7 +310,9 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta.get_pool_delegation_share(pool_id, delegation_id)
+        self.accounting_delta_adapter
+            .accounting_delta()
+            .get_pool_delegation_share(pool_id, delegation_id)
     }
 }
 
@@ -315,6 +321,6 @@ impl<C, S, U, A: PoSAccountingView> FlushablePoSAccountingView for TransactionVe
         &mut self,
         data: PoSAccountingDeltaData,
     ) -> Result<DeltaMergeUndo, pos_accounting::Error> {
-        self.accounting_delta.batch_write_delta(data)
+        self.accounting_delta_adapter.batch_write_delta(data)
     }
 }

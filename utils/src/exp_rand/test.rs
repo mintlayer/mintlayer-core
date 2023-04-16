@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,18 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod counttracker;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod newtype;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+use super::*;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_exponential_rand(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let count = 1000;
+    let sum: f64 = (0..count).map(|_| exponential_rand(&mut rng)).sum();
+    let average = sum / count as f64;
+    assert!(0.8 < average && average < 1.2);
+}

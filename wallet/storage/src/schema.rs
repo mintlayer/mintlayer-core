@@ -15,22 +15,27 @@
 
 //! Wallet database schema
 
-use wallet_types::WalletTx;
-
-use common::{
-    chain::{OutPoint, Transaction},
-    primitives::Id,
-};
+use common::address::Address;
 use utxo::Utxo;
+use wallet_types::{
+    AccountAddressId, AccountId, AccountInfo, AccountOutPointId, AccountTxId, RootKeyContent,
+    RootKeyId, WalletTx,
+};
 
 storage::decl_schema! {
     /// Database schema for wallet storage
     pub Schema {
         /// Storage for individual values.
         pub DBValue: Map<Vec<u8>, Vec<u8>>,
+        /// Store for all the accounts in this wallet
+        pub DBAccounts: Map<AccountId, AccountInfo>,
+        /// Store for all the private keys in this wallet
+        pub DBRootKeys: Map<RootKeyId, RootKeyContent>,
+        /// Store for all the addresses that belong to an account
+        pub DBAddresses: Map<AccountAddressId, Address>,
         /// Store for Utxo Entries
-        pub DBUtxo: Map<OutPoint, Utxo>,
+        pub DBUtxo: Map<AccountOutPointId, Utxo>,
         /// Store for Transaction entries
-        pub DBTxs: Map<Id<Transaction>, WalletTx>,
+        pub DBTxs: Map<AccountTxId, WalletTx>,
     }
 }

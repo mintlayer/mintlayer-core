@@ -18,7 +18,6 @@ use common::{
     chain::{DelegationId, Destination, OutPoint, PoolId},
     primitives::Amount,
 };
-use crypto::vrf::VRFPublicKey;
 
 use crate::{
     error::Error,
@@ -41,13 +40,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
     fn create_pool(
         &mut self,
         input0_outpoint: &OutPoint,
-        pledge_amount: Amount,
-        decommission_key: Destination,
-        vrf_public_key: VRFPublicKey,
-        margin_ratio_per_thousand: u64,
-        cost_per_epoch: Amount,
+        pool_data: PoolData,
     ) -> Result<(PoolId, PoSAccountingUndo), Error> {
         let pool_id = make_pool_id(input0_outpoint);
+        let pledge_amount = pool_data.pledge_amount();
 
         if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
             // This should never happen since it's based on an unspent input
@@ -61,13 +57,6 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         self.data.pool_balances.add_unsigned(pool_id, pledge_amount)?;
 
-        let pool_data = PoolData::new(
-            decommission_key,
-            pledge_amount,
-            vrf_public_key,
-            margin_ratio_per_thousand,
-            cost_per_epoch,
-        );
         let undo_data = self
             .data
             .pool_data

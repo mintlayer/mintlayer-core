@@ -75,15 +75,8 @@ fn create_pool(
         0,
     );
     let pool_data = create_pool_data(rng, destination, pledged_amount);
-    op.create_pool(
-        &outpoint,
-        pledged_amount,
-        pool_data.decommission_destination().clone(),
-        pool_data.vrf_public_key().clone(),
-        pool_data.margin_ratio_per_thousand(),
-        pool_data.cost_per_epoch(),
-    )
-    .map(|(id, undo)| (id, pool_data, undo))
+    op.create_pool(&outpoint, pool_data.clone())
+        .map(|(id, undo)| (id, pool_data, undo))
 }
 
 fn create_delegation_id(

@@ -29,7 +29,7 @@ use tower_http::auth::AuthorizeRequest;
 ///
 /// Custom authorization is not really needed, because `tower_http`
 /// already supports it (see [`tower_http::auth::RequireAuthorizationLayer::basic`]),
-/// but it can simply things if we want to support hashed passwords.
+/// but it can simplify things if we want to support hashed passwords.
 #[derive(Clone)]
 pub struct RpcAuth {
     username: String,
@@ -94,13 +94,17 @@ impl RpcAuth {
             .map_err(CheckError::InvalidUtf8Value)?;
         let (username, password) =
             username_password.split_once(':').ok_or(CheckError::ColonNotFound)?;
+        let username_valid = SliceEqualityCheckMethod::timing_resistant_equal(
+            self.username.as_bytes(),
+            username.as_bytes(),
+        );
         let password_valid = verify_password(
             password.as_bytes(),
             self.password_hash.clone(),
             SliceEqualityCheckMethod::TimingResistant,
         )
         .map_err(CheckError::KdfError)?;
-        Ok(username == self.username && password_valid)
+        Ok(username_valid && password_valid)
     }
 }
 

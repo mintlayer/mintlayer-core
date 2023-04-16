@@ -429,7 +429,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     // The output can be reused in block reward right away
                     Ok(())
                 }
-                TxOutput::Transfer(_, _) | TxOutput::StakePool(_) | TxOutput::Burn(_) => Err(
+                TxOutput::Transfer(_, _)
+                | TxOutput::StakePool(_)
+                | TxOutput::Burn(_)
+                | TxOutput::DecommissionPool(_, _, _, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                 ),
             }
@@ -552,11 +555,56 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_outputs_timelock(
+        &self,
+        block: &Block,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            tx.outputs().iter().try_for_each(|output| {
+                match output {
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::StakePool(_)
+                    | TxOutput::ProduceBlockFromStake(_, _, _)
+                    | TxOutput::LockThenTransfer(_, _, _) => {}
+                    TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
+                        OutputTimeLock::ForBlockCount(c) => {
+                            let cs: i64 = (*c).try_into().map_err(|_| {
+                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(tx.transaction().get_id(), *c)
+                            })?;
+                            let given = BlockDistance::new(cs);
+                            let required = self.chain_config
+                                .as_ref()
+                                .decommission_pool_maturity_distance(block_height);
+                            ensure!(
+                                given >= required,
+                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(tx.transaction().get_id(), given, required)
+                            );
+                        }
+                        OutputTimeLock::UntilHeight(_)
+                        | OutputTimeLock::UntilTime(_)
+                        | OutputTimeLock::ForSeconds(_) => {
+                            return Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType(tx.transaction().get_id()));
+                        }
+                    },
+                };
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+
+    fn check_transactions(
+        &self,
+        block: &Block,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
         self.check_witness_count(block).log_err()?;
         self.check_duplicate_inputs(block).log_err()?;
         self.check_tokens_txs(block).log_err()?;
+        self.check_outputs_timelock(block, block_height).log_err()?;
         Ok(())
     }
 
@@ -564,7 +612,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
-    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
+    pub fn check_block(
+        &self,
+        block: &WithId<Block>,
+        block_height: BlockHeight,
+    ) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header()).log_err()?;
 
         self.check_block_size(block)
@@ -600,7 +652,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             )
             .log_err()?;
 
-        self.check_transactions(block)
+        self.check_transactions(block, block_height)
             .map_err(CheckBlockError::CheckTransactionFailed)
             .log_err()?;
 

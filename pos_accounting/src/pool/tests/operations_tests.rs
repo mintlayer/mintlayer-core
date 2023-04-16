@@ -51,30 +51,13 @@ fn create_pool_twice(#[case] seed: Seed) {
     let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
 
     let mut db = PoSAccountingDB::new(&mut storage);
-    let _ = db
-        .create_pool(
-            &outpoint,
-            pledge_amount,
-            pool_data.decommission_destination().clone(),
-            pool_data.vrf_public_key().clone(),
-            pool_data.margin_ratio_per_thousand(),
-            pool_data.cost_per_epoch(),
-        )
-        .unwrap();
+    let _ = db.create_pool(&outpoint, pool_data.clone()).unwrap();
 
     // using db
     {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
-            db.create_pool(
-                &outpoint,
-                pledge_amount,
-                pool_data.decommission_destination().clone(),
-                pool_data.vrf_public_key().clone(),
-                pool_data.margin_ratio_per_thousand(),
-                pool_data.cost_per_epoch(),
-            )
-            .unwrap_err(),
+            db.create_pool(&outpoint, pool_data.clone()).unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }
@@ -84,16 +67,7 @@ fn create_pool_twice(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta
-                .create_pool(
-                    &outpoint,
-                    pledge_amount,
-                    pool_data.decommission_destination().clone(),
-                    pool_data.vrf_public_key().clone(),
-                    pool_data.margin_ratio_per_thousand(),
-                    pool_data.cost_per_epoch(),
-                )
-                .unwrap_err(),
+            delta.create_pool(&outpoint, pool_data).unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }

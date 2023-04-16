@@ -19,19 +19,21 @@ use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 
 use crate::{
     config::NodeType,
+    event::PeerManagerEvent,
     net::{
         default_backend::{
-            transport::{MpscChannelTransport, TransportAddress},
-            DefaultNetworkingService,
+            transport::{MpscChannelTransport, TcpTransportSocket, TransportAddress},
+            types::{Command, Message},
+            ConnectivityHandle, DefaultNetworkingService,
         },
         types::{PeerInfo, Role},
         ConnectivityService, NetworkingService,
     },
-    peer_manager::tests::make_peer_manager_custom,
+    peer_manager::{tests::make_peer_manager_custom, PeerManager},
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
-        test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker, TestTcpAddressMaker,
-        TestTransportChannel, TestTransportMaker,
+        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker,
+        TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
     },
     types::peer_id::PeerId,
 };
@@ -105,4 +107,178 @@ async fn test_address_rate_limiter_channels() {
         TestTcpAddressMaker,
     >()
     .await;
+}
+
+#[test]
+fn test_addr_list_handling_inbound() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
+        vec![],
+        cmd_tx,
+        conn_rx,
+    );
+
+    let mut pm = PeerManager::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_rx,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let peer_id_1 = PeerId::new();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_1,
+        protocol: NETWORK_PROTOCOL_CURRENT,
+        network: *chain_config.magic_bytes(),
+        version: *chain_config.version(),
+        user_agent: mintlayer_core_user_agent(),
+        services: NodeType::Full.into(),
+    };
+    pm.accept_connection(TestTcpAddressMaker::new(), Role::Inbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 1);
+
+    // Peer is accepted by the peer manager
+    match cmd_rx.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // Peer manager sends response normally to first address list request
+    pm.handle_addr_list_request(peer_id_1);
+    match cmd_rx.try_recv() {
+        Ok(Command::SendMessage {
+            peer,
+            message: Message::AddrListResponse(_),
+        }) if peer == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // Other requests are ignored but the peer is not scored
+    pm.handle_addr_list_request(peer_id_1);
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+    assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
+
+    // Check that the peer is scored if it tries to send an unexpected address list response
+    pm.handle_addr_list_response(
+        peer_id_1,
+        vec![TestTcpAddressMaker::new().as_peer_address()],
+    );
+    assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
+}
+
+#[test]
+fn test_addr_list_handling_outbound() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
+        vec![],
+        cmd_tx,
+        conn_rx,
+    );
+
+    let mut pm = PeerManager::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_rx,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    let peer_id_1 = PeerId::new();
+    let peer_address = TestTcpAddressMaker::new();
+    let peer_info = PeerInfo {
+        peer_id: peer_id_1,
+        protocol: NETWORK_PROTOCOL_CURRENT,
+        network: *chain_config.magic_bytes(),
+        version: *chain_config.version(),
+        user_agent: mintlayer_core_user_agent(),
+        services: NodeType::Full.into(),
+    };
+    pm.connect(peer_address, None);
+
+    // New peer connection is requested
+    match cmd_rx.try_recv() {
+        Ok(Command::Connect { address }) if address == peer_address => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    pm.accept_connection(peer_address, Role::Outbound, peer_info, None);
+    assert_eq!(pm.peers.len(), 1);
+
+    // Peer is accepted by the peer manager
+    match cmd_rx.try_recv() {
+        Ok(Command::Accept { peer_id }) if peer_id == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // Address list is requested from the connected peer
+    match cmd_rx.try_recv() {
+        Ok(Command::SendMessage {
+            peer,
+            message: Message::AddrListRequest(_),
+        }) if peer == peer_id_1 => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // Check that the address list response is processed normally and that the peer is not scored
+    pm.handle_addr_list_response(
+        peer_id_1,
+        vec![TestTcpAddressMaker::new().as_peer_address()],
+    );
+    assert_eq!(pm.peers.get(&peer_id_1).unwrap().score, 0);
+
+    // No more messages
+    match cmd_rx.try_recv() {
+        Err(_) => {}
+        v => panic!("unexpected command: {v:?}"),
+    }
+
+    // Check that the peer is scored if it tries to send an unexpected address list response
+    pm.handle_addr_list_response(
+        peer_id_1,
+        vec![TestTcpAddressMaker::new().as_peer_address()],
+    );
+    assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
 }

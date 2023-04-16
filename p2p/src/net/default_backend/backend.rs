@@ -182,8 +182,8 @@ where
 
         peer.tx.send(Event::Accepted).map_err(P2pError::from)?;
 
-        assert!(!*peer.was_accepted);
-        peer.was_accepted.set();
+        let old_value = peer.was_accepted.test_and_set();
+        assert!(!old_value);
 
         Self::send_sync_event(&self.sync_tx, SyncingEvent::Connected { peer_id });
 
@@ -379,7 +379,7 @@ where
                 handle,
                 services,
                 tx,
-                was_accepted: Default::default(),
+                was_accepted: SetFlag::new(),
             },
         );
 
@@ -396,7 +396,7 @@ where
             .remove(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        if *peer.was_accepted {
+        if peer.was_accepted.test() {
             Self::send_sync_event(&self.sync_tx, SyncingEvent::Disconnected { peer_id });
         }
 
