@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::BlockIndex;
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::Block,
     primitives::{BlockHeight, Id},
@@ -38,7 +38,7 @@ impl<'a> From<&TransactionSourceForConnect<'a>> for TransactionSource {
 
 pub enum TransactionSourceForConnect<'a> {
     Chain { new_block_index: &'a BlockIndex },
-    Mempool { current_best: &'a BlockIndex },
+    Mempool { current_best: &'a GenBlockIndex },
 }
 
 impl<'a> TransactionSourceForConnect<'a> {

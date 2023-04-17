@@ -21,28 +21,33 @@ use common::{
 use std::sync::Arc;
 use subsystem::{CallRequest, ShutdownRequest};
 
-#[async_trait::async_trait]
 pub trait MempoolInterface: Send + Sync {
-    async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
+    /// Add a transaction to mempool
+    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
 
-    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
-    async fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+    /// Get all transactions from mempool
+    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
 
-    async fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
+    /// Get a specific transaction from the mempool
+    fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
 
-    async fn collect_txs(
+    /// Check given transaction is contained in the mempool
+    fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+
+    /// Collect transactions by putting them in given accumulator
+    fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
     ) -> Result<Box<dyn TransactionAccumulator>, Error>;
 
-    async fn subscribe_to_events(
+    /// Subscribe to events emitted by mempool
+    fn subscribe_to_events(
         &mut self,
         handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error>;
 }
 
 #[async_trait::async_trait]
-pub trait MempoolSubsystemInterface: MempoolInterface + 'static {
+pub trait MempoolSubsystemInterface: 'static {
     async fn run(self, call_rq: CallRequest<dyn MempoolInterface>, shut_rq: ShutdownRequest);
 }

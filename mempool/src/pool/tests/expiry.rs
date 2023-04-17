@@ -22,7 +22,7 @@ use crate::SystemUsageEstimator;
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let mock_time = Arc::new(AtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
@@ -56,7 +56,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         mock_clock,
         SystemUsageEstimator {},
     );
-    mempool.add_transaction(parent).await?;
+    mempool.add_transaction(parent)?;
 
     let flags = 0;
     let locktime = 0;
@@ -74,7 +74,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
     assert!(matches!(
-        mempool.add_transaction(child).await,
+        mempool.add_transaction(child),
         Err(Error::TxValidationError(
             TxValidationError::DescendantOfExpiredTransaction
         ))
@@ -89,7 +89,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -122,7 +122,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     );
 
     let parent_id = parent.transaction().get_id();
-    mempool.add_transaction(parent.clone()).await?;
+    mempool.add_transaction(parent.clone())?;
 
     let flags = 0;
     let locktime = 0;
@@ -149,7 +149,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let child_1_id = child_1.transaction().get_id();
 
     let expired_tx_id = child_0.transaction().get_id();
-    mempool.add_transaction(child_0).await?;
+    mempool.add_transaction(child_0)?;
 
     // Simulate the parent being added to a block
     // We have to do this because if we leave this parent in the mempool then it will be
@@ -171,7 +171,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         .await??;
     mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
-    mempool.add_transaction(child_1).await?;
+    mempool.add_transaction(child_1)?;
     assert!(!mempool.contains_transaction(&expired_tx_id));
     assert!(mempool.contains_transaction(&child_1_id));
     mempool.store.assert_valid();

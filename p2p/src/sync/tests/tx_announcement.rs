@@ -38,7 +38,7 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::builder().build().await;
@@ -55,7 +55,7 @@ async fn nonexistent_peer() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -107,7 +107,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
 // an error or misbehavior.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
@@ -129,7 +129,7 @@ async fn initial_block_download() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_transaction_service(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -189,7 +189,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn too_many_announcements(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -249,7 +249,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn duplicated_announcement(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -300,7 +300,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 

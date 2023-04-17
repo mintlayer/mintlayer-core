@@ -138,7 +138,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             TransactionVerifierConfig::new(true),
         );
         let tx_source = TransactionSourceForConnect::Mempool {
-            current_best: &best_block,
+            current_best: &best_block.into(),
         };
 
         // create and connect a tx from mempool based on best block

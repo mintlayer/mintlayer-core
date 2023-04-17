@@ -13,24 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
-use crate::ChainstateConfig;
-use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::TxInput;
-use common::chain::{
-    block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
-    tokens::{RPCTokenInfo, TokenId},
-    ChainConfig, OutPointSourceId, TxMainChainIndex,
+use crate::{ChainstateConfig, ChainstateError, ChainstateEvent};
+
+use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
-use common::chain::{OutPoint, Transaction};
-use common::primitives::{Amount, BlockHeight, Id};
+use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
 
-use crate::{ChainstateError, ChainstateEvent};
-use chainstate_types::Locator;
 use utxo::Utxo;
 
 pub trait ChainstateInterface: Send {
@@ -166,4 +167,42 @@ pub trait ChainstateInterface: Send {
 
     /// Returns true if the initial block download isn't finished yet.
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+
+    /// Check whether stake pool with given ID exists.
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+
+    /// Get stake pool balance. See [pos_accounting::PoSAccountingView::get_pool_balance].
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+
+    /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+
+    /// Get all delegation shares for given stake pool.
+    /// See [pos_accounting::PoSAccountingView::get_pool_delegations_shares].
+    fn get_stake_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError>;
+
+    /// Get delegation balance for given stake pool delegation ID.
+    /// See [pos_accounting::PoSAccountingView::get_delegation_balance].
+    fn get_stake_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError>;
+
+    /// Get data for given stake pool delegation ID.
+    /// See [pos_accounting::PoSAccountingView::get_delegation_data].
+    fn get_stake_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, ChainstateError>;
+
+    /// Get delegation share for given stake pool and delegation.
+    /// See [pos_accounting::PoSAccountingView::get_pool_delegation_share].
+    fn get_stake_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError>;
 }

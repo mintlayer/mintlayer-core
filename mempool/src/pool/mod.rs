@@ -16,15 +16,20 @@
 use parking_lot::RwLock;
 use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc, time::Duration};
 
-use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate::{
+    chainstate_interface::ChainstateInterface,
+    tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
+};
 use common::{
-    chain::{Block, ChainConfig, SignedTransaction, Transaction},
+    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, SignedTransaction, Transaction},
     primitives::{amount::Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
 use serialization::Encode;
-use utils::{ensure, eventhandler::EventsController};
+use utils::{
+    ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
+};
 
 use crate::{
     error::{Error, TxValidationError},
@@ -36,7 +41,6 @@ use feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD};
 use rolling_fee_rate::RollingFeeRate;
 use spends_unconfirmed::SpendsUnconfirmed;
 use store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry};
-use try_get_fee::TryGetFee;
 use tx_with_fee::TxWithFee;
 
 use crate::config::*;
@@ -49,6 +53,7 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod try_get_fee;
+mod tx_verifier;
 mod tx_with_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Fee {
@@ -68,6 +73,7 @@ pub struct Mempool<M> {
     clock: TimeGetter,
     memory_usage_estimator: M,
     events_controller: EventsController<MempoolEvent>,
+    tx_verifier: tx_verifier::TransactionVerifier,
 }
 
 impl<M> std::fmt::Debug for Mempool<M>
@@ -98,6 +104,13 @@ where
         clock: TimeGetter,
         memory_usage_estimator: M,
     ) -> Self {
+        log::trace!("Setting up mempool transaction verifier");
+        let tx_verifier = tx_verifier::create(
+            chain_config.shallow_clone(),
+            chainstate_handle.shallow_clone(),
+        );
+
+        log::trace!("Creating mempool object");
         Self {
             chain_config,
             store: MempoolStore::new(),
@@ -109,6 +122,7 @@ where
             clock,
             memory_usage_estimator,
             events_controller: Default::default(),
+            tx_verifier,
         }
     }
 
@@ -153,12 +167,15 @@ where
             self.decay_rolling_fee_rate();
             log::debug!(
                 "rolling fee rate after decay_rolling_fee_rate {:?}",
-                self.rolling_fee_rate
+                self.rolling_fee_rate,
             );
 
             if self.rolling_fee_rate.read().rolling_minimum_fee_rate() < INCREMENTAL_RELAY_THRESHOLD
             {
-                log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.read().rolling_minimum_fee_rate());
+                log::trace!(
+                    "rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee",
+                    self.rolling_fee_rate.read().rolling_minimum_fee_rate(),
+                );
                 self.drop_rolling_fee();
                 return self.rolling_fee_rate.read().rolling_minimum_fee_rate();
             }
@@ -188,10 +205,9 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    async fn create_entry(
-        &self,
-        tx: SignedTransaction,
-    ) -> Result<TxMempoolEntry, TxValidationError> {
+    fn create_entry(&self, tx: TxWithFee) -> Result<TxMempoolEntry, TxValidationError> {
+        let (tx, fee) = tx.into_tx_and_fee();
+
         // Genesis transaction has no parent, hence the first filter_map
         let parents = tx
             .transaction()
@@ -208,7 +224,6 @@ where
             .cloned()
             .collect();
 
-        let fee = self.try_get_fee(&tx).await?;
         let time = self.clock.get_time();
         TxMempoolEntry::new(tx, fee, parents, ancestors, time)
     }
@@ -219,10 +234,10 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    async fn validate_transaction(
+    fn validate_transaction(
         &self,
-        tx: &SignedTransaction,
-    ) -> Result<Conflicts, TxValidationError> {
+        tx: SignedTransaction,
+    ) -> Result<(Conflicts, TxWithFee, TransactionVerifierDelta), TxValidationError> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -231,14 +246,8 @@ where
         // - Checking if a transaction is "standard" (see `IsStandardTx`, `AreInputsStandard` in Bitcoin Core). We have yet to decide on Mintlayer's
         // definition of "standard"
         //
-        // - Time locks:  Briefly, the corresponding functions in Bitcoin Core are `CheckFinalTx` and
-        // `CheckSequenceLocks`. See mempool/src/time_lock_notes.txt for more details on our
-        // brainstorming on this topic thus far.
-        //
         // - Bitcoin Core does not relay transactions smaller than 82 bytes (see
         // MIN_STANDARD_TX_NONWITNESS_SIZE in Bitcoin Core's policy.h)
-        //
-        // - Checking that coinbase inputs have matured
         //
         // - Checking the signature operations cost (Bitcoin Core: `GetTransactionSigOpCost`)
         //
@@ -263,77 +272,105 @@ where
         // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
         // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
 
-        if tx.transaction().inputs().is_empty() {
-            return Err(TxValidationError::NoInputs);
-        }
+        self.check_preliminary_mempool_policy(&tx)?;
 
-        if tx.transaction().outputs().is_empty() {
-            return Err(TxValidationError::NoOutputs);
-        }
+        let (tx, delta) = self.verify_transaction(tx)?;
 
-        let outpoints = tx.transaction().inputs().iter().map(|input| input.outpoint()).cloned();
+        let conflicts = self.check_mempool_policy(&tx)?;
 
-        if has_duplicate_entry(outpoints) {
-            return Err(TxValidationError::DuplicateInputs);
-        }
-
-        // TODO see this issue:
-        // https://github.com/mintlayer/mintlayer-core/issues/331
-        if tx.encoded_size() > MAX_BLOCK_SIZE_BYTES {
-            return Err(TxValidationError::ExceedsMaxBlockSize);
-        }
-
-        if self.contains_transaction(&tx.transaction().get_id()) {
-            return Err(TxValidationError::TransactionAlreadyInMempool);
-        }
-
-        let tx = TxWithFee::new(self, tx.clone()).await?;
-        let conflicts = self.rbf_checks(&tx)?;
-
-        self.verify_inputs_available(tx.tx()).await?;
-
-        self.pays_minimum_relay_fees(&tx)?;
-
-        self.pays_minimum_mempool_fee(&tx)?;
-
-        Ok(conflicts)
+        Ok((conflicts, tx, delta))
     }
 
-    async fn verify_inputs_available(
+    // Verify the transaction with respect to the consensus rules
+    fn verify_transaction(
+        &self,
+        tx: SignedTransaction,
+    ) -> Result<(TxWithFee, TransactionVerifierDelta), TxValidationError> {
+        let chainstate_handle =
+            subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone());
+
+        for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
+            let tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+
+            let current_best = chainstate_handle
+                .call(move |c| c.get_gen_block_index(&tip))??
+                .ok_or(TxValidationError::InternalError)?;
+
+            let mut tx_verifier = self.tx_verifier.derive_child();
+
+            let fee = tx_verifier
+                .connect_transaction(
+                    &TransactionSourceForConnect::Mempool {
+                        current_best: &current_best,
+                    },
+                    &tx,
+                    &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
+                )?
+                .ok_or(TxValidationError::FeeNotDetermined)?;
+
+            let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
+            if tip == final_tip {
+                let tx = TxWithFee::new_with_fee(tx, fee.into());
+                let delta = tx_verifier.consume()?;
+                return Ok((tx, delta));
+            }
+        }
+
+        Err(TxValidationError::TipMoved)
+    }
+
+    // Cheap mempool policy checks that run before anything else
+    fn check_preliminary_mempool_policy(
         &self,
         tx: &SignedTransaction,
     ) -> Result<(), TxValidationError> {
-        let tx_clone = tx.clone();
-        let chainstate_inputs = self
-            .chainstate_handle
-            .call(move |this| this.available_inputs(tx_clone.transaction()))
-            .await??;
-        tx.transaction()
-            .inputs()
-            .iter()
-            .find(|input| {
-                !chainstate_inputs.contains(&Some((*input).clone()))
-                    && !self.store.contains_outpoint(input.outpoint())
-            })
-            .map_or_else(
-                || Ok(()),
-                |input| {
-                    Err(TxValidationError::OutPointNotFound {
-                        outpoint: input.outpoint().clone(),
-                        spending_tx_id: tx.transaction().get_id(),
-                    })
-                },
-            )
+        ensure!(
+            !tx.transaction().inputs().is_empty(),
+            TxValidationError::NoInputs,
+        );
+
+        ensure!(
+            !tx.transaction().outputs().is_empty(),
+            TxValidationError::NoOutputs,
+        );
+
+        // TODO: see this issue:
+        // https://github.com/mintlayer/mintlayer-core/issues/331
+        ensure!(
+            tx.encoded_size() <= MAX_BLOCK_SIZE_BYTES,
+            TxValidationError::ExceedsMaxBlockSize,
+        );
+
+        // TODO: Taken from the previous implementation. Is this correct?
+        ensure!(
+            !self.contains_transaction(&tx.transaction().get_id()),
+            TxValidationError::TransactionAlreadyInMempool
+        );
+
+        Ok(())
+    }
+
+    // Check the transaction against the mempool inclusion policy
+    fn check_mempool_policy(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
+        self.pays_minimum_relay_fees(tx)?;
+        self.pays_minimum_mempool_fee(tx)?;
+
+        if ENABLE_RBF {
+            self.rbf_checks(tx)
+        } else {
+            // Without RBF enabled, any conflicting transaction results in an error
+            ensure!(
+                self.conflicting_tx_ids(tx.tx()).next().is_none(),
+                TxValidationError::ConflictWithIrreplaceableTransaction
+            );
+            Ok(Conflicts::new(BTreeSet::new()))
+        }
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
         let tx_fee = tx.fee();
         let minimum_fee = self.get_update_minimum_mempool_fee(tx.tx())?;
-        log::debug!(
-            "pays_minimum_mempool_fee tx_fee = {:?}, minimum_fee = {:?}",
-            tx_fee,
-            minimum_fee
-        );
+        log::debug!("pays_minimum_mempool_fee tx_fee = {tx_fee:?}, minimum_fee = {minimum_fee:?}");
         ensure!(
             tx_fee >= minimum_fee,
             TxValidationError::RollingFeeThresholdNotMet {
@@ -365,6 +402,16 @@ where
         );
         Ok(())
     }
+
+    fn conflicting_tx_ids<'a>(
+        &'a self,
+        tx: &'a SignedTransaction,
+    ) -> impl 'a + Iterator<Item = Id<Transaction>> {
+        tx.transaction()
+            .inputs()
+            .iter()
+            .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
+    }
 }
 
 // RBF checks
@@ -373,12 +420,8 @@ where
     M: GetMemoryUsage + Send + Sync,
 {
     fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
-        let conflicts = tx
-            .tx()
-            .transaction()
-            .inputs()
-            .iter()
-            .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
+        let conflicts = self
+            .conflicting_tx_ids(tx.tx())
             .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
@@ -426,7 +469,7 @@ where
         tx: &TxWithFee,
         total_conflict_fees: Fee,
     ) -> Result<(), TxValidationError> {
-        log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee(),);
+        log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
             (tx.fee() - total_conflict_fees).ok_or(TxValidationError::AdditionalFeesUnderflow)?;
         let relay_fee = get_relay_fee(tx.tx());
@@ -537,8 +580,8 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    async fn finalize_tx(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        let entry = self.create_entry(tx).await?;
+    fn finalize_tx(&mut self, tx: TxWithFee) -> Result<(), Error> {
+        let entry = self.create_entry(tx)?;
         let id = entry.tx_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
@@ -584,10 +627,8 @@ where
                         entry.creation_time(),
                         now
                     );
-                    true
-                } else {
-                    false
                 }
+                expired
             })
             .cloned()
             .collect();
@@ -633,10 +674,18 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    pub async fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        let conflicts = self.validate_transaction(&tx).await?;
-        self.store.drop_conflicts(conflicts);
-        self.finalize_tx(tx).await?;
+    pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+        log::debug!("Adding transaction {:?}", tx.transaction().get_id());
+        log::trace!("Adding transaction {tx:?}");
+
+        let (conflicts, tx, delta) =
+            self.validate_transaction(tx).log_err_pfx("Transaction rejected")?;
+        if ENABLE_RBF {
+            self.store.drop_conflicts(conflicts);
+        }
+
+        tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
+        self.finalize_tx(tx)?;
         self.store.assert_valid();
         Ok(())
     }
@@ -705,24 +754,27 @@ where
         // TODO: turn on mempool new tip broadcasts when ready
         // self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
 
-        log::info!(
-            "new tip with block_id {:?} and block_height {:?}",
-            block_id,
-            block_height
-        );
-        // TODO(Roy) handle the new tip
-        let mut rolling_fee_rate = self.rolling_fee_rate.write();
-        (*rolling_fee_rate).set_block_since_last_rolling_fee_bump(true);
-    }
-}
+        log::info!("new tip with block_id {block_id:?} and block_height {block_height:?}");
 
-fn has_duplicate_entry<T>(iter: T) -> bool
-where
-    T: IntoIterator,
-    T::Item: Ord,
-{
-    let mut uniq = BTreeSet::new();
-    iter.into_iter().any(move |x| !uniq.insert(x))
+        self.rolling_fee_rate.write().set_block_since_last_rolling_fee_bump(true);
+
+        // Take all the mempool previous transactions
+        let old_store = std::mem::replace(&mut self.store, MempoolStore::new());
+
+        // Discard the old tx verifier and replace it with a fresh one
+        self.tx_verifier = tx_verifier::create(
+            self.chain_config.shallow_clone(),
+            self.chainstate_handle.shallow_clone(),
+        );
+
+        // Re-populate the verifier with transactions
+        for tx in old_store.into_transactions() {
+            let tx_id = tx.transaction().get_id();
+            if let Err(e) = self.add_transaction(tx) {
+                log::trace!("Evicting {tx_id} from mempool: {e:?}")
+            }
+        }
+    }
 }
 
 #[cfg(test)]

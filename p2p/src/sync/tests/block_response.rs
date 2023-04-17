@@ -34,7 +34,7 @@ use crate::{
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
@@ -63,7 +63,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unrequested_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -98,7 +98,7 @@ async fn unrequested_block(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_response(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 

@@ -38,11 +38,12 @@ mod detail;
 
 use std::sync::Arc;
 
-pub use chainstate_types::PropertyQueryError;
+pub use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+pub use tx_verifier;
 
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;

@@ -41,7 +41,7 @@ use crate::{
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
@@ -74,7 +74,7 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unknown_prev_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -108,7 +108,7 @@ async fn unknown_prev_block(#[case] seed: Seed) {
 }
 
 // The peer ban score is increased if it sends an invalid header.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_timestamp() {
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
@@ -145,7 +145,7 @@ async fn invalid_timestamp() {
 }
 
 // The peer ban score is increased if it sends an invalid header.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_consensus_data() {
     let chain_config = Arc::new(
         ChainConfigBuilder::new(ChainType::Mainnet)
@@ -192,7 +192,7 @@ async fn invalid_consensus_data() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unconnected_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -266,7 +266,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_block(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 

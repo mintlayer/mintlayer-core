@@ -13,39 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::detail::bootstrap::export_bootstrap_stream;
-use crate::detail::bootstrap::import_bootstrap_stream;
-use crate::detail::calculate_median_time_past;
-use crate::detail::tx_verification_strategy::TransactionVerificationStrategy;
-use crate::detail::OrphanBlocksRef;
+use crate::{
+    detail::{
+        self,
+        bootstrap::{export_bootstrap_stream, import_bootstrap_stream},
+        calculate_median_time_past,
+        tx_verification_strategy::TransactionVerificationStrategy,
+        BlockSource, OrphanBlocksRef,
+    },
+    ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+};
 use chainstate_storage::BlockchainStorage;
-use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::block::BlockReward;
-use common::chain::config::ChainConfig;
-use common::chain::tokens::OutputValue;
-use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::{OutPoint, TxInput};
-use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex};
-use common::primitives::Amount;
-
-use chainstate_types::PropertyQueryError;
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{Block, BlockHeader, GenBlock},
-        tokens::{RPCTokenInfo, TokenId},
+        block::{Block, BlockHeader, BlockReward, GenBlock},
+        config::ChainConfig,
+        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
     },
-    primitives::{id::WithId, BlockHeight, Id},
+    primitives::{id::WithId, Amount, BlockHeight, Id},
 };
+use pos_accounting::{DelegationData, PoSAccountingView, PoolData};
 use utils::eventhandler::EventHandler;
 use utxo::{Utxo, UtxosView};
-
-use crate::ChainstateConfig;
-use crate::{
-    detail::{self, BlockSource},
-    ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
-};
 
 pub struct ChainstateInterfaceImpl<S, V> {
     chainstate: detail::Chainstate<S, V>,
@@ -453,5 +446,74 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
         self.chainstate.is_initial_block_download().map_err(ChainstateError::from)
+    }
+
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .pool_exists(pool_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_pool_balance(pool_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_pool_data(pool_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_pool_delegations_shares(pool_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_delegation_balance(delegation_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_delegation_data(delegation_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn get_stake_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_pool_delegation_share(pool_id, delegation_id)
+            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 }

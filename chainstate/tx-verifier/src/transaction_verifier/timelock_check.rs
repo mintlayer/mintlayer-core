@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
+use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
@@ -89,9 +89,11 @@ pub fn check_timelocks<
         None => return Ok(()),
     };
 
-    let starting_point: &BlockIndex = match tx_source {
-        TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
-        TransactionSourceForConnect::Mempool { current_best } => current_best,
+    let starting_point: GenBlockIndex = match tx_source {
+        TransactionSourceForConnect::Chain { new_block_index } => {
+            (*new_block_index).clone().into_gen_block_index()
+        }
+        TransactionSourceForConnect::Mempool { current_best } => (*current_best).clone(),
     };
 
     for input in inputs {
@@ -122,7 +124,7 @@ pub fn check_timelocks<
                 block_index_getter,
                 storage,
                 chain_config.as_ref(),
-                (&starting_point.clone().into_gen_block_index()).into(),
+                (&starting_point).into(),
                 height,
             )
             .map_err(|e| {

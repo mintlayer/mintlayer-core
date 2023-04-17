@@ -99,7 +99,7 @@ impl SyncManagerHandle {
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
         let sync_manager_handle = tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
-            error_sender.send(e).unwrap();
+            let _ = error_sender.send(e);
         });
 
         Self {
@@ -312,9 +312,9 @@ impl MessagingService for MessagingHandleMock {
 #[async_trait]
 impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
-        Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
+        time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await
             .expect("Failed to receive event in time")
-            .unwrap())
+            .ok_or(P2pError::ChannelClosed)
     }
 }

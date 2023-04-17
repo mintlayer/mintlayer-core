@@ -127,7 +127,7 @@ mod tests {
     use super::*;
     use crate::tests::setup_blockprod_test;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn stop() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -154,7 +154,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn start() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -181,7 +181,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn is_connected() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
