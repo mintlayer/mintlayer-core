@@ -90,9 +90,9 @@ pub enum CheckBlockError {
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
     #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<Block>, Id<Block>),
+    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
     #[error("Previous block with id {0} retrieval error starting from block {1}")]
-    PrevBlockRetrievalError(PropertyQueryError, Id<Block>, Id<Block>),
+    PrevBlockRetrievalError(PropertyQueryError, Id<GenBlock>, Id<Block>),
     #[error("Block time must be equal or higher than the median of its ancestors")]
     BlockTimeOrderInvalid,
     #[error("Block time must be a notch higher than the previous block")]
