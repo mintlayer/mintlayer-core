@@ -410,6 +410,7 @@ mod tests {
     use mocks::MempoolInterfaceMock;
     use std::sync::atomic::Ordering::Relaxed;
     use subsystem::CallRequest;
+    use tokio::sync::oneshot::error::TryRecvError;
 
     use crate::{prepare_thread_pool, tests::setup_blockprod_test};
 
@@ -591,10 +592,10 @@ mod tests {
             "Jobs count is incorrect",
         );
 
-        assert!(
-            other_job_cancel_receiver.try_recv().is_err(),
-            "Other job was stopped"
-        );
+        match other_job_cancel_receiver.try_recv() {
+            Err(TryRecvError::Empty) => {}
+            _ => panic!("Other job was stopped"),
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -646,15 +647,15 @@ mod tests {
             "Jobs count is incorrect",
         );
 
-        assert!(
-            stop_job_cancel_receiver.try_recv().is_ok(),
-            "Failed to stop job",
-        );
+        match stop_job_cancel_receiver.try_recv() {
+            Ok(_) => {}
+            _ => panic!("Failed to stop job"),
+        }
 
-        assert!(
-            other_job_cancel_receiver.try_recv().is_err(),
-            "Other job was stopped"
-        );
+        match other_job_cancel_receiver.try_recv() {
+            Err(TryRecvError::Empty) => {}
+            _ => panic!("Other job was stopped"),
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -703,14 +704,14 @@ mod tests {
             "Jobs count is incorrect",
         );
 
-        assert!(
-            stop_job_cancel_receiver.try_recv().is_ok(),
-            "Failed to stop job",
-        );
+        match stop_job_cancel_receiver.try_recv() {
+            Ok(_) => {}
+            _ => panic!("Failed to stop job"),
+        }
 
-        assert!(
-            other_job_cancel_receiver.try_recv().is_ok(),
-            "Other job was stopped"
-        );
+        match other_job_cancel_receiver.try_recv() {
+            Ok(_) => {}
+            _ => panic!("Failed to stop job"),
+        }
     }
 }
