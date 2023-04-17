@@ -55,7 +55,7 @@ pub enum ChainstateEvent {
     NewTip(Id<Block>, BlockHeight),
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum ChainstateError {
     #[error("Initialization error: {0}")]
     FailedToInitializeChainstate(#[from] InitializationError),

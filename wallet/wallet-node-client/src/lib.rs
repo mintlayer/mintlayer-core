@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use handles_client::WalletHandlesClientError;
 use node_traits::NodeInterface;
 use rpc_client::NodeRpcError;
 
+pub mod handles_client;
 pub mod node_traits;
 pub mod rpc_client;
 
@@ -23,4 +25,10 @@ pub async fn make_rpc_client(
     remote_socket_address: String,
 ) -> Result<impl NodeInterface, NodeRpcError> {
     rpc_client::NodeRpcClient::new(remote_socket_address).await
+}
+
+pub async fn make_handles_client(
+    chainstate_handle: chainstate::ChainstateHandle,
+) -> Result<impl NodeInterface, WalletHandlesClientError> {
+    handles_client::WalletHandlesClient::new(chainstate_handle).await
 }
