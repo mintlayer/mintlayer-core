@@ -18,7 +18,7 @@ use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
@@ -28,7 +28,7 @@ use storage::Backend;
 use utils::const_value::ConstValue;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::KeyPurpose;
-use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo};
+use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo, RootKeyContent};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -36,8 +36,11 @@ pub struct AccountKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
 
-    /// The account key from which all the addresses are derived
-    account_pubkey: ConstValue<ExtendedPublicKey>,
+    /// The account private key from which the account public key is derived
+    account_private_key: ConstValue<Option<RootKeyContent>>,
+
+    /// The account public key from which all the addresses are derived
+    account_public_key: ConstValue<ExtendedPublicKey>,
 
     /// The master/root key that this account key was derived from
     root_hierarchy_key: ConstValue<Option<ExtendedPublicKey>>,
@@ -89,7 +92,8 @@ impl AccountKeyChain {
 
         let mut new_account = AccountKeyChain {
             chain_config,
-            account_pubkey: account_pubkey.into(),
+            account_private_key: Some(account_privkey.into()).into(),
+            account_public_key: account_pubkey.into(),
             root_hierarchy_key: Some(root_key.to_public_key()).into(),
             sub_chains,
             lookahead_size: lookahead_size.into(),
@@ -116,14 +120,17 @@ impl AccountKeyChain {
 
         let AccountInfo::Deterministic(account_info) = account_info;
 
-        let account_pubkey = account_info.get_account_key().clone();
+        let pubkey_id = account_info.get_account_key().clone().into();
+
+        let account_private_key = db_tx.get_root_key(&pubkey_id)?.into();
 
         let sub_chains =
             LeafKeyChain::load_leaf_keys(chain_config.clone(), &account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
             chain_config,
-            account_pubkey: account_pubkey.into(),
+            account_private_key,
+            account_public_key: pubkey_id.into_key().into(),
             root_hierarchy_key: account_info.get_root_hierarchy_key().clone().into(),
             sub_chains,
             lookahead_size: account_info.get_lookahead_size().into(),
@@ -131,11 +138,11 @@ impl AccountKeyChain {
     }
 
     pub fn get_account_id(&self) -> AccountId {
-        AccountId::new_from_xpub(&self.account_pubkey)
+        AccountId::new_from_xpub(&self.account_public_key)
     }
 
-    pub fn get_account_key(&self) -> ExtendedPublicKey {
-        self.account_pubkey.clone().take()
+    pub fn get_account_public_key(&self) -> ExtendedPublicKey {
+        self.account_public_key.clone().take()
     }
 
     /// Issue a new address that hasn't been used before
@@ -160,7 +167,6 @@ impl AccountKeyChain {
 
     /// Get the private key that corresponds to the provided public key
     pub fn get_private_key(
-        &self,
         parent_key: &ExtendedPrivateKey,
         requested_key: &ExtendedPublicKey,
     ) -> KeyChainResult<ExtendedPrivateKey> {
@@ -173,6 +179,24 @@ impl AccountKeyChain {
         }
     }
 
+    pub fn get_private_key_for_destination(
+        &self,
+        destination: &Destination,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
+        if let Some(account_private_key) = self.account_private_key.as_ref() {
+            let xpriv = account_private_key.as_key();
+            for purpose in KeyPurpose::ALL {
+                if let Some(xpub) =
+                    self.get_leaf_key_chain(purpose).get_xpub_from_destination(destination)
+                {
+                    return Self::get_private_key(xpriv, xpub);
+                }
+            }
+        }
+
+        Err(KeyChainError::NoPrivateKeyFound)
+    }
+
     /// Get the leaf key chain for a particular key purpose
     pub fn get_leaf_key_chain(&self, purpose: KeyPurpose) -> &LeafKeyChain {
         self.sub_chains.get_for(purpose)
@@ -182,6 +206,13 @@ impl AccountKeyChain {
     /// database persistence done externally.
     fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeyChain {
         self.sub_chains.mut_for(purpose)
+    }
+
+    // Return true if the provided destination belongs to this key chain
+    pub fn is_destination_mine(&self, destination: &Destination) -> bool {
+        KeyPurpose::ALL
+            .iter()
+            .any(|p| self.get_leaf_key_chain(*p).is_destination_mine(destination))
     }
 
     // Return true if the provided public key belongs to this key chain
@@ -209,7 +240,7 @@ impl AccountKeyChain {
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
             self.root_hierarchy_key.clone().take(),
-            self.account_pubkey.clone().take(),
+            self.account_public_key.clone().take(),
             self.get_lookahead_size(),
         ))
     }
@@ -267,3 +298,45 @@ impl AccountKeyChain {
 }
 
 // TODO: tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::key_chain::MasterKeyChain;
+    use common::chain::config::create_unit_test_config;
+    use crypto::key::hdkd::u31::U31;
+    use crypto::key::secp256k1::Secp256k1PublicKey;
+    use rstest::rstest;
+    use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
+
+    const ZERO_H: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(0).0);
+    const MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    #[rstest]
+    #[case("03bf6f8d52dade77f95e9c6c9488fd8492a99c09ff23095caffb2e6409d1746ade")]
+    #[case("035df5d551bac1d61a5473615a70eb17b2f4ccbf7e354166639428941e4dbbcd81")]
+    #[case("030d1d07a8e45110d14f4e2c8623e8db556c11a90c0aac6be9a88f2464e446ee95")]
+    fn check_mine_methods(#[case] public: &str) {
+        let chain_config = Arc::new(create_unit_test_config());
+        let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+        let mut db_tx = db.transaction_rw(None).unwrap();
+
+        let master_key_chain =
+            MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+        let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        key_chain.top_up_all(&mut db_tx).unwrap();
+        db_tx.commit().unwrap();
+
+        // This public key should belong to the key chain
+        let pk: PublicKey =
+            Secp256k1PublicKey::from_bytes(&hex::decode(public).unwrap()).unwrap().into();
+        let pkh = PublicKeyHash::from(&pk);
+        let pk_destination = Destination::PublicKey(pk.clone());
+        let addr_destination = Destination::Address(pkh);
+
+        assert!(key_chain.is_public_key_mine(&pk));
+        assert!(key_chain.is_public_key_hash_mine(&pkh));
+        assert!(key_chain.is_destination_mine(&addr_destination));
+        assert!(key_chain.is_destination_mine(&pk_destination));
+    }
+}

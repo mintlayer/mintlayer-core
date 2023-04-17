@@ -106,13 +106,13 @@ macro_rules! impl_read_ops {
             }
 
             fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
-                self.read::<db::DBRootKeys, _, _>(id)
+                self.read::<db::DBPrivateKeys, _, _>(id)
             }
 
             /// Collect and return all keys from the storage
             fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
                 self.0
-                    .get::<db::DBRootKeys, _>()
+                    .get::<db::DBPrivateKeys, _>()
                     .prefix_iter_decoded(&())
                     .map(Iterator::collect)
             }
@@ -233,11 +233,11 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
-        self.write::<db::DBRootKeys, _, _, _>(id, tx)
+        self.write::<db::DBPrivateKeys, _, _, _>(id, tx)
     }
 
     fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+        self.0.get_mut::<db::DBPrivateKeys, _>().del(id).map_err(Into::into)
     }
 
     fn set_keychain_usage_state(

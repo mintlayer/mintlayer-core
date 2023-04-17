@@ -17,7 +17,7 @@ use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{get_purpose_and_index, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
@@ -418,12 +418,29 @@ impl LeafKeyChain {
         false
     }
 
+    pub fn is_destination_mine(&self, dest: &Destination) -> bool {
+        match dest {
+            Destination::Address(pkh) => self.is_public_key_hash_mine(pkh),
+            Destination::PublicKey(pk) => self.is_public_key_mine(pk),
+            _ => false,
+        }
+    }
+
     pub fn is_public_key_mine(&self, public_key: &PublicKey) -> bool {
         self.public_key_to_index.contains_key(public_key)
     }
 
     pub fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool {
         self.public_key_hash_to_index.contains_key(pubkey_hash)
+    }
+
+    /// Get the extended public key provided a destination or None if no key found
+    pub fn get_xpub_from_destination(&self, dest: &Destination) -> Option<&ExtendedPublicKey> {
+        match dest {
+            Destination::Address(pkh) => self.get_xpub_from_public_key_hash(pkh),
+            Destination::PublicKey(pk) => self.get_xpub_from_public_key(pk),
+            _ => None,
+        }
     }
 
     /// Get the extended public key provided a public key or None if no key found

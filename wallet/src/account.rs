@@ -14,13 +14,18 @@
 // limitations under the License.
 
 use crate::key_chain::AccountKeyChain;
-use crate::{WalletError, WalletResult};
+use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
+use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
+use common::chain::signature::inputsig::InputWitness;
+use common::chain::signature::TransactionSigError;
+use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{ChainConfig, Destination, OutPoint, Transaction, TxOutput};
 use common::primitives::id::WithId;
-use common::primitives::{Id, Idable};
+use common::primitives::{Amount, Id, Idable};
 use crypto::key::hdkd::child_number::ChildNumber;
 use std::collections::BTreeMap;
+use std::ops::Add;
 use std::sync::Arc;
 use storage::Backend;
 use utxo::Utxo;
@@ -80,6 +85,140 @@ impl Account {
             txs: BTreeMap::new(),
             utxo: BTreeMap::new(),
         })
+    }
+
+    pub fn complete_and_add_send_request<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        mut request: SendRequest,
+    ) -> WalletResult<WithId<Transaction>> {
+        self.complete_send_request(&mut request)?;
+        let tx = WithId::new(request.into_transaction());
+        self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
+        Ok(tx)
+    }
+
+    fn complete_send_request(&mut self, req: &mut SendRequest) -> WalletResult<()> {
+        if req.is_complete() {
+            return Err(WalletError::SendRequestComplete);
+        }
+
+        // TODO Calculate the amount we need to send
+        // TODO call coin selector
+
+        if req.sign_transaction() {
+            self.sign_transaction(req)?;
+        }
+
+        req.complete();
+
+        Ok(())
+    }
+
+    /// Calculate the output amount for coins and tokens
+    #[allow(dead_code)] // TODO remove
+    fn calculate_output_amounts(
+        req: &SendRequest,
+    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+        let mut coin_amount = Amount::ZERO;
+        let mut tokens_amounts: BTreeMap<TokenId, Amount> = BTreeMap::new();
+
+        // Iterate over all outputs and calculate the coin and tokens amounts
+        for output in req.get_transaction().outputs() {
+            // Get the supported output value
+            let output_value = match output {
+                TxOutput::Transfer(v, _)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Burn(v) => v,
+                _ => {
+                    return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                        output.clone(),
+                    )))
+                }
+            };
+
+            match output_value {
+                OutputValue::Coin(output_amount) => {
+                    coin_amount =
+                        coin_amount.add(*output_amount).ok_or(WalletError::OutputAmountOverflow)?
+                }
+                OutputValue::Token(token_data) => {
+                    let token_data = token_data.as_ref();
+                    match token_data {
+                        TokenData::TokenTransfer(token_transfer) => {
+                            let new_amount = match tokens_amounts.get(&token_transfer.token_id) {
+                                Some(amount) => amount
+                                    .add(token_transfer.amount)
+                                    .ok_or(WalletError::OutputAmountOverflow)?,
+                                None => token_transfer.amount,
+                            };
+
+                            tokens_amounts.insert(token_transfer.token_id, new_amount);
+                        }
+                        _ => {
+                            return Err(WalletError::UnsupportedTransactionOutput(Box::new(
+                                output.clone(),
+                            )))
+                        }
+                    }
+                }
+            }
+        }
+        Ok((coin_amount, tokens_amounts))
+    }
+
+    fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<()> {
+        let tx = req.get_transaction();
+        let inputs = tx.inputs();
+        let utxos = req.get_connected_tx_outputs();
+        if utxos.len() != inputs.len() {
+            return Err(
+                TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
+            );
+        }
+
+        let sighash_types = req.get_sighash_types();
+        if sighash_types.len() != inputs.len() {
+            return Err(TransactionSigError::InvalidSigHashCountVsInputs(
+                sighash_types.len(),
+                inputs.len(),
+            )
+            .into());
+        }
+
+        let sigs: WalletResult<Vec<StandardInputSignature>> = tx
+            .inputs()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                // Get the destination from this utxo. This should not fail as we checked that
+                // inputs and utxos have the same length
+                let destination = Self::get_tx_output_destination(&utxos[i]).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxos[i].clone()))
+                })?;
+
+                let private_key =
+                    self.key_chain.get_private_key_for_destination(destination)?.private_key();
+
+                let sighash_type = sighash_types[i];
+
+                StandardInputSignature::produce_uniparty_signature_for_input(
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                    tx,
+                    &utxos.iter().collect::<Vec<_>>(),
+                    i,
+                )
+                .map_err(WalletError::TransactionSig)
+            })
+            .collect();
+
+        let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect();
+
+        req.set_witnesses(witnesses)?;
+
+        Ok(())
     }
 
     /// Get the id of this account
@@ -190,6 +329,13 @@ impl Account {
         true
     }
 
+    fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+        match txo {
+            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            _ => None,
+        }
+    }
+
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
@@ -211,12 +357,12 @@ impl Account {
     }
 
     #[allow(dead_code)] // TODO remove
-    pub fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+    fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_issued()
     }
 
     #[allow(dead_code)] // TODO remove
-    pub fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+    fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
     }
 }
@@ -227,12 +373,20 @@ mod tests {
     use crate::key_chain::MasterKeyChain;
     use common::address::pubkeyhash::PublicKeyHash;
     use common::chain::config::create_regtest;
+    use common::chain::signature::verify_signature;
+    use common::chain::timelock::OutputTimeLock;
     use common::chain::tokens::OutputValue;
-    use common::chain::{GenBlock, Transaction};
+    use common::chain::{GenBlock, Transaction, TxInput};
+    use common::primitives::amount::UnsignedIntType;
     use common::primitives::id::WithId;
     use common::primitives::{Amount, Idable, H256};
     use crypto::key::hdkd::child_number::ChildNumber;
     use crypto::key::hdkd::u31::U31;
+    use crypto::key::{KeyKind, PrivateKey};
+    use crypto::random::{Rng, RngCore};
+    use rstest::rstest;
+    use std::ops::{Div, Mul, Sub};
+    use test_utils::random::{make_seedable_rng, Seed};
     use wallet_storage::{DefaultBackend, Store, TransactionRo, TransactionRw, Transactional};
     use wallet_types::KeyPurpose::{Change, ReceiveFunds};
     use wallet_types::TxState;
@@ -401,5 +555,108 @@ mod tests {
             account.get_last_derived_index(ReceiveFunds),
             Some(expected_last_derived)
         );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn sign_transaction(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let config = Arc::new(create_regtest());
+        let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+        let mut db_tx = db.transaction_rw(None).unwrap();
+
+        let master_key_chain =
+            MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
+
+        let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        let mut account = Account::new(config.clone(), &mut db_tx, key_chain).unwrap();
+
+        let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))
+            .map(|_| Amount::from_atoms(rng.next_u32() as UnsignedIntType))
+            .collect();
+
+        let total_amount = amounts.iter().fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
+
+        let utxos: Vec<TxOutput> = amounts
+            .iter()
+            .map(|a| {
+                let purpose = if rng.gen_bool(0.5) {
+                    ReceiveFunds
+                } else {
+                    Change
+                };
+
+                TxOutput::Transfer(
+                    OutputValue::Coin(*a),
+                    Destination::Address(
+                        PublicKeyHash::try_from(
+                            &account.get_new_address(&mut db_tx, purpose).unwrap(),
+                        )
+                        .unwrap(),
+                    ),
+                )
+            })
+            .collect();
+
+        let inputs: Vec<TxInput> = utxos
+            .iter()
+            .map(|_txo| {
+                let source_id = if rng.gen_bool(0.5) {
+                    Id::<Transaction>::new(H256::random_using(&mut rng)).into()
+                } else {
+                    Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
+                };
+                TxInput::new(source_id, rng.next_u32())
+            })
+            .collect();
+
+        let dest_amount = total_amount.div(10).unwrap().mul(5).unwrap();
+        let lock_amount = total_amount.div(10).unwrap().mul(1).unwrap();
+        let burn_amount = total_amount.div(10).unwrap().mul(1).unwrap();
+        let change_amount = total_amount.div(10).unwrap().mul(2).unwrap();
+        let outputs_amounts_sum = [dest_amount, lock_amount, burn_amount, change_amount]
+            .iter()
+            .fold(Amount::ZERO, |acc, a| acc.add(*a).unwrap());
+        let _fee_amount = total_amount.sub(outputs_amounts_sum).unwrap();
+
+        let (_dest_prv, dest_pub) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let outputs = vec![
+            TxOutput::Transfer(
+                OutputValue::Coin(dest_amount),
+                Destination::PublicKey(dest_pub),
+            ),
+            TxOutput::LockThenTransfer(
+                OutputValue::Coin(lock_amount),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForSeconds(rng.next_u64()),
+            ),
+            TxOutput::Burn(OutputValue::Coin(burn_amount)),
+            TxOutput::Transfer(
+                OutputValue::Coin(Amount::from_atoms(100)),
+                Destination::Address(
+                    PublicKeyHash::try_from(&account.get_new_address(&mut db_tx, Change).unwrap())
+                        .unwrap(),
+                ),
+            ),
+        ];
+
+        let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+
+        let mut req = SendRequest::from_transaction(tx);
+        req.set_connected_tx_outputs(utxos.clone());
+
+        account.complete_send_request(&mut req).unwrap();
+
+        let sig_tx = req.signed_transaction().unwrap();
+
+        let utxos_ref = utxos.iter().collect::<Vec<_>>();
+
+        for i in 0..sig_tx.inputs().len() {
+            let destination = Account::get_tx_output_destination(utxos_ref[i]).unwrap();
+            verify_signature(&config, destination, &sig_tx, &utxos_ref, i).unwrap();
+        }
     }
 }

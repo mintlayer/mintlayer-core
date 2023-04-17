@@ -18,7 +18,11 @@ use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 pub use bip39::{Language, Mnemonic};
-use common::chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction};
+use common::chain::signature::TransactionSigError;
+use common::chain::{
+    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
+    TxOutput,
+};
 use common::primitives::{BlockHeight, Id};
 use wallet_storage::{
     DefaultBackend, Store, TransactionRw, Transactional, WalletStorageRead, WalletStorageWrite,
@@ -46,6 +50,16 @@ pub enum WalletError {
     NoAccountFound(AccountId),
     #[error("Not implemented")]
     NotImplemented,
+    #[error("The send request is complete")]
+    SendRequestComplete,
+    #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
+    UnsupportedTransactionOutput(Box<TxOutput>),
+    #[error("Output amounts overflow")]
+    OutputAmountOverflow,
+    #[error("Transaction creation error: {0}")]
+    TransactionCreation(#[from] TransactionCreationError),
+    #[error("Transaction signing error: {0}")]
+    TransactionSig(#[from] TransactionSigError),
 }
 
 /// Result type used for the wallet

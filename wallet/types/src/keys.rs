@@ -120,6 +120,12 @@ impl KeychainUsageState {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct RootKeyId(ExtendedPublicKey);
 
+impl RootKeyId {
+    pub fn into_key(self) -> ExtendedPublicKey {
+        self.0
+    }
+}
+
 impl From<ExtendedPublicKey> for RootKeyId {
     fn from(key: ExtendedPublicKey) -> Self {
         Self(key)
@@ -133,6 +139,10 @@ pub struct RootKeyContent(ExtendedPrivateKey);
 impl RootKeyContent {
     pub fn into_key(self) -> ExtendedPrivateKey {
         self.0
+    }
+
+    pub fn as_key(&self) -> &ExtendedPrivateKey {
+        &self.0
     }
 }
 

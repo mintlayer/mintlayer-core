@@ -91,6 +91,8 @@ pub enum KeyChainError {
     LookAheadExceeded,
     #[error("The provided key is not a root in a hierarchy")]
     KeyNotRoot,
+    #[error("No private key found")]
+    NoPrivateKeyFound,
 }
 
 /// Result type used for the key chain
@@ -208,7 +210,8 @@ mod tests {
             key_chain.issue_key(&mut db_tx, purpose).unwrap()
         };
         assert_eq!(pk.get_derivation_path().to_string(), path_str.to_string());
-        let sk = key_chain.get_private_key(master_key_chain.get_root_private_key(), &pk).unwrap();
+        let sk =
+            AccountKeyChain::get_private_key(master_key_chain.get_root_private_key(), &pk).unwrap();
         let pk2 = ExtendedPublicKey::from_private_key(&sk);
         assert_eq!(pk2.get_derivation_path().to_string(), path_str.to_string());
         assert_eq!(pk, pk2);
