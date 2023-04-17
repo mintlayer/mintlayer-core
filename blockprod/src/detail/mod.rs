@@ -18,7 +18,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use chainstate::{ChainstateHandle, PropertyQueryError};
+use chainstate::{ChainstateEvent, ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
@@ -37,7 +37,7 @@ use mempool::{
     MempoolHandle,
 };
 use serialization::{Decode, Encode};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, watch};
 
 use crate::BlockProductionError;
 
@@ -73,6 +73,7 @@ pub struct JobHandle {
 pub struct BlockProduction {
     chain_config: Arc<ChainConfig>,
     chainstate_handle: ChainstateHandle,
+    chainstate_receiver: Option<watch::Receiver<Id<GenBlock>>>,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     all_jobs: BTreeMap<JobKey, JobHandle>,
@@ -90,6 +91,7 @@ impl BlockProduction {
         let block_production = Self {
             chain_config,
             chainstate_handle,
+            chainstate_receiver: None,
             mempool_handle,
             time_getter,
             all_jobs: BTreeMap::new(),
@@ -191,7 +193,6 @@ impl BlockProduction {
         current_tip_height: BlockHeight,
         stop_flag: Arc<AtomicBool>,
     ) -> Result<BlockHeader, BlockProductionError> {
-        // TODO: use a separate executor for this loop to avoid starving tokio tasks
         consensus::finalize_consensus_data(
             &chain_config,
             &mut block_header,
@@ -220,6 +221,9 @@ impl BlockProduction {
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
+
+        let mut chainstate_receiver =
+            self.subscribe_to_chainstate_events(tip_at_start.block_id()).await?;
 
         {
             // define the job and insert it into the map of all jobs
@@ -306,32 +310,94 @@ impl BlockProduction {
                 });
             }
 
-            tokio::select! {
-                _ = &mut cancel_receiver => {
-                    // TODO: test cancellations
-                    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                    return Err(BlockProductionError::Cancelled);
-                }
-                solve_receive_result = &mut result_receiver => {
-                    let mining_result = match solve_receive_result {
-                        Ok(mining_result) => mining_result,
-                        Err(_) => {
-                            log::error!("Mining thread pool channel lost on tip {} on best height {}", current_tip_index.block_id(), current_tip_index.block_height());
-                            continue;
-                        }
-                    };
-                    let block_header = match mining_result {
-                        Ok(header) => header,
-                        Err(e) => {
-                            log::error!("Solving block in thread-pool returned an error on tip {} on best height {}: {e}", current_tip_index.block_id(), current_tip_index.block_height());
-                            continue;
-                        }
-                    };
-                    let block = Block::new_from_header(block_header, block_body.clone())?;
+            'consume_chainstate_events: loop {
+                tokio::select! {
+                    _ = chainstate_receiver.changed() => {
+                        // TODO: test broadcasts
+                        self.broadcast_new_tip(*chainstate_receiver.borrow());
+                        continue 'consume_chainstate_events;
+                    }
+                    _ = &mut cancel_receiver => {
+                        // TODO: test cancellations
+                        stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                        return Err(BlockProductionError::Cancelled);
+                    }
+                    solve_receive_result = &mut result_receiver => {
+                        let mining_result = match solve_receive_result {
+                            Ok(mining_result) => mining_result,
+                            Err(_) => {
+                                log::error!(
+                                    "Mining thread pool channel lost on tip {} on best height {}",
+                                    current_tip_index.block_id(),
+                                    current_tip_index.block_height()
+                                );
 
-                    return Ok(block);
+                                continue;
+                            }
+                        };
+
+                        let block_header = match mining_result {
+                            Ok(header) => header,
+                            Err(e) => {
+                                log::error!(
+                                    "Solving block in thread-pool returned an error on tip {} on best height {}: {e}",
+                                    current_tip_index.block_id(),
+                                    current_tip_index.block_height()
+                                );
+
+                                continue;
+                            }
+                        };
+
+                        let block = Block::new_from_header(block_header, block_body.clone())?;
+                        return Ok(block);
+                    }
                 }
             }
+        }
+    }
+
+    async fn subscribe_to_chainstate_events(
+        &mut self,
+        tip_at_start: Id<GenBlock>,
+    ) -> Result<watch::Receiver<Id<GenBlock>>, BlockProductionError> {
+        if let Some(chainstate_receiver) = &mut self.chainstate_receiver {
+            return Ok(chainstate_receiver.clone());
+        }
+
+        let (chainstate_sender, chainstate_receiver) = watch::channel(tip_at_start);
+        self.chainstate_receiver = Some(chainstate_receiver.clone());
+
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                    ChainstateEvent::NewTip(block_id, _) => {
+                        if let Err(e) = chainstate_sender.send(block_id.into()) {
+                            log::error!("Chainstate subscriber failed to send new tip: {:?}", e)
+                        }
+                    }
+                },
+            );
+
+        self.chainstate_handle
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
+            .await
+            .map_err(BlockProductionError::SubsystemCallError)?;
+
+        Ok(chainstate_receiver.clone())
+    }
+
+    fn broadcast_new_tip(&mut self, new_tip: Id<GenBlock>) {
+        let mut jobs_to_stop = vec![];
+
+        for (job_key, _) in self.all_jobs.iter() {
+            if job_key.current_tip != new_tip {
+                jobs_to_stop.push(job_key.clone());
+            }
+        }
+
+        for job_key in jobs_to_stop {
+            self.stop_job(&job_key);
         }
     }
 }
