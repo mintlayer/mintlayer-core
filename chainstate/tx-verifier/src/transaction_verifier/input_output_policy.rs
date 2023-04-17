@@ -141,12 +141,15 @@ pub fn check_tx_inputs_outputs_purposes(
             }
             // multiple outputs
             _ => {
-                is_valid_any_to_any_combination(std::slice::from_ref(input_utxo), tx.outputs())?;
+                is_valid_any_to_any_combination_for_tx(
+                    std::slice::from_ref(input_utxo),
+                    tx.outputs(),
+                )?;
             }
         },
         // multiple inputs
         _ => {
-            is_valid_any_to_any_combination(inputs_utxos.as_slice(), tx.outputs())?;
+            is_valid_any_to_any_combination_for_tx(inputs_utxos.as_slice(), tx.outputs())?;
         }
     };
 
@@ -194,7 +197,7 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
     }
 }
 
-fn is_valid_any_to_any_combination(
+fn is_valid_any_to_any_combination_for_tx(
     inputs_utxos: &[TxOutput],
     outputs: &[TxOutput],
 ) -> Result<(), ConnectTransactionError> {
@@ -494,10 +497,10 @@ mod tests {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn tx_one_to_many_invalid_outputs(#[case] seed: Seed) {
+    fn tx_one_to_any_invalid_outputs(#[case] seed: Seed) {
         let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
         let source_valid_outputs = [lock_then_transfer(), transfer(), burn()];
-        let source_invalid_outputs = [stake_pool(), produce_block(), decommission_pool()];
+        let source_invalid_outputs = [produce_block(), decommission_pool()];
 
         let mut rng = make_seedable_rng(seed);
         let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
@@ -507,11 +510,53 @@ mod tests {
             Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
         )]));
 
-        let number_of_outputs = rng.gen_range(1..10);
-        let mut outputs =
-            get_random_outputs_combination(&mut rng, &source_valid_outputs, number_of_outputs);
-        let mut invalid_outputs =
-            get_random_outputs_combination(&mut rng, &source_invalid_outputs, number_of_outputs);
+        let number_of_valid_outputs = rng.gen_range(0..10);
+        let number_of_invalid_outputs = rng.gen_range(1..10);
+        let mut outputs = get_random_outputs_combination(
+            &mut rng,
+            &source_valid_outputs,
+            number_of_valid_outputs,
+        );
+        let mut invalid_outputs = get_random_outputs_combination(
+            &mut rng,
+            &source_invalid_outputs,
+            number_of_invalid_outputs,
+        );
+        outputs.append(&mut invalid_outputs);
+
+        let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+        let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
+        assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_one_to_any_stake_multiple_pools(#[case] seed: Seed) {
+        let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let source_valid_outputs = [lock_then_transfer(), transfer(), burn()];
+        let source_invalid_outputs = [stake_pool()];
+
+        let mut rng = make_seedable_rng(seed);
+        let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+        )]));
+
+        let number_of_valid_outputs = rng.gen_range(0..10);
+        let number_of_invalid_outputs = rng.gen_range(2..10);
+        let mut outputs = get_random_outputs_combination(
+            &mut rng,
+            &source_valid_outputs,
+            number_of_valid_outputs,
+        );
+        let mut invalid_outputs = get_random_outputs_combination(
+            &mut rng,
+            &source_invalid_outputs,
+            number_of_invalid_outputs,
+        );
         outputs.append(&mut invalid_outputs);
 
         let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
