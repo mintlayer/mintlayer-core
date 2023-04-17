@@ -42,6 +42,8 @@ pub enum TransactionSigError {
     InvalidInputIndex(usize, usize),
     #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`")]
     InvalidUtxoCountVsInputs(usize, usize),
+    #[error("SigHash count does not match inputs count (SigHash count: `{0}` vs inputs: `{1}`")]
+    InvalidSigHashCountVsInputs(usize, usize),
     #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
