@@ -75,3 +75,14 @@ pub fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination 
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     Destination::PublicKey(pub_key)
 }
+
+pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
+    match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+            Some(v.clone())
+        }
+        TxOutput::StakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::DecommissionPool(_, _, _, _) => unimplemented!(),
+    }
+}

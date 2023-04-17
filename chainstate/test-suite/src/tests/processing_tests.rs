@@ -16,7 +16,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use super::helpers::new_pub_key_destination;
+use super::helpers::{get_output_value, new_pub_key_destination};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
@@ -380,7 +380,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
                 0,
                 vec![TxInput::new(tf.genesis().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
-                    tf.genesis().utxos()[0].value().unwrap(),
+                    get_output_value(&tf.genesis().utxos()[0]).unwrap(),
                     anyonecanspend_address(),
                 )],
                 0,
@@ -396,7 +396,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
                 0,
                 vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
-                    tx1.transaction().outputs()[0].value().unwrap(),
+                    get_output_value(&tx1.transaction().outputs()[0]).unwrap(),
                     anyonecanspend_address(),
                 )],
                 0,

@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::{
-    chain::{tokens::OutputValue, OutPoint, SignedTransaction, Transaction},
+    chain::{OutPoint, SignedTransaction, Transaction, TxOutput},
     primitives::{Amount, Id, Idable},
 };
 use logging::log;
@@ -150,23 +150,24 @@ impl MempoolStore {
             spending_tx_id: *spending_tx_id_for_error_msg,
         };
         let tx_id = *outpoint.tx_id().get_tx_id().ok_or_else(make_err)?;
-        self.txs_by_id
-            .get(&tx_id)
-            .ok_or_else(make_err)
-            .and_then(|entry| {
-                entry
-                    .tx
-                    .transaction()
-                    .outputs()
-                    .get(outpoint.output_index() as usize)
-                    .ok_or_else(make_err)
-            })
-            .map(|output| {
-                output.value().map_or(Amount::ZERO, |value| match value {
-                    OutputValue::Coin(coin) => coin,
-                    OutputValue::Token(_) => Amount::ZERO,
-                })
-            })
+        self.txs_by_id.get(&tx_id).ok_or_else(make_err).and_then(|entry| {
+            let output = entry
+                .tx
+                .transaction()
+                .outputs()
+                .get(outpoint.output_index() as usize)
+                .ok_or_else(make_err)?;
+            match output {
+                TxOutput::Transfer(v, _)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Burn(v) => Ok(v.coin_amount().unwrap_or(Amount::ZERO)),
+                TxOutput::StakePool(data) => Ok(data.value()),
+                TxOutput::ProduceBlockFromStake(_, _) => {
+                    Err(TxValidationError::ProduceBlockOutputInTx(tx_id))
+                }
+                TxOutput::DecommissionPool(v, _, _, _) => Ok(*v),
+            }
+        })
     }
 
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {

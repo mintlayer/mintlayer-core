@@ -20,7 +20,7 @@ use common::{
     chain::{
         block::BlockRewardTransactable,
         signature::Signable,
-        tokens::{token_id, OutputValue, TokenData, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
         Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
@@ -267,16 +267,12 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     let outputs_total = outputs.map_or_else(
         || Ok::<Amount, ConnectTransactionError>(Amount::ZERO),
         |outputs| {
-            if outputs.iter().any(|output| {
-                output.value().map_or(false, |v| match v {
-                    OutputValue::Coin(_) => false,
-                    OutputValue::Token(_) => true,
-                })
-            }) {
-                return Err(ConnectTransactionError::TokensError(
-                    TokensError::TokensInBlockReward,
-                ));
-            }
+            let has_token_issuance = get_tokens_issuance_count(outputs) > 0;
+            ensure!(
+                !has_token_issuance,
+                ConnectTransactionError::TokensError(TokensError::TokensInBlockReward)
+            );
+
             calculate_total_outputs(pos_accounting_view, outputs, None)
                 .map(|total| total.get(&CoinOrTokenId::Coin).cloned().unwrap_or(Amount::ZERO))
         },

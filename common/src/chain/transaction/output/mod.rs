@@ -83,19 +83,6 @@ impl TxOutput {
             TxOutput::Burn(_) => true,
         }
     }
-}
-
-impl TxOutput {
-    pub fn value(&self) -> Option<OutputValue> {
-        match self {
-            TxOutput::Transfer(v, _) => Some(v.clone()),
-            TxOutput::LockThenTransfer(v, _, _) => Some(v.clone()),
-            TxOutput::Burn(v) => Some(v.clone()),
-            TxOutput::StakePool(d) => Some(OutputValue::Coin(d.value())),
-            TxOutput::ProduceBlockFromStake(_, _) => None,
-            TxOutput::DecommissionPool(v, _, _, _) => Some(OutputValue::Coin(*v)),
-        }
-    }
 
     pub fn has_timelock(&self) -> bool {
         match self {

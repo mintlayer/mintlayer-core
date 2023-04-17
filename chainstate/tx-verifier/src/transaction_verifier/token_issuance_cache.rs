@@ -17,7 +17,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{
     chain::{
-        tokens::{is_tokens_issuance, token_id, TokenAuxiliaryData, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, TokenAuxiliaryData, TokenId},
         Block, Transaction,
     },
     primitives::{Id, Idable, H256},
@@ -74,10 +74,7 @@ impl TokenIssuanceCache {
         block_id: Option<Id<Block>>,
         tx: &Transaction,
     ) -> Result<(), TokensError> {
-        let was_token_issued = tx
-            .outputs()
-            .iter()
-            .any(|output| output.value().map_or(false, |v| is_tokens_issuance(&v)));
+        let was_token_issued = get_tokens_issuance_count(tx.outputs()) > 0;
 
         if was_token_issued {
             self.write_issuance(&block_id.unwrap_or_else(|| H256::zero().into()), tx)?;
@@ -86,12 +83,9 @@ impl TokenIssuanceCache {
     }
 
     pub fn unregister(&mut self, tx: &Transaction) -> Result<(), TokensError> {
-        let was_tokens_issued = tx
-            .outputs()
-            .iter()
-            .any(|output| output.value().map_or(false, |v| is_tokens_issuance(&v)));
+        let was_token_issued = get_tokens_issuance_count(tx.outputs()) > 0;
 
-        if was_tokens_issued {
+        if was_token_issued {
             self.write_undo_issuance(tx)?;
         }
         Ok(())
@@ -151,10 +145,7 @@ impl TokenIssuanceCache {
     where
         ConnectTransactionError: From<E>,
     {
-        let has_token_issuance = tx
-            .outputs()
-            .iter()
-            .any(|output| output.value().map_or(false, |v| is_tokens_issuance(&v)));
+        let has_token_issuance = get_tokens_issuance_count(tx.outputs()) > 0;
 
         if has_token_issuance {
             let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;

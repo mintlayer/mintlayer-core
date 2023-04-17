@@ -208,8 +208,14 @@ where
         let total_burned = tx
             .outputs()
             .iter()
-            .filter(|o| matches!(*o, TxOutput::Burn(_)))
-            .filter_map(|o| o.value().and_then(|v| v.coin_amount()))
+            .filter_map(|output| match output {
+                TxOutput::Burn(v) => v.coin_amount(),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::StakePool(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DecommissionPool(_, _, _, _) => None,
+            })
             .try_fold(Amount::ZERO, |so_far, v| {
                 (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
             })?;

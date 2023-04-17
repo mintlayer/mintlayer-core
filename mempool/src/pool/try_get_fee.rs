@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::{
-    chain::{tokens::OutputValue, SignedTransaction},
-    primitives::Idable,
-};
+use common::{chain::SignedTransaction, primitives::Idable};
 
 use crate::{error::TxValidationError, get_memory_usage::GetMemoryUsage};
 
@@ -34,14 +31,15 @@ where
 {
     // TODO this calculation is already done in ChainState, reuse it
     async fn try_get_fee(&self, tx: &SignedTransaction) -> Result<Fee, TxValidationError> {
-        let tx_clone = tx.clone();
+        let inputs = tx.inputs().to_owned();
+        let outputs = tx.outputs().to_owned();
 
         // Outputs in this vec are:
         //     Some(Amount) if the outpoint was found in the mainchain
-        //     None         if the outpoint wasn't found in the mainchain (maybe it's in the mempool?)
+        //     None         if the outpoint is token or wasn't found in the mainchain (maybe it's in the mempool?)
         let chainstate_input_values = self
             .chainstate_handle
-            .call(move |this| this.get_inputs_outpoints_values(tx_clone.transaction()))
+            .call(move |this| this.get_inputs_outpoints_coin_amount(&inputs))
             .await??;
 
         let input_values = chainstate_input_values
@@ -64,18 +62,18 @@ where
             .cloned()
             .sum::<Option<_>>()
             .ok_or(TxValidationError::InputValuesOverflow)?;
-        let sum_outputs = tx
-            .transaction()
-            .outputs()
-            .iter()
-            .filter_map(|output| {
-                output.value().and_then(|value| match value {
-                    OutputValue::Coin(coin) => Some(coin),
-                    OutputValue::Token(_) => None,
-                })
-            })
+
+        let chainstate_output_values = self
+            .chainstate_handle
+            .call(move |this| this.get_outputs_coin_amount(&outputs))
+            .await??;
+
+        let sum_outputs = chainstate_output_values
+            .into_iter()
+            .flatten()
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
+
         let fee = (sum_inputs - sum_outputs).map(|f| f.into());
         fee.ok_or(TxValidationError::InputsBelowOutputs)
     }

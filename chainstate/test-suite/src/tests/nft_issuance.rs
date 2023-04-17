@@ -38,6 +38,8 @@ use test_utils::{
     random_string,
 };
 
+use super::helpers::get_output_value;
+
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -688,7 +690,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value().unwrap(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -876,7 +878,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value().unwrap(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -1066,7 +1068,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value().unwrap(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -1284,7 +1286,7 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
                 tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
             let issuance_output = &outputs[0];
 
-            match issuance_output.value().unwrap().token_data().unwrap() {
+            match get_output_value(issuance_output).unwrap().token_data().unwrap() {
                 TokenData::NftIssuance(nft) => {
                     assert_eq!(nft.metadata.media_hash(), &media_hash);
                 }
@@ -1353,6 +1355,9 @@ fn nft_valid_case(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value().unwrap(), output_value.into());
+        assert_eq!(
+            get_output_value(issuance_output).unwrap(),
+            output_value.into()
+        );
     })
 }

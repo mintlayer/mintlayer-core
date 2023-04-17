@@ -36,6 +36,13 @@ pub fn is_tokens_issuance(output_value: &OutputValue) -> bool {
 pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
     outputs
         .iter()
-        .filter(|&output| output.value().map_or(false, |v| is_tokens_issuance(&v)))
+        .filter(|&output| match output {
+            TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+                is_tokens_issuance(v)
+            }
+            TxOutput::StakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::DecommissionPool(_, _, _, _) => false,
+        })
         .count()
 }
