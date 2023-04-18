@@ -16,7 +16,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use super::helpers::{get_output_value, new_pub_key_destination};
+use super::helpers::new_pub_key_destination;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{
@@ -25,7 +25,8 @@ use chainstate::{
     OrphanCheckError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    anyonecanspend_address, empty_witness, get_output_value, TestFramework, TestStore,
+    TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::{

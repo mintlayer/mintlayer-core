@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate::{BlockError, BlockSource, ChainstateError, ConnectTransactionError};
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::{
     chain::{
         signature::inputsig::InputWitness,
@@ -30,8 +30,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use super::helpers::get_output_value;
 
 #[rstest]
 #[trace]

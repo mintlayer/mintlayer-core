@@ -17,7 +17,7 @@ use chainstate::{
     is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, TokensError,
 };
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenData;
 use common::chain::Block;
@@ -37,8 +37,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use super::helpers::get_output_value;
 
 #[rstest]
 #[trace]

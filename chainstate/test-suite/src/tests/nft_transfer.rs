@@ -17,7 +17,7 @@ use chainstate::{
     BlockError, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::primitives::Idable;
 use common::{
     chain::{
@@ -35,8 +35,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use super::helpers::get_output_value;
 
 #[rstest]
 #[trace]

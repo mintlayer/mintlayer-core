@@ -37,7 +37,7 @@ pub fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
-fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
+pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
     match output {
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             Some(v.clone())

@@ -19,7 +19,7 @@ use chainstate::{
     BlockError, BlockSource, ChainstateError, CheckBlockError, CheckBlockTransactionsError,
     ConnectTransactionError, TokensError,
 };
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::{Metadata, NftIssuance, TokenIssuance, TokenTransfer};
 use common::primitives::{id, Id};
 use common::{
@@ -39,8 +39,6 @@ use test_utils::{
     random::{make_seedable_rng, Seed},
     random_string,
 };
-
-use super::helpers::get_output_value;
 
 #[rstest]
 #[trace]
