@@ -19,6 +19,7 @@ use clap::Parser;
 use common::chain::ChainConfig;
 use dialoguer::{theme::ColorfulTheme, History};
 use node_comm::{make_rpc_client, node_traits::NodeInterface};
+use serialization::hex::HexEncode;
 use utils::default_data_dir::PrepareDataDirError;
 use wallet::{Wallet, WalletError};
 
@@ -101,6 +102,8 @@ fn new_wallet(
         ImportMnemonic::Cancel => return Err(WalletCliError::Cancelled),
     };
 
+    // TODO: Add optional passphrase
+
     Wallet::new_wallet(Arc::clone(&chain_config), db, &mnemonic, None)
         .map_err(WalletCliError::WalletError)
 }
@@ -129,7 +132,15 @@ async fn run() -> Result<(), WalletCliError> {
     )
     .await
     .map_err(WalletCliError::RpcError)?;
-    println!("Best block id: {:?}", rpc_client.get_best_block_id().await);
+
+    println!(
+        "Best block id: {}",
+        rpc_client
+            .get_best_block_id()
+            .await
+            .map(|block| block.hex_encode())
+            .unwrap_or_else(|e| e.to_string())
+    );
 
     let mut history = CliHistory::default();
 

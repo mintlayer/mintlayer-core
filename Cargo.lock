@@ -4672,6 +4672,7 @@ dependencies = [
  "directories",
  "logging",
  "node-comm",
+ "serialization",
  "thiserror",
  "tokio",
  "utils",
