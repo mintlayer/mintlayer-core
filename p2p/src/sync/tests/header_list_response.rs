@@ -202,7 +202,7 @@ async fn valid_headers(#[case] seed: Seed) {
     handle.assert_no_error().await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect() {
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
