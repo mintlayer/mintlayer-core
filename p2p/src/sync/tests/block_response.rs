@@ -189,7 +189,7 @@ async fn disconnect(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
