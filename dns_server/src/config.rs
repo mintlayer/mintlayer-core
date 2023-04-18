@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use trust_dns_client::rr::Name;
-use utils::default_data_dir::default_data_dir_common;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -25,9 +26,9 @@ pub enum Network {
 
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
-    /// The path to the data directory
-    #[clap(long, default_value_t = default_data_dir())]
-    pub datadir: String,
+    /// Optional path to the data directory
+    #[clap(long)]
+    pub datadir: Option<PathBuf>,
 
     /// Network
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
@@ -55,8 +56,4 @@ pub struct DnsServerConfig {
     /// If set, the SOA record will be added.
     #[clap(long)]
     pub mbox: Option<Name>,
-}
-
-fn default_data_dir() -> String {
-    default_data_dir_common().to_str().expect("Valid UTF-8 expected").to_owned()
 }
