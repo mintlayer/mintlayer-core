@@ -179,7 +179,7 @@ async fn valid_response(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
