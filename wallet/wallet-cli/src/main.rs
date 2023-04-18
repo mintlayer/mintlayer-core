@@ -35,7 +35,7 @@ pub enum WalletCliError {
     WalletError(wallet::wallet::WalletError),
     #[error("Console IO error: {0}")]
     ConsoleIoError(std::io::Error),
-    #[error("Cookie file {0} read error: {1}")]
+    #[error("Cookie file {0} read error: {1}. Please make sure the node is started.")]
     CookieFileReadError(PathBuf, std::io::Error),
     #[error("Prepare data dir error: {0}")]
     PrepareData(PrepareDataDirError),
@@ -135,6 +135,9 @@ impl<T: ToString> History<T> for CliHistory {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), WalletCliError> {
-    run().await
+async fn main() {
+    run().await.unwrap_or_else(|err| {
+        eprintln!("wallet-cli launch failed: {err}");
+        std::process::exit(1)
+    })
 }
