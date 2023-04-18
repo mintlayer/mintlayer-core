@@ -64,7 +64,7 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
@@ -110,7 +110,7 @@ async fn unknown_blocks(#[case] seed: Seed) {
     let unknown_blocks: Vec<Id<Block>> =
         create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -153,7 +153,7 @@ async fn valid_request(#[case] seed: Seed) {
         tf.process_block(block, BlockSource::Local).unwrap().unwrap();
     }
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -198,7 +198,7 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()

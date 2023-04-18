@@ -241,7 +241,7 @@ impl SyncManagerHandleBuilder {
     pub async fn build(self) -> SyncManagerHandle {
         let (chainstate, mempool) = match self.subsystems {
             Some((c, m)) => (c, m),
-            None => start_subsystems(Arc::clone(&self.chain_config)),
+            None => start_subsystems(Arc::clone(&self.chain_config)).await,
         };
 
         SyncManagerHandle::start_with_params(

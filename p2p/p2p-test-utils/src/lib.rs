@@ -28,7 +28,7 @@ use common::{
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 
-pub fn start_subsystems(
+pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
@@ -43,10 +43,10 @@ pub fn start_subsystems(
         Default::default(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate, chain_config)
+    start_subsystems_with_chainstate(chainstate, chain_config).await
 }
 
-pub fn start_subsystems_with_chainstate(
+pub async fn start_subsystems_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
     chain_config: Arc<ChainConfig>,
 ) -> (
@@ -67,7 +67,12 @@ pub fn start_subsystems_with_chainstate(
         move |call, shutdn| mempool.run(call, shutdn)
     });
 
+    // Make sure the mempool event loop has started successfully.
+    // Workaround for the `connect_peer_twice` test error when mempool starts after chainstate shutdown
+    // (happens with "-Zpanic_abort_tests"). Better fix is to stop manager with signal and wait for manager.main() to return.
     tokio::spawn(async move { manager.main().await });
+
+    mempool.call(|mempool| mempool.get_all()).await.unwrap().unwrap();
 
     (chainstate, mempool)
 }
