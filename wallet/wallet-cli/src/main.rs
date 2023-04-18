@@ -27,6 +27,18 @@ mod config;
 
 const MAX_HISTORY: usize = 1000;
 
+#[macro_export]
+macro_rules! println {
+    ($($arg:tt)*) => {
+        compile_error!("Please use `cli_println` in the wallet-cli crate.")
+    };
+}
+
+#[macro_export]
+macro_rules! cli_println {
+    ($($arg:tt)*) => { ::std::println!($($arg)*) };
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("RPC error: {0}")]
@@ -56,7 +68,7 @@ impl Into<&str> for ImportMnemonic {
     fn into(self) -> &'static str {
         match self {
             ImportMnemonic::Generate => "Generate new mnemonic",
-            ImportMnemonic::Import => "Import new mnemonic",
+            ImportMnemonic::Import => "Import mnemonic",
             ImportMnemonic::Cancel => "Cancel",
         }
     }
@@ -91,8 +103,8 @@ fn new_wallet(
     let mnemonic: String = match action {
         ImportMnemonic::Generate => {
             let new_mnemonoc = wallet::wallet::generate_new_mnemonic();
-            println!("New mnemonic: {}", new_mnemonoc.to_string());
-            println!("Please write it somewhere safe to be able to restore your wallet.");
+            cli_println!("New mnemonic: {}", new_mnemonoc.to_string());
+            cli_println!("Please write it somewhere safe to be able to restore your wallet.");
             new_mnemonoc.to_string()
         }
         ImportMnemonic::Import => dialoguer::Input::with_theme(theme)
@@ -133,7 +145,7 @@ async fn run() -> Result<(), WalletCliError> {
     .await
     .map_err(WalletCliError::RpcError)?;
 
-    println!(
+    cli_println!(
         "Best block id: {}",
         rpc_client
             .get_best_block_id()
@@ -153,7 +165,7 @@ async fn run() -> Result<(), WalletCliError> {
             if cmd == "exit" {
                 return Ok(());
             }
-            println!("Entered {}", cmd);
+            cli_println!("Entered {}", cmd);
         }
     }
 }
@@ -189,7 +201,7 @@ impl<T: ToString> History<T> for CliHistory {
 #[tokio::main]
 async fn main() {
     run().await.unwrap_or_else(|err| {
-        eprintln!("wallet-cli launch failed: {err}");
+        cli_println!("wallet-cli launch failed: {err}");
         std::process::exit(1)
     })
 }
