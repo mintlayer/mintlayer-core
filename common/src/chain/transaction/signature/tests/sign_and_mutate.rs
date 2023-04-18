@@ -1073,9 +1073,11 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
         TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
         TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
-        TxOutput::CreateStakePool(_) => unreachable!(), // TODO: come back to this later
-        TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::CreateStakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::DecommissionPool(_, _, _, _)
+        | TxOutput::DelegateStaking(_, _, _)
+        | TxOutput::SpendShareFromDelegation(_, _, _) => unreachable!(), // TODO: come back to this later
     };
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),

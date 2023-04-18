@@ -42,7 +42,9 @@ fn check_timelock(
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
         | TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _) => return Ok(()),
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::DelegateStaking(_, _, _)
+        | TxOutput::SpendShareFromDelegation(_, _, _) => return Ok(()),
         TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };
 

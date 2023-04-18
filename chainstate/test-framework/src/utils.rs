@@ -44,7 +44,9 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         }
         TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::DecommissionPool(_, _, _, _) => None,
+        | TxOutput::DecommissionPool(_, _, _, _)
+        | TxOutput::DelegateStaking(_, _, _)
+        | TxOutput::SpendShareFromDelegation(_, _, _) => None,
     }
 }
 
