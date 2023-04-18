@@ -19,7 +19,7 @@ use std::{
     str::FromStr,
 };
 
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use common::chain::config::ChainType;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
@@ -47,7 +47,7 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub wallet_name: Option<PathBuf>,
 
-    /// RPC address
+    /// Optional RPC address
     #[clap(long)]
     pub rpc_address: Option<SocketAddr>,
 
@@ -62,20 +62,11 @@ pub struct WalletCliArgs {
     /// RPC password
     #[clap(long)]
     pub rpc_password: Option<String>,
-
-    #[command(subcommand)]
-    pub command: Option<Commands>,
 }
 
-#[derive(Subcommand, Debug)]
-pub enum Commands {
-    /// Create a new wallet
-    CreateWallet {},
-}
 #[derive(Debug)]
 pub struct WalletCliConfig {
     pub chain_type: ChainType,
-    pub command: Option<Commands>,
     pub wallet_file: PathBuf,
     pub rpc_address: SocketAddr,
     pub rpc_username: String,
@@ -106,7 +97,6 @@ impl WalletCliConfig {
             rpc_cookie_file,
             rpc_username,
             rpc_password,
-            command,
         } = args;
 
         let chain_type = match network {
@@ -142,7 +132,6 @@ impl WalletCliConfig {
 
         Ok(WalletCliConfig {
             chain_type,
-            command,
             wallet_file,
             rpc_address,
             rpc_username,

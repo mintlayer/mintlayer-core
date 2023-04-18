@@ -20,8 +20,7 @@ use common::chain::ChainConfig;
 use dialoguer::{theme::ColorfulTheme, History};
 use node_comm::{make_rpc_client, node_traits::NodeInterface};
 use utils::default_data_dir::PrepareDataDirError;
-
-use crate::config::Commands;
+use wallet::{Wallet, WalletError};
 
 mod config;
 
@@ -41,27 +40,68 @@ pub enum WalletCliError {
     PrepareData(PrepareDataDirError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
+    #[error("Cancelled")]
+    Cancelled,
 }
 
-fn create_wallet(
+#[derive(Clone, Copy)]
+enum ImportMnemonic {
+    Generate,
+    Import,
+    Cancel,
+}
+
+impl Into<&str> for ImportMnemonic {
+    fn into(self) -> &'static str {
+        match self {
+            ImportMnemonic::Generate => "Generate new mnemonic",
+            ImportMnemonic::Import => "Import new mnemonic",
+            ImportMnemonic::Cancel => "Cancel",
+        }
+    }
+}
+
+fn select_helper<T: Clone + Into<&'static str>>(
+    theme: &ColorfulTheme,
+    prompt: &str,
+    items: &[T],
+) -> Result<T, WalletCliError> {
+    let texts = items.iter().cloned().map(Into::into).collect::<Vec<&str>>();
+    dialoguer::Select::with_theme(theme)
+        .with_prompt(prompt)
+        .default(0)
+        .items(&texts)
+        .interact()
+        .map(|index| items[index].clone())
+        .map_err(WalletCliError::ConsoleIoError)
+}
+
+fn new_wallet(
     chain_config: Arc<ChainConfig>,
     db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
     theme: &ColorfulTheme,
-) -> Result<wallet::wallet::Wallet<wallet_storage::DefaultBackend>, WalletCliError> {
-    let menmonic: String = dialoguer::Input::with_theme(theme)
-        .with_prompt("Mnemonic")
-        .interact_text()
-        .map_err(WalletCliError::ConsoleIoError)?;
+) -> Result<Wallet<wallet_storage::DefaultBackend>, WalletCliError> {
+    let action = select_helper(
+        theme,
+        "Wallet is not initialized",
+        &[ImportMnemonic::Generate, ImportMnemonic::Import, ImportMnemonic::Cancel],
+    )?;
 
-    wallet::wallet::Wallet::new_wallet(Arc::clone(&chain_config), db, &menmonic, None)
-        .map_err(WalletCliError::WalletError)
-}
+    let mnemonic: String = match action {
+        ImportMnemonic::Generate => {
+            let new_mnemonoc = wallet::wallet::generate_new_mnemonic();
+            println!("New mnemonic: {}", new_mnemonoc.to_string());
+            println!("Please write it somewhere safe to be able to restore your wallet.");
+            new_mnemonoc.to_string()
+        }
+        ImportMnemonic::Import => dialoguer::Input::with_theme(theme)
+            .with_prompt("Mnemonic")
+            .interact_text()
+            .map_err(WalletCliError::ConsoleIoError)?,
+        ImportMnemonic::Cancel => return Err(WalletCliError::Cancelled),
+    };
 
-fn load_wallet(
-    chain_config: Arc<ChainConfig>,
-    db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
-) -> Result<wallet::wallet::Wallet<wallet_storage::DefaultBackend>, WalletCliError> {
-    wallet::wallet::Wallet::load_wallet(Arc::clone(&chain_config), db)
+    Wallet::new_wallet(Arc::clone(&chain_config), db, &mnemonic, None)
         .map_err(WalletCliError::WalletError)
 }
 
@@ -77,9 +117,10 @@ async fn run() -> Result<(), WalletCliError> {
 
     let theme = ColorfulTheme::default();
 
-    let _wallet = match config.command {
-        Some(Commands::CreateWallet {}) => create_wallet(chain_config, db, &theme)?,
-        None => load_wallet(chain_config, db)?,
+    let _wallet = match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
+        Ok(wallet) => wallet,
+        Err(WalletError::WalletNotInitialized) => new_wallet(chain_config, db, &theme)?,
+        Err(e) => return Err(WalletCliError::WalletError(e)),
     };
 
     let rpc_client = make_rpc_client(
