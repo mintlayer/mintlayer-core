@@ -53,7 +53,7 @@ async fn test_replace_tx(
         "created a tx with fee {:?}",
         mempool.try_get_fee(&original).await
     );
-    mempool.add_transaction(original).await?;
+    mempool.add_transaction(original)?;
 
     let flags = 0;
     let replacement = tx_spend_input(
@@ -70,7 +70,7 @@ async fn test_replace_tx(
         "created a replacement with fee {:?}",
         mempool.try_get_fee(&replacement).await
     );
-    mempool.add_transaction(replacement).await?;
+    mempool.add_transaction(replacement)?;
     assert!(!mempool.contains_transaction(&original_id));
     mempool.store.assert_valid();
 
@@ -80,7 +80,8 @@ async fn test_replace_tx(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -104,7 +105,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     .await
     .expect("should be able to spend here");
     let original_id = original.transaction().get_id();
-    mempool.add_transaction(original).await?;
+    mempool.add_transaction(original)?;
 
     let flags = 0;
     let replacement_fee = (original_fee + Fee::new(Amount::from_atoms(1000))).unwrap();
@@ -119,14 +120,14 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     .await
     .expect("should be able to spend here");
     assert!(matches!(
-        mempool.add_transaction(replacement.clone()).await,
+        mempool.add_transaction(replacement.clone()),
         Err(Error::TxValidationError(
             TxValidationError::ConflictWithIrreplaceableTransaction
         ))
     ));
 
     mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);
-    mempool.add_transaction(replacement).await?;
+    mempool.add_transaction(replacement)?;
     mempool.store.assert_valid();
 
     Ok(())
@@ -135,7 +136,8 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
@@ -178,7 +180,8 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -195,7 +198,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         .with_flags(1)
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx.clone()).await?;
+    mempool.add_transaction(tx.clone())?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let child_tx_input = TxInput::new(outpoint_source_id, 0);
@@ -212,7 +215,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    mempool.add_transaction(child_tx).await?;
+    mempool.add_transaction(child_tx)?;
 
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
     let replacement_fee: Fee = Amount::from_atoms(relay_fee + 100).into();
@@ -225,7 +228,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    mempool.add_transaction(replacement_tx).await?;
+    mempool.add_transaction(replacement_tx)?;
     mempool.store.assert_valid();
     Ok(())
 }
@@ -233,7 +236,8 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -251,7 +255,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let tx_id = tx.transaction().get_id();
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let input = TxInput::new(outpoint_source_id, 0);
@@ -273,7 +277,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     .await?;
     let replaced_tx_fee = mempool.try_get_fee(&replaced_tx).await?;
     let replaced_id = replaced_tx.transaction().get_id();
-    mempool.add_transaction(replaced_tx).await?;
+    mempool.add_transaction(replaced_tx)?;
 
     // Create some children for this transaction
     let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id);
@@ -289,7 +293,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
     let descendant1_id = descendant1.transaction().get_id();
-    mempool.add_transaction(descendant1).await?;
+    mempool.add_transaction(descendant1)?;
 
     let descendant2_fee: Fee = Amount::from_atoms(100).into();
     let descendant2 = tx_spend_input(
@@ -302,7 +306,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
     let descendant2_id = descendant2.transaction().get_id();
-    mempool.add_transaction(descendant2).await?;
+    mempool.add_transaction(descendant2)?;
 
     //Create a new incoming transaction that conflicts with `replaced_tx` because it spends
     //`input`. It will be rejected because its fee exactly equals (so is not greater than) the
@@ -322,7 +326,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     .await?;
 
     assert!(matches!(
-        mempool.add_transaction(incoming_tx).await,
+        mempool.add_transaction(incoming_tx),
         Err(Error::TxValidationError(
             TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
         ))
@@ -339,7 +343,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         locktime,
     )
     .await?;
-    mempool.add_transaction(incoming_tx).await?;
+    mempool.add_transaction(incoming_tx)?;
 
     assert!(!mempool.contains_transaction(&replaced_id));
     assert!(!mempool.contains_transaction(&descendant1_id));

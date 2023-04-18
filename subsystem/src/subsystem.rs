@@ -86,7 +86,7 @@ impl ShutdownRequest {
                 panic!("Multiple shutdown broadcast requests issued")
             }
             Err(broadcast::error::RecvError::Closed) => {
-                panic!("Shutdown channel sender closed prematurely")
+                log::error!("Shutdown channel sender closed prematurely")
             }
             Ok(()) => (),
         }

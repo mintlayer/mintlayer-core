@@ -89,7 +89,7 @@ impl BlockMaker {
         let max_block_size = self.chain_config.max_block_size_from_txs();
         let returned_accumulator = self
             .mempool_handle
-            .call_async(move |mempool| {
+            .call(move |mempool| {
                 mempool.collect_txs(Box::new(DefaultTxAccumulator::new(max_block_size)))
             })
             .await?
@@ -272,7 +272,7 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_transactions_subsystem_error() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
@@ -327,7 +327,7 @@ mod tests {
         .expect("Subsystem error thread failed");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_transactions_collect_txs_failed() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
@@ -374,7 +374,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_transactions_succeeded() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
@@ -427,7 +427,7 @@ mod tests {
     // fn make_block() {}
     //
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn attempt_submit_new_block_subsystem_error() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -477,7 +477,7 @@ mod tests {
         .expect("Subsystem error thread failed");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn attempt_submit_new_block_preliminary_block_check_failed() {
         let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
 
@@ -531,7 +531,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn attempt_submit_new_block_process_block_failed() {
         let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
 
@@ -588,7 +588,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn attempt_submit_new_block_process_block_no_index() {
         let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
 
@@ -640,7 +640,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn attempt_submit_new_block_process_block_with_index() {
         let (mut manager, chain_config, _chainstate, mempool) = setup_blockprod_test();
 

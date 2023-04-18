@@ -84,7 +84,7 @@ pub struct Fee(pub Amount);
 
 pub struct Subsidy(pub Amount);
 
-/// The change that a set of transactions has caused to the blockchain state
+/// The change that a block has caused to the blockchain state
 #[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
@@ -142,11 +142,11 @@ where
     U: UtxosView + Send + Sync,
     A: PoSAccountingView + Send + Sync,
 {
-    pub fn new_from_handle(
+    pub fn new_generic(
         storage: S,
         chain_config: C,
-        utxos: U,      // TODO: Replace this parameter with handle
-        accounting: A, // TODO: Replace this parameter with handle
+        utxos: U,
+        accounting: A,
         verifier_config: TransactionVerifierConfig,
     ) -> Self {
         let best_block = storage

@@ -17,6 +17,11 @@ use std::time::Duration;
 
 pub type Time = Duration;
 
+pub const ENABLE_RBF: bool = false;
+
+// Number of times we try to add transaction if the tip moves suring validation
+pub const MAX_TX_ADDITION_ATTEMPTS: usize = 3;
+
 pub const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
 // TODO this will be defined elsewhere (some of limits.rs file)
 pub const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;

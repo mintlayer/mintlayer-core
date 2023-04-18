@@ -71,12 +71,12 @@ pub async fn initialize(
     // Mempool subsystem
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
-        chainstate.clone(),
+        subsystem::Handle::clone(&chainstate),
         Default::default(),
         mempool::SystemUsageEstimator {},
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
-        mempool.run(call, shutdn)
+    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
+        move |call, shutdn| mempool.run(call, shutdn)
     });
 
     // P2P subsystem

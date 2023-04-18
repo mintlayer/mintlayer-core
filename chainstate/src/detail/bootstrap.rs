@@ -24,7 +24,7 @@ use crate::{BlockError, ChainstateConfig};
 
 use super::{query::ChainstateQuery, tx_verification_strategy::TransactionVerificationStrategy};
 
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
 pub enum BootstrapError {
     #[error("File error: {0}")]
     File(String),

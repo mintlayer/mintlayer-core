@@ -415,10 +415,7 @@ where
             )));
         }
 
-        let tx = self
-            .mempool_handle
-            .call_async(move |m| Box::pin(async move { m.transaction(&id).await }))
-            .await??;
+        let tx = self.mempool_handle.call(move |m| m.transaction(&id)).await??;
         let res = match tx {
             Some(tx) => TransactionResponse::Found(tx),
             None => TransactionResponse::NotFound(id),
@@ -443,7 +440,7 @@ where
         }
 
         if let Some(tx) = tx {
-            self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+            self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
             self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))?;
         }
 
@@ -482,11 +479,7 @@ where
             ));
         }
 
-        if !(self
-            .mempool_handle
-            .call_async(move |m| Box::pin(async move { m.contains_transaction(&tx).await }))
-            .await??)
-        {
+        if !(self.mempool_handle.call(move |m| m.contains_transaction(&tx)).await??) {
             self.messaging_handle
                 .send_message(self.id(), SyncMessage::TransactionRequest(tx))?;
             assert!(self.announced_transactions.insert(tx));

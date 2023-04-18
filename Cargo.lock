@@ -2141,12 +2141,15 @@ dependencies = [
  "chainstate",
  "chainstate-storage",
  "chainstate-test-framework",
+ "chainstate-types",
  "common",
  "crypto",
+ "hex",
  "jsonrpsee",
  "logging",
  "mockall",
  "parking_lot",
+ "pos_accounting",
  "rpc",
  "rstest 0.17.0",
  "serialization",
@@ -2155,6 +2158,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utxo",
 ]
 
 [[package]]
@@ -2270,6 +2274,7 @@ dependencies = [
  "common",
  "mempool",
  "mockall",
+ "pos_accounting",
  "subsystem",
  "tokio",
  "utils",

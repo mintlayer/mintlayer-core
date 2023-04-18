@@ -21,7 +21,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           # TODO: Inspect coverage, and change toolchain to stable
-          toolchain: nightly-2022-12-13
+          toolchain: nightly-2023-04-10
           override: true
       - uses: actions-rs/cargo@v1
         with:

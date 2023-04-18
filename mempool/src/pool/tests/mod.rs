@@ -15,8 +15,8 @@
 
 use super::*;
 use crate::{
-    get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
-    SystemUsageEstimator,
+    get_memory_usage::MockGetMemoryUsage, pool::try_get_fee::TryGetFee,
+    tx_accumulator::DefaultTxAccumulator, SystemUsageEstimator,
 };
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
@@ -31,7 +31,7 @@ use common::{
         signature::inputsig::InputWitness,
         tokens::OutputValue,
         transaction::{Destination, TxInput, TxOutput},
-        OutPointSourceId, Transaction,
+        OutPoint, OutPointSourceId, Transaction,
     },
     primitives::{Id, H256},
 };
@@ -99,7 +99,7 @@ fn get_relay_fee_from_tx_size(tx_size: usize) -> u128 {
     u128::try_from(tx_size * RELAY_FEE_PER_BYTE).expect("relay fee overflow")
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn add_single_tx() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
@@ -121,7 +121,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 
     let tx_clone = tx.clone();
     let tx_id = tx.transaction().get_id();
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
     assert!(mempool.contains_transaction(&tx_id));
     let all_txs = mempool.get_all();
     assert_eq!(all_txs, vec![tx_clone]);
@@ -136,7 +136,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -156,7 +156,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     }
     let initial_tx = tx_builder.build();
     let initial_tx_id = initial_tx.transaction().get_id();
-    mempool.add_transaction(initial_tx).await?;
+    mempool.add_transaction(initial_tx)?;
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
@@ -168,7 +168,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        mempool.add_transaction(tx.clone()).await?;
+        mempool.add_transaction(tx.clone())?;
     }
 
     let mut fees = Vec::new();
@@ -182,17 +182,20 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn tx_no_inputs() -> anyhow::Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tx_no_inputs() {
     let mut mempool = setup().await;
     let tx = TransactionBuilder::new().build();
+    let res = mempool.add_transaction(tx);
 
-    assert!(matches!(
-        mempool.add_transaction(tx).await,
-        Err(Error::TxValidationError(TxValidationError::NoInputs))
-    ));
+    assert!(
+        matches!(
+            res,
+            Err(Error::TxValidationError(TxValidationError::NoInputs)),
+        ),
+        "Should have failed with no inputs, got {res:?} instead"
+    );
     mempool.store.assert_valid();
-    Ok(())
 }
 
 // TODO this is copy-pasted from libp2p's test utils. This function should be extracted to an
@@ -251,7 +254,7 @@ pub async fn start_chainstate(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -264,14 +267,14 @@ async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     assert!(matches!(
-        mempool.add_transaction(tx).await,
+        mempool.add_transaction(tx),
         Err(Error::TxValidationError(TxValidationError::NoOutputs))
     ));
     mempool.store.assert_valid();
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
@@ -304,14 +307,14 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     .expect("invalid witness count");
 
     assert!(matches!(
-        mempool.add_transaction(tx).await,
-        Err(Error::TxValidationError(TxValidationError::DuplicateInputs))
+        mempool.add_transaction(tx),
+        Err(Error::TxValidationError(_)),
     ));
     mempool.store.assert_valid();
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_already_in_mempool() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
@@ -330,9 +333,9 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     )
     .await?;
 
-    mempool.add_transaction(tx.clone()).await?;
+    mempool.add_transaction(tx.clone())?;
     assert!(matches!(
-        mempool.add_transaction(tx).await,
+        mempool.add_transaction(tx),
         Err(Error::TxValidationError(
             TxValidationError::TransactionAlreadyInMempool
         ))
@@ -344,7 +347,7 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -380,10 +383,8 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     .expect("invalid witness count");
 
     assert!(matches!(
-        mempool.add_transaction(tx).await,
-        Err(Error::TxValidationError(
-            TxValidationError::OutPointNotFound { .. }
-        ))
+        mempool.add_transaction(tx),
+        Err(Error::TxValidationError(TxValidationError::TxValidation(_)))
     ));
     mempool.store.assert_valid();
 
@@ -393,7 +394,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -419,7 +420,7 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
     assert!(matches!(
-        mempool.add_transaction(tx).await,
+        mempool.add_transaction(tx),
         Err(Error::TxValidationError(
             TxValidationError::ExceedsMaxBlockSize
         ))
@@ -512,7 +513,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -532,7 +533,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let tx = tx_builder.build();
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx.clone()).await?;
+    mempool.add_transaction(tx.clone())?;
 
     let flags_replaceable = 1;
     let flags_irreplaceable = 0;
@@ -559,8 +560,8 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     )
     .await?;
 
-    mempool.add_transaction(ancestor_with_signal.clone()).await?;
-    mempool.add_transaction(ancestor_without_signal.clone()).await?;
+    mempool.add_transaction(ancestor_with_signal.clone())?;
+    mempool.add_transaction(ancestor_without_signal.clone())?;
 
     let input_with_replaceable_parent = TxInput::new(
         OutPointSourceId::Transaction(ancestor_with_signal.transaction().get_id()),
@@ -592,7 +593,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     .await?;
     let replaced_tx_id = replaced_tx.transaction().get_id();
 
-    mempool.add_transaction(replaced_tx).await?;
+    mempool.add_transaction(replaced_tx)?;
 
     let replacing_tx = SignedTransaction::new(
         Transaction::new(
@@ -605,14 +606,16 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     )
     .expect("invalid witness count");
 
-    mempool.add_transaction(replacing_tx).await?;
-    assert!(!mempool.contains_transaction(&replaced_tx_id));
+    let result = mempool.add_transaction(replacing_tx);
+    assert_eq!(result.is_ok(), ENABLE_RBF);
+    assert_eq!(!mempool.contains_transaction(&replaced_tx_id), ENABLE_RBF);
+
     mempool.store.assert_valid();
 
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tx_mempool_entry() -> anyhow::Result<()> {
     use common::primitives::time;
     let mut mempool = setup().await;
@@ -756,7 +759,7 @@ async fn test_bip125_max_replacements(
     let input = tx.transaction().inputs().first().expect("one input").clone();
     let outputs = tx.transaction().outputs().to_owned();
     let tx_id = tx.transaction().get_id();
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
 
     let flags = 0;
     let locktime = 0;
@@ -773,7 +776,7 @@ async fn test_bip125_max_replacements(
             locktime,
         )
         .await?;
-        mempool.add_transaction(tx).await?;
+        mempool.add_transaction(tx)?;
     }
     let mempool_size_before_replacement = mempool.store.txs_by_id.len();
 
@@ -787,7 +790,7 @@ async fn test_bip125_max_replacements(
         locktime,
     )
     .await?;
-    mempool.add_transaction(replacement_tx).await?;
+    mempool.add_transaction(replacement_tx)?;
     let mempool_size_after_replacement = mempool.store.txs_by_id.len();
 
     assert_eq!(
@@ -800,7 +803,8 @@ async fn test_bip125_max_replacements(
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES + 1;
     let err = test_bip125_max_replacements(seed, num_potential_replacements)
@@ -818,7 +822,8 @@ async fn too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "RBF not implemented"]
 async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES;
     test_bip125_max_replacements(seed, num_potential_replacements).await
@@ -827,7 +832,7 @@ async fn not_too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -849,7 +854,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx = tx_builder.build();
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
 
     let input1 = TxInput::new(outpoint_source_id.clone(), 0);
     let input2 = TxInput::new(outpoint_source_id, 1);
@@ -866,7 +871,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
         locktime,
     )
     .await?;
-    mempool.add_transaction(replaced_tx).await?;
+    mempool.add_transaction(replaced_tx)?;
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
     let replacement_fee: Fee = Amount::from_atoms(100 + relay_fee).into();
     let incoming_tx = tx_spend_several_inputs(
@@ -882,13 +887,14 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
 
-    let res = mempool.add_transaction(incoming_tx).await;
-    assert!(matches!(
-        res,
-        Err(Error::TxValidationError(
-            TxValidationError::SpendsNewUnconfirmedOutput
-        ))
-    ));
+    let res = mempool.add_transaction(incoming_tx);
+    assert!(
+        matches!(
+            res,
+            Err(Error::TxValidationError(TxValidationError::TxValidation(_))),
+        ),
+        "Should error out on unconfirmed output, got {res:?}"
+    );
     mempool.store.assert_valid();
     Ok(())
 }
@@ -896,7 +902,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
     let mock_time = Arc::new(AtomicU64::new(0));
@@ -949,7 +955,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         mock_clock,
         mock_usage,
     );
-    mempool.add_transaction(parent).await?;
+    mempool.add_transaction(parent.clone())?;
     log::debug!("after adding parent");
 
     let flags = 0;
@@ -984,9 +990,9 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let child_1_id = child_1.transaction().get_id();
     log::debug!("child_1_id {}", child_1_id.get());
-    mempool.add_transaction(child_0.clone()).await?;
+    mempool.add_transaction(child_0.clone())?;
     log::debug!("added child_0");
-    mempool.add_transaction(child_1).await?;
+    mempool.add_transaction(child_1)?;
     log::debug!("added child_1");
 
     assert_eq!(mempool.store.txs_by_id.len(), 2);
@@ -1035,7 +1041,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         child_2.encoded_size(),
         mempool.get_minimum_rolling_fee()
     );
-    let res = mempool.add_transaction(child_2).await;
+    let res = mempool.add_transaction(child_2);
     log::debug!("result of adding child2 {:?}", res);
     assert!(matches!(
         res,
@@ -1055,12 +1061,26 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await?;
     let child_2_high_fee_id = child_2_high_fee.transaction().get_id();
+    let child_2_high_fee_outpt =
+        OutPoint::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0);
     log::debug!("before child2_high_fee");
-    mempool.add_transaction(child_2_high_fee).await?;
+    mempool.add_transaction(child_2_high_fee.clone())?;
+
+    assert!(mempool.contains_transaction(&child_2_high_fee_id));
+    assert!(mempool
+        .chainstate_handle()
+        .call({
+            let outpt = child_2_high_fee_outpt.clone();
+            move |c| c.utxo(&outpt).unwrap().is_none()
+        })
+        .await
+        .unwrap());
+
+    // TODO The commented out part only applies if RBF is active
 
     // We simulate a block being accepted so the rolling fee will begin to decay
     let block = Block::new(
-        vec![],
+        vec![parent, child_2_high_fee],
         genesis.get_id().into(),
         BlockTimestamp::from_int_seconds(1639975461),
         ConsensusData::None,
@@ -1073,6 +1093,14 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .call_mut(|this| this.process_block(block, BlockSource::Local))
         .await??;
     mempool.new_tip_set(Id::new(H256::zero()), BlockHeight::new(1));
+
+    assert!(!mempool.contains_transaction(&child_2_high_fee_id));
+    assert!(mempool
+        .chainstate_handle()
+        .call(move |c| c.utxo(&child_2_high_fee_outpt).unwrap().is_some())
+        .await
+        .unwrap());
+
     // Because the rolling fee is only updated when we attempt to add a tx to the mempool
     // we need to submit a "dummy" tx to trigger these updates.
 
@@ -1100,14 +1128,14 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         "First attempt to add dummy which pays a fee of {:?}",
         mempool.try_get_fee(&dummy_tx).await?
     );
-    let res = mempool.add_transaction(dummy_tx.clone()).await;
+    let res = mempool.add_transaction(dummy_tx.clone());
 
-    log::debug!("result of first attempt to add dummy: {:?}", res);
+    log::debug!("Result of first attempt to add dummy: {res:?}");
     assert!(matches!(
         res,
         Err(Error::TxValidationError(
             TxValidationError::RollingFeeThresholdNotMet { .. }
-        ))
+        )),
     ));
     log::debug!(
         "minimum rolling fee after first attempt to add dummy: {:?}",
@@ -1123,7 +1151,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         Ordering::SeqCst,
     );
     log::debug!("Second attempt to add dummy");
-    mempool.add_transaction(dummy_tx).await?;
+    mempool.add_transaction(dummy_tx)?;
     log::debug!(
         "minimum rolling fee after first second to add dummy: {:?}",
         mempool.get_minimum_rolling_fee()
@@ -1154,7 +1182,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         ))
         .build();
 
-    mempool.add_transaction(another_dummy).await?;
+    mempool.add_transaction(another_dummy)?;
     assert_eq!(
         mempool.get_minimum_rolling_fee(),
         FeeRate::new(Amount::from_atoms(0))
@@ -1167,7 +1195,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     use std::time::Instant;
 
@@ -1226,7 +1254,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
         );
         let tx = tx_builder.build();
         let before_adding_tx_i = Instant::now();
-        mempool.add_transaction(tx).await?;
+        mempool.add_transaction(tx)?;
         log::debug!(
             "time spent adding tx {}: {:?}",
             i,
@@ -1242,7 +1270,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1265,7 +1293,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_id = tx.transaction().get_id();
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
 
@@ -1289,7 +1317,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("tx id is: {}", tx_id);
     log::debug!("tx_a_id : {}", tx_a_id.get());
     log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
-    mempool.add_transaction(tx_a).await?;
+    mempool.add_transaction(tx_a)?;
 
     let tx_b = tx_spend_input(
         &mempool,
@@ -1303,7 +1331,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_b_id = tx_b.transaction().get_id();
     log::debug!("tx_b_id : {}", tx_b_id.get());
     log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
-    mempool.add_transaction(tx_b).await?;
+    mempool.add_transaction(tx_b)?;
 
     let tx_c = tx_spend_input(
         &mempool,
@@ -1317,7 +1345,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_c_id = tx_c.transaction().get_id();
     log::debug!("tx_c_id : {}", tx_c_id.get());
     log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
-    mempool.add_transaction(tx_c).await?;
+    mempool.add_transaction(tx_c)?;
 
     let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
     log::debug!(
@@ -1397,7 +1425,7 @@ fn check_txs_sorted_by_ancestor_score(mempool: &Mempool<SystemUsageEstimator>) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1420,7 +1448,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_id = tx.transaction().get_id();
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx).await?;
+    mempool.add_transaction(tx)?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
 
@@ -1443,7 +1471,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_a_id = tx_a.transaction().get_id();
     log::debug!("tx_a_id : {}", tx_a_id.get());
     log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
-    mempool.add_transaction(tx_a).await?;
+    mempool.add_transaction(tx_a)?;
 
     let tx_b = tx_spend_input(
         &mempool,
@@ -1457,7 +1485,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_b_id = tx_b.transaction().get_id();
     log::debug!("tx_b_id : {}", tx_b_id.get());
     log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
-    mempool.add_transaction(tx_b).await?;
+    mempool.add_transaction(tx_b)?;
 
     let tx_c = tx_spend_input(
         &mempool,
@@ -1471,7 +1499,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_c_id = tx_c.transaction().get_id();
     log::debug!("tx_c_id : {}", tx_c_id.get());
     log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
-    mempool.add_transaction(tx_c).await?;
+    mempool.add_transaction(tx_c)?;
 
     let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
     log::debug!("entry a has score {:?}", entry_a.descendant_score());
@@ -1520,7 +1548,7 @@ fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) 
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
 
@@ -1555,7 +1583,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
         tx.transaction().get_id().get()
     );
     assert!(matches!(
-        mempool.add_transaction(tx).await,
+        mempool.add_transaction(tx),
         Err(Error::MempoolFull)
     ));
     mempool.store.assert_valid();
@@ -1565,7 +1593,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1588,7 +1616,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let parent_id = parent.transaction().get_id();
 
     let outpoint_source_id = OutPointSourceId::Transaction(parent.transaction().get_id());
-    mempool.add_transaction(parent).await?;
+    mempool.add_transaction(parent)?;
     let num_child_txs = num_outputs;
     let flags = 0;
     let locktime = 0;
@@ -1610,7 +1638,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let ids = txs.iter().map(|tx| tx.transaction().get_id()).collect::<Vec<_>>();
 
     for tx in txs {
-        mempool.add_transaction(tx).await?;
+        mempool.add_transaction(tx)?;
     }
 
     mempool.store.remove_tx(&parent_id, MempoolRemovalReason::Block);
@@ -1626,7 +1654,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1654,7 +1682,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     }
     let initial_tx = tx_builder.build();
     let initial_tx_id = initial_tx.transaction().get_id();
-    mempool.add_transaction(initial_tx).await?;
+    mempool.add_transaction(initial_tx)?;
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
@@ -1666,7 +1694,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        mempool.add_transaction(tx.clone()).await?;
+        mempool.add_transaction(tx.clone())?;
     }
 
     let size_limit = 1_000;

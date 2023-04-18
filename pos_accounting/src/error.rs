@@ -85,3 +85,5 @@ pub enum Error {
     #[error("PoS accounting view query failed")]
     ViewFail,
 }
+
+pub type Result<T> = core::result::Result<T, Error>;

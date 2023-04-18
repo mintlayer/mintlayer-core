@@ -368,6 +368,8 @@ where
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
+    ///
+    /// If the `response` channel is not empty, the peer is marked as disconnected by the user and no reconnect attempts are made.
     fn disconnect(
         &mut self,
         peer_id: PeerId,
@@ -618,15 +620,22 @@ where
                 peer.address
             );
 
-            if let Some(Some(response)) = self.pending_disconnects.remove(&peer_id) {
+            let resp_ch = self.pending_disconnects.remove(&peer_id).flatten();
+
+            if peer.role == Role::Outbound {
+                // If `resp_ch` is some, the peer is disconnected after the RPC command
+                if resp_ch.is_some() {
+                    self.peerdb.outbound_peer_disconnected_by_user(peer.address);
+                } else {
+                    self.peerdb.outbound_peer_disconnected(peer.address);
+                }
+            }
+
+            if let Some(response) = resp_ch {
                 response.send(Ok(()));
             }
 
             self.subscribed_to_peer_addresses.remove(&peer_id);
-
-            if peer.role == Role::Outbound {
-                self.peerdb.outbound_peer_disconnected(peer.address);
-            }
         }
     }
 

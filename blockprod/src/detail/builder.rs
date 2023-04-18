@@ -199,7 +199,7 @@ impl PerpetualBlockBuilder {
         });
 
         self.mempool_handle
-            .call_async_mut(|this| this.subscribe_to_events(subscribe_func))
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
             .map_err(|_| BlockProductionError::MempoolChannelClosed)?
             .expect("Block production subscription to mempool events failed");
@@ -304,7 +304,7 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn run() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -337,7 +337,7 @@ mod tests {
 
         let (tx, _rx) = crossbeam_channel::bounded(1);
 
-        mempool.call_async_mut({
+        mempool.call_mut({
             let block_id = block.get_id();
             move |this| {
                 this.subscribe_to_events(Arc::new(move |mempool_event| match mempool_event {
@@ -411,7 +411,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn subscribe_to_chainstate_events() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -467,7 +467,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn subscribe_to_mempool_events() {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 

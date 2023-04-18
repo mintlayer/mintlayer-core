@@ -150,6 +150,7 @@ impl Manager {
         // Name strings
         let manager_name = self.name;
         let subsys_name = config.subsystem_name;
+
         // Shutdown-related channels
         let shutting_down_tx = self.shutting_down_tx.clone();
         let shutdown_rq = ShutdownRequest(self.shutdown_request_tx.subscribe());
@@ -164,7 +165,10 @@ impl Manager {
             subsystem(call_rq, shutdown_rq).await;
 
             // Signal the intent to shut down to the other parts of the application.
-            shutting_down_tx.send(()).await.expect("Subsystem outlived the manager!?");
+            let res = shutting_down_tx.send(()).await;
+            if res.is_err() {
+                log::error!("Subsystem outlived the manager!?");
+            }
 
             log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
 

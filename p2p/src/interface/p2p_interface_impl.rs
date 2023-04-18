@@ -99,7 +99,7 @@ where
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
         let id = tx.transaction().get_id();
-        self.mempool_handle.call_async_mut(|m| m.add_transaction(tx)).await??;
+        self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
         self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))
     }
 }
