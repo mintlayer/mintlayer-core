@@ -36,6 +36,7 @@ enum DerivationType {
 
 impl ChildNumber {
     pub const ZERO: Self = ChildNumber(DerivationType::Normal(U31::from_u32_with_msb(0).0));
+    pub const ONE: Self = ChildNumber(DerivationType::Normal(U31::from_u32_with_msb(1).0));
 
     /// Return a hardened child number
     pub const fn from_hardened(index: U31) -> Self {
@@ -58,9 +59,9 @@ impl ChildNumber {
     }
 
     /// Get the index without the hardened bit set
-    pub fn get_index(&self) -> u32 {
+    pub const fn get_index(&self) -> u32 {
         match self.0 {
-            DerivationType::Normal(i) | DerivationType::Hardened(i) => i.into(),
+            DerivationType::Normal(i) | DerivationType::Hardened(i) => i.into_u32(),
         }
     }
 

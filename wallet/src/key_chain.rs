@@ -36,12 +36,12 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::{Derivable, DerivationError};
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::PublicKey;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryInto;
 use std::sync::Arc;
 use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::keys::{KeyPurpose, KeychainUsageState};
+use wallet_types::keys::{KeyPurpose, KeyPurposeError, KeychainUsageState};
 use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, DeterministicAccountInfo,
     RootKeyContent, RootKeyId,
@@ -233,10 +233,10 @@ pub(crate) struct LeafKeyChain {
     derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
 
     /// All the public key that this key chain holds
-    public_keys: HashSet<PublicKey>,
+    public_keys: BTreeSet<PublicKey>,
 
     /// All the public key hashes that this key chain holds
-    public_key_hashes: HashSet<PublicKeyHash>,
+    public_key_hashes: BTreeSet<PublicKeyHash>,
 
     /// The usage state of this key chain
     usage_state: KeychainUsageState,
@@ -260,8 +260,8 @@ impl LeafKeyChain {
             parent_pubkey,
             addresses: BTreeMap::new(),
             derived_public_keys: BTreeMap::new(),
-            public_keys: HashSet::new(),
-            public_key_hashes: HashSet::new(),
+            public_keys: BTreeSet::new(),
+            public_key_hashes: BTreeSet::new(),
             usage_state: KeychainUsageState::default(),
             lookahead_size,
         }
@@ -280,13 +280,13 @@ impl LeafKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<Self> {
         // TODO optimize for database structure
-        let mut public_key_hashes = HashSet::with_capacity(addresses.len());
+        let mut public_key_hashes = BTreeSet::new();
         for address in addresses.values() {
             let pkh = PublicKeyHash::try_from(address.data(&chain_config)?)?;
             public_key_hashes.insert(pkh);
         }
 
-        let mut public_keys = HashSet::with_capacity(derived_public_keys.len());
+        let mut public_keys = BTreeSet::new();
         for xpub in derived_public_keys.values() {
             public_keys.insert(xpub.clone().into_public_key());
         }
@@ -560,7 +560,8 @@ impl LeafKeyChain {
         // Check if public key is in the key pool
         if self.is_pubkey_mine_in_key_pool(public_key) {
             // Get the key index of the public key, this should always be Some
-            let key_index = public_key.get_derivation_path().as_vec().last().expect("The provided public key belongs to this key chain, hence it should always have a key index");
+            let key_index = public_key.get_derivation_path().as_slice().last()
+                .expect("The provided public key belongs to this key chain, hence it should always have a key index");
             self.usage_state.set_last_used(Some(*key_index));
             db_tx.set_keychain_usage_state(
                 &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
@@ -890,10 +891,12 @@ impl AccountKeyChain {
                 derivation_path.clone(),
             ));
         }
-        let path = derivation_path.as_vec();
+        let path = derivation_path.as_slice();
         // Calculate the key purpose and index
-        let purpose = KeyPurpose::try_from(path[BIP44_KEY_PURPOSE_INDEX])
-            .map_err(KeyChainError::InvalidKeyPurpose)?;
+        let purpose = KeyPurpose::try_from(path[BIP44_KEY_PURPOSE_INDEX]).map_err(|err| {
+            let KeyPurposeError::KeyPurposeConversion(num) = err;
+            KeyChainError::InvalidKeyPurpose(num)
+        })?;
         let key_index = path[BIP44_KEY_INDEX];
         Ok((purpose, key_index))
     }
@@ -978,7 +981,7 @@ mod tests {
         let path = DerivationPath::from_str(path_str).unwrap();
         // Derive expected key
         let pk = {
-            let key_index = path.as_vec().last().unwrap().get_index();
+            let key_index = path.as_slice().last().unwrap().get_index();
             // Derive previous key if necessary
             if key_index > 0 {
                 for _ in 0..key_index {
