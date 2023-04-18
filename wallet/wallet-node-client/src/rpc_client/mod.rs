@@ -15,13 +15,15 @@
 
 pub mod client_impl;
 
+use base64::Engine;
+use chainstate::rpc::ChainstateRpcClient;
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use jsonrpsee::{core::client::ClientT, http_client::HttpClientBuilder, rpc_params};
-use jsonrpsee::{core::params::ObjectParams, http_client::HttpClient};
-use serialization::hex::{HexDecode, HexEncode};
+use jsonrpsee::http_client::HttpClient;
+use jsonrpsee::http_client::HttpClientBuilder;
+use serialization::hex::HexDecode;
 
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
@@ -39,10 +41,29 @@ pub struct NodeRpcClient {
     http_client: HttpClient,
 }
 
+fn get_headers(username_password: Option<(&str, &str)>) -> http::HeaderMap {
+    let mut headers = http::HeaderMap::new();
+    if let Some((username, password)) = username_password {
+        headers.append(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_str(&format!(
+                "Basic {}",
+                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
+            ))
+            .expect("Should not fail"),
+        );
+    }
+    headers
+}
+
 impl NodeRpcClient {
-    pub async fn new(remote_socket_address: String) -> Result<Self, NodeRpcError> {
+    pub async fn new(
+        remote_socket_address: String,
+        username_password: Option<(&str, &str)>,
+    ) -> Result<Self, NodeRpcError> {
         let host = format!("http://{remote_socket_address}");
         let http_client = HttpClientBuilder::default()
+            .set_headers(get_headers(username_password))
             .build(host)
             .map_err(NodeRpcError::ClientCreationError)?;
 
@@ -57,20 +78,9 @@ impl NodeRpcClient {
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, NodeRpcError> {
-        let block_id_hex = block_id.hex_encode();
-
-        let params = {
-            let mut params = ObjectParams::new();
-            params.insert("id", block_id_hex).expect("Can't fail");
-            params
-        };
-
-        let response: Option<String> = self
-            .http_client
-            .request("chainstate_get_block", params)
+        let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
             .await
             .map_err(NodeRpcError::ResponseError)?;
-
         match response {
             Some(block_hex) => {
                 let block = Block::hex_decode_all(block_hex)?;
@@ -81,42 +91,23 @@ impl NodeRpcClient {
     }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, NodeRpcError> {
-        let response: String = self
-            .http_client
-            .request("chainstate_best_block_id", rpc_params![])
+        ChainstateRpcClient::best_block_id(&self.http_client)
             .await
-            .map_err(NodeRpcError::ResponseError)?;
-
-        let block_id = Id::<GenBlock>::hex_decode_all(response)?;
-        Ok(block_id)
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_best_block_height(&self) -> Result<BlockHeight, NodeRpcError> {
-        let response: u64 = self
-            .http_client
-            .request("chainstate_best_block_height", rpc_params![])
+        ChainstateRpcClient::best_block_height(&self.http_client)
             .await
-            .map_err(NodeRpcError::ResponseError)?;
-
-        Ok(response.into())
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_block_id_at_height(
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, NodeRpcError> {
-        let params = {
-            let mut params = ObjectParams::new();
-            params.insert("height", height).expect("Can't fail");
-            params
-        };
-
-        let response: Option<Id<GenBlock>> = self
-            .http_client
-            .request("chainstate_block_id_at_height", params)
+        ChainstateRpcClient::block_id_at_height(&self.http_client, height)
             .await
-            .map_err(NodeRpcError::ResponseError)?;
-
-        Ok(response)
+            .map_err(NodeRpcError::ResponseError)
     }
 }

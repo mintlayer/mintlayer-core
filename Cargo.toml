@@ -46,6 +46,7 @@ members = [
   "utxo",                         # Utxo and related utilities (cache, undo, etc.).
   "wallet",                       # Wallet executable.
   "wallet/wallet-node-client",    # Wallet-to-node communication tools.
+  "wallet/wallet-cli",            # Wallet CLI/REPL.
   "wasm-crypto",                  # WASM bindings for the crypto crate.
 ]
 
@@ -66,6 +67,7 @@ default-members = [
   "utils",
   "utxo",
   "wallet",
+  "wallet/wallet-cli",
 ]
 
 [dependencies]

@@ -14,6 +14,8 @@
 // limitations under the License.
 
 use handles_client::WalletHandlesClientError;
+use std::net::SocketAddr;
+
 use node_traits::NodeInterface;
 use rpc_client::NodeRpcError;
 
@@ -22,9 +24,10 @@ pub mod node_traits;
 pub mod rpc_client;
 
 pub async fn make_rpc_client(
-    remote_socket_address: String,
+    remote_socket_address: SocketAddr,
+    username_password: Option<(&str, &str)>,
 ) -> Result<impl NodeInterface, NodeRpcError> {
-    rpc_client::NodeRpcClient::new(remote_socket_address).await
+    rpc_client::NodeRpcClient::new(remote_socket_address.to_string(), username_password).await
 }
 
 pub async fn make_handles_client(

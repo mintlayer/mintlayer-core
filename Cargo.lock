@@ -787,6 +787,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3d79fbe8970a77e3e34151cc13d3b3e248aa0faaecb9f6091fa07ebefe5ad60"
+dependencies = [
+ "encode_unicode",
+ "lazy_static",
+ "libc",
+ "unicode-width",
+ "windows-sys 0.42.0",
+]
+
+[[package]]
 name = "const_format"
 version = "0.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1027,6 +1040,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
+name = "dialoguer"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59c6f2989294b9a498d3ad5491a79c6deb604617378e1cdc4bfc1c1361fe2f87"
+dependencies = [
+ "console",
+ "shell-words",
+ "tempfile",
+ "zeroize",
+]
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1120,6 +1145,12 @@ name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "endian-type"
@@ -2316,6 +2347,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml 0.7.3",
+ "utils",
 ]
 
 [[package]]
@@ -2323,9 +2355,11 @@ name = "node-comm"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "base64 0.21.0",
  "chainstate",
  "chainstate-storage",
  "common",
+ "http",
  "jsonrpsee",
  "rpc",
  "serde_json",
@@ -3681,6 +3715,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell-words"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4530,6 +4570,7 @@ dependencies = [
  "atomic-traits",
  "criterion",
  "crypto",
+ "directories",
  "logging",
  "loom",
  "num-traits",
@@ -4538,6 +4579,7 @@ dependencies = [
  "slave-pool",
  "static_assertions",
  "test-utils",
+ "thiserror",
 ]
 
 [[package]]
@@ -4618,6 +4660,23 @@ dependencies = [
  "wallet-storage",
  "wallet-types",
  "zeroize",
+]
+
+[[package]]
+name = "wallet-cli"
+version = "0.1.0"
+dependencies = [
+ "clap 4.2.1",
+ "common",
+ "dialoguer",
+ "directories",
+ "logging",
+ "node-comm",
+ "thiserror",
+ "tokio",
+ "utils",
+ "wallet",
+ "wallet-storage",
 ]
 
 [[package]]

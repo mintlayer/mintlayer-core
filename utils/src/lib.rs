@@ -18,6 +18,7 @@ pub mod bloom_filters;
 pub mod config_setting;
 pub mod const_value;
 pub mod counttracker;
+pub mod default_data_dir;
 pub mod ensure;
 pub mod eventhandler;
 pub mod exp_rand;

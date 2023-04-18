@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use clap::Parser;
-use directories::BaseDirs;
 use trust_dns_client::rr::Name;
+use utils::default_data_dir::default_data_dir_common;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -57,14 +57,6 @@ pub struct DnsServerConfig {
     pub mbox: Option<Name>,
 }
 
-const DEFAULT_DATA_DIR_NAME: &str = "mintlayer_dns_server";
-
 fn default_data_dir() -> String {
-    BaseDirs::new()
-        .expect("BaseDirs build failed")
-        .data_dir()
-        .join(DEFAULT_DATA_DIR_NAME)
-        .to_str()
-        .expect("expected valid default data dir path")
-        .to_owned()
+    default_data_dir_common().to_str().expect("Valid UTF-8 expected").to_owned()
 }
