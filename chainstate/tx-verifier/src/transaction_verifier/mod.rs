@@ -213,7 +213,9 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DecommissionPool(_, _, _, _) => None,
+                | TxOutput::DecommissionPool(_, _, _, _)
+                | TxOutput::DelegateStaking(_, _, _)
+                | TxOutput::SpendShareFromDelegation(_, _, _) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -235,7 +237,11 @@ where
         output: &TxOutput,
     ) -> Result<PoolData, ConnectTransactionError> {
         match output {
-            TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::SpendShareFromDelegation(_, _, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
@@ -336,6 +342,8 @@ where
                         .decommission_pool(*pool_id);
                     Some(res)
                 }
+                TxOutput::DelegateStaking(_, _, _) => todo!(),
+                TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
@@ -374,6 +382,8 @@ where
                         Ok(())
                     })
             }
+            TxOutput::DelegateStaking(_, _, _) => todo!(),
+            TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)

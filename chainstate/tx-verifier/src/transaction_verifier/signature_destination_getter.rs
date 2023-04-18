@@ -62,6 +62,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                 match output {
                     TxOutput::Transfer(_, d)
                     | TxOutput::LockThenTransfer(_, d, _)
+                    | TxOutput::DelegateStaking(_, d, _)
+                    | TxOutput::SpendShareFromDelegation(_, d, _)
                     | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
                     TxOutput::Burn(_) => {
                         // This error is emitted in other places for attempting to make this spend,
@@ -100,6 +102,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                 match output {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DelegateStaking(_, _, _)
+                    | TxOutput::SpendShareFromDelegation(_, _, _)
                     | TxOutput::DecommissionPool(_, _, _, _) => {
                         Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                     }

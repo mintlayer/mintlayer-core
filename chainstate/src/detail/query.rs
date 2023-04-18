@@ -230,7 +230,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::Burn(v) => v.token_data(),
                 TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DecommissionPool(_, _, _, _) => None,
+                | TxOutput::DecommissionPool(_, _, _, _)
+                | TxOutput::DelegateStaking(_, _, _)
+                | TxOutput::SpendShareFromDelegation(_, _, _) => None,
             })
             // Find issuance data and return RPCTokenInfo
             .find_map(|token_data| match token_data {

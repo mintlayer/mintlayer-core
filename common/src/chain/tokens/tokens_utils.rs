@@ -42,7 +42,9 @@ pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
             }
             TxOutput::CreateStakePool(_)
             | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::DecommissionPool(_, _, _, _) => false,
+            | TxOutput::DecommissionPool(_, _, _, _)
+            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
         })
         .count()
 }

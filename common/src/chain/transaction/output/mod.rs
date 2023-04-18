@@ -15,7 +15,7 @@
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
-    chain::{tokens::OutputValue, PoolId},
+    chain::{tokens::OutputValue, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -58,6 +58,10 @@ pub enum TxOutput {
     ProduceBlockFromStake(Destination, PoolId),
     #[codec(index = 5)]
     DecommissionPool(Amount, Destination, PoolId, OutputTimeLock),
+    #[codec(index = 6)]
+    DelegateStaking(Amount, Destination, PoolId),
+    #[codec(index = 6)]
+    SpendShareFromDelegation(Amount, Destination, DelegationId),
 }
 
 impl TxOutput {
@@ -67,7 +71,9 @@ impl TxOutput {
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::CreateStakePool(_)
             | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
             TxOutput::Burn(_) => true,
         }
     }
@@ -77,7 +83,9 @@ impl TxOutput {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateStakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
             TxOutput::DecommissionPool(_, _, _, _) | TxOutput::LockThenTransfer(_, _, _) => true,
         }
     }
