@@ -35,9 +35,14 @@ impl AccountId {
     }
 }
 
+/// This is a composite id that combines a prefix account id and a generic item id suffix.
+/// It is useful for storing key/values that belong to different accounts and are stored in the
+/// same map.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct AccountPrefixedId<Id> {
+    /// The account id is the prefix and implements HasPrefix for this struct
     account_id: AccountId,
+    /// The generic item id. This could be anything, like `Id<Transaction` or `OutPoint`
     item_id: Id,
 }
 
@@ -54,7 +59,7 @@ impl<Id: Encode> AccountPrefixedId<Id> {
     }
 }
 
-impl<ID: Encode> HasPrefix<AccountId> for AccountPrefixedId<ID> {}
+impl<Id: Encode> HasPrefix<AccountId> for AccountPrefixedId<Id> {}
 
 pub type AccountTxId = AccountPrefixedId<Id<Transaction>>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;

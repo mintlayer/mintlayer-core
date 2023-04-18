@@ -87,14 +87,14 @@ mod tests {
             ChildNumber::from_hardened(2.try_into().unwrap()),
             ChildNumber::from_hardened(3.try_into().unwrap()),
         ];
-        assert_eq!(derived.0.as_vec(), &expected);
+        assert_eq!(derived.0.as_slice(), expected.as_slice());
         let derived =
             derived.derive_child(ChildNumber::from_hardened(4.try_into().unwrap())).unwrap();
         expected.push(ChildNumber::from_hardened(4.try_into().unwrap()));
-        assert_eq!(derived.0.as_vec(), &expected);
+        assert_eq!(derived.0.as_slice(), expected.as_slice());
         let path = DerivationPath::from_str("m/1'/2'/3'/4'/5").unwrap();
         let derived = derived.derive_absolute_path(&path).unwrap();
         expected.push(ChildNumber::from_normal(5.try_into().unwrap()));
-        assert_eq!(derived.0.as_vec(), &expected);
+        assert_eq!(derived.0.as_slice(), expected.as_slice());
     }
 }

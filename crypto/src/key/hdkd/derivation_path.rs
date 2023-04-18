@@ -39,8 +39,8 @@ impl DerivationPath {
         self.0
     }
 
-    pub fn as_vec(&self) -> &Vec<ChildNumber> {
-        &self.0
+    pub fn as_slice(&self) -> &[ChildNumber] {
+        self.0.as_slice()
     }
 
     pub fn len(&self) -> usize {
@@ -57,15 +57,15 @@ impl DerivationPath {
 
     /// Get the difference of this path and a sub path.
     pub fn get_super_path_diff(&self, sub_path: &DerivationPath) -> Option<&[ChildNumber]> {
-        let super_path_vec = self.as_vec();
+        let super_path_slice = self.as_slice();
         // If the other path is longer or equal to this path then it's not a sub-path
-        if sub_path.len() >= super_path_vec.len() {
+        if sub_path.len() >= super_path_slice.len() {
             return None;
         }
         // Make sure that the paths have a common sub-path
-        let sub_path_vec = sub_path.as_vec();
-        let (common_path, diff_path) = super_path_vec.split_at(sub_path_vec.len());
-        if common_path != sub_path_vec {
+        let sub_path_slice = sub_path.as_slice();
+        let (common_path, diff_path) = super_path_slice.split_at(sub_path_slice.len());
+        if common_path != sub_path_slice {
             return None;
         }
 
@@ -149,19 +149,26 @@ impl fmt::Display for DerivationPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use test_utils::{assert_encoded_eq, decode_from_hex};
 
-    #[test]
-    fn path_diff() {
-        let sub_path = DerivationPath::from_str("m/1/2/3").unwrap();
-        let super_path = DerivationPath::from_str("m/1/2/3/4/5").unwrap();
+    #[rstest]
+    #[case("m/1/2/3", "m/1/2/3/4/5", Some("m/4/5"))]
+    #[case("m/1", "m/1/2", Some("m/2"))]
+    #[case("m", "m/1/2/3", Some("m/1/2/3"))]
+    #[case("m", "m/1", Some("m/1"))]
+    #[case("m", "m", None)]
+    #[case("m/1", "m", None)]
+    #[case("m/1/2/3", "m/1/2/3", None)]
+    #[case("m/1/2/3/4/5", "m/1/2/3", None)]
+    fn path_diff(#[case] sub_path: &str, #[case] super_path: &str, #[case] result: Option<&str>) {
+        let sub_path = DerivationPath::from_str(sub_path).unwrap();
+        let super_path = DerivationPath::from_str(super_path).unwrap();
+        let result = result.map(|s| DerivationPath::from_str(s).unwrap().as_slice().to_vec());
 
         assert_eq!(
-            super_path.get_super_path_diff(&sub_path).unwrap().to_vec(),
-            vec![
-                ChildNumber::from_normal(4.try_into().unwrap()),
-                ChildNumber::from_normal(5.try_into().unwrap()),
-            ]
+            super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()),
+            result
         );
     }
 

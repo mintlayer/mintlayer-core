@@ -19,14 +19,27 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use serialization::{Decode, Encode};
 
+/// The index of the receiving key hierarchy
+const BIP32_RECEIVING_INDEX: ChildNumber = ChildNumber::ZERO;
+/// The index of the change key hierarchy
+const BIP32_CHANGE_INDEX: ChildNumber = ChildNumber::ONE;
+
+/// KeyPurpose errors
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum KeyPurposeError {
+    #[error("Could not convert key index to key purpose: {0}")]
+    KeyPurposeConversion(ChildNumber),
+}
+
 /// The usage purpose of a key i.e. if it is for receiving funds or for change
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[repr(u32)]
 #[allow(clippy::unnecessary_cast)]
 pub enum KeyPurpose {
     /// This is for addresses created for receiving funds that are given to the user
-    ReceiveFunds = 0,
+    ReceiveFunds = BIP32_RECEIVING_INDEX.get_index(),
     /// This is for the internal usage of the wallet when creating change output for a transaction
-    Change = 1,
+    Change = BIP32_CHANGE_INDEX.get_index(),
 }
 
 impl KeyPurpose {
@@ -46,20 +59,16 @@ impl KeyPurpose {
 }
 
 impl TryFrom<ChildNumber> for KeyPurpose {
-    type Error = ChildNumber;
+    type Error = KeyPurposeError;
 
     fn try_from(num: ChildNumber) -> Result<Self, Self::Error> {
-        match num.get_index() {
-            0 => Ok(ReceiveFunds),
-            1 => Ok(Change),
-            _ => Err(num),
+        match num {
+            BIP32_RECEIVING_INDEX => Ok(ReceiveFunds),
+            BIP32_CHANGE_INDEX => Ok(Change),
+            _ => Err(KeyPurposeError::KeyPurposeConversion(num)),
         }
     }
 }
-
-// TODO store separately
-// receiving_state: KeychainUsageState,
-// change_state: KeychainUsageState,
 
 /// Struct that holds information for account addresses
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
