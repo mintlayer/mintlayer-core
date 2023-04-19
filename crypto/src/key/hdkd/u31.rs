@@ -45,7 +45,7 @@ impl U31 {
 
 impl From<U31> for u32 {
     fn from(v: U31) -> Self {
-        v.0
+        v.into_u32()
     }
 }
 
