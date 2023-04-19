@@ -59,7 +59,7 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     .await
     .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
-    repl::start_cli_repl(&output, &config, rpc_client, wallet).await
+    repl::start_cli_repl(output, &config, rpc_client, wallet).await
 }
 
 #[tokio::main]

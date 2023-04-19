@@ -55,11 +55,11 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub rpc_cookie_file: Option<String>,
 
-    /// RPC username
+    /// RPC username (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
     pub rpc_username: Option<String>,
 
-    /// RPC password
+    /// RPC password (either provide a username and password, or use a cookie file. You cannot use both)
     #[clap(long)]
     pub rpc_password: Option<String>,
 
