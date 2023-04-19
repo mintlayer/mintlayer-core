@@ -460,6 +460,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::CreateStakePool(_)
                 | TxOutput::Burn(_)
                 | TxOutput::DecommissionPool(_, _, _, _)
+                | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _, _)
                 | TxOutput::SpendShareFromDelegation(_, _, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
@@ -573,6 +574,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::DecommissionPool(_, _, _, _)
+                    | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _)
                     | TxOutput::SpendShareFromDelegation(_, _, _) => None,
                 })
@@ -603,6 +605,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::LockThenTransfer(_, _, _) 
+                    | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _) 
                     | TxOutput::SpendShareFromDelegation(_, _, _) => {},
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {

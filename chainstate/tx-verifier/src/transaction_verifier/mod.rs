@@ -214,6 +214,7 @@ where
                 | TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _)
+                | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _, _)
                 | TxOutput::SpendShareFromDelegation(_, _, _) => None,
             })
@@ -240,6 +241,7 @@ where
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _, _)
             | TxOutput::SpendShareFromDelegation(_, _, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
@@ -342,6 +344,7 @@ where
                         .decommission_pool(*pool_id);
                     Some(res)
                 }
+                TxOutput::CreateDelegationId(_, _) => todo!(),
                 TxOutput::DelegateStaking(_, _, _) => todo!(),
                 TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
                 TxOutput::Transfer(_, _)
@@ -382,6 +385,7 @@ where
                         Ok(())
                     })
             }
+            TxOutput::CreateDelegationId(_, _) => todo!(),
             TxOutput::DelegateStaking(_, _, _) => todo!(),
             TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
             TxOutput::Transfer(_, _)
