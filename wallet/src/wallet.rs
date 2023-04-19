@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+pub use bip39::{Language, Mnemonic};
 use common::chain::{ChainConfig, Transaction};
 use common::primitives::Id;
 use crypto::random::Rng;
@@ -117,13 +118,18 @@ impl<B: storage::Backend> Wallet<B> {
     }
 }
 
-pub fn generate_new_mnemonic() -> bip39::Mnemonic {
+pub fn generate_new_mnemonic(language: Language) -> Mnemonic {
     let mut rng = crypto::random::make_true_rng();
     let mut data = [0u8; 32];
     rng.fill(&mut data);
-    let res = bip39::Mnemonic::from_entropy(&data).expect("should not fail");
+    let res = bip39::Mnemonic::from_entropy_in(language, &data).expect("should not fail");
     data.zeroize();
     res
+}
+
+pub fn parse_mnemonic(language: Language, mnemonic: &str) -> WalletResult<Mnemonic> {
+    bip39::Mnemonic::parse_in(language, mnemonic)
+        .map_err(|e| WalletError::KeyChainError(KeyChainError::Bip39(e)))
 }
 
 #[cfg(test)]

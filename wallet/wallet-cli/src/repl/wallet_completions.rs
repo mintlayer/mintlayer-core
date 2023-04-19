@@ -39,7 +39,7 @@ impl Completer for WalletCompletions {
             self.external_commands
                 .iter()
                 .map(|cmd| Suggestion {
-                    value: cmd.to_owned(),
+                    value: cmd.clone(),
                     description: None,
                     extra: None,
                     span: Span::new(0, 0),

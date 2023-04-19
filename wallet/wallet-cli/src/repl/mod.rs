@@ -24,6 +24,7 @@ use reedline::{
     FileBackedHistory, KeyCode, KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent,
     ReedlineMenu, Signal, Vi,
 };
+use wallet::DefaultWallet;
 
 use crate::{
     cli_println,
@@ -32,7 +33,6 @@ use crate::{
     errors::WalletCliError,
     output::OutputContext,
     repl::{wallet_completions::WalletCompletions, wallet_prompt::WalletPrompt},
-    DefaultWallet,
 };
 
 const HISTORY_FILE_NAME: &str = "history.txt";

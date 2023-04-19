@@ -13,16 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common::chain::ChainConfig;
 use dialoguer::theme::ColorfulTheme;
-use wallet::Wallet;
+use wallet::wallet::Language;
 
-use crate::{
-    cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext,
-    DefaultWallet,
-};
+use crate::{cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext};
 
 #[derive(Clone, Copy)]
 enum ImportMnemonic {
@@ -41,37 +35,37 @@ impl From<ImportMnemonic> for &str {
     }
 }
 
-pub fn new_wallet(
+pub fn get_new_wallet_mnemonic(
+    language: Language,
     output: &OutputContext,
-    chain_config: Arc<ChainConfig>,
-    db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
     theme: &ColorfulTheme,
-) -> Result<DefaultWallet, WalletCliError> {
+) -> Result<wallet::wallet::Mnemonic, WalletCliError> {
     let action = select_helper(
         theme,
         "Wallet is not initialized",
         &[ImportMnemonic::Generate, ImportMnemonic::Import, ImportMnemonic::Cancel],
     )?;
 
-    let mnemonic: String = match action {
+    let mnemonic = match action {
         ImportMnemonic::Generate => {
-            let new_mnemonoc = wallet::wallet::generate_new_mnemonic();
-            cli_println!(output, "New mnemonic: {}", new_mnemonoc.to_string());
+            let mnemonic = wallet::wallet::generate_new_mnemonic(language);
+            cli_println!(output, "New mnemonic: {}", mnemonic.to_string());
             cli_println!(
                 output,
                 "Please write it somewhere safe to be able to restore your wallet."
             );
-            new_mnemonoc.to_string()
+            mnemonic
         }
-        ImportMnemonic::Import => dialoguer::Input::with_theme(theme)
-            .with_prompt("Mnemonic")
-            .interact_text()
-            .map_err(WalletCliError::ConsoleIoError)?,
+        ImportMnemonic::Import => {
+            let mnemonic: String = dialoguer::Input::with_theme(theme)
+                .with_prompt("Mnemonic")
+                .interact_text()
+                .map_err(WalletCliError::ConsoleIoError)?;
+            wallet::wallet::parse_mnemonic(language, &mnemonic)
+                .map_err(WalletCliError::InvalidMnemonic)?
+        }
         ImportMnemonic::Cancel => return Err(WalletCliError::Cancelled),
     };
 
-    // TODO: Add optional passphrase
-
-    Wallet::new_wallet(Arc::clone(&chain_config), db, &mnemonic, None)
-        .map_err(WalletCliError::WalletError)
+    Ok(mnemonic)
 }

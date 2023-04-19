@@ -28,9 +28,7 @@ use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
 use node_comm::make_rpc_client;
 use output::OutputContext;
-use wallet::{Wallet, WalletError};
-
-type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+use wallet::Wallet;
 
 async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);
@@ -38,18 +36,26 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     let args = config::WalletCliArgs::parse();
     let config = config::WalletCliConfig::from_args(args)?;
     let chain_config = Arc::new(common::chain::config::Builder::new(config.chain_type).build());
-
-    let db = wallet::wallet::open_or_create_wallet_file(&config.wallet_file)
-        .map_err(WalletCliError::WalletError)?;
-
     let theme = ColorfulTheme::default();
+    // TODO: Support other languages
+    let language = wallet::wallet::Language::English;
 
-    let wallet = match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
-        Ok(wallet) => wallet,
-        Err(WalletError::WalletNotInitialized) => {
-            wallet_init::new_wallet(output, chain_config, db, &theme)?
-        }
-        Err(e) => return Err(WalletCliError::WalletError(e)),
+    let file_exists = config.wallet_file.try_exists().map_err(WalletCliError::FileIoError)?;
+
+    let wallet = if file_exists {
+        let db = wallet::wallet::open_or_create_wallet_file(&config.wallet_file)
+            .map_err(WalletCliError::WalletError)?;
+
+        Wallet::load_wallet(Arc::clone(&chain_config), db).map_err(WalletCliError::WalletError)?
+    } else {
+        // Try to get new mnemonic before creating wallet file, it should not be created if user cancels prompt!
+        let mnemonic = wallet_init::get_new_wallet_mnemonic(language, output, &theme)?;
+        let db = wallet::wallet::open_or_create_wallet_file(&config.wallet_file)
+            .map_err(WalletCliError::WalletError)?;
+        // TODO: Add optional passphrase
+
+        Wallet::new_wallet(Arc::clone(&chain_config), db, &mnemonic.to_string(), None)
+            .map_err(WalletCliError::WalletError)?
     };
 
     let rpc_client = make_rpc_client(
@@ -65,8 +71,11 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
 #[tokio::main]
 async fn main() {
     let output = OutputContext::new();
-    run(&output).await.unwrap_or_else(|err| {
-        cli_println!(&output, "wallet-cli launch failed: {err}");
-        std::process::exit(1)
+    run(&output).await.unwrap_or_else(|err| match err {
+        WalletCliError::Cancelled | WalletCliError::Exit => {}
+        e => {
+            cli_println!(&output, "wallet-cli launch failed: {e}");
+            std::process::exit(1)
+        }
     })
 }

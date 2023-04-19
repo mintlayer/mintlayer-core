@@ -19,3 +19,5 @@ pub mod wallet;
 
 pub use crate::account::Account;
 pub use crate::wallet::{Wallet, WalletError, WalletResult};
+
+pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;

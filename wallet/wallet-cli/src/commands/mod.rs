@@ -17,8 +17,9 @@ use clap::Parser;
 use node_comm::node_traits::NodeInterface;
 use reedline::Reedline;
 use serialization::hex::HexEncode;
+use wallet::DefaultWallet;
 
-use crate::{cli_println, errors::WalletCliError, output::OutputContext, DefaultWallet};
+use crate::{cli_println, errors::WalletCliError, output::OutputContext};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -29,8 +30,11 @@ pub enum WalletCommands {
     /// Returns the current best block height
     BestBlockHeight,
 
-    /// Block hight
-    SubmitBlock { block: String },
+    /// Submit a block to be included in the chain
+    SubmitBlock {
+        /// Hex encoded block
+        block: String,
+    },
 
     /// Rescan
     Rescan,
@@ -42,7 +46,8 @@ pub enum WalletCommands {
     History,
 
     /// Clear screen
-    Clear,
+    #[clap(name = "clear")]
+    ClearScreen,
 
     /// Clear history
     ClearHistory,
@@ -93,7 +98,7 @@ pub async fn handle_wallet_command(
             line_editor.print_history().expect("Should not fail normally");
             Ok(())
         }
-        WalletCommands::Clear => {
+        WalletCommands::ClearScreen => {
             line_editor.clear_scrollback().expect("Should not fail normally");
             Ok(())
         }
