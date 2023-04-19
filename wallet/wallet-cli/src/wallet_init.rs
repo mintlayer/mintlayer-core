@@ -19,7 +19,7 @@ use common::chain::ChainConfig;
 use dialoguer::theme::ColorfulTheme;
 use wallet::Wallet;
 
-use crate::{cli_println, errors::WalletCliError, helpers::select_helper};
+use crate::{cli_println, errors::WalletCliError, helpers::select_helper, DefWallet};
 
 #[derive(Clone, Copy)]
 enum ImportMnemonic {
@@ -42,7 +42,7 @@ pub fn new_wallet(
     chain_config: Arc<ChainConfig>,
     db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
     theme: &ColorfulTheme,
-) -> Result<Wallet<wallet_storage::DefaultBackend>, WalletCliError> {
+) -> Result<DefWallet, WalletCliError> {
     let action = select_helper(
         theme,
         "Wallet is not initialized",

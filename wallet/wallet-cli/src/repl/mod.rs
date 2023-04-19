@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use clap::{Command, FromArgMatches, Subcommand};
+use node_comm::node_traits::NodeInterface;
 use reedline::{
     ColumnarMenu, DefaultCompleter, DefaultHinter, DefaultValidator, EditMode, Emacs,
     ExampleHighlighter, FileBackedHistory, ListMenu, Reedline, ReedlineMenu, Signal, Vi,
@@ -25,6 +26,7 @@ use crate::{
     config::WalletCliConfig,
     errors::WalletCliError,
     repl::wallet_prompt::WalletPrompt,
+    DefWallet,
 };
 
 mod wallet_prompt;
@@ -63,11 +65,7 @@ fn get_repl_command() -> Command {
     repl_command
 }
 
-fn process_input(
-    line_editor: &mut Reedline,
-    line: &str,
-    repl_command: &Command,
-) -> Result<(), WalletCliError> {
+fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommands, WalletCliError> {
     let args = shlex::split(line).ok_or(WalletCliError::InvalidQuoting)?;
     let mut matches = repl_command
         .clone()
@@ -75,13 +73,18 @@ fn process_input(
         .map_err(WalletCliError::InvalidCommandInput)?;
     let command = WalletCommands::from_arg_matches_mut(&mut matches)
         .map_err(WalletCliError::InvalidCommandInput)?;
-    handle_wallet_command(line_editor, command)
+    Ok(command)
 }
 
-pub fn start_cli_repl(config: &WalletCliConfig) -> Result<(), WalletCliError> {
+pub async fn start_cli_repl(
+    config: &WalletCliConfig,
+    mut rpc_client: impl NodeInterface,
+    mut wallet: DefWallet,
+) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
-    cli_println!("Use 'exit' or Ctrl-D to quit");
+    cli_println!("Use 'help' to see all available commands.");
+    cli_println!("Use 'exit' or Ctrl-D to quit.");
 
     let history_file_path = config.data_dir.join(HISTORY_FILE_NAME);
     let history = Box::new(
@@ -131,10 +134,24 @@ pub fn start_cli_repl(config: &WalletCliConfig) -> Result<(), WalletCliError> {
 
         match sig {
             Ok(Signal::Success(line)) => {
-                let res = process_input(&mut line_editor, &line, &repl_command);
+                let res = parse_input(&line, &repl_command);
                 match res {
-                    Ok(()) => {}
-                    Err(WalletCliError::Exit) => break Ok(()),
+                    Ok(command) => {
+                        let res = handle_wallet_command(
+                            &mut rpc_client,
+                            &mut wallet,
+                            &mut line_editor,
+                            command,
+                        )
+                        .await;
+                        match res {
+                            Ok(_) => {}
+                            Err(WalletCliError::Exit) => break Ok(()),
+                            Err(e) => {
+                                cli_println!("{}", e);
+                            }
+                        }
+                    }
                     Err(e) => {
                         cli_println!("{}", e);
                     }

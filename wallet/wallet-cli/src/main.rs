@@ -18,8 +18,7 @@ use std::sync::Arc;
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
-use node_comm::{make_rpc_client, node_traits::NodeInterface};
-use serialization::hex::HexEncode;
+use node_comm::make_rpc_client;
 use wallet::{Wallet, WalletError};
 
 mod commands;
@@ -35,6 +34,8 @@ macro_rules! cli_println {
     ($($arg:tt)*) => { ::std::println!($($arg)*) };
 }
 
+type DefWallet = Wallet<wallet_storage::DefaultBackend>;
+
 async fn run() -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);
 
@@ -47,7 +48,7 @@ async fn run() -> Result<(), WalletCliError> {
 
     let theme = ColorfulTheme::default();
 
-    let _wallet = match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
+    let wallet = match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
         Ok(wallet) => wallet,
         Err(WalletError::WalletNotInitialized) => {
             wallet_init::new_wallet(chain_config, db, &theme)?
@@ -60,17 +61,9 @@ async fn run() -> Result<(), WalletCliError> {
         Some((&config.rpc_username, &config.rpc_password)),
     )
     .await
-    .map_err(WalletCliError::RpcError)?;
+    .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
-    cli_println!(
-        "Best block id: {}",
-        rpc_client
-            .get_best_block_id()
-            .await
-            .map_or_else(|e| e.to_string(), |block| block.hex_encode())
-    );
-
-    repl::start_cli_repl(&config)
+    repl::start_cli_repl(&config, rpc_client, wallet).await
 }
 
 #[tokio::main]

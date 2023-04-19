@@ -14,14 +14,26 @@
 // limitations under the License.
 
 use clap::Parser;
+use node_comm::node_traits::NodeInterface;
 use reedline::Reedline;
+use serialization::hex::HexEncode;
 
-use crate::{cli_println, errors::WalletCliError};
+use crate::{cli_println, errors::WalletCliError, DefWallet};
 
 #[derive(Debug, Parser)]
+#[clap(rename_all = "lower")]
 pub enum WalletCommands {
-    /// Test subcommand
-    Example { some_arg: String },
+    /// Returns the current best block hash
+    BestBlock,
+
+    /// Returns the current block height
+    BlockHeight,
+
+    /// Block hight
+    SubmitBlock { block: String },
+
+    /// Rescan
+    Rescan,
 
     /// Quit the REPL
     Exit,
@@ -36,15 +48,41 @@ pub enum WalletCommands {
     ClearHistory,
 }
 
-pub fn handle_wallet_command(
+pub async fn handle_wallet_command(
+    rpc_client: &mut impl NodeInterface,
+    _wallet: &mut DefWallet,
     line_editor: &mut Reedline,
     command: WalletCommands,
 ) -> Result<(), WalletCliError> {
     match command {
-        WalletCommands::Example { some_arg } => {
-            cli_println!("Example command requests: {some_arg}");
+        WalletCommands::BestBlock => {
+            let id = rpc_client
+                .get_best_block_id()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!("{}", id.hex_encode());
             Ok(())
         }
+
+        WalletCommands::BlockHeight => {
+            let height = rpc_client
+                .get_best_block_height()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!("{}", height);
+            Ok(())
+        }
+
+        WalletCommands::SubmitBlock { block } => {
+            cli_println!("Submit block {}...", block);
+            Ok(())
+        }
+
+        WalletCommands::Rescan => {
+            cli_println!("Not implemented");
+            Ok(())
+        }
+
         WalletCommands::Exit => Err(WalletCliError::Exit),
         WalletCommands::History => {
             line_editor.print_history().expect("Should not fail normally");
