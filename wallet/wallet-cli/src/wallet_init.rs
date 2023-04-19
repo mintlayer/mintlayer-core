@@ -19,7 +19,9 @@ use common::chain::ChainConfig;
 use dialoguer::theme::ColorfulTheme;
 use wallet::Wallet;
 
-use crate::{cli_println, errors::WalletCliError, helpers::select_helper, DefWallet};
+use crate::{
+    cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext, DefWallet,
+};
 
 #[derive(Clone, Copy)]
 enum ImportMnemonic {
@@ -39,6 +41,7 @@ impl From<ImportMnemonic> for &str {
 }
 
 pub fn new_wallet(
+    output: &OutputContext,
     chain_config: Arc<ChainConfig>,
     db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
     theme: &ColorfulTheme,
@@ -52,8 +55,11 @@ pub fn new_wallet(
     let mnemonic: String = match action {
         ImportMnemonic::Generate => {
             let new_mnemonoc = wallet::wallet::generate_new_mnemonic();
-            cli_println!("New mnemonic: {}", new_mnemonoc.to_string());
-            cli_println!("Please write it somewhere safe to be able to restore your wallet.");
+            cli_println!(output, "New mnemonic: {}", new_mnemonoc.to_string());
+            cli_println!(
+                output,
+                "Please write it somewhere safe to be able to restore your wallet."
+            );
             new_mnemonoc.to_string()
         }
         ImportMnemonic::Import => dialoguer::Input::with_theme(theme)

@@ -25,6 +25,7 @@ use crate::{
     commands::{handle_wallet_command, WalletCommands},
     config::WalletCliConfig,
     errors::WalletCliError,
+    output::OutputContext,
     repl::wallet_prompt::WalletPrompt,
     DefWallet,
 };
@@ -77,14 +78,15 @@ fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommands, Wal
 }
 
 pub async fn start_cli_repl(
+    output: &OutputContext,
     config: &WalletCliConfig,
     mut rpc_client: impl NodeInterface,
     mut wallet: DefWallet,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
-    cli_println!("Use 'help' to see all available commands.");
-    cli_println!("Use 'exit' or Ctrl-D to quit.");
+    cli_println!(output, "Use 'help' to see all available commands.");
+    cli_println!(output, "Use 'exit' or Ctrl-D to quit.");
 
     let history_file_path = config.data_dir.join(HISTORY_FILE_NAME);
     let history = Box::new(
@@ -134,26 +136,31 @@ pub async fn start_cli_repl(
 
         match sig {
             Ok(Signal::Success(line)) => {
-                let res = parse_input(&line, &repl_command);
-                match res {
-                    Ok(command) => {
-                        let res = handle_wallet_command(
-                            &mut rpc_client,
-                            &mut wallet,
-                            &mut line_editor,
-                            command,
-                        )
-                        .await;
-                        match res {
-                            Ok(_) => {}
-                            Err(WalletCliError::Exit) => break Ok(()),
-                            Err(e) => {
-                                cli_println!("{}", e);
+                let line = line.trim();
+                if !line.is_empty() {
+                    let res = parse_input(line, &repl_command);
+                    match res {
+                        Ok(command) => {
+                            let res = handle_wallet_command(
+                                output,
+                                &mut rpc_client,
+                                &mut wallet,
+                                &mut line_editor,
+                                command,
+                            )
+                            .await;
+
+                            match res {
+                                Ok(_) => {}
+                                Err(WalletCliError::Exit) => break Ok(()),
+                                Err(e) => {
+                                    cli_println!(output, "{}", e);
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        cli_println!("{}", e);
+                        Err(e) => {
+                            cli_println!(output, "{}", e);
+                        }
                     }
                 }
             }
@@ -164,7 +171,7 @@ pub async fn start_cli_repl(
                 break Ok(());
             }
             Err(err) => {
-                cli_println!("Error: {err:?}");
+                cli_println!(output, "Error: {err:?}");
             }
         }
     }

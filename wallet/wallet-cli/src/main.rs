@@ -13,30 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod commands;
+mod config;
+mod errors;
+mod helpers;
+mod output;
+mod repl;
+mod wallet_init;
+
 use std::sync::Arc;
 
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
 use node_comm::make_rpc_client;
+use output::OutputContext;
 use wallet::{Wallet, WalletError};
-
-mod commands;
-mod config;
-mod errors;
-mod helpers;
-mod repl;
-mod wallet_init;
-
-// TODO(PR): Add a context
-#[macro_export]
-macro_rules! cli_println {
-    ($($arg:tt)*) => { ::std::println!($($arg)*) };
-}
 
 type DefWallet = Wallet<wallet_storage::DefaultBackend>;
 
-async fn run() -> Result<(), WalletCliError> {
+async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);
 
     let args = config::WalletCliArgs::parse();
@@ -51,7 +47,7 @@ async fn run() -> Result<(), WalletCliError> {
     let wallet = match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
         Ok(wallet) => wallet,
         Err(WalletError::WalletNotInitialized) => {
-            wallet_init::new_wallet(chain_config, db, &theme)?
+            wallet_init::new_wallet(output, chain_config, db, &theme)?
         }
         Err(e) => return Err(WalletCliError::WalletError(e)),
     };
@@ -63,13 +59,14 @@ async fn run() -> Result<(), WalletCliError> {
     .await
     .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
-    repl::start_cli_repl(&config, rpc_client, wallet).await
+    repl::start_cli_repl(&output, &config, rpc_client, wallet).await
 }
 
 #[tokio::main]
 async fn main() {
-    run().await.unwrap_or_else(|err| {
-        cli_println!("wallet-cli launch failed: {err}");
+    let output = OutputContext::new();
+    run(&output).await.unwrap_or_else(|err| {
+        cli_println!(&output, "wallet-cli launch failed: {err}");
         std::process::exit(1)
     })
 }

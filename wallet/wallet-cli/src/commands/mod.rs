@@ -18,7 +18,7 @@ use node_comm::node_traits::NodeInterface;
 use reedline::Reedline;
 use serialization::hex::HexEncode;
 
-use crate::{cli_println, errors::WalletCliError, DefWallet};
+use crate::{cli_println, errors::WalletCliError, output::OutputContext, DefWallet};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -49,6 +49,7 @@ pub enum WalletCommands {
 }
 
 pub async fn handle_wallet_command(
+    output: &OutputContext,
     rpc_client: &mut impl NodeInterface,
     _wallet: &mut DefWallet,
     line_editor: &mut Reedline,
@@ -60,7 +61,7 @@ pub async fn handle_wallet_command(
                 .get_best_block_id()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
-            cli_println!("{}", id.hex_encode());
+            cli_println!(output, "{}", id.hex_encode());
             Ok(())
         }
 
@@ -69,7 +70,7 @@ pub async fn handle_wallet_command(
                 .get_best_block_height()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
-            cli_println!("{}", height);
+            cli_println!(output, "{}", height);
             Ok(())
         }
 
@@ -78,12 +79,12 @@ pub async fn handle_wallet_command(
                 .submit_block(block)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
-            cli_println!("The block was submitted successfully");
+            cli_println!(output, "The block was submitted successfully");
             Ok(())
         }
 
         WalletCommands::Rescan => {
-            cli_println!("Not implemented");
+            cli_println!(output, "Not implemented");
             Ok(())
         }
 
