@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod wallet_completions;
+mod wallet_prompt;
+
 use clap::{Command, FromArgMatches, Subcommand};
 use node_comm::node_traits::NodeInterface;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    ColumnarMenu, DefaultCompleter, DefaultValidator, EditCommand, EditMode, Emacs,
-    ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers, Keybindings, ListMenu, Reedline,
-    ReedlineEvent, ReedlineMenu, Signal, Vi,
+    ColumnarMenu, DefaultValidator, EditCommand, EditMode, Emacs, ExampleHighlighter,
+    FileBackedHistory, KeyCode, KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent,
+    ReedlineMenu, Signal, Vi,
 };
 
 use crate::{
@@ -28,11 +31,9 @@ use crate::{
     config::WalletCliConfig,
     errors::WalletCliError,
     output::OutputContext,
-    repl::wallet_prompt::WalletPrompt,
+    repl::{wallet_completions::WalletCompletions, wallet_prompt::WalletPrompt},
     DefaultWallet,
 };
-
-mod wallet_prompt;
 
 const HISTORY_FILE_NAME: &str = "history.txt";
 const HISTORY_MAX_LINES: usize = 1000;
@@ -102,7 +103,7 @@ pub async fn start_cli_repl(
         .chain(std::iter::once("help".to_owned()))
         .collect::<Vec<_>>();
 
-    let completer = Box::new(DefaultCompleter::new(commands.clone()));
+    let completer = Box::new(WalletCompletions::new(commands.clone()));
 
     let mut line_editor = Reedline::create()
         .with_history(history)
