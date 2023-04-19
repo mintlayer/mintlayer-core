@@ -65,7 +65,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                     | TxOutput::DelegateStaking(_, d, _)
                     | TxOutput::SpendShareFromDelegation(_, d, _)
                     | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
-                    TxOutput::Burn(_) => {
+                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                         // This error is emitted in other places for attempting to make this spend,
                         // but this is just a double-check.
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
@@ -107,7 +107,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                     | TxOutput::DecommissionPool(_, _, _, _) => {
                         Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                     }
-                    TxOutput::Burn(_) => {
+                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                     }
 

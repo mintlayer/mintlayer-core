@@ -46,6 +46,7 @@ fn get_staking_kernel_destination(
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _, _)
         | TxOutput::SpendShareFromDelegation(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _) => {

@@ -146,6 +146,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .iter()
             .enumerate()
             // burned outputs should not be included into utxo set
+            // FIXME: should CreateDelegationId be exluded as well?
             .filter(|(_, output)| !output.is_burn())
             .try_for_each(|(idx, output)| {
                 let outpoint = OutPoint::new(id.clone(), idx as u32);

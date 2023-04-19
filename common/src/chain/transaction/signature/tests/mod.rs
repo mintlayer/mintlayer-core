@@ -723,6 +723,7 @@ fn check_mutate_output(
         TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::DecommissionPool(_, _, _, _)
+        | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _, _)
         | TxOutput::SpendShareFromDelegation(_, _, _) => unreachable!(), // TODO: come back to this later
     };
