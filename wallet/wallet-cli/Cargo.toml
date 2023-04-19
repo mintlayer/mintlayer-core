@@ -18,6 +18,7 @@ clap = { version = "4", features = ["derive"] }
 dialoguer = { version = "0.10", features = ["history", "completion"] }
 directories = "5.0"
 reedline = { version = "0.18" }
+shlex = "1.0"
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 

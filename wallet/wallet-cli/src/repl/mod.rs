@@ -13,69 +13,87 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
-
+use clap::{Command, FromArgMatches, Subcommand};
 use reedline::{
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultCompleter, DefaultHinter, DefaultValidator, EditMode, Emacs,
-    ExampleHighlighter, FileBackedHistory, ListMenu, Prompt, PromptEditMode, PromptHistorySearch,
-    PromptHistorySearchStatus, Reedline, ReedlineMenu, Signal, Vi,
+    ExampleHighlighter, FileBackedHistory, ListMenu, Reedline, ReedlineMenu, Signal, Vi,
 };
 
-use crate::{cli_println, WalletCliError};
+use crate::{
+    cli_println,
+    commands::{handle_wallet_command, WalletCommands},
+    config::WalletCliConfig,
+    errors::WalletCliError,
+    repl::wallet_prompt::WalletPrompt,
+};
 
-const MAX_HISTORY: usize = 1000;
+mod wallet_prompt;
 
-// For custom prompt, implement the Prompt trait
-//
-// This example displays the number of keystrokes
-// or rather increments each time the prompt is rendered.
-#[derive(Clone)]
-pub struct CustomPrompt {}
+const HISTORY_FILE_NAME: &str = "history.txt";
+const HISTORY_MAX_LINES: usize = 1000;
 
-impl Prompt for CustomPrompt {
-    fn render_prompt_left(&self) -> Cow<str> {
-        Cow::Borrowed("Wallet")
+fn get_repl_command() -> Command {
+    // Strip out usage
+    const PARSER_TEMPLATE: &str = "\
+        {all-args}
+    ";
+
+    // Strip out name/version
+    const APPLET_TEMPLATE: &str = "\
+        {about-with-newline}\n\
+        {usage-heading}\n    {usage}\n\
+        \n\
+        {all-args}{after-help}\
+    ";
+
+    let repl_command = Command::new("repl")
+        .multicall(true)
+        .arg_required_else_help(true)
+        .subcommand_required(true)
+        .subcommand_value_name("APPLET")
+        .subcommand_help_heading("APPLETS")
+        .help_template(PARSER_TEMPLATE);
+
+    let mut repl_command = WalletCommands::augment_subcommands(repl_command);
+
+    for subcommand in repl_command.get_subcommands_mut() {
+        *subcommand = subcommand.clone().help_template(APPLET_TEMPLATE);
     }
 
-    fn render_prompt_right(&self) -> Cow<str> {
-        Cow::Borrowed("")
-    }
-
-    fn render_prompt_indicator(&self, _edit_mode: PromptEditMode) -> Cow<str> {
-        Cow::Borrowed("> ")
-    }
-
-    fn render_prompt_multiline_indicator(&self) -> Cow<str> {
-        Cow::Borrowed("::: ")
-    }
-
-    fn render_prompt_history_search_indicator(
-        &self,
-        history_search: PromptHistorySearch,
-    ) -> Cow<str> {
-        let prefix = match history_search.status {
-            PromptHistorySearchStatus::Passing => "",
-            PromptHistorySearchStatus::Failing => "failing ",
-        };
-
-        Cow::Owned(format!(
-            "({}reverse-search: {}) ",
-            prefix, history_search.term
-        ))
-    }
+    repl_command
 }
 
-pub fn start_cli_repl() -> Result<(), WalletCliError> {
-    cli_println!("Ctrl-D to quit");
-    // quick command like parameter handling
-    let vi_mode = matches!(std::env::args().nth(1), Some(x) if x == "--vi");
+fn process_input(
+    line_editor: &mut Reedline,
+    line: &str,
+    repl_command: &Command,
+) -> Result<(), WalletCliError> {
+    let args = shlex::split(line).ok_or(WalletCliError::InvalidQuoting)?;
+    let mut matches = repl_command
+        .clone()
+        .try_get_matches_from(args)
+        .map_err(WalletCliError::InvalidCommandInput)?;
+    let command = WalletCommands::from_arg_matches_mut(&mut matches)
+        .map_err(WalletCliError::InvalidCommandInput)?;
+    handle_wallet_command(line_editor, command)
+}
 
-    // TODO(PR): Keep history in the wallets dir
-    let history =
-        Box::new(FileBackedHistory::with_file(MAX_HISTORY, "history.txt".into()).unwrap());
+pub fn start_cli_repl(config: &WalletCliConfig) -> Result<(), WalletCliError> {
+    let repl_command = get_repl_command();
 
-    let commands = vec!["clear".into(), "exit".into(), "history".into()];
+    cli_println!("Use 'exit' or Ctrl-D to quit");
+
+    let history_file_path = config.data_dir.join(HISTORY_FILE_NAME);
+    let history = Box::new(
+        FileBackedHistory::with_file(HISTORY_MAX_LINES, history_file_path.clone())
+            .map_err(|e| WalletCliError::HistoryFileError(history_file_path, e))?,
+    );
+
+    let commands = repl_command
+        .get_subcommands()
+        .map(|command| command.get_name().to_owned())
+        .chain(std::iter::once("help".to_owned()))
+        .collect::<Vec<_>>();
 
     let completer = Box::new(DefaultCompleter::new_with_wordlen(commands.clone(), 0));
 
@@ -85,7 +103,7 @@ pub fn start_cli_repl() -> Result<(), WalletCliError> {
         .with_quick_completions(true)
         .with_partial_completions(true)
         .with_highlighter(Box::new(ExampleHighlighter::new(commands)))
-        .with_hinter(Box::new(DefaultHinter::default()))
+        .with_hinter(Box::<DefaultHinter>::default())
         .with_validator(Box::new(DefaultValidator))
         .with_ansi_colors(true);
 
@@ -98,53 +116,35 @@ pub fn start_cli_repl() -> Result<(), WalletCliError> {
             ListMenu::default().with_name("history_menu"),
         )));
 
-    let edit_mode: Box<dyn EditMode> = if vi_mode {
-        let normal_keybindings = default_vi_normal_keybindings();
-        let insert_keybindings = default_vi_insert_keybindings();
-
-        Box::new(Vi::new(insert_keybindings, normal_keybindings))
+    let edit_mode: Box<dyn EditMode> = if config.vi_mode {
+        Box::<Vi>::default()
     } else {
-        let keybindings = default_emacs_keybindings();
-
-        Box::new(Emacs::new(keybindings))
+        Box::<Emacs>::default()
     };
 
     line_editor = line_editor.with_edit_mode(edit_mode);
 
-    // Adding vi as text editor
-    line_editor = line_editor.with_buffer_editor("vi".into(), "nu".into());
-
-    let prompt = CustomPrompt {};
+    let prompt = WalletPrompt::new();
 
     loop {
         let sig = line_editor.read_line(&prompt);
 
         match sig {
-            Ok(Signal::CtrlD) => {
-                break Ok(());
-            }
-            Ok(Signal::Success(buffer)) => {
-                if buffer.trim() == "exit" {
-                    break Ok(());
+            Ok(Signal::Success(line)) => {
+                let res = process_input(&mut line_editor, &line, &repl_command);
+                match res {
+                    Ok(()) => {}
+                    Err(WalletCliError::Exit) => break Ok(()),
+                    Err(e) => {
+                        cli_println!("{}", e);
+                    }
                 }
-                if buffer.trim() == "clear" {
-                    line_editor.clear_scrollback().unwrap();
-                    continue;
-                }
-                // Get the full history
-                if buffer.trim() == "history" {
-                    line_editor.print_history().unwrap();
-                    continue;
-                }
-                if buffer.trim() == "clear-history" {
-                    line_editor.history_mut().clear().expect("");
-                    continue;
-                }
-
-                cli_println!("Our buffer: {buffer}");
             }
             Ok(Signal::CtrlC) => {
                 // Prompt has been cleared and should start on the next line
+            }
+            Ok(Signal::CtrlD) => {
+                break Ok(());
             }
             Err(err) => {
                 cli_println!("Error: {err:?}");

@@ -62,15 +62,21 @@ pub struct WalletCliArgs {
     /// RPC password
     #[clap(long)]
     pub rpc_password: Option<String>,
+
+    /// vi input mode
+    #[clap(long)]
+    pub vi_mode: bool,
 }
 
 #[derive(Debug)]
 pub struct WalletCliConfig {
     pub chain_type: ChainType,
+    pub data_dir: PathBuf,
     pub wallet_file: PathBuf,
     pub rpc_address: SocketAddr,
     pub rpc_username: String,
     pub rpc_password: String,
+    pub vi_mode: bool,
 }
 
 const DEFAULT_WALLETS_DIR: &str = "wallets";
@@ -97,6 +103,7 @@ impl WalletCliConfig {
             rpc_cookie_file,
             rpc_username,
             rpc_password,
+            vi_mode,
         } = args;
 
         let chain_type = match network {
@@ -106,12 +113,12 @@ impl WalletCliConfig {
             Network::Signet => ChainType::Signet,
         };
 
-        let wallet_dirs = prepare_data_dir(
+        let data_dir = prepare_data_dir(
             || default_data_dir_for_chain(chain_type.name()).join(DEFAULT_WALLETS_DIR),
             &wallets_dir,
         )
         .map_err(WalletCliError::PrepareData)?;
-        let wallet_file = wallet_dirs.join(wallet_name.unwrap_or(DEFAULT_WALLET_NAME.into()));
+        let wallet_file = data_dir.join(wallet_name.unwrap_or(DEFAULT_WALLET_NAME.into()));
 
         // TODO: Use the constant with the node
         let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
@@ -132,10 +139,12 @@ impl WalletCliConfig {
 
         Ok(WalletCliConfig {
             chain_type,
+            data_dir,
             wallet_file,
             rpc_address,
             rpc_username,
             rpc_password,
+            vi_mode,
         })
     }
 }
