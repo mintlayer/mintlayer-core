@@ -42,7 +42,7 @@ impl AccountId {
 pub struct AccountPrefixedId<Id> {
     /// The account id is the prefix and implements HasPrefix for this struct
     account_id: AccountId,
-    /// The generic item id. This could be anything, like `Id<Transaction` or `OutPoint`
+    /// The generic item id. This could be anything, like `Id<Transaction>` or `OutPoint`
     item_id: Id,
 }
 

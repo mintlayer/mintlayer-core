@@ -163,7 +163,7 @@ impl Derivable for Secp256k1ExtendedPrivateKey {
             .into();
 
         let derivation_path = {
-            let mut child_path = self.derivation_path.as_slice().to_vec();
+            let mut child_path = self.derivation_path.into_vec();
             child_path.push(num);
             child_path.try_into()?
         };
