@@ -720,12 +720,12 @@ fn check_mutate_output(
         TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
         TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
         TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
-        TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::CreateStakePool(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::DelegateStaking(_, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::SpendShareFromDelegation(_, _, _) => unreachable!(), // TODO: come back to this later
     };
 
     let tx = tx_updater.generate_tx().unwrap();

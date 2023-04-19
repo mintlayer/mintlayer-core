@@ -66,7 +66,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
+        Block, ChainConfig, DelegationId, Destination, GenBlock, OutPointSourceId, Transaction,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -318,6 +319,29 @@ where
         )
     }
 
+    fn check_delegation_spend_destination(
+        &self,
+        delegation_id: DelegationId,
+        destination: &Destination,
+    ) -> Result<(), ConnectTransactionError> {
+        let delegation_data = self
+            .accounting_delta_adapter
+            .accounting_delta()
+            .get_delegation_data(delegation_id)?
+            .ok_or(ConnectTransactionError::DelegationDataNotFound(
+                delegation_id,
+            ))?;
+        ensure!(
+            destination == delegation_data.spend_destination(),
+            ConnectTransactionError::SpendDestinationForDelegationMismatch(
+                delegation_id,
+                destination.clone(),
+                delegation_data.spend_destination().clone()
+            )
+        );
+        Ok(())
+    }
+
     fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
@@ -334,19 +358,52 @@ where
                         .accounting_delta_adapter
                         .operations(tx_source)
                         .create_pool(input0.outpoint(), data.as_ref().clone().into())
-                        .map(|(_, undo)| undo);
+                        .map(|(_, undo)| undo)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
                 TxOutput::DecommissionPool(_, _, pool_id, _) => {
                     let res = self
                         .accounting_delta_adapter
                         .operations(tx_source)
-                        .decommission_pool(*pool_id);
+                        .decommission_pool(*pool_id)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
-                TxOutput::CreateDelegationId(_, _) => todo!(),
-                TxOutput::DelegateStaking(_, _, _) => todo!(),
-                TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
+                TxOutput::CreateDelegationId(spend_destination, target_pool) => {
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .create_delegation_id(
+                            *target_pool,
+                            spend_destination.clone(),
+                            input0.outpoint(),
+                        )
+                        .map(|(_, undo)| undo)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
+                    Some(res)
+                }
+                TxOutput::DelegateStaking(amount, _, delegation_id) => {
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .delegate_staking(*delegation_id, *amount)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
+                    Some(res)
+                }
+                TxOutput::SpendShareFromDelegation(amount, destination, delegation_id) => {
+                    match self.check_delegation_spend_destination(*delegation_id, &destination) {
+                        Ok(_) => {
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .spend_share_from_delegation_id(*delegation_id, *amount)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
+                        }
+                        Err(err) => Some(Err(err)),
+                    }
+                }
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
@@ -370,7 +427,11 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::CreateStakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
+            TxOutput::CreateStakePool(_)
+            | TxOutput::DecommissionPool(_, _, _, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::SpendShareFromDelegation(_, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
@@ -385,9 +446,6 @@ where
                         Ok(())
                     })
             }
-            TxOutput::CreateDelegationId(_, _) => todo!(),
-            TxOutput::DelegateStaking(_, _, _) => todo!(),
-            TxOutput::SpendShareFromDelegation(_, _, _) => todo!(),
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)

@@ -612,9 +612,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::Burn(_)
                     | TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _) 
+                    | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _) 
+                    | TxOutput::DelegateStaking(_, _, _)
                     | TxOutput::SpendShareFromDelegation(_, _, _) => {},
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {

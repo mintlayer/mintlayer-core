@@ -19,7 +19,7 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        DelegationId, Destination, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
         TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
@@ -127,6 +127,10 @@ pub enum ConnectTransactionError {
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Total balance of delegations in pool {0} is zero")]
     TotalDelegationBalanceZero(PoolId),
+    #[error("Delegation {0} not found")]
+    DelegationDataNotFound(DelegationId),
+    #[error("Spend destination for delegation {0} mismatch: expected {1:?}, actual {2:?}")]
+    SpendDestinationForDelegationMismatch(DelegationId, Destination, Destination),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811
