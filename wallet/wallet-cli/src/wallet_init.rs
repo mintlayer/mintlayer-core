@@ -20,7 +20,8 @@ use dialoguer::theme::ColorfulTheme;
 use wallet::Wallet;
 
 use crate::{
-    cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext, DefWallet,
+    cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext,
+    DefaultWallet,
 };
 
 #[derive(Clone, Copy)]
@@ -45,7 +46,7 @@ pub fn new_wallet(
     chain_config: Arc<ChainConfig>,
     db: Arc<wallet_storage::Store<wallet_storage::DefaultBackend>>,
     theme: &ColorfulTheme,
-) -> Result<DefWallet, WalletCliError> {
+) -> Result<DefaultWallet, WalletCliError> {
     let action = select_helper(
         theme,
         "Wallet is not initialized",

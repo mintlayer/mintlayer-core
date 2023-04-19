@@ -30,7 +30,7 @@ use node_comm::make_rpc_client;
 use output::OutputContext;
 use wallet::{Wallet, WalletError};
 
-type DefWallet = Wallet<wallet_storage::DefaultBackend>;
+type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
 
 async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);

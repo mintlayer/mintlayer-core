@@ -16,8 +16,8 @@
 use clap::{Command, FromArgMatches, Subcommand};
 use node_comm::node_traits::NodeInterface;
 use reedline::{
-    ColumnarMenu, DefaultCompleter, DefaultHinter, DefaultValidator, EditMode, Emacs,
-    ExampleHighlighter, FileBackedHistory, ListMenu, Reedline, ReedlineMenu, Signal, Vi,
+    ColumnarMenu, DefaultCompleter, DefaultValidator, EditMode, Emacs, ExampleHighlighter,
+    FileBackedHistory, ListMenu, Reedline, ReedlineMenu, Signal, Vi,
 };
 
 use crate::{
@@ -27,7 +27,7 @@ use crate::{
     errors::WalletCliError,
     output::OutputContext,
     repl::wallet_prompt::WalletPrompt,
-    DefWallet,
+    DefaultWallet,
 };
 
 mod wallet_prompt;
@@ -81,7 +81,7 @@ pub async fn start_cli_repl(
     output: &OutputContext,
     config: &WalletCliConfig,
     mut rpc_client: impl NodeInterface,
-    mut wallet: DefWallet,
+    mut wallet: DefaultWallet,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
@@ -100,15 +100,14 @@ pub async fn start_cli_repl(
         .chain(std::iter::once("help".to_owned()))
         .collect::<Vec<_>>();
 
-    let completer = Box::new(DefaultCompleter::new_with_wordlen(commands.clone(), 0));
+    let completer = Box::new(DefaultCompleter::new(commands.clone()));
 
     let mut line_editor = Reedline::create()
         .with_history(history)
         .with_completer(completer)
-        .with_quick_completions(true)
+        .with_quick_completions(false)
         .with_partial_completions(true)
         .with_highlighter(Box::new(ExampleHighlighter::new(commands)))
-        .with_hinter(Box::<DefaultHinter>::default())
         .with_validator(Box::new(DefaultValidator))
         .with_ansi_colors(true);
 

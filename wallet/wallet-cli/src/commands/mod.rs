@@ -18,7 +18,7 @@ use node_comm::node_traits::NodeInterface;
 use reedline::Reedline;
 use serialization::hex::HexEncode;
 
-use crate::{cli_println, errors::WalletCliError, output::OutputContext, DefWallet};
+use crate::{cli_println, errors::WalletCliError, output::OutputContext, DefaultWallet};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -51,7 +51,7 @@ pub enum WalletCommands {
 pub async fn handle_wallet_command(
     output: &OutputContext,
     rpc_client: &mut impl NodeInterface,
-    _wallet: &mut DefWallet,
+    _wallet: &mut DefaultWallet,
     line_editor: &mut Reedline,
     command: WalletCommands,
 ) -> Result<(), WalletCliError> {
