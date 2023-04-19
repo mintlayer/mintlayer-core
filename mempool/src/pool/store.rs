@@ -97,7 +97,7 @@ pub struct MempoolStore {
     pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
-    // which the transacitons have been inserted into the mempool, so they can be re-inserted in
+    // which the transactions have been inserted into the mempool, so they can be re-inserted in
     // the same order after a reorg. We keep both mapping from transactions to sequence numbers and
     // the mapping from sequence number back to transaction. The sequence number to be allocated to
     // the next incoming transaction is kept separately.
