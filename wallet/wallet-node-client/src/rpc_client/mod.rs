@@ -15,7 +15,6 @@
 
 pub mod client_impl;
 
-use base64::Engine;
 use chainstate::rpc::ChainstateRpcClient;
 use common::{
     chain::{Block, GenBlock},
@@ -23,6 +22,7 @@ use common::{
 };
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::http_client::HttpClientBuilder;
+use rpc::make_http_header_with_auth;
 use serialization::hex::HexDecode;
 
 #[derive(thiserror::Error, Debug)]
@@ -41,21 +41,6 @@ pub struct NodeRpcClient {
     http_client: HttpClient,
 }
 
-fn get_headers(username_password: Option<(&str, &str)>) -> http::HeaderMap {
-    let mut headers = http::HeaderMap::new();
-    if let Some((username, password)) = username_password {
-        headers.append(
-            http::header::AUTHORIZATION,
-            http::HeaderValue::from_str(&format!(
-                "Basic {}",
-                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
-            ))
-            .expect("Should not fail"),
-        );
-    }
-    headers
-}
-
 impl NodeRpcClient {
     pub async fn new(
         remote_socket_address: String,
@@ -63,7 +48,7 @@ impl NodeRpcClient {
     ) -> Result<Self, NodeRpcError> {
         let host = format!("http://{remote_socket_address}");
         let http_client = HttpClientBuilder::default()
-            .set_headers(get_headers(username_password))
+            .set_headers(make_http_header_with_auth(username_password))
             .build(host)
             .map_err(NodeRpcError::ClientCreationError)?;
 

@@ -26,8 +26,8 @@ pub enum WalletCommands {
     /// Returns the current best block hash
     BestBlock,
 
-    /// Returns the current block height
-    BlockHeight,
+    /// Returns the current best block height
+    BestBlockHeight,
 
     /// Block hight
     SubmitBlock { block: String },
@@ -65,7 +65,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
 
-        WalletCommands::BlockHeight => {
+        WalletCommands::BestBlockHeight => {
             let height = rpc_client
                 .get_best_block_height()
                 .await
