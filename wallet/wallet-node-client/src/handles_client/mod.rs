@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{ChainstateError, ChainstateHandle};
+use chainstate::{BlockSource, ChainstateError, ChainstateHandle};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use serialization::hex::{HexDecode, HexError};
 
 use crate::node_traits::NodeInterface;
 
@@ -25,12 +26,14 @@ pub struct WalletHandlesClient {
     chainstate_handle: ChainstateHandle,
 }
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 pub enum WalletHandlesClientError {
     #[error("Call error: {0}")]
     CallError(#[from] subsystem::subsystem::CallError),
     #[error("Chainstate error: {0}")]
     ChainstateError(#[from] ChainstateError),
+    #[error("Decode error: {0}")]
+    HexError(#[from] HexError),
 }
 
 impl WalletHandlesClient {
@@ -80,5 +83,13 @@ impl NodeInterface for WalletHandlesClient {
             .call(move |this| this.get_block_id_from_height(&height))
             .await??;
         Ok(result)
+    }
+
+    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
+        let block = Block::hex_decode_all(&block_hex)?;
+        self.chainstate_handle
+            .call_mut(move |this| this.process_block(block, BlockSource::Local))
+            .await??;
+        Ok(())
     }
 }

@@ -48,4 +48,9 @@ impl NodeInterface for NodeRpcClient {
         let block_id_at_height = self.get_block_id_at_height(height).await?;
         Ok(block_id_at_height)
     }
+
+    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
+        self.submit_block(block_hex).await?;
+        Ok(())
+    }
 }

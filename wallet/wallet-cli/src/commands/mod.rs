@@ -74,7 +74,11 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::SubmitBlock { block } => {
-            cli_println!("Submit block {}...", block);
+            rpc_client
+                .submit_block(block)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!("The block was submitted successfully");
             Ok(())
         }
 

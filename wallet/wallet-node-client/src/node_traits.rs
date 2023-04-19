@@ -29,4 +29,5 @@ pub trait NodeInterface {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;
+    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
 }
