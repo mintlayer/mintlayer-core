@@ -16,8 +16,10 @@
 use clap::{Command, FromArgMatches, Subcommand};
 use node_comm::node_traits::NodeInterface;
 use reedline::{
-    ColumnarMenu, DefaultCompleter, DefaultValidator, EditMode, Emacs, ExampleHighlighter,
-    FileBackedHistory, ListMenu, Reedline, ReedlineMenu, Signal, Vi,
+    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
+    ColumnarMenu, DefaultCompleter, DefaultValidator, EditCommand, EditMode, Emacs,
+    ExampleHighlighter, FileBackedHistory, KeyCode, KeyModifiers, Keybindings, ListMenu, Reedline,
+    ReedlineEvent, ReedlineMenu, Signal, Vi,
 };
 
 use crate::{
@@ -121,9 +123,18 @@ pub async fn start_cli_repl(
         )));
 
     let edit_mode: Box<dyn EditMode> = if config.vi_mode {
-        Box::<Vi>::default()
+        let mut normal_keybindings = default_vi_normal_keybindings();
+        let mut insert_keybindings = default_vi_insert_keybindings();
+
+        add_menu_keybindings(&mut normal_keybindings);
+        add_menu_keybindings(&mut insert_keybindings);
+
+        Box::new(Vi::new(insert_keybindings, normal_keybindings))
     } else {
-        Box::<Emacs>::default()
+        let mut keybindings = default_emacs_keybindings();
+        add_menu_keybindings(&mut keybindings);
+
+        Box::new(Emacs::new(keybindings))
     };
 
     line_editor = line_editor.with_edit_mode(edit_mode);
@@ -174,4 +185,36 @@ pub async fn start_cli_repl(
             }
         }
     }
+}
+
+fn add_menu_keybindings(keybindings: &mut Keybindings) {
+    keybindings.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('x'),
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("history_menu".to_string()),
+            ReedlineEvent::MenuPageNext,
+        ]),
+    );
+
+    keybindings.add_binding(
+        KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+        KeyCode::Char('x'),
+        ReedlineEvent::MenuPagePrevious,
+    );
+
+    keybindings.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("completion_menu".to_string()),
+            ReedlineEvent::Edit(vec![EditCommand::Complete]),
+        ]),
+    );
+
+    keybindings.add_binding(
+        KeyModifiers::SHIFT,
+        KeyCode::BackTab,
+        ReedlineEvent::MenuPrevious,
+    );
 }
