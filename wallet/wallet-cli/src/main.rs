@@ -13,27 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::VecDeque, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use clap::Parser;
 use common::chain::ChainConfig;
-use dialoguer::{theme::ColorfulTheme, History};
+use dialoguer::theme::ColorfulTheme;
 use node_comm::{make_rpc_client, node_traits::NodeInterface};
 use serialization::hex::HexEncode;
 use utils::default_data_dir::PrepareDataDirError;
 use wallet::{Wallet, WalletError};
 
 mod config;
+mod repl;
 
-const MAX_HISTORY: usize = 1000;
-
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => {
-        compile_error!("Please use `cli_println` in the wallet-cli crate.")
-    };
-}
-
+// TODO(PR): Add context
 #[macro_export]
 macro_rules! cli_println {
     ($($arg:tt)*) => { ::std::println!($($arg)*) };
@@ -80,13 +73,14 @@ fn select_helper<T: Clone + Into<&'static str>>(
     items: &[T],
 ) -> Result<T, WalletCliError> {
     let texts = items.iter().cloned().map(Into::into).collect::<Vec<&str>>();
-    dialoguer::Select::with_theme(theme)
+    let index = dialoguer::Select::with_theme(theme)
         .with_prompt(prompt)
         .default(0)
         .items(&texts)
-        .interact()
-        .map(|index| items[index].clone())
-        .map_err(WalletCliError::ConsoleIoError)
+        .interact_opt()
+        .map_err(WalletCliError::ConsoleIoError)?
+        .ok_or(WalletCliError::Cancelled)?;
+    Ok(items[index].clone())
 }
 
 fn new_wallet(
@@ -154,48 +148,7 @@ async fn run() -> Result<(), WalletCliError> {
             .unwrap_or_else(|e| e.to_string())
     );
 
-    let mut history = CliHistory::default();
-
-    loop {
-        if let Ok(cmd) = dialoguer::Input::<String>::with_theme(&theme)
-            .with_prompt("mintlayer")
-            .history_with(&mut history)
-            .interact_text()
-        {
-            if cmd == "exit" {
-                return Ok(());
-            }
-            cli_println!("Entered {}", cmd);
-        }
-    }
-}
-
-struct CliHistory {
-    max: usize,
-    history: VecDeque<String>,
-}
-
-impl Default for CliHistory {
-    fn default() -> Self {
-        // TODO: Read history from a file
-        CliHistory {
-            max: MAX_HISTORY,
-            history: VecDeque::new(),
-        }
-    }
-}
-
-impl<T: ToString> History<T> for CliHistory {
-    fn read(&self, pos: usize) -> Option<String> {
-        self.history.get(pos).cloned()
-    }
-
-    fn write(&mut self, val: &T) {
-        if self.history.len() == self.max {
-            self.history.pop_back();
-        }
-        self.history.push_front(val.to_string());
-    }
+    repl::start_cli_repl()
 }
 
 #[tokio::main]
