@@ -28,7 +28,7 @@ jobs:
             --all-features --workspace --all-targets --
             -D warnings
             -A clippy::new_without_default
-            -A clippy::unknown_lints
+            -A unknown_lints
             -W clippy::implicit_saturating_sub
             -W clippy::implicit_clone
             -W clippy::map_unwrap_or
