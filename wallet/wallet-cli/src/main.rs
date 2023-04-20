@@ -113,7 +113,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         wallet,
     )
     .await
-    .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+    .map_err(WalletCliError::Controller)?;
 
     repl::start_cli_repl(output, controller, &data_dir, vi_mode).await
 }

@@ -19,8 +19,8 @@ use utils::default_data_dir::PrepareDataDirError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
-    #[error("RPC error: {0}")]
-    RpcError(String),
+    #[error("Controller error: {0}")]
+    Controller(wallet_controller::ControllerError),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),
     #[error("Console IO error: {0}")]
