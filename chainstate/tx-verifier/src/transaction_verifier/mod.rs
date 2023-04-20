@@ -387,7 +387,7 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
-    ) -> Result<Option<Fee>, ConnectTransactionError> {
+    ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
         input_output_policy::check_tx_inputs_outputs_purposes(tx.transaction(), &self.utxo_cache)?;
@@ -468,7 +468,7 @@ where
             TransactionSourceForConnect::Mempool { current_best: _ } => { /* do nothing */ }
         };
 
-        Ok(Some(fee))
+        Ok(fee)
     }
 
     fn connect_block_reward(
@@ -559,7 +559,7 @@ where
                     ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
                 )?;
 
-                self.connect_transaction(&transaction_source, tx, median_time_past)?
+                Some(self.connect_transaction(&transaction_source, tx, median_time_past)?)
             }
             BlockTransactableWithIndexRef::BlockReward(block, _) => {
                 self.connect_block_reward(

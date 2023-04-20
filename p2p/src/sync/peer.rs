@@ -39,7 +39,7 @@ use common::{
 };
 use logging::log;
 use mempool::{
-    error::{Error as MempoolError, TxValidationError},
+    error::{Error as MempoolError, MempoolPolicyError},
     MempoolHandle,
 };
 use utils::const_value::ConstValue;
@@ -506,17 +506,16 @@ where
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            P2pError::MempoolError(
-                MempoolError::MempoolFull
-                // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
-                | MempoolError::TxValidationError(TxValidationError::TransactionAlreadyInMempool),
-            ) => Ok(()),
+            P2pError::MempoolError(MempoolError::Policy(
+                MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
+            )) => Ok(()),
             // A protocol error - increase the ban score of a peer.
             e @ (P2pError::ProtocolError(_)
-            | P2pError::MempoolError(MempoolError::TxValidationError(_))
+            | P2pError::MempoolError(_)
             | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(_),
             ))) => {
+                // TODO(PR): Use mempool ban score if the error is coming from mempool
                 log::info!(
                     "Adjusting the '{}' peer score by {}: {e:?}",
                     self.id(),
@@ -546,8 +545,7 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)
-            | P2pError::MempoolError(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)) => Err(e),
         }
     }
 

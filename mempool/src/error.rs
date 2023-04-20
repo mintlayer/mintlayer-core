@@ -13,56 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::ChainstateError;
+use chainstate::{tx_verifier::error::ConnectTransactionError, ChainstateError};
 use subsystem::subsystem::CallError;
 use thiserror::Error;
 
-use common::chain::transaction::Transaction;
-use common::chain::OutPoint;
-use common::primitives::Id;
 use common::primitives::H256;
 
 use crate::pool::fee::Fee;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum Error {
-    #[error("Mempool is full")]
-    MempoolFull,
     #[error(transparent)]
-    TxValidationError(#[from] TxValidationError),
-    #[error("Subsystem failure")]
-    SubsystemFailure,
-    #[error("Send error")]
-    SendError,
-    #[error("Receive error")]
-    RecvError,
+    Validity(#[from] TxValidationError),
+    #[error(transparent)]
+    Policy(#[from] MempoolPolicyError),
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum TxValidationError {
+pub enum MempoolPolicyError {
+    #[error("Mempool is full")]
+    MempoolFull,
     #[error("Transaction has no inputs.")]
     NoInputs,
     #[error("Transaction has no outputs.")]
     NoOutputs,
-    #[error("Transaction has duplicate inputs.")]
-    DuplicateInputs,
-    #[error("Outpoint not found: {outpoint:?}")]
-    OutPointNotFound {
-        outpoint: OutPoint,
-        spending_tx_id: Id<Transaction>,
-    },
     #[error("Transaction exceeds the maximum block size.")]
     ExceedsMaxBlockSize,
     #[error("Transaction already exists in the mempool.")]
     TransactionAlreadyInMempool,
     #[error("Transaction conflicts with another, irreplaceable transaction.")]
     ConflictWithIrreplaceableTransaction,
-    #[error("The sum of the transaction's inputs' values overflows.")]
-    InputValuesOverflow,
-    #[error("The sum of the transaction's outputs' values overflows.")]
-    OutputValuesOverflow,
-    #[error("The sum of the transaction's inputs is smaller than the sum of its outputs.")]
-    InputsBelowOutputs,
     #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
@@ -92,22 +72,26 @@ pub enum TxValidationError {
     AncestorFeeUpdateOverflow,
     #[error("Fee overflow")]
     FeeOverflow,
-    #[error("Fee not determined")]
-    FeeNotDetermined,
     #[error("Get parent error")]
     GetParentError,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum TxValidationError {
     #[error("Chainstate error")]
     ChainstateError(#[from] ChainstateError),
-    #[error("Transaction validation error: {0}")]
-    TxValidation(#[from] chainstate::tx_verifier::error::ConnectTransactionError),
+    #[error(transparent)]
+    TxValidation(#[from] ConnectTransactionError),
     #[error("Subsystem call error")]
     CallError(#[from] CallError),
-    #[error("Internal Error.")]
-    InternalError,
     #[error("Tip moved while trying to process transaction")]
     TipMoved,
-    #[error("Produce block output in transaction {0}")]
-    ProduceBlockOutputInTx(Id<Transaction>),
+}
+
+impl From<ConnectTransactionError> for Error {
+    fn from(e: ConnectTransactionError) -> Self {
+        TxValidationError::from(e).into()
+    }
 }

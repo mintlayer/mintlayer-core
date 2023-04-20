@@ -51,7 +51,7 @@ async fn test_replace_tx(
     let original_id = original.transaction().get_id();
     log::debug!(
         "created a tx with fee {:?}",
-        mempool.try_get_fee(&original).await
+        try_get_fee(&mempool, &original).await
     );
     mempool.add_transaction(original)?;
 
@@ -68,7 +68,7 @@ async fn test_replace_tx(
     .expect("should be able to spend here");
     log::debug!(
         "created a replacement with fee {:?}",
-        mempool.try_get_fee(&replacement).await
+        try_get_fee(&mempool, &replacement).await
     );
     mempool.add_transaction(replacement)?;
     assert!(!mempool.contains_transaction(&original_id));
@@ -119,12 +119,10 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .await
     .expect("should be able to spend here");
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(replacement.clone()),
-        Err(Error::TxValidationError(
-            TxValidationError::ConflictWithIrreplaceableTransaction
-        ))
-    ));
+        Err(MempoolPolicyError::ConflictWithIrreplaceableTransaction.into())
+    );
 
     mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);
     mempool.add_transaction(replacement)?;
@@ -146,8 +144,8 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     let res = test_replace_tx(&mut rng, Fee::new(Amount::from_atoms(300)), replacement_fee).await;
     assert!(matches!(
         res,
-        Err(Error::TxValidationError(
-            TxValidationError::InsufficientFeesToRelayRBF
+        Err(Error::Policy(
+            MempoolPolicyError::InsufficientFeesToRelayRBF
         ))
     ));
     let res = test_replace_tx(
@@ -158,8 +156,8 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     .await;
     assert!(matches!(
         res,
-        Err(Error::TxValidationError(
-            TxValidationError::ReplacementFeeLowerThanOriginal { .. }
+        Err(Error::Policy(
+            MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }
         ))
     ));
     let res = test_replace_tx(
@@ -170,8 +168,8 @@ async fn tx_replace(#[case] seed: Seed) -> anyhow::Result<()> {
     .await;
     assert!(matches!(
         res,
-        Err(Error::TxValidationError(
-            TxValidationError::ReplacementFeeLowerThanOriginal { .. }
+        Err(Error::Policy(
+            MempoolPolicyError::ReplacementFeeLowerThanOriginal { .. }
         ))
     ));
     Ok(())
@@ -275,7 +273,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         locktime,
     )
     .await?;
-    let replaced_tx_fee = mempool.try_get_fee(&replaced_tx).await?;
+    let replaced_tx_fee = try_get_fee(&mempool, &replaced_tx).await;
     let replaced_id = replaced_tx.transaction().get_id();
     mempool.add_transaction(replaced_tx)?;
 
@@ -325,12 +323,10 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
 
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(incoming_tx),
-        Err(Error::TxValidationError(
-            TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
-        ))
-    ));
+        Err(MempoolPolicyError::TransactionFeeLowerThanConflictsWithDescendants.into())
+    );
 
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
     let sufficient_rbf_fee = insufficient_rbf_fee + Amount::from_atoms(relay_fee).into();
