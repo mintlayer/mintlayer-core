@@ -56,8 +56,8 @@ fn get_repl_command() -> Command {
         .multicall(true)
         .arg_required_else_help(true)
         .subcommand_required(true)
-        .subcommand_value_name("APPLET")
-        .subcommand_help_heading("APPLETS")
+        .subcommand_value_name("Command")
+        .subcommand_help_heading("Commands")
         .help_template(PARSER_TEMPLATE);
 
     let mut repl_command = WalletCommands::augment_subcommands(repl_command);

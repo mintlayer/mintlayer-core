@@ -4965,6 +4965,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wallet-controller"
+version = "0.1.0"
+
+[[package]]
 name = "wallet-storage"
 version = "0.1.0"
 dependencies = [
