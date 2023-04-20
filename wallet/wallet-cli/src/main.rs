@@ -35,7 +35,7 @@ use errors::WalletCliError;
 use node_comm::make_rpc_client;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 use wallet::Wallet;
-use wallet_controller::cookie::load_cookie;
+use wallet_controller::{cookie::load_cookie, Controller};
 
 const COOKIE_FILENAME: &str = ".cookie";
 
@@ -112,7 +112,9 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         .await
         .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
-    repl::start_cli_repl(output, rpc_client, wallet, &data_dir, vi_mode).await
+    let controller = Controller::new(rpc_client, wallet);
+
+    repl::start_cli_repl(output, controller, &data_dir, vi_mode).await
 }
 
 #[tokio::main]

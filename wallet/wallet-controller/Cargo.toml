@@ -6,9 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
+node-comm = { path = "../wallet-node-client" }
+serialization = { path = "../../serialization" }
+utils = { path = "../../utils" }
+wallet = { path = ".." }
+wallet-storage = { path = "../storage" }
 
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
 thiserror.workspace = true
 zeroize = "1.5"
+
+[dev-dependencies]

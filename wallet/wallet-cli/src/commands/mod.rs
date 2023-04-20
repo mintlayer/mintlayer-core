@@ -17,7 +17,7 @@ use clap::Parser;
 use node_comm::node_traits::{NodeInterface, PeerId};
 use reedline::Reedline;
 use serialization::hex::HexEncode;
-use wallet::DefaultWallet;
+use wallet_controller::Controller;
 
 use crate::{cli_println, console::ConsoleContext, errors::WalletCliError};
 
@@ -44,6 +44,7 @@ pub enum WalletCommands {
         block: String,
     },
 
+    /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     SubmitTransaction {
         /// Hex encoded transaction
         transaction: String,
@@ -90,16 +91,15 @@ pub enum WalletCommands {
     ClearHistory,
 }
 
-pub async fn handle_wallet_command(
+pub async fn handle_wallet_command<T: NodeInterface>(
     output: &ConsoleContext,
-    rpc_client: &mut impl NodeInterface,
-    _wallet: &mut DefaultWallet,
+    controller: &mut Controller<T>,
     line_editor: &mut Reedline,
     command: WalletCommands,
 ) -> Result<(), WalletCliError> {
     match command {
         WalletCommands::BestBlock => {
-            let id = rpc_client
+            let id = controller
                 .get_best_block_id()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -108,7 +108,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::BestBlockHeight => {
-            let height = rpc_client
+            let height = controller
                 .get_best_block_height()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -117,7 +117,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::SubmitBlock { block } => {
-            rpc_client
+            controller
                 .submit_block(block)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -126,7 +126,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::SubmitTransaction { transaction } => {
-            rpc_client
+            controller
                 .submit_transaction(transaction)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -140,7 +140,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::NodeVersion => {
-            let version = rpc_client
+            let version = controller
                 .node_version()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -149,7 +149,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::NodeShutdown => {
-            rpc_client
+            controller
                 .node_shutdown()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -158,7 +158,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommands::Connect { address } => {
-            rpc_client
+            controller
                 .p2p_connect(address)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -166,7 +166,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
         WalletCommands::Disconnect { peer_id } => {
-            rpc_client
+            controller
                 .p2p_disconnect(peer_id)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -174,7 +174,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
         WalletCommands::PeerCount => {
-            let peer_count = rpc_client
+            let peer_count = controller
                 .p2p_get_peer_count()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -182,7 +182,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
         WalletCommands::ConnectedPeers => {
-            let peers = rpc_client
+            let peers = controller
                 .p2p_get_connected_peers()
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -190,7 +190,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
         WalletCommands::AddReservedPeer { address } => {
-            rpc_client
+            controller
                 .p2p_add_reserved_node(address)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
@@ -198,7 +198,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
         WalletCommands::RemoveReservedPeer { address } => {
-            rpc_client
+            controller
                 .p2p_remove_reserved_node(address)
                 .await
                 .map_err(|e| WalletCliError::RpcError(e.to_string()))?;

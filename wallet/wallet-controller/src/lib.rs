@@ -17,3 +17,131 @@
 
 pub mod cookie;
 pub mod mnemonic;
+
+use common::{
+    chain::{Block, GenBlock},
+    primitives::{BlockHeight, Id},
+};
+use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
+use wallet::DefaultWallet;
+
+#[derive(thiserror::Error, Debug)]
+pub enum ControllerError {
+    #[error("RPC error: {0}")]
+    RpcError(String),
+}
+
+pub struct Controller<T> {
+    rpc_client: T,
+    _wallet: DefaultWallet,
+}
+
+impl<T: NodeInterface> Controller<T> {
+    pub fn new(rpc_client: T, wallet: DefaultWallet) -> Self {
+        Self {
+            rpc_client,
+            _wallet: wallet,
+        }
+    }
+
+    pub async fn get_best_block_id(&self) -> Result<Id<GenBlock>, ControllerError> {
+        self.rpc_client
+            .get_best_block_id()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ControllerError> {
+        self.rpc_client
+            .get_block(block_id)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn get_best_block_height(&self) -> Result<BlockHeight, ControllerError> {
+        self.rpc_client
+            .get_best_block_height()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn get_block_id_at_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, ControllerError> {
+        self.rpc_client
+            .get_block_id_at_height(height)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn submit_block(&self, block_hex: String) -> Result<(), ControllerError> {
+        self.rpc_client
+            .submit_block(block_hex)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn submit_transaction(&self, transaction_hex: String) -> Result<(), ControllerError> {
+        self.rpc_client
+            .submit_transaction(transaction_hex)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn node_shutdown(&self) -> Result<(), ControllerError> {
+        self.rpc_client
+            .node_shutdown()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn node_version(&self) -> Result<String, ControllerError> {
+        self.rpc_client
+            .node_version()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_connect(&self, address: String) -> Result<(), ControllerError> {
+        self.rpc_client
+            .p2p_connect(address)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), ControllerError> {
+        self.rpc_client
+            .p2p_disconnect(peer_id)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_get_peer_count(&self) -> Result<usize, ControllerError> {
+        self.rpc_client
+            .p2p_get_peer_count()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, ControllerError> {
+        self.rpc_client
+            .p2p_get_connected_peers()
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_add_reserved_node(&self, address: String) -> Result<(), ControllerError> {
+        self.rpc_client
+            .p2p_add_reserved_node(address)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+
+    pub async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), ControllerError> {
+        self.rpc_client
+            .p2p_remove_reserved_node(address)
+            .await
+            .map_err(|e| ControllerError::RpcError(e.to_string()))
+    }
+}

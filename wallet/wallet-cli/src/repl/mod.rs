@@ -25,7 +25,7 @@ use reedline::{
     ColumnarMenu, DefaultValidator, EditCommand, EditMode, Emacs, FileBackedHistory, KeyCode,
     KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
 };
-use wallet::DefaultWallet;
+use wallet_controller::Controller;
 
 use crate::{
     cli_println,
@@ -84,10 +84,9 @@ fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommands, Wal
     Ok(command)
 }
 
-pub async fn start_cli_repl(
+pub async fn start_cli_repl<T: NodeInterface>(
     output: &ConsoleContext,
-    mut rpc_client: impl NodeInterface,
-    mut wallet: DefaultWallet,
+    mut controller: Controller<T>,
     data_dir: &Path,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
@@ -158,8 +157,7 @@ pub async fn start_cli_repl(
                         Ok(command) => {
                             let res = handle_wallet_command(
                                 output,
-                                &mut rpc_client,
-                                &mut wallet,
+                                &mut controller,
                                 &mut line_editor,
                                 command,
                             )
