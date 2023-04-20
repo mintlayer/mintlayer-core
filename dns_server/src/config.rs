@@ -13,8 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::PathBuf;
+
 use clap::Parser;
-use directories::BaseDirs;
 use trust_dns_client::rr::Name;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -25,9 +26,9 @@ pub enum Network {
 
 #[derive(Parser, Debug)]
 pub struct DnsServerConfig {
-    /// The path to the data directory
-    #[clap(long, default_value_t = default_data_dir())]
-    pub datadir: String,
+    /// Optional path to the data directory
+    #[clap(long)]
+    pub datadir: Option<PathBuf>,
 
     /// Network
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
@@ -55,16 +56,4 @@ pub struct DnsServerConfig {
     /// If set, the SOA record will be added.
     #[clap(long)]
     pub mbox: Option<Name>,
-}
-
-const DEFAULT_DATA_DIR_NAME: &str = "mintlayer_dns_server";
-
-fn default_data_dir() -> String {
-    BaseDirs::new()
-        .expect("BaseDirs build failed")
-        .data_dir()
-        .join(DEFAULT_DATA_DIR_NAME)
-        .to_str()
-        .expect("expected valid default data dir path")
-        .to_owned()
 }

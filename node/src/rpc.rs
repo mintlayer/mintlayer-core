@@ -20,8 +20,8 @@ use std::{sync::Arc, time::Duration};
 use chainstate_launcher::ChainConfig;
 use subsystem::manager::ShutdownTrigger;
 
-#[rpc::rpc(server, namespace = "node")]
-trait NodeRpc {
+#[rpc::rpc(server, client, namespace = "node")]
+pub trait NodeRpc {
     /// Order the node to shutdown
     #[method(name = "shutdown")]
     fn shutdown(&self) -> rpc::Result<()>;

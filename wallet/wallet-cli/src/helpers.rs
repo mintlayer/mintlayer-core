@@ -13,11 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-mod key_chain;
-pub mod wallet;
+use dialoguer::theme::ColorfulTheme;
 
-pub use crate::account::Account;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
+use crate::errors::WalletCliError;
 
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+/// A type-safe wrapper for [dialoguer::Select]
+pub fn select_helper<T: Clone + Into<&'static str>>(
+    theme: &ColorfulTheme,
+    prompt: &str,
+    items: &[T],
+) -> Result<T, WalletCliError> {
+    let texts = items.iter().cloned().map(Into::into).collect::<Vec<&str>>();
+    let index = dialoguer::Select::with_theme(theme)
+        .with_prompt(prompt)
+        .default(0)
+        .items(&texts)
+        .interact_opt()
+        .map_err(WalletCliError::ConsoleIoError)?
+        .ok_or(WalletCliError::Cancelled)?;
+    Ok(items[index].clone())
+}

@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account;
-mod key_chain;
-pub mod wallet;
+use std::path::Path;
 
-pub use crate::account::Account;
-pub use crate::wallet::{Wallet, WalletError, WalletResult};
-
-pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;
+// TODO: Replace String with custom error
+pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), String> {
+    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;
+    let (username, password) = content.split_once(':').ok_or(format!(
+        "Invalid cookie file {:?}: ':' not found",
+        path.as_ref()
+    ))?;
+    Ok((username.to_owned(), password.to_owned()))
+}

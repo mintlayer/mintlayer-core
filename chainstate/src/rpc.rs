@@ -25,7 +25,7 @@ use common::{
 use serialization::hex::{HexDecode, HexEncode};
 use subsystem::subsystem::CallError;
 
-#[rpc::rpc(server, namespace = "chainstate")]
+#[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
     /// Get the best block ID
     #[method(name = "best_block_id")]
