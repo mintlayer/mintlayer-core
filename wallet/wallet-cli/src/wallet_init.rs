@@ -35,7 +35,14 @@ impl From<ImportMnemonic> for &str {
     }
 }
 
-pub fn get_new_wallet_mnemonic(
+pub fn input_wallet_path(theme: &ColorfulTheme) -> Result<String, WalletCliError> {
+    dialoguer::Input::with_theme(theme)
+        .with_prompt("Wallet path")
+        .interact_text()
+        .map_err(WalletCliError::ConsoleIoError)
+}
+
+pub fn input_new_wallet_mnemonic(
     language: Language,
     output: &OutputContext,
     theme: &ColorfulTheme,

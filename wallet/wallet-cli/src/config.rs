@@ -16,12 +16,10 @@
 use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use clap::Parser;
 use common::chain::config::ChainType;
-use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
 use crate::WalletCliError;
 
@@ -39,13 +37,9 @@ pub struct WalletCliArgs {
     #[arg(long, value_enum, default_value_t = Network::Mainnet)]
     pub network: Network,
 
-    /// Optional path to the directory containing the wallet files
+    /// Optional path to the wallet file
     #[clap(long)]
-    pub wallets_dir: Option<PathBuf>,
-
-    /// Optional wallet file name
-    #[clap(long)]
-    pub wallet_name: Option<PathBuf>,
+    pub wallet_file: Option<PathBuf>,
 
     /// Optional RPC address
     #[clap(long)]
@@ -68,83 +62,24 @@ pub struct WalletCliArgs {
     pub vi_mode: bool,
 }
 
-#[derive(Debug)]
-pub struct WalletCliConfig {
-    pub chain_type: ChainType,
-    pub data_dir: PathBuf,
-    pub wallet_file: PathBuf,
-    pub rpc_address: SocketAddr,
-    pub rpc_username: String,
-    pub rpc_password: String,
-    pub vi_mode: bool,
+pub const COOKIE_FILENAME: &str = ".cookie";
+
+impl From<Network> for ChainType {
+    fn from(value: Network) -> Self {
+        match value {
+            Network::Mainnet => ChainType::Mainnet,
+            Network::Testnet => ChainType::Testnet,
+            Network::Regtest => ChainType::Regtest,
+            Network::Signet => ChainType::Signet,
+        }
+    }
 }
 
-const DEFAULT_WALLETS_DIR: &str = "wallets";
-const DEFAULT_WALLET_NAME: &str = "wallet";
-
-const COOKIE_FILENAME: &str = ".cookie";
-
-fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), WalletCliError> {
+pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), WalletCliError> {
     let content = std::fs::read_to_string(path.as_ref())
         .map_err(|e| WalletCliError::CookieFileReadError(path.as_ref().to_owned(), e))?;
     let (username, password) = content.split_once(':').ok_or(WalletCliError::InvalidConfig(
         format!("Invalid cookie file {:?}: ':' not found", path.as_ref()),
     ))?;
     Ok((username.to_owned(), password.to_owned()))
-}
-
-impl WalletCliConfig {
-    pub fn from_args(args: WalletCliArgs) -> Result<WalletCliConfig, WalletCliError> {
-        let WalletCliArgs {
-            network,
-            wallets_dir,
-            wallet_name,
-            rpc_address,
-            rpc_cookie_file,
-            rpc_username,
-            rpc_password,
-            vi_mode,
-        } = args;
-
-        let chain_type = match network {
-            Network::Mainnet => ChainType::Mainnet,
-            Network::Testnet => ChainType::Testnet,
-            Network::Regtest => ChainType::Regtest,
-            Network::Signet => ChainType::Signet,
-        };
-
-        let data_dir = prepare_data_dir(
-            || default_data_dir_for_chain(chain_type.name()).join(DEFAULT_WALLETS_DIR),
-            &wallets_dir,
-        )
-        .map_err(WalletCliError::PrepareData)?;
-        let wallet_file = data_dir.join(wallet_name.unwrap_or(DEFAULT_WALLET_NAME.into()));
-
-        // TODO: Use the constant with the node
-        let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
-        let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
-
-        let (rpc_username, rpc_password) = match (rpc_cookie_file, rpc_username, rpc_password) {
-            (None, None, None) => {
-                load_cookie(default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME))?
-            }
-            (Some(cookie_path), None, None) => load_cookie(cookie_path)?,
-            (None, Some(username), Some(password)) => (username, password),
-            _ => {
-                return Err(WalletCliError::InvalidConfig(
-                    "Invalid RPC cookie/username/password combination".to_owned(),
-                ))
-            }
-        };
-
-        Ok(WalletCliConfig {
-            chain_type,
-            data_dir,
-            wallet_file,
-            rpc_address,
-            rpc_username,
-            rpc_password,
-            vi_mode,
-        })
-    }
 }

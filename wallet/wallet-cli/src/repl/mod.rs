@@ -16,6 +16,8 @@
 mod wallet_completions;
 mod wallet_prompt;
 
+use std::path::Path;
+
 use clap::{Command, FromArgMatches, Subcommand};
 use node_comm::node_traits::NodeInterface;
 use reedline::{
@@ -29,7 +31,6 @@ use wallet::DefaultWallet;
 use crate::{
     cli_println,
     commands::{handle_wallet_command, WalletCommands},
-    config::WalletCliConfig,
     errors::WalletCliError,
     output::OutputContext,
     repl::{wallet_completions::WalletCompletions, wallet_prompt::WalletPrompt},
@@ -82,16 +83,17 @@ fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommands, Wal
 
 pub async fn start_cli_repl(
     output: &OutputContext,
-    config: &WalletCliConfig,
     mut rpc_client: impl NodeInterface,
     mut wallet: DefaultWallet,
+    data_dir: &Path,
+    vi_mode: bool,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
     cli_println!(output, "Use 'help' to see all available commands.");
     cli_println!(output, "Use 'exit' or Ctrl-D to quit.");
 
-    let history_file_path = config.data_dir.join(HISTORY_FILE_NAME);
+    let history_file_path = data_dir.join(HISTORY_FILE_NAME);
     let history = Box::new(
         FileBackedHistory::with_file(HISTORY_MAX_LINES, history_file_path.clone())
             .map_err(|e| WalletCliError::HistoryFileError(history_file_path, e))?,
@@ -123,7 +125,7 @@ pub async fn start_cli_repl(
             ListMenu::default().with_name("history_menu"),
         )));
 
-    let edit_mode: Box<dyn EditMode> = if config.vi_mode {
+    let edit_mode: Box<dyn EditMode> = if vi_mode {
         let mut normal_keybindings = default_vi_normal_keybindings();
         let mut insert_keybindings = default_vi_insert_keybindings();
 

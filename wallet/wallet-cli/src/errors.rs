@@ -25,8 +25,8 @@ pub enum WalletCliError {
     WalletError(wallet::wallet::WalletError),
     #[error("Console IO error: {0}")]
     ConsoleIoError(std::io::Error),
-    #[error("File IO error: {0}")]
-    FileIoError(std::io::Error),
+    #[error("File '{0}' IO error: {1}")]
+    FileIoError(PathBuf, std::io::Error),
     #[error("History file {0} I/O error: {1}")]
     HistoryFileError(PathBuf, std::io::Error),
     #[error(

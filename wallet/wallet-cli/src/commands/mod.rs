@@ -31,6 +31,14 @@ pub enum WalletCommands {
     BestBlockHeight,
 
     /// Submit a block to be included in the chain
+    ///
+    /// More information about block submits.
+    /// More information about block submits.
+    ///
+    /// Even more information about block submits.
+    /// Even more information about block submits.
+    /// Even more information about block submits.
+    /// Even more information about block submits.
     SubmitBlock {
         /// Hex encoded block
         block: String,

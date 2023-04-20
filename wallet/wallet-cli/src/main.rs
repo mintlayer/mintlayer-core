@@ -21,36 +21,76 @@ mod output;
 mod repl;
 mod wallet_init;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use clap::Parser;
+use common::chain::config::ChainType;
+use config::{load_cookie, WalletCliArgs, COOKIE_FILENAME};
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
 use node_comm::make_rpc_client;
 use output::OutputContext;
+use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 use wallet::Wallet;
 
 async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);
 
     let args = config::WalletCliArgs::parse();
-    let config = config::WalletCliConfig::from_args(args)?;
-    let chain_config = Arc::new(common::chain::config::Builder::new(config.chain_type).build());
+
+    let WalletCliArgs {
+        network,
+        wallet_file,
+        rpc_address,
+        rpc_cookie_file,
+        rpc_username,
+        rpc_password,
+        vi_mode,
+    } = args;
+
+    let chain_type: ChainType = network.into();
+    let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
     let theme = ColorfulTheme::default();
     // TODO: Support other languages
     let language = wallet::wallet::Language::English;
 
-    let file_exists = config.wallet_file.try_exists().map_err(WalletCliError::FileIoError)?;
+    // TODO: Use the constant with the node
+    let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
+    let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
+
+    let (rpc_username, rpc_password) = match (rpc_cookie_file, rpc_username, rpc_password) {
+        (None, None, None) => {
+            load_cookie(default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME))?
+        }
+        (Some(cookie_path), None, None) => load_cookie(cookie_path)?,
+        (None, Some(username), Some(password)) => (username, password),
+        _ => {
+            return Err(WalletCliError::InvalidConfig(
+                "Invalid RPC cookie/username/password combination".to_owned(),
+            ))
+        }
+    };
+
+    let data_dir = prepare_data_dir(|| default_data_dir_for_chain(chain_type.name()), &None)
+        .map_err(WalletCliError::PrepareData)?;
+
+    let wallet_path = match wallet_file {
+        Some(path) => path,
+        None => wallet_init::input_wallet_path(&theme)?.into(),
+    };
+    let file_exists = wallet_path
+        .try_exists()
+        .map_err(|e| WalletCliError::FileIoError(wallet_path.clone(), e))?;
 
     let wallet = if file_exists {
-        let db = wallet::wallet::open_or_create_wallet_file(&config.wallet_file)
+        let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
             .map_err(WalletCliError::WalletError)?;
 
         Wallet::load_wallet(Arc::clone(&chain_config), db).map_err(WalletCliError::WalletError)?
     } else {
         // Try to get new mnemonic before creating wallet file, it should not be created if user cancels prompt!
-        let mnemonic = wallet_init::get_new_wallet_mnemonic(language, output, &theme)?;
-        let db = wallet::wallet::open_or_create_wallet_file(&config.wallet_file)
+        let mnemonic = wallet_init::input_new_wallet_mnemonic(language, output, &theme)?;
+        let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
             .map_err(WalletCliError::WalletError)?;
         // TODO: Add optional passphrase
 
@@ -58,14 +98,11 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
             .map_err(WalletCliError::WalletError)?
     };
 
-    let rpc_client = make_rpc_client(
-        config.rpc_address,
-        Some((&config.rpc_username, &config.rpc_password)),
-    )
-    .await
-    .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+    let rpc_client = make_rpc_client(rpc_address, Some((&rpc_username, &rpc_password)))
+        .await
+        .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
-    repl::start_cli_repl(output, &config, rpc_client, wallet).await
+    repl::start_cli_repl(output, rpc_client, wallet, &data_dir, vi_mode).await
 }
 
 #[tokio::main]
