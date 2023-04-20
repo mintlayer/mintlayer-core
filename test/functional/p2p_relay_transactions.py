@@ -18,6 +18,13 @@ class RelayTransactions(BitcoinTestFramework):
         self.connect_nodes(0, 1)
         self.sync_all(self.nodes[0:2])
 
+    def assert_mempool_contains_tx(self, n, tx_id):
+        for _ in range(5):
+            if self.nodes[n].mempool_contains_tx(tx_id):
+                break
+            time.sleep(1)
+        assert self.nodes[n].mempool_contains_tx(tx_id)
+
     def run_test(self):
         signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
         base_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('TransactionV1')
@@ -68,7 +75,7 @@ class RelayTransactions(BitcoinTestFramework):
 
         self.nodes[0].p2p_submit_transaction(encoded_tx)
         assert self.nodes[0].mempool_contains_tx(tx_id)
-        assert self.nodes[1].mempool_contains_tx(tx_id)
+        self.assert_mempool_contains_tx(1, tx_id)
 
 
 if __name__ == '__main__':
