@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::types::peer_id::PeerId;
 
 /// Helper type used to return information about a connected peer from RPC.
 ///
 /// `String` is used for types that implement `Display`, but do not have `serde::Serialize`.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConnectedPeer {
     pub peer_id: PeerId,
 

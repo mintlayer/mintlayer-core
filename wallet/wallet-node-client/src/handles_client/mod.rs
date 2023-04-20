@@ -18,6 +18,7 @@ use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use serialization::hex::{HexDecode, HexError};
 
 use crate::node_traits::NodeInterface;
@@ -91,5 +92,35 @@ impl NodeInterface for WalletHandlesClient {
             .call_mut(move |this| this.process_block(block, BlockSource::Local))
             .await??;
         Ok(())
+    }
+
+    async fn submit_transaction(&self, _transaction_hex: String) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+
+    async fn node_shutdown(&self) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+    async fn node_version(&self) -> Result<String, Self::Error> {
+        unimplemented!()
+    }
+
+    async fn p2p_connect(&self, _address: String) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+    async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+    async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
+        unimplemented!()
+    }
+    async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
+        unimplemented!()
+    }
+    async fn p2p_add_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+        unimplemented!()
+    }
+    async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+        unimplemented!()
     }
 }

@@ -2515,6 +2515,8 @@ dependencies = [
  "common",
  "http",
  "jsonrpsee",
+ "node",
+ "p2p",
  "rpc",
  "serde_json",
  "serialization",

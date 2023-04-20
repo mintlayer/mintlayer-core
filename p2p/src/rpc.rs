@@ -19,7 +19,7 @@ use serialization::hex::HexDecode;
 use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
 use subsystem::subsystem::CallError;
 
-#[rpc::rpc(server, namespace = "p2p")]
+#[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
     /// Try to connect to a remote node (just once).
     /// For persistent connections `add_reserved_node` should be used.

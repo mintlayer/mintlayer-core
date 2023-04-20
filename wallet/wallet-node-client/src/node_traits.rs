@@ -18,6 +18,8 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
+pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
+
 #[async_trait::async_trait]
 pub trait NodeInterface {
     type Error: std::error::Error;
@@ -30,4 +32,15 @@ pub trait NodeInterface {
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
+    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
+
+    async fn node_shutdown(&self) -> Result<(), Self::Error>;
+    async fn node_version(&self) -> Result<String, Self::Error>;
+
+    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error>;
+    async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error>;
+    async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error>;
+    async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error>;
+    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error>;
+    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error>;
 }

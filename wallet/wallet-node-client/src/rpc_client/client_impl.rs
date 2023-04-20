@@ -18,6 +18,7 @@ use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex::HexDecode;
 
 use crate::node_traits::NodeInterface;
@@ -64,6 +65,53 @@ impl NodeInterface for NodeRpcClient {
 
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
         ChainstateRpcClient::submit_block(&self.http_client, block_hex)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error> {
+        P2pRpcClient::submit_transaction(&self.http_client, transaction_hex)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn node_shutdown(&self) -> Result<(), Self::Error> {
+        node::rpc::NodeRpcClient::shutdown(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn node_version(&self) -> Result<String, Self::Error> {
+        node::rpc::NodeRpcClient::version(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+        P2pRpcClient::connect(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error> {
+        P2pRpcClient::disconnect(&self.http_client, peer_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
+        P2pRpcClient::get_peer_count(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
+        P2pRpcClient::get_connected_peers(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+        P2pRpcClient::add_reserved_node(&self.http_client, address)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+        P2pRpcClient::remove_reserved_node(&self.http_client, address)
             .await
             .map_err(NodeRpcError::ResponseError)
     }

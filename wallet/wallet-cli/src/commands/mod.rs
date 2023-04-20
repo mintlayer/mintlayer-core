@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use clap::Parser;
-use node_comm::node_traits::NodeInterface;
+use node_comm::node_traits::{NodeInterface, PeerId};
 use reedline::Reedline;
 use serialization::hex::HexEncode;
 use wallet::DefaultWallet;
@@ -44,8 +44,37 @@ pub enum WalletCommands {
         block: String,
     },
 
+    SubmitTransaction {
+        /// Hex encoded transaction
+        transaction: String,
+    },
+
     /// Rescan
     Rescan,
+
+    /// Node version
+    NodeVersion,
+
+    /// Node shutdown
+    NodeShutdown,
+
+    /// Connect to the remote peer
+    Connect { address: String },
+
+    /// Disconnected the remote peer
+    Disconnect { peer_id: PeerId },
+
+    /// Get connected peer count
+    PeerCount,
+
+    /// Get connected peers
+    ConnectedPeers,
+
+    /// Add reserved peer
+    AddReservedPeer { address: String },
+
+    /// Remove reserved peer
+    RemoveReservedPeer { address: String },
 
     /// Quit the REPL
     Exit,
@@ -96,8 +125,84 @@ pub async fn handle_wallet_command(
             Ok(())
         }
 
+        WalletCommands::SubmitTransaction { transaction } => {
+            rpc_client
+                .submit_transaction(transaction)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "The transaction was submitted successfully");
+            Ok(())
+        }
+
         WalletCommands::Rescan => {
             cli_println!(output, "Not implemented");
+            Ok(())
+        }
+
+        WalletCommands::NodeVersion => {
+            let version = rpc_client
+                .node_version()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "{}", version);
+            Ok(())
+        }
+
+        WalletCommands::NodeShutdown => {
+            rpc_client
+                .node_shutdown()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "Success");
+            Ok(())
+        }
+
+        WalletCommands::Connect { address } => {
+            rpc_client
+                .p2p_connect(address)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "Success");
+            Ok(())
+        }
+        WalletCommands::Disconnect { peer_id } => {
+            rpc_client
+                .p2p_disconnect(peer_id)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "Success");
+            Ok(())
+        }
+        WalletCommands::PeerCount => {
+            let peer_count = rpc_client
+                .p2p_get_peer_count()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "{}", peer_count);
+            Ok(())
+        }
+        WalletCommands::ConnectedPeers => {
+            let peers = rpc_client
+                .p2p_get_connected_peers()
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "{:?}", peers);
+            Ok(())
+        }
+        WalletCommands::AddReservedPeer { address } => {
+            rpc_client
+                .p2p_add_reserved_node(address)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "Success");
+            Ok(())
+        }
+        WalletCommands::RemoveReservedPeer { address } => {
+            rpc_client
+                .p2p_remove_reserved_node(address)
+                .await
+                .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
+            cli_println!(output, "Success");
             Ok(())
         }
 
