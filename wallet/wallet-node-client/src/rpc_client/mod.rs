@@ -15,15 +15,11 @@
 
 pub mod client_impl;
 
-use chainstate::rpc::ChainstateRpcClient;
-use common::{
-    chain::{Block, GenBlock},
-    primitives::{BlockHeight, Id},
-};
 use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::http_client::HttpClientBuilder;
 use rpc::make_http_header_with_auth;
-use serialization::hex::HexDecode;
+
+use crate::node_traits::NodeInterface;
 
 #[derive(thiserror::Error, Debug)]
 pub enum NodeRpcError {
@@ -60,45 +56,5 @@ impl NodeRpcClient {
             .map_err(|e| NodeRpcError::InitializationError(Box::new(e)))?;
 
         Ok(client)
-    }
-
-    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, NodeRpcError> {
-        let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
-            .await
-            .map_err(NodeRpcError::ResponseError)?;
-        match response {
-            Some(block_hex) => {
-                let block = Block::hex_decode_all(block_hex)?;
-                Ok(Some(block))
-            }
-            None => Ok(None),
-        }
-    }
-
-    async fn get_best_block_id(&self) -> Result<Id<GenBlock>, NodeRpcError> {
-        ChainstateRpcClient::best_block_id(&self.http_client)
-            .await
-            .map_err(NodeRpcError::ResponseError)
-    }
-
-    async fn get_best_block_height(&self) -> Result<BlockHeight, NodeRpcError> {
-        ChainstateRpcClient::best_block_height(&self.http_client)
-            .await
-            .map_err(NodeRpcError::ResponseError)
-    }
-
-    async fn get_block_id_at_height(
-        &self,
-        height: BlockHeight,
-    ) -> Result<Option<Id<GenBlock>>, NodeRpcError> {
-        ChainstateRpcClient::block_id_at_height(&self.http_client, height)
-            .await
-            .map_err(NodeRpcError::ResponseError)
-    }
-
-    async fn submit_block(&self, block_hex: String) -> Result<(), NodeRpcError> {
-        ChainstateRpcClient::submit_block(&self.http_client, block_hex)
-            .await
-            .map_err(NodeRpcError::ResponseError)
     }
 }

@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::rpc::ChainstateRpcClient;
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use serialization::hex::HexDecode;
 
 use crate::node_traits::NodeInterface;
 
@@ -27,30 +29,42 @@ impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        let block = self.get_block(block_id).await?;
-        Ok(block)
+        let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)?;
+        match response {
+            Some(block_hex) => {
+                let block = Block::hex_decode_all(block_hex)?;
+                Ok(Some(block))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
-        let best_block_id = self.get_best_block_id().await?;
-        Ok(best_block_id)
+        ChainstateRpcClient::best_block_id(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_best_block_height(&self) -> Result<common::primitives::BlockHeight, Self::Error> {
-        let best_block_height = self.get_best_block_height().await?;
-        Ok(best_block_height)
+        ChainstateRpcClient::best_block_height(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn get_block_id_at_height(
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        let block_id_at_height = self.get_block_id_at_height(height).await?;
-        Ok(block_id_at_height)
+        ChainstateRpcClient::block_id_at_height(&self.http_client, height)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
-        self.submit_block(block_hex).await?;
-        Ok(())
+        ChainstateRpcClient::submit_block(&self.http_client, block_hex)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 }
