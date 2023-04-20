@@ -25,5 +25,5 @@ zeroize = "1.5"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest = "0.16"
+rstest = "0.17"
 tempfile = "3.3"
