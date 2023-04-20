@@ -157,6 +157,7 @@ where
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),

@@ -34,6 +34,7 @@ make_config_setting!(RequestedBlocksLimit, usize, 500);
 make_config_setting!(MaxMessageSize, usize, 10 * 1024 * 1024);
 make_config_setting!(MaxPeerTxAnnouncements, usize, 5000);
 make_config_setting!(MaxUnconnectedHeaders, usize, 10);
+make_config_setting!(SyncStallingTimeout, Duration, Duration::from_secs(5));
 
 /// A node type.
 #[derive(Debug, Copy, Clone)]
@@ -112,4 +113,6 @@ pub struct P2pConfig {
     /// A maximum number of unconnected headers (block announcements) that a peer can send before
     /// it will be considered malicious.
     pub max_unconnected_headers: MaxUnconnectedHeaders,
+    /// A timeout after which a peer is disconnected.
+    pub sync_stalling_timeout: SyncStallingTimeout,
 }
