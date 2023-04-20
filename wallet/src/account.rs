@@ -201,12 +201,12 @@ impl Account {
     }
 
     #[allow(dead_code)] // TODO remove
-    pub(crate) fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+    pub fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_issued()
     }
 
     #[allow(dead_code)] // TODO remove
-    pub(crate) fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+    pub fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
     }
 }
