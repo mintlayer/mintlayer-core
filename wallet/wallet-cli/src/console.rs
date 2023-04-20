@@ -24,6 +24,8 @@ macro_rules! cli_println {
 /// Input/output devices used to interact with a user (stub for now)
 pub struct ConsoleContext {}
 
+// TODO: Use `external_printer` from reedline to print output in background if needed
+
 impl ConsoleContext {
     pub fn new() -> Self {
         Self {}
