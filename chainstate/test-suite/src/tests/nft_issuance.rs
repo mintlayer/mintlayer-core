@@ -17,7 +17,7 @@ use chainstate::{
     is_rfc3986_valid_symbol, BlockError, ChainstateError, CheckBlockError,
     CheckBlockTransactionsError, TokensError,
 };
-use chainstate_test_framework::{TestFramework, TransactionBuilder};
+use chainstate_test_framework::{get_output_value, TestFramework, TransactionBuilder};
 use common::chain::tokens::OutputValue;
 use common::chain::tokens::TokenData;
 use common::chain::Block;
@@ -688,7 +688,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -876,7 +876,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -1066,7 +1066,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), output_value);
+        assert_eq!(get_output_value(issuance_output).unwrap(), output_value);
     })
 }
 
@@ -1284,7 +1284,7 @@ fn nft_media_hash_valid(#[case] seed: Seed) {
                 tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
             let issuance_output = &outputs[0];
 
-            match issuance_output.value().token_data().unwrap() {
+            match get_output_value(issuance_output).unwrap().token_data().unwrap() {
                 TokenData::NftIssuance(nft) => {
                     assert_eq!(nft.metadata.media_hash(), &media_hash);
                 }
@@ -1353,6 +1353,9 @@ fn nft_valid_case(#[case] seed: Seed) {
             tf.outputs_from_genblock(block.get_id().into()).values().next().unwrap().clone();
         let issuance_output = &outputs[0];
 
-        assert_eq!(issuance_output.value(), output_value.into());
+        assert_eq!(
+            get_output_value(issuance_output).unwrap(),
+            output_value.into()
+        );
     })
 }

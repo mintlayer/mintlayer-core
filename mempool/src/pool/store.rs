@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::{
-    chain::{tokens::OutputValue, OutPoint, SignedTransaction, Transaction},
+    chain::{OutPoint, SignedTransaction, Transaction, TxOutput},
     primitives::{Amount, Id, Idable},
 };
 use logging::log;
@@ -97,7 +97,7 @@ pub struct MempoolStore {
     pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
-    // which the transacitons have been inserted into the mempool, so they can be re-inserted in
+    // which the transactions have been inserted into the mempool, so they can be re-inserted in
     // the same order after a reorg. We keep both mapping from transactions to sequence numbers and
     // the mapping from sequence number back to transaction. The sequence number to be allocated to
     // the next incoming transaction is kept separately.
@@ -150,21 +150,24 @@ impl MempoolStore {
             spending_tx_id: *spending_tx_id_for_error_msg,
         };
         let tx_id = *outpoint.tx_id().get_tx_id().ok_or_else(make_err)?;
-        self.txs_by_id
-            .get(&tx_id)
-            .ok_or_else(make_err)
-            .and_then(|entry| {
-                entry
-                    .tx
-                    .transaction()
-                    .outputs()
-                    .get(outpoint.output_index() as usize)
-                    .ok_or_else(make_err)
-            })
-            .map(|output| match output.value() {
-                OutputValue::Coin(coin) => coin,
-                OutputValue::Token(_) => Amount::from_atoms(0),
-            })
+        self.txs_by_id.get(&tx_id).ok_or_else(make_err).and_then(|entry| {
+            let output = entry
+                .tx
+                .transaction()
+                .outputs()
+                .get(outpoint.output_index() as usize)
+                .ok_or_else(make_err)?;
+            match output {
+                TxOutput::Transfer(v, _)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Burn(v) => Ok(v.coin_amount().unwrap_or(Amount::ZERO)),
+                TxOutput::StakePool(data) => Ok(data.value()),
+                TxOutput::ProduceBlockFromStake(_, _) => {
+                    Err(TxValidationError::ProduceBlockOutputInTx(tx_id))
+                }
+                TxOutput::DecommissionPool(v, _, _, _) => Ok(*v),
+            }
+        })
     }
 
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {

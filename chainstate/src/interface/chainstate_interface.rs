@@ -20,6 +20,7 @@ use crate::detail::BlockSource;
 use crate::{ChainstateConfig, ChainstateError, ChainstateEvent};
 
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
+use common::chain::TxOutput;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
@@ -136,10 +137,18 @@ pub trait ChainstateInterface: Send {
     /// Returns all spendable inputs of a Transaction
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
 
-    /// Returns the values of the outpoints spent by a transaction
-    fn get_inputs_outpoints_values(
+    /// Returns the coin amounts of the outpoints spent by a transaction.
+    /// If a utxo for an input was not found or contains tokens the result is `None`.
+    fn get_inputs_outpoints_coin_amount(
         &self,
-        tx: &Transaction,
+        inputs: &[TxInput],
+    ) -> Result<Vec<Option<Amount>>, ChainstateError>;
+
+    /// Returns the coin amounts of the outputs.
+    /// If an output contains tokens the result is `None`.
+    fn get_outputs_coin_amount(
+        &self,
+        outputs: &[TxOutput],
     ) -> Result<Vec<Option<Amount>>, ChainstateError>;
 
     /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)

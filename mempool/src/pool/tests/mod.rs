@@ -461,11 +461,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
         let outpoint = input.outpoint().clone();
         let chainstate_outpoint_value = mempool
             .chainstate_handle
-            .call(move |this| {
-                this.get_inputs_outpoints_values(
-                    &Transaction::new(0, vec![input], vec![], 0).unwrap(),
-                )
-            })
+            .call(move |this| this.get_inputs_outpoints_coin_amount(&[input]))
             .await??;
         let input_value = match chainstate_outpoint_value.first().unwrap() {
             Some(input_value) => *input_value,

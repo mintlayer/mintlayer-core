@@ -208,8 +208,14 @@ where
         let total_burned = tx
             .outputs()
             .iter()
-            .filter(|o| matches!(*o, TxOutput::Burn(_)))
-            .filter_map(|o| o.value().coin_amount())
+            .filter_map(|output| match output {
+                TxOutput::Burn(v) => v.coin_amount(),
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::StakePool(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DecommissionPool(_, _, _, _) => None,
+            })
             .try_fold(Amount::ZERO, |so_far, v| {
                 (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
             })?;
@@ -235,7 +241,7 @@ where
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::StakePool(d) => Ok(d.as_ref().clone().into()),
-            TxOutput::ProduceBlockFromStake(_, _, pool_id)
+            TxOutput::ProduceBlockFromStake(_, pool_id)
             | TxOutput::DecommissionPool(_, _, pool_id, _) => self
                 .accounting_delta_adapter
                 .accounting_delta()
@@ -297,6 +303,7 @@ where
 
         check_transferred_amount_in_reward(
             &self.utxo_cache,
+            &self.accounting_delta_adapter.accounting_delta(),
             &block.block_reward_transactable(),
             block.get_id(),
             total_fees,
@@ -333,7 +340,7 @@ where
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::Burn(_)
-                | TxOutput::ProduceBlockFromStake(_, _, _) => None,
+                | TxOutput::ProduceBlockFromStake(_, _) => None,
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -371,7 +378,7 @@ where
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _, _) => Ok(()),
+            | TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
         })
     }
 
@@ -405,6 +412,7 @@ where
         // check for attempted money printing
         let fee = check_transferred_amounts_and_get_fee(
             &self.utxo_cache,
+            &self.accounting_delta_adapter.accounting_delta(),
             tx.transaction(),
             issuance_token_id_getter,
         )?;

@@ -27,11 +27,12 @@ use crate::{
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::chain::TxOutput;
 use common::{
     chain::{
         block::{Block, BlockHeader, BlockReward, GenBlock},
         config::ChainConfig,
-        tokens::{OutputValue, RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
@@ -342,39 +343,45 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
     }
 
-    fn get_inputs_outpoints_values(
+    fn get_inputs_outpoints_coin_amount(
         &self,
-        tx: &Transaction,
+        inputs: &[TxInput],
     ) -> Result<Vec<Option<Amount>>, ChainstateError> {
         let chainstate_ref = self
             .chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
         let utxo_view = chainstate_ref.make_utxo_view();
+        let pos_accounting_view = chainstate_ref.make_pos_accounting_view();
 
-        let outpoint_values = tx.inputs().iter().map(|input| input.outpoint()).try_fold(
-            Vec::new(),
-            |mut values, outpoint| {
-                let opt_utxo = utxo_view
-                    .utxo(outpoint)
+        inputs
+            .iter()
+            .map(|input| {
+                let utxo = utxo_view
+                    .utxo(input.outpoint())
                     .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
-                if let Some(utxo) = opt_utxo {
-                    match utxo.output().value() {
-                        OutputValue::Coin(amount) => values.push(Some(amount)),
-                        _ => {
-                            return Err(ChainstateError::FailedToReadProperty(
-                                PropertyQueryError::ExpectedCoinOutpointAndFoundToken,
-                            ))
-                        }
-                    }
-                } else {
-                    values.push(None)
+                match utxo {
+                    Some(utxo) => get_output_coin_amount(&pos_accounting_view, utxo.output()),
+                    None => Ok(None),
                 }
-                Ok(values)
-            },
-        );
+            })
+            .collect::<Result<Vec<_>, _>>()
+    }
 
-        outpoint_values
+    fn get_outputs_coin_amount(
+        &self,
+        outputs: &[TxOutput],
+    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
+        let chainstate_ref = self
+            .chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
+        let pos_accounting_view = chainstate_ref.make_pos_accounting_view();
+
+        outputs
+            .iter()
+            .map(|output| get_output_coin_amount(&pos_accounting_view, output))
+            .collect::<Result<Vec<_>, _>>()
     }
 
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
@@ -516,4 +523,32 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
+}
+
+fn get_output_coin_amount(
+    pos_accounting_view: &impl PoSAccountingView,
+    output: &TxOutput,
+) -> Result<Option<Amount>, ChainstateError> {
+    let amount = match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+            v.coin_amount()
+        }
+        TxOutput::StakePool(data) => Some(data.value()),
+        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+            let pool_balance = pos_accounting_view
+                .get_pool_balance(*pool_id)
+                .map_err(|_| {
+                    ChainstateError::FailedToReadProperty(PropertyQueryError::PoolBalanceNotFound(
+                        *pool_id,
+                    ))
+                })?
+                .ok_or(ChainstateError::FailedToReadProperty(
+                    PropertyQueryError::PoolBalanceNotFound(*pool_id),
+                ))?;
+            Some(pool_balance)
+        }
+        TxOutput::DecommissionPool(v, _, _, _) => Some(*v),
+    };
+
+    Ok(amount)
 }

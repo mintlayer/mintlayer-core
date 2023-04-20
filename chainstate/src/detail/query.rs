@@ -19,10 +19,10 @@ use common::{
     chain::{
         block::{BlockHeader, BlockReward},
         tokens::{
-            OutputValue, RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo,
-            TokenAuxiliaryData, TokenData, TokenId,
+            RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo, TokenAuxiliaryData,
+            TokenData, TokenId,
         },
-        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
+        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
@@ -217,12 +217,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .outputs()
             .iter()
             // Filter tokens
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(_) => None,
-                OutputValue::Token(token_data) => Some(token_data),
+            .filter_map(|output| match output {
+                TxOutput::Transfer(v, _)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Burn(v) => v.token_data(),
+                TxOutput::StakePool(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DecommissionPool(_, _, _, _) => None,
             })
             // Find issuance data and return RPCTokenInfo
-            .find_map(|token_data| match &*token_data {
+            .find_map(|token_data| match token_data {
                 TokenData::TokenIssuance(issuance) => {
                     Some(RPCTokenInfo::new_fungible(RPCFungibleTokenInfo::new(
                         token_id,

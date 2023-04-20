@@ -108,4 +108,6 @@ pub enum TxValidationError {
     InternalError,
     #[error("Tip moved while trying to process transaction")]
     TipMoved,
+    #[error("Produce block output in transaction {0}")]
+    ProduceBlockOutputInTx(Id<Transaction>),
 }
