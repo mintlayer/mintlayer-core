@@ -407,17 +407,15 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.import_deterministic_coinbase_privkeys()
         if not self.setup_clean_chain:
             for n in self.nodes:
-                assert_equal(n.getblockchaininfo()["blocks"], 199)
+                assert_equal(n.chainstate_best_block_height(), 0)
             # To ensure that all nodes are out of IBD, the most recent block
-            # must have a timestamp not too old (see IsInitialBlockDownload()).
+            # must have a timestamp not too old (see chainstate_is_initial_block_download()).
             self.log.debug('Generate a block with current time')
-            block_hash = self.generate(self.nodes[0], 1, sync_fun=self.no_op)[0]
-            block = self.nodes[0].getblock(blockhash=block_hash, verbosity=0)
+            block = self.nodes[0].blockprod_generate_block("00", [])
             for n in self.nodes:
-                n.submitblock(block)
-                chain_info = n.getblockchaininfo()
-                assert_equal(chain_info["blocks"], 200)
-                assert_equal(chain_info["initialblockdownload"], False)
+                n.chainstate_submit_block(block)
+                assert_equal(n.chainstate_best_block_height(), 1)
+                assert not n.chainstate_is_initial_block_download()
 
     def import_deterministic_coinbase_privkeys(self):
         for i in range(self.num_nodes):

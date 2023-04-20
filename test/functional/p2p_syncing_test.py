@@ -9,7 +9,7 @@ from test_framework.util import (
     assert_equal,
 )
 
-class ExampleTest(BitcoinTestFramework):
+class SyncingTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
         self.num_nodes = 2
@@ -96,4 +96,4 @@ class ExampleTest(BitcoinTestFramework):
         self.assert_tip(1, blocks[3])
 
 if __name__ == '__main__':
-    ExampleTest().main()
+    SyncingTest().main()

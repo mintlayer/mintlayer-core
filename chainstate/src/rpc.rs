@@ -69,6 +69,10 @@ trait ChainstateRpc {
     /// Reads blocks from disk
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> rpc::Result<()>;
+
+    /// Returns true if the initial block download isn't finished yet.
+    #[method(name = "is_initial_block_download")]
+    async fn is_initial_block_download(&self) -> rpc::Result<bool>;
 }
 
 #[async_trait::async_trait]
@@ -136,6 +140,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
 
         Ok(())
+    }
+
+    async fn is_initial_block_download(&self) -> rpc::Result<bool> {
+        handle_error(self.call(move |this| this.is_initial_block_download()).await)
     }
 }
 
