@@ -515,23 +515,27 @@ where
             | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(_),
             ))) => {
-                // TODO(PR): Use mempool ban score if the error is coming from mempool
-                log::info!(
-                    "Adjusting the '{}' peer score by {}: {e:?}",
-                    self.id(),
-                    e.ban_score(),
-                );
+                let ban_score = e.ban_score();
+                if ban_score > 0 {
+                    log::info!(
+                        "Adjusting the '{}' peer score by {}: {e:?}",
+                        self.id(),
+                        ban_score,
+                    );
 
-                let (sender, receiver) = oneshot_nofail::channel();
-                self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                    self.id(),
-                    e.ban_score(),
-                    sender,
-                ))?;
-                receiver.await?.or_else(|e| match e {
-                    P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-                    e => Err(e),
-                })
+                    let (sender, receiver) = oneshot_nofail::channel();
+                    self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
+                        self.id(),
+                        ban_score,
+                        sender,
+                    ))?;
+                    receiver.await?.or_else(|e| match e {
+                        P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+                        e => Err(e),
+                    })
+                } else {
+                    Err(e)
+                }
             }
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.

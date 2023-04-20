@@ -20,7 +20,7 @@ use common::{
     chain::{Block, Transaction},
     primitives::Id,
 };
-use mempool::error::Error as MempoolError;
+use mempool::error::{Error as MempoolError, MempoolBanScore};
 
 use crate::protocol::NetworkProtocol;
 
@@ -186,8 +186,7 @@ impl BanScore for P2pError {
             P2pError::NoiseHandshakeError(_) => 0,
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
-            // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
-            P2pError::MempoolError(_) => 20,
+            P2pError::MempoolError(err) => err.mempool_ban_score(),
         }
     }
 }
