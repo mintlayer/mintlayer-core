@@ -32,10 +32,9 @@ use config::WalletCliArgs;
 use console::ConsoleContext;
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
-use node_comm::make_rpc_client;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 use wallet::Wallet;
-use wallet_controller::{cookie::load_cookie, Controller};
+use wallet_controller::cookie::load_cookie;
 
 const COOKIE_FILENAME: &str = ".cookie";
 
@@ -108,11 +107,13 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
             .map_err(WalletCliError::WalletError)?
     };
 
-    let rpc_client = make_rpc_client(rpc_address, Some((&rpc_username, &rpc_password)))
-        .await
-        .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
-
-    let controller = Controller::new(rpc_client, wallet);
+    let controller = wallet_controller::make_rpc_controller(
+        rpc_address,
+        Some((&rpc_username, &rpc_password)),
+        wallet,
+    )
+    .await
+    .map_err(|e| WalletCliError::RpcError(e.to_string()))?;
 
     repl::start_cli_repl(output, controller, &data_dir, vi_mode).await
 }

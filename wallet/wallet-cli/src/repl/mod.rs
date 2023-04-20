@@ -19,13 +19,12 @@ mod wallet_prompt;
 use std::path::Path;
 
 use clap::{Command, FromArgMatches, Subcommand};
-use node_comm::node_traits::NodeInterface;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultValidator, EditCommand, EditMode, Emacs, FileBackedHistory, KeyCode,
     KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
 };
-use wallet_controller::Controller;
+use wallet_controller::RpcController;
 
 use crate::{
     cli_println,
@@ -84,9 +83,9 @@ fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommands, Wal
     Ok(command)
 }
 
-pub async fn start_cli_repl<T: NodeInterface>(
+pub async fn start_cli_repl(
     output: &ConsoleContext,
-    mut controller: Controller<T>,
+    mut controller: RpcController,
     data_dir: &Path,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {

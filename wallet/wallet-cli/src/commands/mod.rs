@@ -14,10 +14,9 @@
 // limitations under the License.
 
 use clap::Parser;
-use node_comm::node_traits::{NodeInterface, PeerId};
 use reedline::Reedline;
 use serialization::hex::HexEncode;
-use wallet_controller::Controller;
+use wallet_controller::{PeerId, RpcController};
 
 use crate::{cli_println, console::ConsoleContext, errors::WalletCliError};
 
@@ -91,9 +90,9 @@ pub enum WalletCommands {
     ClearHistory,
 }
 
-pub async fn handle_wallet_command<T: NodeInterface>(
+pub async fn handle_wallet_command(
     output: &ConsoleContext,
-    controller: &mut Controller<T>,
+    controller: &mut RpcController,
     line_editor: &mut Reedline,
     command: WalletCommands,
 ) -> Result<(), WalletCliError> {

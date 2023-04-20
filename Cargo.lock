@@ -4955,7 +4955,6 @@ dependencies = [
  "dialoguer",
  "directories",
  "logging",
- "node-comm",
  "reedline",
  "serialization",
  "shlex",

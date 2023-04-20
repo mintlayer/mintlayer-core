@@ -18,11 +18,14 @@
 pub mod cookie;
 pub mod mnemonic;
 
+use std::net::SocketAddr;
+
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
+pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
+use node_comm::{handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient};
 use wallet::DefaultWallet;
 
 #[derive(thiserror::Error, Debug)]
@@ -144,4 +147,18 @@ impl<T: NodeInterface> Controller<T> {
             .await
             .map_err(|e| ControllerError::RpcError(e.to_string()))
     }
+}
+
+pub type RpcController = Controller<NodeRpcClient>;
+pub type HandlesController = Controller<WalletHandlesClient>;
+
+pub async fn make_rpc_controller(
+    remote_socket_address: SocketAddr,
+    username_password: Option<(&str, &str)>,
+    wallet: DefaultWallet,
+) -> Result<RpcController, ControllerError> {
+    let rpc_client = make_rpc_client(remote_socket_address, username_password)
+        .await
+        .map_err(|e| ControllerError::RpcError(e.to_string()))?;
+    Ok(Controller::new(rpc_client, wallet))
 }

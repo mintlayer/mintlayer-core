@@ -16,7 +16,6 @@
 use handles_client::WalletHandlesClientError;
 use std::net::SocketAddr;
 
-use node_traits::NodeInterface;
 use rpc_client::NodeRpcError;
 
 pub mod handles_client;
@@ -26,12 +25,12 @@ pub mod rpc_client;
 pub async fn make_rpc_client(
     remote_socket_address: SocketAddr,
     username_password: Option<(&str, &str)>,
-) -> Result<impl NodeInterface, NodeRpcError> {
+) -> Result<rpc_client::NodeRpcClient, NodeRpcError> {
     rpc_client::NodeRpcClient::new(remote_socket_address.to_string(), username_password).await
 }
 
 pub async fn make_handles_client(
     chainstate_handle: chainstate::ChainstateHandle,
-) -> Result<impl NodeInterface, WalletHandlesClientError> {
+) -> Result<handles_client::WalletHandlesClient, WalletHandlesClientError> {
     handles_client::WalletHandlesClient::new(chainstate_handle).await
 }
