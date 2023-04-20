@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod ban_score;
+
+pub use ban_score::MempoolBanScore;
 use chainstate::{tx_verifier::error::ConnectTransactionError, ChainstateError};
 use subsystem::subsystem::CallError;
 use thiserror::Error;

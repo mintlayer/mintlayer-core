@@ -47,7 +47,6 @@ use crate::config::*;
 
 use self::fee::Fee;
 
-mod ban_score;
 pub mod fee;
 mod feerate;
 mod rolling_fee_rate;
