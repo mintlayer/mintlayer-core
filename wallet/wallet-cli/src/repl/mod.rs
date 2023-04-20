@@ -170,6 +170,10 @@ pub async fn start_cli_repl(
                                 }
                             }
                         }
+                        Err(WalletCliError::InvalidCommandInput(e)) => {
+                            // Print help and parse errors using styles
+                            e.print().expect("Should not fail normally");
+                        }
                         Err(e) => {
                             cli_println!(output, "{}", e);
                         }
