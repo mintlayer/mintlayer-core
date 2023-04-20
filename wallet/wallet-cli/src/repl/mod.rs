@@ -22,9 +22,8 @@ use clap::{Command, FromArgMatches, Subcommand};
 use node_comm::node_traits::NodeInterface;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
-    ColumnarMenu, DefaultValidator, EditCommand, EditMode, Emacs, ExampleHighlighter,
-    FileBackedHistory, KeyCode, KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent,
-    ReedlineMenu, Signal, Vi,
+    ColumnarMenu, DefaultValidator, EditCommand, EditMode, Emacs, FileBackedHistory, KeyCode,
+    KeyModifiers, Keybindings, ListMenu, Reedline, ReedlineEvent, ReedlineMenu, Signal, Vi,
 };
 use wallet::DefaultWallet;
 
@@ -116,7 +115,6 @@ pub async fn start_cli_repl(
         .with_completer(completer)
         .with_quick_completions(false)
         .with_partial_completions(true)
-        .with_highlighter(Box::new(ExampleHighlighter::new(commands)))
         .with_validator(Box::new(DefaultValidator))
         .with_ansi_colors(true);
 
