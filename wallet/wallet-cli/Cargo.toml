@@ -12,6 +12,7 @@ node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
+wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = '../storage' }
 
 clap = { version = "4", features = ["derive"] }

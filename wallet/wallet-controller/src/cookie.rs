@@ -13,23 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use dialoguer::theme::ColorfulTheme;
+use std::path::Path;
 
-use crate::errors::WalletCliError;
-
-/// A type-safe wrapper for [dialoguer::Select]
-pub fn select_helper<T: Clone + Into<&'static str>>(
-    theme: &ColorfulTheme,
-    prompt: &str,
-    items: &[T],
-) -> Result<T, WalletCliError> {
-    let texts = items.iter().cloned().map(Into::into).collect::<Vec<&str>>();
-    let index = dialoguer::Select::with_theme(theme)
-        .with_prompt(prompt)
-        .default(0)
-        .items(&texts)
-        .interact_opt()
-        .map_err(WalletCliError::ConsoleIoError)?
-        .ok_or(WalletCliError::Cancelled)?;
-    Ok(items[index].clone())
+// TODO: Replace String with custom error
+pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), String> {
+    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;
+    let (username, password) = content.split_once(':').ok_or(format!(
+        "Invalid cookie file {:?}: ':' not found",
+        path.as_ref()
+    ))?;
+    Ok((username.to_owned(), password.to_owned()))
 }

@@ -17,6 +17,8 @@ use std::borrow::Cow;
 
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus};
 
+/// A very simple [Prompt] trait implementation
+/// ([reedline::DefaultPrompt] shows the current dir and the clock on the right, which we don't need)
 #[derive(Clone)]
 pub struct WalletPrompt {}
 

@@ -15,9 +15,9 @@
 
 mod commands;
 mod config;
+mod console;
 mod errors;
 mod helpers;
-mod output;
 mod repl;
 mod wallet_init;
 
@@ -25,15 +25,18 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::chain::config::ChainType;
-use config::{load_cookie, WalletCliArgs, COOKIE_FILENAME};
+use config::WalletCliArgs;
+use console::ConsoleContext;
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
 use node_comm::make_rpc_client;
-use output::OutputContext;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 use wallet::Wallet;
+use wallet_controller::cookie::load_cookie;
 
-async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
+const COOKIE_FILENAME: &str = ".cookie";
+
+async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     logging::init_logging::<&std::path::Path>(None);
 
     let args = config::WalletCliArgs::parse();
@@ -60,9 +63,13 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
 
     let (rpc_username, rpc_password) = match (rpc_cookie_file, rpc_username, rpc_password) {
         (None, None, None) => {
-            load_cookie(default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME))?
+            let cookie_file_path =
+                default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
+            load_cookie(cookie_file_path.clone())
+                .map_err(|e| WalletCliError::CookieFileReadError(cookie_file_path, e))?
         }
-        (Some(cookie_path), None, None) => load_cookie(cookie_path)?,
+        (Some(cookie_file_path), None, None) => load_cookie(&cookie_file_path)
+            .map_err(|e| WalletCliError::CookieFileReadError(cookie_file_path.into(), e))?,
         (None, Some(username), Some(password)) => (username, password),
         _ => {
             return Err(WalletCliError::InvalidConfig(
@@ -107,7 +114,7 @@ async fn run(output: &OutputContext) -> Result<(), WalletCliError> {
 
 #[tokio::main]
 async fn main() {
-    let output = OutputContext::new();
+    let output = ConsoleContext::new();
     run(&output).await.unwrap_or_else(|err| match err {
         WalletCliError::Cancelled | WalletCliError::Exit => {}
         e => {

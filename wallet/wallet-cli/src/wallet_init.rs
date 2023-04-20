@@ -15,8 +15,9 @@
 
 use dialoguer::theme::ColorfulTheme;
 use wallet::wallet::Language;
+use wallet_controller::mnemonic::{generate_new_mnemonic, parse_mnemonic};
 
-use crate::{cli_println, errors::WalletCliError, helpers::select_helper, output::OutputContext};
+use crate::{cli_println, console::ConsoleContext, errors::WalletCliError, helpers::select_helper};
 
 #[derive(Clone, Copy)]
 enum ImportMnemonic {
@@ -44,7 +45,7 @@ pub fn input_wallet_path(theme: &ColorfulTheme) -> Result<String, WalletCliError
 
 pub fn input_new_wallet_mnemonic(
     language: Language,
-    output: &OutputContext,
+    output: &ConsoleContext,
     theme: &ColorfulTheme,
 ) -> Result<wallet::wallet::Mnemonic, WalletCliError> {
     let action = select_helper(
@@ -55,7 +56,7 @@ pub fn input_new_wallet_mnemonic(
 
     let mnemonic = match action {
         ImportMnemonic::Generate => {
-            let mnemonic = wallet::wallet::generate_new_mnemonic(language);
+            let mnemonic = generate_new_mnemonic(language);
             cli_println!(output, "New mnemonic: {}", mnemonic.to_string());
             cli_println!(
                 output,
@@ -68,8 +69,7 @@ pub fn input_new_wallet_mnemonic(
                 .with_prompt("Mnemonic")
                 .interact_text()
                 .map_err(WalletCliError::ConsoleIoError)?;
-            wallet::wallet::parse_mnemonic(language, &mnemonic)
-                .map_err(WalletCliError::InvalidMnemonic)?
+            parse_mnemonic(language, &mnemonic).map_err(WalletCliError::InvalidMnemonic)?
         }
         ImportMnemonic::Cancel => return Err(WalletCliError::Cancelled),
     };

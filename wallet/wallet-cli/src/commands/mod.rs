@@ -19,7 +19,7 @@ use reedline::Reedline;
 use serialization::hex::HexEncode;
 use wallet::DefaultWallet;
 
-use crate::{cli_println, errors::WalletCliError, output::OutputContext};
+use crate::{cli_println, console::ConsoleContext, errors::WalletCliError};
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -62,7 +62,7 @@ pub enum WalletCommands {
 }
 
 pub async fn handle_wallet_command(
-    output: &OutputContext,
+    output: &ConsoleContext,
     rpc_client: &mut impl NodeInterface,
     _wallet: &mut DefaultWallet,
     line_editor: &mut Reedline,

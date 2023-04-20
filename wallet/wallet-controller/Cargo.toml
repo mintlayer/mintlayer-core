@@ -6,5 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
 
-[dev-dependencies]
+bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
+thiserror.workspace = true
+zeroize = "1.5"

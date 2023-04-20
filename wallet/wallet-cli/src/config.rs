@@ -13,15 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
+use std::{net::SocketAddr, path::PathBuf};
 
 use clap::Parser;
 use common::chain::config::ChainType;
-
-use crate::WalletCliError;
 
 #[derive(clap::ValueEnum, Clone, Debug)]
 pub enum Network {
@@ -62,8 +57,6 @@ pub struct WalletCliArgs {
     pub vi_mode: bool,
 }
 
-pub const COOKIE_FILENAME: &str = ".cookie";
-
 impl From<Network> for ChainType {
     fn from(value: Network) -> Self {
         match value {
@@ -73,13 +66,4 @@ impl From<Network> for ChainType {
             Network::Signet => ChainType::Signet,
         }
     }
-}
-
-pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), WalletCliError> {
-    let content = std::fs::read_to_string(path.as_ref())
-        .map_err(|e| WalletCliError::CookieFileReadError(path.as_ref().to_owned(), e))?;
-    let (username, password) = content.split_once(':').ok_or(WalletCliError::InvalidConfig(
-        format!("Invalid cookie file {:?}: ':' not found", path.as_ref()),
-    ))?;
-    Ok((username.to_owned(), password.to_owned()))
 }

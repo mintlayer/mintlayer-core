@@ -4961,12 +4961,20 @@ dependencies = [
  "tokio",
  "utils",
  "wallet",
+ "wallet-controller",
  "wallet-storage",
 ]
 
 [[package]]
 name = "wallet-controller"
 version = "0.1.0"
+dependencies = [
+ "bip39",
+ "crypto",
+ "logging",
+ "thiserror",
+ "zeroize",
+]
 
 [[package]]
 name = "wallet-storage"

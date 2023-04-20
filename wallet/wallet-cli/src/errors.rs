@@ -32,7 +32,7 @@ pub enum WalletCliError {
     #[error(
         "RPC authentication cookie-file {0} read error: {1}. Please make sure the node is started."
     )]
-    CookieFileReadError(PathBuf, std::io::Error),
+    CookieFileReadError(PathBuf, String),
     #[error("Prepare data dir error: {0}")]
     PrepareData(PrepareDataDirError),
     #[error("Invalid config: {0}")]
@@ -41,8 +41,8 @@ pub enum WalletCliError {
     InvalidQuoting,
     #[error("{0}")]
     InvalidCommandInput(clap::Error),
-    #[error("Invalid mnemonic")]
-    InvalidMnemonic(wallet::WalletError),
+    #[error("Invalid mnemonic: {0}")]
+    InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Cancelled")]
     Cancelled,
     #[error("Quit")]

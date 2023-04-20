@@ -16,17 +16,18 @@
 #[macro_export]
 macro_rules! cli_println {
     ($context:expr, $($arg:tt)*) => {
-        $context.start_output();
-        ::std::println!($($arg)*)
+        ConsoleContext::begin_output($context);
+        println!($($arg)*)
     };
 }
 
-pub struct OutputContext {}
+/// Input/output devices used to interact with a user (stub for now)
+pub struct ConsoleContext {}
 
-impl OutputContext {
+impl ConsoleContext {
     pub fn new() -> Self {
         Self {}
     }
 
-    pub fn start_output(&self) {}
+    pub fn begin_output(&self) {}
 }
