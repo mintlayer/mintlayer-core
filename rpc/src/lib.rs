@@ -25,7 +25,7 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use logging::log;
 
 pub use config::RpcConfig;
-pub use jsonrpsee::core::server::rpc_module::Methods;
+pub use jsonrpsee::core::server::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 use rpc_auth::RpcAuth;
