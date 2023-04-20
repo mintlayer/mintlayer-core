@@ -95,4 +95,10 @@ impl NodeRpcClient {
             .await
             .map_err(NodeRpcError::ResponseError)
     }
+
+    async fn submit_block(&self, block_hex: String) -> Result<(), NodeRpcError> {
+        ChainstateRpcClient::submit_block(&self.http_client, block_hex)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
 }
