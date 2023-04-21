@@ -56,6 +56,7 @@ fn unban_peer() {
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
             max_unconnected_headers: Default::default(),
+            sync_stalling_timeout: Default::default(),
         }),
         time_getter.get_time_getter(),
         db_store,

@@ -16,7 +16,7 @@
 use std::{collections::BTreeSet, convert::TryInto};
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
@@ -29,7 +29,7 @@ use common::{
         },
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
-        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
+        tokens::{get_tokens_issuance_count, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
@@ -37,7 +37,7 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::PoSAccountingDB;
+use pos_accounting::{PoSAccountingDB, PoSAccountingView};
 use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
@@ -145,6 +145,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     // TODO: When the mempool incorporates the transaction-verifier, this won't be needed anymore
     pub fn make_utxo_view(&self) -> impl UtxosView<Error = S::Error> + '_ {
         UtxosDB::new(&self.db_tx)
+    }
+
+    pub fn make_pos_accounting_view(
+        &self,
+    ) -> impl PoSAccountingView<Error = pos_accounting::Error> + '_ {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx)
     }
 
     pub fn chain_config(&self) -> &ChainConfig {
@@ -425,7 +431,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block.block_reward().outputs().iter().try_for_each(|output| {
             match output {
                 TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
-                TxOutput::ProduceBlockFromStake(_, _, _) => {
+                TxOutput::ProduceBlockFromStake(_, _) => {
                     // The output can be reused in block reward right away
                     Ok(())
                 }
@@ -537,14 +543,18 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             // Check tokens
             tx.outputs()
                 .iter()
-                .filter_map(|output| match output.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Token(token_data) => Some(token_data),
+                .filter_map(|output| match output {
+                    TxOutput::Transfer(v, _)
+                    | TxOutput::LockThenTransfer(v, _, _)
+                    | TxOutput::Burn(v) => v.token_data(),
+                    TxOutput::StakePool(_)
+                    | TxOutput::ProduceBlockFromStake(_, _)
+                    | TxOutput::DecommissionPool(_, _, _, _) => None,
                 })
                 .try_for_each(|token_data| {
                     check_tokens_data(
                         self.chain_config,
-                        token_data.as_ref(),
+                        token_data,
                         tx.transaction(),
                         block.get_id(),
                     )
@@ -566,7 +576,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::Transfer(_, _)
                     | TxOutput::Burn(_)
                     | TxOutput::StakePool(_)
-                    | TxOutput::ProduceBlockFromStake(_, _, _)
+                    | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::LockThenTransfer(_, _, _) => {}
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {

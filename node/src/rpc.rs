@@ -18,20 +18,21 @@
 use std::{sync::Arc, time::Duration};
 
 use chainstate_launcher::ChainConfig;
+use rpc::Result as RpcResult;
 use subsystem::manager::ShutdownTrigger;
 
-#[rpc::rpc(server, namespace = "node")]
-trait NodeRpc {
+#[rpc::rpc(server, client, namespace = "node")]
+pub trait NodeRpc {
     /// Order the node to shutdown
     #[method(name = "shutdown")]
-    fn shutdown(&self) -> rpc::Result<()>;
+    fn shutdown(&self) -> RpcResult<()>;
 
     /// Get node software version
     #[method(name = "version")]
-    fn version(&self) -> rpc::Result<String>;
+    fn version(&self) -> RpcResult<String>;
 
     #[method(name = "set_mock_time")]
-    fn set_mock_time(&self, time: u64) -> rpc::Result<()>;
+    fn set_mock_time(&self, time: u64) -> RpcResult<()>;
 }
 
 struct NodeRpc {
@@ -49,7 +50,7 @@ impl NodeRpc {
 }
 
 impl NodeRpcServer for NodeRpc {
-    fn shutdown(&self) -> rpc::Result<()> {
+    fn shutdown(&self) -> RpcResult<()> {
         // There is no easy way to gracefully shut down the jsonrpsee server to make it finish existing RPC requests first.
         // So it's possible that the current RPC call will return an error because the process is terminated before the response is sent.
         // As a workaround, shutdown is started in background with some delay.
@@ -61,11 +62,11 @@ impl NodeRpcServer for NodeRpc {
         Ok(())
     }
 
-    fn version(&self) -> rpc::Result<String> {
+    fn version(&self) -> RpcResult<String> {
         Ok(env!("CARGO_PKG_VERSION").into())
     }
 
-    fn set_mock_time(&self, time: u64) -> rpc::Result<()> {
+    fn set_mock_time(&self, time: u64) -> RpcResult<()> {
         crate::mock_time::set_mock_time(*self.chain_config.chain_type(), time)?;
         Ok(())
     }

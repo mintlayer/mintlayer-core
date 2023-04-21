@@ -6,19 +6,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-chainstate = { path = "../../chainstate/" }
-common = { path = '../../common' }
-serialization = {path = "../../serialization"}
-subsystem = { path = "../../subsystem/" }
+chainstate = { path = "../../chainstate" }
+common = { path = "../../common" }
+node = { path = "../../node" }
+p2p = { path = "../../p2p" }
+rpc = { path = "../../rpc" }
+serialization = { path = "../../serialization" }
+subsystem = { path = "../../subsystem" }
+tower = "0.4"
 
 async-trait.workspace = true
+jsonrpsee.workspace = true
 thiserror.workspace = true
 
-jsonrpsee = { version = "0.16" }
 serde_json = "1.0"
+http = "0.2"
+base64 = "0.21"
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }
-rpc = { path = "../../rpc/" }
 
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

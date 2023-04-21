@@ -19,7 +19,7 @@ mod config_files;
 mod mock_time;
 mod options;
 mod regtest_options;
-mod rpc;
+pub mod rpc;
 mod runner;
 
 pub type Error = anyhow::Error;

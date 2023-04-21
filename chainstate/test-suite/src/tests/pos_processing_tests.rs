@@ -272,8 +272,7 @@ fn pos_basic(#[case] seed: Seed) {
     let initially_staked = Amount::from_atoms(1);
     let total_reward = (subsidy + initially_staked).unwrap();
 
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(total_reward, anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
         .with_timestamp(block_timestamp)
@@ -501,11 +500,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     {
         // valid case
         let consensus_data = ConsensusData::PoS(Box::new(valid_pos_data));
-        let reward_output = TxOutput::ProduceBlockFromStake(
-            Amount::from_atoms(1),
-            anyonecanspend_address(),
-            pool_id,
-        );
+        let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
             .with_reward(vec![reward_output])
@@ -572,8 +567,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     );
 
     // test valid case
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(valid_pos_data)))
         .with_reward(vec![reward_output])
@@ -687,8 +681,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -716,8 +709,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -752,8 +744,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -807,8 +798,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id2);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id2);
     let res = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -889,8 +879,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -917,8 +906,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     let block_c_index = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -955,8 +943,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -1013,8 +1000,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let initially_staked = Amount::from_atoms(1);
     let total_reward = (subsidy + initially_staked).unwrap();
 
-    let produce_block_output =
-        TxOutput::ProduceBlockFromStake(total_reward, anyonecanspend_address(), pool_id1);
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![produce_block_output])
@@ -1053,8 +1039,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         ))
         .build();
 
-    let produce_block_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id2);
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id2);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![produce_block_output])
@@ -1150,8 +1135,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
     let initially_staked = Amount::from_atoms(1);
     let total_reward = (subsidy + initially_staked).unwrap();
 
-    let produce_block_output =
-        TxOutput::ProduceBlockFromStake(total_reward, anyonecanspend_address(), pool_id1);
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
         .with_reward(vec![produce_block_output])
@@ -1169,8 +1153,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         ))
         .build();
 
-    let produce_block_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id1);
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![produce_block_output])

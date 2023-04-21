@@ -29,7 +29,7 @@ pub type TestStore = chainstate_storage::inmemory::Store;
 pub type TestChainstate = Box<dyn chainstate::chainstate_interface::ChainstateInterface>;
 
 pub use {
-    crate::utils::{anyonecanspend_address, empty_witness},
+    crate::utils::{anyonecanspend_address, empty_witness, get_output_value},
     block_builder::BlockBuilder,
     framework::TestFramework,
     framework_builder::{OrphanErrorHandler, TestFrameworkBuilder, TxVerificationStrategy},

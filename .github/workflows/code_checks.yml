@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-      - '**' # target all branches
+      - "**" # target all branches
   pull_request:
     branches:
       - master
@@ -28,6 +28,7 @@ jobs:
             --all-features --workspace --all-targets --
             -D warnings
             -A clippy::new_without_default
+            -A unknown_lints
             -W clippy::implicit_saturating_sub
             -W clippy::implicit_clone
             -W clippy::map_unwrap_or
@@ -83,4 +84,3 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v1
         with:
           command: check ${{ matrix.checks }}
-

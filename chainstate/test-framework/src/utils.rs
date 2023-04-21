@@ -37,6 +37,17 @@ pub fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
+pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
+    match output {
+        TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
+            Some(v.clone())
+        }
+        TxOutput::StakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::DecommissionPool(_, _, _, _) => None,
+    }
+}
+
 pub fn create_new_outputs(
     chainstate: &TestChainstate,
     srcid: OutPointSourceId,
@@ -58,7 +69,7 @@ pub fn create_utxo_data(
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(InputWitness, TxInput, TxOutput)> {
-    let new_output = match output.value() {
+    let new_output = match get_output_value(output)? {
         OutputValue::Coin(output_value) => {
             let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
             let new_value = (output_value - spent_value).unwrap();
@@ -94,7 +105,7 @@ pub fn create_multiple_utxo_data(
     rng: &mut (impl Rng + CryptoRng),
 ) -> Option<(InputWitness, TxInput, Vec<TxOutput>)> {
     let num_outputs = rng.gen_range(1..10);
-    let new_outputs = match output.value() {
+    let new_outputs = match get_output_value(output)? {
         OutputValue::Coin(output_value) => {
             let switch = rng.gen_range(0..3);
             if switch == 0 {

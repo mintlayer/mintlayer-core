@@ -143,7 +143,7 @@ where
             ));
         }
         TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),
-        TxOutput::ProduceBlockFromStake(_, _, pool_id) => {
+        TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pool_data = pos_accounting_view
                 .get_pool_data(pool_id)?
                 .ok_or(ConsensusPoSError::PoolDataNotFound(pool_id))?;

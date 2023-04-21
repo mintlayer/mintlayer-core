@@ -17,6 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+pub use bip39::{Language, Mnemonic};
 use common::chain::{ChainConfig, Transaction};
 use common::primitives::Id;
 use wallet_storage::{
@@ -67,8 +68,7 @@ pub fn open_or_create_wallet_in_memory() -> WalletResult<Arc<Store<DefaultBacken
 }
 
 impl<B: storage::Backend> Wallet<B> {
-    #[allow(dead_code)] // TODO remove
-    fn new_wallet(
+    pub fn new_wallet(
         chain_config: Arc<ChainConfig>,
         db: Arc<Store<B>>,
         mnemonic: &str,
@@ -95,8 +95,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    #[allow(dead_code)] // TODO remove
-    fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
+    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
         let version = db.get_storage_version()?;
         if version == WALLET_VERSION_UNINITIALIZED {
             return Err(WalletError::WalletNotInitialized);

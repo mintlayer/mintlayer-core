@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,6 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    logging::log::info!("Hello, world!");
+#[macro_export]
+macro_rules! cli_println {
+    ($context:expr, $($arg:tt)*) => {
+        ConsoleContext::begin_output($context);
+        println!($($arg)*)
+    };
+}
+
+/// Input/output devices used to interact with a user (stub for now)
+pub struct ConsoleContext {}
+
+// TODO: Use `external_printer` from reedline to print output in background if needed
+
+impl ConsoleContext {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    pub fn begin_output(&self) {}
 }

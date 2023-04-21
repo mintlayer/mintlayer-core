@@ -19,16 +19,18 @@ pub mod rpc_creds;
 
 use std::net::SocketAddr;
 
+use base64::Engine;
 use jsonrpsee::server::{ServerBuilder, ServerHandle};
 
 use logging::log;
 
 pub use config::RpcConfig;
-pub use jsonrpsee::core::server::rpc_module::Methods;
+pub use jsonrpsee::core::server::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 use rpc_auth::RpcAuth;
 use rpc_creds::RpcCreds;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -131,10 +133,7 @@ impl Rpc {
         creds: Option<RpcCreds>,
     ) -> anyhow::Result<Self> {
         let auth_layer = creds.as_ref().map(|creds| {
-            tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(
-                creds.username(),
-                creds.password(),
-            ))
+            ValidateRequestHeaderLayer::custom(RpcAuth::new(creds.username(), creds.password()))
         });
 
         let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(auth_layer));
@@ -201,12 +200,27 @@ impl subsystem::Subsystem for Rpc {
     }
 }
 
+/// Construct a basic authorization header for HTTP requests (when [username_password] is set)
+pub fn make_http_header_with_auth(username_password: Option<(&str, &str)>) -> http::HeaderMap {
+    let mut headers = http::HeaderMap::new();
+    if let Some((username, password)) = username_password {
+        headers.append(
+            http::header::AUTHORIZATION,
+            http::HeaderValue::from_str(&format!(
+                "Basic {}",
+                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
+            ))
+            .expect("Should not fail"),
+        );
+    }
+    headers
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use base64::Engine;
     use crypto::random::{
         distributions::{Alphanumeric, DistString},
         Rng,
@@ -294,29 +308,13 @@ mod tests {
         Ok(())
     }
 
-    fn get_headers(username_password: Option<(&str, &str)>) -> http::HeaderMap {
-        let mut headers = http::HeaderMap::new();
-        if let Some((username, password)) = username_password {
-            headers.append(
-                http::header::AUTHORIZATION,
-                http::HeaderValue::from_str(&format!(
-                    "Basic {}",
-                    base64::engine::general_purpose::STANDARD
-                        .encode(format!("{username}:{password}"))
-                ))
-                .unwrap(),
-            );
-        }
-        headers
-    }
-
     async fn http_request(
         rpc: &Rpc,
         username_password: Option<(&str, &str)>,
     ) -> anyhow::Result<()> {
         let url = format!("http://{}", rpc.http_address().unwrap());
         let client = HttpClientBuilder::default()
-            .set_headers(get_headers(username_password))
+            .set_headers(make_http_header_with_auth(username_password))
             .build(url)?;
         let response: String =
             client.request("example_server_protocol_version", rpc_params!()).await?;
@@ -327,7 +325,7 @@ mod tests {
     async fn ws_request(rpc: &Rpc, username_password: Option<(&str, &str)>) -> anyhow::Result<()> {
         let url = format!("ws://{}", rpc.websocket_address().unwrap());
         let client = WsClientBuilder::default()
-            .set_headers(get_headers(username_password))
+            .set_headers(make_http_header_with_auth(username_password))
             .build(url)
             .await?;
         let response: String =

@@ -226,6 +226,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_unconnected_headers: 1.into(),
+        sync_stalling_timeout: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))

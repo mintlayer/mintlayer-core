@@ -21,7 +21,7 @@ hyper = "0.14"
 jsonrpsee = { workspace = true, features = ["full"] }
 thiserror.workspace = true
 tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.3", features = ["auth"] }
+tower-http = { version = "0.4", features = ["auth"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

@@ -10,9 +10,11 @@ logging = {path = '../logging'}
 crypto = { path = "../crypto/" }
 
 atomic-traits = "0.3"
+directories = "5.0"
 num-traits = "0.2"
-slave-pool = "0.2"
 probabilistic-collections = "0.7"
+slave-pool = "0.2"
+thiserror.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
