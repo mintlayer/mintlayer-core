@@ -73,7 +73,7 @@ trait ChainstateRpc {
 
     /// Returns true if the initial block download isn't finished yet.
     #[method(name = "is_initial_block_download")]
-    async fn is_initial_block_download(&self) -> rpc::Result<bool>;
+    async fn is_initial_block_download(&self) -> RpcResult<bool>;
 }
 
 #[async_trait::async_trait]
@@ -143,7 +143,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         Ok(())
     }
 
-    async fn is_initial_block_download(&self) -> rpc::Result<bool> {
+    async fn is_initial_block_download(&self) -> RpcResult<bool> {
         handle_error(self.call(move |this| this.is_initial_block_download()).await)
     }
 }
