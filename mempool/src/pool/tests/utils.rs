@@ -78,11 +78,7 @@ pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
     result
 }
 
-// TODO this calculation is already done in ChainState, reuse it
-pub async fn try_get_fee<M>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee
-where
-    M: GetMemoryUsage,
-{
+pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee {
     let tx_clone = tx.clone();
 
     // Outputs in this vec are:

@@ -254,7 +254,7 @@ impl MempoolBanScore for pos_accounting::Error {
         use pos_accounting::Error as E;
         match self {
             // These may be caused by an out of sync peer
-            // TODO(PR): Can we ban the peer in these cases anyway? Some will be only triggered
+            // TODO: Can we ban the peer in these cases anyway? Some will be only triggered
             // after an epoch has elapsed which should be enough time for peer to be up-to-date
             E::InvariantErrorPoolBalanceAlreadyExists => 0,
             E::InvariantErrorPoolDataAlreadyExists => 0,
