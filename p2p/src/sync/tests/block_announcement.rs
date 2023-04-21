@@ -51,12 +51,12 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -84,12 +84,12 @@ async fn unknown_prev_block(#[case] seed: Seed) {
         .build();
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -105,6 +105,8 @@ async fn unknown_prev_block(#[case] seed: Seed) {
     assert_eq!(sent_to, peer);
     assert!(matches!(message, SyncMessage::HeaderListRequest(_)));
     handle.assert_no_peer_manager_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
@@ -142,6 +144,8 @@ async fn invalid_timestamp() {
         .ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 // The peer ban score is increased if it sends an invalid header.
@@ -187,6 +191,8 @@ async fn invalid_consensus_data() {
     );
     handle.assert_no_event().await;
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -202,7 +208,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
     let orphan_block = tf.make_block_builder().with_parent(block.get_id().into()).build();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
@@ -231,7 +237,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -262,6 +268,8 @@ async fn unconnected_headers(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -276,12 +284,12 @@ async fn valid_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -300,4 +308,6 @@ async fn valid_block(#[case] seed: Seed) {
         SyncMessage::BlockListRequest(BlockListRequest::new(vec![block.get_id()]))
     );
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }

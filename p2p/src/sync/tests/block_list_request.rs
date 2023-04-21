@@ -63,14 +63,14 @@ async fn max_block_count_in_request_exceeded(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -109,12 +109,12 @@ async fn unknown_blocks(#[case] seed: Seed) {
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let unknown_blocks: Vec<Id<Block>> =
         create_n_blocks(&mut tf, 2).into_iter().map(|b| b.get_id()).collect();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -152,12 +152,12 @@ async fn valid_request(#[case] seed: Seed) {
     for block in blocks.clone() {
         tf.process_block(block, BlockSource::Local).unwrap().unwrap();
     }
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 
@@ -197,14 +197,14 @@ async fn request_same_block_twice(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     let block = tf.make_block_builder().build();
     tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
-    let (chainstate, mempool) =
+    let (chainstate, mempool, subsystem_manager_handle) =
         start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
         .build()
         .await;
 

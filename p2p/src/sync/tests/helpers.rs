@@ -34,6 +34,7 @@ use common::{
 };
 use mempool::MempoolHandle;
 use p2p_test_utils::start_subsystems;
+use subsystem::manager::ManagerJoinHandle;
 
 use crate::{
     message::SyncMessage,
@@ -58,7 +59,8 @@ pub struct SyncManagerHandle {
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
-    sync_manager_handle: JoinHandle<()>,
+    sync_manager_handle: Option<JoinHandle<()>>,
+    subsystem_manager_handle: Option<ManagerJoinHandle>,
 }
 
 impl SyncManagerHandle {
@@ -77,6 +79,7 @@ impl SyncManagerHandle {
         p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool: MempoolHandle,
+        subsystem_manager_handle: ManagerJoinHandle,
     ) -> Self {
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
@@ -101,10 +104,10 @@ impl SyncManagerHandle {
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = tokio::spawn(async move {
+        let sync_manager_handle = Some(tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
             let _ = error_sender.send(e);
-        });
+        }));
 
         Self {
             peer_manager_receiver,
@@ -112,6 +115,7 @@ impl SyncManagerHandle {
             sync_event_receiver: handle_receiver,
             error_receiver,
             sync_manager_handle,
+            subsystem_manager_handle: Some(subsystem_manager_handle),
         }
     }
 
@@ -210,8 +214,16 @@ impl SyncManagerHandle {
     }
 
     /// Awaits on the sync manager join handle and rethrows the panic.
-    pub async fn resume_panic(self) {
-        panic::resume_unwind(self.sync_manager_handle.await.unwrap_err().into_panic());
+    pub async fn resume_panic(mut self) {
+        self.subsystem_manager_handle.take().unwrap().join().await;
+
+        panic::resume_unwind(
+            self.sync_manager_handle.take().unwrap().await.unwrap_err().into_panic(),
+        );
+    }
+
+    pub async fn join_subsystem_manager(mut self) {
+        self.subsystem_manager_handle.take().unwrap().join().await;
     }
 }
 
@@ -221,6 +233,7 @@ pub struct SyncManagerHandleBuilder {
     subsystems: Option<(
         subsystem::Handle<Box<dyn ChainstateInterface>>,
         MempoolHandle,
+        ManagerJoinHandle,
     )>,
 }
 
@@ -238,12 +251,15 @@ impl SyncManagerHandleBuilder {
         self
     }
 
+    // TODO: FIXME: Accept only chainstate here and create the system manager inside.
+    // TODO: FIXME: Use the shutdown trigger!
     pub fn with_subsystems(
         mut self,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool: MempoolHandle,
+        subsystem_manager_handle: ManagerJoinHandle,
     ) -> Self {
-        self.subsystems = Some((chainstate, mempool));
+        self.subsystems = Some((chainstate, mempool, subsystem_manager_handle));
         self
     }
 
@@ -253,8 +269,8 @@ impl SyncManagerHandleBuilder {
     }
 
     pub async fn build(self) -> SyncManagerHandle {
-        let (chainstate, mempool) = match self.subsystems {
-            Some((c, m)) => (c, m),
+        let (chainstate, mempool, handle) = match self.subsystems {
+            Some((c, m, h)) => (c, m, h),
             None => start_subsystems(Arc::clone(&self.chain_config)).await,
         };
 
@@ -263,6 +279,7 @@ impl SyncManagerHandleBuilder {
             self.p2p_config,
             chainstate,
             mempool,
+            handle,
         )
         .await
     }
