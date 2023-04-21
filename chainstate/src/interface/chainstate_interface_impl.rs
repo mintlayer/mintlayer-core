@@ -368,22 +368,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .collect::<Result<Vec<_>, _>>()
     }
 
-    fn get_outputs_coin_amount(
-        &self,
-        outputs: &[TxOutput],
-    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
-        let chainstate_ref = self
-            .chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
-        let pos_accounting_view = chainstate_ref.make_pos_accounting_view();
-
-        outputs
-            .iter()
-            .map(|output| get_output_coin_amount(&pos_accounting_view, output))
-            .collect::<Result<Vec<_>, _>>()
-    }
-
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.chainstate
             .query()
