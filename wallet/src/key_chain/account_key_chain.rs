@@ -24,6 +24,7 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::PublicKey;
 use std::sync::Arc;
 use storage::Backend;
+use utils::const_value::ConstValue;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo};
@@ -35,10 +36,10 @@ pub struct AccountKeyChain {
     chain_config: Arc<ChainConfig>,
 
     /// The account key from which all the addresses are derived
-    account_pubkey: ExtendedPublicKey,
+    account_pubkey: ConstValue<ExtendedPublicKey>,
 
     /// The master/root key that this account key was derived from
-    root_hierarchy_key: Option<ExtendedPublicKey>,
+    root_hierarchy_key: ConstValue<Option<ExtendedPublicKey>>,
 
     /// Key chain for receiving funds
     receiving_key_chain: LeafKeyChain,
@@ -90,8 +91,8 @@ impl AccountKeyChain {
 
         let mut new_account = AccountKeyChain {
             chain_config,
-            account_pubkey,
-            root_hierarchy_key: Some(root_key.to_public_key()),
+            account_pubkey: account_pubkey.into(),
+            root_hierarchy_key: Some(root_key.to_public_key()).into(),
             receiving_key_chain,
             change_key_chain,
             lookahead_size,
@@ -125,8 +126,8 @@ impl AccountKeyChain {
 
         Ok(AccountKeyChain {
             chain_config,
-            account_pubkey,
-            root_hierarchy_key: account_info.get_root_hierarchy_key().clone(),
+            account_pubkey: account_pubkey.into(),
+            root_hierarchy_key: account_info.get_root_hierarchy_key().clone().into(),
             receiving_key_chain,
             change_key_chain,
             lookahead_size: account_info.get_lookahead_size(),
@@ -138,7 +139,7 @@ impl AccountKeyChain {
     }
 
     pub fn get_account_key(&self) -> ExtendedPublicKey {
-        self.account_pubkey.clone()
+        self.account_pubkey.clone().take()
     }
 
     /// Issue a new address that hasn't been used before
@@ -222,8 +223,8 @@ impl AccountKeyChain {
 
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
-            self.root_hierarchy_key.clone(),
-            self.account_pubkey.clone(),
+            self.root_hierarchy_key.clone().take(),
+            self.account_pubkey.clone().take(),
             self.lookahead_size,
         ))
     }
