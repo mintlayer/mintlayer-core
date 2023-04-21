@@ -193,7 +193,16 @@ impl Account {
     /// watched.
     #[allow(dead_code)] // TODO remove
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        match txo.destination() {
+        let destination = match txo {
+            TxOutput::Transfer(_, d) => Some(d),
+            TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            TxOutput::Burn(_) => None,
+            TxOutput::StakePool(_) => None,
+            TxOutput::ProduceBlockFromStake(_, _) => None,
+            TxOutput::DecommissionPool(_, _, _, _) => None,
+        };
+
+        match destination {
             Some(Destination::Address(pkh)) => self.key_chain.is_public_key_hash_mine(pkh),
             Some(Destination::PublicKey(pk)) => self.key_chain.is_public_key_mine(pk),
             _ => false,
