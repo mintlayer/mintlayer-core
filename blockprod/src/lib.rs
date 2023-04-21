@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod detail;
+pub mod interface;
 pub mod rpc;
 
 use std::sync::Arc;
@@ -24,7 +26,10 @@ use common::{
     time_getter::TimeGetter,
 };
 use consensus::ConsensusCreationError;
-use detail::{BlockProduction, JobKey};
+use detail::{
+    job_manager::{JobKey, JobManagerError},
+    BlockProduction,
+};
 use interface::blockprod_interface::BlockProductionInterface;
 use mempool::MempoolHandle;
 use subsystem::subsystem::CallError;
@@ -47,10 +52,9 @@ pub enum BlockProductionError {
     TipChanged(Id<GenBlock>, BlockHeight, Id<GenBlock>, BlockHeight),
     #[error("Job already exists")]
     JobAlreadyExists(JobKey),
+    #[error("Job manager error: {0}")]
+    JobManagerError(#[from] JobManagerError),
 }
-
-mod detail;
-pub mod interface;
 
 impl subsystem::Subsystem for Box<dyn BlockProductionInterface> {}
 
@@ -143,9 +147,14 @@ mod tests {
 
         tokio::spawn(async move {
             blockprod
-                .call_mut(move |this: &mut Box<dyn BlockProductionInterface>| {
-                    assert!(this.stop_all().is_ok(), "Failed to stop non-existent jobs");
-                    shutdown.initiate();
+                .call_async_mut(move |this| {
+                    Box::pin(async move {
+                        assert!(
+                            this.stop_all().await == Ok(0),
+                            "Failed to stop non-existent jobs"
+                        );
+                        shutdown.initiate();
+                    })
                 })
                 .await
                 .expect("Error initializing block production");

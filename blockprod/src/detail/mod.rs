@@ -13,12 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::BTreeMap,
-    sync::{atomic::AtomicBool, Arc},
+pub mod job_manager;
+
+use crate::{
+    detail::job_manager::{JobKey, JobManager},
+    BlockProductionError,
 };
 
-use chainstate::{ChainstateEvent, ChainstateHandle, PropertyQueryError};
+use std::sync::{atomic::AtomicBool, Arc};
+
+use chainstate::{ChainstateHandle, PropertyQueryError};
 use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
@@ -26,9 +30,9 @@ use common::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
             BlockBody, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, Destination, GenBlock, SignedTransaction,
+        Block, ChainConfig, Destination, SignedTransaction,
     },
-    primitives::{BlockHeight, Id},
+    primitives::BlockHeight,
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -36,10 +40,8 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
-use serialization::{Decode, Encode};
-use tokio::sync::{oneshot, watch};
 
-use crate::BlockProductionError;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
 pub enum TransactionsSource {
@@ -47,36 +49,13 @@ pub enum TransactionsSource {
     Provided(Vec<SignedTransaction>),
 }
 
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Encode,
-    Decode,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-pub struct JobKey {
-    current_tip: Id<GenBlock>,
-    // TODO: in proof of stake, we also add some identifier of the current key so that we don't stake twice from the same key.
-    //       This is because in PoS, there could be penalties for creating multiple blocks by the same staker.
-}
-
-pub struct JobHandle {
-    cancel_signal: oneshot::Sender<()>,
-}
-
 #[allow(dead_code)]
 pub struct BlockProduction {
     chain_config: Arc<ChainConfig>,
     chainstate_handle: ChainstateHandle,
-    chainstate_receiver: Option<watch::Receiver<Id<GenBlock>>>,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
-    all_jobs: BTreeMap<JobKey, JobHandle>,
+    job_manager: JobManager,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
@@ -88,15 +67,17 @@ impl BlockProduction {
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
+        let job_manager = JobManager::new(chainstate_handle.clone());
+
         let block_production = Self {
             chain_config,
             chainstate_handle,
-            chainstate_receiver: None,
             mempool_handle,
             time_getter,
-            all_jobs: BTreeMap::new(),
+            job_manager,
             mining_thread_pool,
         };
+
         Ok(block_production)
     }
 
@@ -104,28 +85,15 @@ impl BlockProduction {
         &self.time_getter
     }
 
-    pub fn stop_all_jobs(&mut self) {
-        let mut all_jobs = Vec::new();
-        while let Some((key, handle)) = self.all_jobs.pop_first() {
-            all_jobs.push((key, handle));
-        }
-
-        log::info!("Cancelling {} jobs", all_jobs.len());
-
-        for (key, handle) in all_jobs.drain(..) {
-            let _ = handle.cancel_signal.send(());
-            log::info!("Stopped mining job for tip {}", key.current_tip);
-        }
+    pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
+        self.job_manager
+            .stop_job(None)
+            .await
+            .map_err(BlockProductionError::JobManagerError)
     }
 
-    pub fn stop_job(&mut self, key: &JobKey) -> bool {
-        if let Some(handle) = self.all_jobs.remove(key) {
-            let _ = handle.cancel_signal.send(());
-            log::info!("Stopped mining job for tip {}", key.current_tip);
-            true
-        } else {
-            false
-        }
+    pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {
+        Ok(self.job_manager.stop_job(Some(job_key)).await? == 1)
     }
 
     pub async fn collect_transactions(
@@ -203,12 +171,6 @@ impl BlockProduction {
         Ok(block_header)
     }
 
-    pub fn make_job_key(tip_at_start: &GenBlockIndex) -> JobKey {
-        JobKey {
-            current_tip: tip_at_start.block_id(),
-        }
-    }
-
     pub async fn generate_block(
         &mut self,
         _reward_destination: Destination,
@@ -216,31 +178,12 @@ impl BlockProduction {
     ) -> Result<Block, BlockProductionError> {
         let stop_flag = Arc::new(false.into());
 
-        let (cancel_sender, mut cancel_receiver) = oneshot::channel::<()>();
-
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
-        let mut chainstate_receiver =
-            self.subscribe_to_chainstate_events(tip_at_start.block_id()).await?;
-
-        {
-            // define the job and insert it into the map of all jobs
-            let job_key = Self::make_job_key(&tip_at_start);
-
-            #[allow(clippy::map_entry)]
-            if !self.all_jobs.contains_key(&job_key) {
-                self.all_jobs.insert(
-                    job_key,
-                    JobHandle {
-                        cancel_signal: cancel_sender,
-                    },
-                );
-            } else {
-                return Err(BlockProductionError::JobAlreadyExists(job_key));
-            }
-        }
+        let (_job_key, mut cancel_receiver) =
+            self.job_manager.new_job(tip_at_start.block_id()).await?;
 
         loop {
             let timestamp =
@@ -297,6 +240,7 @@ impl BlockProduction {
                 let chain_config = Arc::clone(&self.chain_config);
                 let current_tip_height = current_tip_index.block_height();
                 let stop_flag = Arc::clone(&stop_flag);
+
                 self.mining_thread_pool.spawn(move || {
                     let block_header = Self::solve_block(
                         chain_config,
@@ -304,113 +248,63 @@ impl BlockProduction {
                         current_tip_height,
                         stop_flag,
                     );
+
                     result_sender
                         .send(block_header)
                         .expect("Failed to send block header back to main thread");
                 });
             }
 
-            'consume_chainstate_events: loop {
-                tokio::select! {
-                    _ = chainstate_receiver.changed() => {
-                        // TODO: test broadcasts
-                        self.broadcast_new_tip(*chainstate_receiver.borrow());
-                        continue 'consume_chainstate_events;
-                    }
-                    _ = &mut cancel_receiver => {
-                        // TODO: test cancellations
-                        stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
-                        return Err(BlockProductionError::Cancelled);
-                    }
-                    solve_receive_result = &mut result_receiver => {
-                        let mining_result = match solve_receive_result {
-                            Ok(mining_result) => mining_result,
-                            Err(_) => {
-                                log::error!(
-                                    "Mining thread pool channel lost on tip {} on best height {}",
-                                    current_tip_index.block_id(),
-                                    current_tip_index.block_height()
-                                );
+            tokio::select! {
+                _ = cancel_receiver.recv() => {
+                    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return Err(BlockProductionError::Cancelled);
+                }
+                solve_receive_result = &mut result_receiver => {
+                    let mining_result = match solve_receive_result {
+                        Ok(mining_result) => mining_result,
+                        Err(_) => {
+                            log::error!(
+                                "Mining thread pool channel lost on tip {} on best height {}",
+                                current_tip_index.block_id(),
+                                current_tip_index.block_height()
+                            );
 
-                                continue;
-                            }
-                        };
+                            continue;
+                        }
+                    };
 
-                        let block_header = match mining_result {
-                            Ok(header) => header,
-                            Err(e) => {
-                                log::error!(
-                                    "Solving block in thread-pool returned an error on tip {} on best height {}: {e}",
-                                    current_tip_index.block_id(),
-                                    current_tip_index.block_height()
-                                );
 
-                                continue;
-                            }
-                        };
+                    let block_header = match mining_result {
+                        Ok(header) => header,
+                        Err(e) => {
+                            log::error!(
+                                "Solving block in thread-pool returned an error on tip {} on best height {}: {e}",
+                                current_tip_index.block_id(),
+                                current_tip_index.block_height()
+                            );
 
-                        let block = Block::new_from_header(block_header, block_body.clone())?;
-                        return Ok(block);
-                    }
+                            continue;
+                        }
+                    };
+
+                    let block = Block::new_from_header(block_header, block_body.clone())?;
+                    return Ok(block);
                 }
             }
-        }
-    }
-
-    async fn subscribe_to_chainstate_events(
-        &mut self,
-        tip_at_start: Id<GenBlock>,
-    ) -> Result<watch::Receiver<Id<GenBlock>>, BlockProductionError> {
-        if let Some(chainstate_receiver) = &mut self.chainstate_receiver {
-            return Ok(chainstate_receiver.clone());
-        }
-
-        let (chainstate_sender, chainstate_receiver) = watch::channel(tip_at_start);
-        self.chainstate_receiver = Some(chainstate_receiver.clone());
-
-        let subscribe_func =
-            Arc::new(
-                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                    ChainstateEvent::NewTip(block_id, _) => {
-                        if let Err(e) = chainstate_sender.send(block_id.into()) {
-                            log::error!("Chainstate subscriber failed to send new tip: {:?}", e)
-                        }
-                    }
-                },
-            );
-
-        self.chainstate_handle
-            .call_mut(|this| this.subscribe_to_events(subscribe_func))
-            .await
-            .map_err(BlockProductionError::SubsystemCallError)?;
-
-        Ok(chainstate_receiver.clone())
-    }
-
-    fn broadcast_new_tip(&mut self, new_tip: Id<GenBlock>) {
-        let mut jobs_to_stop = vec![];
-
-        for (job_key, _) in self.all_jobs.iter() {
-            if job_key.current_tip != new_tip {
-                jobs_to_stop.push(job_key.clone());
-            }
-        }
-
-        for job_key in jobs_to_stop {
-            self.stop_job(&job_key);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use common::chain::GenBlock;
     use common::primitives::{Id, H256};
     use crypto::random::make_pseudo_rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
     use mocks::MempoolInterfaceMock;
     use std::sync::atomic::Ordering::Relaxed;
     use subsystem::CallRequest;
-    use tokio::sync::oneshot::error::TryRecvError;
 
     use crate::{prepare_thread_pool, tests::setup_blockprod_test};
 
@@ -565,37 +459,24 @@ mod tests {
         )
         .expect("Error initializing blockprod");
 
-        let other_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager
+            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .await
+            .unwrap();
 
-        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
-
-        block_production.all_jobs.insert(
-            other_job_key,
-            JobHandle {
-                cancel_signal: other_job_cancel_sender,
-            },
-        );
-
-        let stop_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
+        let stop_job_key =
+            JobKey::new(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>);
 
         assert!(
-            !block_production.stop_job(&stop_job_key),
+            !block_production.stop_job(stop_job_key).await.unwrap(),
             "Stopped a non-existent job"
         );
 
         assert!(
-            block_production.all_jobs.len() == 1,
+            block_production.job_manager.get_job_count().await.unwrap() == 1,
             "Jobs count is incorrect",
         );
-
-        match other_job_cancel_receiver.try_recv() {
-            Err(TryRecvError::Empty) => {}
-            _ => panic!("Other job was stopped"),
-        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -611,51 +492,27 @@ mod tests {
         )
         .expect("Error initializing blockprod");
 
-        let other_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager
+            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .await
+            .unwrap();
 
-        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
-
-        block_production.all_jobs.insert(
-            other_job_key,
-            JobHandle {
-                cancel_signal: other_job_cancel_sender,
-            },
-        );
-
-        let stop_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
-
-        let (stop_job_cancel_sender, mut stop_job_cancel_receiver) = oneshot::channel::<()>();
-
-        block_production.all_jobs.insert(
-            stop_job_key.clone(),
-            JobHandle {
-                cancel_signal: stop_job_cancel_sender,
-            },
-        );
+        let (stop_job_key, _stop_job_cancel_receiver) = block_production
+            .job_manager
+            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .await
+            .unwrap();
 
         assert!(
-            block_production.stop_job(&stop_job_key),
+            block_production.stop_job(stop_job_key).await.unwrap(),
             "Failed to stop job"
         );
 
         assert!(
-            block_production.all_jobs.len() == 1,
+            block_production.job_manager.get_job_count().await.unwrap() == 1,
             "Jobs count is incorrect",
         );
-
-        match stop_job_cancel_receiver.try_recv() {
-            Ok(_) => {}
-            _ => panic!("Failed to stop job"),
-        }
-
-        match other_job_cancel_receiver.try_recv() {
-            Err(TryRecvError::Empty) => {}
-            _ => panic!("Other job was stopped"),
-        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -671,47 +528,26 @@ mod tests {
         )
         .expect("Error initializing blockprod");
 
-        let other_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
+        let (_other_job_key, _other_job_cancel_receiver) = block_production
+            .job_manager
+            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .await
+            .unwrap();
 
-        let (other_job_cancel_sender, mut other_job_cancel_receiver) = oneshot::channel::<()>();
-
-        block_production.all_jobs.insert(
-            other_job_key,
-            JobHandle {
-                cancel_signal: other_job_cancel_sender,
-            },
-        );
-
-        let stop_job_key = JobKey {
-            current_tip: Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>,
-        };
-
-        let (stop_job_cancel_sender, mut stop_job_cancel_receiver) = oneshot::channel::<()>();
-
-        block_production.all_jobs.insert(
-            stop_job_key,
-            JobHandle {
-                cancel_signal: stop_job_cancel_sender,
-            },
-        );
-
-        block_production.stop_all_jobs();
+        let (_stop_job_key, _stop_job_cancel_receiver) = block_production
+            .job_manager
+            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .await
+            .unwrap();
 
         assert!(
-            block_production.all_jobs.is_empty(),
-            "Jobs count is incorrect",
+            block_production.stop_all_jobs().await.unwrap() == 2,
+            "Incorrect number of jobs stopped",
         );
 
-        match stop_job_cancel_receiver.try_recv() {
-            Ok(_) => {}
-            _ => panic!("Failed to stop job"),
-        }
-
-        match other_job_cancel_receiver.try_recv() {
-            Ok(_) => {}
-            _ => panic!("Failed to stop job"),
-        }
+        assert!(
+            block_production.job_manager.get_job_count().await.unwrap() == 0,
+            "Jobs count is incorrect",
+        );
     }
 }
