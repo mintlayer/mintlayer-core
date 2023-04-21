@@ -41,6 +41,7 @@ tests![invalid_pubsub_block,];
 // Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
 // invalid block from the first service and verify that the `SyncManager` of the first service
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
+#[allow(clippy::extra_unused_type_parameters)]
 async fn invalid_pubsub_block<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,

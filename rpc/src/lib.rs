@@ -25,11 +25,12 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use logging::log;
 
 pub use config::RpcConfig;
-pub use jsonrpsee::core::server::rpc_module::Methods;
+pub use jsonrpsee::core::server::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 use rpc_auth::RpcAuth;
 use rpc_creds::RpcCreds;
+use tower_http::validate_request::ValidateRequestHeaderLayer;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -132,10 +133,7 @@ impl Rpc {
         creds: Option<RpcCreds>,
     ) -> anyhow::Result<Self> {
         let auth_layer = creds.as_ref().map(|creds| {
-            tower_http::auth::RequireAuthorizationLayer::custom(RpcAuth::new(
-                creds.username(),
-                creds.password(),
-            ))
+            ValidateRequestHeaderLayer::custom(RpcAuth::new(creds.username(), creds.password()))
         });
 
         let middleware = tower::ServiceBuilder::new().layer(tower::util::option_layer(auth_layer));

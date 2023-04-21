@@ -23,7 +23,7 @@ use crypto::{
 };
 use hyper::{Body, Request, Response};
 use logging::log;
-use tower_http::auth::AuthorizeRequest;
+use tower_http::validate_request::ValidateRequest;
 
 /// Custom HTTP authentication layer implementation
 ///
@@ -108,10 +108,10 @@ impl RpcAuth {
     }
 }
 
-impl<B> AuthorizeRequest<B> for RpcAuth {
+impl<B> ValidateRequest<B> for RpcAuth {
     type ResponseBody = Body;
 
-    fn authorize(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
+    fn validate(&mut self, request: &mut Request<B>) -> Result<(), Response<Self::ResponseBody>> {
         let res = self.check_auth(request);
         match res {
             Ok(true) => Ok(()),

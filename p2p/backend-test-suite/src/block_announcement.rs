@@ -32,6 +32,7 @@ use p2p::{
 
 tests![block_announcement, block_announcement_no_subscription,];
 
+#[allow(clippy::extra_unused_type_parameters)]
 async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -127,6 +128,7 @@ where
     assert_eq!(&header, block.header());
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,

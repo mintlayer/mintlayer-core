@@ -25,6 +25,7 @@ use p2p::{
 
 tests![connect, connect_address_in_use, connect_accept,];
 
+#[allow(clippy::extra_unused_type_parameters)]
 async fn connect<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -46,6 +47,7 @@ where
 }
 
 // Check that connecting twice to the same address isn't possible.
+#[allow(clippy::extra_unused_type_parameters)]
 async fn connect_address_in_use<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -84,6 +86,7 @@ where
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
 // trying to connect to `service1`.
+#[allow(clippy::extra_unused_type_parameters)]
 async fn connect_accept<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
