@@ -142,19 +142,19 @@ impl JobManager {
             loop {
                 tokio::select! {
                     event = get_job_count_receiver.recv()
-                        => event_then(event, |ev| jobs.handle_job_count(ev)),
+                        => event_then(event, |result_sender| jobs.handle_job_count(result_sender)),
 
                     tip_id = chainstate_receiver.recv()
                         => event_then(tip_id, |id| jobs.handle_chainstate_event(id)),
 
                     event = new_job_receiver.recv()
-                        => event_then(event, |ev| jobs.handle_add_job(ev)),
+                        => event_then(event, |job| jobs.handle_add_job(job)),
 
                     event = stop_job_receiver.recv()
                         => event_then(event, |ev| jobs.handle_stop_job(ev)),
 
                     event = shutdown_receiver.recv()
-                        => return event_then(event, |ev| jobs.handle_shutdown(ev)),
+                        => return event_then(event, |result_sender| jobs.handle_shutdown(result_sender)),
                 }
             }
         });
