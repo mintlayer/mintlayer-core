@@ -83,7 +83,6 @@ type NewJobEvent = (
     oneshot::Sender<Result<JobKey, JobManagerError>>,
 );
 
-#[allow(clippy::type_complexity)]
 pub struct JobManager {
     chainstate_handle: ChainstateHandle,
     get_job_count_sender: UnboundedSender<oneshot::Sender<usize>>,
@@ -120,7 +119,6 @@ impl JobManager {
         job_manager
     }
 
-    #[allow(clippy::type_complexity)]
     fn run(
         &mut self,
         mut chainstate_receiver: UnboundedReceiver<Id<GenBlock>>,
@@ -236,7 +234,6 @@ impl JobManager {
             .or_else(|e| Err(e))
     }
 
-    #[allow(clippy::type_complexity)]
     fn new_job_handler(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {
         if let Some((current_tip_id, cancel_sender, result_sender)) = event {
             let job_key = JobKey::new(current_tip_id);
