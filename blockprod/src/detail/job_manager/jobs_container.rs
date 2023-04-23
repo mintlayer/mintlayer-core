@@ -28,13 +28,13 @@ pub struct JobsContainer {
 }
 
 impl JobsContainer {
-    pub fn job_count(&self, result_sender: oneshot::Sender<usize>) {
+    pub fn handle_job_count(&self, result_sender: oneshot::Sender<usize>) {
         _ = result_sender
             .send(self.jobs.len())
             .log_err_pfx("Error sending get job count results");
     }
 
-    pub fn new_job(&mut self, event: NewJobEvent) {
+    pub fn handle_add_job(&mut self, event: NewJobEvent) {
         let NewJobEvent {
             current_tip_id,
             cancel_sender,
@@ -74,8 +74,7 @@ impl JobsContainer {
 
     /// Remove a job by its key. If `and_stop` is true, the job will be stopped.
     /// Returns true if the job was removed, false if it was not found.
-    #[allow(dead_code)]
-    pub fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
+    fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
         match self.jobs.entry(job_key) {
             std::collections::btree_map::Entry::Vacant(j) => {
                 log::error!("Attempted to stop non-existent job: {j:?}");
@@ -84,7 +83,7 @@ impl JobsContainer {
             std::collections::btree_map::Entry::Occupied(entry) => {
                 if and_stop {
                     _ = entry
-                        .get()
+                        .remove()
                         .cancel_sender
                         .send(())
                         .log_err_pfx("Error sending cancel job event");
@@ -94,45 +93,31 @@ impl JobsContainer {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn stop_all(&mut self) -> usize {
+    fn stop_all(&mut self) -> usize {
         let taken_jobs = std::mem::take(&mut self.jobs);
         let count = taken_jobs.len();
-        let _stop_results =
+        let stop_results =
             taken_jobs.into_iter().map(|j| j.1.cancel_sender.send(())).collect::<Vec<_>>();
+
+        let send_fail_count = stop_results.into_iter().filter_map(|r| r.ok()).count();
+        if send_fail_count > 0 {
+            log::info!("Sending stop jobs for block production failed for {send_fail_count}");
+        }
+
         count
     }
 
     pub fn handle_stop_job(&mut self, event: (Option<JobKey>, oneshot::Sender<usize>)) {
         let (job_key, result_sender) = event;
-        let mut stop_jobs = Vec::new();
 
-        match job_key {
-            Some(job_key) => {
-                if let Some(job_handle) = self.jobs.remove(&job_key) {
-                    stop_jobs.push((job_key, job_handle));
-                } else {
-                    log::error!("Attempted to stop non-existent job: {job_key:?}")
-                }
-            }
-            None => {
-                stop_jobs =
-                    std::mem::take(&mut self.jobs).into_iter().map(|(k, v)| (k, v)).collect();
-                log::info!("Cancelling {} jobs", stop_jobs.len());
-            }
-        }
-
-        let stop_count = stop_jobs.len();
-
-        for (job_key, job_handle) in stop_jobs.drain(..) {
-            let _ = job_handle.cancel_sender.send(());
-            log::info!("Stopped mining job for tip {}", job_key.current_tip_id());
-        }
-
-        _ = result_sender.send(stop_count).log_err_pfx("Error sending stop jobs count");
+        let stopped_count = match job_key {
+            Some(job_key) => self.remove_job(job_key, true) as usize,
+            None => self.stop_all(),
+        };
+        _ = result_sender.send(stopped_count).log_err_pfx("Error sending stop jobs count");
     }
 
-    pub fn shutdown(&mut self, result_sender: oneshot::Sender<usize>) {
+    pub fn handle_shutdown(&mut self, result_sender: oneshot::Sender<usize>) {
         log::info!("Stopping block production job manager");
         self.handle_stop_job((None, result_sender));
     }
