@@ -23,7 +23,7 @@ use tokio::sync::{
     mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
-use utils::ensure;
+use utils::{ensure, tap_error_log::LogError};
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum JobManagerError {
@@ -170,11 +170,9 @@ impl JobManager {
                         Arc::new(
                             move |chainstate_event: ChainstateEvent| match chainstate_event {
                                 ChainstateEvent::NewTip(block_id, _) => {
-                                    if let Err(e) = chainstate_sender.send(block_id.into()) {
-                                        log::error!(
-                                            "Chainstate subscriber failed to send new tip: {e:?}"
-                                        )
-                                    }
+                                    _ = chainstate_sender.send(block_id.into()).log_err_pfx(
+                                        "Chainstate subscriber failed to send new tip",
+                                    );
                                 }
                             },
                         );
@@ -197,9 +195,7 @@ impl JobManager {
 
             for job_key in jobs_to_stop {
                 if let Some(handle) = jobs.remove(&job_key) {
-                    if let Err(e) = handle.cancel_sender.send(()) {
-                        log::info!("Error sendin cancel job event: {e:?}");
-                    }
+                    _ = handle.cancel_sender.send(()).log_err_pfx("Error sending cancel job event");
                 }
             }
         }
@@ -224,9 +220,9 @@ impl JobManager {
         event: Option<oneshot::Sender<usize>>,
     ) {
         if let Some(result_sender) = event {
-            if let Err(e) = result_sender.send(jobs.len()) {
-                log::info!("Error sending get job count results: {e:?}");
-            }
+            _ = result_sender
+                .send(jobs.len())
+                .log_err_pfx("Error sending get job count results");
         }
     }
 
@@ -318,9 +314,7 @@ impl JobManager {
                 log::info!("Stopped mining job for tip {}", job_key.current_tip_id());
             }
 
-            if let Err(e) = result_sender.send(stop_count) {
-                log::info!("Error sending stop jobs count: {e:?}");
-            }
+            _ = result_sender.send(stop_count).log_err_pfx("Error sending stop jobs count");
         }
     }
 
