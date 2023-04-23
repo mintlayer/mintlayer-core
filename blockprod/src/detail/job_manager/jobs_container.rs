@@ -77,6 +77,37 @@ impl JobsContainer {
         }
     }
 
+    /// Remove a job by its key. If `and_stop` is true, the job will be stopped.
+    /// Returns true if the job was removed, false if it was not found.
+    #[allow(dead_code)]
+    pub fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
+        match self.jobs.entry(job_key) {
+            std::collections::btree_map::Entry::Vacant(j) => {
+                log::error!("Attempted to stop non-existent job: {j:?}");
+                false
+            }
+            std::collections::btree_map::Entry::Occupied(entry) => {
+                if and_stop {
+                    _ = entry
+                        .get()
+                        .cancel_sender
+                        .send(())
+                        .log_err_pfx("Error sending cancel job event");
+                }
+                true
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn stop_all(&mut self) -> usize {
+        let taken_jobs = std::mem::take(&mut self.jobs);
+        let count = taken_jobs.len();
+        let _stop_results =
+            taken_jobs.into_iter().map(|j| j.1.cancel_sender.send(())).collect::<Vec<_>>();
+        count
+    }
+
     pub fn handle_stop_job(&mut self, event: Option<(Option<JobKey>, oneshot::Sender<usize>)>) {
         if let Some((job_key, result_sender)) = event {
             let mut stop_jobs = Vec::new();
