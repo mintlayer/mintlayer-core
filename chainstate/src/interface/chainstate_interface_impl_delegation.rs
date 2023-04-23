@@ -44,9 +44,9 @@ use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
-use crate::ChainstateConfig;
 use crate::{
-    chainstate_interface::ChainstateInterface, BlockSource, ChainstateError, ChainstateEvent,
+    chainstate_interface::ChainstateInterface, BlockSource, ChainInfo, ChainstateConfig,
+    ChainstateError, ChainstateEvent,
 };
 
 impl<T: Deref + DerefMut + Send> ChainstateInterface for T
@@ -315,6 +315,10 @@ where
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError> {
         self.deref().get_stake_pool_delegation_share(pool_id, delegation_id)
+    }
+
+    fn info(&self) -> Result<ChainInfo, ChainstateError> {
+        self.deref().info()
     }
 }
 

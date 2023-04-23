@@ -17,16 +17,15 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
-use crate::{ChainstateConfig, ChainstateError, ChainstateEvent};
+use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
-use common::chain::TxOutput;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -214,4 +213,7 @@ pub trait ChainstateInterface: Send {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
+
+    /// Returns information about the chain.
+    fn info(&self) -> Result<ChainInfo, ChainstateError>;
 }

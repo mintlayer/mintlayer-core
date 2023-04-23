@@ -23,7 +23,7 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
@@ -522,6 +522,25 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn info(&self) -> Result<ChainInfo, ChainstateError> {
+        let best_block_index = self.get_best_block_index()?;
+        let best_block_height = best_block_index.block_height();
+        let best_block_id = best_block_index.block_id();
+        let best_block_timestamp = best_block_index.block_timestamp();
+
+        let median_time = self.calculate_median_time_past(&best_block_id)?;
+
+        let is_initial_block_download = self.is_initial_block_download()?;
+
+        Ok(ChainInfo {
+            best_block_height,
+            best_block_id,
+            best_block_timestamp,
+            median_time,
+            is_initial_block_download,
+        })
     }
 }
 

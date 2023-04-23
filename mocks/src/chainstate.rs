@@ -33,8 +33,9 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
-use chainstate::ChainstateConfig;
-use chainstate::{BlockSource, ChainstateError, ChainstateEvent, Locator};
+use chainstate::{
+    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
+};
 use chainstate_types::BlockIndex;
 use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
@@ -163,6 +164,7 @@ mockall::mock! {
             pool_id: PoolId,
             delegation_id: DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
+        fn info(&self) -> Result<ChainInfo, ChainstateError>;
     }
 }
 

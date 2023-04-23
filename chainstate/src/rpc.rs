@@ -17,7 +17,7 @@
 
 use std::io::{Read, Write};
 
-use crate::{Block, BlockSource, ChainstateError, GenBlock};
+use crate::{Block, BlockSource, ChainInfo, ChainstateError, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
@@ -70,6 +70,10 @@ trait ChainstateRpc {
     /// Reads blocks from disk
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
+
+    /// Return information about the chain.
+    #[method(name = "info")]
+    async fn info(&self) -> RpcResult<ChainInfo>;
 }
 
 #[async_trait::async_trait]
@@ -137,6 +141,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
 
         Ok(())
+    }
+
+    async fn info(&self) -> RpcResult<ChainInfo> {
+        handle_error(self.call(move |this| this.info()).await)
     }
 }
 
