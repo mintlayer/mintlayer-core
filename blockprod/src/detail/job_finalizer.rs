@@ -15,6 +15,6 @@ impl<F: FnOnce()> Drop for JobFinalizer<F> {
     fn drop(&mut self) {
         let mut stopper: Option<F> = None;
         std::mem::swap(&mut stopper, &mut self.job_finalizer);
-        let _send_result = stopper.expect("Must exist")();
+        stopper.expect("Must exist")();
     }
 }
