@@ -215,10 +215,7 @@ impl JobManager {
         );
 
         tokio::select! {
-            result = result_receiver => match result {
-                Ok(v) => Ok(v),
-                Err(_) => Err(JobManagerError::FailedToReadJobCount),
-            }
+            result = result_receiver => result.map_err(|_| JobManagerError::FailedToReadJobCount),
         }
     }
 
@@ -246,13 +243,10 @@ impl JobManager {
         );
 
         tokio::select! {
-            result = result_receiver => match result {
-                Ok(v) => match v {
-                    Ok(v) => Ok((v, cancel_receiver)),
-                    Err(e) => Err(e),
-                },
-                Err(_) => Err(JobManagerError::FailedToCreateJob)
-            }
+            result = result_receiver
+                => result
+                    .map_err(|_| JobManagerError::FailedToCreateJob)?
+                    .and_then(|v| Ok((v, cancel_receiver))).or_else(|e| Err(e))
         }
     }
 
@@ -291,10 +285,7 @@ impl JobManager {
         );
 
         tokio::select! {
-            result = result_receiver => match result {
-                Ok(v) => Ok(v),
-                Err(_) => Err(JobManagerError::FailedToStopJobs),
-            }
+            result = result_receiver => result.map_err(|_| JobManagerError::FailedToStopJobs),
         }
     }
 
