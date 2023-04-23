@@ -79,11 +79,11 @@ impl JobKey {
     }
 }
 
-type NewJobEvent = (
-    Id<GenBlock>,
-    UnboundedSender<()>,
-    oneshot::Sender<Result<JobKey, JobManagerError>>,
-);
+pub struct NewJobEvent {
+    current_tip_id: Id<GenBlock>,
+    cancel_sender: UnboundedSender<()>,
+    result_sender: oneshot::Sender<Result<JobKey, JobManagerError>>,
+}
 
 pub struct JobManager {
     chainstate_handle: ChainstateHandle,
@@ -195,8 +195,14 @@ impl JobManager {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
+        let job = NewJobEvent {
+            current_tip_id: block_id,
+            cancel_sender,
+            result_sender,
+        };
+
         ensure!(
-            self.new_job_sender.send((block_id, cancel_sender, result_sender)).is_ok(),
+            self.new_job_sender.send(job).is_ok(),
             JobManagerError::FailedToSendNewJobEvent
         );
 

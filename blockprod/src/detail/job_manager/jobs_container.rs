@@ -37,7 +37,12 @@ impl JobsContainer {
     }
 
     pub fn handle_new_job(&mut self, event: Option<NewJobEvent>) {
-        if let Some((current_tip_id, cancel_sender, result_sender)) = event {
+        if let Some(NewJobEvent {
+            current_tip_id,
+            cancel_sender,
+            result_sender,
+        }) = event
+        {
             let job_key = JobKey::new(current_tip_id);
 
             if self.jobs.contains_key(&job_key) {
