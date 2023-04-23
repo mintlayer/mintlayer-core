@@ -357,7 +357,10 @@ mod tests {
             let accumulator = block_production.collect_transactions().await;
 
             let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
-            assert!(!collected_transactions, "Expected collect_tx() to not be called");
+            assert!(
+                !collected_transactions,
+                "Expected collect_tx() to not be called"
+            );
 
             assert!(
                 matches!(
@@ -412,7 +415,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn collect_transactions_succeeded() {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
