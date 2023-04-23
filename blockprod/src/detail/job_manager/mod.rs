@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, mem::take, sync::Arc};
+mod jobs_container;
+
+use std::sync::Arc;
 
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{chain::GenBlock, primitives::Id};
@@ -128,24 +130,24 @@ impl JobManager {
         mut shutdown_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
     ) {
         tokio::spawn(async move {
-            let mut jobs: BTreeMap<JobKey, JobHandle> = BTreeMap::new();
+            let mut jobs = jobs_container::JobsContainer::default();
 
             loop {
                 tokio::select! {
                     event = get_job_count_receiver.recv()
-                        => Self::handle_get_job_count(&jobs, event),
+                        => jobs.handle_get_job_count(event),
 
                     event = chainstate_receiver.recv()
-                        => Self::handle_chainstate_event(&mut jobs, event),
+                        => jobs.handle_chainstate_event(event),
 
                     event = new_job_receiver.recv()
-                        => Self::handle_new_job(&mut jobs, event),
+                        => jobs.handle_new_job(event),
 
                     event = stop_job_receiver.recv()
-                        => Self::handle_stop_job(&mut jobs, event),
+                        => jobs.handle_stop_job( event),
 
                     event = shutdown_receiver.recv()
-                        => return Self::handle_shutdown(&mut jobs, event), // Note: the return here
+                        => return jobs.handle_shutdown(event), // Note: the return here
                 }
             }
         });
@@ -174,27 +176,6 @@ impl JobManager {
         });
     }
 
-    fn handle_chainstate_event(
-        jobs: &mut BTreeMap<JobKey, JobHandle>,
-        event: Option<Id<GenBlock>>,
-    ) {
-        if let Some(new_tip_id) = event {
-            let mut jobs_to_stop: Vec<JobKey> = vec![];
-
-            for (job_key, _) in jobs.iter() {
-                if job_key.current_tip_id() != new_tip_id {
-                    jobs_to_stop.push(job_key.clone());
-                }
-            }
-
-            for job_key in jobs_to_stop {
-                if let Some(handle) = jobs.remove(&job_key) {
-                    _ = handle.cancel_sender.send(()).log_err_pfx("Error sending cancel job event");
-                }
-            }
-        }
-    }
-
     #[allow(dead_code)]
     pub async fn get_job_count(&self) -> Result<usize, JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
@@ -205,17 +186,6 @@ impl JobManager {
         );
 
         result_receiver.await.map_err(|_| JobManagerError::FailedToReadJobCount)
-    }
-
-    fn handle_get_job_count(
-        jobs: &BTreeMap<JobKey, JobHandle>,
-        event: Option<oneshot::Sender<usize>>,
-    ) {
-        if let Some(result_sender) = event {
-            _ = result_sender
-                .send(jobs.len())
-                .log_err_pfx("Error sending get job count results");
-        }
     }
 
     pub async fn new_job(
@@ -234,24 +204,6 @@ impl JobManager {
             .await
             .map_err(|_| JobManagerError::FailedToCreateJob)?
             .map(|v| (v, cancel_receiver))
-    }
-
-    fn handle_new_job(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {
-        if let Some((current_tip_id, cancel_sender, result_sender)) = event {
-            let job_key = JobKey::new(current_tip_id);
-
-            if jobs.contains_key(&job_key) {
-                if let Err(e) = result_sender.send(Err(JobManagerError::JobAlreadyExists)) {
-                    log::error!("Error sending new job exists error: {e:?}");
-                }
-            } else {
-                jobs.insert(job_key.clone(), JobHandle { cancel_sender });
-
-                if let Err(e) = result_sender.send(Ok(job_key)) {
-                    log::error!("Error sending new job event: {e:?}");
-                }
-            }
-        }
     }
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError> {
@@ -275,48 +227,6 @@ impl JobManager {
 
         result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
-
-    fn handle_stop_job(
-        jobs: &mut BTreeMap<JobKey, JobHandle>,
-        event: Option<(Option<JobKey>, oneshot::Sender<usize>)>,
-    ) {
-        if let Some((job_key, result_sender)) = event {
-            let mut stop_jobs = Vec::new();
-
-            match job_key {
-                Some(job_key) => {
-                    if let Some(job_handle) = jobs.remove(&job_key) {
-                        stop_jobs.push((job_key, job_handle));
-                    } else {
-                        log::error!("Attempted to stop non-existent job: {job_key:?}")
-                    }
-                }
-                None => {
-                    stop_jobs = take(jobs).into_iter().map(|(k, v)| (k, v)).collect();
-                    log::info!("Cancelling {} jobs", stop_jobs.len());
-                }
-            }
-
-            let stop_count = stop_jobs.len();
-
-            for (job_key, job_handle) in stop_jobs.drain(..) {
-                let _ = job_handle.cancel_sender.send(());
-                log::info!("Stopped mining job for tip {}", job_key.current_tip_id());
-            }
-
-            _ = result_sender.send(stop_count).log_err_pfx("Error sending stop jobs count");
-        }
-    }
-
-    fn handle_shutdown(
-        jobs: &mut BTreeMap<JobKey, JobHandle>,
-        event: Option<oneshot::Sender<usize>>,
-    ) {
-        if let Some(result_sender) = event {
-            log::info!("Stopping block production job manager");
-            Self::handle_stop_job(jobs, Some((None, result_sender)));
-        }
-    }
 }
 
 impl Drop for JobManager {
@@ -331,3 +241,5 @@ impl Drop for JobManager {
         tokio::spawn(async move { result_receiver.await });
     }
 }
+
+// TODO: tests
