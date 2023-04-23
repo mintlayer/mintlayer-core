@@ -255,7 +255,6 @@ impl JobManager {
         self._stop_job(None).await
     }
 
-
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError> {
         self._stop_job(Some(job_key)).await
     }
@@ -285,11 +284,7 @@ impl JobManager {
                     }
                 }
                 None => {
-                    stop_jobs = take(jobs)
-                        .into_iter()
-                        .map(|(k, v)| (k, v))
-                        .collect();
-
+                    stop_jobs = take(jobs).into_iter().map(|(k, v)| (k, v)).collect();
                     log::info!("Cancelling {} jobs", stop_jobs.len());
                 }
             }
