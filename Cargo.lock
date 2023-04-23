@@ -2492,7 +2492,6 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "assert_cmd",
  "blockprod",
  "chainstate",
  "chainstate-launcher",
@@ -2536,6 +2535,17 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
+]
+
+[[package]]
+name = "node-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "logging",
+ "node",
+ "tokio",
 ]
 
 [[package]]
