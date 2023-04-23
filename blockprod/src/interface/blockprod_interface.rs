@@ -23,8 +23,7 @@ pub trait BlockProductionInterface: Send {
     /// to all currently running jobs to stop running
     async fn stop_all(&mut self) -> Result<usize, BlockProductionError>;
 
-    /// When called, the job manager will be notified to send a signal
-    /// to the specified job to stop running
+    /// Stop a specific job, given its key
     async fn stop_job(&mut self, job_id: JobKey) -> Result<bool, BlockProductionError>;
 
     /// Generate a block with the given transactions to the specified
