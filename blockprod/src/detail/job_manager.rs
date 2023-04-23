@@ -313,7 +313,7 @@ impl JobManager {
         event: Option<oneshot::Sender<usize>>,
     ) {
         if let Some(result_sender) = event {
-            log::info!("Stopping job manager");
+            log::info!("Stopping block production job manager");
             Self::handle_stop_job(jobs, Some((None, result_sender)));
         }
     }
