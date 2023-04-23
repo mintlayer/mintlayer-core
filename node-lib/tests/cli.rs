@@ -17,7 +17,7 @@ use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
 use tempfile::TempDir;
 
-use node::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
+use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
 
 const CONFIG_NAME: &str = "config.toml";
 

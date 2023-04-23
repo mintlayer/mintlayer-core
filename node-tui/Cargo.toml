@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 logging = { path = "../logging" }
-node = { path = "../node/" }
+node-lib = { path = "../node-lib/" }
 
 tokio = { workspace = true, default-features = false }
 

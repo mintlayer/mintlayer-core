@@ -75,12 +75,12 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
-        node::rpc::NodeRpcClient::shutdown(&self.http_client)
+        node_lib::rpc::NodeRpcClient::shutdown(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
     async fn node_version(&self) -> Result<String, Self::Error> {
-        node::rpc::NodeRpcClient::version(&self.http_client)
+        node_lib::rpc::NodeRpcClient::version(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)
     }
