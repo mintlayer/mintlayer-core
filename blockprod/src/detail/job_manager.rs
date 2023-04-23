@@ -133,19 +133,19 @@ impl JobManager {
             loop {
                 tokio::select! {
                     event = get_job_count_receiver.recv()
-                        => Self::get_job_count_handler(&jobs, event),
+                        => Self::handle_get_job_count(&jobs, event),
 
                     event = chainstate_receiver.recv()
-                        => Self::chainstate_handler(&mut jobs, event),
+                        => Self::handle_chainstate_event(&mut jobs, event),
 
                     event = new_job_receiver.recv()
-                        => Self::new_job_handler(&mut jobs, event),
+                        => Self::handle_new_job(&mut jobs, event),
 
                     event = stop_job_receiver.recv()
-                        => Self::stop_job_handler(&mut jobs, event),
+                        => Self::handle_stop_job(&mut jobs, event),
 
                     event = shutdown_receiver.recv()
-                        => return Self::shutdown_handler(&mut jobs, event), // Note: the return here
+                        => return Self::handle_shutdown(&mut jobs, event), // Note: the return here
                 }
             }
         });
@@ -174,7 +174,10 @@ impl JobManager {
         });
     }
 
-    fn chainstate_handler(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<Id<GenBlock>>) {
+    fn handle_chainstate_event(
+        jobs: &mut BTreeMap<JobKey, JobHandle>,
+        event: Option<Id<GenBlock>>,
+    ) {
         if let Some(new_tip_id) = event {
             let mut jobs_to_stop: Vec<JobKey> = vec![];
 
@@ -204,7 +207,7 @@ impl JobManager {
         result_receiver.await.map_err(|_| JobManagerError::FailedToReadJobCount)
     }
 
-    fn get_job_count_handler(
+    fn handle_get_job_count(
         jobs: &BTreeMap<JobKey, JobHandle>,
         event: Option<oneshot::Sender<usize>>,
     ) {
@@ -233,7 +236,7 @@ impl JobManager {
             .and_then(|v| Ok((v, cancel_receiver)))
     }
 
-    fn new_job_handler(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {
+    fn handle_new_job(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {
         if let Some((current_tip_id, cancel_sender, result_sender)) = event {
             let job_key = JobKey::new(current_tip_id);
 
@@ -270,7 +273,7 @@ impl JobManager {
         result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
 
-    fn stop_job_handler(
+    fn handle_stop_job(
         jobs: &mut BTreeMap<JobKey, JobHandle>,
         event: Option<(Option<JobKey>, oneshot::Sender<usize>)>,
     ) {
@@ -281,6 +284,8 @@ impl JobManager {
                 Some(job_key) => {
                     if let Some(job_handle) = jobs.remove(&job_key) {
                         stop_jobs.push((job_key, job_handle));
+                    } else {
+                        log::error!("Attempted to stop non-existent job: {job_key:?}")
                     }
                 }
                 None => {
@@ -300,13 +305,13 @@ impl JobManager {
         }
     }
 
-    fn shutdown_handler(
+    fn handle_shutdown(
         jobs: &mut BTreeMap<JobKey, JobHandle>,
         event: Option<oneshot::Sender<usize>>,
     ) {
         if let Some(result_sender) = event {
             log::info!("Stopping job manager");
-            Self::stop_job_handler(jobs, Some((None, result_sender)));
+            Self::handle_stop_job(jobs, Some((None, result_sender)));
         }
     }
 }
