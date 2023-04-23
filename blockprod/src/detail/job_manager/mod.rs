@@ -153,7 +153,7 @@ impl JobManager {
         });
     }
 
-    fn subscribe_to_chainstate(&mut self, chainstate_sender: UnboundedSender<Id<GenBlock>>) {
+    fn subscribe_to_chainstate(&self, chainstate_sender: UnboundedSender<Id<GenBlock>>) {
         let chainstate_handle = self.chainstate_handle.clone();
 
         tokio::spawn(async move {
@@ -188,7 +188,7 @@ impl JobManager {
         result_receiver.await.map_err(|_| JobManagerError::FailedToReadJobCount)
     }
 
-    pub async fn new_job(
+    pub async fn add_job(
         &self,
         block_id: Id<GenBlock>,
     ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {

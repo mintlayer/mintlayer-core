@@ -185,7 +185,7 @@ impl BlockProduction {
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
         let (_job_key, mut cancel_receiver) =
-            self.job_manager.new_job(tip_at_start.block_id()).await?;
+            self.job_manager.add_job(tip_at_start.block_id()).await?;
 
         // At the end of this function, the job has to be removed
         OnceDestructor::new(|| {
@@ -478,7 +478,7 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
             .await
             .unwrap();
 
@@ -507,13 +507,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
             .await
             .unwrap();
 
@@ -539,13 +539,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (_stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .new_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
             .await
             .unwrap();
 
