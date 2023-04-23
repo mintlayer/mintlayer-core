@@ -5,7 +5,7 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 from test_framework import mintlayer_hash
-from test_framework.util import (assert_raises_rpc_error)
+from test_framework.util import assert_raises_rpc_error
 from test_framework.test_framework import BitcoinTestFramework
 import scalecodec
 import time
