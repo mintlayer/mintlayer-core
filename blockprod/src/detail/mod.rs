@@ -43,6 +43,7 @@ use mempool::{
 };
 
 use tokio::sync::oneshot;
+use utils::once_destructor::OnceDestructor;
 
 #[derive(Debug, Clone)]
 pub enum TransactionsSource {
@@ -111,12 +112,20 @@ impl BlockProduction {
         Ok(returned_accumulator)
     }
 
-    async fn stop_job_in_scope(&mut self, job_key: JobKey) {
+    async fn stop_job_in_scope(&mut self, job_key: JobKey, job_key_destroyed: &AtomicBool) {
         // TODO: this function has to go.
         // I couldn't find a way to use RAII to call an async function that takes a mut reference to self.
         // Once this solution is found, this has to go
-        let result_receiver = self.job_manager.stop_job(job_key);
-        let _stop_result = result_receiver.await;
+        {
+            assert!(
+                !job_key_destroyed.load(std::sync::atomic::Ordering::SeqCst),
+                "Must be true as it was done already"
+            );
+            let result_receiver = self.job_manager.stop_job(job_key.clone());
+            let _stop_result = result_receiver.await;
+        }
+        // We consume the value so that it doesn't happen again
+        job_key_destroyed.store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     async fn pull_consensus_data(
@@ -195,6 +204,12 @@ impl BlockProduction {
             self.job_manager.add_job(tip_at_start.block_id()).await?;
 
         // At the end of this function, the job has to be removed
+        // Once the job key is used, we swap it with None... this is all temporary.
+        // The the docs in the function self.stop_job_in_scope()
+        let job_key_destroyed = AtomicBool::new(false);
+        let _job_remove_checker = OnceDestructor::new(|| {
+            assert!(job_key_destroyed.load(std::sync::atomic::Ordering::SeqCst));
+        });
 
         loop {
             let timestamp =
@@ -282,7 +297,7 @@ impl BlockProduction {
                     let _ended = ended_receiver.recv();
 
                     // TODO: use RAII for this
-                    self.stop_job_in_scope(job_key).await;
+                    self.stop_job_in_scope(job_key, &job_key_destroyed).await;
 
                     return Err(BlockProductionError::Cancelled);
                 }
@@ -315,7 +330,7 @@ impl BlockProduction {
                     };
 
                     // TODO: use RAII for this
-                    self.stop_job_in_scope(job_key).await;
+                    self.stop_job_in_scope(job_key, &job_key_destroyed).await;
 
                     let block = Block::new_from_header(block_header, block_body.clone())?;
                     return Ok(block);
