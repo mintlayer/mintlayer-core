@@ -242,7 +242,8 @@ impl JobManager {
             result = result_receiver
                 => result
                     .map_err(|_| JobManagerError::FailedToCreateJob)?
-                    .and_then(|v| Ok((v, cancel_receiver))).or_else(|e| Err(e))
+                    .and_then(|v| Ok((v, cancel_receiver)))
+                    .or_else(|e| Err(e))
         }
     }
 
