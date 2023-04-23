@@ -333,8 +333,6 @@ impl Drop for JobManager {
             return;
         }
 
-        tokio::spawn(async move {
-            result_receiver.await
-        });
+        tokio::spawn(async move { result_receiver.await });
     }
 }
