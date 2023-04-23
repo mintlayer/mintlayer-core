@@ -23,6 +23,7 @@ use tokio::sync::{
     mpsc::{self, unbounded_channel, UnboundedReceiver, UnboundedSender},
     oneshot,
 };
+use utils::ensure;
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum JobManagerError {
@@ -208,9 +209,10 @@ impl JobManager {
     pub async fn get_job_count(&self) -> Result<usize, JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
 
-        if self.get_job_count_sender.send(result_sender).is_err() {
-            return Err(JobManagerError::FailedToSendGetJobCountEvent);
-        }
+        ensure!(
+            self.get_job_count_sender.send(result_sender).is_ok(),
+            JobManagerError::FailedToSendGetJobCountEvent
+        );
 
         tokio::select! {
             result = result_receiver => match result {
@@ -238,9 +240,10 @@ impl JobManager {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
-        if self.new_job_sender.send((block_id, cancel_sender, result_sender)).is_err() {
-            return Err(JobManagerError::FailedToSendNewJobEvent);
-        }
+        ensure!(
+            self.new_job_sender.send((block_id, cancel_sender, result_sender)).is_ok(),
+            JobManagerError::FailedToSendNewJobEvent
+        );
 
         tokio::select! {
             result = result_receiver => match result {
@@ -282,9 +285,10 @@ impl JobManager {
     pub async fn stop_job(&mut self, job_key: Option<JobKey>) -> Result<usize, JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
 
-        if self.stop_job_sender.send((job_key, result_sender)).is_err() {
-            return Err(JobManagerError::FailedToSendStopJobEvent);
-        }
+        ensure!(
+            self.stop_job_sender.send((job_key, result_sender)).is_ok(),
+            JobManagerError::FailedToSendStopJobEvent
+        );
 
         tokio::select! {
             result = result_receiver => match result {
