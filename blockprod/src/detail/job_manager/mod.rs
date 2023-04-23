@@ -93,6 +93,13 @@ pub struct JobManager {
     shutdown_sender: UnboundedSender<oneshot::Sender<usize>>,
 }
 
+/// Helper function that calls a closure if the event is `Some`.
+fn event_then<T>(ev: Option<T>, f: impl FnOnce(T)) {
+    if let Some(ev) = ev {
+        f(ev)
+    }
+}
+
 impl JobManager {
     pub fn new(chainstate_handle: ChainstateHandle) -> JobManager {
         let (chainstate_sender, chainstate_receiver) = mpsc::unbounded_channel::<Id<GenBlock>>();
@@ -135,19 +142,19 @@ impl JobManager {
             loop {
                 tokio::select! {
                     event = get_job_count_receiver.recv()
-                        => jobs.job_count(event),
+                        => event_then(event, |ev| jobs.job_count(ev)),
 
-                    event = chainstate_receiver.recv()
-                        => jobs.handle_chainstate_event(event),
+                    tip_id = chainstate_receiver.recv()
+                        => event_then(tip_id, |id| jobs.handle_chainstate_event(id)),
 
                     event = new_job_receiver.recv()
-                        => jobs.new_job(event),
+                        => event_then(event, |ev| jobs.new_job(ev)),
 
                     event = stop_job_receiver.recv()
-                        => jobs.handle_stop_job( event),
+                        => event_then(event, |ev| jobs.handle_stop_job(ev)),
 
                     event = shutdown_receiver.recv()
-                        => return jobs.shutdown(event), // Note: the return here
+                        => return event_then(event, |ev| jobs.shutdown(ev)),
                 }
             }
         });
