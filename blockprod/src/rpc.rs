@@ -27,16 +27,19 @@ use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, namespace = "blockprod")]
 trait BlockProductionRpc {
-    /// Stop block production
+    /// When called, the job manager will be notified to send a signal
+    /// to all currently running jobs to stop running
     #[method(name = "stop_all")]
     async fn stop_all(&self) -> rpc::Result<usize>;
 
-    // Stop a specific job
+    /// When called, the job manager will be notified to send a signal
+    /// to the specified job to stop running
     #[method(name = "stop_job")]
     async fn stop_job(&self, job_id: String) -> rpc::Result<bool>;
 
-    /// Generate a block with the supplied transactions to the specified reward destination
-    /// If transactions are None, the block will be generated with available transactions in the mempool
+    /// Generate a block with the given transactions to the specified
+    /// reward destination. If transactions are None, the block will be
+    /// generated with available transactions in the mempool
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
