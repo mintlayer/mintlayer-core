@@ -28,7 +28,7 @@ pub struct JobsContainer {
 }
 
 impl JobsContainer {
-    pub fn handle_get_job_count(&self, event: Option<oneshot::Sender<usize>>) {
+    pub fn job_count(&self, event: Option<oneshot::Sender<usize>>) {
         if let Some(result_sender) = event {
             _ = result_sender
                 .send(self.jobs.len())
@@ -36,7 +36,7 @@ impl JobsContainer {
         }
     }
 
-    pub fn handle_new_job(&mut self, event: Option<NewJobEvent>) {
+    pub fn new_job(&mut self, event: Option<NewJobEvent>) {
         if let Some(NewJobEvent {
             current_tip_id,
             cancel_sender,
@@ -107,7 +107,7 @@ impl JobsContainer {
         }
     }
 
-    pub fn handle_shutdown(&mut self, event: Option<oneshot::Sender<usize>>) {
+    pub fn shutdown(&mut self, event: Option<oneshot::Sender<usize>>) {
         if let Some(result_sender) = event {
             log::info!("Stopping block production job manager");
             self.handle_stop_job(Some((None, result_sender)));
