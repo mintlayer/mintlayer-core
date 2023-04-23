@@ -15,6 +15,8 @@
 
 pub mod job_manager;
 
+mod job_finalizer;
+
 use crate::{
     detail::job_manager::{JobKey, JobManager},
     BlockProductionError,
@@ -23,6 +25,7 @@ use crate::{
 use std::sync::{atomic::AtomicBool, Arc};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
+
 use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
@@ -42,6 +45,8 @@ use mempool::{
 };
 
 use tokio::sync::oneshot;
+
+use self::job_finalizer::JobFinalizer;
 
 #[derive(Debug, Clone)]
 pub enum TransactionsSource {
@@ -184,6 +189,13 @@ impl BlockProduction {
 
         let (_job_key, mut cancel_receiver) =
             self.job_manager.new_job(tip_at_start.block_id()).await?;
+
+        // At the end of this function, the job has to be removed
+        JobFinalizer::new(|| {
+            let result_receiver = self.job_manager.stop_job(_job_key);
+            let rt = tokio::runtime::Runtime::new().expect("Failed to start runtime");
+            let _send_result = rt.block_on(result_receiver);
+        });
 
         loop {
             let timestamp =
