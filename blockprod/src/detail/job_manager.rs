@@ -252,7 +252,16 @@ impl JobManager {
         }
     }
 
-    pub async fn stop_job(&mut self, job_key: Option<JobKey>) -> Result<usize, JobManagerError> {
+    pub async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError> {
+        self._stop_job(None).await
+    }
+
+
+    pub async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError> {
+        self._stop_job(Some(job_key)).await
+    }
+
+    pub async fn _stop_job(&mut self, job_key: Option<JobKey>) -> Result<usize, JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
 
         ensure!(

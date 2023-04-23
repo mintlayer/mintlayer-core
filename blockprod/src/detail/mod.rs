@@ -87,13 +87,13 @@ impl BlockProduction {
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
         self.job_manager
-            .stop_job(None)
+            .stop_all_jobs()
             .await
             .map_err(BlockProductionError::JobManagerError)
     }
 
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {
-        Ok(self.job_manager.stop_job(Some(job_key)).await? == 1)
+        Ok(self.job_manager.stop_job(job_key).await? == 1)
     }
 
     pub async fn collect_transactions(
