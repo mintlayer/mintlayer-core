@@ -149,8 +149,11 @@ mod tests {
             blockprod
                 .call_async_mut(move |this| {
                     Box::pin(async move {
-                        assert!(
-                            this.stop_all().await == Ok(0),
+                        let stopped_jobs_count = this.stop_all().await;
+
+                        assert_eq!(
+                            stopped_jobs_count,
+                            Ok(0),
                             "Failed to stop non-existent jobs"
                         );
                         shutdown.initiate();
