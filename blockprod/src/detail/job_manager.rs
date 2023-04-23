@@ -257,13 +257,13 @@ impl JobManager {
 
             if jobs.contains_key(&job_key) {
                 if let Err(e) = result_sender.send(Err(JobManagerError::JobAlreadyExists)) {
-                    log::info!("Error sending new job exists error: {e:?}");
+                    log::error!("Error sending new job exists error: {e:?}");
                 }
             } else {
                 jobs.insert(job_key.clone(), JobHandle { cancel_sender });
 
                 if let Err(e) = result_sender.send(Ok(job_key)) {
-                    log::info!("Error sending new job event: {e:?}");
+                    log::error!("Error sending new job event: {e:?}");
                 }
             }
         }
@@ -329,7 +329,7 @@ impl Drop for JobManager {
         let (result_sender, result_receiver) = oneshot::channel();
 
         if let Err(e) = self.shutdown_sender.send(result_sender) {
-            log::info!("Error sending shutdown during job manager drop: {e:?}");
+            log::error!("Error sending shutdown during job manager drop: {e:?}");
             return;
         }
 
