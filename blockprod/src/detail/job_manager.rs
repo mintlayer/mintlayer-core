@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, mem::take, sync::Arc};
 
 use chainstate::{ChainstateEvent, ChainstateHandle};
 use common::{chain::GenBlock, primitives::Id};
@@ -286,9 +286,10 @@ impl JobManager {
                     }
                 }
                 None => {
-                    while let Some((job_key, job_handle)) = jobs.pop_first() {
-                        stop_jobs.push((job_key, job_handle));
-                    }
+                    stop_jobs = take(jobs)
+                        .into_iter()
+                        .map(|(k, v)| (k, v))
+                        .collect();
 
                     log::info!("Cancelling {} jobs", stop_jobs.len());
                 }
