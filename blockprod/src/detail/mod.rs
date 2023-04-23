@@ -22,7 +22,7 @@ use crate::{
     BlockProductionError,
 };
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{atomic::AtomicBool, mpsc, Arc};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
 
@@ -247,7 +247,12 @@ impl BlockProduction {
                 consensus_data,
             );
 
+            // A synchronous channel that sends only when the mining/staking is done
+            let (ended_sender, ended_receiver) = mpsc::channel::<()>();
+
+            // Return the result of mining
             let (result_sender, mut result_receiver) = oneshot::channel();
+
             {
                 let chain_config = Arc::clone(&self.chain_config);
                 let current_tip_height = current_tip_index.block_height();
@@ -261,6 +266,9 @@ impl BlockProduction {
                         stop_flag,
                     );
 
+                    // This can fail if the function exited before the mining thread finished
+                    let _send_whether_ended = ended_sender.send(());
+
                     result_sender
                         .send(block_header)
                         .expect("Failed to send block header back to main thread");
@@ -270,6 +278,9 @@ impl BlockProduction {
             tokio::select! {
                 _ = cancel_receiver.recv() => {
                     stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+
+                    // This can fail if the mining thread has already finished
+                    let _ended = ended_receiver.recv();
                     return Err(BlockProductionError::Cancelled);
                 }
                 solve_receive_result = &mut result_receiver => {
