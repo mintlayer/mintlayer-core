@@ -21,11 +21,13 @@ pub mod tx_verification_strategy;
 
 mod chainstateref;
 mod error;
+mod info;
 mod median_time;
 mod orphan_blocks;
 
 pub use self::{
-    error::*, median_time::calculate_median_time_past, tokens::is_rfc3986_valid_symbol,
+    error::*, info::ChainInfo, median_time::calculate_median_time_past,
+    tokens::is_rfc3986_valid_symbol,
 };
 pub use chainstate_types::Locator;
 pub use error::{

@@ -414,8 +414,9 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             block = self.nodes[0].blockprod_generate_block("00", [])
             for n in self.nodes:
                 n.chainstate_submit_block(block)
-                assert_equal(n.chainstate_best_block_height(), 1)
-                assert not n.chainstate_is_initial_block_download()
+                info = n.chainstate_info()
+                assert_equal(info["best_block_height"], 1)
+                assert not info["is_initial_block_download"]
 
     def import_deterministic_coinbase_privkeys(self):
         for i in range(self.num_nodes):

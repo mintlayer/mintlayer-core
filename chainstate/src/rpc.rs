@@ -17,7 +17,7 @@
 
 use std::io::{Read, Write};
 
-use crate::{Block, BlockSource, ChainstateError, GenBlock};
+use crate::{Block, BlockSource, ChainInfo, ChainstateError, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
@@ -71,9 +71,9 @@ trait ChainstateRpc {
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
 
-    /// Returns true if the initial block download isn't finished yet.
-    #[method(name = "is_initial_block_download")]
-    async fn is_initial_block_download(&self) -> RpcResult<bool>;
+    /// Return an information about the chain.
+    #[method(name = "info")]
+    async fn info(&self) -> RpcResult<ChainInfo>;
 }
 
 #[async_trait::async_trait]
@@ -143,8 +143,8 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         Ok(())
     }
 
-    async fn is_initial_block_download(&self) -> RpcResult<bool> {
-        handle_error(self.call(move |this| this.is_initial_block_download()).await)
+    async fn info(&self) -> RpcResult<ChainInfo> {
+        handle_error(self.call(move |this| this.info()).await)
     }
 }
 

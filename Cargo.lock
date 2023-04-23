@@ -543,6 +543,7 @@ dependencies = [
  "pos_accounting",
  "rpc",
  "rstest",
+ "serde",
  "serde_json",
  "serialization",
  "static_assertions",
