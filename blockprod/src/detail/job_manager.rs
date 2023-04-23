@@ -77,15 +77,17 @@ impl JobKey {
     }
 }
 
+type NewJobEvent = (
+    Id<GenBlock>,
+    UnboundedSender<()>,
+    oneshot::Sender<Result<JobKey, JobManagerError>>,
+);
+
 #[allow(clippy::type_complexity)]
 pub struct JobManager {
     chainstate_handle: ChainstateHandle,
     get_job_count_sender: UnboundedSender<oneshot::Sender<usize>>,
-    new_job_sender: UnboundedSender<(
-        Id<GenBlock>,
-        UnboundedSender<()>,
-        oneshot::Sender<Result<JobKey, JobManagerError>>,
-    )>,
+    new_job_sender: UnboundedSender<NewJobEvent>,
     stop_job_sender: UnboundedSender<(Option<JobKey>, oneshot::Sender<usize>)>,
     shutdown_sender: UnboundedSender<oneshot::Sender<usize>>,
 }
@@ -94,14 +96,9 @@ impl JobManager {
     pub fn new(chainstate_handle: ChainstateHandle) -> JobManager {
         let (chainstate_sender, chainstate_receiver) = mpsc::unbounded_channel::<Id<GenBlock>>();
         let (get_job_count_sender, get_job_count_receiver) = mpsc::unbounded_channel();
+        let (new_job_sender, new_job_receiver) = mpsc::unbounded_channel::<NewJobEvent>();
         let (stop_job_sender, stop_job_receiver) = mpsc::unbounded_channel();
         let (shutdown_sender, shutdown_receiver) = mpsc::unbounded_channel();
-
-        let (new_job_sender, new_job_receiver) = mpsc::unbounded_channel::<(
-            Id<GenBlock>,
-            UnboundedSender<()>,
-            oneshot::Sender<Result<JobKey, JobManagerError>>,
-        )>();
 
         let mut job_manager = JobManager {
             chainstate_handle,
@@ -128,11 +125,7 @@ impl JobManager {
         &mut self,
         mut chainstate_receiver: UnboundedReceiver<Id<GenBlock>>,
         mut get_job_count_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
-        mut new_job_receiver: UnboundedReceiver<(
-            Id<GenBlock>,
-            UnboundedSender<()>,
-            oneshot::Sender<Result<JobKey, JobManagerError>>,
-        )>,
+        mut new_job_receiver: UnboundedReceiver<NewJobEvent>,
         mut stop_job_receiver: UnboundedReceiver<(Option<JobKey>, oneshot::Sender<usize>)>,
         mut shutdown_receiver: UnboundedReceiver<oneshot::Sender<usize>>,
     ) {
@@ -244,14 +237,7 @@ impl JobManager {
     }
 
     #[allow(clippy::type_complexity)]
-    fn new_job_handler(
-        jobs: &mut BTreeMap<JobKey, JobHandle>,
-        event: Option<(
-            Id<GenBlock>,
-            UnboundedSender<()>,
-            oneshot::Sender<Result<JobKey, JobManagerError>>,
-        )>,
-    ) {
+    fn new_job_handler(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {
         if let Some((current_tip_id, cancel_sender, result_sender)) = event {
             let job_key = JobKey::new(current_tip_id);
 
