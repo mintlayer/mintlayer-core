@@ -184,12 +184,12 @@ impl BlockProduction {
 
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
-        let (_job_key, mut cancel_receiver) =
+        let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(tip_at_start.block_id()).await?;
 
         // At the end of this function, the job has to be removed
         OnceDestructor::new(|| {
-            let result_receiver = self.job_manager.stop_job(_job_key);
+            let result_receiver = self.job_manager.stop_job(job_key);
             let rt = tokio::runtime::Runtime::new().expect("Failed to start runtime");
             let _send_result = rt.block_on(result_receiver);
         });
