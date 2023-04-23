@@ -20,7 +20,7 @@ mod storage;
 
 pub use crate::{
     data::PoSAccountingData,
-    error::Error,
+    error::{Error, Result},
     pool::{
         block_undo::{
             AccountingBlockRewardUndo, AccountingBlockUndo, AccountingBlockUndoError,

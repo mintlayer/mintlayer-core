@@ -14,18 +14,18 @@
 // limitations under the License.
 
 use std::{
+    collections::BTreeMap,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
 
 use chainstate_types::Locator;
 use chainstate_types::{BlockIndex, GenBlockIndex};
-use common::chain::TxInput;
 use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
-    OutPointSourceId, TxMainChainIndex,
+    OutPointSourceId, TxMainChainIndex, TxOutput,
 };
 use common::chain::{OutPoint, Transaction};
 use common::{
@@ -36,6 +36,11 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
+use common::{
+    chain::{DelegationId, PoolId, TxInput},
+    primitives::Amount,
+};
+use pos_accounting::{DelegationData, PoolData};
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
@@ -44,9 +49,9 @@ use crate::{
     chainstate_interface::ChainstateInterface, BlockSource, ChainstateError, ChainstateEvent,
 };
 
-impl<
-        T: Deref<Target = dyn ChainstateInterface> + DerefMut<Target = dyn ChainstateInterface> + Send,
-    > ChainstateInterface for T
+impl<T: Deref + DerefMut + Send> ChainstateInterface for T
+where
+    T::Target: ChainstateInterface,
 {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>) {
         self.deref_mut().subscribe_to_events(handler)
@@ -225,11 +230,19 @@ impl<
     fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
         self.deref().available_inputs(tx)
     }
-    fn get_inputs_outpoints_values(
+
+    fn get_inputs_outpoints_coin_amount(
         &self,
-        tx: &Transaction,
-    ) -> Result<Vec<Option<common::primitives::Amount>>, ChainstateError> {
-        self.deref().get_inputs_outpoints_values(tx)
+        inputs: &[TxInput],
+    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
+        self.deref().get_inputs_outpoints_coin_amount(inputs)
+    }
+
+    fn get_outputs_coin_amount(
+        &self,
+        outputs: &[TxOutput],
+    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
+        self.deref().get_outputs_coin_amount(outputs)
     }
 
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
@@ -261,6 +274,47 @@ impl<
 
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError> {
         self.deref().is_initial_block_download()
+    }
+
+    fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError> {
+        self.deref().stake_pool_exists(pool_id)
+    }
+
+    fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_stake_pool_balance(pool_id)
+    }
+
+    fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
+        self.deref().get_stake_pool_data(pool_id)
+    }
+
+    fn get_stake_pool_delegations_shares(
+        &self,
+        pool_id: PoolId,
+    ) -> Result<Option<BTreeMap<DelegationId, Amount>>, ChainstateError> {
+        self.deref().get_stake_pool_delegations_shares(pool_id)
+    }
+
+    fn get_stake_delegation_balance(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_stake_delegation_balance(delegation_id)
+    }
+
+    fn get_stake_delegation_data(
+        &self,
+        delegation_id: DelegationId,
+    ) -> Result<Option<DelegationData>, ChainstateError> {
+        self.deref().get_stake_delegation_data(delegation_id)
+    }
+
+    fn get_stake_pool_delegation_share(
+        &self,
+        pool_id: PoolId,
+        delegation_id: DelegationId,
+    ) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_stake_pool_delegation_share(pool_id, delegation_id)
     }
 }
 

@@ -25,7 +25,8 @@ use chainstate::{
     OrphanCheckError,
 };
 use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TestStore, TransactionBuilder,
+    anyonecanspend_address, empty_witness, get_output_value, TestFramework, TestStore,
+    TransactionBuilder,
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::{
@@ -379,7 +380,10 @@ fn transaction_processing_order(#[case] seed: Seed) {
             Transaction::new(
                 0,
                 vec![TxInput::new(tf.genesis().get_id().into(), 0)],
-                vec![TxOutput::Transfer(tf.genesis().utxos()[0].value(), anyonecanspend_address())],
+                vec![TxOutput::Transfer(
+                    get_output_value(&tf.genesis().utxos()[0]).unwrap(),
+                    anyonecanspend_address(),
+                )],
                 0,
             )
             .unwrap(),
@@ -393,7 +397,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
                 0,
                 vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
-                    tx1.transaction().outputs()[0].value(),
+                    get_output_value(&tx1.transaction().outputs()[0]).unwrap(),
                     anyonecanspend_address(),
                 )],
                 0,

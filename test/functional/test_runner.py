@@ -104,6 +104,7 @@ BASE_SCRIPTS = [
     'p2p_ping.py',
     'p2p_syncing_test.py',
     'feature_lmdb_backend_test.py',
+    'mempool_submit_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time

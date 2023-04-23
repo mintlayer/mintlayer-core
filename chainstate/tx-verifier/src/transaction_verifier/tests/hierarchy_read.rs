@@ -494,9 +494,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let pool_balance1 = Amount::from_atoms(200);
     let pool_balance2 = Amount::from_atoms(300);
 
-    let pool_data0 = create_pool_data(&mut rng, destination0, pool_balance0);
-    let pool_data1 = create_pool_data(&mut rng, destination1, pool_balance1);
-    let pool_data2 = create_pool_data(&mut rng, destination2, pool_balance2);
+    let pool_data0 = create_pool_data(&mut rng, destination0.clone(), destination0, pool_balance0);
+    let pool_data1 = create_pool_data(&mut rng, destination1.clone(), destination1, pool_balance1);
+    let pool_data2 = create_pool_data(&mut rng, destination2.clone(), destination2, pool_balance2);
 
     let pool_id_0 = pos_accounting::make_pool_id(&outpoint0);
     let pool_id_1 = pos_accounting::make_pool_id(&outpoint1);
@@ -530,7 +530,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         .expect_get_pool_data()
         .with(eq(pool_id_0))
         .times(2)
-        .return_const(Ok(Some(pool_data0.clone())));
+        .return_const(Ok(Some(pool_data0.clone().into())));
     store.expect_get_pool_data().with(eq(pool_id_1)).times(1).return_const(Ok(None));
     store.expect_get_pool_data().with(eq(pool_id_2)).times(2).return_const(Ok(None));
 
@@ -549,15 +549,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
         let (_, undo) = verifier
-            .accounting_delta
-            .create_pool(
-                &outpoint1,
-                pool_balance1,
-                pool_data1.decommission_destination().clone(),
-                pool_data1.vrf_public_key().clone(),
-                pool_data1.margin_ratio_per_thousand(),
-                pool_data1.cost_per_epoch(),
-            )
+            .accounting_delta_adapter
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint1, pool_data1.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -580,15 +574,9 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
         let (_, undo) = verifier
-            .accounting_delta
-            .create_pool(
-                &outpoint2,
-                pool_balance2,
-                pool_data2.decommission_destination().clone(),
-                pool_data2.vrf_public_key().clone(),
-                pool_data2.margin_ratio_per_thousand(),
-                pool_data2.cost_per_epoch(),
-            )
+            .accounting_delta_adapter
+            .operations(TransactionSource::Mempool)
+            .create_pool(&outpoint2, pool_data2.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -637,26 +625,26 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
 
     // fetch pool data
     assert_eq!(
-        verifier1.get_pool_data(pool_id_0).unwrap().as_ref(),
-        Some(&pool_data0)
+        verifier1.get_pool_data(pool_id_0).unwrap(),
+        Some(pool_data0.clone().into())
     );
     assert_eq!(
-        verifier1.get_pool_data(pool_id_1).unwrap().as_ref(),
-        Some(&pool_data1)
+        verifier1.get_pool_data(pool_id_1).unwrap(),
+        Some(pool_data1.clone().into())
     );
-    assert_eq!(verifier1.get_pool_data(pool_id_2).unwrap().as_ref(), None);
+    assert_eq!(verifier1.get_pool_data(pool_id_2).unwrap(), None);
 
     assert_eq!(
-        verifier2.get_pool_data(pool_id_0).unwrap().as_ref(),
-        Some(&pool_data0)
+        verifier2.get_pool_data(pool_id_0).unwrap(),
+        Some(pool_data0.into())
     );
     assert_eq!(
-        verifier2.get_pool_data(pool_id_1).unwrap().as_ref(),
-        Some(&pool_data1)
+        verifier2.get_pool_data(pool_id_1).unwrap(),
+        Some(pool_data1.into())
     );
     assert_eq!(
-        verifier2.get_pool_data(pool_id_2).unwrap().as_ref(),
-        Some(&pool_data2)
+        verifier2.get_pool_data(pool_id_2).unwrap(),
+        Some(pool_data2.into())
     );
 
     // fetch undo

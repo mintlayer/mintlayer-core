@@ -92,14 +92,22 @@ pub enum TxValidationError {
     AncestorFeeUpdateOverflow,
     #[error("Fee overflow")]
     FeeOverflow,
+    #[error("Fee not determined")]
+    FeeNotDetermined,
     #[error("Get parent error")]
     GetParentError,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
     #[error("Chainstate error")]
     ChainstateError(#[from] ChainstateError),
+    #[error("Transaction validation error: {0}")]
+    TxValidation(#[from] chainstate::tx_verifier::error::ConnectTransactionError),
     #[error("Subsystem call error")]
     CallError(#[from] CallError),
     #[error("Internal Error.")]
     InternalError,
+    #[error("Tip moved while trying to process transaction")]
+    TipMoved,
+    #[error("Produce block output in transaction {0}")]
+    ProduceBlockOutputInTx(Id<Transaction>),
 }

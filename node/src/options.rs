@@ -19,14 +19,13 @@ use std::{ffi::OsString, net::SocketAddr, num::NonZeroU64, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 use common::chain::config::ChainType;
-use directories::UserDirs;
+use utils::default_data_dir::default_data_dir_common;
 
 use crate::{
     config_files::{NodeTypeConfigFile, StorageBackendConfigFile},
     regtest_options::RegtestOptions,
 };
 
-const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
 
 /// Mintlayer node executable
@@ -142,6 +141,21 @@ pub struct RunOptions {
     /// Enable/Disable websocket RPC.
     #[clap(long)]
     pub ws_rpc_enabled: Option<bool>,
+
+    /// Username for RPC HTTP and WebSocket server basic authorization.
+    /// If not set, the cookie file is created.
+    #[clap(long)]
+    pub rpc_username: Option<String>,
+
+    /// Password for RPC HTTP and WebSocket server basic authorization.
+    /// If not set, the RPC cookie file is created.
+    #[clap(long)]
+    pub rpc_password: Option<String>,
+
+    /// Custom file path for the RPC cookie file.
+    /// If not set, the cookie file is created in the data dir.
+    #[clap(long)]
+    pub rpc_cookie_file: Option<String>,
 }
 
 impl Options {
@@ -168,10 +182,5 @@ impl Options {
 }
 
 pub fn default_data_dir(chain_type: ChainType) -> PathBuf {
-    UserDirs::new()
-        // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
-        .expect("Unable to get home directory")
-        .home_dir()
-        .join(DATA_DIR_NAME)
-        .join(chain_type.name())
+    default_data_dir_common().join(chain_type.name())
 }

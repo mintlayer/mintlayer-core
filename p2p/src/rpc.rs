@@ -17,90 +17,91 @@ use common::chain::SignedTransaction;
 use serialization::hex::HexDecode;
 
 use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
+use rpc::Result as RpcResult;
 use subsystem::subsystem::CallError;
 
-#[rpc::rpc(server, namespace = "p2p")]
+#[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
     /// Try to connect to a remote node (just once).
     /// For persistent connections `add_reserved_node` should be used.
     #[method(name = "connect")]
-    async fn connect(&self, addr: String) -> rpc::Result<()>;
+    async fn connect(&self, addr: String) -> RpcResult<()>;
 
     /// Disconnect peer
     #[method(name = "disconnect")]
-    async fn disconnect(&self, peer_id: PeerId) -> rpc::Result<()>;
+    async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()>;
 
     /// Get the number of peers
     #[method(name = "get_peer_count")]
-    async fn get_peer_count(&self) -> rpc::Result<usize>;
+    async fn get_peer_count(&self) -> RpcResult<usize>;
 
     /// Get bind address of the local node
     #[method(name = "get_bind_addresses")]
-    async fn get_bind_addresses(&self) -> rpc::Result<Vec<String>>;
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>>;
 
     /// Get details of connected peers
     #[method(name = "get_connected_peers")]
-    async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>>;
+    async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>>;
 
     /// Add the address to the reserved nodes list.
     /// The node will try to keep connections open to all reserved peers.
     #[method(name = "add_reserved_node")]
-    async fn add_reserved_node(&self, addr: String) -> rpc::Result<()>;
+    async fn add_reserved_node(&self, addr: String) -> RpcResult<()>;
 
     /// Remove the address from the reserved nodes list.
     /// Existing connection to the peer is not closed.
     #[method(name = "remove_reserved_node")]
-    async fn remove_reserved_node(&self, addr: String) -> rpc::Result<()>;
+    async fn remove_reserved_node(&self, addr: String) -> RpcResult<()>;
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
+    async fn submit_transaction(&self, tx_hex: String) -> RpcResult<()>;
 }
 
 #[async_trait::async_trait]
 impl P2pRpcServer for super::P2pHandle {
-    async fn connect(&self, addr: String) -> rpc::Result<()> {
+    async fn connect(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.connect(addr)).await;
         handle_error(res)
     }
 
-    async fn disconnect(&self, peer_id: PeerId) -> rpc::Result<()> {
+    async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.disconnect(peer_id)).await;
         handle_error(res)
     }
 
-    async fn get_peer_count(&self) -> rpc::Result<usize> {
+    async fn get_peer_count(&self) -> RpcResult<usize> {
         let res = self.call_async(|this| this.get_peer_count()).await;
         handle_error(res)
     }
 
-    async fn get_bind_addresses(&self) -> rpc::Result<Vec<String>> {
+    async fn get_bind_addresses(&self) -> RpcResult<Vec<String>> {
         let res = self.call_async(|this| this.get_bind_addresses()).await;
         handle_error(res)
     }
 
-    async fn get_connected_peers(&self) -> rpc::Result<Vec<ConnectedPeer>> {
+    async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>> {
         let res = self.call_async(|this| this.get_connected_peers()).await;
         handle_error(res)
     }
 
-    async fn add_reserved_node(&self, addr: String) -> rpc::Result<()> {
+    async fn add_reserved_node(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.add_reserved_node(addr)).await;
         handle_error(res)
     }
 
-    async fn remove_reserved_node(&self, addr: String) -> rpc::Result<()> {
+    async fn remove_reserved_node(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.remove_reserved_node(addr)).await;
         handle_error(res)
     }
 
-    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
+    async fn submit_transaction(&self, tx_hex: String) -> RpcResult<()> {
         let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
         handle_error(self.call_async_mut(|s| s.submit_transaction(tx)).await)
     }
 }
 
-fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> rpc::Result<T> {
+fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> RpcResult<T> {
     e.map_err(rpc::Error::to_call_error)
         .and_then(|r| r.map_err(rpc::Error::to_call_error))
 }

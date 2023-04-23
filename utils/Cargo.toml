@@ -10,15 +10,17 @@ logging = {path = '../logging'}
 crypto = { path = "../crypto/" }
 
 atomic-traits = "0.3"
+directories = "5.0"
 num-traits = "0.2"
+probabilistic-collections = "0.7"
 slave-pool = "0.2"
-probabilistic-collections = "0.7.0"
+thiserror.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
 static_assertions.workspace = true
-criterion = "0.3"
+criterion = "0.4"
 rstest.workspace = true
 
 [target.'cfg(loom)'.dependencies]

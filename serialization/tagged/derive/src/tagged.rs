@@ -18,6 +18,7 @@
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
+use syn::Meta;
 
 // Extract variant discriminant from #[codec(index = X)] or Rust discriminant.
 pub fn variant_index(variant: &syn::Variant) -> Option<TokenStream> {
@@ -25,14 +26,15 @@ pub fn variant_index(variant: &syn::Variant) -> Option<TokenStream> {
         .attrs
         .iter()
         .filter_map(|a| {
-            a.path.is_ident("codec").then_some(())?;
-            match a.parse_args().expect("Can't parse metadata") {
-                syn::NestedMeta::Meta(syn::Meta::NameValue(nv)) => {
-                    nv.path.is_ident("index").then(|| match nv.lit {
+            a.path().is_ident("codec").then_some(())?;
+            match a.parse_args::<Meta>().expect("Can't parse metadata") {
+                Meta::NameValue(nv) => nv.path.is_ident("index").then(|| match nv.value {
+                    syn::Expr::Lit(expr_literal) => match expr_literal.lit {
                         syn::Lit::Int(n) => n.base10_parse::<u8>().expect("codec index invalid"),
-                        _ => panic!("codec index should be a numeric value"),
-                    })
-                }
+                        _ => panic!("codec index should be a literal numeric value"),
+                    },
+                    _ => panic!("codec index should be a literal (numeric value)"),
+                }),
                 _ => None,
             }
         })

@@ -142,14 +142,16 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         .ok_or(SpendStakeError::NoBlockRewardOutputs)?;
 
     let vrf_pub_key = match reward_output {
-        TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
-            // only pool outputs can be staked
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::DecommissionPool(_, _, _, _) => {
             return Err(BlockError::SpendStakeError(
-                SpendStakeError::InvalidBlockRewardPurpose,
+                SpendStakeError::InvalidBlockRewardOutputType,
             ));
         }
         TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),
-        TxOutput::ProduceBlockFromStake(_, _, pool_id) => {
+        TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pos_view = PoSAccountingDB::<_, TipStorageTag>::new(db_tx);
             let pool_data = pos_view
                 .get_pool_data(*pool_id)?

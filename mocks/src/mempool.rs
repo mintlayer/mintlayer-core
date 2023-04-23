@@ -69,7 +69,7 @@ impl MempoolInterfaceMock {
 
 #[async_trait::async_trait]
 impl MempoolInterface for MempoolInterfaceMock {
-    async fn add_transaction(&mut self, _tx: SignedTransaction) -> Result<(), Error> {
+    fn add_transaction(&mut self, _tx: SignedTransaction) -> Result<(), Error> {
         self.add_transaction_called.store(true, Relaxed);
 
         if self.add_transaction_should_error.load(Relaxed) {
@@ -79,7 +79,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    async fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
+    fn get_all(&self) -> Result<Vec<SignedTransaction>, Error> {
         self.get_all_called.store(true, Relaxed);
 
         if self.get_all_should_error.load(Relaxed) {
@@ -89,7 +89,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    async fn contains_transaction(&self, _tx: &Id<Transaction>) -> Result<bool, Error> {
+    fn contains_transaction(&self, _tx: &Id<Transaction>) -> Result<bool, Error> {
         self.contains_transaction_called.store(true, Relaxed);
 
         if self.contains_transaction_should_error.load(Relaxed) {
@@ -99,11 +99,11 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    async fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
+    fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
         unimplemented!()
     }
 
-    async fn collect_txs(
+    fn collect_txs(
         &self,
         tx_accumulator: Box<dyn TransactionAccumulator + Send>,
     ) -> Result<Box<dyn TransactionAccumulator>, Error> {
@@ -116,7 +116,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         }
     }
 
-    async fn subscribe_to_events(
+    fn subscribe_to_events(
         &mut self,
         _handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>,
     ) -> Result<(), Error> {

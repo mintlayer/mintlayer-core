@@ -18,8 +18,8 @@ logging = { path = "../logging" }
 utils = { path = '../utils' }
 
 tokio = { workspace = true, default-features = false }
-trust-dns-client = "0.22.0"
-trust-dns-server = "0.22.0"
+trust-dns-client = "0.22"
+trust-dns-server = "0.22"
 thiserror.workspace = true
 async-trait.workspace = true
 parity-scale-codec.workspace = true

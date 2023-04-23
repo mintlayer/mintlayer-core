@@ -72,10 +72,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         // let's create more blocks until block_height_that_unlocks - 1, and always fail to spend, and build up the chain
         for height in 2..block_height_that_unlocks {
             // attempt to spend the locked output
-            let best_block_index = match tf.best_block_index() {
-                chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-                chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-            };
+            let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
@@ -95,10 +92,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         }
 
         // now we should be able to spend it at block_height_that_unlocks
-        let best_block_index = match tf.best_block_index() {
-            chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-            chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-        };
+        let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
@@ -143,10 +137,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         // let's create more blocks until block_count_that_unlocks + block_height_with_locked_output, and always fail to spend, and build up the chain
         for height in 2..block_count_that_unlocks + block_height_with_locked_output {
             // attempt to spend the locked output
-            let best_block_index = match tf.best_block_index() {
-                chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-                chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-            };
+            let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
@@ -169,10 +160,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         // now we should be able to spend it at block_count_that_unlocks
 
         // attempt to spend the locked output
-        let best_block_index = match tf.best_block_index() {
-            chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-            chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-        };
+        let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
@@ -238,10 +226,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            let best_block_index = match tf.best_block_index() {
-                chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-                chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-            };
+            let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
@@ -265,10 +250,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         }
 
         // Check that the output can now be spent.
-        let best_block_index = match tf.best_block_index() {
-            chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-            chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-        };
+        let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {
@@ -335,10 +317,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            let best_block_index = match tf.best_block_index() {
-                chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-                chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-            };
+            let best_block_index = tf.best_block_index();
             assert_eq!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
@@ -367,10 +346,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         }
 
         // Check that the output can now be spent.
-        let best_block_index = match tf.best_block_index() {
-            chainstate_types::GenBlockIndex::Block(block_index) => block_index,
-            chainstate_types::GenBlockIndex::Genesis(_) => unreachable!(),
-        };
+        let best_block_index = tf.best_block_index();
         verifier
             .connect_transaction(
                 &TransactionSourceForConnect::Mempool {

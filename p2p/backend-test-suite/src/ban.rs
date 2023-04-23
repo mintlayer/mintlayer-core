@@ -21,6 +21,7 @@ use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockErr
 use common::{
     chain::block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
     primitives::Idable,
+    time_getter::TimeGetter,
 };
 
 use p2p::{
@@ -40,6 +41,7 @@ tests![invalid_pubsub_block,];
 // Start two network services, spawn a `SyncMessageHandler` for the first service, publish an
 // invalid block from the first service and verify that the `SyncManager` of the first service
 // receives a `AdjustPeerScore` event which bans the peer of the second service.
+#[allow(clippy::extra_unused_type_parameters)]
 async fn invalid_pubsub_block<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -51,7 +53,7 @@ where
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
-    let (chainstate, mempool) = p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
+    let (chainstate, mempool) = p2p_test_utils::start_subsystems(Arc::clone(&chain_config)).await;
 
     let (mut conn1, messaging_handle, sync_event_receiver) = N::start(
         T::make_transport(),
@@ -70,6 +72,7 @@ where
         chainstate,
         mempool,
         tx_peer_manager,
+        TimeGetter::default(),
     );
 
     let (mut conn2, mut messaging_handle_2, mut sync2) = N::start(

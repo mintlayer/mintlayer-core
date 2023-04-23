@@ -45,6 +45,8 @@ pub enum BlockError {
     StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
+    #[error("Failed to load block")]
+    BlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
     InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
@@ -121,6 +123,12 @@ pub enum CheckBlockTransactionsError {
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
+    #[error("Maturity setting type for the decommission pool output in tx {0} is invalid")]
+    InvalidDecommissionMaturityType(Id<Transaction>),
+    #[error("Maturity setting for the decommission pool output in tx {0} too short: {1} < {2}")]
+    InvalidDecommissionMaturityDistance(Id<Transaction>, BlockDistance, BlockDistance),
+    #[error("Maturity setting value for the decommission pool output in tx {0} is invalid: {1}")]
+    InvalidDecommissionMaturityDistanceValue(Id<Transaction>, u64),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

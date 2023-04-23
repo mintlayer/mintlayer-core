@@ -13,22 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
-
-/// Wrapper for the bool type that can only be set to true once
-#[derive(Default)]
+/// Wrapper for the bool type that can only be set to true
 pub struct SetFlag(bool);
 
 impl SetFlag {
+    /// Creates a new unset flag
+    pub fn new() -> Self {
+        Self(false)
+    }
+
+    /// If the flag is already set
+    pub fn test(&self) -> bool {
+        self.0
+    }
+
+    /// Sets the flag
     pub fn set(&mut self) {
         self.0 = true;
     }
-}
 
-impl Deref for SetFlag {
-    type Target = bool;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    /// Sets the flag and returns the old value
+    pub fn test_and_set(&mut self) -> bool {
+        let old_value = self.0;
+        self.0 = true;
+        old_value
     }
 }

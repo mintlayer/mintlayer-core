@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,6 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    logging::log::info!("Hello, world!");
+use crypto::random::Rng;
+
+/// Returns a value sampled from an exponential distribution with a mean of 1.0
+pub fn exponential_rand(rng: &mut impl Rng) -> f64 {
+    #[allow(clippy::float_arithmetic)]
+    -rng.gen::<f64>().ln()
 }
+
+#[cfg(test)]
+mod test;

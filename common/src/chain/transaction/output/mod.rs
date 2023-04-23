@@ -55,7 +55,9 @@ pub enum TxOutput {
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
-    ProduceBlockFromStake(Amount, Destination, PoolId),
+    ProduceBlockFromStake(Destination, PoolId),
+    #[codec(index = 5)]
+    DecommissionPool(Amount, Destination, PoolId, OutputTimeLock),
 }
 
 impl TxOutput {
@@ -66,7 +68,8 @@ impl TxOutput {
             TxOutput::LockThenTransfer(_, d, _) => Some(d),
             TxOutput::Burn(_) => None,
             TxOutput::StakePool(d) => Some(d.staker()),
-            TxOutput::ProduceBlockFromStake(_, d, _) => Some(d),
+            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
+            TxOutput::DecommissionPool(_, d, _, _) => Some(d),
         }
     }
 
@@ -75,20 +78,9 @@ impl TxOutput {
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::StakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _, _) => false,
+            | TxOutput::DecommissionPool(_, _, _, _)
+            | TxOutput::ProduceBlockFromStake(_, _) => false,
             TxOutput::Burn(_) => true,
-        }
-    }
-}
-
-impl TxOutput {
-    pub fn value(&self) -> OutputValue {
-        match self {
-            TxOutput::Transfer(v, _) => v.clone(),
-            TxOutput::LockThenTransfer(v, _, _) => v.clone(),
-            TxOutput::Burn(v) => v.clone(),
-            TxOutput::StakePool(d) => OutputValue::Coin(d.value()),
-            TxOutput::ProduceBlockFromStake(v, _, _) => OutputValue::Coin(*v),
         }
     }
 
@@ -97,8 +89,8 @@ impl TxOutput {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
             | TxOutput::StakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _, _) => false,
-            TxOutput::LockThenTransfer(_, _, _) => true,
+            | TxOutput::ProduceBlockFromStake(_, _) => false,
+            TxOutput::DecommissionPool(_, _, _, _) | TxOutput::LockThenTransfer(_, _, _) => true,
         }
     }
 }

@@ -6,3 +6,5 @@ chain_width = 80
 single_line_if_else_max_width = 50
 newline_style = "Unix"
 edition = "2021"
+
+match_arm_leading_pipes = "Preserve"

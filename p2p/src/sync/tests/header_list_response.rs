@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Duration};
 
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
@@ -22,15 +22,16 @@ use p2p_test_utils::{create_n_blocks, start_subsystems_with_chainstate};
 use test_utils::random::Seed;
 
 use crate::{
+    config::NodeType,
     error::ProtocolError,
     message::{BlockListRequest, HeaderList, SyncMessage},
     sync::tests::helpers::SyncManagerHandle,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
-    P2pError,
+    P2pConfig, P2pError,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::start().await;
@@ -45,7 +46,7 @@ async fn nonexistent_peer() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn header_count_limit_exceeded(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -55,7 +56,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
@@ -85,7 +86,7 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unordered_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -101,7 +102,7 @@ async fn unordered_headers(#[case] seed: Seed) {
         .map(|(_, b)| b.header().clone())
         .collect();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -126,7 +127,7 @@ async fn unordered_headers(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnected_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -140,7 +141,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
         .map(|b| b.header().clone())
         .collect();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -165,7 +166,7 @@ async fn disconnected_headers(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_headers(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -175,7 +176,7 @@ async fn valid_headers(#[case] seed: Seed) {
         .build();
     let blocks = create_n_blocks(&mut tf, 3);
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
@@ -199,4 +200,41 @@ async fn valid_headers(#[case] seed: Seed) {
     );
 
     handle.assert_no_error().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn disconnect() {
+    let p2p_config = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: NodeType::Full.into(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: "test".try_into().unwrap(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Duration::from_millis(100).into(),
+    });
+    let mut handle = SyncManagerHandle::builder()
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .build()
+        .await;
+
+    let peer = PeerId::new();
+    handle.connect_peer(peer).await;
+
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    handle.assert_disconnect_peer_event(peer).await;
 }

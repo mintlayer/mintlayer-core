@@ -118,7 +118,7 @@ where
             Arc::clone(&p2p_config),
             conn,
             rx_peer_manager,
-            time_getter,
+            time_getter.clone(),
             peerdb_storage,
         )?;
         tokio::spawn(async move {
@@ -143,6 +143,7 @@ where
                     chainstate_handle,
                     mempool_handle_,
                     tx_peer_manager,
+                    time_getter,
                 )
                 .run()
                 .await

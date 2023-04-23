@@ -100,8 +100,11 @@ pub fn calculate_target_required(
 ) -> Result<Compact, ConsensusPoSError> {
     // check if current block is a net upgrade threshold
     let pos_config = match pos_status {
-        PoSStatus::Threshold { initial_difficulty } => return Ok(*initial_difficulty),
-        PoSStatus::Ongoing { config } => config,
+        PoSStatus::Threshold {
+            initial_difficulty,
+            config: _,
+        } => return Ok(*initial_difficulty),
+        PoSStatus::Ongoing(config) => config,
     };
 
     let prev_block_id = match prev_block_id.classify(chain_config) {
@@ -115,10 +118,13 @@ pub fn calculate_target_required(
     // check if prev block is a net upgrade threshold
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
         RequiredConsensus::PoS(status) => match status {
-            PoSStatus::Threshold { initial_difficulty } => {
+            PoSStatus::Threshold {
+                initial_difficulty,
+                config: _,
+            } => {
                 return Ok(initial_difficulty);
             }
-            PoSStatus::Ongoing { config: _config } => { /*do nothing*/ }
+            PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
             panic!("Prev block's consensus status must be PoS because we are in Ongoing PoS net version")
@@ -336,7 +342,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_new_target_too_easy(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config = PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 2).unwrap();
+        let config = PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 1.into(), 2).unwrap();
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
             calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
@@ -346,7 +352,7 @@ mod tests {
 
     #[test]
     fn calculate_new_target_with_overflow() {
-        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 2).unwrap();
+        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 1.into(), 2).unwrap();
         let prev_target = Uint256::MAX;
         let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
 
@@ -478,8 +484,8 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config_1 = PoSChainConfig::new(target_limit_1, 10, 1.into(), 2).unwrap();
-        let pos_config_2 = PoSChainConfig::new(target_limit_2, 20, 1.into(), 5).unwrap();
+        let pos_config_1 = PoSChainConfig::new(target_limit_1, 10, 1.into(), 1.into(), 2).unwrap();
+        let pos_config_2 = PoSChainConfig::new(target_limit_2, 20, 1.into(), 1.into(), 5).unwrap();
         let upgrades = vec![
             (
                 BlockHeight::new(0),

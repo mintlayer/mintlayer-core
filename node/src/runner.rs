@@ -38,6 +38,8 @@ use logging::log;
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
 use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
+use rpc::rpc_creds::RpcCreds;
+use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
     config_files::NodeConfigFile,
@@ -70,12 +72,12 @@ pub async fn initialize(
     // Mempool subsystem
     let mempool = mempool::make_mempool(
         Arc::clone(&chain_config),
-        chainstate.clone(),
+        subsystem::Handle::clone(&chainstate),
         Default::default(),
         mempool::SystemUsageEstimator {},
     );
-    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
-        mempool.run(call, shutdn)
+    let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
+        move |call, shutdn| mempool.run(call, shutdn)
     });
 
     // P2P subsystem
@@ -115,10 +117,16 @@ pub async fn initialize(
 
     // RPC subsystem
     if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
+        let rpc_creds = RpcCreds::new(
+            &data_dir,
+            rpc_config.username.as_deref(),
+            rpc_config.password.as_deref(),
+            rpc_config.cookie_file.as_deref(),
+        )?;
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
         let _rpc = manager.add_subsystem(
             "rpc",
-            rpc::Builder::new(rpc_config.into())
+            rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
                 .register(crate::rpc::init(
                     manager.make_shutdown_trigger(),
                     chain_config,
@@ -169,35 +177,6 @@ pub async fn run(options: Options) -> Result<()> {
             .await
         }
     }
-}
-
-/// Prepare data directory for the node.
-/// Two possibilities:
-/// 1. If no data directory is specified, use the default data directory provided by default_data_dir_getter;
-///    it doesn't have to exist. It will be automatically created.
-/// 2. If a custom data directory is specified, it MUST exist. Otherwise, an error is returned.
-fn prepare_data_dir<F: Fn() -> PathBuf>(
-    default_data_dir_getter: F,
-    datadir_path_opt: &Option<PathBuf>,
-) -> Result<PathBuf> {
-    let data_dir = match datadir_path_opt {
-        Some(data_dir) => {
-            if !data_dir.exists() {
-                return Err(anyhow::anyhow!("Custom data directory '{}' does not exist. Please create it or use the default data directory.", data_dir.display()));
-            }
-            data_dir.clone()
-        }
-        None => {
-            std::fs::create_dir_all(default_data_dir_getter()).with_context(|| {
-                format!(
-                    "Failed to create the '{}' data directory",
-                    default_data_dir_getter().display()
-                )
-            })?;
-            default_data_dir_getter()
-        }
-    };
-    Ok(data_dir)
 }
 
 /// Creates an exclusive lock file in the specified directory.

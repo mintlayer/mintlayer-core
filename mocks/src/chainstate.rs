@@ -16,11 +16,14 @@
 use std::sync::Arc;
 
 use common::chain::block::BlockReward;
+use common::chain::DelegationId;
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
+use common::chain::PoolId;
 use common::chain::Transaction;
 use common::chain::TxInput;
 use common::chain::TxMainChainIndex;
+use common::chain::TxOutput;
 use common::primitives::Amount;
 use common::{
     chain::{
@@ -37,6 +40,7 @@ use chainstate_types::GenBlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::tokens::TokenAuxiliaryData;
 use common::chain::ChainConfig;
+use pos_accounting::PoolData;
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
 
@@ -118,9 +122,13 @@ mockall::mock! {
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
         fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
-        fn get_inputs_outpoints_values(
+        fn get_inputs_outpoints_coin_amount(
             &self,
-            tx: &Transaction,
+            inputs: &[TxInput],
+        ) -> Result<Vec<Option<Amount>>, ChainstateError>;
+        fn get_outputs_coin_amount(
+            &self,
+            outputs: &[TxOutput],
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
@@ -135,6 +143,26 @@ mockall::mock! {
         ) -> Result<(), ChainstateError>;
         fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
+        fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
+        fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+        fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
+        fn get_stake_pool_delegations_shares(
+            &self,
+            pool_id: PoolId,
+        ) -> Result<Option<std::collections::BTreeMap<DelegationId, Amount>>, ChainstateError>;
+        fn get_stake_delegation_balance(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, ChainstateError>;
+        fn get_stake_delegation_data(
+            &self,
+            delegation_id: DelegationId,
+        ) -> Result<Option<pos_accounting::DelegationData>, ChainstateError>;
+        fn get_stake_pool_delegation_share(
+            &self,
+            pool_id: PoolId,
+            delegation_id: DelegationId,
+        ) -> Result<Option<Amount>, ChainstateError>;
     }
 }
 

@@ -26,6 +26,7 @@ use p2p::{
     net::NetworkingService,
 };
 use tokio::sync::mpsc;
+use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
 mod config;
 mod crawler_p2p;
@@ -33,6 +34,7 @@ mod dns_server;
 mod error;
 
 const DNS_SERVER_USER_AGENT: &str = "MintlayerDnsSeedServer";
+const DNS_SERVER_DB_NAME: &str = "dns_server";
 
 async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
@@ -65,6 +67,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
 
     let transport = p2p::make_p2p_transport();
@@ -77,8 +80,14 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     )
     .await?;
 
+    let data_dir = prepare_data_dir(
+        || default_data_dir_for_chain(chain_type.name()),
+        &config.datadir,
+    )
+    .expect("Failed to prepare data directory");
+
     let storage = DnsServerStorageImpl::new(storage_lmdb::Lmdb::new(
-        config.datadir.clone().into(),
+        data_dir.join(DNS_SERVER_DB_NAME),
         Default::default(),
         Default::default(),
         Default::default(),

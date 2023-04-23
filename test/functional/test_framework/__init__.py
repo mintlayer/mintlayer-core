@@ -13,11 +13,86 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import hashlib
 import scalecodec
 
-def init_p2p_types():
+def mintlayer_hash(data):
+    return hashlib.blake2b(data, digest_size = 64).digest()[0:32]
+
+def init_mintlayer_types():
     custom_types = {
         "types": {
+            "Amount": "Compact<u128>",
+
+            "H256": "[u8; 32]",
+
+            "OutputValue": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Coin", "Amount"],
+                    # TODO tokens
+                ]
+            },
+
+            "Destination": {
+                "type": "enum",
+                "type_mapping": [
+                    ["AnyoneCanSpend", "()"],
+                    # TODO other destination types
+                ]
+            },
+
+            "TxOutput": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Transfer", "(OutputValue, Destination)"],
+                    # TODO other purpose types
+                ]
+            },
+
+            "OutPointSourceId": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Transaction", "H256"],
+                    ["BlockReward", "H256"],
+                ]
+            },
+
+            "TxInput": {
+                "type": "struct",
+                "type_mapping": [
+                    ["id", "OutPointSourceId"],
+                    ["index", "u32"],
+                ]
+            },
+
+            "TransactionV1": {
+                "type": "struct",
+                "type_mapping": [
+                    ["version", "u8"], # has to be 1
+                    ["flags", "u32"],
+                    ["inputs", "Vec<TxInput>"],
+                    ["outputs", "Vec<TxOutput>"],
+                    ["time_lock", "u32"],
+                ]
+            },
+
+            "InputWitness": {
+                "type": "enum",
+                "type_mapping": [
+                    ["NoSignature", "Option<Vec<u8>>"],
+                    # TODO Standard
+                ]
+            },
+
+            "SignedTransaction": {
+                "type": "struct",
+                "type_mapping": [
+                    ["transaction", "TransactionV1"],
+                    ["signatures", "Vec<InputWitness>"],
+                ]
+            },
+
             "SemVer": {
                 "type": "struct",
                 "type_mapping": [
@@ -122,4 +197,4 @@ def init_p2p_types():
 
     scalecodec.base.RuntimeConfiguration().update_type_registry(custom_types)
 
-init_p2p_types()
+init_mintlayer_types()

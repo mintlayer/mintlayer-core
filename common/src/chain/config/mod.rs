@@ -30,10 +30,13 @@ use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
+use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
+
+use super::{PoSStatus, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -43,6 +46,12 @@ const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
         None => panic!("epoch length cannot be 0"),
     };
 const DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP: usize = 2;
+
+pub const BIP44_PATH: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(44).0);
+pub const MINTLAYER_COIN_TYPE: ChildNumber =
+    ChildNumber::from_hardened(U31::from_u32_with_msb(0x4D4C).0);
+pub const MINTLAYER_COIN_TYPE_TEST: ChildNumber =
+    ChildNumber::from_hardened(U31::from_u32_with_msb(0x01).0);
 
 pub type EpochIndex = u64;
 
@@ -90,12 +99,20 @@ impl ChainType {
             ChainType::Signet => 33031,
         }
     }
+
+    const fn default_bip44_coin_type(&self) -> ChildNumber {
+        match self {
+            ChainType::Mainnet => MINTLAYER_COIN_TYPE,
+            ChainType::Testnet | ChainType::Regtest | ChainType::Signet => MINTLAYER_COIN_TYPE_TEST,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
+    bip44_coin_type: ChildNumber,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
@@ -129,6 +146,10 @@ pub struct ChainConfig {
 impl ChainConfig {
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
+    }
+
+    pub fn bip44_coin_type(&self) -> ChildNumber {
+        self.bip44_coin_type
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
@@ -276,6 +297,24 @@ impl ChainConfig {
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
+    }
+
+    pub fn decommission_pool_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
+        match self.net_upgrades.consensus_status(block_height) {
+            RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
+                self.empty_consensus_reward_maturity_distance
+            }
+            RequiredConsensus::PoS(status) => {
+                let pos_config = match &status {
+                    PoSStatus::Ongoing(config)
+                    | PoSStatus::Threshold {
+                        initial_difficulty: _,
+                        config,
+                    } => config,
+                };
+                pos_config.decommission_maturity_distance()
+            }
+        }
     }
 
     pub fn max_classic_multisig_public_keys_count(&self) -> usize {

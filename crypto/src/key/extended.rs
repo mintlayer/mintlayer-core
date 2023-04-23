@@ -32,12 +32,12 @@ pub enum ExtendedKeyKind {
     Secp256k1Schnorr,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Decode, Encode)]
 pub struct ExtendedPrivateKey {
     key: ExtendedPrivateKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Decode, Encode)]
 pub struct ExtendedPublicKey {
     pub_key: ExtendedPublicKeyHolder,
 }

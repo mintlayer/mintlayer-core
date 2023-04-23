@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{net::SocketAddr, str::FromStr};
+use std::{fmt::Debug, net::SocketAddr, str::FromStr};
 
 use utils::make_config_setting;
 

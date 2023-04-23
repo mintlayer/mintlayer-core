@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{block_index_ancestor_getter, BlockIndex, GenBlockIndex};
+use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
-        block::timestamp::BlockTimestamp, signature::Transactable, ChainConfig, GenBlock, TxOutput,
+        block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
+        ChainConfig, GenBlock, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -34,18 +35,16 @@ fn check_timelock(
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError> {
-    use common::chain::timelock::OutputTimeLock;
+    let source_block_height = source_block_index.block_height();
+    let source_block_time = source_block_index.block_timestamp();
 
     let timelock = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
         | TxOutput::StakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) => tl,
+        | TxOutput::ProduceBlockFromStake(_, _) => return Ok(()),
+        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };
-
-    let source_block_height = source_block_index.block_height();
-    let source_block_time = source_block_index.block_timestamp();
 
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
@@ -90,6 +89,13 @@ pub fn check_timelocks<
         None => return Ok(()),
     };
 
+    let starting_point: GenBlockIndex = match tx_source {
+        TransactionSourceForConnect::Chain { new_block_index } => {
+            (*new_block_index).clone().into_gen_block_index()
+        }
+        TransactionSourceForConnect::Mempool { current_best } => (*current_best).clone(),
+    };
+
     for input in inputs {
         let outpoint = input.outpoint();
         let utxo = utxos_view
@@ -114,16 +120,11 @@ pub fn check_timelocks<
                 db_tx.get_gen_block_index(id)
             };
 
-            let starting_point: &BlockIndex = match tx_source {
-                TransactionSourceForConnect::Chain { new_block_index } => new_block_index,
-                TransactionSourceForConnect::Mempool { current_best } => current_best,
-            };
-
             let source_block_index = block_index_ancestor_getter(
                 block_index_getter,
                 storage,
                 chain_config.as_ref(),
-                (&starting_point.clone().into_gen_block_index()).into(),
+                (&starting_point).into(),
                 height,
             )
             .map_err(|e| {

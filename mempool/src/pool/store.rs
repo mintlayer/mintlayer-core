@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::{
-    chain::{tokens::OutputValue, OutPoint, SignedTransaction, Transaction},
+    chain::{OutPoint, SignedTransaction, Transaction, TxOutput},
     primitives::{Amount, Id, Idable},
 };
 use logging::log;
@@ -95,6 +95,15 @@ pub struct MempoolStore {
     // We keep the information of which outpoints are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
     pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
+
+    // Track transactions by internal unique sequence number. This is used to recover the order in
+    // which the transactions have been inserted into the mempool, so they can be re-inserted in
+    // the same order after a reorg. We keep both mapping from transactions to sequence numbers and
+    // the mapping from sequence number back to transaction. The sequence number to be allocated to
+    // the next incoming transaction is kept separately.
+    pub txs_by_seq_no: BTreeMap<usize, Id<Transaction>>,
+    pub seq_nos_by_tx: BTreeMap<Id<Transaction>, usize>,
+    next_seq_no: usize,
 }
 
 // If a transaction is removed from the mempool for any reason other than inclusion in a block,
@@ -120,18 +129,14 @@ impl MempoolStore {
             txs_by_id: BTreeMap::new(),
             txs_by_creation_time: BTreeMap::new(),
             spender_txs: BTreeMap::new(),
+            txs_by_seq_no: BTreeMap::new(),
+            seq_nos_by_tx: BTreeMap::new(),
+            next_seq_no: 0,
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.txs_by_id.is_empty()
-    }
-
-    // Checks whether the outpoint is to be created by an unconfirmed tx
-    pub fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
-        outpoint.tx_id().get_tx_id().is_some()
-            && matches!(self.txs_by_id.get(outpoint.tx_id().get_tx_id().expect("Not a block reward outpoint")),
-            Some(entry) if entry.tx.transaction().outputs().len() > outpoint.output_index() as usize)
     }
 
     /// unconfirmed means: The outpoint comes from a transaction in the mempool
@@ -145,21 +150,24 @@ impl MempoolStore {
             spending_tx_id: *spending_tx_id_for_error_msg,
         };
         let tx_id = *outpoint.tx_id().get_tx_id().ok_or_else(make_err)?;
-        self.txs_by_id
-            .get(&tx_id)
-            .ok_or_else(make_err)
-            .and_then(|entry| {
-                entry
-                    .tx
-                    .transaction()
-                    .outputs()
-                    .get(outpoint.output_index() as usize)
-                    .ok_or_else(make_err)
-            })
-            .map(|output| match output.value() {
-                OutputValue::Coin(coin) => coin,
-                OutputValue::Token(_) => Amount::from_atoms(0),
-            })
+        self.txs_by_id.get(&tx_id).ok_or_else(make_err).and_then(|entry| {
+            let output = entry
+                .tx
+                .transaction()
+                .outputs()
+                .get(outpoint.output_index() as usize)
+                .ok_or_else(make_err)?;
+            match output {
+                TxOutput::Transfer(v, _)
+                | TxOutput::LockThenTransfer(v, _, _)
+                | TxOutput::Burn(v) => Ok(v.coin_amount().unwrap_or(Amount::ZERO)),
+                TxOutput::StakePool(data) => Ok(data.value()),
+                TxOutput::ProduceBlockFromStake(_, _) => {
+                    Err(TxValidationError::ProduceBlockOutputInTx(tx_id))
+                }
+                TxOutput::DecommissionPool(v, _, _, _) => Ok(*v),
+            }
+        })
     }
 
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
@@ -256,12 +264,16 @@ impl MempoolStore {
 
         let creation_time = entry.creation_time;
         let tx_id = entry.tx_id();
+        let seq_no = self.next_seq_no;
+        self.next_seq_no += 1;
 
         self.txs_by_id.insert(tx_id, entry.clone());
 
         self.add_to_descendant_score_index(&entry);
         self.add_to_ancestor_score_index(&entry);
         self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
+        self.txs_by_seq_no.insert(seq_no, tx_id);
+        self.seq_nos_by_tx.insert(tx_id, seq_no);
         Ok(())
     }
 
@@ -354,7 +366,8 @@ impl MempoolStore {
         self.remove_from_descendant_score_index(entry);
         self.remove_from_ancestor_score_index(entry);
         self.remove_from_creation_time_index(entry);
-        self.unspend_outpoints(entry)
+        self.remove_from_seq_no_index(entry);
+        self.unspend_outpoints(entry);
     }
 
     fn remove_from_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
@@ -403,6 +416,12 @@ impl MempoolStore {
         }
     }
 
+    fn remove_from_seq_no_index(&mut self, entry: &TxMempoolEntry) {
+        let tx_id = entry.tx_id();
+        let seq_no = self.seq_nos_by_tx.remove(&tx_id).expect("tx entry must exist");
+        self.txs_by_seq_no.remove(&seq_no).expect("tx with given seq no must exist");
+    }
+
     pub fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
             self.remove_tx(&conflict, MempoolRemovalReason::Replaced)
@@ -433,6 +452,19 @@ impl MempoolStore {
 
     pub fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Id<Transaction>> {
         self.spender_txs.get(outpoint).cloned()
+    }
+
+    /// Take all the transactions from the store in the original order of insertion
+    pub fn into_transactions(self) -> impl Iterator<Item = SignedTransaction> {
+        let Self {
+            mut txs_by_id,
+            txs_by_seq_no,
+            ..
+        } = self;
+
+        txs_by_seq_no
+            .into_values()
+            .map(move |id| txs_by_id.remove(&id).expect("transaction must be present").tx)
     }
 }
 

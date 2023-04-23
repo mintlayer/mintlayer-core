@@ -115,20 +115,18 @@ mod tests {
 
         let mempool = mempool::make_mempool(
             Arc::clone(&chain_config),
-            chainstate.clone(),
+            subsystem::Handle::clone(&chainstate),
             Default::default(),
             mempool::SystemUsageEstimator {},
         );
-
-        let mempool = manager
-            .add_subsystem_with_custom_eventloop("mempool", move |call, shutdn| {
-                mempool.run(call, shutdn)
-            });
+        let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
+            move |call, shutdn| mempool.run(call, shutdn)
+        });
 
         (manager, chain_config, chainstate, mempool)
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
         let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 

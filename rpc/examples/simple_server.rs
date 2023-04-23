@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
     let rpc_config = rpc::RpcConfig::default();
     let _rpc_subsystem = app.add_subsystem(
         "rpc",
-        rpc::Builder::new(rpc_config)
+        rpc::Builder::new(rpc_config, None)
             .register(some_subsystem.clone().into_rpc())
             .build()
             .await?,

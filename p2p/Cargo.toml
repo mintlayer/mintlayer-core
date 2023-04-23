@@ -10,51 +10,52 @@ default = []
 testing_utils = ["dep:rlimit", "dep:ctor", "dep:test-utils", "tokio/test-util"]
 
 [dependencies]
+chainstate = { path = "../chainstate/" }
 common = { path = "../common/" }
 crypto = { path = "../crypto/" }
-chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
 mempool = { path = "../mempool/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
-subsystem = { path = "../subsystem/" }
-utils = { path = "../utils/" }
 storage = { path = "../storage" }
+subsystem = { path = "../subsystem/" }
 test-utils = { path = "../test-utils", optional = true }
+utils = { path = "../utils/" }
 
 async-trait.workspace = true
 bytes = "1.1"
+ctor = { version = "0.2", optional = true}
 futures.workspace = true
-itertools.workspace = true
-parity-scale-codec.workspace = true
-sscanf = "0.4"
-thiserror.workspace = true
-void = "1.0"
-tap = "1.0"
-once_cell.workspace = true
-jsonrpsee = { workspace = true, features = ["macros"] }
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
-tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
-snowstorm = "0.4.0"
-serde.workspace = true
-socket2 = { version = "0.5", features = ["all"] }
-tokio-socks = { version = "0.5.1" }
 hex.workspace = true
-rlimit = { version = "0.9.1", optional = true}
-ctor = { version = "0.2.0", optional = true}
-siphasher = "0.3.10"
+itertools.workspace = true
+jsonrpsee = { workspace = true, features = ["macros"] }
+once_cell.workspace = true
+parity-scale-codec.workspace = true
+rlimit = { version = "0.9", optional = true}
+serde.workspace = true
+siphasher = "0.3"
+snowstorm = "0.4"
+socket2 = { version = "0.5", features = ["all"] }
+sscanf = "0.4"
+tap = "1.0"
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio-socks = { version = "0.5" }
+tokio-util = {version = "0.7", default-features = false, features = ["codec"] }
+void = "1.0"
 
 [dev-dependencies]
-chainstate-test-framework = { path = "../chainstate/test-framework" }
 chainstate-storage = { path = "../chainstate/storage" }
-crypto = { path = "../crypto/" }
-p2p-test-utils = { path = "p2p-test-utils" }
-p2p-backend-test-suite = { path = "backend-test-suite" }
-test-utils = { path = "../test-utils" }
+chainstate-test-framework = { path = "../chainstate/test-framework" }
 consensus = { path = "../consensus" }
+crypto = { path = "../crypto/" }
+p2p-backend-test-suite = { path = "backend-test-suite" }
+p2p-test-utils = { path = "p2p-test-utils" }
+test-utils = { path = "../test-utils" }
 
-rstest.workspace = true
+criterion = "0.4"
 portpicker = "0.1"
+rstest.workspace = true
 
 [[test]]
 name = "backend_tcp"
@@ -66,4 +67,8 @@ harness = false
 
 [[test]]
 name = "backend_noise"
+harness = false
+
+[[bench]]
+name = "benches"
 harness = false

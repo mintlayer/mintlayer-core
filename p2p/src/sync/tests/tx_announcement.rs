@@ -38,7 +38,7 @@ use crate::{
     P2pConfig, P2pError,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[should_panic = "Received a message from unknown peer"]
 async fn nonexistent_peer() {
     let mut handle = SyncManagerHandle::builder().build().await;
@@ -55,7 +55,7 @@ async fn nonexistent_peer() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn invalid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -66,7 +66,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
@@ -107,7 +107,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
 // an error or misbehavior.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_block_download() {
     let chain_config = Arc::new(create_unit_test_config());
     let mut handle = SyncManagerHandle::builder()
@@ -129,7 +129,7 @@ async fn initial_block_download() {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_transaction_service(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -140,7 +140,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -163,6 +163,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -189,7 +190,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn too_many_announcements(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -200,7 +201,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -223,6 +224,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
         max_message_size: Default::default(),
         max_peer_tx_announcements: 0.into(),
         max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
@@ -249,7 +251,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn duplicated_announcement(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -260,7 +262,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
@@ -300,7 +302,7 @@ async fn duplicated_announcement(#[case] seed: Seed) {
 #[rstest::rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn valid_transaction(#[case] seed: Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
@@ -311,7 +313,7 @@ async fn valid_transaction(#[case] seed: Seed) {
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
     let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config));
+        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()

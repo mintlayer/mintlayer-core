@@ -32,6 +32,7 @@ use p2p::{
 
 tests![block_announcement, block_announcement_no_subscription,];
 
+#[allow(clippy::extra_unused_type_parameters)]
 async fn block_announcement<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -127,6 +128,7 @@ where
     assert_eq!(&header, block.header());
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 async fn block_announcement_no_subscription<T, N, A>()
 where
     T: TestTransportMaker<Transport = N::Transport, Address = N::Address>,
@@ -157,6 +159,7 @@ where
         max_message_size: Default::default(),
         max_peer_tx_announcements: Default::default(),
         max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
     });
     let (mut conn1, mut messaging_handle1, _sync1) = N::start(
         T::make_transport(),

@@ -18,4 +18,4 @@ crypto = { path = "../../crypto" }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 futures.workspace = true
 libtest-mimic = "0.6"
-rlimit = "0.9.1"
+rlimit = "0.9"

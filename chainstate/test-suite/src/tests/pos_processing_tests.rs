@@ -15,10 +15,7 @@
 
 use std::num::NonZeroU64;
 
-use super::helpers::{
-    new_pub_key_destination,
-    pos::{calculate_new_target, pos_mine},
-};
+use super::helpers::pos::{calculate_new_target, create_stake_pool_data, pos_mine};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
@@ -38,9 +35,10 @@ use common::{
         config::{Builder as ConfigBuilder, EpochIndex},
         create_unittest_pos_config,
         stakelock::StakePoolData,
+        timelock::OutputTimeLock,
         tokens::OutputValue,
-        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
-        UpgradeVersion,
+        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoSChainConfig, PoolId, TxInput,
+        TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Idable, H256},
     Uint256,
@@ -64,22 +62,6 @@ const TEST_EPOCH_LENGTH: NonZeroU64 = match NonZeroU64::new(2) {
 const TEST_SEALED_EPOCH_DISTANCE: usize = 0;
 
 const MIN_DIFFICULTY: Uint256 = Uint256::MAX;
-
-fn create_stake_pool_data(
-    rng: &mut (impl Rng + CryptoRng),
-    amount: Amount,
-    vrf_pk: VRFPublicKey,
-) -> StakePoolData {
-    let destination = new_pub_key_destination(rng);
-    StakePoolData::new(
-        amount,
-        anyonecanspend_address(),
-        vrf_pk,
-        destination,
-        0,
-        Amount::ZERO,
-    )
-}
 
 fn add_block_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
@@ -185,6 +167,59 @@ fn setup_test_chain_with_staked_pool(
     (tf, stake_pool_outpoint, pool_id)
 }
 
+// Create a chain genesis <- block_1
+// block_1 has txs with 2 StakePool output
+fn setup_test_chain_with_2_staked_pools(
+    rng: &mut (impl Rng + CryptoRng),
+    vrf_pk_1: VRFPublicKey,
+    vrf_pk_2: VRFPublicKey,
+) -> (TestFramework, OutPoint, PoolId, OutPoint, PoolId) {
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
+        ),
+    ];
+
+    setup_test_chain_with_2_staked_pools_with_net_upgrades(rng, vrf_pk_1, vrf_pk_2, upgrades)
+}
+
+fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
+    rng: &mut (impl Rng + CryptoRng),
+    vrf_pk_1: VRFPublicKey,
+    vrf_pk_2: VRFPublicKey,
+    upgrades: Vec<(BlockHeight, UpgradeVersion)>,
+) -> (TestFramework, OutPoint, PoolId, OutPoint, PoolId) {
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    let chain_config = ConfigBuilder::test_chain()
+        .net_upgrades(net_upgrades)
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .build();
+
+    let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
+
+    let stake_pool_data1 = create_stake_pool_data(rng, Amount::from_atoms(1), vrf_pk_1);
+    let stake_pool_data2 = create_stake_pool_data(rng, Amount::from_atoms(1), vrf_pk_2);
+    let (stake_pool_outpoint1, pool_id1, stake_pool_outpoint2, pool_id2) =
+        add_block_with_2_stake_pools(rng, &mut tf, stake_pool_data1, stake_pool_data2);
+
+    (
+        tf,
+        stake_pool_outpoint1,
+        pool_id1,
+        stake_pool_outpoint2,
+        pool_id2,
+    )
+}
+
 // Create a chain genesis <- block_1 <- block_2
 // PoS consensus activates on height 2.
 // block_1 has valid StakePool output. block_2 has PoS kernel input from block_1.
@@ -233,8 +268,11 @@ fn pos_basic(#[case] seed: Seed) {
     );
 
     // valid case
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = Amount::from_atoms(1);
+    let total_reward = (subsidy + initially_staked).unwrap();
+
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(consensus_data)
         .with_timestamp(block_timestamp)
@@ -246,9 +284,7 @@ fn pos_basic(#[case] seed: Seed) {
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
             .unwrap()
             .unwrap();
-    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
-    let initially_staked = Amount::from_atoms(1);
-    assert_eq!((subsidy + initially_staked).unwrap(), res_pool_balance);
+    assert_eq!(total_reward, res_pool_balance);
 }
 
 // PoS consensus activates on height 1.
@@ -464,11 +500,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     {
         // valid case
         let consensus_data = ConsensusData::PoS(Box::new(valid_pos_data));
-        let reward_output = TxOutput::ProduceBlockFromStake(
-            Amount::from_atoms(1),
-            anyonecanspend_address(),
-            pool_id,
-        );
+        let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
         tf.make_block_builder()
             .with_consensus_data(consensus_data)
             .with_reward(vec![reward_output])
@@ -535,8 +567,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     );
 
     // test valid case
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(valid_pos_data)))
         .with_reward(vec![reward_output])
@@ -650,8 +681,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -679,8 +709,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -715,8 +744,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -745,33 +773,10 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (_, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
 
-    let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
-        (
-            BlockHeight::new(2),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                initial_difficulty: MIN_DIFFICULTY.into(),
-                config: create_unittest_pos_config(),
-            }),
-        ),
-    ];
-    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-    let chain_config = ConfigBuilder::test_chain()
-        .net_upgrades(net_upgrades)
-        .epoch_length(TEST_EPOCH_LENGTH)
-        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
-        .build();
-    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
-
     // create initial chain: genesis <- block_1
     // block1 creates 2 separate pools
-    let stake_pool_data1 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_1);
-    let stake_pool_data2 = create_stake_pool_data(&mut rng, Amount::from_atoms(1), vrf_pk_2);
-    let (stake_pool_outpoint1, pool_id1, _, pool_id2) =
-        add_block_with_2_stake_pools(&mut rng, &mut tf, stake_pool_data1, stake_pool_data2);
+    let (mut tf, stake_pool_outpoint1, pool_id1, _, pool_id2) =
+        setup_test_chain_with_2_staked_pools(&mut rng, vrf_pk_1, vrf_pk_2);
 
     // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
     // kernel refers to pool1, while block reward refers to pool2
@@ -793,8 +798,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id2);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id2);
     let res = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -865,6 +869,33 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        stake_pool_outpoint.clone(),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        sealed_pool_balance,
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![reward_output])
+        .with_timestamp(block_timestamp)
+        .build_and_process()
+        .unwrap();
+
+    // prepare and process block_c with StakePool -> ProduceBlockFromStake kernel
+    let sealed_pool_balance =
+        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        block_timestamp,
         stake_pool_outpoint,
         &vrf_sk,
         // no epoch is sealed yet so use initial randomness
@@ -875,37 +906,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
-    tf.make_block_builder()
-        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
-        .with_reward(vec![reward_output])
-        .with_timestamp(block_timestamp)
-        .build_and_process()
-        .unwrap();
-
-    // prepare and process block_c with ProduceBlockFromStake -> ProduceBlockFromStake kernel
-    let block_a_reward_outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_a_id), 0);
-    let sealed_pool_balance =
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
-            .unwrap()
-            .unwrap();
-    let new_block_height = tf.best_block_index().block_height().next_height();
-    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
-    let (pos_data, block_timestamp) = pos_mine(
-        block_timestamp,
-        block_a_reward_outpoint,
-        &vrf_sk,
-        // no epoch is sealed yet so use initial randomness
-        PoSRandomness::new(initial_randomness),
-        pool_id,
-        sealed_pool_balance,
-        1,
-        current_difficulty,
-    )
-    .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     let block_c_index = tf
         .make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
@@ -942,8 +943,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         current_difficulty,
     )
     .expect("should be able to mine");
-    let reward_output =
-        TxOutput::ProduceBlockFromStake(Amount::from_atoms(1), anyonecanspend_address(), pool_id);
+    let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
     tf.make_block_builder()
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(vec![reward_output])
@@ -954,6 +954,219 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
 
     let res_pool_balance =
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let total_subsidy =
+        tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
+    let initially_staked = Amount::from_atoms(1);
+    assert_eq!(
+        (total_subsidy.unwrap() + initially_staked).unwrap(),
+        res_pool_balance
+    );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_from_produce_block(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (vrf_sk_2, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let target_block_time = create_unittest_pos_config().target_block_time().get();
+
+    // create initial chain: genesis <- block_1
+    // block1 creates 2 separate pools
+    let (mut tf, stake_pool_outpoint1, pool_id1, stake_pool_outpoint2, pool_id2) =
+        setup_test_chain_with_2_staked_pools(&mut rng, vrf_pk_1, vrf_pk_2);
+
+    // prepare and process block_2 with StakePool -> ProduceBlockFromStake kernel
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        stake_pool_outpoint1,
+        &vrf_sk_1,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id1,
+        Amount::from_atoms(1),
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = Amount::from_atoms(1);
+    let total_reward = (subsidy + initially_staked).unwrap();
+
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![produce_block_output])
+        .with_timestamp(block_timestamp)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // prepare and process block_3 with ProduceBlockFromStake -> Decommission
+    let block_2_reward_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
+        0,
+    );
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        stake_pool_outpoint2,
+        &vrf_sk_2,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id2,
+        Amount::from_atoms(1),
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let tx = TransactionBuilder::new()
+        .add_input(block_2_reward_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::DecommissionPool(
+            total_reward,
+            anyonecanspend_address(),
+            pool_id1,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
+        .build();
+
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id2);
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![produce_block_output])
+        .with_timestamp(block_timestamp)
+        .add_transaction(tx)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    let res_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id1).unwrap();
+    assert!(res_pool_balance.is_none());
+}
+
+// Produce `genesis -> a` chain. Block `a` has 2 stake pool outputs (one to produce block and one to decommission)
+// Also at block 'a' PoS activates. At height 2 and 3 chain changes configuration of decommission maturity.
+// The test creates block 'b' from block 'a'. And the block 'c' from block 'a'.
+// The goal of the test is to check that block 'c' follows the maturity rules from height 2 and not 3.
+//
+// TODO: enable when mintlayer/mintlayer-core/issues/752 is implemented
+#[ignore]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_from_not_best_block(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk_1, vrf_pk_1) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (_, vrf_pk_2) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let target_block_time = create_unittest_pos_config().target_block_time().get();
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: PoSChainConfig::new(
+                    Uint256::MAX,
+                    target_block_time,
+                    2000.into(),
+                    50.into(),
+                    5,
+                )
+                .unwrap(),
+            }),
+        ),
+        (
+            BlockHeight::new(3),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: PoSChainConfig::new(
+                    Uint256::MAX,
+                    target_block_time,
+                    2000.into(),
+                    100.into(), // decommission maturity increased
+                    5,
+                )
+                .unwrap(),
+            }),
+        ),
+    ];
+
+    // create initial chain: genesis <- block_a
+    // block_a creates 2 separate pools
+    let (mut tf, stake_pool_outpoint1, pool_id1, stake_pool_outpoint2, pool_id2) =
+        setup_test_chain_with_2_staked_pools_with_net_upgrades(
+            &mut rng, vrf_pk_1, vrf_pk_2, upgrades,
+        );
+    let block_a_id = tf.best_block_id();
+    let block_a_height = tf.best_block_index().block_height();
+
+    // prepare and process block_a <- block_b with StakePool -> ProduceBlockFromStake kernel
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let current_difficulty = calculate_new_target(&mut tf, block_a_height.next_height()).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        stake_pool_outpoint1,
+        &vrf_sk_1,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id1,
+        Amount::from_atoms(1),
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    // prepare and process block_a <- block_c with StakePool -> Decommission
+    let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
+    let initially_staked = Amount::from_atoms(1);
+    let total_reward = (subsidy + initially_staked).unwrap();
+
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
+        .with_reward(vec![produce_block_output])
+        .with_timestamp(block_timestamp)
+        .build_and_process()
+        .unwrap();
+
+    let tx = TransactionBuilder::new()
+        .add_input(stake_pool_outpoint2.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::DecommissionPool(
+            total_reward,
+            anyonecanspend_address(),
+            pool_id2,
+            OutputTimeLock::ForBlockCount(50),
+        ))
+        .build();
+
+    let produce_block_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id1);
+    tf.make_block_builder()
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(vec![produce_block_output])
+        .with_timestamp(block_timestamp)
+        .with_parent(block_a_id)
+        .add_transaction(tx)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // no reorg happened so decommission has no effect
+    let res_pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id2)
             .unwrap()
             .unwrap();
     let total_subsidy =

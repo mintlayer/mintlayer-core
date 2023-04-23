@@ -28,7 +28,10 @@ use tokio::{
 };
 
 use chainstate::chainstate_interface::ChainstateInterface;
-use common::chain::{config::create_mainnet, ChainConfig};
+use common::{
+    chain::{config::create_mainnet, ChainConfig},
+    time_getter::TimeGetter,
+};
 use mempool::MempoolHandle;
 use p2p_test_utils::start_subsystems;
 
@@ -94,12 +97,13 @@ impl SyncManagerHandle {
             chainstate,
             mempool,
             peer_manager_sender,
+            TimeGetter::default(),
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
         let sync_manager_handle = tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
-            error_sender.send(e).unwrap();
+            let _ = error_sender.send(e);
         });
 
         Self {
@@ -176,6 +180,16 @@ impl SyncManagerHandle {
         }
     }
 
+    pub async fn assert_disconnect_peer_event(&mut self, id: PeerId) {
+        match self.peer_manager_receiver.recv().await.unwrap() {
+            PeerManagerEvent::Disconnect(peer_id, sender) => {
+                assert_eq!(id, peer_id);
+                sender.send(Ok(()));
+            }
+            e => panic!("Expected PeerManagerEvent::Disconnect, received: {e:?}"),
+        }
+    }
+
     /// Panics if there is an event from the peer manager.
     pub async fn assert_no_peer_manager_event(&mut self) {
         time::timeout(SHORT_TIMEOUT, self.peer_manager_receiver.recv())
@@ -241,7 +255,7 @@ impl SyncManagerHandleBuilder {
     pub async fn build(self) -> SyncManagerHandle {
         let (chainstate, mempool) = match self.subsystems {
             Some((c, m)) => (c, m),
-            None => start_subsystems(Arc::clone(&self.chain_config)),
+            None => start_subsystems(Arc::clone(&self.chain_config)).await,
         };
 
         SyncManagerHandle::start_with_params(
@@ -312,9 +326,9 @@ impl MessagingService for MessagingHandleMock {
 #[async_trait]
 impl SyncingEventReceiver for SyncingEventReceiverMock {
     async fn poll_next(&mut self) -> Result<SyncingEvent> {
-        Ok(time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
+        time::timeout(LONG_TIMEOUT, self.events_receiver.recv())
             .await
             .expect("Failed to receive event in time")
-            .unwrap())
+            .ok_or(P2pError::ChannelClosed)
     }
 }
