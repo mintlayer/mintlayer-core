@@ -210,9 +210,7 @@ impl JobManager {
             JobManagerError::FailedToSendGetJobCountEvent
         );
 
-        tokio::select! {
-            result = result_receiver => result.map_err(|_| JobManagerError::FailedToReadJobCount),
-        }
+        result_receiver.await.map_err(|_| JobManagerError::FailedToReadJobCount)
     }
 
     fn get_job_count_handler(
@@ -238,13 +236,11 @@ impl JobManager {
             JobManagerError::FailedToSendNewJobEvent
         );
 
-        tokio::select! {
-            result = result_receiver
-                => result
-                    .map_err(|_| JobManagerError::FailedToCreateJob)?
-                    .and_then(|v| Ok((v, cancel_receiver)))
-                    .or_else(|e| Err(e))
-        }
+        result_receiver
+            .await
+            .map_err(|_| JobManagerError::FailedToCreateJob)?
+            .and_then(|v| Ok((v, cancel_receiver)))
+            .or_else(|e| Err(e))
     }
 
     #[allow(clippy::type_complexity)]
@@ -281,9 +277,7 @@ impl JobManager {
             JobManagerError::FailedToSendStopJobEvent
         );
 
-        tokio::select! {
-            result = result_receiver => result.map_err(|_| JobManagerError::FailedToStopJobs),
-        }
+        result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
 
     fn stop_job_handler(
@@ -340,9 +334,7 @@ impl Drop for JobManager {
         }
 
         tokio::spawn(async move {
-            tokio::select! {
-                _ = result_receiver => {},
-            }
+            result_receiver.await
         });
     }
 }
