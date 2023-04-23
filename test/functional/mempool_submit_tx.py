@@ -49,6 +49,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
             'transaction': tx,
             'signatures': [],
         }
+        # TODO: Use helpers for encoding (https://github.com/mintlayer/mintlayer-core/issues/849).
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
         self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))

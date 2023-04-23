@@ -71,7 +71,7 @@ trait ChainstateRpc {
     #[method(name = "import_bootstrap_file")]
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()>;
 
-    /// Return an information about the chain.
+    /// Return information about the chain.
     #[method(name = "info")]
     async fn info(&self) -> RpcResult<ChainInfo>;
 }

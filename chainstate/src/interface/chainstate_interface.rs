@@ -214,6 +214,6 @@ pub trait ChainstateInterface: Send {
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
 
-    /// Returns an information about the chain.
+    /// Returns information about the chain.
     fn info(&self) -> Result<ChainInfo, ChainstateError>;
 }
