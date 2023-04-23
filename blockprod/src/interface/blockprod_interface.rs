@@ -15,19 +15,21 @@
 
 use common::chain::{Block, Destination, SignedTransaction};
 
-use crate::{detail::JobKey, BlockProductionError};
+use crate::{detail::job_manager::JobKey, BlockProductionError};
 
 #[async_trait::async_trait]
 pub trait BlockProductionInterface: Send {
-    /// When called, the Block Builder will cancel all current attempts to create blocks
-    /// and won't attempt to do it again for new tips in chainstate or mempool
-    /// Call start() to enable again
-    fn stop_all(&mut self) -> Result<(), BlockProductionError>;
+    /// When called, the job manager will be notified to send a signal
+    /// to all currently running jobs to stop running
+    async fn stop_all(&mut self) -> Result<usize, BlockProductionError>;
 
-    fn stop_job(&mut self, job_id: JobKey) -> Result<(), BlockProductionError>;
+    /// When called, the job manager will be notified to send a signal
+    /// to the specified job to stop running
+    async fn stop_job(&mut self, job_id: JobKey) -> Result<bool, BlockProductionError>;
 
-    /// Generate a block with the given transactions to the specified reward destination
-    /// If transactions are None, the block will be generated with available transactions in the mempool
+    /// Generate a block with the given transactions to the specified
+    /// reward destination. If transactions are None, the block will be
+    /// generated with available transactions in the mempool
     async fn generate_block(
         &mut self,
         reward_destination: Destination,

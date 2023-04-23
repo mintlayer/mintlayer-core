@@ -34,6 +34,7 @@ use std::iter;
 
 use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
+use utils::ensure;
 
 pub use crate::chain::block::block_v1::BlockBody;
 
@@ -141,19 +142,18 @@ impl Block {
         let tx_merkle_root = calculate_tx_merkle_root(&body)?;
         let witness_merkle_root = calculate_witness_merkle_root(&body)?;
 
-        if header.tx_merkle_root != tx_merkle_root {
-            return Err(BlockCreationError::MerkleTreeMismatch(
-                header.tx_merkle_root,
-                tx_merkle_root,
-            ));
-        }
+        ensure!(
+            header.tx_merkle_root == tx_merkle_root,
+            BlockCreationError::MerkleTreeMismatch(header.tx_merkle_root, tx_merkle_root,)
+        );
 
-        if header.witness_merkle_root != witness_merkle_root {
-            return Err(BlockCreationError::WitnessMerkleTreeMismatch(
+        ensure!(
+            header.witness_merkle_root == witness_merkle_root,
+            BlockCreationError::WitnessMerkleTreeMismatch(
                 header.witness_merkle_root,
                 witness_merkle_root,
-            ));
-        }
+            )
+        );
 
         let block = Block::V1(BlockV1 { header, body });
 

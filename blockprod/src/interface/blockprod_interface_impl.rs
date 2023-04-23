@@ -16,7 +16,7 @@
 use common::chain::{Block, Destination, SignedTransaction};
 
 use crate::{
-    detail::{BlockProduction, JobKey},
+    detail::{job_manager::JobKey, BlockProduction},
     BlockProductionError,
 };
 
@@ -24,14 +24,12 @@ use super::blockprod_interface::BlockProductionInterface;
 
 #[async_trait::async_trait]
 impl BlockProductionInterface for BlockProduction {
-    fn stop_all(&mut self) -> Result<(), BlockProductionError> {
-        self.stop_all_jobs();
-        Ok(())
+    async fn stop_all(&mut self) -> Result<usize, BlockProductionError> {
+        self.stop_all_jobs().await
     }
 
-    fn stop_job(&mut self, job_id: JobKey) -> Result<(), BlockProductionError> {
-        self.stop_job(&job_id);
-        Ok(())
+    async fn stop_job(&mut self, job_id: JobKey) -> Result<bool, BlockProductionError> {
+        self.stop_job(job_id).await
     }
 
     async fn generate_block(
