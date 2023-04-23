@@ -233,7 +233,7 @@ impl JobManager {
         result_receiver
             .await
             .map_err(|_| JobManagerError::FailedToCreateJob)?
-            .and_then(|v| Ok((v, cancel_receiver)))
+            .map(|v| (v, cancel_receiver))
     }
 
     fn handle_new_job(jobs: &mut BTreeMap<JobKey, JobHandle>, event: Option<NewJobEvent>) {

@@ -356,10 +356,8 @@ mod tests {
 
             let accumulator = block_production.collect_transactions().await;
 
-            assert!(
-                !mock_mempool.collect_txs_called.load(Relaxed),
-                "Expected collect_tx() to not be called"
-            );
+            let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+            assert!(!collected_transactions, "Expected collect_tx() to not be called");
 
             assert!(
                 matches!(
@@ -401,10 +399,8 @@ mod tests {
 
                 let accumulator = block_production.collect_transactions().await;
 
-                assert!(
-                    mock_mempool.collect_txs_called.load(Relaxed),
-                    "Expected collect_tx() to be called"
-                );
+                let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+                assert!(collected_transactions, "Expected collect_tx() to be called");
 
                 assert!(
                     matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
@@ -443,10 +439,8 @@ mod tests {
 
                 let accumulator = block_production.collect_transactions().await;
 
-                assert!(
-                    mock_mempool.collect_txs_called.load(Relaxed),
-                    "Expected collect_tx() to be called"
-                );
+                let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+                assert!(collected_transactions, "Expected collect_tx() to be called");
 
                 assert!(
                     accumulator.is_ok(),
@@ -480,15 +474,11 @@ mod tests {
         let stop_job_key =
             JobKey::new(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>);
 
-        assert!(
-            !block_production.stop_job(stop_job_key).await.unwrap(),
-            "Stopped a non-existent job"
-        );
+        let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
+        assert!(!job_stopped, "Stopped a non-existent job");
 
-        assert!(
-            block_production.job_manager.get_job_count().await.unwrap() == 1,
-            "Jobs count is incorrect",
-        );
+        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+        assert_eq!(jobs_count, 1, "Jobs count is incorrect");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -516,15 +506,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(
-            block_production.stop_job(stop_job_key).await.unwrap(),
-            "Failed to stop job"
-        );
+        let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
+        assert!(job_stopped, "Failed to stop job");
 
-        assert!(
-            block_production.job_manager.get_job_count().await.unwrap() == 1,
-            "Jobs count is incorrect",
-        );
+        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+        assert_eq!(jobs_count, 1, "Jobs count is incorrect");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -552,14 +538,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(
-            block_production.stop_all_jobs().await.unwrap() == 2,
-            "Incorrect number of jobs stopped",
-        );
+        let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
+        assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
 
-        assert!(
-            block_production.job_manager.get_job_count().await.unwrap() == 0,
-            "Jobs count is incorrect",
-        );
+        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+        assert_eq!(jobs_count, 0, "Jobs count is incorrect");
     }
 }
