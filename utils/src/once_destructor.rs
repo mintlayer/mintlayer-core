@@ -14,6 +14,7 @@
 // limitations under the License.
 
 // A helper struct that will call a function when it is dropped
+#[must_use = "The value must be held in the scope"]
 pub struct OnceDestructor<F: FnOnce()> {
     call_on_drop: Option<F>,
 }
