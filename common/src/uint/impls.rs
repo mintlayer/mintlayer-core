@@ -601,6 +601,18 @@ pub enum UintConversionError {
     ConversionOverflow,
 }
 
+impl TryFrom<Uint256> for u128 {
+    type Error = UintConversionError;
+
+    fn try_from(n: Uint256) -> Result<Self, UintConversionError> {
+        if n > Uint256::from_u128(u128::MAX) {
+            Err(UintConversionError::ConversionOverflow)
+        } else {
+            Ok(u128::from_le_bytes(n.low_128().to_bytes()))
+        }
+    }
+}
+
 impl TryFrom<Uint512> for Uint256 {
     type Error = UintConversionError;
 

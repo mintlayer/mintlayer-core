@@ -166,6 +166,9 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
+            ConnectTransactionError::StakerRewardCalculationFailed(_) => 0,
+            ConnectTransactionError::DelegatorsRewardSumFailed(_) => 0,
+            ConnectTransactionError::DelegatorRewardCalculationFailed(_) => 0,
         }
     }
 }

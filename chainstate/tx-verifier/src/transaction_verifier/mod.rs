@@ -62,13 +62,17 @@ use ::utils::{ensure, shallow_clone::ShallowClone};
 use chainstate_types::BlockIndex;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData},
+        block::{
+            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
+            ConsensusData,
+        },
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
         Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
+    Uint256,
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
@@ -472,7 +476,6 @@ where
     fn connect_block_reward(
         &mut self,
         block_index: &BlockIndex,
-        tx_source: TransactionSource,
         reward_transactable: BlockRewardTransactable,
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
@@ -525,19 +528,85 @@ where
         match block_index.block_header().consensus_data() {
             ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
             ConsensusData::PoS(pos_data) => {
-                let block_subsidy =
-                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
-                let undo = self
-                    .accounting_delta_adapter
-                    .operations(tx_source)
-                    .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
-
-                self.accounting_block_undo
-                    .get_or_create_block_undo(&TransactionSource::Chain(block_id))
-                    .set_reward_undo(AccountingBlockRewardUndo::new(vec![undo]));
+                self.distribute_block_reward(block_index, pos_data)?;
             }
         };
 
+        Ok(())
+    }
+
+    // FIXME: amount on decommission
+
+    /// Distribute block reward among the staker and delegators
+    fn distribute_block_reward(
+        &mut self,
+        block_index: &BlockIndex,
+        pos_data: &PoSData,
+    ) -> Result<(), ConnectTransactionError> {
+        let block_subsidy =
+            self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+        let block_id = *block_index.block_id();
+        let tx_source = TransactionSource::Chain(block_id);
+
+        let pool_id = *pos_data.stake_pool_id();
+        let pool_data = self
+            .accounting_delta_adapter
+            .accounting_delta()
+            .get_pool_data(pool_id)?
+            .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
+
+        let increase_balance_undo = self
+            .accounting_delta_adapter
+            .operations(tx_source)
+            .increase_pool_balance(pool_id, block_subsidy)?;
+
+        // FIXME: margin per epoch from db
+        let total_delegators_reward = (block_subsidy - pool_data.cost_per_epoch())
+            .and_then(|v| (v / 1000).and_then(|v| v * pool_data.margin_ratio_per_thousand().into()))
+            .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
+                block_id,
+            ))?;
+        let total_delegators_reward = Uint256::from_amount(total_delegators_reward);
+
+        let delegation_undos = self
+            .accounting_delta_adapter
+            .accounting_delta()
+            .get_pool_delegations_shares(pool_id)?
+            .map(|delegation_shares| {
+                let total_delegators_balance =
+                    delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
+                        (acc + *v)
+                            .ok_or(ConnectTransactionError::DelegatorsRewardSumFailed(block_id))
+                    })?;
+                let total_delegators_balance = Uint256::from_amount(total_delegators_balance);
+
+                let mut pos_operations = self.accounting_delta_adapter.operations(tx_source);
+                delegation_shares
+                    .iter()
+                    .map(|(delegation_id, balance)| {
+                        let balance = Uint256::from_amount(*balance);
+                        let reward = total_delegators_reward * balance / total_delegators_balance;
+                        let reward: u128 = reward.try_into().map_err(|_| {
+                            ConnectTransactionError::DelegatorRewardCalculationFailed(block_id)
+                        })?;
+
+                        pos_operations
+                            .delegate_staking(*delegation_id, Amount::from_atoms(reward))
+                            .map_err(ConnectTransactionError::PoSAccountingError)
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?;
+
+        let undos = delegation_undos
+            .unwrap_or_default()
+            .into_iter()
+            .chain(vec![increase_balance_undo].into_iter())
+            .collect();
+
+        self.accounting_block_undo
+            .get_or_create_block_undo(&tx_source)
+            .set_reward_undo(AccountingBlockRewardUndo::new(undos));
         Ok(())
     }
 
@@ -560,11 +629,7 @@ where
                 Some(self.connect_transaction(&transaction_source, tx, median_time_past)?)
             }
             BlockTransactableWithIndexRef::BlockReward(block, _) => {
-                self.connect_block_reward(
-                    block_index,
-                    (&transaction_source).into(),
-                    block.block_reward_transactable(),
-                )?;
+                self.connect_block_reward(block_index, block.block_reward_transactable())?;
                 None
             }
         };

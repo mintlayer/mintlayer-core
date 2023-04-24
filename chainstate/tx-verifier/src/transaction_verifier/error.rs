@@ -107,6 +107,12 @@ pub enum ConnectTransactionError {
     PoolBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
+    #[error("Failed to calculate staker reward for block {0}")]
+    StakerRewardCalculationFailed(Id<Block>),
+    #[error("Failed to sum delegators reward for block {0}")]
+    DelegatorsRewardSumFailed(Id<Block>),
+    #[error("Failed to calculate delegator reward for block {0}")]
+    DelegatorRewardCalculationFailed(Id<Block>),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811

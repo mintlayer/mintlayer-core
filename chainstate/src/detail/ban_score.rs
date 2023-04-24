@@ -120,6 +120,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
+            ConnectTransactionError::StakerRewardCalculationFailed(_) => 100,
+            ConnectTransactionError::DelegatorsRewardSumFailed(_) => 100,
+            ConnectTransactionError::DelegatorRewardCalculationFailed(_) => 100,
         }
     }
 }
