@@ -13,12 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode};
 use std::time::Duration;
+
+use serde::{Deserialize, Serialize};
+
+use serialization::{Decode, Encode};
 
 pub type BlockTimestampInternalType = u64;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, PartialOrd, Ord)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct BlockTimestamp {
     #[codec(compact)]
     timestamp: BlockTimestampInternalType,

@@ -65,7 +65,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInit<M> {
         chainstate
             .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
-            .map_err(|_| Error::SubsystemFailure)?;
+            .map_err(|e| Error::Validity(e.into()))?;
         Ok(rx)
     }
 }

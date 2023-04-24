@@ -73,12 +73,10 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let child_id = child.transaction().get_id();
     mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(child),
-        Err(Error::TxValidationError(
-            TxValidationError::DescendantOfExpiredTransaction
-        ))
-    ));
+        Err(MempoolPolicyError::DescendantOfExpiredTransaction.into())
+    );
 
     assert!(!mempool.contains_transaction(&parent_id));
     assert!(!mempool.contains_transaction(&child_id));

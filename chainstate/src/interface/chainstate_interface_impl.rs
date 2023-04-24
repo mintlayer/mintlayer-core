@@ -23,7 +23,7 @@ use crate::{
         tx_verification_strategy::TransactionVerificationStrategy,
         BlockSource, OrphanBlocksRef,
     },
-    ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
+    ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
@@ -368,22 +368,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .collect::<Result<Vec<_>, _>>()
     }
 
-    fn get_outputs_coin_amount(
-        &self,
-        outputs: &[TxOutput],
-    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
-        let chainstate_ref = self
-            .chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
-        let pos_accounting_view = chainstate_ref.make_pos_accounting_view();
-
-        outputs
-            .iter()
-            .map(|output| get_output_coin_amount(&pos_accounting_view, output))
-            .collect::<Result<Vec<_>, _>>()
-    }
-
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
         self.chainstate
             .query()
@@ -522,6 +506,25 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_pool_delegation_share(pool_id, delegation_id)
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
+    }
+
+    fn info(&self) -> Result<ChainInfo, ChainstateError> {
+        let best_block_index = self.get_best_block_index()?;
+        let best_block_height = best_block_index.block_height();
+        let best_block_id = best_block_index.block_id();
+        let best_block_timestamp = best_block_index.block_timestamp();
+
+        let median_time = self.calculate_median_time_past(&best_block_id)?;
+
+        let is_initial_block_download = self.is_initial_block_download()?;
+
+        Ok(ChainInfo {
+            best_block_height,
+            best_block_id,
+            best_block_timestamp,
+            median_time,
+            is_initial_block_download,
+        })
     }
 }
 

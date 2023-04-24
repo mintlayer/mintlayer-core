@@ -103,6 +103,7 @@ BASE_SCRIPTS = [
     'example_test.py',
     'p2p_ping.py',
     'p2p_syncing_test.py',
+    'p2p_relay_transactions.py',
     'feature_lmdb_backend_test.py',
     'mempool_submit_tx.py',
 

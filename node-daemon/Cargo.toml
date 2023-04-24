@@ -1,0 +1,17 @@
+[package]
+name = "node-daemon"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+logging = { path = "../logging" }
+node-lib = { path = "../node-lib/" }
+
+tokio = { workspace = true, default-features = false }
+
+anyhow = "1.0"
+
+[dev-dependencies]
+assert_cmd = "2"

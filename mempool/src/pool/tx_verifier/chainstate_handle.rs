@@ -72,12 +72,18 @@ impl From<chainstate::TransactionVerifierStorageError> for Error {
     }
 }
 
-impl From<Error> for crate::error::Error {
+impl From<Error> for crate::error::TxValidationError {
     fn from(e: Error) -> Self {
         match e {
-            Error::Chainstate(e) => crate::error::Error::TxValidationError(e.into()),
-            Error::Subsystem(_) => crate::error::Error::SubsystemFailure,
+            Error::Chainstate(e) => e.into(),
+            Error::Subsystem(e) => e.into(),
         }
+    }
+}
+
+impl From<Error> for crate::error::Error {
+    fn from(e: Error) -> Self {
+        crate::error::Error::Validity(e.into())
     }
 }
 

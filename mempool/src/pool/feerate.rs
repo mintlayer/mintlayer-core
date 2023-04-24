@@ -17,7 +17,7 @@ use std::num::NonZeroUsize;
 
 use common::primitives::amount::Amount;
 
-use crate::error::TxValidationError;
+use crate::error::MempoolPolicyError;
 
 use super::fee::Fee;
 
@@ -37,20 +37,19 @@ impl FeeRate {
     pub fn from_total_tx_fee(
         total_tx_fee: Fee,
         tx_size: NonZeroUsize,
-    ) -> Result<Self, TxValidationError> {
+    ) -> Result<Self, MempoolPolicyError> {
         let tx_size = u128::try_from(usize::from(tx_size)).expect("div_up conversion");
-        Ok(Self {
-            amount_per_kb: ((*total_tx_fee * 1000).ok_or(TxValidationError::FeeOverflow)?
-                / tx_size)
-                .expect("tx_size nonzero"),
-        })
+        let scaled_fee = (*total_tx_fee * 1000).ok_or(MempoolPolicyError::FeeOverflow)?;
+        let amount_per_kb = (scaled_fee / tx_size).expect("tx_size nonzero");
+        Ok(Self { amount_per_kb })
     }
 
-    pub fn compute_fee(&self, size: usize) -> Result<Fee, TxValidationError> {
+    pub fn compute_fee(&self, size: usize) -> Result<Fee, MempoolPolicyError> {
         let size = u128::try_from(size).expect("compute_fee conversion");
-        let fee = (self.amount_per_kb * size).ok_or(TxValidationError::FeeOverflow)?;
+        let fee = (self.amount_per_kb * size).ok_or(MempoolPolicyError::FeeOverflow)?;
         // +999 for ceil operation
-        let fee = (((fee + Amount::from_atoms(999)).ok_or(TxValidationError::FeeOverflow)?) / 1000)
+        let ceil_add = Amount::from_atoms(999);
+        let fee = (((fee + ceil_add).ok_or(MempoolPolicyError::FeeOverflow)?) / 1000)
             .expect("valid division");
         Ok(fee.into())
     }
@@ -63,7 +62,7 @@ impl FeeRate {
 impl std::ops::Add for FeeRate {
     type Output = Option<Self>;
     fn add(self, other: Self) -> Self::Output {
-        (self.amount_per_kb + other.amount_per_kb).map(|amount_per_kb| FeeRate { amount_per_kb })
+        (self.amount_per_kb + other.amount_per_kb).map(FeeRate::new)
     }
 }
 
@@ -96,11 +95,11 @@ mod tests {
         let fee = Amount::from_atoms(u128::MAX).into();
         let tx_size = 1;
         let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert!(matches!(res, Err(TxValidationError::FeeOverflow)));
+        assert_eq!(res, Err(MempoolPolicyError::FeeOverflow));
 
         let fee = Amount::from_atoms(u128::MAX - 1).into();
         let tx_size = 3;
         let res = FeeRate::from_total_tx_fee(fee, NonZeroUsize::new(tx_size).unwrap());
-        assert!(matches!(res, Err(TxValidationError::FeeOverflow)));
+        assert_eq!(res, Err(MempoolPolicyError::FeeOverflow));
     }
 }

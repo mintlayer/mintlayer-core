@@ -15,16 +15,21 @@
 
 #![allow(clippy::unwrap_used)]
 
-use common::chain::{SignedTransaction, Transaction};
-use common::primitives::Id;
-use mempool::error::Error;
-use mempool::tx_accumulator::TransactionAccumulator;
-use mempool::MempoolEvent;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
-use std::sync::Arc;
-use subsystem::{CallRequest, ShutdownRequest};
+use std::sync::{
+    atomic::{AtomicBool, Ordering::Relaxed},
+    Arc,
+};
 
-use mempool::{MempoolInterface, MempoolSubsystemInterface};
+use common::{
+    chain::{SignedTransaction, Transaction},
+    primitives::Id,
+};
+use mempool::{
+    error::{Error, TxValidationError},
+    tx_accumulator::TransactionAccumulator,
+    MempoolEvent, MempoolInterface, MempoolSubsystemInterface,
+};
+use subsystem::{subsystem::CallError, CallRequest, ShutdownRequest};
 
 #[derive(Clone)]
 pub struct MempoolInterfaceMock {
@@ -67,13 +72,16 @@ impl MempoolInterfaceMock {
     }
 }
 
+const SUBSYSTEM_ERROR: Error =
+    Error::Validity(TxValidationError::CallError(CallError::ResultFetchFailed));
+
 #[async_trait::async_trait]
 impl MempoolInterface for MempoolInterfaceMock {
     fn add_transaction(&mut self, _tx: SignedTransaction) -> Result<(), Error> {
         self.add_transaction_called.store(true, Relaxed);
 
         if self.add_transaction_should_error.load(Relaxed) {
-            Err(Error::SubsystemFailure)
+            Err(SUBSYSTEM_ERROR)
         } else {
             Ok(())
         }
@@ -83,7 +91,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         self.get_all_called.store(true, Relaxed);
 
         if self.get_all_should_error.load(Relaxed) {
-            Err(Error::SubsystemFailure)
+            Err(SUBSYSTEM_ERROR)
         } else {
             Ok(vec![])
         }
@@ -93,7 +101,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         self.contains_transaction_called.store(true, Relaxed);
 
         if self.contains_transaction_should_error.load(Relaxed) {
-            Err(Error::SubsystemFailure)
+            Err(SUBSYSTEM_ERROR)
         } else {
             Ok(true)
         }
@@ -110,7 +118,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         self.collect_txs_called.store(true, Relaxed);
 
         if self.collect_txs_should_error.load(Relaxed) {
-            Err(Error::SubsystemFailure)
+            Err(SUBSYSTEM_ERROR)
         } else {
             Ok(tx_accumulator)
         }
@@ -123,7 +131,7 @@ impl MempoolInterface for MempoolInterfaceMock {
         self.subscribe_to_events_called.store(true, Relaxed);
 
         if self.subscribe_to_events_should_error.load(Relaxed) {
-            Err(Error::SubsystemFailure)
+            Err(SUBSYSTEM_ERROR)
         } else {
             Ok(())
         }

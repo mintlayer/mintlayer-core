@@ -15,31 +15,19 @@
 
 use std::sync::Arc;
 
-use common::chain::block::BlockReward;
-use common::chain::DelegationId;
-use common::chain::OutPoint;
-use common::chain::OutPointSourceId;
-use common::chain::PoolId;
-use common::chain::Transaction;
-use common::chain::TxInput;
-use common::chain::TxMainChainIndex;
-use common::chain::TxOutput;
-use common::primitives::Amount;
+use chainstate::{
+    BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
+};
+use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::{Block, BlockHeader, GenBlock},
-        tokens::{RPCTokenInfo, TokenId},
+        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
+        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex,
     },
-    primitives::{BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
-
-use chainstate::ChainstateConfig;
-use chainstate::{BlockSource, ChainstateError, ChainstateEvent, Locator};
-use chainstate_types::BlockIndex;
-use chainstate_types::GenBlockIndex;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::tokens::TokenAuxiliaryData;
-use common::chain::ChainConfig;
 use pos_accounting::PoolData;
 use utils::eventhandler::EventHandler;
 use utxo::Utxo;
@@ -126,10 +114,6 @@ mockall::mock! {
             &self,
             inputs: &[TxInput],
         ) -> Result<Vec<Option<Amount>>, ChainstateError>;
-        fn get_outputs_coin_amount(
-            &self,
-            outputs: &[TxOutput],
-        ) -> Result<Vec<Option<Amount>>, ChainstateError>;
         fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
         fn import_bootstrap_stream<'a>(
@@ -163,6 +147,7 @@ mockall::mock! {
             pool_id: PoolId,
             delegation_id: DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
+        fn info(&self) -> Result<ChainInfo, ChainstateError>;
     }
 }
 

@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Top-level node binary
+use serde::{Deserialize, Serialize};
 
-async fn run() -> anyhow::Result<()> {
-    let opts = node::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
-    logging::log::info!("Command line options: {opts:?}");
-    node::run(opts).await
-}
+use common::{
+    chain::{block::timestamp::BlockTimestamp, GenBlock},
+    primitives::{BlockHeight, Id},
+};
 
-#[tokio::main]
-async fn main() {
-    run().await.unwrap_or_else(|err| {
-        eprintln!("Mintlayer node launch failed: {err:?}");
-        std::process::exit(1)
-    })
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChainInfo {
+    pub best_block_height: BlockHeight,
+    pub best_block_id: Id<GenBlock>,
+    pub best_block_timestamp: BlockTimestamp,
+    pub median_time: BlockTimestamp,
+    pub is_initial_block_download: bool,
 }

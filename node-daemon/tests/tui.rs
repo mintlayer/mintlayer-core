@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
+use std::path::Path;
 
-#[tokio::main]
-async fn main() -> Result<(), node_lib::Error> {
-    let opts = node_lib::Options::from_args(env::args_os());
-    node_lib::init_logging(&opts);
-    node_lib::run(opts).await
+use assert_cmd::Command;
+
+const BIN_NAME: &str = env!("CARGO_BIN_EXE_node-daemon");
+
+// This test is only needed because the node name is hardcoded here, so if the name is changed we
+// get an error that is easy to understand.
+#[test]
+fn node_path_is_correct() {
+    assert!(Path::new(BIN_NAME).is_file());
+}
+
+#[test]
+fn no_args() {
+    Command::new(BIN_NAME).assert().failure();
 }

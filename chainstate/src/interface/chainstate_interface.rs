@@ -17,10 +17,9 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::detail::BlockSource;
-use crate::{ChainstateConfig, ChainstateError, ChainstateEvent};
+use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
-use common::chain::TxOutput;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
@@ -144,13 +143,6 @@ pub trait ChainstateInterface: Send {
         inputs: &[TxInput],
     ) -> Result<Vec<Option<Amount>>, ChainstateError>;
 
-    /// Returns the coin amounts of the outputs.
-    /// If an output contains tokens the result is `None`.
-    fn get_outputs_coin_amount(
-        &self,
-        outputs: &[TxOutput],
-    ) -> Result<Vec<Option<Amount>>, ChainstateError>;
-
     /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
@@ -214,4 +206,7 @@ pub trait ChainstateInterface: Send {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, ChainstateError>;
+
+    /// Returns information about the chain.
+    fn info(&self) -> Result<ChainInfo, ChainstateError>;
 }
