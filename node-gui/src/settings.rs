@@ -21,35 +21,35 @@ use iced::{
 use iced_aw::style::TabBarStyles;
 use iced_aw::tab_bar::TabLabel;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum TabBarPosition {
+pub enum TabPosition {
     #[default]
     Top,
     Bottom,
 }
 
-impl TabBarPosition {
-    pub const ALL: [TabBarPosition; 2] = [TabBarPosition::Top, TabBarPosition::Bottom];
+impl TabPosition {
+    pub const ALL: [TabPosition; 2] = [TabPosition::Top, TabPosition::Bottom];
 }
 
-impl From<TabBarPosition> for String {
-    fn from(position: TabBarPosition) -> Self {
+impl From<TabPosition> for String {
+    fn from(position: TabPosition) -> Self {
         String::from(match position {
-            TabBarPosition::Top => "Top",
-            TabBarPosition::Bottom => "Bottom",
+            TabPosition::Top => "Top",
+            TabPosition::Bottom => "Bottom",
         })
     }
 }
 
 //#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TabSettings {
-    pub tab_bar_position: Option<TabBarPosition>,
+    pub tab_bar_position: Option<TabPosition>,
     pub tab_bar_theme: Option<TabBarStyles>,
 }
 
 impl TabSettings {
     pub fn new() -> Self {
         TabSettings {
-            tab_bar_position: Some(TabBarPosition::Top),
+            tab_bar_position: Some(TabPosition::Top),
             tab_bar_theme: Some(TabBarStyles::default()),
         }
     }
@@ -57,7 +57,7 @@ impl TabSettings {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
-    PositionSelected(TabBarPosition),
+    PositionSelected(TabPosition),
     ThemeSelected(TabBarStyles),
 }
 
@@ -102,7 +102,7 @@ impl Tab for SettingsTab {
         let content: Element<'_, SettingsMessage> = Container::new(
             Column::new()
                 .push(Text::new("TabBar position:").size(20))
-                .push(TabBarPosition::ALL.iter().cloned().fold(
+                .push(TabPosition::ALL.iter().cloned().fold(
                     Column::new().padding(10).spacing(10),
                     |column, position| {
                         column.push(
