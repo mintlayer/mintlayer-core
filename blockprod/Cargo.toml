@@ -12,7 +12,6 @@ chainstate = { path = "../chainstate/" }
 chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
 consensus = { path = "../consensus" }
-crypto = { path = "../crypto/" }
 mempool = { path = "../mempool/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }

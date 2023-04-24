@@ -404,7 +404,6 @@ dependencies = [
  "chainstate-types",
  "common",
  "consensus",
- "crypto",
  "futures",
  "hex",
  "jsonrpsee",
