@@ -345,11 +345,12 @@ impl BlockProduction {
 mod tests {
     use common::chain::GenBlock;
     use common::primitives::{Id, H256};
-    use crypto::random::make_pseudo_rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
     use mocks::MempoolInterfaceMock;
+    use rstest::rstest;
     use std::sync::atomic::Ordering::Relaxed;
     use subsystem::CallRequest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::{prepare_thread_pool, tests::setup_blockprod_test};
 
@@ -491,9 +492,14 @@ mod tests {
         join_handle.await.unwrap();
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_non_existent_job() {
+    async fn stop_job_non_existent_job(#[case] seed: Seed) {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut rng = make_seedable_rng(seed);
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -506,12 +512,11 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
-        let stop_job_key =
-            JobKey::new(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>);
+        let stop_job_key = JobKey::new(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -520,9 +525,14 @@ mod tests {
         assert_eq!(jobs_count, 1, "Jobs count is incorrect");
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_existing_job() {
+    async fn stop_job_existing_job(#[case] seed: Seed) {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut rng = make_seedable_rng(seed);
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -535,13 +545,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
@@ -552,9 +562,14 @@ mod tests {
         assert_eq!(jobs_count, 1, "Jobs count is incorrect");
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_multiple_jobs() {
+    async fn stop_job_multiple_jobs(#[case] seed: Seed) {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut rng = make_seedable_rng(seed);
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -571,7 +586,7 @@ mod tests {
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_job_cancel_receiver) = block_production
                 .job_manager
-                .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+                .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
                 .await
                 .unwrap();
 
@@ -639,9 +654,14 @@ mod tests {
 
     // TODO: add generate_block() tests with actual transactions
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_all_jobs() {
+    async fn stop_all_jobs(#[case] seed: Seed) {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut rng = make_seedable_rng(seed);
 
         let mut block_production = BlockProduction::new(
             chain_config,
@@ -654,13 +674,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (_stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
