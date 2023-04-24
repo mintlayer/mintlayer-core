@@ -77,3 +77,62 @@ pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
     );
     result
 }
+
+pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTransaction) -> Fee {
+    let tx_clone = tx.clone();
+
+    // Outputs in this vec are:
+    //     Some(Amount) if the outpoint was found in the mainchain
+    //     None         if the outpoint wasn't found in the mainchain (maybe it's in the mempool?)
+    let chainstate_input_values = mempool
+        .chainstate_handle
+        .call(move |this| this.get_inputs_outpoints_coin_amount(tx_clone.transaction().inputs()))
+        .await
+        .expect("chainstate to work")
+        .expect("tx to exist");
+
+    let mut input_values = Vec::<Amount>::new();
+    for (i, chainstate_input_value) in chainstate_input_values.iter().enumerate() {
+        if let Some(value) = chainstate_input_value {
+            input_values.push(*value)
+        } else {
+            let value = get_unconfirmed_outpoint_value(
+                &mempool.store,
+                tx.transaction().inputs().get(i).expect("index").outpoint(),
+            );
+            input_values.push(value);
+        }
+    }
+
+    let sum_inputs =
+        input_values.iter().cloned().sum::<Option<_>>().expect("input values overflow");
+    let sum_outputs = tx
+        .transaction()
+        .outputs()
+        .iter()
+        .map(output_coin_amount)
+        .sum::<Option<_>>()
+        .expect("output values overflow");
+    (sum_inputs - sum_outputs).expect("negative fee").into()
+}
+
+// unconfirmed means: The outpoint comes from a transaction in the mempool
+pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &OutPoint) -> Amount {
+    let tx_id = *outpoint.tx_id().get_tx_id().expect("Not a transaction");
+    let entry = store.txs_by_id.get(&tx_id).expect("Entry not found");
+    let tx = entry.tx().transaction();
+    let output = tx.outputs().get(outpoint.output_index() as usize).expect("output not found");
+    output_coin_amount(output)
+}
+
+fn output_coin_amount(output: &TxOutput) -> Amount {
+    let val = match output {
+        TxOutput::Transfer(val, _) => val,
+        TxOutput::LockThenTransfer(val, _, _) => val,
+        _ => return Amount::ZERO,
+    };
+    match val {
+        OutputValue::Coin(amt) => *amt,
+        OutputValue::Token(_) => Amount::ZERO,
+    }
+}

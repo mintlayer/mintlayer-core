@@ -41,8 +41,6 @@ pub enum ConnectTransactionError {
     MissingOutputOrSpent,
     #[error("No inputs in a transaction")]
     MissingTxInputs,
-    #[error("Coin output is not found to be able to stake")]
-    MissingCoinOutputToStake,
     #[error("While disconnecting a block, undo info for transaction `{0}` doesn't exist ")]
     MissingTxUndo(Id<Transaction>),
     #[error("While disconnecting a block, block undo info doesn't exist for block `{0}`")]
@@ -213,8 +211,6 @@ pub enum TokensError {
     InsufficientTokenFees(Id<Transaction>, Id<Block>),
     #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
     TransferZeroTokens(Id<Transaction>, Id<Block>),
-    #[error("Can't fetch transaction inputs in main chain by outpoint")]
-    NoTxInMainChainByOutpoint,
     #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
     #[error("Block reward can't be paid in tokens")]

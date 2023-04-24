@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,11 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
+pub async fn run() -> anyhow::Result<()> {
+    let opts = node_lib::Options::from_args(std::env::args_os());
+    logging::init_logging::<&std::path::Path>(None);
+    logging::log::info!("Command line options: {opts:?}");
+    node_lib::run(opts).await
+}
 
 #[tokio::main]
-async fn main() -> Result<(), node_lib::Error> {
-    let opts = node_lib::Options::from_args(env::args_os());
-    node_lib::init_logging(&opts);
-    node_lib::run(opts).await
+async fn main() {
+    run().await.unwrap_or_else(|err| {
+        eprintln!("Mintlayer node launch failed: {err:?}");
+        std::process::exit(1)
+    })
 }

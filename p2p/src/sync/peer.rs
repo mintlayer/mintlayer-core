@@ -39,7 +39,7 @@ use common::{
 };
 use logging::log;
 use mempool::{
-    error::{Error as MempoolError, TxValidationError},
+    error::{Error as MempoolError, MempoolPolicyError},
     MempoolHandle,
 };
 use utils::const_value::ConstValue;
@@ -506,33 +506,36 @@ where
             // request/response after a peer is disconnected, but before receiving the disconnect
             // event. Therefore this error can be safely ignored.
             P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-            P2pError::MempoolError(
-                MempoolError::MempoolFull
-                // TODO: https://github.com/mintlayer/mintlayer-core/issues/770
-                | MempoolError::TxValidationError(TxValidationError::TransactionAlreadyInMempool),
-            ) => Ok(()),
+            P2pError::MempoolError(MempoolError::Policy(
+                MempoolPolicyError::MempoolFull | MempoolPolicyError::TransactionAlreadyInMempool,
+            )) => Ok(()),
             // A protocol error - increase the ban score of a peer.
             e @ (P2pError::ProtocolError(_)
-            | P2pError::MempoolError(MempoolError::TxValidationError(_))
+            | P2pError::MempoolError(_)
             | P2pError::ChainstateError(ChainstateError::ProcessBlockError(
                 BlockError::CheckBlockFailed(_),
             ))) => {
-                log::info!(
-                    "Adjusting the '{}' peer score by {}: {e:?}",
-                    self.id(),
-                    e.ban_score(),
-                );
+                let ban_score = e.ban_score();
+                if ban_score > 0 {
+                    log::info!(
+                        "Adjusting the '{}' peer score by {}: {e:?}",
+                        self.id(),
+                        ban_score,
+                    );
 
-                let (sender, receiver) = oneshot_nofail::channel();
-                self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
-                    self.id(),
-                    e.ban_score(),
-                    sender,
-                ))?;
-                receiver.await?.or_else(|e| match e {
-                    P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
-                    e => Err(e),
-                })
+                    let (sender, receiver) = oneshot_nofail::channel();
+                    self.peer_manager_sender.send(PeerManagerEvent::AdjustPeerScore(
+                        self.id(),
+                        ban_score,
+                        sender,
+                    ))?;
+                    receiver.await?.or_else(|e| match e {
+                        P2pError::PeerError(PeerError::PeerDoesntExist) => Ok(()),
+                        e => Err(e),
+                    })
+                } else {
+                    Err(e)
+                }
             }
             // Some of these errors aren't technically fatal, but they shouldn't occur in the sync
             // manager.
@@ -546,8 +549,7 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)
-            | P2pError::MempoolError(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)) => Err(e),
         }
     }
 

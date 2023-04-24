@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -32,7 +32,7 @@ use utils::{
 };
 
 use crate::{
-    error::{Error, TxValidationError},
+    error::{Error, MempoolPolicyError, TxValidationError},
     get_memory_usage::GetMemoryUsage,
     tx_accumulator::TransactionAccumulator,
     MempoolEvent,
@@ -52,7 +52,6 @@ mod feerate;
 mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
-mod try_get_fee;
 mod tx_verifier;
 mod tx_with_fee;
 
@@ -205,7 +204,7 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    fn create_entry(&self, tx: TxWithFee) -> Result<TxMempoolEntry, TxValidationError> {
+    fn create_entry(&self, tx: TxWithFee) -> Result<TxMempoolEntry, MempoolPolicyError> {
         let (tx, fee) = tx.into_tx_and_fee();
 
         // Genesis transaction has no parent, hence the first filter_map
@@ -237,7 +236,7 @@ where
     fn validate_transaction(
         &self,
         tx: SignedTransaction,
-    ) -> Result<(Conflicts, TxWithFee, TransactionVerifierDelta), TxValidationError> {
+    ) -> Result<(Conflicts, TxWithFee, TransactionVerifierDelta), Error> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -290,23 +289,22 @@ where
             subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone());
 
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
-            let tip = chainstate_handle.call(|c| c.get_best_block_id())??;
-
-            let current_best = chainstate_handle
-                .call(move |c| c.get_gen_block_index(&tip))??
-                .ok_or(TxValidationError::InternalError)?;
+            let (tip, current_best) = chainstate_handle.call(|chainstate| {
+                let tip = chainstate.get_best_block_id()?;
+                let tip_index =
+                    chainstate.get_gen_block_index(&tip)?.expect("tip block index to exist");
+                Ok::<_, chainstate::ChainstateError>((tip, tip_index))
+            })??;
 
             let mut tx_verifier = self.tx_verifier.derive_child();
 
-            let fee = tx_verifier
-                .connect_transaction(
-                    &TransactionSourceForConnect::Mempool {
-                        current_best: &current_best,
-                    },
-                    &tx,
-                    &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
-                )?
-                .ok_or(TxValidationError::FeeNotDetermined)?;
+            let fee = tx_verifier.connect_transaction(
+                &TransactionSourceForConnect::Mempool {
+                    current_best: &current_best,
+                },
+                &tx,
+                &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
+            )?;
 
             let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
             if tip == final_tip {
@@ -323,35 +321,35 @@ where
     fn check_preliminary_mempool_policy(
         &self,
         tx: &SignedTransaction,
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<(), MempoolPolicyError> {
         ensure!(
             !tx.transaction().inputs().is_empty(),
-            TxValidationError::NoInputs,
+            MempoolPolicyError::NoInputs,
         );
 
         ensure!(
             !tx.transaction().outputs().is_empty(),
-            TxValidationError::NoOutputs,
+            MempoolPolicyError::NoOutputs,
         );
 
         // TODO: see this issue:
         // https://github.com/mintlayer/mintlayer-core/issues/331
         ensure!(
             tx.encoded_size() <= MAX_BLOCK_SIZE_BYTES,
-            TxValidationError::ExceedsMaxBlockSize,
+            MempoolPolicyError::ExceedsMaxBlockSize,
         );
 
         // TODO: Taken from the previous implementation. Is this correct?
         ensure!(
             !self.contains_transaction(&tx.transaction().get_id()),
-            TxValidationError::TransactionAlreadyInMempool
+            MempoolPolicyError::TransactionAlreadyInMempool
         );
 
         Ok(())
     }
 
     // Check the transaction against the mempool inclusion policy
-    fn check_mempool_policy(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
+    fn check_mempool_policy(&self, tx: &TxWithFee) -> Result<Conflicts, MempoolPolicyError> {
         self.pays_minimum_relay_fees(tx)?;
         self.pays_minimum_mempool_fee(tx)?;
 
@@ -361,19 +359,19 @@ where
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
                 self.conflicting_tx_ids(tx.tx()).next().is_none(),
-                TxValidationError::ConflictWithIrreplaceableTransaction
+                MempoolPolicyError::ConflictWithIrreplaceableTransaction
             );
             Ok(Conflicts::new(BTreeSet::new()))
         }
     }
 
-    fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+    fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
         let minimum_fee = self.get_update_minimum_mempool_fee(tx.tx())?;
         log::debug!("pays_minimum_mempool_fee tx_fee = {tx_fee:?}, minimum_fee = {minimum_fee:?}");
         ensure!(
             tx_fee >= minimum_fee,
-            TxValidationError::RollingFeeThresholdNotMet {
+            MempoolPolicyError::RollingFeeThresholdNotMet {
                 minimum_fee,
                 tx_fee,
             }
@@ -384,7 +382,7 @@ where
     fn get_update_minimum_mempool_fee(
         &self,
         tx: &SignedTransaction,
-    ) -> Result<Fee, TxValidationError> {
+    ) -> Result<Fee, MempoolPolicyError> {
         let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
         let res = minimum_fee_rate.compute_fee(tx.encoded_size());
@@ -392,13 +390,13 @@ where
         res
     }
 
-    fn pays_minimum_relay_fees(&self, tx: &TxWithFee) -> Result<(), TxValidationError> {
+    fn pays_minimum_relay_fees(&self, tx: &TxWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
         let relay_fee = get_relay_fee(tx.tx());
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
-            TxValidationError::InsufficientFeesToRelay { tx_fee, relay_fee }
+            MempoolPolicyError::InsufficientFeesToRelay { tx_fee, relay_fee }
         );
         Ok(())
     }
@@ -419,7 +417,7 @@ impl<M> Mempool<M>
 where
     M: GetMemoryUsage + Send + Sync,
 {
-    fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, TxValidationError> {
+    fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
             .conflicting_tx_ids(tx.tx())
             .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
@@ -436,13 +434,13 @@ where
         &self,
         tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<Conflicts, TxValidationError> {
+    ) -> Result<Conflicts, MempoolPolicyError> {
         for entry in conflicts {
             // Enforce BIP125 Rule #1.
 
             ensure!(
                 entry.is_replaceable(&self.store),
-                TxValidationError::ConflictWithIrreplaceableTransaction
+                MempoolPolicyError::ConflictWithIrreplaceableTransaction
             );
         }
         // It's possible that the replacement pays more fees than its direct conflicts but not more
@@ -468,10 +466,10 @@ where
         &self,
         tx: &TxWithFee,
         total_conflict_fees: Fee,
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<(), MempoolPolicyError> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
-            (tx.fee() - total_conflict_fees).ok_or(TxValidationError::AdditionalFeesUnderflow)?;
+            (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
         let relay_fee = get_relay_fee(tx.tx());
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
@@ -481,7 +479,7 @@ where
         );
         ensure!(
             additional_fees >= relay_fee,
-            TxValidationError::InsufficientFeesToRelayRBF
+            MempoolPolicyError::InsufficientFeesToRelayRBF
         );
         Ok(())
     }
@@ -490,7 +488,7 @@ where
         &self,
         tx: &TxWithFee,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
-    ) -> Result<Fee, TxValidationError> {
+    ) -> Result<Fee, MempoolPolicyError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
             self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
         });
@@ -498,12 +496,12 @@ where
         let total_conflict_fees = conflicts_with_descendants
             .map(|conflict| conflict.fee())
             .sum::<Option<Fee>>()
-            .ok_or(TxValidationError::ConflictsFeeOverflow)?;
+            .ok_or(MempoolPolicyError::ConflictsFeeOverflow)?;
 
         let replacement_fee = tx.fee();
         ensure!(
             replacement_fee > total_conflict_fees,
-            TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
+            MempoolPolicyError::TransactionFeeLowerThanConflictsWithDescendants
         );
         Ok(total_conflict_fees)
     }
@@ -512,7 +510,7 @@ where
         &self,
         tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<(), MempoolPolicyError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
             .flat_map(|conflict| {
@@ -531,7 +529,7 @@ where
                 !outpoints_spent_by_conflicts.contains(&input.outpoint())
             })
             .map_or(Ok(()), |_| {
-                Err(TxValidationError::SpendsNewUnconfirmedOutput)
+                Err(MempoolPolicyError::SpendsNewUnconfirmedOutput)
             })
     }
 
@@ -539,12 +537,12 @@ where
         &self,
         tx: &TxWithFee,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<(), MempoolPolicyError> {
         let replacement_fee = tx.fee();
         conflicts.iter().find(|conflict| conflict.fee() >= replacement_fee).map_or_else(
             || Ok(()),
             |conflict| {
-                Err(TxValidationError::ReplacementFeeLowerThanOriginal {
+                Err(MempoolPolicyError::ReplacementFeeLowerThanOriginal {
                     replacement_tx: tx.tx().transaction().get_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee(),
@@ -557,12 +555,12 @@ where
     fn potential_replacements_within_limit(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<BTreeSet<Id<Transaction>>, TxValidationError> {
+    ) -> Result<BTreeSet<Id<Transaction>>, MempoolPolicyError> {
         let mut num_potential_replacements = 0;
         for conflict in conflicts {
             num_potential_replacements += conflict.count_with_descendants();
             if num_potential_replacements > MAX_BIP125_REPLACEMENT_CANDIDATES {
-                return Err(TxValidationError::TooManyPotentialReplacements);
+                return Err(MempoolPolicyError::TooManyPotentialReplacements);
             }
         }
         let replacements_with_descendants = conflicts
@@ -587,11 +585,14 @@ where
         self.remove_expired_transactions();
         ensure!(
             self.store.txs_by_id.contains_key(&id),
-            TxValidationError::DescendantOfExpiredTransaction
+            MempoolPolicyError::DescendantOfExpiredTransaction
         );
 
         self.limit_mempool_size()?;
-        ensure!(self.store.txs_by_id.contains_key(&id), Error::MempoolFull);
+        ensure!(
+            self.store.txs_by_id.contains_key(&id),
+            MempoolPolicyError::MempoolFull
+        );
         Ok(())
     }
 
@@ -601,7 +602,7 @@ where
             let new_minimum_fee_rate =
                 (*removed_fees.iter().max().expect("removed_fees should not be empty")
                     + INCREMENTAL_RELAY_FEE_RATE)
-                    .ok_or(TxValidationError::FeeOverflow)?;
+                    .ok_or(MempoolPolicyError::FeeOverflow)?;
             if new_minimum_fee_rate > self.rolling_fee_rate.read().rolling_minimum_fee_rate() {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }
@@ -638,7 +639,7 @@ where
         }
     }
 
-    fn trim(&mut self) -> Result<Vec<FeeRate>, TxValidationError> {
+    fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
         while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
             // TODO sort by descendant score, not by fee

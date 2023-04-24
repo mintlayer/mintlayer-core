@@ -82,7 +82,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantBrokenAlreadyUnspent => 0,
             // Even though this is an invariant error, it stems from referencing a block for reward that doesn't exist
             ConnectTransactionError::MissingOutputOrSpent => 100,
-            ConnectTransactionError::MissingCoinOutputToStake => 100,
             ConnectTransactionError::AttemptToPrintMoney(_, _) => 100,
             ConnectTransactionError::TxFeeTotalCalcFailed(_, _) => 100,
             ConnectTransactionError::SignatureVerificationFailed(_) => 100,
@@ -212,7 +211,6 @@ impl BanScore for TokensError {
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             TokensError::CoinOrTokenOverflow => 100,
             TokensError::InsufficientTokenFees(_, _) => 100,
-            TokensError::NoTxInMainChainByOutpoint => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
             TokensError::TokensInBlockReward => 100,
@@ -263,8 +261,8 @@ impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusPoWError::InvalidPoW(_) => 100,
-            ConsensusPoWError::PrevBlockLoadError(_, _, _) => 0,
-            ConsensusPoWError::PrevBlockNotFound(_, _) => 100,
+            ConsensusPoWError::PrevBlockLoadError(_, _) => 0,
+            ConsensusPoWError::PrevBlockNotFound(_) => 100,
             ConsensusPoWError::AncestorAtHeightNotFound(_, _, _) => 0,
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
@@ -336,7 +334,7 @@ impl BanScore for utxo::Error {
 
 impl BanScore for pos_accounting::Error {
     fn ban_score(&self) -> u32 {
-        type E = pos_accounting::Error;
+        use pos_accounting::Error as E;
         match self {
             E::StorageError(_) => 0,
             E::AccountingError(_) => 100,

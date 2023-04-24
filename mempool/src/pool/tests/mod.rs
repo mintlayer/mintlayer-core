@@ -15,8 +15,8 @@
 
 use super::*;
 use crate::{
-    get_memory_usage::MockGetMemoryUsage, pool::try_get_fee::TryGetFee,
-    tx_accumulator::DefaultTxAccumulator, SystemUsageEstimator,
+    get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
+    SystemUsageEstimator,
 };
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
@@ -173,7 +173,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let mut fees = Vec::new();
     for tx in mempool.get_all() {
-        fees.push(mempool.try_get_fee(&tx).await?)
+        fees.push(try_get_fee(&mempool, &tx).await)
     }
     let mut fees_sorted = fees.clone();
     fees_sorted.sort();
@@ -188,11 +188,9 @@ async fn tx_no_inputs() {
     let tx = TransactionBuilder::new().build();
     let res = mempool.add_transaction(tx);
 
-    assert!(
-        matches!(
-            res,
-            Err(Error::TxValidationError(TxValidationError::NoInputs)),
-        ),
+    assert_eq!(
+        res,
+        Err(MempoolPolicyError::NoInputs.into()),
         "Should have failed with no inputs, got {res:?} instead"
     );
     mempool.store.assert_valid();
@@ -266,10 +264,10 @@ async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
         )
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(tx),
-        Err(Error::TxValidationError(TxValidationError::NoOutputs))
-    ));
+        Err(MempoolPolicyError::NoOutputs.into())
+    );
     mempool.store.assert_valid();
     Ok(())
 }
@@ -308,7 +306,7 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
 
     assert!(matches!(
         mempool.add_transaction(tx),
-        Err(Error::TxValidationError(_)),
+        Err(Error::Validity(_)),
     ));
     mempool.store.assert_valid();
     Ok(())
@@ -334,12 +332,10 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     .await?;
 
     mempool.add_transaction(tx.clone())?;
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(tx),
-        Err(Error::TxValidationError(
-            TxValidationError::TransactionAlreadyInMempool
-        ))
-    ));
+        Err(MempoolPolicyError::TransactionAlreadyInMempool.into())
+    );
     mempool.store.assert_valid();
     Ok(())
 }
@@ -384,7 +380,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 
     assert!(matches!(
         mempool.add_transaction(tx),
-        Err(Error::TxValidationError(TxValidationError::TxValidation(_)))
+        Err(Error::Validity(TxValidationError::TxValidation(_)))
     ));
     mempool.store.assert_valid();
 
@@ -419,12 +415,10 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx = tx_builder.build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
-    assert!(matches!(
+    assert_eq!(
         mempool.add_transaction(tx),
-        Err(Error::TxValidationError(
-            TxValidationError::ExceedsMaxBlockSize
-        ))
-    ));
+        Err(MempoolPolicyError::ExceedsMaxBlockSize.into())
+    );
     mempool.store.assert_valid();
     Ok(())
 }
@@ -465,9 +459,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
             .await??;
         let input_value = match chainstate_outpoint_value.first().unwrap() {
             Some(input_value) => *input_value,
-            None => {
-                mempool.store.get_unconfirmed_outpoint_value(&H256::zero().into(), &outpoint)?
-            }
+            None => get_unconfirmed_outpoint_value(&mempool.store, &outpoint),
         };
         input_values.push(input_value)
     }
@@ -803,15 +795,12 @@ async fn test_bip125_max_replacements(
 #[ignore = "RBF not implemented"]
 async fn too_many_conflicts(#[case] seed: Seed) -> anyhow::Result<()> {
     let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES + 1;
-    let err = test_bip125_max_replacements(seed, num_potential_replacements)
+    let err: Error = test_bip125_max_replacements(seed, num_potential_replacements)
         .await
         .expect_err("expected error TooManyPotentialReplacements")
         .downcast()
         .expect("failed to downcast");
-    assert!(matches!(
-        err,
-        Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
-    ));
+    assert_eq!(err, MempoolPolicyError::TooManyPotentialReplacements.into());
     Ok(())
 }
 
@@ -887,7 +876,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     assert!(
         matches!(
             res,
-            Err(Error::TxValidationError(TxValidationError::TxValidation(_))),
+            Err(Error::Validity(TxValidationError::TxValidation(_))),
         ),
         "Should error out on unconfirmed output, got {res:?}"
     );
@@ -995,7 +984,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     assert!(mempool.contains_transaction(&child_1_id));
     assert!(!mempool.contains_transaction(&child_0_id));
     let rolling_fee = mempool.get_minimum_rolling_fee();
-    let child_0_fee = mempool.try_get_fee(&child_0).await?;
+    let child_0_fee = try_get_fee(&mempool, &child_0).await;
     log::debug!("FeeRate of child_0 {:?}", child_0_fee);
     assert_eq!(
         rolling_fee,
@@ -1014,7 +1003,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     assert_eq!(
         rolling_fee,
         (FeeRate::from_total_tx_fee(
-            mempool.try_get_fee(&child_0).await?,
+            try_get_fee(&mempool, &child_0).await,
             NonZeroUsize::new(child_0.encoded_size()).unwrap()
         )? + INCREMENTAL_RELAY_FEE_RATE)
             .unwrap()
@@ -1033,7 +1022,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     log::debug!(
         "before child2: fee = {:?}, size = {}, minimum fee rate = {:?}",
-        mempool.try_get_fee(&child_2).await?,
+        try_get_fee(&mempool, &child_2).await,
         child_2.encoded_size(),
         mempool.get_minimum_rolling_fee()
     );
@@ -1041,8 +1030,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("result of adding child2 {:?}", res);
     assert!(matches!(
         res,
-        Err(Error::TxValidationError(
-            TxValidationError::RollingFeeThresholdNotMet { .. }
+        Err(Error::Policy(
+            MempoolPolicyError::RollingFeeThresholdNotMet { .. }
         ))
     ));
 
@@ -1097,8 +1086,8 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .await
         .unwrap());
 
-    // Because the rolling fee is only updated when we attempt to add a tx to the mempool
-    // we need to submit a "dummy" tx to trigger these updates.
+    // Because the rolling fee is only updated when we attempt to add a tx to the mempool we need
+    // to submit a "dummy" tx to trigger these updates.
 
     // Since memory usage is now zero, it is less than 1/4 of the max size
     // and ROLLING_FEE_BASE_HALFLIFE / 4 is the time it will take for the fee to halve
@@ -1122,15 +1111,15 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         .build();
     log::debug!(
         "First attempt to add dummy which pays a fee of {:?}",
-        mempool.try_get_fee(&dummy_tx).await?
+        try_get_fee(&mempool, &dummy_tx).await
     );
     let res = mempool.add_transaction(dummy_tx.clone());
 
     log::debug!("Result of first attempt to add dummy: {res:?}");
     assert!(matches!(
         res,
-        Err(Error::TxValidationError(
-            TxValidationError::RollingFeeThresholdNotMet { .. }
+        Err(Error::Policy(
+            MempoolPolicyError::RollingFeeThresholdNotMet { .. }
         )),
     ));
     log::debug!(
@@ -1312,7 +1301,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_a_id = tx_a.transaction().get_id();
     log::debug!("tx id is: {}", tx_id);
     log::debug!("tx_a_id : {}", tx_a_id.get());
-    log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
+    log::debug!("tx_a fee : {:?}", try_get_fee(&mempool, &tx_a).await);
     mempool.add_transaction(tx_a)?;
 
     let tx_b = tx_spend_input(
@@ -1326,7 +1315,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
     log::debug!("tx_b_id : {}", tx_b_id.get());
-    log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
+    log::debug!("tx_b fee : {:?}", try_get_fee(&mempool, &tx_b).await);
     mempool.add_transaction(tx_b)?;
 
     let tx_c = tx_spend_input(
@@ -1340,7 +1329,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
     log::debug!("tx_c_id : {}", tx_c_id.get());
-    log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
+    log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction(tx_c)?;
 
     let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
@@ -1466,7 +1455,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_a_id = tx_a.transaction().get_id();
     log::debug!("tx_a_id : {}", tx_a_id.get());
-    log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a).await?);
+    log::debug!("tx_a fee : {:?}", try_get_fee(&mempool, &tx_a).await);
     mempool.add_transaction(tx_a)?;
 
     let tx_b = tx_spend_input(
@@ -1480,7 +1469,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
     log::debug!("tx_b_id : {}", tx_b_id.get());
-    log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b).await?);
+    log::debug!("tx_b fee : {:?}", try_get_fee(&mempool, &tx_b).await);
     mempool.add_transaction(tx_b)?;
 
     let tx_c = tx_spend_input(
@@ -1494,7 +1483,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
     log::debug!("tx_c_id : {}", tx_c_id.get());
-    log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c).await?);
+    log::debug!("tx_c fee : {:?}", try_get_fee(&mempool, &tx_c).await);
     mempool.add_transaction(tx_c)?;
 
     let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a");
@@ -1578,10 +1567,8 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
         "mempool_full: tx has id {}",
         tx.transaction().get_id().get()
     );
-    assert!(matches!(
-        mempool.add_transaction(tx),
-        Err(Error::MempoolFull)
-    ));
+    let res = mempool.add_transaction(tx);
+    assert_eq!(res, Err(MempoolPolicyError::MempoolFull.into()));
     mempool.store.assert_valid();
     Ok(())
 }

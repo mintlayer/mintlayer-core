@@ -13,11 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::env;
+// A helper struct that will call a function when it is dropped
+#[must_use = "The value must be held in the scope"]
+pub struct OnceDestructor<F: FnOnce()> {
+    call_on_drop: Option<F>,
+}
 
-#[tokio::main]
-async fn main() -> Result<(), node_lib::Error> {
-    let opts = node_lib::Options::from_args(env::args_os());
-    node_lib::init_logging(&opts);
-    node_lib::run(opts).await
+impl<F: FnOnce()> OnceDestructor<F> {
+    pub fn new(call_on_drop: F) -> Self {
+        Self {
+            call_on_drop: Some(call_on_drop),
+        }
+    }
+}
+
+impl<F: FnOnce()> Drop for OnceDestructor<F> {
+    fn drop(&mut self) {
+        let mut finalizer: Option<F> = None;
+        std::mem::swap(&mut finalizer, &mut self.call_on_drop);
+        finalizer.expect("Must exist")();
+    }
 }

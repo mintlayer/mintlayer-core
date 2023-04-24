@@ -1,5 +1,5 @@
 [package]
-name = "node"
+name = "node-lib"
 license.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -33,5 +33,4 @@ fs4 = "0.6"
 [dev-dependencies]
 crypto = { path = "../crypto" }
 
-assert_cmd = "2"
 tempfile = "3.3"

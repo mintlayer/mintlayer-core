@@ -34,6 +34,23 @@ pub struct BlockBody {
     pub(super) transactions: Vec<SignedTransaction>,
 }
 
+impl BlockBody {
+    pub fn new(reward: BlockReward, transactions: Vec<SignedTransaction>) -> Self {
+        Self {
+            reward,
+            transactions,
+        }
+    }
+
+    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+        &self.transactions
+    }
+
+    pub fn reward(&self) -> &BlockReward {
+        &self.reward
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,

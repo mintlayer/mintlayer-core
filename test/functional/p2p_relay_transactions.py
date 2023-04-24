@@ -1,43 +1,36 @@
 #!/usr/bin/env python3
 # Copyright (c) 2017-2021 The Bitcoin Core developers
+# Copyright (c) 2022 RBB S.r.l
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
-"""Mempool transaction submission test
 
-Check that:
-* Valid transaction is accepted by the mempool and included in a block as
-  appropriate.
-* Invalid transaction gets properly rejected at mempool level.
-"""
-
-from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import (assert_raises_rpc_error)
 from test_framework import mintlayer_hash
+from test_framework.util import assert_raises_rpc_error
+from test_framework.test_framework import BitcoinTestFramework
 import scalecodec
+import time
 
-class MempoolTxSubmissionTest(BitcoinTestFramework):
-
+class RelayTransactions(BitcoinTestFramework):
     def set_test_params(self):
-        self.setup_clean_chain = True
-        self.num_nodes = 1
-        self.extra_args = [[]]
+        self.num_nodes = 2
 
     def setup_network(self):
         self.setup_nodes()
-        self.sync_all(self.nodes[0:1])
+        self.connect_nodes(0, 1)
+        self.sync_all(self.nodes[0:2])
+
+    def assert_mempool_contains_tx(self, n, tx_id):
+        for _ in range(5):
+            if self.nodes[n].mempool_contains_tx(tx_id):
+                break
+            time.sleep(1)
+        assert self.nodes[n].mempool_contains_tx(tx_id)
 
     def run_test(self):
-        node = self.nodes[0]
-
-        # Get chain tip
-        tip_id = node.chainstate_best_block_id()
-        self.log.debug('Tip: {}'.format(tip_id))
-
         signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
         base_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('TransactionV1')
 
-        # Try to submit an invalid transaction
-
+        # Try to submit an invalid transaction.
         tx = {
             'version': 1,
             'flags': 0,
@@ -52,15 +45,15 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         # TODO: Use helpers for encoding (https://github.com/mintlayer/mintlayer-core/issues/849).
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
-        self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
-        assert_raises_rpc_error(None, "Transaction has no inputs", node.p2p_submit_transaction, encoded_tx)
-        assert not node.mempool_contains_tx(tx_id)
+        assert_raises_rpc_error(None, "Transaction has no inputs", self.nodes[0].p2p_submit_transaction, encoded_tx)
+        assert not self.nodes[0].mempool_contains_tx(tx_id)
+        assert not self.nodes[1].mempool_contains_tx(tx_id)
 
-        # Submit a valid transaction
-
+        # Submit a valid transaction.
+        genesis = self.nodes[0].chainstate_block_id_at_height(0)
         input = {
-            'id': { 'BlockReward': '0x{}'.format(tip_id) },
+            'id': { 'BlockReward': '0x{}'.format(genesis) },
             'index': 0,
         }
         output = {
@@ -78,13 +71,14 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
             'transaction': tx,
             'signatures': [witness],
         }
+
         encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
         tx_id = scalecodec.ScaleBytes(mintlayer_hash(base_tx_obj.encode(tx).data)).to_hex()[2:]
-        self.log.debug("Encoded transaction {}: {}".format(tx_id, encoded_tx))
 
-        node.p2p_submit_transaction(encoded_tx)
-        assert node.mempool_contains_tx(tx_id)
+        self.nodes[0].p2p_submit_transaction(encoded_tx)
+        assert self.nodes[0].mempool_contains_tx(tx_id)
+        self.assert_mempool_contains_tx(1, tx_id)
 
 
 if __name__ == '__main__':
-    MempoolTxSubmissionTest().main()
+    RelayTransactions().main()

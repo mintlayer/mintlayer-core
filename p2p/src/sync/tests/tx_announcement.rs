@@ -24,7 +24,7 @@ use common::{
     },
     primitives::{Amount, Id, Idable},
 };
-use mempool::error::{Error as MempoolError, TxValidationError};
+use mempool::error::{Error as MempoolError, MempoolPolicyError};
 use test_utils::random::Seed;
 
 use crate::{
@@ -96,8 +96,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
     assert_eq!(peer, adjusted_peer);
     assert_eq!(
         score,
-        P2pError::MempoolError(MempoolError::TxValidationError(TxValidationError::NoInputs))
-            .ban_score()
+        P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::NoInputs)).ban_score()
     );
     handle.assert_no_event().await;
 
