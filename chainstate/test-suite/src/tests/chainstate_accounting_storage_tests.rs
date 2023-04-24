@@ -47,13 +47,13 @@ fn create_pool_data(
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ration = rng.gen_range(0u64..1000);
-    let cost_per_epoch = Amount::from_atoms(rng.gen_range(0..1000));
+    let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     PoolData::new(
         decomission_destination,
         pledged_amount,
         vrf_pk,
         margin_ration,
-        cost_per_epoch,
+        cost_per_block,
     )
 }
 
@@ -86,7 +86,7 @@ fn make_tx_with_stake_pool(
         pool_data.vrf_public_key().clone(),
         pool_data.decommission_destination().clone(),
         pool_data.margin_ratio_per_thousand(),
-        pool_data.cost_per_epoch(),
+        pool_data.cost_per_block(),
     )));
 
     let transfer_output = TxOutput::Transfer(

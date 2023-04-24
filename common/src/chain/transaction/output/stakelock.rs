@@ -29,7 +29,7 @@ pub struct StakePoolData {
     // TODO: create a PerThousand type
     #[codec(compact)]
     margin_ratio_per_thousand: u64,
-    cost_per_epoch: Amount,
+    cost_per_block: Amount,
 }
 
 impl StakePoolData {
@@ -39,7 +39,7 @@ impl StakePoolData {
         vrf_public_key: VRFPublicKey,
         decommission_key: Destination,
         margin_ratio_per_thousand: u64,
-        cost_per_epoch: Amount,
+        cost_per_block: Amount,
     ) -> Self {
         Self {
             value,
@@ -47,7 +47,7 @@ impl StakePoolData {
             vrf_public_key,
             decommission_key,
             margin_ratio_per_thousand,
-            cost_per_epoch,
+            cost_per_block,
         }
     }
 
@@ -67,8 +67,8 @@ impl StakePoolData {
         self.margin_ratio_per_thousand
     }
 
-    pub fn cost_per_epoch(&self) -> Amount {
-        self.cost_per_epoch
+    pub fn cost_per_block(&self) -> Amount {
+        self.cost_per_block
     }
 
     pub fn value(&self) -> Amount {

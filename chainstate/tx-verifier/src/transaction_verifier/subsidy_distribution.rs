@@ -49,8 +49,7 @@ where
         .operations(tx_source)
         .increase_pool_balance(pool_id, block_subsidy)?;
 
-    // FIXME: cost per epoch from db
-    let total_delegators_reward = (block_subsidy - pool_data.cost_per_epoch())
+    let total_delegators_reward = (block_subsidy - pool_data.cost_per_block())
         .and_then(|v| (v * pool_data.margin_ratio_per_thousand().into()).and_then(|v| v / 1000))
         .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
             block_id,
