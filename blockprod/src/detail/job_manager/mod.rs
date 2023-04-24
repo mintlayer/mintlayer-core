@@ -240,6 +240,23 @@ impl JobManager {
 
         result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
+
+    /// For destructors, we make a job stopper that will send stop signal
+    /// Returns both the function and a oneshot-receiver.
+    /// Once the job is dropped from the job manager, the receiver will be notified.
+    pub fn make_job_stopper_function(
+        &self,
+    ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>) {
+        let (result_sender, result_receiver) = oneshot::channel::<usize>();
+
+        let sender = self.stop_job_sender.clone();
+
+        let stopper = Box::new(move |job_key: JobKey| {
+            let _ = sender.send((Some(job_key), result_sender));
+        });
+
+        (stopper, result_receiver)
+    }
 }
 
 impl Drop for JobManager {
