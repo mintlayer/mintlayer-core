@@ -16,7 +16,7 @@
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{Column, Container, Text},
-    Element, Length, Sandbox, Settings,
+    Element, Font, Length, Sandbox, Settings,
 };
 use iced_aw::{TabLabel, Tabs};
 
@@ -29,10 +29,10 @@ use settings::{SettingsMessage, SettingsTab, TabPosition};
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
 
-// const ICON_FONT: Font = iced::Font::External {
-//     name: "Icons",
-//     bytes: include_bytes!("../fonts/icons.ttf"),
-// };
+const ICON_FONT: Font = iced::Font::External {
+    name: "Icons",
+    bytes: include_bytes!("../fonts/icons.ttf"),
+};
 
 enum Icon {
     User,
@@ -96,7 +96,7 @@ impl Sandbox for MintlayerGUI {
             .push(self.dashboard_tab.tab_label(), self.dashboard_tab.view())
             .push(self.settings_tab.tab_label(), self.settings_tab.view())
             .tab_bar_style(theme)
-            // .icon_font(ICON_FONT)
+            .icon_font(ICON_FONT)
             .tab_bar_position(match position {
                 TabPosition::Top => iced_aw::TabBarPosition::Top,
                 TabPosition::Bottom => iced_aw::TabBarPosition::Bottom,
