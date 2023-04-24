@@ -15,7 +15,7 @@
 
 pub use self::{
     error::ConsensusPoWError,
-    work::{calculate_work_required, check_pow_consensus, check_proof_of_work, mine},
+    work::{calculate_work_required, check_pow_consensus, check_proof_of_work, mine, MiningResult},
 };
 
 mod error;

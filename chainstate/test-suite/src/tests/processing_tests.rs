@@ -756,7 +756,7 @@ fn consensus_type(#[case] seed: Seed) {
     for i in 5..10 {
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
-        let mut mined_block = tf
+        let mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::LockThenTransfer(
@@ -766,24 +766,33 @@ fn consensus_type(#[case] seed: Seed) {
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
+        let mut block_header = mined_block.header().clone();
         let bits = min_difficulty.into();
-        assert!(consensus::mine(&mut mined_block, u128::MAX, bits)
-            .expect("Unexpected conversion error"));
+        assert_eq!(
+            consensus::mine(&mut block_header, u128::MAX, bits, Arc::new(false.into()))
+                .expect("Unexpected conversion error"),
+            consensus::MiningResult::Success
+        );
+        let mined_block = Block::new_from_header(block_header, mined_block.body().clone()).unwrap();
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
     // fail.
     let prev_block = tf.block(*tf.index_at(9).block_id());
-    let mut mined_block = tf
+    let mined_block = tf
         .make_block_builder()
         .with_parent(prev_block.get_id().into())
         .add_test_transaction_from_block(&prev_block, &mut rng)
         .build();
     let bits = min_difficulty.into();
-    assert!(
-        consensus::mine(&mut mined_block, u128::MAX, bits).expect("Unexpected conversion error")
+    let mut block_header = mined_block.header().clone();
+    assert_eq!(
+        consensus::mine(&mut block_header, u128::MAX, bits, Arc::new(false.into()))
+            .expect("Unexpected conversion error"),
+        consensus::MiningResult::Success
     );
+    let mined_block = Block::new_from_header(block_header, mined_block.body().clone()).unwrap();
 
     assert!(matches!(
         tf.process_block(mined_block, BlockSource::Local).unwrap_err(),
@@ -824,7 +833,7 @@ fn consensus_type(#[case] seed: Seed) {
     for i in 15..20 {
         let (_, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
-        let mut mined_block = tf
+        let mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::LockThenTransfer(
@@ -835,8 +844,13 @@ fn consensus_type(#[case] seed: Seed) {
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
         let bits = min_difficulty.into();
-        assert!(consensus::mine(&mut mined_block, u128::MAX, bits)
-            .expect("Unexpected conversion error"));
+        let mut block_header = mined_block.header().clone();
+        assert_eq!(
+            consensus::mine(&mut block_header, u128::MAX, bits, Arc::new(false.into()))
+                .expect("Unexpected conversion error"),
+            consensus::MiningResult::Success
+        );
+        let mined_block = Block::new_from_header(block_header, mined_block.body().clone()).unwrap();
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 }
@@ -903,12 +917,16 @@ fn pow(#[case] seed: Seed) {
     ));
 
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
-    let mut valid_block = random_invalid_block;
+    let valid_block = random_invalid_block;
     let bits = difficulty.into();
-    assert!(
-        consensus::mine(&mut valid_block, u128::MAX, bits).expect("Unexpected conversion error")
+    let mut block_header = valid_block.header().clone();
+    assert_eq!(
+        consensus::mine(&mut block_header, u128::MAX, bits, Arc::new(false.into()))
+            .expect("Unexpected conversion error"),
+        consensus::MiningResult::Success
     );
-    tf.process_block(valid_block.clone(), BlockSource::Local).unwrap();
+    let valid_block = Block::new_from_header(block_header, valid_block.body().clone()).unwrap();
+    tf.process_block(valid_block, BlockSource::Local).unwrap();
 }
 
 #[rstest]
@@ -972,10 +990,15 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
             .expect("generate invalid block");
 
-        let mut valid_block = random_invalid_block;
+        let valid_block = random_invalid_block;
         let bits = difficulty.into();
-        assert!(consensus::mine(&mut valid_block, u128::MAX, bits)
-            .expect("Unexpected conversion error"));
+        let mut block_header = valid_block.header().clone();
+        assert_eq!(
+            consensus::mine(&mut block_header, u128::MAX, bits, Arc::new(false.into()))
+                .expect("Unexpected conversion error"),
+            consensus::MiningResult::Success
+        );
+        let valid_block = Block::new_from_header(block_header, valid_block.body().clone()).unwrap();
         valid_block
     };
     tf.process_block(block, BlockSource::Local).unwrap();

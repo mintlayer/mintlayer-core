@@ -13,20 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod newtype;
-pub mod once_destructor;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+// A helper struct that will call a function when it is dropped
+#[must_use = "The value must be held in the scope"]
+pub struct OnceDestructor<F: FnOnce()> {
+    call_on_drop: Option<F>,
+}
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+impl<F: FnOnce()> OnceDestructor<F> {
+    pub fn new(call_on_drop: F) -> Self {
+        Self {
+            call_on_drop: Some(call_on_drop),
+        }
+    }
+}
+
+impl<F: FnOnce()> Drop for OnceDestructor<F> {
+    fn drop(&mut self) {
+        let mut finalizer: Option<F> = None;
+        std::mem::swap(&mut finalizer, &mut self.call_on_drop);
+        finalizer.expect("Must exist")();
+    }
+}

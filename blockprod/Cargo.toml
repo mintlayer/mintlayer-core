@@ -12,7 +12,6 @@ chainstate = { path = "../chainstate/" }
 chainstate-types = { path = "../chainstate/types" }
 common = { path = "../common/" }
 consensus = { path = "../consensus" }
-crypto = { path = "../crypto/" }
 mempool = { path = "../mempool/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }
@@ -20,16 +19,21 @@ logging = {path = '../logging'}
 utils = {path = '../utils'}
 rpc = { path = "../rpc/" }
 
+async-trait.workspace = true
 hex.workspace = true
+futures.workspace = true
+jsonrpsee = { workspace = true, features = ["macros"] }
+parity-scale-codec.workspace = true
+slave-pool = "0.2"
+serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
-futures.workspace = true
 void = "1.0"
-crossbeam-channel = "0.5"
-jsonrpsee = { workspace = true, features = ["macros"] }
-async-trait.workspace = true
 
 [dev-dependencies]
+rstest.workspace = true
+
 chainstate-storage = { path = "../chainstate/storage/" }
 chainstate-types = {path = '../chainstate/types'}
 mocks = { path = "../mocks/" }
+test-utils = {path = '../test-utils'}

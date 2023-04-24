@@ -15,15 +15,17 @@
 
 #![allow(dead_code)]
 
+use std::sync::{atomic::AtomicBool, Arc};
+
 use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::consensus_data::PoWData,
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData},
+        block::{timestamp::BlockTimestamp, BlockHeader, ConsensusData},
         config::ChainConfig,
-        PoWStatus,
+        GenBlockId, PoWStatus,
     },
-    primitives::{BlockHeight, Compact, Id, Idable, H256},
+    primitives::{BlockHeight, Compact, Idable, H256},
     Uint256,
 };
 
@@ -53,20 +55,29 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     pow_status: &PoWStatus,
     block_index_handle: &H,
 ) -> Result<(), ConsensusPoWError> {
-    let get_block_index =
-        |&prev_block_id: &Id<Block>| block_index_handle.get_block_index(&prev_block_id);
-
     let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
         block_index_handle.get_ancestor(block_index, ancestor_height)
     };
 
-    let work_required = calculate_work_required(
-        chain_config,
-        header,
-        pow_status,
-        get_block_index,
-        get_ancestor,
-    )?;
+    let work_required = match header.prev_block_id().classify(chain_config) {
+        GenBlockId::Genesis(_) => match pow_status {
+            PoWStatus::Ongoing => unreachable!(),
+            PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
+        },
+        GenBlockId::Block(prev_id) => {
+            let prev_block_index = block_index_handle
+                .get_block_index(&prev_id)
+                .map_err(|e| ConsensusPoWError::PrevBlockLoadError(prev_id, e))?
+                .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_id))?;
+            calculate_work_required(
+                chain_config,
+                &prev_block_index.into(),
+                header.timestamp(),
+                pow_status,
+                get_ancestor,
+            )?
+        }
+    };
 
     // TODO: add test for a block with invalid target
     utils::ensure!(
@@ -81,41 +92,44 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     }
 }
 
-pub fn calculate_work_required<F, G>(
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MiningResult {
+    Success,
+    Failed,
+    Stopped,
+}
+
+impl MiningResult {
+    pub fn is_success(&self) -> bool {
+        *self == Self::Success
+    }
+}
+
+pub fn calculate_work_required<G>(
     chain_config: &ChainConfig,
-    header: &BlockHeader,
+    prev_block_index: &GenBlockIndex,
+    block_timestamp: BlockTimestamp,
     pow_status: &PoWStatus,
-    get_block_index: F,
     get_ancestor: G,
 ) -> Result<Compact, ConsensusPoWError>
 where
-    F: Fn(&Id<Block>) -> Result<Option<BlockIndex>, PropertyQueryError>,
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
-        PoWStatus::Ongoing => {
-            let prev_block_id = header
-                .prev_block_id()
-                .classify(chain_config)
-                .chain_block_id()
-                .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
-
-            // TODO: this should use get_gen_block_index() because the previous block could be genesis
-            let prev_block_index = get_block_index(&prev_block_id)
-                .map_err(|err| {
-                    ConsensusPoWError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
-                })?
-                .ok_or_else(|| {
-                    ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
-                })?;
-
-            PoW::new(chain_config).get_work_required(
-                &prev_block_index,
-                header.timestamp(),
+        PoWStatus::Ongoing => match prev_block_index {
+            GenBlockIndex::Block(prev_block_index) => PoW::new(chain_config).get_work_required(
+                prev_block_index,
+                block_timestamp,
                 get_ancestor,
-            )
-        }
+            ),
+            GenBlockIndex::Genesis(_) => match pow_status {
+                // If this is genesis, then the status can't be on-going
+                PoWStatus::Ongoing => unreachable!(),
+                PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
+            },
+        },
     }
 }
 
@@ -225,19 +239,28 @@ impl PoW {
     }
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<bool, ConsensusPoWError> {
+pub fn mine(
+    block_header: &mut BlockHeader,
+    max_nonce: u128,
+    bits: Compact,
+    stop_flag: Arc<AtomicBool>,
+) -> Result<MiningResult, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
         data.update_nonce(nonce);
-        block.update_consensus_data(ConsensusData::PoW(data.clone()));
+        block_header.update_consensus_data(ConsensusData::PoW(data.clone()));
 
-        if check_proof_of_work(block.get_id().get(), bits)? {
-            return Ok(true);
+        if check_proof_of_work(block_header.get_id().get(), bits)? {
+            return Ok(MiningResult::Success);
+        }
+
+        if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            return Ok(MiningResult::Stopped);
         }
     }
 
-    Ok(false)
+    Ok(MiningResult::Failed)
 }
 
 #[cfg(test)]

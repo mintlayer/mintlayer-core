@@ -261,8 +261,8 @@ impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusPoWError::InvalidPoW(_) => 100,
-            ConsensusPoWError::PrevBlockLoadError(_, _, _) => 0,
-            ConsensusPoWError::PrevBlockNotFound(_, _) => 100,
+            ConsensusPoWError::PrevBlockLoadError(_, _) => 0,
+            ConsensusPoWError::PrevBlockNotFound(_) => 100,
             ConsensusPoWError::AncestorAtHeightNotFound(_, _, _) => 0,
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
