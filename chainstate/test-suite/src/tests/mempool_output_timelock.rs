@@ -80,6 +80,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                    None
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -100,6 +101,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                None,
             )
             .unwrap();
     });
@@ -145,6 +147,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     },
                     &spend_locked_tx,
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                    None,
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -168,6 +171,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                None,
             )
             .unwrap();
     });
@@ -233,7 +237,8 @@ fn output_lock_until_time(#[case] seed: Seed) {
                         current_best: &best_block_index,
                     },
                     &spend_locked_tx,
-                    &mtp
+                    &mtp,
+                    None,
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -258,6 +263,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+                None,
             )
             .unwrap();
     });
@@ -324,7 +330,8 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                         current_best: &best_block_index,
                     },
                     &spend_locked_tx,
-                    &mtp
+                    &mtp,
+                    None
                 ),
                 Err(ConnectTransactionError::TimeLockViolation)
             );
@@ -354,6 +361,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                 },
                 &spend_locked_tx,
                 &BlockTimestamp::from_duration_since_epoch(time::get_time()),
+                None,
             )
             .unwrap();
     });

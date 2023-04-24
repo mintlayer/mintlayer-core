@@ -278,6 +278,7 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
         },
     )?;
 
+    // FIXME: this is wrong, no tests?
     let max_allowed_outputs_total =
         amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
             .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?;

@@ -304,6 +304,7 @@ where
                 },
                 &tx,
                 &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
+                None,
             )?;
 
             let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
