@@ -19,8 +19,8 @@ mod amounts_map;
 mod cached_inputs_operation;
 mod input_output_policy;
 mod optional_tx_index_cache;
+mod reward_distribution;
 mod signature_check;
-mod subsidy_distribution;
 mod timelock_check;
 mod token_issuance_cache;
 mod transferred_amount_check;
@@ -526,12 +526,13 @@ where
             ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
             ConsensusData::PoS(pos_data) => {
                 let tx_source = TransactionSource::Chain(block_id);
-                let undos = subsidy_distribution::distribute_subsidy(
+                let block_subsidy =
+                    self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                let undos = reward_distribution::distribute_reward(
                     &mut self.accounting_delta_adapter,
-                    self.chain_config.as_ref(),
                     block_id,
-                    block_index.block_height(),
                     pos_data.as_ref(),
+                    block_subsidy,
                 )?;
 
                 self.accounting_block_undo

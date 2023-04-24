@@ -16,8 +16,8 @@
 use crate::{error::ConnectTransactionError, TransactionSource};
 
 use common::{
-    chain::{block::consensus_data::PoSData, Block, ChainConfig},
-    primitives::{Amount, BlockHeight, Id},
+    chain::{block::consensus_data::PoSData, Block},
+    primitives::{Amount, Id},
     Uint256,
 };
 use pos_accounting::{AccountingBlockRewardUndo, PoSAccountingOperations, PoSAccountingView};
@@ -25,19 +25,13 @@ use pos_accounting::{AccountingBlockRewardUndo, PoSAccountingOperations, PoSAcco
 use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
 
 /// Distribute subsidy among the staker and delegators
-pub fn distribute_subsidy<C, P>(
+pub fn distribute_reward<P: PoSAccountingView>(
     accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
-    chain_config: &C,
     block_id: Id<Block>,
-    block_height: BlockHeight,
     pos_data: &PoSData,
-) -> Result<AccountingBlockRewardUndo, ConnectTransactionError>
-where
-    C: AsRef<ChainConfig>,
-    P: PoSAccountingView,
-{
+    total_reward: Amount,
+) -> Result<AccountingBlockRewardUndo, ConnectTransactionError> {
     let tx_source = TransactionSource::Chain(block_id);
-    let block_subsidy = chain_config.as_ref().block_subsidy_at_height(&block_height);
 
     let pool_id = *pos_data.stake_pool_id();
     let pool_data = accounting_adapter
@@ -47,9 +41,9 @@ where
 
     let increase_balance_undo = accounting_adapter
         .operations(tx_source)
-        .increase_pool_balance(pool_id, block_subsidy)?;
+        .increase_pool_balance(pool_id, total_reward)?;
 
-    let total_delegators_reward = (block_subsidy - pool_data.cost_per_block())
+    let total_delegators_reward = (total_reward - pool_data.cost_per_block())
         .and_then(|v| (v * pool_data.margin_ratio_per_thousand().into()).and_then(|v| v / 1000))
         .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
             block_id,
@@ -92,3 +86,5 @@ where
 
     Ok(AccountingBlockRewardUndo::new(undos))
 }
+
+// FIXME: tests
