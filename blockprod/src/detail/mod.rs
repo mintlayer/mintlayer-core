@@ -632,6 +632,11 @@ mod tests {
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
             async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
                 for _ in 1..=jobs_to_create {
                     _ = block_production
                         .generate_block(
@@ -640,8 +645,6 @@ mod tests {
                         )
                         .await;
                 }
-
-                shutdown_trigger.initiate();
 
                 let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
                 assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
