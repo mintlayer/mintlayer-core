@@ -29,7 +29,7 @@ use common::{
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
-pub async fn start_subsystems(
+pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
@@ -46,10 +46,10 @@ pub async fn start_subsystems(
         Default::default(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate, chain_config).await
+    start_subsystems_with_chainstate(chainstate, chain_config)
 }
 
-pub async fn start_subsystems_with_chainstate(
+pub fn start_subsystems_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
     chain_config: Arc<ChainConfig>,
 ) -> (
