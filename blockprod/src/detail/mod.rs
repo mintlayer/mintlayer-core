@@ -459,18 +459,18 @@ mod tests {
             }
         });
 
-        manager.add_subsystem_with_custom_eventloop(
-            "test-call",
-            move |_: CallRequest<()>, _| async move {
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate,
-                    mock_mempool_subsystem,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
+        let block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mock_mempool_subsystem,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
 
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
                 let accumulator = block_production.collect_transactions().await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
@@ -480,10 +480,13 @@ mod tests {
                     accumulator.is_ok(),
                     "Expected collect_transactions() to succeed"
                 );
-            },
-        );
+
+                shutdown_trigger.initiate();
+            }
+        });
 
         manager.main().await;
+        join_handle.await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
