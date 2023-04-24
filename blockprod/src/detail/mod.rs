@@ -180,10 +180,10 @@ impl BlockProduction {
     /// remnants in the job manager.
     pub async fn produce_block(
         &self,
-        _reward_destination: Destination,
+        reward_destination: Destination,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(_reward_destination, transactions_source, None)
+        self.produce_block_with_custom_id(reward_destination, transactions_source, None)
             .await
     }
 
