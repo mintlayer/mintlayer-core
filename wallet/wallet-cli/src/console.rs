@@ -16,8 +16,10 @@
 #[macro_export]
 macro_rules! cli_println {
     ($context:expr, $($arg:tt)*) => {
-        ConsoleContext::begin_output($context);
-        println!($($arg)*)
+        {
+            ConsoleContext::begin_output($context);
+            println!($($arg)*)
+        }
     };
 }
 

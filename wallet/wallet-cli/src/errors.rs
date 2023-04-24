@@ -41,6 +41,8 @@ pub enum WalletCliError {
     InvalidQuoting,
     #[error("{0}")]
     InvalidCommandInput(clap::Error),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Cancelled")]

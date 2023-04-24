@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use clap::Parser;
+use common::primitives::{BlockHeight, H256};
 use reedline::Reedline;
 use serialization::hex::HexEncode;
 use wallet_controller::{PeerId, RpcController};
@@ -28,6 +31,18 @@ pub enum WalletCommands {
 
     /// Returns the current best block height
     BestBlockHeight,
+
+    /// Get a block hash at height
+    BlockHash {
+        /// Block height
+        height: BlockHeight,
+    },
+
+    /// Get a block by its hash
+    Block {
+        /// Block hash
+        hash: String,
+    },
 
     /// Submit a block to be included in the chain
     ///
@@ -107,6 +122,30 @@ pub async fn handle_wallet_command(
             let height =
                 controller.get_best_block_height().await.map_err(WalletCliError::Controller)?;
             cli_println!(output, "{}", height);
+            Ok(())
+        }
+
+        WalletCommands::BlockHash { height } => {
+            let hash = controller
+                .get_block_id_at_height(height)
+                .await
+                .map_err(WalletCliError::Controller)?;
+            match hash {
+                Some(id) => cli_println!(output, "{}", id.hex_encode()),
+                None => cli_println!(output, "Not found"),
+            }
+            Ok(())
+        }
+
+        WalletCommands::Block { hash } => {
+            let hash =
+                H256::from_str(&hash).map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
+            let hash =
+                controller.get_block(hash.into()).await.map_err(WalletCliError::Controller)?;
+            match hash {
+                Some(block) => println!("{}", block.hex_encode()),
+                None => cli_println!(output, "Not found"),
+            }
             Ok(())
         }
 
