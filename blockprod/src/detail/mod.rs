@@ -205,7 +205,7 @@ impl BlockProduction {
 
         // At the end of this function, the job has to be removed
         // Once the job key is used, we swap it with None... this is all temporary.
-        // The the docs in the function self.stop_job_in_scope()
+        // The docs in the function self.stop_job_in_scope()
         let job_key_destroyed = AtomicBool::new(false);
         let _job_remove_checker = OnceDestructor::new(|| {
             assert!(job_key_destroyed.load(std::sync::atomic::Ordering::SeqCst));
