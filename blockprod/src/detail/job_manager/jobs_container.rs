@@ -57,13 +57,12 @@ impl JobsContainer {
     }
 
     pub fn handle_chainstate_event(&mut self, new_tip_id: Id<GenBlock>) {
-        let mut jobs_to_stop: Vec<JobKey> = vec![];
-
-        for (job_key, _) in self.jobs.iter() {
-            if job_key.current_tip_id() != new_tip_id {
-                jobs_to_stop.push(job_key.clone());
-            }
-        }
+        let jobs_to_stop: Vec<JobKey> = self
+            .jobs
+            .iter()
+            .filter(|(job_key, _)| job_key.current_tip_id() != new_tip_id)
+            .map(|(job_key, _)| job_key.clone())
+            .collect();
 
         for job_key in jobs_to_stop {
             if let Some(handle) = self.jobs.remove(&job_key) {
