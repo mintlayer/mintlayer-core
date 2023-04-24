@@ -178,7 +178,7 @@ impl BlockProduction {
     /// the internal job is finished. Generally this can be used to ensure
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
-    pub async fn generate_block(
+    pub async fn produce_block(
         &mut self,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
@@ -625,7 +625,7 @@ mod tests {
 
                 for _ in 1..=jobs_to_create {
                     let (_block, job_ended) = block_production
-                        .generate_block(
+                        .produce_block(
                             Destination::AnyoneCanSpend,
                             TransactionsSource::Provided(vec![]),
                         )

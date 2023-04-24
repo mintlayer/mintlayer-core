@@ -42,7 +42,7 @@ impl BlockProductionInterface for BlockProduction {
             None => crate::detail::TransactionsSource::Mempool,
         };
 
-        let (block, end_receiver) = self.generate_block(reward_destination, transactions).await?;
+        let (block, end_receiver) = self.produce_block(reward_destination, transactions).await?;
         let _finished = end_receiver.await;
         Ok(block)
     }
