@@ -315,7 +315,6 @@ impl BlockProduction {
                         }
                     };
 
-
                     let block_header = match mining_result {
                         Ok(header) => header,
                         Err(e) => {
@@ -487,7 +486,7 @@ mod tests {
         manager.main().await;
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn stop_job_non_existent_job() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
@@ -546,6 +545,78 @@ mod tests {
 
         let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
         assert_eq!(jobs_count, 1, "Jobs count is incorrect");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn stop_job_multiple_jobs() {
+        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let mut block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let mut job_keys = Vec::new();
+        let jobs_to_create = 5;
+
+        for _ in 1..=jobs_to_create {
+            let (job_key, _stop_job_cancel_receiver) = block_production
+                .job_manager
+                .add_job(Id::new(H256::random_using(&mut make_pseudo_rng())) as Id<GenBlock>)
+                .await
+                .unwrap();
+
+            job_keys.push(job_key)
+        }
+
+        assert_eq!(job_keys.len(), jobs_to_create, "Failed to create {jobs_to_create} jobs");
+
+        while !job_keys.is_empty() {
+            let current_jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+            assert_eq!(current_jobs_count, job_keys.len(), "Jobs count is incorrect");
+
+            let job_key = job_keys.pop().unwrap();
+
+            let job_stopped = block_production.stop_job(job_key).await.unwrap();
+            assert!(job_stopped, "Failed to stop job");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn generate_block_multiple_jobs() {
+        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+        let jobs_to_create = 5;
+
+        let mut block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                for _ in 1..=jobs_to_create {
+                    block_production.generate_block(Destination::AnyoneCanSpend, TransactionsSource::Provided(vec![])).await;
+                }
+
+                shutdown_trigger.initiate();
+
+                let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+                assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
