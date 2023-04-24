@@ -107,11 +107,11 @@ fn get_output_value<P: PoSAccountingView>(
         }
         TxOutput::StakePool(data) => OutputValue::Coin(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pool_balance = pos_accounting_view
-                .get_pool_balance(*pool_id)
+            let staker_balance = pos_accounting_view
+                .get_staker_balance(*pool_id)
                 .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::PoolBalanceNotFound(*pool_id))?;
-            OutputValue::Coin(pool_balance)
+                .ok_or(ConnectTransactionError::StakerBalanceNotFound(*pool_id))?;
+            OutputValue::Coin(staker_balance)
         }
         TxOutput::DecommissionPool(v, _, _, _) => OutputValue::Coin(*v),
     };

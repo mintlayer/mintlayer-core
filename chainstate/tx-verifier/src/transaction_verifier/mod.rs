@@ -535,8 +535,6 @@ where
         Ok(())
     }
 
-    // FIXME: amount on decommission
-
     /// Distribute block reward among the staker and delegators
     fn distribute_block_reward(
         &mut self,

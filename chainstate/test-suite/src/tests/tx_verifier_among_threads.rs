@@ -72,6 +72,13 @@ impl PoSAccountingView for EmptyAccountingView {
         Ok(None)
     }
 
+    fn get_staker_balance(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<common::primitives::Amount>, pos_accounting::Error> {
+        Ok(None)
+    }
+
     fn get_pool_delegations_shares(
         &self,
         _pool_id: PoolId,

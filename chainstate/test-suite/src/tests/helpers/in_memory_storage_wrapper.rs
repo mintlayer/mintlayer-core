@@ -28,7 +28,7 @@ use common::{
     },
     primitives::{Amount, Id},
 };
-use pos_accounting::{DelegationData, PoSAccountingStorageRead, PoSAccountingView, PoolData};
+use pos_accounting::{DelegationData, PoSAccountingDB, PoSAccountingView, PoolData};
 use utxo::UtxosStorageRead;
 
 pub struct InMemoryStorageWrapper {
@@ -127,43 +127,37 @@ impl PoSAccountingView for InMemoryStorageWrapper {
     }
 
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&self.storage, pool_id)
-            .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_balance(pool_id)
     }
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&self.storage, pool_id)
-            .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_data(pool_id)
+    }
+
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, pos_accounting::Error> {
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_staker_balance(pool_id)
     }
 
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
-            &self.storage,
-            delegation_id,
-        )
-        .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
+            .get_delegation_balance(delegation_id)
     }
 
     fn get_delegation_data(
         &self,
         delegation_id: DelegationId,
     ) -> Result<Option<DelegationData>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_delegation_data(&self.storage, delegation_id)
-            .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_delegation_data(delegation_id)
     }
 
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
     ) -> Result<Option<BTreeMap<DelegationId, Amount>>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_delegations_shares(
-            &self.storage,
-            pool_id,
-        )
-        .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_delegations_shares(pool_id)
     }
 
     fn get_pool_delegation_share(
@@ -171,11 +165,7 @@ impl PoSAccountingView for InMemoryStorageWrapper {
         pool_id: PoolId,
         delegation_id: DelegationId,
     ) -> Result<Option<Amount>, pos_accounting::Error> {
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_delegation_share(
-            &self.storage,
-            pool_id,
-            delegation_id,
-        )
-        .map_err(pos_accounting::Error::StorageError)
+        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage)
+            .get_pool_delegation_share(pool_id, delegation_id)
     }
 }

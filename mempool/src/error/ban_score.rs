@@ -159,7 +159,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
-            ConnectTransactionError::PoolBalanceNotFound(_) => 0,
+            ConnectTransactionError::StakerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::StorageError(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
@@ -259,6 +259,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationCreationFailedPoolDoesNotExist => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
+            E::InvariantErrorDelegationSharesMoreThanPoolBalance => 0,
 
             // Accounting error has to be inspected further
             E::AccountingError(err) => err.mempool_ban_score(),

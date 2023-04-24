@@ -185,6 +185,9 @@ pub trait ChainstateInterface: Send {
     /// Get stake pool data. See [pos_accounting::PoSAccountingView::get_pool_data].
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
 
+    /// Get staker balance. See [pos_accounting::PoSAccountingView::get_staker_balance].
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
+
     /// Get all delegation shares for given stake pool.
     /// See [pos_accounting::PoSAccountingView::get_pool_delegations_shares].
     fn get_stake_pool_delegations_shares(

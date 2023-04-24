@@ -289,6 +289,10 @@ where
         self.deref().get_stake_pool_data(pool_id)
     }
 
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError> {
+        self.deref().get_staker_balance(pool_id)
+    }
+
     fn get_stake_pool_delegations_shares(
         &self,
         pool_id: PoolId,

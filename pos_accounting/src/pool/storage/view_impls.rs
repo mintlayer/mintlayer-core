@@ -25,6 +25,7 @@ use crate::{
     pool::{
         delegation::DelegationData,
         delta::data::PoSAccountingDeltaData,
+        helpers,
         pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
@@ -45,6 +46,10 @@ impl<S: PoSAccountingStorageRead<T>, T: StorageTag> PoSAccountingView for PoSAcc
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Error> {
         self.store.get_pool_data(pool_id).map_err(Error::from)
+    }
+
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+        helpers::calculate_staker_balance(self, pool_id)
     }
 
     fn get_pool_delegations_shares(

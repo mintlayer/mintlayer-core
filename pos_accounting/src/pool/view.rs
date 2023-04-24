@@ -33,6 +33,8 @@ pub trait PoSAccountingView {
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error>;
 
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error>;
+
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,
@@ -76,6 +78,10 @@ where
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, Self::Error> {
         self.deref().get_pool_data(pool_id)
+    }
+
+    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        self.deref().get_staker_balance(pool_id)
     }
 
     fn get_pool_delegations_shares(
