@@ -17,7 +17,7 @@ use std::path::Path;
 
 use assert_cmd::Command;
 
-const BIN_NAME: &str = env!("CARGO_BIN_EXE_node-tui");
+const BIN_NAME: &str = env!("CARGO_BIN_EXE_node-daemon");
 
 // This test is only needed because the node name ix hardcoded here, so if the name is changed we
 // get an error that is easy to understand.
