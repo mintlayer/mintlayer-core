@@ -15,25 +15,11 @@
 
 use std::{net::SocketAddr, num::NonZeroU64, path::Path, str::FromStr};
 
-use assert_cmd::Command;
 use tempfile::TempDir;
 
-use node::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
+use node_lib::{NodeConfigFile, NodeTypeConfigFile, RunOptions, StorageBackendConfigFile};
 
-const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 const CONFIG_NAME: &str = "config.toml";
-
-// This test is only needed because the node name ix hardcoded here, so if the name is changed we
-// get an error that is easy to understand.
-#[test]
-fn node_path_is_correct() {
-    assert!(Path::new(BIN_NAME).is_file());
-}
-
-#[test]
-fn no_args() {
-    Command::new(BIN_NAME).assert().failure();
-}
 
 fn create_empty_file(path: impl AsRef<Path>) {
     let path = path.as_ref();

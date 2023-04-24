@@ -7,7 +7,7 @@ rust-version.workspace = true
 homepage = "https://github.com/mintlayer/mintlayer-core/issues"
 
 [dependencies]
-node = { path = "../node" }
+node-lib = { path = "../node-lib" }
 
 tokio = { workspace = true, features = ['full'] }
 

@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
-node = { path = "../../node" }
+node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
 rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }

@@ -23,7 +23,8 @@ members = [
   "mempool",                      # Mempool interface and implementation.
   "merkletree",                   # Merkle tree implementation with merkle proofs.
   "mocks",                        # Mock implementations of our traits (used for testing)
-  "node",                         # Node executable.
+  "node-lib",                     # Node lib; the common library between daemon, tui and gui node executables.
+  "node-daemon",                  # Node terminal binary.
   "p2p",                          # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",       # P2p backend agnostic tests.
   "pos_accounting",               # PoS accounting and balances abstractions
@@ -57,14 +58,14 @@ default-members = [
   "crypto",
   "logging",
   "mempool",
-  "node",
+  "node-lib",
+  "node-daemon",
   "p2p",
   "rpc",
   "script",
   "serialization",
   "storage",
   "subsystem",
-#  "test",
   "utils",
   "utxo",
   "wallet",
