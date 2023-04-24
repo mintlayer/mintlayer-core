@@ -19,13 +19,14 @@ use blockprod::interface::blockprod_interface::BlockProductionInterface;
 use chainstate_launcher::ChainstateInterface;
 use mempool::MempoolInterface;
 use p2p::interface::p2p_interface::P2pInterface;
-use subsystem::Handle;
+use subsystem::{manager::ShutdownTrigger, Handle};
 
 /// Remote controller for the node subsystems.
 /// It contains handles to the subsystems to be used by components
 /// that are meant to control a new, such as a CLI, GUI or similar.
 #[derive(Clone)]
 pub struct RemoteController {
+    pub shutdown_trigger: ShutdownTrigger,
     pub chainstate: Handle<Box<dyn ChainstateInterface>>,
     pub mempool: Handle<dyn MempoolInterface>,
     pub block_prod: Handle<Box<dyn BlockProductionInterface>>,
@@ -34,6 +35,6 @@ pub struct RemoteController {
 
 impl Debug for RemoteController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RemoteController").finish()
+        f.debug_struct("RemoteController (contents cannot be displayed)").finish()
     }
 }
