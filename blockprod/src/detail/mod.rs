@@ -635,6 +635,8 @@ mod tests {
         join_handle.await.unwrap();
     }
 
+    // TODO: add generate_block() tests with actual transactions
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn stop_all_jobs() {
         let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
