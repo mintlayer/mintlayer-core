@@ -25,6 +25,7 @@ members = [
   "mocks",                        # Mock implementations of our traits (used for testing)
   "node-lib",                     # Node lib; the common library between daemon, tui and gui node executables.
   "node-daemon",                  # Node terminal binary.
+  "node-gui",                     # Node GUI binary.
   "p2p",                          # P2p communication interfaces and protocols.
   "p2p/backend-test-suite",       # P2p backend agnostic tests.
   "pos_accounting",               # PoS accounting and balances abstractions
