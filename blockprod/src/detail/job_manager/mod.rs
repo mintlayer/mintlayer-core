@@ -253,6 +253,7 @@ impl JobManager {
     /// For destructors, we make a job stopper that will send stop signal
     /// Returns both the function and a oneshot-receiver.
     /// Once the job is dropped from the job manager, the receiver will be notified.
+    #[must_use]
     pub fn make_job_stopper_function(
         &self,
     ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>) {
