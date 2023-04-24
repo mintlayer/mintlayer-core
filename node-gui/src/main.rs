@@ -24,7 +24,7 @@ mod dashboard;
 use dashboard::{DashboardMessage, DashboardTab};
 
 mod settings;
-use settings::{SettingsMessage, SettingsTab, TabBarPosition};
+use settings::{SettingsMessage, SettingsTab, TabPosition};
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
@@ -98,8 +98,8 @@ impl Sandbox for MintlayerGUI {
             .tab_bar_style(theme)
             // .icon_font(ICON_FONT)
             .tab_bar_position(match position {
-                TabBarPosition::Top => iced_aw::TabBarPosition::Top,
-                TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
+                TabPosition::Top => iced_aw::TabBarPosition::Top,
+                TabPosition::Bottom => iced_aw::TabBarPosition::Bottom,
             })
             .into()
     }
