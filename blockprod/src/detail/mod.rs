@@ -588,7 +588,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn generate_block_multiple_jobs() {
-        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
         let jobs_to_create = 5;
 
@@ -605,7 +605,12 @@ mod tests {
             let shutdown_trigger = manager.make_shutdown_trigger();
             async move {
                 for _ in 1..=jobs_to_create {
-                    block_production.generate_block(Destination::AnyoneCanSpend, TransactionsSource::Provided(vec![])).await;
+                    _ = block_production
+                        .generate_block(
+                            Destination::AnyoneCanSpend,
+                            TransactionsSource::Provided(vec![]),
+                        )
+                        .await;
                 }
 
                 shutdown_trigger.initiate();
