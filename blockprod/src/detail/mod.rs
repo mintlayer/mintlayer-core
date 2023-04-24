@@ -179,9 +179,19 @@ impl BlockProduction {
     /// that the block production process has ended and that there's no
     /// remnants in the job manager.
     pub async fn produce_block(
-        &mut self,
+        &self,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        self.produce_block_with_custom_id(_reward_destination, transactions_source, None)
+            .await
+    }
+
+    async fn produce_block_with_custom_id(
+        &self,
+        _reward_destination: Destination,
+        transactions_source: TransactionsSource,
+        custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let stop_flag = Arc::new(false.into());
 
@@ -190,7 +200,7 @@ impl BlockProduction {
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
-            self.job_manager.add_job(tip_at_start.block_id()).await?;
+            self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
 
         // At the end of this function, the job has to be removed
         let (job_remover_func, end_confirm_receiver) = self.job_manager.make_job_stopper_function();
@@ -324,6 +334,7 @@ impl BlockProduction {
 mod tests {
     use common::chain::GenBlock;
     use common::primitives::{Id, H256};
+    use crypto::random::Rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
     use mocks::MempoolInterfaceMock;
     use rstest::rstest;
@@ -496,11 +507,11 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
-        let stop_job_key = JobKey::new(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -529,13 +540,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
@@ -565,12 +576,12 @@ mod tests {
         .expect("Error initializing blockprod");
 
         let mut job_keys = Vec::new();
-        let jobs_to_create = 5;
+        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
 
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_job_cancel_receiver) = block_production
                 .job_manager
-                .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+                .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
                 .await
                 .unwrap();
 
@@ -598,13 +609,18 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn generate_block_multiple_jobs() {
+    async fn generate_block_multiple_jobs(#[case] seed: Seed) {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
-        let jobs_to_create = 5;
+        let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
+        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+
+        let block_production = BlockProduction::new(
             chain_config,
             chainstate,
             mempool,
@@ -621,21 +637,21 @@ mod tests {
                     shutdown_trigger.initiate();
                 });
 
-                let mut jobs = vec![];
+                let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
+                    let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
 
-                for _ in 1..=jobs_to_create {
-                    let (_block, job_ended) = block_production
-                        .produce_block(
-                            Destination::AnyoneCanSpend,
-                            TransactionsSource::Provided(vec![]),
-                        )
-                        .await
-                        .unwrap();
+                    block_production.produce_block_with_custom_id(
+                        Destination::AnyoneCanSpend,
+                        TransactionsSource::Provided(vec![]),
+                        Some(id),
+                    )
+                });
 
-                    jobs.push(job_ended);
-                }
+                let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
 
-                for job in jobs {
+                let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
+
+                for (_block, job) in jobs_finished_iter {
                     job.await.unwrap();
                 }
 
@@ -670,13 +686,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (_stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 

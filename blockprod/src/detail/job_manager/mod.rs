@@ -62,6 +62,9 @@ pub struct JobHandle {
     serde::Deserialize,
 )]
 pub struct JobKey {
+    /// The job key is provided in tests to make it possible to run multiple block productions in parallel
+    custom_id: Option<Vec<u8>>,
+    /// The current tip, which will be the "previous block" for the block that will be produced
     current_tip_id: Id<GenBlock>,
     // TODO: in proof of stake, we also add some identifier of the
     // current key so that we don't stake twice from the same key.
@@ -70,8 +73,11 @@ pub struct JobKey {
 }
 
 impl JobKey {
-    pub fn new(current_tip_id: Id<GenBlock>) -> Self {
-        JobKey { current_tip_id }
+    pub fn new(custom_id: Option<Vec<u8>>, current_tip_id: Id<GenBlock>) -> Self {
+        JobKey {
+            custom_id,
+            current_tip_id,
+        }
     }
 
     pub fn current_tip_id(&self) -> Id<GenBlock> {
@@ -80,6 +86,7 @@ impl JobKey {
 }
 
 pub struct NewJobEvent {
+    custom_id: Option<Vec<u8>>,
     current_tip_id: Id<GenBlock>,
     cancel_sender: UnboundedSender<()>,
     result_sender: oneshot::Sender<Result<JobKey, JobManagerError>>,
@@ -197,12 +204,14 @@ impl JobManager {
 
     pub async fn add_job(
         &self,
+        custom_id: Option<Vec<u8>>,
         block_id: Id<GenBlock>,
     ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError> {
         let (result_sender, result_receiver) = oneshot::channel();
         let (cancel_sender, cancel_receiver) = unbounded_channel::<()>();
 
         let job = NewJobEvent {
+            custom_id,
             current_tip_id: block_id,
             cancel_sender,
             result_sender,
