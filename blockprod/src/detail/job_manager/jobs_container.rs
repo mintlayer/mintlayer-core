@@ -95,8 +95,10 @@ impl JobsContainer {
     fn stop_all(&mut self) -> usize {
         let taken_jobs = std::mem::take(&mut self.jobs);
         let count = taken_jobs.len();
-        let stop_results =
-            taken_jobs.into_iter().map(|j| j.1.cancel_sender.send(())).collect::<Vec<_>>();
+        let stop_results = taken_jobs
+            .into_values()
+            .map(|job_handle| job_handle.cancel_sender.send(()))
+            .collect::<Vec<_>>();
 
         let send_fail_count = stop_results.into_iter().filter_map(|r| r.ok()).count();
         if send_fail_count > 0 {
