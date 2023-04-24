@@ -6475,6 +6475,7 @@ dependencies = [
  "node-comm",
  "serialization",
  "thiserror",
+ "tokio",
  "utils",
  "wallet",
  "wallet-storage",

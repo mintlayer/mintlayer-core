@@ -108,6 +108,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     };
 
     let controller = wallet_controller::make_rpc_controller(
+        chain_config,
         rpc_address,
         Some((&rpc_username, &rpc_password)),
         wallet,

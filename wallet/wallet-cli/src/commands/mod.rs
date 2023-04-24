@@ -143,7 +143,7 @@ pub async fn handle_wallet_command(
             let hash =
                 controller.get_block(hash.into()).await.map_err(WalletCliError::Controller)?;
             match hash {
-                Some(block) => println!("{}", block.hex_encode()),
+                Some(block) => cli_println!(output, "{}", block.hex_encode()),
                 None => cli_println!(output, "Not found"),
             }
             Ok(())

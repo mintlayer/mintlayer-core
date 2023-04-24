@@ -17,15 +17,17 @@
 
 pub mod cookie;
 pub mod mnemonic;
+mod sync;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 use node_comm::{handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient};
+use tokio::sync::Mutex;
 use wallet::DefaultWallet;
 
 #[derive(thiserror::Error, Debug)]
@@ -36,14 +38,27 @@ pub enum ControllerError {
 
 pub struct Controller<T> {
     rpc_client: T,
-    _wallet: DefaultWallet,
+    _wallet: Arc<Mutex<DefaultWallet>>,
+    sync_handle: tokio::task::JoinHandle<()>,
 }
 
-impl<T: NodeInterface> Controller<T> {
-    pub fn new(rpc_client: T, wallet: DefaultWallet) -> Self {
+pub type RpcController = Controller<NodeRpcClient>;
+pub type HandlesController = Controller<WalletHandlesClient>;
+
+impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
+    pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
+        let wallet = Arc::new(Mutex::new(wallet));
+
+        let sync_handle = tokio::spawn(sync::run_sync(
+            chain_config,
+            rpc_client.clone(),
+            Arc::clone(&wallet),
+        ));
+
         Self {
             rpc_client,
             _wallet: wallet,
+            sync_handle,
         }
     }
 
@@ -149,10 +164,15 @@ impl<T: NodeInterface> Controller<T> {
     }
 }
 
-pub type RpcController = Controller<NodeRpcClient>;
-pub type HandlesController = Controller<WalletHandlesClient>;
+impl<T> Drop for Controller<T> {
+    fn drop(&mut self) {
+        // TODO: Wait for the sync task to stop
+        self.sync_handle.abort();
+    }
+}
 
 pub async fn make_rpc_controller(
+    chain_config: Arc<ChainConfig>,
     remote_socket_address: SocketAddr,
     username_password: Option<(&str, &str)>,
     wallet: DefaultWallet,
@@ -160,5 +180,5 @@ pub async fn make_rpc_controller(
     let rpc_client = make_rpc_client(remote_socket_address, username_password)
         .await
         .map_err(|e| ControllerError::RpcError(e.to_string()))?;
-    Ok(Controller::new(rpc_client, wallet))
+    Ok(Controller::new(chain_config, rpc_client, wallet))
 }

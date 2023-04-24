@@ -23,6 +23,7 @@ use serialization::hex::{HexDecode, HexError};
 
 use crate::node_traits::NodeInterface;
 
+#[derive(Clone)]
 pub struct WalletHandlesClient {
     chainstate_handle: ChainstateHandle,
 }

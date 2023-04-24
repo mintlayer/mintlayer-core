@@ -34,6 +34,7 @@ pub enum NodeRpcError {
     ResponseError(jsonrpsee::core::Error),
 }
 
+#[derive(Clone)]
 pub struct NodeRpcClient {
     http_client: HttpClient<HttpBackend>,
 }
