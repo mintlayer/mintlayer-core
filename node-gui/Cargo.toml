@@ -11,3 +11,5 @@ node-lib = { path = "../node-lib" }
 
 iced = "0.9"
 iced_aw = "0.5"
+
+tokio = { workspace = true, default-features = false }

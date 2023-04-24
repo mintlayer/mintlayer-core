@@ -3585,6 +3585,7 @@ dependencies = [
  "iced",
  "iced_aw",
  "node-lib",
+ "tokio",
 ]
 
 [[package]]

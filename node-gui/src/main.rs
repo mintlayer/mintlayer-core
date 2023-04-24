@@ -48,7 +48,8 @@ impl From<Icon> for char {
     }
 }
 
-fn main() -> iced::Result {
+#[tokio::main]
+async fn main() -> iced::Result {
     MintlayerGUI::run(Settings::default())
 }
 
