@@ -19,15 +19,15 @@ use std::{
 };
 
 use common::{
-    chain::{OutPoint, SignedTransaction, Transaction, TxOutput},
-    primitives::{Amount, Id, Idable},
+    chain::{OutPoint, SignedTransaction, Transaction},
+    primitives::{Id, Idable},
 };
 use logging::log;
 use serialization::Encode;
 use utils::newtype;
 
 use super::{fee::Fee, Time};
-use crate::error::{Error, TxValidationError};
+use crate::error::MempoolPolicyError;
 
 newtype! {
     #[derive(Debug)]
@@ -139,37 +139,6 @@ impl MempoolStore {
         self.txs_by_id.is_empty()
     }
 
-    /// unconfirmed means: The outpoint comes from a transaction in the mempool
-    pub fn get_unconfirmed_outpoint_value(
-        &self,
-        spending_tx_id_for_error_msg: &Id<Transaction>,
-        outpoint: &OutPoint,
-    ) -> Result<Amount, TxValidationError> {
-        let make_err = || TxValidationError::OutPointNotFound {
-            outpoint: outpoint.clone(),
-            spending_tx_id: *spending_tx_id_for_error_msg,
-        };
-        let tx_id = *outpoint.tx_id().get_tx_id().ok_or_else(make_err)?;
-        self.txs_by_id.get(&tx_id).ok_or_else(make_err).and_then(|entry| {
-            let output = entry
-                .tx
-                .transaction()
-                .outputs()
-                .get(outpoint.output_index() as usize)
-                .ok_or_else(make_err)?;
-            match output {
-                TxOutput::Transfer(v, _)
-                | TxOutput::LockThenTransfer(v, _, _)
-                | TxOutput::Burn(v) => Ok(v.coin_amount().unwrap_or(Amount::ZERO)),
-                TxOutput::StakePool(data) => Ok(data.value()),
-                TxOutput::ProduceBlockFromStake(_, _) => {
-                    Err(TxValidationError::ProduceBlockOutputInTx(tx_id))
-                }
-                TxOutput::DecommissionPool(v, _, _, _) => Ok(*v),
-            }
-        })
-    }
-
     pub fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
         self.txs_by_id.get(id)
     }
@@ -225,11 +194,14 @@ impl MempoolStore {
         }
     }
 
-    fn update_ancestor_state_for_add(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
+    fn update_ancestor_state_for_add(
+        &mut self,
+        entry: &TxMempoolEntry,
+    ) -> Result<(), MempoolPolicyError> {
         for ancestor in entry.unconfirmed_ancestors(self).0 {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
-                .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?;
+                .ok_or(MempoolPolicyError::AncestorFeeUpdateOverflow)?;
             ancestor.size_with_descendants += entry.size();
             ancestor.count_with_descendants += 1;
         }
@@ -257,7 +229,7 @@ impl MempoolStore {
         self.spender_txs.retain(|_, id| *id != entry.tx_id())
     }
 
-    pub fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
+    pub fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolPolicyError> {
         self.append_to_parents(&entry);
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
@@ -490,7 +462,7 @@ impl TxMempoolEntry {
         parents: BTreeSet<Id<Transaction>>,
         ancestors: BTreeSet<TxMempoolEntry>,
         creation_time: Time,
-    ) -> Result<TxMempoolEntry, TxValidationError> {
+    ) -> Result<TxMempoolEntry, MempoolPolicyError> {
         let size_with_ancestors: usize =
             ancestors.iter().map(|ancestor| ancestor.tx().encoded_size()).sum::<usize>()
                 + tx.encoded_size();
@@ -498,9 +470,9 @@ impl TxMempoolEntry {
             .iter()
             .map(|ancestor| ancestor.fee())
             .sum::<Option<_>>()
-            .ok_or(TxValidationError::AncestorFeeOverflow)?;
+            .ok_or(MempoolPolicyError::AncestorFeeOverflow)?;
         let fees_with_ancestors =
-            (fee + ancestor_fees).ok_or(TxValidationError::AncestorFeeOverflow)?;
+            (fee + ancestor_fees).ok_or(MempoolPolicyError::AncestorFeeOverflow)?;
         Ok(Self {
             size_with_ancestors,
             count_with_ancestors: 1 + ancestors.len(),
@@ -613,11 +585,11 @@ impl TxMempoolEntry {
     pub fn unconfirmed_ancestors_from_parents(
         parents: BTreeSet<Id<Transaction>>,
         store: &MempoolStore,
-    ) -> Result<Ancestors, TxValidationError> {
+    ) -> Result<Ancestors, MempoolPolicyError> {
         let mut ancestors = BTreeSet::new();
         for parent in parents {
             ancestors.insert(parent);
-            let parent = store.get_entry(&parent).ok_or(TxValidationError::GetParentError)?;
+            let parent = store.get_entry(&parent).ok_or(MempoolPolicyError::GetParentError)?;
             let parent_ancestors = parent.unconfirmed_ancestors(store).0;
             ancestors.extend(parent_ancestors);
         }

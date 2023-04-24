@@ -25,7 +25,7 @@ use common::chain::{
     block::{timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
-    OutPointSourceId, TxMainChainIndex, TxOutput,
+    OutPointSourceId, TxMainChainIndex,
 };
 use common::chain::{OutPoint, Transaction};
 use common::{
@@ -236,13 +236,6 @@ where
         inputs: &[TxInput],
     ) -> Result<Vec<Option<Amount>>, ChainstateError> {
         self.deref().get_inputs_outpoints_coin_amount(inputs)
-    }
-
-    fn get_outputs_coin_amount(
-        &self,
-        outputs: &[TxOutput],
-    ) -> Result<Vec<Option<Amount>>, ChainstateError> {
-        self.deref().get_outputs_coin_amount(outputs)
     }
 
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError> {
