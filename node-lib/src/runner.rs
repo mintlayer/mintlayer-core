@@ -145,6 +145,7 @@ pub async fn initialize(
 
     if let Some(sender) = remote_controller_sender {
         let remote_controller = RemoteController {
+            shutdown_trigger: manager.make_shutdown_trigger(),
             chainstate: chainstate.clone(),
             block_prod: block_prod.clone(),
             mempool: mempool.clone(),
