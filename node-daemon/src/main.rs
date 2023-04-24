@@ -17,7 +17,7 @@ pub async fn run() -> anyhow::Result<()> {
     let opts = node_lib::Options::from_args(std::env::args_os());
     logging::init_logging::<&std::path::Path>(None);
     logging::log::info!("Command line options: {opts:?}");
-    node_lib::run(opts).await
+    node_lib::run(opts, None).await
 }
 
 #[tokio::main]

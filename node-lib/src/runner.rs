@@ -39,6 +39,7 @@ use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
 
 use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
+use tokio::sync::oneshot;
 use utils::default_data_dir::prepare_data_dir;
 
 use crate::{
@@ -46,6 +47,7 @@ use crate::{
     mock_time::set_mock_time,
     options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
+    remote_controller::RemoteController,
 };
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
@@ -53,6 +55,7 @@ pub async fn initialize(
     chain_config: ChainConfig,
     data_dir: PathBuf,
     node_config: NodeConfigFile,
+    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
 ) -> Result<subsystem::Manager> {
     let chain_config = Arc::new(chain_config);
 
@@ -131,20 +134,33 @@ pub async fn initialize(
                     manager.make_shutdown_trigger(),
                     chain_config,
                 ))
-                .register(block_prod.into_rpc())
+                .register(block_prod.clone().into_rpc())
                 .register(chainstate.clone().into_rpc())
-                .register(mempool.into_rpc())
+                .register(mempool.clone().into_rpc())
                 .register(p2p.clone().into_rpc())
                 .build()
                 .await?,
         );
     }
 
+    if let Some(sender) = remote_controller_sender {
+        let remote_controller = RemoteController {
+            chainstate: chainstate.clone(),
+            block_prod: block_prod.clone(),
+            mempool: mempool.clone(),
+            p2p: p2p.clone(),
+        };
+        sender.send(remote_controller).expect("RemoteController channel closed");
+    }
+
     Ok(manager)
 }
 
 /// Processes options and potentially runs the node.
-pub async fn run(options: Options) -> Result<()> {
+pub async fn run(
+    options: Options,
+    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
+) -> Result<()> {
     match options.command {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();
@@ -153,6 +169,7 @@ pub async fn run(options: Options) -> Result<()> {
                 &options.data_dir,
                 run_options,
                 chain_config,
+                remote_controller_sender,
             )
             .await
         }
@@ -163,6 +180,7 @@ pub async fn run(options: Options) -> Result<()> {
                 &options.data_dir,
                 run_options,
                 chain_config,
+                remote_controller_sender,
             )
             .await
         }
@@ -173,6 +191,7 @@ pub async fn run(options: Options) -> Result<()> {
                 &options.data_dir,
                 &regtest_options.run_options,
                 chain_config,
+                remote_controller_sender,
             )
             .await
         }
@@ -194,6 +213,7 @@ async fn start(
     datadir_path_opt: &Option<PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
+    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
 ) -> Result<()> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
@@ -210,7 +230,13 @@ async fn start(
     let _lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let manager = initialize(chain_config, data_dir, node_config).await?;
+    let manager = initialize(
+        chain_config,
+        data_dir,
+        node_config,
+        remote_controller_sender,
+    )
+    .await?;
     manager.main().await;
 
     Ok(())
