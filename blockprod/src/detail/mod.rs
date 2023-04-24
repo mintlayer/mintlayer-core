@@ -573,11 +573,19 @@ mod tests {
             job_keys.push(job_key)
         }
 
-        assert_eq!(job_keys.len(), jobs_to_create, "Failed to create {jobs_to_create} jobs");
+        assert_eq!(
+            job_keys.len(),
+            jobs_to_create,
+            "Failed to create {jobs_to_create} jobs"
+        );
 
         while !job_keys.is_empty() {
             let current_jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-            assert_eq!(current_jobs_count, job_keys.len(), "Jobs count is incorrect");
+            assert_eq!(
+                current_jobs_count,
+                job_keys.len(),
+                "Jobs count is incorrect"
+            );
 
             let job_key = job_keys.pop().unwrap();
 
