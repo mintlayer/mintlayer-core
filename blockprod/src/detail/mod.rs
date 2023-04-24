@@ -474,6 +474,11 @@ mod tests {
         let join_handle = tokio::spawn({
             let shutdown_trigger = manager.make_shutdown_trigger();
             async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
                 let accumulator = block_production.collect_transactions().await;
 
                 let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
@@ -483,8 +488,6 @@ mod tests {
                     accumulator.is_ok(),
                     "Expected collect_transactions() to succeed"
                 );
-
-                shutdown_trigger.initiate();
             }
         });
 
