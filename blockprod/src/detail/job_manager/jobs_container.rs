@@ -105,6 +105,7 @@ impl JobsContainer {
             log::info!("Sending stop jobs for block production failed for {send_fail_count}");
         }
 
+        // We don't do `count - send_fail_count` because the failures are in sending, not in stopping. The jobs are assumed to have been stopped already.
         count
     }
 
