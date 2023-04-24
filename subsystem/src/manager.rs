@@ -366,7 +366,7 @@ impl Manager {
     /// This method should always be used instead of spawning a task manually because it prevents
     /// an incorrect usage. The returned handle must be joined to ensure a proper subsystems
     /// shutdown.
-    pub fn run_in_task(self) -> ManagerJoinHandle {
+    pub fn main_in_task(self) -> ManagerJoinHandle {
         let handle = Some(tokio::spawn(async move { self.main().await }));
         ManagerJoinHandle { handle }
     }

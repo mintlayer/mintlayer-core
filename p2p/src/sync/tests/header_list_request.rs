@@ -18,7 +18,6 @@ use std::{iter, sync::Arc};
 use chainstate::{ban_score::BanScore, Locator};
 use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
-use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -55,12 +54,10 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -80,6 +77,8 @@ async fn max_locator_size_exceeded(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::LocatorSizeExceeded(0, 0)).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -99,12 +98,10 @@ async fn valid_request(#[case] seed: Seed) {
         .chainstate
         .get_locator_from_height(block_index.block_height().prev_height().unwrap())
         .unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -125,4 +122,6 @@ async fn valid_request(#[case] seed: Seed) {
     assert_eq!(headers.len(), 1);
     assert_eq!(&headers[0], block_index.block_header());
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }

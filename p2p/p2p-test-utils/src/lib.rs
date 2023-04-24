@@ -27,13 +27,14 @@ use common::{
     primitives::Idable,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
-use subsystem::manager::ManagerJoinHandle;
+use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
 pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     MempoolHandle,
+    ShutdownTrigger,
     ManagerJoinHandle,
 ) {
     let chainstate = make_chainstate(
@@ -54,9 +55,11 @@ pub async fn start_subsystems_with_chainstate(
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     MempoolHandle,
+    ShutdownTrigger,
     ManagerJoinHandle,
 ) {
     let mut manager = subsystem::Manager::new("p2p-test-manager");
+    let shutdown_trigger = manager.make_shutdown_trigger();
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
@@ -70,9 +73,9 @@ pub async fn start_subsystems_with_chainstate(
         move |call, shutdn| mempool.run(call, shutdn)
     });
 
-    let manager_handle = manager.run_in_task();
+    let manager_handle = manager.main_in_task();
 
-    (chainstate, mempool, manager_handle)
+    (chainstate, mempool, shutdown_trigger, manager_handle)
 }
 
 pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {

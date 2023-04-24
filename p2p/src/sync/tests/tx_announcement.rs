@@ -25,7 +25,6 @@ use common::{
     primitives::{Amount, Id, Idable},
 };
 use mempool::error::{Error as MempoolError, TxValidationError};
-use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -65,14 +64,12 @@ async fn invalid_transaction(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -143,8 +140,6 @@ async fn no_transaction_service(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -172,7 +167,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -206,8 +201,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -235,7 +228,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -269,14 +262,12 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -322,14 +313,12 @@ async fn valid_transaction(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 

@@ -24,6 +24,8 @@ async fn connect_peer() {
 
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
+
+    handle.join_subsystem_manager().await;
 }
 
 // Check that the attempt to connect the peer twice results in an error.
@@ -39,6 +41,8 @@ async fn connect_peer_twice() {
         P2pError::PeerError(PeerError::PeerAlreadyExists),
         handle.error().await
     );
+
+    handle.join_subsystem_manager().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -60,4 +64,6 @@ async fn disconnect_peer() {
     handle.connect_peer(peer).await;
     handle.disconnect_peer(peer);
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }

@@ -26,7 +26,6 @@ use common::{
     primitives::Idable,
 };
 use consensus::ConsensusVerificationError;
-use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -51,12 +50,10 @@ async fn nonexistent_peer(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -84,12 +81,10 @@ async fn unknown_prev_block(#[case] seed: Seed) {
         .build();
     let block_1 = tf.make_block_builder().build();
     let block_2 = tf.make_block_builder().with_parent(block_1.get_id().into()).build();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -208,8 +203,6 @@ async fn unconnected_headers(#[case] seed: Seed) {
         .build();
     let block = tf.make_block_builder().build();
     let orphan_block = tf.make_block_builder().with_parent(block.get_id().into()).build();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -237,7 +230,7 @@ async fn unconnected_headers(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -284,12 +277,10 @@ async fn valid_block(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool, subsystem_manager_handle) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool, subsystem_manager_handle)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
