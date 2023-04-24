@@ -280,8 +280,10 @@ impl BlockProduction {
                         stop_flag,
                     );
 
-                    // This can fail if the function exited before the mining thread finished
-                    let _send_whether_ended = ended_sender.send(());
+                    let _ended_sender = OnceDestructor::new(move || {
+                        // This can fail if the function exited before the mining thread finished
+                        let _send_whether_ended = ended_sender.send(());
+                    });
 
                     result_sender
                         .send(block_header)
