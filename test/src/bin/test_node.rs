@@ -19,5 +19,5 @@ use std::env;
 async fn main() -> Result<(), node_lib::Error> {
     let opts = node_lib::Options::from_args(env::args_os());
     node_lib::init_logging(&opts);
-    node_lib::run(opts).await
+    node_lib::run(opts, None).await
 }
