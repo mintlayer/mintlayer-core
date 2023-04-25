@@ -45,14 +45,11 @@ pub struct WalletTx {
 }
 
 impl WalletTx {
-    pub fn new(tx: Transaction, state: TxState) -> Self {
-        WalletTx {
-            tx: WithId::new(tx),
-            state,
-        }
+    pub fn new(tx: WithId<Transaction>, state: TxState) -> Self {
+        WalletTx { tx, state }
     }
 
-    pub fn get_tx(&self) -> &Transaction {
+    pub fn get_tx(&self) -> &WithId<Transaction> {
         &self.tx
     }
 
