@@ -22,7 +22,7 @@ pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait NodeInterface {
-    type Error: std::error::Error;
+    type Error: std::error::Error + Send;
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
