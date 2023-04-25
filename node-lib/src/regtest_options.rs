@@ -17,7 +17,7 @@ use clap::Args;
 
 use crate::RunOptions;
 
-#[derive(Args, Debug)]
+#[derive(Args, Clone, Debug)]
 pub struct RegtestOptions {
     #[clap(flatten)]
     pub run_options: RunOptions,
@@ -25,7 +25,7 @@ pub struct RegtestOptions {
     pub chain_config: ChainConfigOptions,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Clone, Debug)]
 pub struct ChainConfigOptions {
     /// Address prefix.
     #[clap(long)]

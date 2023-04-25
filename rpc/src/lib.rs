@@ -154,7 +154,15 @@ impl Rpc {
 
         let websocket = match ws_bind_addr {
             Some(bind_addr) => {
-                let ws_server = ServerBuilder::new()
+                let ws_server: jsonrpsee::server::Server<
+                    tower::layer::util::Stack<
+                        tower::util::Either<
+                            ValidateRequestHeaderLayer<RpcAuth>,
+                            tower::layer::util::Identity,
+                        >,
+                        tower::layer::util::Identity,
+                    >,
+                > = ServerBuilder::new()
                     .set_middleware(middleware)
                     .ws_only()
                     .build(bind_addr)

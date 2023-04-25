@@ -57,7 +57,7 @@ pub async fn initialize(
     node_config: NodeConfigFile,
     remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
 ) -> Result<subsystem::Manager> {
-    let chain_config = Arc::new(chain_config);
+    let chain_config: Arc<ChainConfig> = Arc::new(chain_config);
 
     // INITIALIZE SUBSYSTEMS
 
@@ -162,7 +162,8 @@ pub async fn run(
     options: Options,
     remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
 ) -> Result<subsystem::Manager> {
-    match options.command {
+    let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
+    match command {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();
             start(
@@ -231,7 +232,7 @@ async fn start(
     let _lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
-    let manager = initialize(
+    let manager: subsystem::Manager = initialize(
         chain_config,
         data_dir,
         node_config,

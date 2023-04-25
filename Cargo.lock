@@ -3583,10 +3583,13 @@ dependencies = [
 name = "node-gui"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "common",
  "iced",
  "iced_aw",
+ "logging",
  "node-lib",
+ "subsystem",
  "tokio",
 ]
 
