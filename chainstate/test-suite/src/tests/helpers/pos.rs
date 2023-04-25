@@ -113,7 +113,7 @@ pub fn create_stake_pool_data(
         anyonecanspend_address(),
         vrf_pk,
         destination,
-        0,
+        1000,
         Amount::ZERO,
     )
 }

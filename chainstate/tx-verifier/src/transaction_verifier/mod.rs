@@ -544,7 +544,7 @@ where
                 let undos = reward_distribution::distribute_reward(
                     &mut self.accounting_delta_adapter,
                     block_id,
-                    pos_data.as_ref(),
+                    *pos_data.stake_pool_id(),
                     total_reward,
                 )?;
 

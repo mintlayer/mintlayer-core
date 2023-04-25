@@ -97,7 +97,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &TransactionSourceForConnect::Chain {
                             new_block_index: block_index,
                         },
-                        &tx,
+                        tx,
                         &median_time_past,
                         take_front_tx_index(&mut tx_indices),
                     )
