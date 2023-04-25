@@ -113,12 +113,22 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRw<B>,
         account_index: ChildNumber,
     ) -> KeyChainResult<AccountKeyChain> {
+        self.create_account_key_chain_with_lookahead(db_tx, account_index, LOOKAHEAD_SIZE)
+    }
+
+    #[allow(dead_code)] // TODO remove
+    pub fn create_account_key_chain_with_lookahead<B: Backend>(
+        &self,
+        db_tx: &mut StoreTxRw<B>,
+        account_index: ChildNumber,
+        lookahead_size: u32,
+    ) -> KeyChainResult<AccountKeyChain> {
         AccountKeyChain::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
             &self.root_key,
             account_index,
-            LOOKAHEAD_SIZE,
+            lookahead_size,
         )
     }
 

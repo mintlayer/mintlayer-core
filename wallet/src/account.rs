@@ -175,7 +175,7 @@ impl Account {
         wallet_tx: &WalletTx,
     ) -> WalletResult<()> {
         let tx = wallet_tx.get_tx();
-        for i in 0..tx.outputs().len() {
+        for (i, _) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
             self.utxo.remove(&outpoint);
             db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
