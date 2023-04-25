@@ -63,6 +63,7 @@ impl Default for ManagerConfig {
 /// An application is composed of a number of long-lived subsystems. The [Manager] type starts
 /// and manages the life cycle of the subsystems. Whenever a subsystem exits, all other subsystems
 /// are requested to terminate and the manager is shut down.
+#[must_use]
 pub struct Manager {
     // Manager name
     name: &'static str,
