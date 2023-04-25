@@ -48,9 +48,30 @@ impl From<Icon> for char {
     }
 }
 
+pub async fn initialize() -> anyhow::Result<subsystem::Manager> {
+    let opts = node_lib::Options::from_args(std::env::args_os());
+    logging::init_logging::<&std::path::Path>(None);
+    logging::log::info!("Command line options: {opts:?}");
+    node_lib::run(opts, None).await
+}
+
 #[tokio::main]
 async fn main() -> iced::Result {
-    MintlayerGUI::run(Settings::default())
+    let manager = initialize().await.expect("Node initialization failed");
+    let shutdown_trigger = manager.make_shutdown_trigger();
+
+    let manager_join_handle = tokio::spawn(async move { manager.main().await });
+
+    tokio::task::block_in_place(|| MintlayerGUI::run(Settings::default()))?;
+
+    shutdown_trigger.initiate();
+
+    {
+        let err = "Joining subsystem manager failed. Clean shutdown couldn't be performed.";
+        manager_join_handle.await.expect(err);
+    }
+
+    Ok(())
 }
 
 struct MintlayerGUI {

@@ -7,8 +7,11 @@ edition = "2021"
 
 [dependencies]
 common = { path = '../common' }
+logging = { path = "../logging" }
 node-lib = { path = "../node-lib" }
+subsystem = { path = "../subsystem" }
 
+anyhow = "1.0"
 iced = "0.9"
 iced_aw = "0.5"
 
