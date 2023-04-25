@@ -165,7 +165,7 @@ impl RandomizedTransactionVerificationStrategy {
 
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
-        let mut total_fee = Amount::ZERO;
+        let mut total_fees = Amount::ZERO;
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
             if self.rng.borrow_mut().gen::<bool>() {
@@ -179,7 +179,7 @@ impl RandomizedTransactionVerificationStrategy {
                     tx_num,
                 )?;
 
-                total_fee = (total_fee + fee).ok_or_else(|| {
+                total_fees = (total_fees + fee).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
 
@@ -202,13 +202,14 @@ impl RandomizedTransactionVerificationStrategy {
         }
 
         tx_verifier
-            .check_block_reward(block, Fee(total_fee), Subsidy(block_subsidy))
+            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
         tx_verifier
             .connect_block_reward(
                 block_index,
                 block.block_reward_transactable(),
+                Fee(total_fees),
                 block_reward_tx_index,
             )
             .log_err()?;
@@ -233,7 +234,7 @@ impl RandomizedTransactionVerificationStrategy {
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
-        let mut total_fee = Amount::ZERO;
+        let mut total_fees = Amount::ZERO;
         while tx_num < block.transactions().len() {
             if self.rng.borrow_mut().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
@@ -249,14 +250,14 @@ impl RandomizedTransactionVerificationStrategy {
                     take_front_tx_index(tx_indices),
                 )?;
 
-                total_fee = (total_fee + fee.0).ok_or_else(|| {
+                total_fees = (total_fees + fee.0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
                 tx_num += 1;
             }
         }
         let cache = tx_verifier.consume()?;
-        Ok((cache, total_fee, tx_num))
+        Ok((cache, total_fees, tx_num))
     }
 
     fn disconnect_with_base<C, S, M, U, A>(

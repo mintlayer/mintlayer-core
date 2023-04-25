@@ -116,6 +116,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .connect_block_reward(
                 block_index,
                 block.block_reward_transactable(),
+                Fee(total_fees),
                 block_reward_tx_index,
             )
             .log_err()?;

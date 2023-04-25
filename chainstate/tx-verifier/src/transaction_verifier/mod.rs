@@ -302,6 +302,7 @@ where
             &self.accounting_delta_adapter.accounting_delta(),
             &block.block_reward_transactable(),
             block.get_id(),
+            block.consensus_data(),
             total_fees,
             block_subsidy_at_height,
         )
@@ -477,6 +478,7 @@ where
         &mut self,
         block_index: &BlockIndex,
         reward_transactable: BlockRewardTransactable,
+        total_fees: Fee,
         tx_index: Option<TxMainChainIndex>,
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
@@ -530,17 +532,20 @@ where
             )?;
         }
 
-        // distribute subsidy among staker and delegators
         match block_index.block_header().consensus_data() {
             ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
             ConsensusData::PoS(pos_data) => {
+                // distribute subsidy among staker and delegators
                 let block_subsidy =
                     self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
+                let total_reward = (block_subsidy + total_fees.0)
+                    .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+
                 let undos = reward_distribution::distribute_reward(
                     &mut self.accounting_delta_adapter,
                     block_id,
                     pos_data.as_ref(),
-                    block_subsidy,
+                    total_reward,
                 )?;
 
                 self.accounting_block_undo

@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     amount_sum,
     chain::{
-        block::BlockRewardTransactable,
+        block::{BlockRewardTransactable, ConsensusData},
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
         Block, OutPointSourceId, Transaction, TxInput, TxOutput,
@@ -251,6 +251,7 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     pos_accounting_view: &P,
     block_reward_transactable: &BlockRewardTransactable,
     block_id: Id<Block>,
+    consensus_data: &ConsensusData,
     total_fees: Fee,
     block_subsidy_at_height: Subsidy,
 ) -> Result<(), ConnectTransactionError> {
@@ -278,14 +279,21 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
         },
     )?;
 
-    // FIXME: this is wrong, no tests?
-    let max_allowed_outputs_total =
-        amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
-            .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?;
+    let max_allowed_outputs_total = match consensus_data {
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
+                .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?
+        }
+        ConsensusData::PoS(_) => {
+            // TODO: it doesn't actually make much sense to check amounts for PoS, because reward doesn't
+            // transfer anything in terms of utxos.
+            inputs_total
+        }
+    };
 
     ensure!(
         outputs_total <= max_allowed_outputs_total,
-        ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total,)
+        ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total)
     );
     Ok(())
 }

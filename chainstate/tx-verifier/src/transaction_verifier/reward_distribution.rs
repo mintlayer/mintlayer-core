@@ -25,7 +25,6 @@ use pos_accounting::{AccountingBlockRewardUndo, PoSAccountingOperations, PoSAcco
 use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
 
 /// Distribute subsidy among the staker and delegators
-// FIXME: add total fee
 pub fn distribute_reward<P: PoSAccountingView>(
     accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
     block_id: Id<Block>,
