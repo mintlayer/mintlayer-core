@@ -115,11 +115,11 @@ pub trait ChainstateInterface: Send {
         first_block_index: &GenBlockIndex,
         second_block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, ChainstateError>;
-    fn last_common_height(
+    fn last_common_block(
         &self,
         first_block: &Id<GenBlock>,
         second_block: &Id<GenBlock>,
-    ) -> Result<Option<BlockHeight>, ChainstateError>;
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, ChainstateError>;
     fn get_block_reward(
         &self,
         block_index: &BlockIndex,

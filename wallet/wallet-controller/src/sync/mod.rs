@@ -38,66 +38,44 @@ async fn sync_blocks<T: NodeInterface>(
 ) -> Result<bool, SyncError> {
     // TODO: Make it more efficient: download blocks concurrently and send fewer requests
 
-    let wallet_block_height_opt = wallet
-        .lock()
+    let (wallet_block_id, wallet_block_height) =
+        wallet.lock().await.get_best_block().map_err(SyncError::UnexpectedWalletError)?;
+
+    let node_best_block = rpc_client
+        .get_best_block_id()
         .await
-        .get_best_block_height()
-        .map_err(SyncError::UnexpectedWalletError)?;
-    let wallet_block_height = match wallet_block_height_opt {
-        Some(height) => height,
+        .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
+
+    let common_block_opt = rpc_client
+        .get_last_common_block(wallet_block_id, node_best_block)
+        .await
+        .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
+
+    let (common_block_id, common_block_height) = match common_block_opt {
+        Some(common_block) => common_block,
         None => {
-            wallet.lock().await.scan_genesis().map_err(SyncError::UnexpectedWalletError)?;
+            // No common block found for some reason. This can happen if the wallet is on an abandoned chain
+            // and the node has never seen this chain before. Reset the wallet to the genesis and start over.
+            wallet
+                .lock()
+                .await
+                .reset_to_height(chain_config.genesis_block_id(), BlockHeight::zero())
+                .map_err(SyncError::UnexpectedWalletError)?;
             return Ok(true);
         }
     };
 
-    if wallet_block_height > BlockHeight::zero() {
-        let wallet_best_block = wallet
+    if common_block_height < wallet_block_height {
+        // Reset the wallet state to some previous block and start over
+        logging::log::debug!(
+            "Reorg detected, reset from {wallet_block_height} to {common_block_height}"
+        );
+        wallet
             .lock()
             .await
-            .get_block_hash(wallet_block_height)
-            .map_err(SyncError::UnexpectedWalletError)?
-            .expect("block id is expected to be known to the wallet");
-
-        let node_best_block = rpc_client
-            .get_best_block_id()
-            .await
-            .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
-
-        let common_height_opt = rpc_client
-            .get_last_common_height(wallet_best_block.into(), node_best_block)
-            .await
-            .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
-        let common_height = match common_height_opt {
-            Some(heigth) => heigth,
-            None => {
-                // No common block found for some reason. This can happen if the wallet is on an abandoned chain
-                // and the node has never seen it before. Reset the wallet to an older block and start over.
-                let prev_height = wallet_block_height
-                    .prev_height()
-                    .expect("Must succeed because `wallet_block_height` is greater than zero");
-                logging::log::debug!(
-                    "No common block found, reset wallet to {wallet_block_height}"
-                );
-                wallet
-                    .lock()
-                    .await
-                    .reset_to_height(prev_height)
-                    .map_err(SyncError::UnexpectedWalletError)?;
-                return Ok(true);
-            }
-        };
-
-        if common_height < wallet_block_height {
-            logging::log::debug!(
-                "Reorg detected, reset from {wallet_block_height} to {common_height}"
-            );
-            wallet
-                .lock()
-                .await
-                .reset_to_height(common_height)
-                .map_err(SyncError::UnexpectedWalletError)?;
-        }
+            .reset_to_height(common_block_id, common_block_height)
+            .map_err(SyncError::UnexpectedWalletError)?;
+        return Ok(true);
     }
 
     let next_block_height = wallet_block_height.next_height();

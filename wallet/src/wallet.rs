@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 pub use bip39::{Language, Mnemonic};
-use common::chain::{Block, ChainConfig, SignedTransaction, Transaction};
+use common::chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction};
 use common::primitives::{BlockHeight, Id};
 use wallet_storage::{
     DefaultBackend, Store, TransactionRw, Transactional, WalletStorageRead, WalletStorageWrite,
@@ -117,22 +117,13 @@ impl<B: storage::Backend> Wallet<B> {
         &self.db
     }
 
-    /// Returns the last scanned block height (none if no blocks were scanned and 0 if only the genesis block was scanned)
-    pub fn get_best_block_height(&self) -> WalletResult<Option<BlockHeight>> {
+    /// Returns the last scanned block hash and height (none if no blocks were scanned).
+    /// Geneses block must be already scanned when the wallet is created.
+    pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
         Err(WalletError::NotImplemented)
     }
 
-    /// Returns the block hash from the specified height
-    pub fn get_block_hash(&self, _height: BlockHeight) -> WalletResult<Option<Id<Block>>> {
-        Err(WalletError::NotImplemented)
-    }
-
-    /// Scan reward outputs from the genesis block
-    pub fn scan_genesis(&mut self) -> WalletResult<()> {
-        Err(WalletError::NotImplemented)
-    }
-
-    /// Scan new blocks, store block hashes, and update best block height.
+    /// Scan new blocks and update best block hash/height.
     /// New block must continue the chain of previously scanned blocks.
     pub fn scan_new_blocks(&mut self, _blocks: Vec<Block>) -> WalletResult<()> {
         Err(WalletError::NotImplemented)
@@ -140,7 +131,11 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Resets the wallet state to a lower block height, removing transactions and UTXOs from the dropped blocks.
     /// Used when a chain reorg is detected.
-    pub fn reset_to_height(&mut self, _height: BlockHeight) -> WalletResult<()> {
+    pub fn reset_to_height(
+        &mut self,
+        _block_id: Id<GenBlock>,
+        _height: BlockHeight,
+    ) -> WalletResult<()> {
         Err(WalletError::NotImplemented)
     }
 

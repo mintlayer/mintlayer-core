@@ -199,12 +199,12 @@ where
         self.deref().last_common_ancestor(first_block_index, second_block_index)
     }
 
-    fn last_common_height(
+    fn last_common_block(
         &self,
         first_block: &Id<GenBlock>,
         second_block: &Id<GenBlock>,
-    ) -> Result<Option<BlockHeight>, ChainstateError> {
-        self.deref().last_common_height(first_block, second_block)
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, ChainstateError> {
+        self.deref().last_common_block(first_block, second_block)
     }
 
     fn get_block_reward(
