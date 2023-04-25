@@ -63,6 +63,16 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
+    async fn get_last_common_height(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<BlockHeight>, Self::Error> {
+        ChainstateRpcClient::last_common_height(&self.http_client, first_block, second_block)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
+
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
         ChainstateRpcClient::submit_block(&self.http_client, block_hex)
             .await

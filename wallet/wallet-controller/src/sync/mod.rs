@@ -17,6 +17,7 @@ use std::{sync::Arc, time::Duration};
 
 use common::{chain::ChainConfig, primitives::BlockHeight};
 use node_comm::node_traits::NodeInterface;
+use serialization::hex::HexEncode;
 use tokio::sync::Mutex;
 use wallet::DefaultWallet;
 
@@ -28,20 +29,21 @@ pub enum SyncError {
     UnexpectedWalletError(wallet::WalletError),
 }
 
-/// Sync the wallet state (blocks) from the node.
-/// Returns true if the wallet state has changed and false otherwise.
+/// Sync the wallet state (known blocks) from the node.
+/// Returns true if the wallet state has changed.
 async fn sync_blocks<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &mut T,
     wallet: Arc<Mutex<DefaultWallet>>,
 ) -> Result<bool, SyncError> {
     // TODO: Make it more efficient: download blocks concurrently and send fewer requests
-    let wallet_block_height = match wallet
+
+    let wallet_block_height_opt = wallet
         .lock()
         .await
         .get_best_block_height()
-        .map_err(SyncError::UnexpectedWalletError)?
-    {
+        .map_err(SyncError::UnexpectedWalletError)?;
+    let wallet_block_height = match wallet_block_height_opt {
         Some(height) => height,
         None => {
             wallet.lock().await.scan_genesis().map_err(SyncError::UnexpectedWalletError)?;
@@ -49,87 +51,86 @@ async fn sync_blocks<T: NodeInterface>(
         }
     };
 
-    let node_block_height = rpc_client
-        .get_best_block_height()
-        .await
-        .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
-
-    if node_block_height <= wallet_block_height {
-        return Ok(false);
-    }
-
     if wallet_block_height > BlockHeight::zero() {
-        let node_block_id = match rpc_client
-            .get_block_id_at_height(wallet_block_height)
-            .await
-            .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?
-        {
-            Some(id) => id,
-            None => {
-                return Err(SyncError::UnexpectedRpcError(format!(
-                    "Node block height is {node_block_height} but block at height {wallet_block_height} is None"
-                )));
-            }
-        };
-        let wallet_block_id = match wallet
+        let wallet_best_block = wallet
             .lock()
             .await
             .get_block_hash(wallet_block_height)
             .map_err(SyncError::UnexpectedWalletError)?
-        {
-            Some(id) => id,
-            None => panic!("Wallet block height is {wallet_block_height} but the block is None"),
+            .expect("block id is expected to be known to the wallet");
+
+        let node_best_block = rpc_client
+            .get_best_block_id()
+            .await
+            .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
+
+        let common_height_opt = rpc_client
+            .get_last_common_height(wallet_best_block.into(), node_best_block)
+            .await
+            .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
+        let common_height = match common_height_opt {
+            Some(heigth) => heigth,
+            None => {
+                // No common block found for some reason. This can happen if the wallet is on an abandoned chain
+                // and the node has never seen it before. Reset the wallet to an older block and start over.
+                let prev_height = wallet_block_height
+                    .prev_height()
+                    .expect("Must succeed because `wallet_block_height` is greater than zero");
+                logging::log::debug!(
+                    "No common block found, reset wallet to {wallet_block_height}"
+                );
+                wallet
+                    .lock()
+                    .await
+                    .reset_to_height(prev_height)
+                    .map_err(SyncError::UnexpectedWalletError)?;
+                return Ok(true);
+            }
         };
 
-        if node_block_id != wallet_block_id {
+        if common_height < wallet_block_height {
+            logging::log::debug!(
+                "Reorg detected, reset from {wallet_block_height} to {common_height}"
+            );
             wallet
                 .lock()
                 .await
-                .reset_to_height(
-                    wallet_block_height
-                        .prev_height()
-                        .expect("Must succeed because `wallet_block_height` is not zero"),
-                )
+                .reset_to_height(common_height)
                 .map_err(SyncError::UnexpectedWalletError)?;
-            return Ok(true);
         }
     }
 
-    let new_block_height = wallet_block_height.next_height();
-    let new_block_id = match rpc_client
-        .get_block_id_at_height(new_block_height)
+    let next_block_height = wallet_block_height.next_height();
+    let next_block_id_opt = rpc_client
+        .get_block_id_at_height(next_block_height)
         .await
-        .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?
-    {
+        .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?;
+    let next_gen_block_id = match next_block_id_opt {
         Some(id) => id,
-        None => return Err(SyncError::UnexpectedRpcError(format!(
-            "Node block height is {node_block_height} but block at height {new_block_height} is None"
-        ))),
+        None => return Ok(false),
     };
-    let new_block_id = match new_block_id.classify(chain_config) {
+    let next_block_id = match next_gen_block_id.classify(chain_config) {
         common::chain::GenBlockId::Genesis(_) => {
             return Err(SyncError::UnexpectedRpcError(format!(
-                "Node returned genesis block at height {new_block_height}"
+                "Received the genesis block at positive hight {next_block_height}"
             )))
         }
-        common::chain::GenBlockId::Block(block_id) => block_id,
+        common::chain::GenBlockId::Block(id) => id,
     };
 
-    let new_block = match rpc_client
-        .get_block(new_block_id)
+    let new_block = rpc_client
+        .get_block(next_block_id)
         .await
         .map_err(|e| SyncError::UnexpectedRpcError(e.to_string()))?
-    {
-        Some(block) => block,
-        None => {
-            return Err(SyncError::UnexpectedRpcError(format!(
-                "Advertised block with id {new_block_id} not found"
-            )))
-        }
-    };
+        .ok_or_else(|| {
+            SyncError::UnexpectedRpcError(format!(
+                "Advertised block with id {} not found",
+                next_block_id.hex_encode()
+            ))
+        })?;
 
-    // This may fail if there was a reorg before the `get_block_id_at_height` and `get_block` calls,
-    // but it should resolve normally next time.
+    // This may fail if there was a reorg after this function was started.
+    // It should resolve normally next time.
     wallet
         .lock()
         .await

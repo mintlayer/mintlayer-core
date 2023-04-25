@@ -87,6 +87,18 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn get_last_common_height(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<BlockHeight>, Self::Error> {
+        let result = self
+            .chainstate_handle
+            .call(move |this| this.last_common_height(&first_block, &second_block))
+            .await??;
+        Ok(result)
+    }
+
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
         let block = Block::hex_decode_all(&block_hex)?;
         self.chainstate_handle

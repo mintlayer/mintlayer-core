@@ -55,6 +55,14 @@ trait ChainstateRpc {
     #[method(name = "best_block_height")]
     async fn best_block_height(&self) -> RpcResult<BlockHeight>;
 
+    /// Get last common height of two chains (none if any of the given chains is not found)
+    #[method(name = "last_common_height")]
+    async fn last_common_height(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> RpcResult<Option<BlockHeight>>;
+
     /// Get token information
     #[method(name = "token_info")]
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>>;
@@ -108,6 +116,17 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn best_block_height(&self) -> RpcResult<BlockHeight> {
         handle_error(self.call(move |this| this.get_best_block_height()).await)
+    }
+
+    async fn last_common_height(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> RpcResult<Option<BlockHeight>> {
+        handle_error(
+            self.call(move |this| this.last_common_height(&first_block, &second_block))
+                .await,
+        )
     }
 
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>> {

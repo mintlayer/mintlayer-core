@@ -39,7 +39,7 @@ pub enum WalletCommands {
     },
 
     /// Get a block by its hash
-    Block {
+    GetBlock {
         /// Block hash
         hash: String,
     },
@@ -137,7 +137,7 @@ pub async fn handle_wallet_command(
             Ok(())
         }
 
-        WalletCommands::Block { hash } => {
+        WalletCommands::GetBlock { hash } => {
             let hash =
                 H256::from_str(&hash).map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
             let hash =

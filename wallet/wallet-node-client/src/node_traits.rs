@@ -31,6 +31,11 @@ pub trait NodeInterface {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;
+    async fn get_last_common_height(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<BlockHeight>, Self::Error>;
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
     async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
 
