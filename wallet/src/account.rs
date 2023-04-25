@@ -17,6 +17,7 @@ use crate::key_chain::AccountKeyChain;
 use crate::{WalletError, WalletResult};
 use common::address::Address;
 use common::chain::{ChainConfig, Destination, OutPoint, Transaction, TxOutput};
+use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
 use crypto::key::hdkd::child_number::ChildNumber;
 use std::collections::BTreeMap;
@@ -99,7 +100,7 @@ impl Account {
     fn add_transaction<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        tx: Transaction,
+        tx: WithId<Transaction>,
         state: TxState,
     ) -> WalletResult<()> {
         let tx_id = tx.get_id();
@@ -228,6 +229,7 @@ mod tests {
     use common::chain::config::create_regtest;
     use common::chain::tokens::OutputValue;
     use common::chain::{GenBlock, Transaction};
+    use common::primitives::id::WithId;
     use common::primitives::{Amount, Idable, H256};
     use crypto::key::hdkd::child_number::ChildNumber;
     use crypto::key::hdkd::u31::U31;
@@ -276,10 +278,11 @@ mod tests {
             Destination::PublicKey(pk4.into_public_key()),
         );
 
-        let tx1 = Transaction::new(1, vec![], vec![txo1, txo2, txo3, txo4], 0).unwrap();
-        let tx2 = Transaction::new(2, vec![], vec![], 0).unwrap();
-        let tx3 = Transaction::new(3, vec![], vec![], 0).unwrap();
-        let tx4 = Transaction::new(4, vec![], vec![], 0).unwrap();
+        let tx1 =
+            WithId::new(Transaction::new(1, vec![], vec![txo1, txo2, txo3, txo4], 0).unwrap());
+        let tx2 = WithId::new(Transaction::new(2, vec![], vec![], 0).unwrap());
+        let tx3 = WithId::new(Transaction::new(3, vec![], vec![], 0).unwrap());
+        let tx4 = WithId::new(Transaction::new(4, vec![], vec![], 0).unwrap());
 
         let block_id: Id<GenBlock> = H256::from_low_u64_le(123).into();
 
