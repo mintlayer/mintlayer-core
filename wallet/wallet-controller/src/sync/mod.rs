@@ -13,17 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
-
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use node_comm::node_traits::NodeInterface;
-use tokio::sync::Mutex;
 use wallet::DefaultWallet;
 
-enum NewSyncState {
+pub enum NewSyncState {
     UnknownChain,
     Revert {
         common_block_id: Id<GenBlock>,
@@ -44,7 +41,7 @@ pub enum SyncError<T: NodeInterface> {
     BlockNotFound(Id<Block>),
 }
 
-async fn notify_new_block<T: NodeInterface>(
+pub async fn notify_new_block<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &mut T,
     wallet_block_id: Id<GenBlock>,
@@ -63,8 +60,6 @@ async fn notify_new_block<T: NodeInterface>(
     let (common_block_id, common_block_height) = match common_block_opt {
         Some(common_block) => common_block,
         None => {
-            // No common block found for some reason. This can happen if the wallet is on an abandoned chain
-            // and the node has never seen this chain before. Reset the wallet to the genesis and start over.
             return Ok(Some(NewSyncState::UnknownChain));
         }
     };
@@ -106,7 +101,7 @@ async fn notify_new_block<T: NodeInterface>(
 
 /// Sync the wallet state (known blocks) from the node.
 /// Returns true if the wallet state has changed.
-fn apply_sync_state(
+pub fn apply_sync_state(
     chain_config: &ChainConfig,
     sync_state: NewSyncState,
     wallet: &mut DefaultWallet,
@@ -114,57 +109,23 @@ fn apply_sync_state(
     match sync_state {
         NewSyncState::UnknownChain => {
             // No common block found for some reason. This can happen if the wallet is on an abandoned chain
-            // and the node has never seen this chain before. Reset the wallet to the genesis and start over.
+            // and the node has never seen this chain before. Reset the wallet to the genesis to start over.
+            logging::log::debug!(
+                "Current wallet's chain is not found, start block scan from the beginning"
+            );
             wallet.reset_to_height(chain_config.genesis_block_id(), BlockHeight::zero())
         }
         NewSyncState::Revert {
             common_block_id,
             common_block_height,
         } => {
-            // Reset the wallet state to some previous block and start over
+            // Reorg was detected, reset the wallet state to some previous block and start over
             logging::log::debug!("Reorg detected, reset to {common_block_height}");
             wallet.reset_to_height(common_block_id, common_block_height)
         }
-        NewSyncState::NewBlock { block } => wallet.scan_new_blocks(vec![block]),
-    }
-}
-
-pub async fn run_sync<T: NodeInterface>(
-    chain_config: Arc<ChainConfig>,
-    mut rpc_client: T,
-    wallet: Arc<Mutex<DefaultWallet>>,
-) {
-    loop {
-        let (wallet_block_id, wallet_block_height) = wallet
-            .lock()
-            .await
-            .get_best_block()
-            .expect("`get_best_block` should not fail normally");
-
-        let sync_state_res = notify_new_block(
-            &chain_config,
-            &mut rpc_client,
-            wallet_block_id,
-            wallet_block_height,
-        )
-        .await;
-
-        match sync_state_res {
-            Ok(Some(sync_state)) => {
-                let mut wallet = wallet.lock().await;
-                let apply_res = apply_sync_state(&chain_config, sync_state, &mut wallet);
-                if let Err(e) = apply_res {
-                    logging::log::error!("Wallet scan failed: {}", e);
-                }
-            }
-            Ok(None) => {
-                // No new blocks
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-            Err(e) => {
-                logging::log::error!("Node scan failed: {}", e);
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            }
+        NewSyncState::NewBlock { block } => {
+            logging::log::debug!("New block found {}", block.header().block_id());
+            wallet.scan_new_blocks(vec![block])
         }
     }
 }
