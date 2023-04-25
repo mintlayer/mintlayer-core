@@ -13,10 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
 use iced::{
     alignment::{Horizontal, Vertical},
     widget::{Column, Container, Text},
-    Element, Font, Length, Sandbox, Settings,
+    Application, Element, Font, Length, Settings, Theme,
 };
 use iced_aw::{TabLabel, Tabs};
 
@@ -24,7 +27,10 @@ mod dashboard;
 use dashboard::{DashboardMessage, DashboardTab};
 
 mod settings;
+use logging::log;
+use node_lib::remote_controller::RemoteController;
 use settings::{SettingsMessage, SettingsTab, TabPosition};
+use tokio::sync::oneshot;
 
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
@@ -48,21 +54,45 @@ impl From<Icon> for char {
     }
 }
 
-pub async fn initialize() -> anyhow::Result<subsystem::Manager> {
+pub async fn initialize(
+    remote_controller_sender: oneshot::Sender<RemoteController>,
+) -> anyhow::Result<subsystem::Manager> {
     let opts = node_lib::Options::from_args(std::env::args_os());
     logging::init_logging::<&std::path::Path>(None);
     logging::log::info!("Command line options: {opts:?}");
-    node_lib::run(opts, None).await
+
+    node_lib::run(opts, Some(remote_controller_sender)).await
 }
 
 #[tokio::main]
 async fn main() -> iced::Result {
-    let manager = initialize().await.expect("Node initialization failed");
+    let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
+
+    let manager = initialize(remote_controller_sender).await.expect("Node initialization failed");
     let shutdown_trigger = manager.make_shutdown_trigger();
+
+    let controller = remote_controller_receiver.await.expect("Node controller receiving failed");
+
+    let chain_config = controller
+        .chainstate
+        .call(|this| this.get_chain_config().clone())
+        .await
+        .expect("Chain config retrieval failed after node initialization");
+
+    let node_controller = NodeInitializationData {
+        chain_config,
+        controller,
+    };
 
     let manager_join_handle = tokio::spawn(async move { manager.main().await });
 
-    tokio::task::block_in_place(|| MintlayerGUI::run(Settings::default()))?;
+    let gui_settings = Settings {
+        antialiasing: true,
+        flags: Some(node_controller),
+        ..Settings::default()
+    };
+
+    tokio::task::block_in_place(|| MintlayerGUI::run(gui_settings))?;
 
     shutdown_trigger.initiate();
 
@@ -80,6 +110,11 @@ struct MintlayerGUI {
     settings_tab: SettingsTab,
 }
 
+struct NodeInitializationData {
+    chain_config: Arc<ChainConfig>,
+    controller: RemoteController,
+}
+
 #[derive(Clone, Debug)]
 enum Message {
     TabSelected(usize),
@@ -87,27 +122,55 @@ enum Message {
     Settings(SettingsMessage),
 }
 
-impl Sandbox for MintlayerGUI {
-    type Message = Message;
+#[derive(Debug, Clone)]
+struct InitializationState {
+    hello: String,
+}
 
-    fn new() -> Self {
-        MintlayerGUI {
+impl InitializationState {
+    async fn load() -> Result<InitializationState, ()> {
+        log::info!("Starting node...");
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        return Ok(Self {
+            hello: "Loaded!".to_string(),
+        });
+    }
+}
+
+impl Application for MintlayerGUI {
+    type Message = Message;
+    type Executor = iced::executor::Default;
+    type Theme = Theme;
+    type Flags = Option<NodeInitializationData>;
+
+    fn new(init_data: Self::Flags) -> (Self, iced::Command<Self::Message>) {
+        let gui = MintlayerGUI {
             active_tab: 0,
             dashboard_tab: DashboardTab::new(),
             settings_tab: SettingsTab::new(),
-        }
+        };
+
+        (
+            gui,
+            // TODO: put the initialization result here
+            iced::Command::perform(
+                InitializationState::load(),
+                |_: Result<InitializationState, ()>| Message::TabSelected(0),
+            ),
+        )
     }
 
     fn title(&self) -> String {
         String::from("Mintlayer Node")
     }
 
-    fn update(&mut self, message: Self::Message) {
+    fn update(&mut self, message: Self::Message) -> iced::Command<Message> {
         match message {
             Message::TabSelected(selected) => self.active_tab = selected,
             Message::Dashboard(message) => self.dashboard_tab.update(message),
             Message::Settings(message) => self.settings_tab.update(message),
         }
+        iced::Command::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
