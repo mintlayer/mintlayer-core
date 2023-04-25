@@ -43,7 +43,10 @@ impl BlockProductionInterface for BlockProduction {
         };
 
         let (block, end_receiver) = self.produce_block(reward_destination, transactions).await?;
+
+        // The only error that can happen is if the channel is closed. We don't care about that here.
         let _finished = end_receiver.await;
+
         Ok(block)
     }
 }
