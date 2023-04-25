@@ -161,7 +161,7 @@ pub async fn initialize(
 pub async fn run(
     options: Options,
     remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
-) -> Result<()> {
+) -> Result<subsystem::Manager> {
     match options.command {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();
@@ -215,7 +215,7 @@ async fn start(
     run_options: &RunOptions,
     chain_config: ChainConfig,
     remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
-) -> Result<()> {
+) -> Result<subsystem::Manager> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
@@ -238,9 +238,8 @@ async fn start(
         remote_controller_sender,
     )
     .await?;
-    manager.main().await;
 
-    Ok(())
+    Ok(manager)
 }
 
 fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
