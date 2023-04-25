@@ -127,20 +127,18 @@ pub async fn initialize(
             rpc_config.cookie_file.as_deref(),
         )?;
         // TODO: get rid of the unwrap_or() after fixing the issue in #446
-        let _rpc = manager.add_subsystem(
-            "rpc",
-            rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
-                .register(crate::rpc::init(
-                    manager.make_shutdown_trigger(),
-                    chain_config,
-                ))
-                .register(block_prod.clone().into_rpc())
-                .register(chainstate.clone().into_rpc())
-                .register(mempool.clone().into_rpc())
-                .register(p2p.clone().into_rpc())
-                .build()
-                .await?,
-        );
+        let rpc = rpc::Builder::new(rpc_config.into(), Some(rpc_creds))
+            .register(crate::rpc::init(
+                manager.make_shutdown_trigger(),
+                chain_config,
+            ))
+            .register(block_prod.clone().into_rpc())
+            .register(chainstate.clone().into_rpc())
+            .register(mempool.clone().into_rpc())
+            .register(p2p.clone().into_rpc())
+            .build();
+        let rpc = rpc.await;
+        let _rpc = manager.add_subsystem("rpc", rpc?);
     }
 
     if let Some(sender) = remote_controller_sender {
