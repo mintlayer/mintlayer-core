@@ -30,8 +30,6 @@ pub fn main() -> iced::Result {
     })
 }
 
-#[derive(Debug)]
-
 enum MintlayerNodeGUI {
     Loading,
     Loaded(NodeController),
