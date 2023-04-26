@@ -17,13 +17,11 @@ use common::chain::ChainConfig;
 use node_lib::remote_controller::RemoteController;
 use std::fmt::Debug;
 use std::sync::Arc;
-use subsystem::manager::ShutdownTrigger;
 use tokio::sync::oneshot;
 
 pub struct NodeController {
     chain_config: Arc<ChainConfig>,
-    _controller: RemoteController,
-    shutdown_trigger: ShutdownTrigger,
+    controller: RemoteController,
     manager_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
@@ -44,7 +42,6 @@ impl NodeController {
         logging::log::info!("Command line options: {opts:?}");
 
         let manager = node_lib::run(opts, Some(remote_controller_sender)).await?;
-        let shutdown_trigger = manager.make_shutdown_trigger();
 
         let controller =
             remote_controller_receiver.await.expect("Node controller receiving failed");
@@ -59,8 +56,7 @@ impl NodeController {
 
         let node_controller = NodeController {
             chain_config,
-            _controller: controller,
-            shutdown_trigger,
+            controller,
             manager_join_handle: Some(manager_join_handle),
         };
 
@@ -78,7 +74,7 @@ impl NodeController {
         }
         logging::log::error!("Starting shutdown process...");
 
-        self.shutdown_trigger.initiate();
+        self.controller.shutdown_trigger.initiate();
 
         let mut join_handle = None;
         std::mem::swap(&mut self.manager_join_handle, &mut join_handle);
