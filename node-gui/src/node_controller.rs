@@ -37,6 +37,10 @@ impl NodeController {
     pub async fn initialize() -> anyhow::Result<NodeController> {
         let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
 
+        if std::env::var("RUST_LOG").is_err() {
+            std::env::set_var("RUST_LOG", "info");
+        }
+
         let opts = node_lib::Options::from_args(std::env::args_os());
         logging::init_logging::<&std::path::Path>(None);
         logging::log::info!("Command line options: {opts:?}");
