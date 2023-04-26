@@ -250,6 +250,8 @@ mod tests {
         assert_eq!(store, original_store);
     }
 
+    // Create a pool with 2 delegations and random balances and reward.
+    // Check distribution properties.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -270,7 +272,7 @@ mod tests {
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
         let mpt = rng.gen_range(0..1000);
 
-        let pool_balance =
+        let original_pool_balance =
             ((pledged_amount + delegation_id_1_amount).unwrap() + delegation_id_2_amount).unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
@@ -285,7 +287,7 @@ mod tests {
 
         let store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
-            BTreeMap::from([(pool_id, pool_balance)]),
+            BTreeMap::from([(pool_id, original_pool_balance)]),
             BTreeMap::from([
                 ((pool_id, delegation_id_1), delegation_id_1_amount),
                 ((pool_id, delegation_id_2), delegation_id_2_amount),
@@ -304,8 +306,10 @@ mod tests {
 
         distribute_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
 
+        // check that whole reward is added to the balance
         let deviation = Amount::from_atoms(1);
-        let expected_pool_balance = ((pool_balance + reward).unwrap() - deviation).unwrap();
+        let expected_pool_balance =
+            ((original_pool_balance + reward).unwrap() - deviation).unwrap();
         assert_eq!(
             expected_pool_balance,
             accounting_adapter
@@ -315,26 +319,20 @@ mod tests {
                 .unwrap()
         );
 
+        // check that that delegator's reward is proportional to their balances
         let (consumed_data, _) = accounting_adapter.consume();
-        let delegation_1_reward = consumed_data
-            .delegation_balances
-            .data()
-            .get(&delegation_id_1)
-            .unwrap()
-            .into_unsigned()
-            .unwrap()
-            .into_atoms();
-        let delegation_2_reward = consumed_data
-            .delegation_balances
-            .data()
-            .get(&delegation_id_2)
-            .unwrap()
-            .into_unsigned()
-            .unwrap()
-            .into_atoms();
-        assert_eq!(
-            delegation_1_reward / delegation_2_reward,
-            delegation_id_1_amount.into_atoms() / delegation_id_2_amount.into_atoms()
-        );
+        let delegation_1_reward = consumed_data.delegation_balances.data().get(&delegation_id_1);
+        let delegation_2_reward = consumed_data.delegation_balances.data().get(&delegation_id_2);
+
+        // the difference between delegations can be so big that the reward can be 0
+        if let (Some(delegation_1_reward), Some(delegation_2_reward)) =
+            (delegation_1_reward, delegation_2_reward)
+        {
+            assert_eq!(
+                delegation_1_reward.into_unsigned().unwrap().into_atoms()
+                    / delegation_2_reward.into_unsigned().unwrap().into_atoms(),
+                delegation_id_1_amount.into_atoms() / delegation_id_2_amount.into_atoms()
+            );
+        }
     }
 }

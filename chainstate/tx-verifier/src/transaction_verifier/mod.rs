@@ -535,7 +535,7 @@ where
         match block_index.block_header().consensus_data() {
             ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
             ConsensusData::PoS(pos_data) => {
-                // distribute subsidy among staker and delegators
+                // distribute reward among staker and delegators
                 let block_subsidy =
                     self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
                 let total_reward = (block_subsidy + total_fees.0)
