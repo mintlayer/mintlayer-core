@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common::chain::ChainConfig;
 use node_lib::remote_controller::RemoteController;
 use std::fmt::Debug;
+use std::sync::Arc;
 use subsystem::manager::ShutdownTrigger;
 use tokio::sync::oneshot;
 
