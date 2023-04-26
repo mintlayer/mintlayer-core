@@ -44,17 +44,20 @@ pub async fn initialize(
 }
 
 fn do_shutdown(initialized_data: &mut NodeController) -> Command<Message> {
+    // We shutdown and join only once, so this being None means we took the handle already
     if initialized_data.manager_join_handle.is_none() {
+        logging::log::error!("Shutdown already requested.");
         return Command::none();
     }
-    logging::log::error!("Starting shutdown process");
-    let shutdown_trigger = initialized_data.shutdown_trigger.clone();
+    logging::log::error!("Starting shutdown process...");
+
+    initialized_data.shutdown_trigger.initiate();
+
     let mut join_handle = None;
     std::mem::swap(&mut initialized_data.manager_join_handle, &mut join_handle);
 
     Command::perform(
         async move {
-            shutdown_trigger.initiate();
             join_handle.expect("Must be found").await.expect("Joining failed");
         },
         |_| Message::ShuttingDownFinished,
@@ -135,31 +138,29 @@ impl Application for MintlayerNodeGUI {
                     *self = MintlayerNodeGUI::Loaded(initialized_data);
                     Command::none()
                 }
-                // While the screen is loading, ignore all events
+                // TODO: handle error on initialization
                 Message::Loaded(Err(e)) => panic!("Error: {e}"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         panic!("Attempted shutdown during initialization")
                     } else {
+                        // While the screen is loading, ignore all events
                         Command::none()
                     }
                 }
                 Message::ShuttingDownFinished => Command::none(),
             },
-            MintlayerNodeGUI::Loaded(ref mut initialized_data) => {
-                match message {
-                    Message::Loaded(_) => Command::none(), // TODO: make this unreachable
-                    // TODO: handle error on initialization
-                    Message::EventOccurred(event) => {
-                        if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
-                            do_shutdown(initialized_data)
-                        } else {
-                            Command::none()
-                        }
+            MintlayerNodeGUI::Loaded(ref mut initialized_data) => match message {
+                Message::Loaded(_) => unreachable!("Already loaded"),
+                Message::EventOccurred(event) => {
+                    if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                        do_shutdown(initialized_data)
+                    } else {
+                        Command::none()
                     }
-                    Message::ShuttingDownFinished => iced::window::close(),
                 }
-            }
+                Message::ShuttingDownFinished => iced::window::close(),
+            },
         }
     }
 
