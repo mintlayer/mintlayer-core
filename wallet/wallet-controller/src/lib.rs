@@ -139,7 +139,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::RpcError)
     }
 
-    pub async fn get_block_fetcher(
+    pub fn get_block_fetcher(
         &self,
     ) -> oneshot::Receiver<Result<sync::NewSyncState, sync::SyncError<T>>> {
         let (wallet_block_id, wallet_block_height) =

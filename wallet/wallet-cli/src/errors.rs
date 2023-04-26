@@ -48,6 +48,4 @@ pub enum WalletCliError {
     InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Cancelled")]
     Cancelled,
-    #[error("Quit")]
-    Exit,
 }
