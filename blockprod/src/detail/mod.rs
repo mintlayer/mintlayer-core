@@ -112,22 +112,6 @@ impl BlockProduction {
         Ok(returned_accumulator)
     }
 
-    async fn stop_job_in_scope(&mut self, job_key: JobKey, job_key_destroyed: &AtomicBool) {
-        // TODO: this function has to go.
-        // I couldn't find a way to use RAII to call an async function that takes a mut reference to self.
-        // Once this solution is found, this has to go
-        {
-            assert!(
-                !job_key_destroyed.load(std::sync::atomic::Ordering::SeqCst),
-                "Must be true as it was done already"
-            );
-            let result_receiver = self.job_manager.stop_job(job_key.clone());
-            let _stop_result = result_receiver.await;
-        }
-        // We consume the value so that it doesn't happen again
-        job_key_destroyed.store(true, std::sync::atomic::Ordering::SeqCst);
-    }
-
     async fn pull_consensus_data(
         &self,
         block_timestamp: BlockTimestamp,
@@ -189,11 +173,26 @@ impl BlockProduction {
         Ok(block_header)
     }
 
-    pub async fn generate_block(
-        &mut self,
+    /// The function the creates a new block.
+    /// Returns the block and a oneshot receiver that will be notified when
+    /// the internal job is finished. Generally this can be used to ensure
+    /// that the block production process has ended and that there's no
+    /// remnants in the job manager.
+    pub async fn produce_block(
+        &self,
+        reward_destination: Destination,
+        transactions_source: TransactionsSource,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
+        self.produce_block_with_custom_id(reward_destination, transactions_source, None)
+            .await
+    }
+
+    async fn produce_block_with_custom_id(
+        &self,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
-    ) -> Result<Block, BlockProductionError> {
+        custom_id: Option<Vec<u8>>,
+    ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let stop_flag = Arc::new(false.into());
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
@@ -201,15 +200,11 @@ impl BlockProduction {
         let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
-            self.job_manager.add_job(tip_at_start.block_id()).await?;
+            self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
 
         // At the end of this function, the job has to be removed
-        // Once the job key is used, we swap it with None... this is all temporary.
-        // The docs in the function self.stop_job_in_scope()
-        let job_key_destroyed = AtomicBool::new(false);
-        let _job_remove_checker = OnceDestructor::new(|| {
-            assert!(job_key_destroyed.load(std::sync::atomic::Ordering::SeqCst));
-        });
+        let (job_remover_func, end_confirm_receiver) = self.job_manager.make_job_stopper_function();
+        let _job_remover = OnceDestructor::new(move || job_remover_func(job_key));
 
         loop {
             let timestamp =
@@ -298,9 +293,6 @@ impl BlockProduction {
                     // This can fail if the mining thread has already finished
                     let _ended = ended_receiver.recv();
 
-                    // TODO: use RAII for this
-                    self.stop_job_in_scope(job_key, &job_key_destroyed).await;
-
                     return Err(BlockProductionError::Cancelled);
                 }
                 solve_receive_result = &mut result_receiver => {
@@ -330,11 +322,8 @@ impl BlockProduction {
                         }
                     };
 
-                    // TODO: use RAII for this
-                    self.stop_job_in_scope(job_key, &job_key_destroyed).await;
-
                     let block = Block::new_from_header(block_header, block_body.clone())?;
-                    return Ok(block);
+                    return Ok((block, end_confirm_receiver));
                 }
             }
         }
@@ -345,10 +334,11 @@ impl BlockProduction {
 mod tests {
     use common::chain::GenBlock;
     use common::primitives::{Id, H256};
+    use crypto::random::Rng;
     use mempool::{MempoolInterface, MempoolSubsystemInterface};
     use mocks::MempoolInterfaceMock;
     use rstest::rstest;
-    use std::sync::atomic::Ordering::Relaxed;
+    use std::sync::atomic::Ordering;
     use subsystem::CallRequest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -390,7 +380,7 @@ mod tests {
 
             let accumulator = block_production.collect_transactions().await;
 
-            let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
             assert!(
                 !collected_transactions,
                 "Expected collect_tx() to not be called"
@@ -413,7 +403,7 @@ mod tests {
         let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
         let mock_mempool = MempoolInterfaceMock::new();
-        mock_mempool.collect_txs_should_error.store(true, Relaxed);
+        mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
 
         let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
             let mock_mempool = mock_mempool.clone();
@@ -436,7 +426,8 @@ mod tests {
 
                 let accumulator = block_production.collect_transactions().await;
 
-                let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+                let collected_transactions =
+                    mock_mempool.collect_txs_called.load(Ordering::Relaxed);
                 assert!(collected_transactions, "Expected collect_tx() to be called");
 
                 assert!(
@@ -481,7 +472,8 @@ mod tests {
 
                 let accumulator = block_production.collect_transactions().await;
 
-                let collected_transactions = mock_mempool.collect_txs_called.load(Relaxed);
+                let collected_transactions =
+                    mock_mempool.collect_txs_called.load(Ordering::Relaxed);
                 assert!(collected_transactions, "Expected collect_tx() to be called");
 
                 assert!(
@@ -515,11 +507,11 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
-        let stop_job_key = JobKey::new(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+        let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
 
         let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
         assert!(!job_stopped, "Stopped a non-existent job");
@@ -548,13 +540,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
@@ -584,12 +576,12 @@ mod tests {
         .expect("Error initializing blockprod");
 
         let mut job_keys = Vec::new();
-        let jobs_to_create = 5;
+        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
 
         for _ in 1..=jobs_to_create {
             let (job_key, _stop_job_cancel_receiver) = block_production
                 .job_manager
-                .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+                .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
                 .await
                 .unwrap();
 
@@ -617,13 +609,18 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn generate_block_multiple_jobs() {
+    async fn generate_block_multiple_jobs(#[case] seed: Seed) {
         let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
-        let jobs_to_create = 5;
+        let mut rng = make_seedable_rng(seed);
 
-        let mut block_production = BlockProduction::new(
+        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+
+        let block_production = BlockProduction::new(
             chain_config,
             chainstate,
             mempool,
@@ -640,13 +637,22 @@ mod tests {
                     shutdown_trigger.initiate();
                 });
 
-                for _ in 1..=jobs_to_create {
-                    _ = block_production
-                        .generate_block(
-                            Destination::AnyoneCanSpend,
-                            TransactionsSource::Provided(vec![]),
-                        )
-                        .await;
+                let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
+                    let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
+
+                    block_production.produce_block_with_custom_id(
+                        Destination::AnyoneCanSpend,
+                        TransactionsSource::Provided(vec![]),
+                        Some(id),
+                    )
+                });
+
+                let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
+
+                let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
+
+                for (_block, job) in jobs_finished_iter {
+                    job.await.unwrap();
                 }
 
                 let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
@@ -680,13 +686,13 @@ mod tests {
 
         let (_other_job_key, _other_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 
         let (_stop_job_key, _stop_job_cancel_receiver) = block_production
             .job_manager
-            .add_job(Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
 

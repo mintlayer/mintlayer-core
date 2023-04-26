@@ -36,12 +36,13 @@ impl JobsContainer {
 
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
         let NewJobEvent {
+            custom_id,
             current_tip_id,
             cancel_sender,
             result_sender,
         } = event;
 
-        let job_key = JobKey::new(current_tip_id);
+        let job_key = JobKey::new(custom_id, current_tip_id);
 
         if self.jobs.contains_key(&job_key) {
             if let Err(e) = result_sender.send(Err(JobManagerError::JobAlreadyExists)) {
