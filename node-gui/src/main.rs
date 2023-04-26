@@ -143,7 +143,7 @@ impl Application for MintlayerNodeGUI {
     }
 
     fn theme(&self) -> Self::Theme {
-        Theme::Light
+        Theme::Dark
     }
 
     fn subscription(&self) -> Subscription<Message> {
