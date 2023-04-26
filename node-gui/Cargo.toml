@@ -12,7 +12,8 @@ node-lib = { path = "../node-lib" }
 subsystem = { path = "../subsystem" }
 
 anyhow = "1.0"
-iced = "0.9"
-iced_aw = "0.5"
+iced = { version = "0.9", features = ["canvas", "debug", "tokio"] }
+iced_aw = { version = "0.5", features = ["cupertino"] }
+iced_native = "0.10"
 
-tokio = { workspace = true, default-features = false }
+tokio = { version = "1.27", features = ["time"] }
