@@ -42,7 +42,7 @@ enum Message {
     ShuttingDownFinished,
 }
 
-fn do_shutdown(controller: &mut NodeController) -> Command<Message> {
+fn gui_shutdown(controller: &mut NodeController) -> Command<Message> {
     let manager_join_handle = match controller.trigger_shutdown() {
         Some(h) => h,
         None => return Command::none(),
@@ -101,7 +101,7 @@ impl Application for MintlayerNodeGUI {
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
-                        do_shutdown(controller)
+                        gui_shutdown(controller)
                     } else {
                         Command::none()
                     }
