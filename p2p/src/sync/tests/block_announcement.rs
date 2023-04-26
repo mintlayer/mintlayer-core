@@ -73,6 +73,9 @@ async fn nonexistent_peer(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn unknown_prev_block(#[case] seed: Seed) {
+    // TODO: FIXME:
+    logging::init_logging(Some(""));
+
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let chain_config = Arc::new(create_unit_test_config());

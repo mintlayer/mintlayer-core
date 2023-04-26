@@ -61,9 +61,9 @@ pub struct SyncManagerHandle {
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
-    sync_manager_handle: Option<JoinHandle<()>>,
+    sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
-    subsystem_manager_handle: Option<ManagerJoinHandle>,
+    subsystem_manager_handle: ManagerJoinHandle,
 }
 
 impl SyncManagerHandle {
@@ -108,10 +108,10 @@ impl SyncManagerHandle {
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
-        let sync_manager_handle = Some(tokio::spawn(async move {
+        let sync_manager_handle = tokio::spawn(async move {
             let e = sync.run().await.unwrap_err();
             let _ = error_sender.send(e);
-        }));
+        });
 
         Self {
             peer_manager_receiver,
@@ -120,7 +120,7 @@ impl SyncManagerHandle {
             error_receiver,
             sync_manager_handle,
             shutdown_trigger,
-            subsystem_manager_handle: Some(subsystem_manager_handle),
+            subsystem_manager_handle,
         }
     }
 
@@ -219,15 +219,20 @@ impl SyncManagerHandle {
     }
 
     /// Awaits on the sync manager join handle and rethrows the panic.
-    pub async fn resume_panic(mut self) {
-        panic::resume_unwind(
-            self.sync_manager_handle.take().unwrap().await.unwrap_err().into_panic(),
-        );
+    pub async fn resume_panic(self) {
+        panic::resume_unwind(self.sync_manager_handle.await.unwrap_err().into_panic());
     }
 
-    pub async fn join_subsystem_manager(mut self) {
+    pub async fn join_subsystem_manager(self) {
         self.shutdown_trigger.initiate();
-        self.subsystem_manager_handle.take().unwrap().join().await;
+
+        drop(self.peer_manager_receiver);
+        drop(self.sync_event_sender);
+        drop(self.sync_event_receiver);
+        drop(self.error_receiver);
+        let _ = self.sync_manager_handle.await;
+
+        self.subsystem_manager_handle.join().await;
     }
 }
 
