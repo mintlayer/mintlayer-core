@@ -11,7 +11,7 @@ use subsystem::manager::ShutdownTrigger;
 use tokio::sync::oneshot;
 
 pub fn main() -> iced::Result {
-    MintlayerSplash::run(Settings {
+    MintlayerNodeGUI::run(Settings {
         antialiasing: true,
         exit_on_close_request: false,
         try_opengles_first: true,
@@ -21,7 +21,7 @@ pub fn main() -> iced::Result {
 
 #[derive(Debug)]
 
-enum MintlayerSplash {
+enum MintlayerNodeGUI {
     Loading,
     Loaded(NodeController),
 }
@@ -106,7 +106,7 @@ impl NodeController {
     }
 }
 
-impl Application for MintlayerSplash {
+impl Application for MintlayerNodeGUI {
     type Executor = executor::Default;
     type Message = Message;
     type Theme = Theme;
@@ -114,15 +114,15 @@ impl Application for MintlayerSplash {
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
-            MintlayerSplash::Loading,
+            MintlayerNodeGUI::Loading,
             Command::perform(NodeController::load(), Message::Loaded),
         )
     }
 
     fn title(&self) -> String {
         match self {
-            MintlayerSplash::Loading => ("Mintlayer Node - Loading...").to_string(),
-            MintlayerSplash::Loaded(d) => {
+            MintlayerNodeGUI::Loading => ("Mintlayer Node - Loading...").to_string(),
+            MintlayerNodeGUI::Loaded(d) => {
                 format!("Mintlayer Node - {}", d.chain_config.chain_type().name())
             }
         }
@@ -130,9 +130,9 @@ impl Application for MintlayerSplash {
 
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
-            MintlayerSplash::Loading => match message {
+            MintlayerNodeGUI::Loading => match message {
                 Message::Loaded(Ok(initialized_data)) => {
-                    *self = MintlayerSplash::Loaded(initialized_data);
+                    *self = MintlayerNodeGUI::Loaded(initialized_data);
                     Command::none()
                 }
                 // While the screen is loading, ignore all events
@@ -146,7 +146,7 @@ impl Application for MintlayerSplash {
                 }
                 Message::ShuttingDownFinished => Command::none(),
             },
-            MintlayerSplash::Loaded(ref mut initialized_data) => {
+            MintlayerNodeGUI::Loaded(ref mut initialized_data) => {
                 match message {
                     Message::Loaded(_) => Command::none(), // TODO: make this unreachable
                     // TODO: handle error on initialization
@@ -165,11 +165,11 @@ impl Application for MintlayerSplash {
 
     fn view(&self) -> Element<Message> {
         match self {
-            MintlayerSplash::Loading => {
+            MintlayerNodeGUI::Loading => {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerSplash::Loaded(state) => {
+            MintlayerNodeGUI::Loaded(state) => {
                 let main_widget = text(&format!(
                     "Genesis block: {}",
                     state.chain_config.genesis_block_id(),
