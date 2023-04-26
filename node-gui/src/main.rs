@@ -48,18 +48,18 @@ enum Message {
     ShuttingDownFinished,
 }
 
-fn do_shutdown(initialized_data: &mut NodeController) -> Command<Message> {
+fn do_shutdown(controller: &mut NodeController) -> Command<Message> {
     // We shutdown and join only once, so this being None means we took the handle already
-    if initialized_data.manager_join_handle.is_none() {
+    if controller.manager_join_handle.is_none() {
         logging::log::error!("Shutdown already requested.");
         return Command::none();
     }
     logging::log::error!("Starting shutdown process...");
 
-    initialized_data.shutdown_trigger.initiate();
+    controller.shutdown_trigger.initiate();
 
     let mut join_handle = None;
-    std::mem::swap(&mut initialized_data.manager_join_handle, &mut join_handle);
+    std::mem::swap(&mut controller.manager_join_handle, &mut join_handle);
 
     Command::perform(
         async move {
@@ -142,8 +142,8 @@ impl Application for MintlayerNodeGUI {
     fn update(&mut self, message: Message) -> Command<Message> {
         match self {
             MintlayerNodeGUI::Loading => match message {
-                Message::Loaded(Ok(initialized_data)) => {
-                    *self = MintlayerNodeGUI::Loaded(initialized_data);
+                Message::Loaded(Ok(controller)) => {
+                    *self = MintlayerNodeGUI::Loaded(controller);
                     Command::none()
                 }
                 // TODO: handle error on initialization
@@ -158,11 +158,11 @@ impl Application for MintlayerNodeGUI {
                 }
                 Message::ShuttingDownFinished => Command::none(),
             },
-            MintlayerNodeGUI::Loaded(ref mut initialized_data) => match message {
+            MintlayerNodeGUI::Loaded(ref mut controller) => match message {
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
-                        do_shutdown(initialized_data)
+                        do_shutdown(controller)
                     } else {
                         Command::none()
                     }
