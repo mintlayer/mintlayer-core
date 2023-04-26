@@ -115,10 +115,9 @@ impl MempoolBanScore for ChainstateError {
 impl MempoolBanScore for ConnectTransactionError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
-            // TODO: Make dependent on double spend depth
+            // These depend on the current chainstate. Since it is not easy to determine whether
+            // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
-
-            // TODO: Make dependent on how much time is there left in the time lock
             ConnectTransactionError::TimeLockViolation => 0,
 
             // These are delegated to the inner error
@@ -220,7 +219,6 @@ impl MempoolBanScore for TxIndexError {
             } => 100,
 
             // Double spend may happen if peers are out of sync.
-            // TODO: Punish double spends with many confirmations.
             TxIndexError::DoubleSpendAttempt(_) => 0,
             TxIndexError::MissingOutputOrSpent => 0,
         }
@@ -231,7 +229,6 @@ impl MempoolBanScore for utxo::Error {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             // These errors may be caused by out of sync nodes.
-            // TODO: Make dependent on double spending depth.
             utxo::Error::UtxoAlreadySpent(_) => 0,
             utxo::Error::NoUtxoFound => 0,
 
@@ -254,16 +251,16 @@ impl MempoolBanScore for pos_accounting::Error {
         use pos_accounting::Error as E;
         match self {
             // These may be caused by an out of sync peer
-            // TODO: Can we ban the peer in these cases anyway? Some will be only triggered
-            // after an epoch has elapsed which should be enough time for peer to be up-to-date
-            E::InvariantErrorPoolBalanceAlreadyExists => 0,
-            E::InvariantErrorPoolDataAlreadyExists => 0,
-            E::InvariantErrorDelegationCreationFailedIdAlreadyExists => 0,
             E::AttemptedDecommissionNonexistingPoolBalance => 0,
             E::AttemptedDecommissionNonexistingPoolData => 0,
             E::DelegationCreationFailedPoolDoesNotExist => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
+
+            // Internal invariant errors
+            E::InvariantErrorPoolBalanceAlreadyExists => 0,
+            E::InvariantErrorPoolDataAlreadyExists => 0,
+            E::InvariantErrorDelegationCreationFailedIdAlreadyExists => 0,
             E::InvariantErrorPoolCreationReversalFailedBalanceNotFound => 0,
             E::InvariantErrorPoolCreationReversalFailedDataNotFound => 0,
             E::InvariantErrorPoolCreationReversalFailedAmountChanged => 0,
