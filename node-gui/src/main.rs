@@ -69,7 +69,7 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Loading,
-            Command::perform(NodeController::load(), Message::Loaded),
+            Command::perform(NodeController::initialize(), Message::Loaded),
         )
     }
 
