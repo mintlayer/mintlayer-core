@@ -15,8 +15,6 @@
 
 mod node_controller;
 
-use std::fmt::Debug;
-
 use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
