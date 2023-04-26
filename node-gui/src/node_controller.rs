@@ -37,7 +37,7 @@ impl Debug for NodeController {
 }
 
 impl NodeController {
-    pub async fn load() -> anyhow::Result<NodeController> {
+    pub async fn initialize() -> anyhow::Result<NodeController> {
         let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
 
         let opts = node_lib::Options::from_args(std::env::args_os());
