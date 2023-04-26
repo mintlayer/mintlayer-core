@@ -19,7 +19,7 @@ pub mod cookie;
 pub mod mnemonic;
 mod sync;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use common::{
     chain::{Block, ChainConfig, GenBlock},
@@ -29,8 +29,11 @@ pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use tokio::sync::oneshot;
+use sync::SyncEvent;
+use tokio::sync::mpsc;
 use wallet::DefaultWallet;
+
+const BLOCK_QUEUE_COUNT: usize = 100;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -39,9 +42,9 @@ pub enum ControllerError<T: NodeInterface> {
 }
 
 pub struct Controller<T> {
-    chain_config: Arc<ChainConfig>,
     rpc_client: T,
     wallet: DefaultWallet,
+    sync_rx: mpsc::Receiver<SyncEvent>,
 }
 
 pub type RpcController = Controller<NodeRpcClient>;
@@ -49,10 +52,22 @@ pub type HandlesController = Controller<WalletHandlesClient>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        Self {
+        let (sync_tx, sync_rx) = mpsc::channel(BLOCK_QUEUE_COUNT);
+        let (wallet_block_id, wallet_block_height) =
+            wallet.get_best_block().expect("`get_best_block` should not fail normally");
+
+        tokio::spawn(sync::run(
+            sync_tx,
             chain_config,
+            rpc_client.clone(),
+            wallet_block_id,
+            wallet_block_height,
+        ));
+
+        Self {
             rpc_client,
             wallet,
+            sync_rx,
         }
     }
 
@@ -139,41 +154,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::RpcError)
     }
 
-    pub fn get_block_fetcher(
-        &self,
-    ) -> oneshot::Receiver<Result<sync::NewSyncState, sync::SyncError<T>>> {
-        let (wallet_block_id, wallet_block_height) =
-            self.wallet.get_best_block().expect("`get_best_block` should not fail normally");
-
-        let (tx, rx) = oneshot::channel();
-        let mut rpc_client = self.rpc_client.clone();
-        let chain_config = Arc::clone(&self.chain_config);
-        tokio::spawn(async move {
-            while !tx.is_closed() {
-                let sync_state_res_opt = sync::notify_new_block(
-                    &chain_config,
-                    &mut rpc_client,
-                    wallet_block_id,
-                    wallet_block_height,
-                )
-                .await
-                .transpose();
-                if let Some(sync_state_res) = sync_state_res_opt {
-                    let _ = tx.send(sync_state_res);
-                    return;
-                }
-                tokio::time::sleep(Duration::from_secs(1)).await;
-            }
-        });
-
-        rx
+    // Receive new events from the sync event loop.
+    // This function is cancel safe.
+    pub async fn recv_sync_event(&mut self) -> SyncEvent {
+        self.sync_rx.recv().await.expect("Sync loop must not exit")
     }
 
-    pub fn apply_sync_state(
-        &mut self,
-        sync_state: sync::NewSyncState,
-    ) -> Result<(), wallet::WalletError> {
-        sync::apply_sync_state(&self.chain_config, sync_state, &mut self.wallet)
+    pub fn process_sync_event(&mut self, sync_event: SyncEvent) -> Result<(), wallet::WalletError> {
+        sync::apply_sync_event(sync_event, &mut self.wallet)
     }
 }
 

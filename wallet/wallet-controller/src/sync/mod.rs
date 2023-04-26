@@ -13,18 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{sync::Arc, time::Duration};
+
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use node_comm::node_traits::NodeInterface;
+use tokio::sync::mpsc;
 use wallet::DefaultWallet;
 
-pub enum NewSyncState {
-    UnknownChain,
-    Revert {
-        common_block_id: Id<GenBlock>,
-        common_block_height: BlockHeight,
+pub enum SyncEvent {
+    Reset {
+        block_id: Id<GenBlock>,
+        block_height: BlockHeight,
     },
     NewBlock {
         block: Block,
@@ -41,12 +43,12 @@ pub enum SyncError<T: NodeInterface> {
     BlockNotFound(Id<Block>),
 }
 
-pub async fn notify_new_block<T: NodeInterface>(
+async fn fetch_new_block<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &mut T,
     wallet_block_id: Id<GenBlock>,
     wallet_block_height: BlockHeight,
-) -> Result<Option<NewSyncState>, SyncError<T>> {
+) -> Result<Option<SyncEvent>, SyncError<T>> {
     // TODO: Make it more efficient: download blocks concurrently and send fewer requests
 
     let node_best_block =
@@ -60,14 +62,17 @@ pub async fn notify_new_block<T: NodeInterface>(
     let (common_block_id, common_block_height) = match common_block_opt {
         Some(common_block) => common_block,
         None => {
-            return Ok(Some(NewSyncState::UnknownChain));
+            return Ok(Some(SyncEvent::Reset {
+                block_id: chain_config.genesis_block_id(),
+                block_height: BlockHeight::zero(),
+            }));
         }
     };
 
     if common_block_height < wallet_block_height {
-        return Ok(Some(NewSyncState::Revert {
-            common_block_id,
-            common_block_height,
+        return Ok(Some(SyncEvent::Reset {
+            block_id: common_block_id,
+            block_height: common_block_height,
         }));
     }
 
@@ -92,38 +97,74 @@ pub async fn notify_new_block<T: NodeInterface>(
         .await
         .map_err(SyncError::UnexpectedRpcError)?;
     match new_block {
-        Some(block) => Ok(Some(NewSyncState::NewBlock { block })),
+        Some(block) => Ok(Some(SyncEvent::NewBlock { block })),
         // This may fail if there was a reorg after this function was started.
         // It should resolve normally next time.
         None => Err(SyncError::BlockNotFound(next_block_id)),
     }
 }
 
+pub async fn run<T: NodeInterface>(
+    sync_tx: mpsc::Sender<SyncEvent>,
+    chain_config: Arc<ChainConfig>,
+    mut rpc_client: T,
+    mut wallet_block_id: Id<GenBlock>,
+    mut wallet_block_height: BlockHeight,
+) {
+    while !sync_tx.is_closed() {
+        let sync_state = fetch_new_block(
+            &chain_config,
+            &mut rpc_client,
+            wallet_block_id,
+            wallet_block_height,
+        )
+        .await;
+
+        match sync_state {
+            Ok(Some(v)) => {
+                match &v {
+                    SyncEvent::Reset {
+                        block_id,
+                        block_height,
+                    } => {
+                        wallet_block_id = *block_id;
+                        wallet_block_height = *block_height;
+                    }
+                    SyncEvent::NewBlock { block } => {
+                        wallet_block_id = block.header().block_id().into();
+                        wallet_block_height = wallet_block_height.next_height();
+                    }
+                }
+                _ = sync_tx.send(v).await;
+            }
+            Ok(None) => {
+                // No new blocks, wait before retrying
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+            Err(e) => {
+                logging::log::error!("Sync error: {}", e);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+        }
+    }
+}
+
 /// Sync the wallet state (known blocks) from the node.
 /// Returns true if the wallet state has changed.
-pub fn apply_sync_state(
-    chain_config: &ChainConfig,
-    sync_state: NewSyncState,
+pub fn apply_sync_event(
+    sync_event: SyncEvent,
     wallet: &mut DefaultWallet,
 ) -> Result<(), wallet::WalletError> {
-    match sync_state {
-        NewSyncState::UnknownChain => {
-            // No common block found for some reason. This can happen if the wallet is on an abandoned chain
-            // and the node has never seen this chain before. Reset the wallet to the genesis to start over.
-            logging::log::debug!(
-                "Current wallet's chain is not found, start block scan from the beginning"
-            );
-            wallet.reset_to_height(chain_config.genesis_block_id(), BlockHeight::zero())
-        }
-        NewSyncState::Revert {
-            common_block_id,
-            common_block_height,
+    match sync_event {
+        SyncEvent::Reset {
+            block_id: common_block_id,
+            block_height: common_block_height,
         } => {
-            // Reorg was detected, reset the wallet state to some previous block and start over
+            // Reorg was detected, reset the wallet state to some previous block
             logging::log::debug!("Reorg detected, reset to {common_block_height}");
             wallet.reset_to_height(common_block_id, common_block_height)
         }
-        NewSyncState::NewBlock { block } => {
+        SyncEvent::NewBlock { block } => {
             logging::log::debug!("New block found {}", block.header().block_id());
             wallet.scan_new_blocks(vec![block])
         }
