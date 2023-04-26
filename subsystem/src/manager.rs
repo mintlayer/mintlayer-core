@@ -378,7 +378,7 @@ pub struct ShutdownTrigger(mpsc::Sender<()>);
 
 impl ShutdownTrigger {
     /// Initiate shutdown
-    pub fn initiate(&self) {
+    pub fn initiate(self) {
         use mpsc::error::TrySendError as E;
         self.0.try_send(()).unwrap_or_else(|err| match err {
             E::Full(_) => log::info!("Shutdown requested but the system is already shutting down"),
