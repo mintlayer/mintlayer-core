@@ -88,6 +88,6 @@ impl NodeController {
     }
 
     pub fn chain_config(&self) -> &ChainConfig {
-        &self.chain_config.as_ref()
+        self.chain_config.as_ref()
     }
 }
