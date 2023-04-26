@@ -48,16 +48,6 @@ enum Message {
     ShuttingDownFinished,
 }
 
-pub async fn initialize(
-    remote_controller_sender: oneshot::Sender<RemoteController>,
-) -> anyhow::Result<subsystem::Manager> {
-    let opts = node_lib::Options::from_args(std::env::args_os());
-    logging::init_logging::<&std::path::Path>(None);
-    logging::log::info!("Command line options: {opts:?}");
-
-    node_lib::run(opts, Some(remote_controller_sender)).await
-}
-
 fn do_shutdown(initialized_data: &mut NodeController) -> Command<Message> {
     // We shutdown and join only once, so this being None means we took the handle already
     if initialized_data.manager_join_handle.is_none() {
@@ -98,8 +88,11 @@ impl NodeController {
     async fn load() -> anyhow::Result<NodeController> {
         let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
 
-        let manager =
-            initialize(remote_controller_sender).await.expect("Node initialization failed");
+        let opts = node_lib::Options::from_args(std::env::args_os());
+        logging::init_logging::<&std::path::Path>(None);
+        logging::log::info!("Command line options: {opts:?}");
+
+        let manager = node_lib::run(opts, Some(remote_controller_sender)).await?;
         let shutdown_trigger = manager.make_shutdown_trigger();
 
         let controller =
