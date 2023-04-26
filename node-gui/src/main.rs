@@ -13,17 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::sync::Arc;
+mod node_controller;
 
-use common::chain::ChainConfig;
+use std::fmt::Debug;
+
 use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use node_lib::remote_controller::RemoteController;
-use subsystem::manager::ShutdownTrigger;
-use tokio::sync::oneshot;
+use node_controller::NodeController;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -49,72 +47,17 @@ enum Message {
 }
 
 fn do_shutdown(controller: &mut NodeController) -> Command<Message> {
-    // We shutdown and join only once, so this being None means we took the handle already
-    if controller.manager_join_handle.is_none() {
-        logging::log::error!("Shutdown already requested.");
-        return Command::none();
-    }
-    logging::log::error!("Starting shutdown process...");
-
-    controller.shutdown_trigger.initiate();
-
-    let mut join_handle = None;
-    std::mem::swap(&mut controller.manager_join_handle, &mut join_handle);
+    let manager_join_handle = match controller.trigger_shutdown() {
+        Some(h) => h,
+        None => return Command::none(),
+    };
 
     Command::perform(
         async move {
-            join_handle.expect("Must be found").await.expect("Joining failed");
+            manager_join_handle.await.expect("Joining failed");
         },
         |_| Message::ShuttingDownFinished,
     )
-}
-
-struct NodeController {
-    chain_config: Arc<ChainConfig>,
-    _controller: RemoteController,
-    shutdown_trigger: ShutdownTrigger,
-    manager_join_handle: Option<tokio::task::JoinHandle<()>>,
-}
-
-impl Debug for NodeController {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeInitializationData")
-            .field("chain_config", &self.chain_config)
-            .finish()
-    }
-}
-
-impl NodeController {
-    async fn load() -> anyhow::Result<NodeController> {
-        let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
-
-        let opts = node_lib::Options::from_args(std::env::args_os());
-        logging::init_logging::<&std::path::Path>(None);
-        logging::log::info!("Command line options: {opts:?}");
-
-        let manager = node_lib::run(opts, Some(remote_controller_sender)).await?;
-        let shutdown_trigger = manager.make_shutdown_trigger();
-
-        let controller =
-            remote_controller_receiver.await.expect("Node controller receiving failed");
-
-        let manager_join_handle = tokio::spawn(async move { manager.main().await });
-
-        let chain_config = controller
-            .chainstate
-            .call(|this| this.get_chain_config().clone())
-            .await
-            .expect("Chain config retrieval failed after node initialization");
-
-        let node_controller = NodeController {
-            chain_config,
-            _controller: controller,
-            shutdown_trigger,
-            manager_join_handle: Some(manager_join_handle),
-        };
-
-        Ok(node_controller)
-    }
 }
 
 impl Application for MintlayerNodeGUI {
@@ -134,7 +77,7 @@ impl Application for MintlayerNodeGUI {
         match self {
             MintlayerNodeGUI::Loading => ("Mintlayer Node - Loading...").to_string(),
             MintlayerNodeGUI::Loaded(d) => {
-                format!("Mintlayer Node - {}", d.chain_config.chain_type().name())
+                format!("Mintlayer Node - {}", d.chain_config().chain_type().name())
             }
         }
     }
@@ -181,7 +124,7 @@ impl Application for MintlayerNodeGUI {
             MintlayerNodeGUI::Loaded(state) => {
                 let main_widget = text(&format!(
                     "Genesis block: {}",
-                    state.chain_config.genesis_block_id(),
+                    state.chain_config().genesis_block_id(),
                 ))
                 .width(Length::Fill)
                 .size(25)
