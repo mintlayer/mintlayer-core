@@ -2563,6 +2563,7 @@ dependencies = [
  "iced_style",
  "lazy_static",
  "num-traits",
+ "time 0.3.20",
 ]
 
 [[package]]
@@ -2584,6 +2585,7 @@ checksum = "215d51fa4f70dbb63775d7141243c4d98d4d525d8949695601f8fbac7dcbc04e"
 dependencies = [
  "futures",
  "log",
+ "tokio",
  "wasm-bindgen-futures",
  "wasm-timer",
 ]
@@ -3587,6 +3589,7 @@ dependencies = [
  "common",
  "iced",
  "iced_aw",
+ "iced_native",
  "logging",
  "node-lib",
  "subsystem",
@@ -3773,6 +3776,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -5787,6 +5799,8 @@ version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0cbfecb4d19b5ea75bb31ad904eb5b9fa13f21079c3b92017ebdf4999a5890"
 dependencies = [
+ "libc",
+ "num_threads",
  "serde",
  "time-core",
 ]
