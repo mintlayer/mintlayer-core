@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../../common" }
-logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
@@ -17,7 +16,8 @@ wallet-storage = { path = '../storage' }
 clap = { version = "4", features = ["derive"] }
 dialoguer = { version = "0.10", features = ["history", "completion"] }
 directories = "5.0"
-reedline = { version = "0.18" }
+env_logger = "0.10"
+reedline = { version = "0.19", features = ["external_printer"] }
 shlex = "1.0"
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

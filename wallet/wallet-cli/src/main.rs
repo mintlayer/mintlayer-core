@@ -22,6 +22,7 @@ mod config;
 mod console;
 mod errors;
 mod helpers;
+mod log;
 mod repl;
 mod wallet_init;
 
@@ -41,7 +42,7 @@ use wallet_controller::cookie::load_cookie;
 const COOKIE_FILENAME: &str = ".cookie";
 
 async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
-    logging::init_logging::<&std::path::Path>(None);
+    let printer = log::init();
 
     let args = config::WalletCliArgs::parse();
 
@@ -123,7 +124,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     let output_copy = output.clone();
     let repl_command = repl::get_repl_command();
     let create_line_editor =
-        repl::create_line_editor(repl_command.clone(), output, &data_dir, vi_mode)?;
+        repl::create_line_editor(printer, repl_command.clone(), output, &data_dir, vi_mode)?;
 
     let repl_handle = std::thread::spawn(move || {
         // Run a blocking loop in a separate thread
