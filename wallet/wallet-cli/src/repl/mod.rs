@@ -85,6 +85,7 @@ fn parse_input(line: &str, repl_command: &Command) -> Result<WalletCommand, Wall
 }
 
 pub fn create_line_editor(
+    printer: reedline::ExternalPrinter<String>,
     repl_command: Command,
     output: &ConsoleContext,
     data_dir: &Path,
@@ -108,6 +109,7 @@ pub fn create_line_editor(
     let completer = Box::new(WalletCompletions::new(commands));
 
     let mut line_editor = Reedline::create()
+        .with_external_printer(printer)
         .with_history(history)
         .with_completer(completer)
         .with_quick_completions(false)
