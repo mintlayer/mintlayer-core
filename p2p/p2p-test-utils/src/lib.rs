@@ -27,12 +27,15 @@ use common::{
     primitives::Idable,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
+use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
-pub async fn start_subsystems(
+pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     MempoolHandle,
+    ShutdownTrigger,
+    ManagerJoinHandle,
 ) {
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
@@ -43,17 +46,20 @@ pub async fn start_subsystems(
         Default::default(),
     )
     .unwrap();
-    start_subsystems_with_chainstate(chainstate, chain_config).await
+    start_subsystems_with_chainstate(chainstate, chain_config)
 }
 
-pub async fn start_subsystems_with_chainstate(
+pub fn start_subsystems_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
     chain_config: Arc<ChainConfig>,
 ) -> (
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     MempoolHandle,
+    ShutdownTrigger,
+    ManagerJoinHandle,
 ) {
     let mut manager = subsystem::Manager::new("p2p-test-manager");
+    let shutdown_trigger = manager.make_shutdown_trigger();
 
     let chainstate = manager.add_subsystem("p2p-test-chainstate", chainstate);
 
@@ -67,14 +73,9 @@ pub async fn start_subsystems_with_chainstate(
         move |call, shutdn| mempool.run(call, shutdn)
     });
 
-    // Make sure the mempool event loop has started successfully.
-    // Workaround for the `connect_peer_twice` test error when mempool starts after chainstate shutdown
-    // (happens with "-Zpanic_abort_tests"). Better fix is to stop manager with signal and wait for manager.main() to return.
-    tokio::spawn(async move { manager.main().await });
+    let manager_handle = manager.main_in_task();
 
-    mempool.call(|mempool| mempool.get_all()).await.unwrap().unwrap();
-
-    (chainstate, mempool)
+    (chainstate, mempool, shutdown_trigger, manager_handle)
 }
 
 pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {

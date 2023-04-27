@@ -27,13 +27,16 @@ use tokio::{
     time,
 };
 
-use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate::{
+    chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
+    DefaultTransactionVerificationStrategy,
+};
 use common::{
     chain::{config::create_mainnet, ChainConfig},
     time_getter::TimeGetter,
 };
-use mempool::MempoolHandle;
-use p2p_test_utils::start_subsystems;
+use mempool::{MempoolHandle, MempoolSubsystemInterface};
+use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
 use crate::{
     message::SyncMessage,
@@ -59,6 +62,8 @@ pub struct SyncManagerHandle {
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
     error_receiver: UnboundedReceiver<P2pError>,
     sync_manager_handle: JoinHandle<()>,
+    shutdown_trigger: ShutdownTrigger,
+    subsystem_manager_handle: ManagerJoinHandle,
 }
 
 impl SyncManagerHandle {
@@ -77,6 +82,8 @@ impl SyncManagerHandle {
         p2p_config: Arc<P2pConfig>,
         chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool: MempoolHandle,
+        shutdown_trigger: ShutdownTrigger,
+        subsystem_manager_handle: ManagerJoinHandle,
     ) -> Self {
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
 
@@ -112,6 +119,8 @@ impl SyncManagerHandle {
             sync_event_receiver: handle_receiver,
             error_receiver,
             sync_manager_handle,
+            shutdown_trigger,
+            subsystem_manager_handle,
         }
     }
 
@@ -213,15 +222,24 @@ impl SyncManagerHandle {
     pub async fn resume_panic(self) {
         panic::resume_unwind(self.sync_manager_handle.await.unwrap_err().into_panic());
     }
+
+    pub async fn join_subsystem_manager(self) {
+        self.shutdown_trigger.initiate();
+
+        drop(self.peer_manager_receiver);
+        drop(self.sync_event_sender);
+        drop(self.sync_event_receiver);
+        drop(self.error_receiver);
+        let _ = self.sync_manager_handle.await;
+
+        self.subsystem_manager_handle.join().await;
+    }
 }
 
 pub struct SyncManagerHandleBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
-    subsystems: Option<(
-        subsystem::Handle<Box<dyn ChainstateInterface>>,
-        MempoolHandle,
-    )>,
+    chainstate: Option<Box<dyn ChainstateInterface>>,
 }
 
 impl SyncManagerHandleBuilder {
@@ -229,7 +247,7 @@ impl SyncManagerHandleBuilder {
         Self {
             chain_config: Arc::new(create_mainnet()),
             p2p_config: Arc::new(test_p2p_config()),
-            subsystems: None,
+            chainstate: None,
         }
     }
 
@@ -238,12 +256,8 @@ impl SyncManagerHandleBuilder {
         self
     }
 
-    pub fn with_subsystems(
-        mut self,
-        chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
-        mempool: MempoolHandle,
-    ) -> Self {
-        self.subsystems = Some((chainstate, mempool));
+    pub fn with_chainstate(mut self, chainstate: Box<dyn ChainstateInterface>) -> Self {
+        self.chainstate = Some(chainstate);
         self
     }
 
@@ -253,16 +267,41 @@ impl SyncManagerHandleBuilder {
     }
 
     pub async fn build(self) -> SyncManagerHandle {
-        let (chainstate, mempool) = match self.subsystems {
-            Some((c, m)) => (c, m),
-            None => start_subsystems(Arc::clone(&self.chain_config)).await,
-        };
+        let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
+        let shutdown_trigger = manager.make_shutdown_trigger();
+
+        let chainstate = self.chainstate.unwrap_or_else(|| {
+            make_chainstate(
+                Arc::clone(&self.chain_config),
+                ChainstateConfig::new(),
+                chainstate_storage::inmemory::Store::new_empty().unwrap(),
+                DefaultTransactionVerificationStrategy::new(),
+                None,
+                Default::default(),
+            )
+            .unwrap()
+        });
+        let chainstate = manager.add_subsystem("p2p-sync-test-chainstate", chainstate);
+
+        let mempool = mempool::make_mempool(
+            Arc::clone(&self.chain_config),
+            chainstate.clone(),
+            Default::default(),
+            mempool::SystemUsageEstimator {},
+        );
+        let mempool = manager.add_subsystem_with_custom_eventloop("p2p-sync-test-mempool", {
+            move |call, shutdn| mempool.run(call, shutdn)
+        });
+
+        let manager_handle = manager.main_in_task();
 
         SyncManagerHandle::start_with_params(
             self.chain_config,
             self.p2p_config,
             chainstate,
             mempool,
+            shutdown_trigger,
+            manager_handle,
         )
         .await
     }

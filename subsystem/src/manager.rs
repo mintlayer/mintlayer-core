@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::future::Future;
-use core::time::Duration;
+use core::{future::Future, time::Duration};
 use futures::future::{select_all, BoxFuture, FutureExt};
-use tokio::sync::{broadcast, mpsc};
-use tokio::task;
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::{self, JoinHandle},
+};
 
 use logging::log;
 
@@ -359,6 +360,16 @@ impl Manager {
 
         log::info!("Manager {} terminated", self.name);
     }
+
+    /// Runs the application in a separate task.
+    ///
+    /// This method should always be used instead of spawning a task manually because it prevents
+    /// an incorrect usage. The returned handle must be joined to ensure a proper subsystems
+    /// shutdown.
+    pub fn main_in_task(self) -> ManagerJoinHandle {
+        let handle = Some(tokio::spawn(async move { self.main().await }));
+        ManagerJoinHandle { handle }
+    }
 }
 
 /// Used to initiate shutdown of manager and subsystems.
@@ -367,12 +378,38 @@ pub struct ShutdownTrigger(mpsc::Sender<()>);
 
 impl ShutdownTrigger {
     /// Initiate shutdown
-    pub fn initiate(&self) {
+    pub fn initiate(self) {
         use mpsc::error::TrySendError as E;
         self.0.try_send(()).unwrap_or_else(|err| match err {
             E::Full(_) => log::info!("Shutdown requested but the system is already shutting down"),
             E::Closed(_) => log::info!("Shutdown requested but the system is already down"),
         })
+    }
+}
+
+pub struct ManagerJoinHandle {
+    handle: Option<JoinHandle<()>>,
+}
+
+impl ManagerJoinHandle {
+    pub async fn join(mut self) {
+        if let Err(e) = self.handle.take().expect("The join handle is missing").await {
+            log::error!("Failed to join handle: {e:?}");
+        }
+    }
+}
+
+impl Drop for ManagerJoinHandle {
+    fn drop(&mut self) {
+        if self.handle.is_none() {
+            return;
+        }
+
+        if std::thread::panicking() {
+            log::warn!("Subsystem manager's handle hasn't been joined");
+        } else {
+            panic!("Subsystem manager's handle hasn't been joined")
+        }
     }
 }
 

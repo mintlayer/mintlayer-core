@@ -53,7 +53,8 @@ where
     let (tx_peer_manager, mut rx_peer_manager) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let p2p_config = Arc::new(test_p2p_config());
-    let (chainstate, mempool) = p2p_test_utils::start_subsystems(Arc::clone(&chain_config)).await;
+    let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
+        p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
 
     let (mut conn1, messaging_handle, sync_event_receiver) = N::start(
         T::make_transport(),
@@ -135,4 +136,7 @@ where
         }
         e => panic!("invalid event received: {e:?}"),
     }
+
+    shutdown_trigger.initiate();
+    subsystem_manager_handle.join().await;
 }

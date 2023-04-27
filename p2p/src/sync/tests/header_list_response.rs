@@ -18,7 +18,7 @@ use std::{iter, sync::Arc, time::Duration};
 use chainstate::ban_score::BanScore;
 use chainstate_test_framework::TestFramework;
 use common::{chain::config::create_unit_test_config, primitives::Idable};
-use p2p_test_utils::{create_n_blocks, start_subsystems_with_chainstate};
+use p2p_test_utils::create_n_blocks;
 use test_utils::random::Seed;
 
 use crate::{
@@ -55,14 +55,12 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let block = tf.make_block_builder().build();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -81,6 +79,8 @@ async fn header_count_limit_exceeded(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::HeadersLimitExceeded(0, 0)).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -101,12 +101,10 @@ async fn unordered_headers(#[case] seed: Seed) {
         .filter(|(i, _)| *i != 1)
         .map(|(_, b)| b.header().clone())
         .collect();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -122,6 +120,8 @@ async fn unordered_headers(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -140,12 +140,10 @@ async fn disconnected_headers(#[case] seed: Seed) {
         .skip(1)
         .map(|b| b.header().clone())
         .collect();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -161,6 +159,8 @@ async fn disconnected_headers(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::DisconnectedHeaders).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -175,12 +175,10 @@ async fn valid_headers(#[case] seed: Seed) {
         .with_chain_config(chain_config.as_ref().clone())
         .build();
     let blocks = create_n_blocks(&mut tf, 3);
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -200,6 +198,8 @@ async fn valid_headers(#[case] seed: Seed) {
     );
 
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -237,4 +237,6 @@ async fn disconnect() {
 
     tokio::time::sleep(Duration::from_millis(300)).await;
     handle.assert_disconnect_peer_event(peer).await;
+
+    handle.join_subsystem_manager().await;
 }

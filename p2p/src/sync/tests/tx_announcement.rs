@@ -25,7 +25,6 @@ use common::{
     primitives::{Amount, Id, Idable},
 };
 use mempool::error::{Error as MempoolError, MempoolPolicyError};
-use p2p_test_utils::start_subsystems_with_chainstate;
 use test_utils::random::Seed;
 
 use crate::{
@@ -65,14 +64,12 @@ async fn invalid_transaction(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(chain_config)
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -102,6 +99,8 @@ async fn invalid_transaction(#[case] seed: Seed) {
         P2pError::MempoolError(MempoolError::Policy(MempoolPolicyError::NoInputs)).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 // Transaction announcements are ignored during the initial block download, but it isn't considered
@@ -123,6 +122,8 @@ async fn initial_block_download() {
     handle.assert_no_event().await;
     handle.assert_no_peer_manager_event().await;
     handle.assert_no_error().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -138,8 +139,6 @@ async fn no_transaction_service(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -167,7 +166,7 @@ async fn no_transaction_service(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -184,6 +183,8 @@ async fn no_transaction_service(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::UnexpectedMessage("".to_owned())).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -199,8 +200,6 @@ async fn too_many_announcements(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(P2pConfig {
         bind_addresses: Default::default(),
@@ -228,7 +227,7 @@ async fn too_many_announcements(#[case] seed: Seed) {
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -245,6 +244,8 @@ async fn too_many_announcements(#[case] seed: Seed) {
         P2pError::ProtocolError(ProtocolError::TransactionAnnouncementLimitExceeded(0)).ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -260,14 +261,12 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -296,6 +295,8 @@ async fn duplicated_announcement(#[case] seed: Seed) {
         .ban_score()
     );
     handle.assert_no_event().await;
+
+    handle.join_subsystem_manager().await;
 }
 
 #[rstest::rstest]
@@ -311,14 +312,12 @@ async fn valid_transaction(#[case] seed: Seed) {
         .build();
     // Process a block to finish the initial block download.
     tf.make_block_builder().build_and_process().unwrap().unwrap();
-    let (chainstate, mempool) =
-        start_subsystems_with_chainstate(tf.into_chainstate(), Arc::clone(&chain_config)).await;
 
     let p2p_config = Arc::new(test_p2p_config());
     let mut handle = SyncManagerHandle::builder()
         .with_chain_config(Arc::clone(&chain_config))
         .with_p2p_config(Arc::clone(&p2p_config))
-        .with_subsystems(chainstate, mempool)
+        .with_chainstate(tf.into_chainstate())
         .build()
         .await;
 
@@ -344,6 +343,8 @@ async fn valid_transaction(#[case] seed: Seed) {
         SyncMessage::NewTransaction(tx.transaction().get_id()),
         handle.message().await.1
     );
+
+    handle.join_subsystem_manager().await;
 }
 
 /// Creates a simple transaction.
