@@ -35,7 +35,7 @@ impl Debug for NodeBackendController {
 
 impl NodeBackendController {
     pub async fn initialize() -> anyhow::Result<NodeBackendController> {
-        let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
+        let (node_controller_sender, node_controller_receiver) = oneshot::channel();
 
         if std::env::var("RUST_LOG").is_err() {
             std::env::set_var("RUST_LOG", "info");
@@ -45,10 +45,9 @@ impl NodeBackendController {
         logging::init_logging::<&std::path::Path>(None);
         logging::log::info!("Command line options: {opts:?}");
 
-        let manager = node_lib::run(opts, Some(remote_controller_sender)).await?;
+        let manager = node_lib::run(opts, Some(node_controller_sender)).await?;
 
-        let controller =
-            remote_controller_receiver.await.expect("Node controller receiving failed");
+        let controller = node_controller_receiver.await.expect("Node controller receiving failed");
 
         let manager_join_handle = tokio::spawn(async move { manager.main().await });
 
