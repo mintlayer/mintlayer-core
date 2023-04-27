@@ -101,8 +101,7 @@ pub async fn initialize(
             Default::default(),
             peerdb_storage,
         )
-        .await
-        .expect("The p2p subsystem initialization failed"),
+        .await?,
     );
 
     // Block production

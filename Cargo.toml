@@ -61,6 +61,7 @@ default-members = [
   "mempool",
   "node-lib",
   "node-daemon",
+  "node-gui",
   "p2p",
   "rpc",
   "script",

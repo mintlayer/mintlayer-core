@@ -15,7 +15,10 @@
 
 mod backend_controller;
 
+use std::ops::DerefMut;
+
 use backend_controller::NodeBackendController;
+use iced::futures::TryFutureExt;
 use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
@@ -33,11 +36,12 @@ pub fn main() -> iced::Result {
 enum MintlayerNodeGUI {
     Loading,
     Loaded(NodeBackendController),
+    IntializationError(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Message {
-    Loaded(anyhow::Result<NodeBackendController>),
+    Loaded(Result<NodeBackendController, String>),
     EventOccurred(iced_native::Event),
     ShuttingDownFinished,
 }
@@ -50,7 +54,8 @@ fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
 
     Command::perform(
         async move {
-            manager_join_handle.await.expect("Joining failed");
+            let mut handle = manager_join_handle.lock().await;
+            handle.deref_mut().await.expect("Manager thread failed");
         },
         |_| Message::ShuttingDownFinished,
     )
@@ -65,7 +70,10 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Loading,
-            Command::perform(NodeBackendController::initialize(), Message::Loaded),
+            Command::perform(
+                NodeBackendController::initialize().map_err(|e| e.to_string()),
+                Message::Loaded,
+            ),
         )
     }
 
@@ -75,6 +83,7 @@ impl Application for MintlayerNodeGUI {
             MintlayerNodeGUI::Loaded(d) => {
                 format!("Mintlayer Node - {}", d.chain_config().chain_type().name())
             }
+            MintlayerNodeGUI::IntializationError(_) => "Mintlayer initialization error".to_string(),
         }
     }
 
@@ -85,8 +94,10 @@ impl Application for MintlayerNodeGUI {
                     *self = MintlayerNodeGUI::Loaded(controller);
                     Command::none()
                 }
-                // TODO: handle error on initialization
-                Message::Loaded(Err(e)) => panic!("Error: {e}"),
+                Message::Loaded(Err(e)) => {
+                    *self = MintlayerNodeGUI::IntializationError(e);
+                    Command::none()
+                }
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                         panic!("Attempted shutdown during initialization")
@@ -107,6 +118,11 @@ impl Application for MintlayerNodeGUI {
                         Command::none()
                     }
                 }
+                Message::ShuttingDownFinished => iced::window::close(),
+            },
+            MintlayerNodeGUI::IntializationError(_) => match message {
+                Message::Loaded(_) => Command::none(),
+                Message::EventOccurred(_) => Command::none(),
                 Message::ShuttingDownFinished => iced::window::close(),
             },
         }
@@ -133,6 +149,24 @@ impl Application for MintlayerNodeGUI {
                 container(window_contents)
                     .width(Length::Fill)
                     .height(Length::Fill)
+                    .center_y()
+                    .into()
+            }
+
+            MintlayerNodeGUI::IntializationError(e) => {
+                let error_box = column![
+                    iced::widget::text("Mintlayer-core node initialization failed".to_string())
+                        .size(32),
+                    iced::widget::text(e.to_string()).size(20),
+                    iced::widget::button(text("Close")).on_press(Message::ShuttingDownFinished)
+                ]
+                .align_items(iced::Alignment::Center)
+                .spacing(5);
+
+                container(error_box)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
                     .center_y()
                     .into()
             }
