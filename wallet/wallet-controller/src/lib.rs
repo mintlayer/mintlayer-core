@@ -86,7 +86,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     }
 
     pub async fn chainstate_info(&self) -> Result<ChainInfo, ControllerError<T>> {
-        self.rpc_client.chainstate().await.map_err(ControllerError::RpcError)
+        self.rpc_client.chainstate_info().await.map_err(ControllerError::RpcError)
     }
 
     pub async fn get_best_block_id(&self) -> Result<Id<GenBlock>, ControllerError<T>> {
@@ -174,7 +174,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     fn handle_node_state_change(&mut self, chain_info: ChainInfo) {
         log::info!(
-            "Node chain info updated, best block height: {}, best block id: {}",
+            "Node chainstate updated, best block height: {}, best block id: {}",
             chain_info.best_block_height,
             chain_info.best_block_id.hex_encode()
         );
@@ -293,3 +293,5 @@ pub async fn make_rpc_controller(
         .map_err(ControllerError::RpcError)?;
     Ok(Controller::new(chain_config, rpc_client, wallet))
 }
+
+// TODO: Add tests for block sync

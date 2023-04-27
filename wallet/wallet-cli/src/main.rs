@@ -16,11 +16,11 @@
 // Use `cli_println` instead
 #![deny(clippy::print_stdout)]
 
+mod cli_event_loop;
 mod commands;
 mod config;
 mod console;
 mod errors;
-mod even_loop;
 mod helpers;
 mod repl;
 mod wallet_init;
@@ -109,7 +109,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
             .map_err(WalletCliError::WalletError)?
     };
 
-    let mut controller = wallet_controller::make_rpc_controller(
+    let controller = wallet_controller::make_rpc_controller(
         chain_config,
         rpc_address,
         Some((&rpc_username, &rpc_password)),
@@ -125,12 +125,14 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     let create_line_editor =
         repl::create_line_editor(repl_command.clone(), output, &data_dir, vi_mode)?;
 
-    std::thread::spawn(move || {
+    let repl_handle = std::thread::spawn(move || {
         // Run a blocking loop in a separate thread
         repl::run(create_line_editor, repl_command, event_tx, &output_copy);
     });
 
-    even_loop::run(&mut controller, event_rx).await;
+    cli_event_loop::run(controller, event_rx).await;
+
+    repl_handle.join().expect("Should not panic");
 
     Ok(())
 }

@@ -25,7 +25,7 @@ pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 pub trait NodeInterface {
     type Error: std::error::Error + Send + Sync;
 
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error>;
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;

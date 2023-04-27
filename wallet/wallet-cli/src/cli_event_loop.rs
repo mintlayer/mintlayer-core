@@ -38,13 +38,13 @@ async fn handle_event(controller: &mut RpcController, event: Event) {
     }
 }
 
-pub async fn run(controller: &mut RpcController, mut event_rx: mpsc::UnboundedReceiver<Event>) {
+pub async fn run(mut controller: RpcController, mut event_rx: mpsc::UnboundedReceiver<Event>) {
     loop {
         tokio::select! {
             event_opt = event_rx.recv() => {
                 match event_opt {
                     Some(event) => {
-                        handle_event(controller, event).await;
+                        handle_event(&mut controller, event).await;
                     },
                     None => return,
                 }

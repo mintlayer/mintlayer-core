@@ -27,11 +27,11 @@ use reedline::{
 use tokio::sync::mpsc;
 
 use crate::{
+    cli_event_loop::Event,
     cli_println,
     commands::{ConsoleCommand, WalletCommand},
     console::ConsoleContext,
     errors::WalletCliError,
-    even_loop::Event,
     repl::{wallet_completions::WalletCompletions, wallet_prompt::WalletPrompt},
 };
 

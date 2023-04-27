@@ -60,7 +60,7 @@ impl WalletHandlesClient {
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
 
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
         let result = self.chainstate_handle.call(move |this| this.info()).await??;
         Ok(result)
     }

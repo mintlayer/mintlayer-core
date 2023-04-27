@@ -29,7 +29,7 @@ use super::{NodeRpcClient, NodeRpcError};
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
 
-    async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
         ChainstateRpcClient::info(&self.http_client)
             .await
             .map_err(NodeRpcError::ResponseError)

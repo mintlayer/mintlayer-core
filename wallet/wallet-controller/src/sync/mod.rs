@@ -52,8 +52,9 @@ pub type BlockFetchResult<T> = Result<FetchedBlock, FetchBlockError<T>>;
 
 pub async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<ChainInfo>, rpc_client: T) {
     let mut last_state = None;
+
     while !state_tx.is_closed() {
-        let state_res = rpc_client.chainstate().await;
+        let state_res = rpc_client.chainstate_info().await;
         match state_res {
             Ok(state) => {
                 if last_state.as_ref() != Some(&state) {
