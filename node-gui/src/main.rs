@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod node_controller;
+mod backend_controller;
 
 use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use node_controller::NodeBackendController;
+use backend_controller::NodeBackendController;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
