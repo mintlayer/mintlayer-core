@@ -2331,6 +2331,7 @@ dependencies = [
 name = "mempool"
 version = "0.1.0"
 dependencies = [
+ "accounting",
  "anyhow",
  "async-trait",
  "chainstate",
