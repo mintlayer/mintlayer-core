@@ -57,7 +57,7 @@ pub async fn initialize(
     node_config: NodeConfigFile,
     node_controller: Option<oneshot::Sender<NodeController>>,
 ) -> Result<subsystem::Manager> {
-    let chain_config: Arc<ChainConfig> = Arc::new(chain_config);
+    let chain_config = Arc::new(chain_config);
 
     // INITIALIZE SUBSYSTEMS
 
