@@ -79,10 +79,7 @@ impl NodeBackendController {
 
         self.controller.shutdown_trigger.clone().initiate();
 
-        let mut join_handle = None;
-        std::mem::swap(&mut self.manager_join_handle, &mut join_handle);
-
-        join_handle
+        self.manager_join_handle.take()
     }
 
     pub fn chain_config(&self) -> &ChainConfig {
