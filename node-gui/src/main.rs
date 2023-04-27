@@ -101,6 +101,7 @@ impl Application for MintlayerNodeGUI {
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                        // TODO: this event doesn't cover the case of closing the Window through Cmd+Q in MacOS
                         gui_shutdown(controller)
                     } else {
                         Command::none()
