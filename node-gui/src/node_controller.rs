@@ -19,13 +19,13 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-pub struct NodeController {
+pub struct NodeBackendController {
     chain_config: Arc<ChainConfig>,
     controller: RemoteController,
     manager_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
-impl Debug for NodeController {
+impl Debug for NodeBackendController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NodeInitializationData")
             .field("chain_config", &self.chain_config)
@@ -33,8 +33,8 @@ impl Debug for NodeController {
     }
 }
 
-impl NodeController {
-    pub async fn initialize() -> anyhow::Result<NodeController> {
+impl NodeBackendController {
+    pub async fn initialize() -> anyhow::Result<NodeBackendController> {
         let (remote_controller_sender, remote_controller_receiver) = oneshot::channel();
 
         if std::env::var("RUST_LOG").is_err() {
@@ -58,7 +58,7 @@ impl NodeController {
             .await
             .expect("Chain config retrieval failed after node initialization");
 
-        let node_controller = NodeController {
+        let node_controller = NodeBackendController {
             chain_config,
             controller,
             manager_join_handle: Some(manager_join_handle),

@@ -19,7 +19,7 @@ use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use node_controller::NodeController;
+use node_controller::NodeBackendController;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -32,17 +32,17 @@ pub fn main() -> iced::Result {
 
 enum MintlayerNodeGUI {
     Loading,
-    Loaded(NodeController),
+    Loaded(NodeBackendController),
 }
 
 #[derive(Debug)]
 enum Message {
-    Loaded(anyhow::Result<NodeController>),
+    Loaded(anyhow::Result<NodeBackendController>),
     EventOccurred(iced_native::Event),
     ShuttingDownFinished,
 }
 
-fn gui_shutdown(controller: &mut NodeController) -> Command<Message> {
+fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
     let manager_join_handle = match controller.trigger_shutdown() {
         Some(h) => h,
         None => return Command::none(),
@@ -65,7 +65,7 @@ impl Application for MintlayerNodeGUI {
     fn new(_flags: ()) -> (Self, Command<Message>) {
         (
             MintlayerNodeGUI::Loading,
-            Command::perform(NodeController::initialize(), Message::Loaded),
+            Command::perform(NodeBackendController::initialize(), Message::Loaded),
         )
     }
 
