@@ -127,7 +127,8 @@ fn transfer_tx_verifier_to_thread(#[case] seed: Seed) {
             utxos,
             accounting,
             TransactionVerifierConfig::new(false),
-        );
+        )
+        .unwrap();
 
         std::thread::scope(|s| {
             s.spawn(move || verifier.consume());

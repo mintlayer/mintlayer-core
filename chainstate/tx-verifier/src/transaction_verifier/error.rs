@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::Infallible;
+
+use thiserror::Error;
+
 use chainstate_types::GetAncestorError;
 use common::{
     chain::{
@@ -23,7 +27,6 @@ use common::{
     },
     primitives::{Amount, BlockHeight, Id},
 };
-use thiserror::Error;
 
 use super::storage::TransactionVerifierStorageError;
 
@@ -137,6 +140,12 @@ impl From<SpendError> for TxIndexError {
                 source_output_index,
             },
         }
+    }
+}
+
+impl From<Infallible> for ConnectTransactionError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
     }
 }
 

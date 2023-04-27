@@ -141,6 +141,7 @@ where
     S: TransactionVerifierStorageRef,
     U: UtxosView + Send + Sync,
     A: PoSAccountingView + Send + Sync,
+    ConnectTransactionError: From<U::Error>,
 {
     pub fn new_generic(
         storage: S,
@@ -148,23 +149,24 @@ where
         utxos: U,
         accounting: A,
         verifier_config: TransactionVerifierConfig,
-    ) -> Self {
+    ) -> Result<Self, ConnectTransactionError> {
         let best_block = storage
             .get_best_block_for_utxos()
             .expect("Database error while reading utxos best block")
             .expect("best block should be some");
         let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
-        Self {
+        let utxo_cache = UtxosCache::new(utxos)?;
+        Ok(Self {
             storage,
             chain_config,
             best_block,
             tx_index_cache,
             token_issuance_cache: TokenIssuanceCache::new(),
-            utxo_cache: UtxosCache::new(utxos).expect("Utxo cache setup failed"),
+            utxo_cache,
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta_adapter: PoSAccountingDeltaAdapter::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
-        }
+        })
     }
 }
 

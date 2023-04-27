@@ -20,7 +20,7 @@ use chainstate::{
     tx_verifier::{
         transaction_verifier::storage::HasTxIndexDisabledError, TransactionVerifierStorageRef,
     },
-    ChainstateError,
+    ChainstateError, ConnectTransactionError,
 };
 use chainstate_types::storage_result;
 use common::{
@@ -46,6 +46,13 @@ pub enum Error {
     Chainstate(#[from] ChainstateError),
     #[error("Subsystem error: {0}")]
     Subsystem(#[from] subsystem::subsystem::CallError),
+}
+
+impl From<Error> for ConnectTransactionError {
+    fn from(value: Error) -> Self {
+        todo!();
+        todo!()
+    }
 }
 
 impl HasTxIndexDisabledError for Error {
@@ -112,7 +119,7 @@ impl Clone for ChainstateHandle {
     }
 }
 
-impl utils::shallow_clone::ShallowClone for ChainstateHandle {
+impl ShallowClone for ChainstateHandle {
     fn shallow_clone(&self) -> Self {
         Self(self.0.shallow_clone())
     }

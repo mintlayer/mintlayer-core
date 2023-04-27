@@ -19,7 +19,7 @@ mod chainstate_handle;
 
 use std::sync::Arc;
 
-pub use chainstate::tx_verifier::flush_to_storage;
+pub use chainstate::{tx_verifier::flush_to_storage, ConnectTransactionError};
 use common::chain::ChainConfig;
 use utils::shallow_clone::ShallowClone;
 
@@ -37,10 +37,10 @@ pub type TransactionVerifier = chainstate::tx_verifier::TransactionVerifier<
 pub fn create(
     chain_config: Arc<ChainConfig>,
     chainstate: subsystem::Handle<Chainstate>,
-) -> TransactionVerifier {
+) -> Result<TransactionVerifier, ConnectTransactionError> {
     let verifier_config = chainstate::tx_verifier::TransactionVerifierConfig::new(false);
-    let chainstate = chainstate_handle::ChainstateHandle::new(chainstate);
-    chainstate::tx_verifier::TransactionVerifier::new_generic(
+    let chainstate = ChainstateHandle::new(chainstate);
+    TransactionVerifier::new_generic(
         chainstate.shallow_clone(),
         chain_config,
         chainstate.shallow_clone(),
