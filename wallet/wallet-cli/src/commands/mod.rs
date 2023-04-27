@@ -25,6 +25,9 @@ use crate::errors::WalletCliError;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
+    /// Returns the node chainstate
+    Chainstate,
+
     /// Returns the current best block hash
     BestBlock,
 
@@ -118,6 +121,11 @@ pub async fn handle_wallet_command(
     command: WalletCommand,
 ) -> Result<EditConsole, WalletCliError> {
     match command {
+        WalletCommand::Chainstate => {
+            let info = controller.chainstate_info().await.map_err(WalletCliError::Controller)?;
+            Ok(EditConsole::Print(format!("{info:?}")))
+        }
+
         WalletCommand::BestBlock => {
             let id = controller.get_best_block_id().await.map_err(WalletCliError::Controller)?;
             Ok(EditConsole::Print(id.hex_encode()))

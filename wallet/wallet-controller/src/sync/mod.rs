@@ -13,160 +13,106 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
+use chainstate::ChainInfo;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use node_comm::node_traits::NodeInterface;
 use tokio::sync::mpsc;
-use wallet::DefaultWallet;
 
-pub enum SyncEvent {
-    Reset {
-        block_id: Id<GenBlock>,
-        block_height: BlockHeight,
-    },
-    NewBlock {
-        block: Block,
-    },
+pub struct FetchedBlock {
+    pub block: Block,
+    pub block_height: BlockHeight,
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum SyncError<T: NodeInterface> {
+pub enum FetchBlockError<T: NodeInterface> {
     #[error("Unexpected RPC error: {0}")]
     UnexpectedRpcError(T::Error),
     #[error("Unexpected genesis block received at height {0}")]
     UnexpectedGenesisBlock(BlockHeight),
-    #[error("Node did not return block {0}")]
-    BlockNotFound(Id<Block>),
+    #[error("Node does not have new block")]
+    NoNewBlock,
+    #[error("Unexpected block received")]
+    UnexpectedBlockReceived,
 }
 
-async fn fetch_new_block<T: NodeInterface>(
-    chain_config: &ChainConfig,
-    rpc_client: &mut T,
-    wallet_block_id: Id<GenBlock>,
-    wallet_block_height: BlockHeight,
-) -> Result<Option<SyncEvent>, SyncError<T>> {
-    // TODO: Make it more efficient: download blocks concurrently and send fewer requests
+pub type BlockFetchResult<T> = Result<FetchedBlock, FetchBlockError<T>>;
 
-    let node_best_block =
-        rpc_client.get_best_block_id().await.map_err(SyncError::UnexpectedRpcError)?;
-
-    let common_block_opt = rpc_client
-        .get_last_common_block(wallet_block_id, node_best_block)
-        .await
-        .map_err(SyncError::UnexpectedRpcError)?;
-
-    let (common_block_id, common_block_height) = match common_block_opt {
-        Some(common_block) => common_block,
-        None => {
-            return Ok(Some(SyncEvent::Reset {
-                block_id: chain_config.genesis_block_id(),
-                block_height: BlockHeight::zero(),
-            }));
-        }
-    };
-
-    if common_block_height < wallet_block_height {
-        return Ok(Some(SyncEvent::Reset {
-            block_id: common_block_id,
-            block_height: common_block_height,
-        }));
-    }
-
-    let next_block_height = wallet_block_height.next_height();
-    let next_block_id_opt = rpc_client
-        .get_block_id_at_height(next_block_height)
-        .await
-        .map_err(SyncError::UnexpectedRpcError)?;
-    let next_gen_block_id = match next_block_id_opt {
-        Some(id) => id,
-        None => return Ok(None),
-    };
-    let next_block_id = match next_gen_block_id.classify(chain_config) {
-        common::chain::GenBlockId::Genesis(_) => {
-            return Err(SyncError::UnexpectedGenesisBlock(wallet_block_height))
-        }
-        common::chain::GenBlockId::Block(id) => id,
-    };
-
-    let new_block = rpc_client
-        .get_block(next_block_id)
-        .await
-        .map_err(SyncError::UnexpectedRpcError)?;
-    match new_block {
-        Some(block) => Ok(Some(SyncEvent::NewBlock { block })),
-        // This may fail if there was a reorg after this function was started.
-        // It should resolve normally next time.
-        None => Err(SyncError::BlockNotFound(next_block_id)),
-    }
-}
-
-pub async fn run<T: NodeInterface>(
-    sync_tx: mpsc::Sender<SyncEvent>,
-    chain_config: Arc<ChainConfig>,
-    mut rpc_client: T,
-    mut wallet_block_id: Id<GenBlock>,
-    mut wallet_block_height: BlockHeight,
-) {
-    while !sync_tx.is_closed() {
-        let sync_state = fetch_new_block(
-            &chain_config,
-            &mut rpc_client,
-            wallet_block_id,
-            wallet_block_height,
-        )
-        .await;
-
-        match sync_state {
-            Ok(Some(v)) => {
-                match &v {
-                    SyncEvent::Reset {
-                        block_id,
-                        block_height,
-                    } => {
-                        wallet_block_id = *block_id;
-                        wallet_block_height = *block_height;
-                    }
-                    SyncEvent::NewBlock { block } => {
-                        wallet_block_id = block.header().block_id().into();
-                        wallet_block_height = wallet_block_height.next_height();
-                    }
-                }
-                _ = sync_tx.send(v).await;
-            }
-            Ok(None) => {
-                // No new blocks, wait before retrying
+pub async fn run_state_sync<T: NodeInterface>(tip_tx: mpsc::Sender<ChainInfo>, rpc_client: T) {
+    while !tip_tx.is_closed() {
+        let state_res = rpc_client.chainstate().await;
+        match state_res {
+            Ok(state) => {
+                _ = tip_tx.send(state).await;
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
             Err(e) => {
-                logging::log::error!("Sync error: {}", e);
+                logging::log::error!("Node state sync error: {}", e);
                 tokio::time::sleep(Duration::from_secs(10)).await;
             }
         }
     }
 }
 
-/// Sync the wallet state (known blocks) from the node.
-/// Returns true if the wallet state has changed.
-pub fn apply_sync_event(
-    sync_event: SyncEvent,
-    wallet: &mut DefaultWallet,
-) -> Result<(), wallet::WalletError> {
-    match sync_event {
-        SyncEvent::Reset {
-            block_id: common_block_id,
-            block_height: common_block_height,
-        } => {
-            // Reorg was detected, reset the wallet state to some previous block
-            logging::log::debug!("Reorg detected, reset to {common_block_height}");
-            wallet.reset_to_height(common_block_id, common_block_height)
+pub async fn fetch_new_block<T: NodeInterface>(
+    chain_config: &ChainConfig,
+    rpc_client: &mut T,
+    node_block_id: Id<GenBlock>,
+    node_block_height: BlockHeight,
+    wallet_block_id: Id<GenBlock>,
+    wallet_block_height: BlockHeight,
+) -> Result<FetchedBlock, FetchBlockError<T>> {
+    assert!(node_block_id != wallet_block_id);
+    assert!(node_block_height >= wallet_block_height);
+
+    let common_block_opt = rpc_client
+        .get_last_common_block(wallet_block_id, node_block_id)
+        .await
+        .map_err(FetchBlockError::UnexpectedRpcError)?;
+
+    let (common_block_id, common_block_height) = match common_block_opt {
+        // Common branch is found
+        Some(common_block) => common_block,
+        // Common branch not found, restart from genesis block.
+        // This happens when:
+        // 1. The node is downloading blocks.
+        // 2. Blocks in the blockchain were pruned, so the block the wallet knows about is now unrecognized in the block tree.
+        None => (chain_config.genesis_block_id(), BlockHeight::zero()),
+    };
+
+    let block_height = common_block_height.next_height();
+
+    let gen_block_id = rpc_client
+        .get_block_id_at_height(block_height)
+        .await
+        .map_err(FetchBlockError::UnexpectedRpcError)?
+        .ok_or(FetchBlockError::NoNewBlock)?;
+
+    // This must not be genesis, but we don't want to trust the remote node and give it power to panic the wallet with expect.
+    // TODO: we should mark this node as malicious if this happens to be genesis.
+    let block_id = match gen_block_id.classify(chain_config) {
+        common::chain::GenBlockId::Genesis(_) => {
+            return Err(FetchBlockError::UnexpectedGenesisBlock(wallet_block_height))
         }
-        SyncEvent::NewBlock { block } => {
-            logging::log::debug!("New block found {}", block.header().block_id());
-            wallet.scan_new_blocks(vec![block])
-        }
-    }
+        common::chain::GenBlockId::Block(id) => id,
+    };
+
+    let block = rpc_client
+        .get_block(block_id)
+        .await
+        .map_err(FetchBlockError::UnexpectedRpcError)?
+        .ok_or(FetchBlockError::NoNewBlock)?;
+    utils::ensure!(
+        *block.header().prev_block_id() == common_block_id,
+        FetchBlockError::UnexpectedBlockReceived
+    );
+
+    Ok(FetchedBlock {
+        block,
+        block_height,
+    })
 }

@@ -117,24 +117,18 @@ impl<B: storage::Backend> Wallet<B> {
         &self.db
     }
 
-    /// Returns the last scanned block hash and height (none if no blocks were scanned).
-    /// Geneses block must be already scanned when the wallet is created.
+    /// Returns the last scanned block hash and height.
+    /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
         Err(WalletError::NotImplemented)
     }
 
     /// Scan new blocks and update best block hash/height.
-    /// New block must continue the chain of previously scanned blocks.
-    pub fn scan_new_blocks(&mut self, _blocks: Vec<Block>) -> WalletResult<()> {
-        Err(WalletError::NotImplemented)
-    }
-
-    /// Resets the wallet state to a lower block height, removing transactions and UTXOs from the dropped blocks.
-    /// Used when a chain reorg is detected.
-    pub fn reset_to_height(
+    /// New block may reset the chain of previously scanned blocks.
+    pub fn scan_new_blocks(
         &mut self,
-        _block_id: Id<GenBlock>,
-        _height: BlockHeight,
+        _block_height: BlockHeight,
+        _blocks: Vec<Block>,
     ) -> WalletResult<()> {
         Err(WalletError::NotImplemented)
     }

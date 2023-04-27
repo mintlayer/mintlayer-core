@@ -49,9 +49,7 @@ pub async fn run(controller: &mut RpcController, mut event_rx: mpsc::UnboundedRe
                     None => return,
                 }
             }
-            sync_event = controller.recv_sync_event() => {
-                controller.process_sync_event(sync_event).expect("Sync event handling should not fail normally");
-            }
+            _ = controller.run_sync() => {}
         }
     }
 }

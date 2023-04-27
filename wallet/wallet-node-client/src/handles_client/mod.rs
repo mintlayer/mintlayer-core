@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockSource, ChainstateError, ChainstateHandle};
+use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -59,6 +59,11 @@ impl WalletHandlesClient {
 #[async_trait::async_trait]
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
+
+    async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
+        let result = self.chainstate_handle.call(move |this| this.info()).await??;
+        Ok(result)
+    }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         let result = self.chainstate_handle.call(move |this| this.get_best_block_id()).await??;

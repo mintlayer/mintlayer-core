@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::rpc::ChainstateRpcClient;
+use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -28,6 +28,12 @@ use super::{NodeRpcClient, NodeRpcError};
 #[async_trait::async_trait]
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
+
+    async fn chainstate(&self) -> Result<ChainInfo, Self::Error> {
+        ChainstateRpcClient::info(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
