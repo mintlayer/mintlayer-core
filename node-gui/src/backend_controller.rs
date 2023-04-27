@@ -77,7 +77,7 @@ impl NodeBackendController {
         }
         logging::log::info!("Starting shutdown process...");
 
-        self.controller.shutdown_trigger.initiate();
+        self.controller.shutdown_trigger.clone().initiate();
 
         let mut join_handle = None;
         std::mem::swap(&mut self.manager_join_handle, &mut join_handle);
