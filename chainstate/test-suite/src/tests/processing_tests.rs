@@ -42,7 +42,7 @@ use common::{
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
         OutputSpentState, TxInput, TxOutput, UpgradeVersion,
     },
-    primitives::{Amount, BlockHeight, Compact, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable},
     Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
@@ -201,7 +201,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
                 anyonecanspend_address(),
                 vrf_pub_key,
                 decommission_destination,
-                0,
+                PerThousand::new(0).unwrap(),
                 Amount::ZERO,
             )))])
             .add_test_transaction_from_best_block(&mut rng)

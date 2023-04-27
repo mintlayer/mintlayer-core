@@ -29,7 +29,7 @@ use common::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
         Destination, OutPoint, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
     },
-    primitives::{signed_amount::SignedAmount, Amount, Idable},
+    primitives::{per_thousand::PerThousand, signed_amount::SignedAmount, Amount, Idable},
 };
 use crypto::{
     random::{CryptoRng, Rng},
@@ -46,7 +46,7 @@ fn create_pool_data(
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let margin_ratio = rng.gen_range(0u64..1000);
+    let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     PoolData::new(
         decomission_destination,

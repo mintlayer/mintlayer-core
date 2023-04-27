@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 
 use common::{
     chain::{DelegationId, Destination, OutPoint, OutPointSourceId, PoolId},
-    primitives::{Amount, Id, H256},
+    primitives::{per_thousand::PerThousand, Amount, Id, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -53,7 +53,7 @@ fn create_pool_data(
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let margin_ratio = rng.gen_range(0u64..1000);
+    let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     PoolData::new(
         decomission_destination,

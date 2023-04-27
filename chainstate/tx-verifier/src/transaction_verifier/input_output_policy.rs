@@ -255,7 +255,7 @@ mod tests {
             tokens::OutputValue,
             Block, Destination, GenBlock, OutPoint, OutPointSourceId, PoolId, TxInput,
         },
-        primitives::{Amount, Compact, Id, H256},
+        primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
     };
     use crypto::{
         random::{seq::IteratorRandom, Rng},
@@ -323,7 +323,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             vrf_pub_key,
             Destination::AnyoneCanSpend,
-            0,
+            PerThousand::new(0).unwrap(),
             Amount::ZERO,
         )))
     }

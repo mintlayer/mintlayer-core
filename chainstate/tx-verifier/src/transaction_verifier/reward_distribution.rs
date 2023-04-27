@@ -41,7 +41,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
     let total_staker_reward = (total_reward - pool_data.cost_per_block())
-        .and_then(|v| v * pool_data.margin_ratio_per_thousand().into())
+        .and_then(|v| v * pool_data.margin_ratio_per_thousand().value().into())
         .and_then(|v| v / 1000)
         .and_then(|v| v + pool_data.cost_per_block())
         .ok_or(ConnectTransactionError::StakerRewardCalculationFailed(
@@ -208,7 +208,7 @@ mod tests {
     use super::*;
     use common::{
         chain::{DelegationId, Destination, PoolId},
-        primitives::{Amount, H256},
+        primitives::{per_thousand::PerThousand, Amount, H256},
     };
     use crypto::{
         random::Rng,
@@ -270,7 +270,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             pledged_amount,
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
-            100,
+            PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
         );
 
@@ -383,7 +383,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = rng.gen_range(0..1000);
+        let mpt = PerThousand::new(rng.gen_range(0..=1000)).unwrap();
 
         let original_pool_balance =
             ((pledged_amount + delegation_id_1_amount).unwrap() + delegation_id_2_amount).unwrap();
@@ -463,7 +463,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = rng.gen_range(0..1000);
+        let mpt = PerThousand::new(rng.gen_range(0..1000)).unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
@@ -518,7 +518,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = 1000;
+        let mpt = PerThousand::new(1000).unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 

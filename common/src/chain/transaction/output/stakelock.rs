@@ -16,7 +16,7 @@
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
 
-use crate::primitives::Amount;
+use crate::primitives::{per_thousand::PerThousand, Amount};
 
 use super::Destination;
 
@@ -26,9 +26,7 @@ pub struct StakePoolData {
     staker: Destination,
     vrf_public_key: VRFPublicKey,
     decommission_key: Destination,
-    // TODO: create a PerThousand type
-    #[codec(compact)]
-    margin_ratio_per_thousand: u64,
+    margin_ratio_per_thousand: PerThousand,
     cost_per_block: Amount,
 }
 
@@ -38,7 +36,7 @@ impl StakePoolData {
         staker: Destination,
         vrf_public_key: VRFPublicKey,
         decommission_key: Destination,
-        margin_ratio_per_thousand: u64,
+        margin_ratio_per_thousand: PerThousand,
         cost_per_block: Amount,
     ) -> Self {
         Self {
@@ -63,7 +61,7 @@ impl StakePoolData {
         &self.decommission_key
     }
 
-    pub fn margin_ratio_per_thousand(&self) -> u64 {
+    pub fn margin_ratio_per_thousand(&self) -> PerThousand {
         self.margin_ratio_per_thousand
     }
 

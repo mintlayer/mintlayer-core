@@ -24,7 +24,7 @@ use common::{
         stakelock::StakePoolData,
         OutPoint, PoolId, RequiredConsensus,
     },
-    primitives::{Amount, BlockHeight, Compact},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact},
 };
 use consensus::ConsensusPoSError;
 use crypto::{
@@ -113,7 +113,7 @@ pub fn create_stake_pool_data(
         anyonecanspend_address(),
         vrf_pk,
         destination,
-        1000,
+        PerThousand::new(1000).unwrap(), // give all reward to the owner
         Amount::ZERO,
     )
 }
