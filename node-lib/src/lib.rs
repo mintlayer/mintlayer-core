@@ -27,7 +27,7 @@ pub type Error = anyhow::Error;
 
 pub use config_files::{NodeConfigFile, NodeTypeConfigFile, StorageBackendConfigFile};
 pub use options::{Command, Options, RunOptions};
-pub use runner::{initialize, run};
+pub use runner::{initialize, setup};
 
 pub fn init_logging(_opts: &Options) {
     logging::init_logging::<&std::path::Path>(None)

@@ -156,7 +156,7 @@ pub async fn initialize(
 }
 
 /// Processes options and potentially runs the node.
-pub async fn run(
+pub async fn setup(
     options: Options,
     node_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<subsystem::Manager> {

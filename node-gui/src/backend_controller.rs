@@ -45,7 +45,7 @@ impl NodeBackendController {
         logging::init_logging::<&std::path::Path>(None);
         logging::log::info!("Command line options: {opts:?}");
 
-        let manager = node_lib::run(opts, Some(node_controller_sender)).await?;
+        let manager = node_lib::setup(opts, Some(node_controller_sender)).await?;
 
         let controller = node_controller_receiver.await.expect("Node controller receiving failed");
 
