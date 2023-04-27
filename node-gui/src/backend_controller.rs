@@ -89,3 +89,5 @@ impl NodeBackendController {
         self.chain_config.as_ref()
     }
 }
+
+// TODO: tests, especially startup and shutdown
