@@ -19,7 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        OutPointSourceId, PoolId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -107,12 +108,19 @@ pub enum ConnectTransactionError {
     StakerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    #[error("Failed to calculate staker reward for block {0}")]
-    StakerRewardCalculationFailed(Id<Block>),
-    #[error("Failed to sum delegators reward for block {0}")]
-    DelegatorsRewardSumFailed(Id<Block>),
-    #[error("Failed to calculate delegator reward for block {0}")]
-    DelegatorRewardCalculationFailed(Id<Block>),
+    // FIXME: rename and pass more info
+    #[error("Failed to calculate reward for block {0} for owner of the pool {1}")]
+    StakerRewardCalculationFailed(Id<Block>, PoolId),
+    #[error(
+        "Reward in block {0} for owner of the pool {1} which is {2:?} cannot be bigger than total reward {3:?}"
+    )]
+    StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    #[error("Failed to sum block {0} reward for pool {1} delegations")]
+    DelegationsRewardSumFailed(Id<Block>, PoolId),
+    #[error("Reward for delegation {0} in block {1} overflowed")]
+    DelegationRewardOverflow(DelegationId, Id<Block>),
+    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
+    DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811

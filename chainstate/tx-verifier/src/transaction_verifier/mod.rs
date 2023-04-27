@@ -541,7 +541,7 @@ where
                 let total_reward = (block_subsidy + total_fees.0)
                     .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
 
-                let undos = reward_distribution::distribute_reward(
+                let undos = reward_distribution::distribute_pos_reward(
                     &mut self.accounting_delta_adapter,
                     block_id,
                     *pos_data.stake_pool_id(),

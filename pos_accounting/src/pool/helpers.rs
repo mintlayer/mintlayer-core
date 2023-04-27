@@ -50,6 +50,7 @@ pub fn make_delegation_id(input0_outpoint: &OutPoint) -> DelegationId {
     DelegationId::new(hasher.finalize().into())
 }
 
+// FIXME: staker balance as a field in db
 pub fn calculate_staker_balance<V: PoSAccountingView<Error = crate::Error>>(
     view: &V,
     pool_id: PoolId,
