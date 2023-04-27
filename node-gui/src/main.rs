@@ -15,11 +15,11 @@
 
 mod backend_controller;
 
+use backend_controller::NodeBackendController;
 use iced::widget::{column, container, text};
 use iced::{alignment, Subscription};
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use backend_controller::NodeBackendController;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
