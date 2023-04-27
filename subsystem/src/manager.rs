@@ -381,15 +381,14 @@ impl ShutdownTrigger {
     /// Initiate shutdown
     pub fn initiate(self) {
         use mpsc::error::TrySendError as E;
-        if let Some(sender) = self.0.upgrade() {
-            sender.try_send(()).unwrap_or_else(|err| match err {
-                E::Full(_) => {
-                    log::info!("Shutdown requested but the system is already shutting down")
-                }
-                E::Closed(_) => log::info!("Shutdown requested but the system is already down"),
-            })
-        } else {
-            log::info!("Shutdown requested but the system is already down")
+        match self.0.upgrade().map(|s| s.try_send(())) {
+            None | Some(Err(E::Closed(_))) => {
+                log::info!("Shutdown requested but the system is already down")
+            }
+            Some(Err(E::Full(_))) => {
+                log::info!("Shutdown requested but the system is already shutting down")
+            }
+            Some(Ok(())) => {}
         }
     }
 }
