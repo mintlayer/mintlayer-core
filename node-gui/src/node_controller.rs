@@ -14,14 +14,14 @@
 // limitations under the License.
 
 use common::chain::ChainConfig;
-use node_lib::remote_controller::RemoteController;
+use node_lib::node_controller::NodeController;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
 pub struct NodeBackendController {
     chain_config: Arc<ChainConfig>,
-    controller: RemoteController,
+    controller: NodeController,
     manager_join_handle: Option<tokio::task::JoinHandle<()>>,
 }
 

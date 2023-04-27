@@ -21,11 +21,11 @@ use mempool::MempoolInterface;
 use p2p::interface::p2p_interface::P2pInterface;
 use subsystem::{manager::ShutdownTrigger, Handle};
 
-/// Remote controller for the node subsystems.
+/// Controller for the node subsystems.
 /// It contains handles to the subsystems to be used by components
 /// that are meant to control a new, such as a CLI, GUI or similar.
 #[derive(Clone)]
-pub struct RemoteController {
+pub struct NodeController {
     pub shutdown_trigger: ShutdownTrigger,
     pub chainstate: Handle<Box<dyn ChainstateInterface>>,
     pub mempool: Handle<dyn MempoolInterface>,
@@ -33,7 +33,7 @@ pub struct RemoteController {
     pub p2p: Handle<Box<dyn P2pInterface>>,
 }
 
-impl Debug for RemoteController {
+impl Debug for NodeController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RemoteController (contents cannot be displayed)").finish()
     }

@@ -17,9 +17,9 @@
 
 mod config_files;
 mod mock_time;
+pub mod node_controller;
 mod options;
 mod regtest_options;
-pub mod remote_controller;
 pub mod rpc;
 mod runner;
 

@@ -45,9 +45,9 @@ use utils::default_data_dir::prepare_data_dir;
 use crate::{
     config_files::NodeConfigFile,
     mock_time::set_mock_time,
+    node_controller::NodeController,
     options::{default_data_dir, Command, Options, RunOptions},
     regtest_options::ChainConfigOptions,
-    remote_controller::RemoteController,
 };
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
@@ -55,7 +55,7 @@ pub async fn initialize(
     chain_config: ChainConfig,
     data_dir: PathBuf,
     node_config: NodeConfigFile,
-    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
+    remote_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<subsystem::Manager> {
     let chain_config: Arc<ChainConfig> = Arc::new(chain_config);
 
@@ -142,7 +142,7 @@ pub async fn initialize(
     }
 
     if let Some(sender) = remote_controller_sender {
-        let remote_controller = RemoteController {
+        let remote_controller = NodeController {
             shutdown_trigger: manager.make_shutdown_trigger(),
             chainstate: chainstate.clone(),
             block_prod: block_prod.clone(),
@@ -158,7 +158,7 @@ pub async fn initialize(
 /// Processes options and potentially runs the node.
 pub async fn run(
     options: Options,
-    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
+    remote_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<subsystem::Manager> {
     let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
     match command {
@@ -213,7 +213,7 @@ async fn start(
     datadir_path_opt: &Option<PathBuf>,
     run_options: &RunOptions,
     chain_config: ChainConfig,
-    remote_controller_sender: Option<oneshot::Sender<RemoteController>>,
+    remote_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<subsystem::Manager> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
