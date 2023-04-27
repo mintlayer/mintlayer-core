@@ -55,6 +55,8 @@ pub struct Controller<T: NodeInterface> {
     /// Used to start block synchronization when a new block is found.
     node_chain_info: Option<ChainInfo>,
 
+    state_sync_task: JoinHandle<()>,
+
     /// Handle of the background block fetch task, if started.
     /// If successful, the wallet will be updated.
     /// If there was an error, the block sync process will be retried later.
@@ -70,7 +72,7 @@ const BLOCK_SYNC_ENABLED: bool = false;
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
         let (node_state_tx, node_state_rx) = mpsc::channel(1);
-        tokio::spawn(sync::run_state_sync(node_state_tx, rpc_client.clone()));
+        let state_sync_task = tokio::spawn(sync::run_state_sync(node_state_tx, rpc_client.clone()));
 
         Self {
             chain_config,
@@ -78,6 +80,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             wallet,
             node_state_rx,
             node_chain_info: None,
+            state_sync_task,
             block_fetch_task: None,
         }
     }
@@ -269,6 +272,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 }
             }
         }
+    }
+}
+
+impl<T: NodeInterface> Drop for Controller<T> {
+    fn drop(&mut self) {
+        self.state_sync_task.abort();
+        self.block_fetch_task.as_ref().map(JoinHandle::abort);
     }
 }
 
