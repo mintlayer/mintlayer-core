@@ -73,10 +73,10 @@ impl NodeController {
     pub fn trigger_shutdown(&mut self) -> Option<tokio::task::JoinHandle<()>> {
         if self.manager_join_handle.is_none() {
             // We shutdown and join only once, so this being None means we took the handle already
-            logging::log::error!("Shutdown already requested.");
+            logging::log::warn!("Shutdown already requested.");
             return None;
         }
-        logging::log::error!("Starting shutdown process...");
+        logging::log::info!("Starting shutdown process...");
 
         self.controller.shutdown_trigger.initiate();
 
