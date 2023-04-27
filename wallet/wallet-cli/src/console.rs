@@ -18,7 +18,7 @@ macro_rules! cli_println {
     ($context:expr, $($arg:tt)*) => {
         {
             ConsoleContext::begin_output($context);
-            println!($($arg)*)
+            println!($($arg)*);
         }
     };
 }

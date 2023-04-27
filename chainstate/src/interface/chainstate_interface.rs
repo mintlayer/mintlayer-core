@@ -115,6 +115,8 @@ pub trait ChainstateInterface: Send {
         first_block_index: &GenBlockIndex,
         second_block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, ChainstateError>;
+    /// Returns last common block id and height of two chains.
+    /// Returns None if no block indexes are found and therefore the last common ancestor is unknown.
     fn last_common_block(
         &self,
         first_block: &Id<GenBlock>,

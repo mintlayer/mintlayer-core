@@ -28,7 +28,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     cli_println,
-    commands::{EditConsole, WalletCommand},
+    commands::{ConsoleCommand, WalletCommand},
     console::ConsoleContext,
     errors::WalletCliError,
     even_loop::Event,
@@ -168,26 +168,26 @@ pub fn run(
 
                             match res {
                                 Ok(cmd) => match cmd {
-                                    EditConsole::Print(text) => {
+                                    ConsoleCommand::Print(text) => {
                                         cli_println!(output, "{}", text);
                                     }
-                                    EditConsole::ClearScreen => {
+                                    ConsoleCommand::ClearScreen => {
                                         line_editor
                                             .clear_scrollback()
                                             .expect("Should not fail normally");
                                     }
-                                    EditConsole::PrintHistory => {
+                                    ConsoleCommand::PrintHistory => {
                                         line_editor
                                             .print_history()
                                             .expect("Should not fail normally");
                                     }
-                                    EditConsole::ClearHistory => {
+                                    ConsoleCommand::ClearHistory => {
                                         line_editor
                                             .history_mut()
                                             .clear()
                                             .expect("Should not fail normally");
                                     }
-                                    EditConsole::Exit => return,
+                                    ConsoleCommand::Exit => return,
                                 },
                                 Err(e) => {
                                     cli_println!(output, "{}", e);

@@ -26,10 +26,12 @@ use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use logging::log;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
+use serialization::hex::HexEncode;
 use sync::{BlockFetchResult, FetchedBlock};
 use tokio::{sync::mpsc, task::JoinHandle};
 use wallet::DefaultWallet;
@@ -42,30 +44,41 @@ pub enum ControllerError<T: NodeInterface> {
 
 pub struct Controller<T: NodeInterface> {
     chain_config: Arc<ChainConfig>,
+
     rpc_client: T,
+
     wallet: DefaultWallet,
-    node_tip_rx: mpsc::Receiver<ChainInfo>,
+
+    node_state_rx: mpsc::Receiver<ChainInfo>,
+
+    /// Last known chain state information of the remote node.
+    /// Used to start block synchronization when a new block is found.
     node_chain_info: Option<ChainInfo>,
-    sync_task: Option<JoinHandle<BlockFetchResult<T>>>,
+
+    /// Handle of the background block fetch task, if started.
+    /// If successful, the wallet will be updated.
+    /// If there was an error, the block sync process will be retried later.
+    block_fetch_task: Option<JoinHandle<BlockFetchResult<T>>>,
 }
 
 pub type RpcController = Controller<NodeRpcClient>;
 pub type HandlesController = Controller<WalletHandlesClient>;
 
+// Disabled until wallet implements required API
 const BLOCK_SYNC_ENABLED: bool = false;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        let (tip_tx, tip_rx) = mpsc::channel(1);
-        tokio::spawn(sync::run_state_sync(tip_tx, rpc_client.clone()));
+        let (node_state_tx, node_state_rx) = mpsc::channel(1);
+        tokio::spawn(sync::run_state_sync(node_state_tx, rpc_client.clone()));
 
         Self {
             chain_config,
             rpc_client,
             wallet,
-            node_tip_rx: tip_rx,
+            node_state_rx,
             node_chain_info: None,
-            sync_task: None,
+            block_fetch_task: None,
         }
     }
 
@@ -156,7 +169,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::RpcError)
     }
 
-    fn handle_node_tip_change(&mut self, chain_info: ChainInfo) {
+    fn handle_node_state_change(&mut self, chain_info: ChainInfo) {
+        log::info!(
+            "Node chain info updated, best block height: {}, best block id: {}",
+            chain_info.best_block_height,
+            chain_info.best_block_id.hex_encode()
+        );
         self.node_chain_info = Some(chain_info);
     }
 
@@ -165,7 +183,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             return;
         }
 
-        if self.sync_task.is_some() {
+        if self.block_fetch_task.is_some() {
             return;
         }
 
@@ -177,6 +195,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let (wallet_block_id, wallet_block_height) =
             self.wallet.get_best_block().expect("`get_best_block` should not fail normally");
 
+        // Wait until the node has enough block height.
+        // Block sync may not work correctly otherwise.
         if node_block_id == wallet_block_id || node_block_height < wallet_block_height {
             return;
         }
@@ -184,7 +204,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let chain_config = Arc::clone(&self.chain_config);
         let mut rpc_client = self.rpc_client.clone();
 
-        self.sync_task = Some(tokio::spawn(async move {
+        self.block_fetch_task = Some(tokio::spawn(async move {
             let sync_res = sync::fetch_new_block(
                 &chain_config,
                 &mut rpc_client,
@@ -196,7 +216,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .await;
 
             if let Err(e) = &sync_res {
-                logging::log::error!("Block fetch failed: {e}");
+                log::error!("Block fetch failed: {e}");
+                // Wait a bit to not spam constantly if the node is unreachable
                 tokio::time::sleep(Duration::from_secs(10)).await;
             }
 
@@ -212,19 +233,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         {
             let scan_res = self.wallet.scan_new_blocks(block_height, vec![block]);
             if let Err(e) = scan_res {
-                logging::log::error!("Block scan failed: {e}");
+                log::error!("Block scan failed: {e}");
             }
         }
     }
 
     async fn recv_block_fetch_result(
-        sync_task: &mut Option<JoinHandle<BlockFetchResult<T>>>,
+        block_fetch_task: &mut Option<JoinHandle<BlockFetchResult<T>>>,
     ) -> BlockFetchResult<T> {
         // This must be cancel safe!
-        match sync_task {
+        match block_fetch_task {
             Some(task) => {
                 let res = task.await.expect("Block fetch should not panic");
-                *sync_task = None;
+                *block_fetch_task = None;
                 res
             }
             None => std::future::pending().await,
@@ -239,11 +260,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             self.start_block_fetch_if_needed();
 
             tokio::select! {
-                tip = self.node_tip_rx.recv() => {
+                chain_info_opt = self.node_state_rx.recv() => {
                     // Channel is always open because [run_tip_sync] does not return
-                    self.handle_node_tip_change(tip.expect("Channel must be open"));
+                    self.handle_node_state_change(chain_info_opt.expect("Channel must be open"));
                 }
-                sync_result = Self::recv_block_fetch_result(&mut self.sync_task) => {
+                sync_result = Self::recv_block_fetch_result(&mut self.block_fetch_task) => {
                     self.handle_block_fetch_result(sync_result);
                 }
             }

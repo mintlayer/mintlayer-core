@@ -23,6 +23,12 @@ use common::{
 use node_comm::node_traits::NodeInterface;
 use tokio::sync::mpsc;
 
+struct NextBlockInfo {
+    pub common_block_id: Id<GenBlock>,
+    pub block_id: Id<Block>,
+    pub block_height: BlockHeight,
+}
+
 pub struct FetchedBlock {
     pub block: Block,
     pub block_height: BlockHeight,
@@ -34,20 +40,26 @@ pub enum FetchBlockError<T: NodeInterface> {
     UnexpectedRpcError(T::Error),
     #[error("Unexpected genesis block received at height {0}")]
     UnexpectedGenesisBlock(BlockHeight),
-    #[error("Node does not have new block")]
-    NoNewBlock,
-    #[error("Unexpected block received")]
-    UnexpectedBlockReceived,
+    #[error("There is no block at height {0}")]
+    NoBlockAtHeight(BlockHeight),
+    #[error("Block with id {0} not found")]
+    BlockNotFound(Id<Block>),
+    #[error("Invalid prev block id: {0}, expected: {1}")]
+    InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
 
 pub type BlockFetchResult<T> = Result<FetchedBlock, FetchBlockError<T>>;
 
-pub async fn run_state_sync<T: NodeInterface>(tip_tx: mpsc::Sender<ChainInfo>, rpc_client: T) {
-    while !tip_tx.is_closed() {
+pub async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<ChainInfo>, rpc_client: T) {
+    let mut last_state = None;
+    while !state_tx.is_closed() {
         let state_res = rpc_client.chainstate().await;
         match state_res {
             Ok(state) => {
-                _ = tip_tx.send(state).await;
+                if last_state.as_ref() != Some(&state) {
+                    _ = state_tx.send(state.clone()).await;
+                    last_state = Some(state);
+                }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
             Err(e) => {
@@ -58,14 +70,16 @@ pub async fn run_state_sync<T: NodeInterface>(tip_tx: mpsc::Sender<ChainInfo>, r
     }
 }
 
-pub async fn fetch_new_block<T: NodeInterface>(
+// TODO: For security reasons, the wallet should probably keep track of latest blocks
+// and not allow very large reorgs (for example, the Monero wallet allows reorgs of up to 100 blocks).
+async fn get_next_block_info<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &mut T,
     node_block_id: Id<GenBlock>,
     node_block_height: BlockHeight,
     wallet_block_id: Id<GenBlock>,
     wallet_block_height: BlockHeight,
-) -> Result<FetchedBlock, FetchBlockError<T>> {
+) -> Result<NextBlockInfo, FetchBlockError<T>> {
     assert!(node_block_id != wallet_block_id);
     assert!(node_block_height >= wallet_block_height);
 
@@ -90,7 +104,7 @@ pub async fn fetch_new_block<T: NodeInterface>(
         .get_block_id_at_height(block_height)
         .await
         .map_err(FetchBlockError::UnexpectedRpcError)?
-        .ok_or(FetchBlockError::NoNewBlock)?;
+        .ok_or(FetchBlockError::NoBlockAtHeight(block_height))?;
 
     // This must not be genesis, but we don't want to trust the remote node and give it power to panic the wallet with expect.
     // TODO: we should mark this node as malicious if this happens to be genesis.
@@ -101,14 +115,43 @@ pub async fn fetch_new_block<T: NodeInterface>(
         common::chain::GenBlockId::Block(id) => id,
     };
 
+    Ok(NextBlockInfo {
+        common_block_id,
+        block_id,
+        block_height,
+    })
+}
+
+pub async fn fetch_new_block<T: NodeInterface>(
+    chain_config: &ChainConfig,
+    rpc_client: &mut T,
+    node_block_id: Id<GenBlock>,
+    node_block_height: BlockHeight,
+    wallet_block_id: Id<GenBlock>,
+    wallet_block_height: BlockHeight,
+) -> Result<FetchedBlock, FetchBlockError<T>> {
+    let NextBlockInfo {
+        common_block_id,
+        block_id,
+        block_height,
+    } = get_next_block_info(
+        chain_config,
+        rpc_client,
+        node_block_id,
+        node_block_height,
+        wallet_block_id,
+        wallet_block_height,
+    )
+    .await?;
+
     let block = rpc_client
         .get_block(block_id)
         .await
         .map_err(FetchBlockError::UnexpectedRpcError)?
-        .ok_or(FetchBlockError::NoNewBlock)?;
+        .ok_or(FetchBlockError::BlockNotFound(block_id))?;
     utils::ensure!(
         *block.header().prev_block_id() == common_block_id,
-        FetchBlockError::UnexpectedBlockReceived
+        FetchBlockError::InvalidPrevBlockId(*block.header().prev_block_id(), common_block_id)
     );
 
     Ok(FetchedBlock {

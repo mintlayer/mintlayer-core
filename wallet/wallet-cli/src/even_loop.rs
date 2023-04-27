@@ -17,7 +17,7 @@ use tokio::sync::{mpsc, oneshot};
 use wallet_controller::RpcController;
 
 use crate::{
-    commands::{handle_wallet_command, EditConsole, WalletCommand},
+    commands::{handle_wallet_command, ConsoleCommand, WalletCommand},
     errors::WalletCliError,
 };
 
@@ -25,7 +25,7 @@ use crate::{
 pub enum Event {
     HandleCommand {
         command: WalletCommand,
-        res_tx: oneshot::Sender<Result<EditConsole, WalletCliError>>,
+        res_tx: oneshot::Sender<Result<ConsoleCommand, WalletCliError>>,
     },
 }
 

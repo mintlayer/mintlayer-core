@@ -26,7 +26,7 @@ use crate::errors::WalletCliError;
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
     /// Returns the node chainstate
-    Chainstate,
+    ChainstateInfo,
 
     /// Returns the current best block hash
     BestBlock,
@@ -108,7 +108,7 @@ pub enum WalletCommand {
 }
 
 #[derive(Debug)]
-pub enum EditConsole {
+pub enum ConsoleCommand {
     Print(String),
     ClearScreen,
     PrintHistory,
@@ -119,22 +119,22 @@ pub enum EditConsole {
 pub async fn handle_wallet_command(
     controller: &mut RpcController,
     command: WalletCommand,
-) -> Result<EditConsole, WalletCliError> {
+) -> Result<ConsoleCommand, WalletCliError> {
     match command {
-        WalletCommand::Chainstate => {
+        WalletCommand::ChainstateInfo => {
             let info = controller.chainstate_info().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(format!("{info:?}")))
+            Ok(ConsoleCommand::Print(format!("{info:?}")))
         }
 
         WalletCommand::BestBlock => {
             let id = controller.get_best_block_id().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(id.hex_encode()))
+            Ok(ConsoleCommand::Print(id.hex_encode()))
         }
 
         WalletCommand::BestBlockHeight => {
             let height =
                 controller.get_best_block_height().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(height.to_string()))
+            Ok(ConsoleCommand::Print(height.to_string()))
         }
 
         WalletCommand::BlockHash { height } => {
@@ -143,8 +143,8 @@ pub async fn handle_wallet_command(
                 .await
                 .map_err(WalletCliError::Controller)?;
             match hash {
-                Some(id) => Ok(EditConsole::Print(id.hex_encode())),
-                None => Ok(EditConsole::Print("Not found".to_owned())),
+                Some(id) => Ok(ConsoleCommand::Print(id.hex_encode())),
+                None => Ok(ConsoleCommand::Print("Not found".to_owned())),
             }
         }
 
@@ -154,14 +154,14 @@ pub async fn handle_wallet_command(
             let hash =
                 controller.get_block(hash.into()).await.map_err(WalletCliError::Controller)?;
             match hash {
-                Some(block) => Ok(EditConsole::Print(block.hex_encode())),
-                None => Ok(EditConsole::Print("Not found".to_owned())),
+                Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
+                None => Ok(ConsoleCommand::Print("Not found".to_owned())),
             }
         }
 
         WalletCommand::SubmitBlock { block } => {
             controller.submit_block(block).await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(
+            Ok(ConsoleCommand::Print(
                 "The block was submitted successfully".to_owned(),
             ))
         }
@@ -171,59 +171,59 @@ pub async fn handle_wallet_command(
                 .submit_transaction(transaction)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(
+            Ok(ConsoleCommand::Print(
                 "The transaction was submitted successfully".to_owned(),
             ))
         }
 
-        WalletCommand::Rescan => Ok(EditConsole::Print("Not implemented".to_owned())),
+        WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
         WalletCommand::NodeVersion => {
             let version = controller.node_version().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(version))
+            Ok(ConsoleCommand::Print(version))
         }
 
         WalletCommand::NodeShutdown => {
             controller.node_shutdown().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print("Success".to_owned()))
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
         WalletCommand::Connect { address } => {
             controller.p2p_connect(address).await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print("Success".to_owned()))
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::Disconnect { peer_id } => {
             controller.p2p_disconnect(peer_id).await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print("Success".to_owned()))
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::PeerCount => {
             let peer_count =
                 controller.p2p_get_peer_count().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(peer_count.to_string()))
+            Ok(ConsoleCommand::Print(peer_count.to_string()))
         }
         WalletCommand::ConnectedPeers => {
             let peers =
                 controller.p2p_get_connected_peers().await.map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print(format!("{peers:?}")))
+            Ok(ConsoleCommand::Print(format!("{peers:?}")))
         }
         WalletCommand::AddReservedPeer { address } => {
             controller
                 .p2p_add_reserved_node(address)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print("Success".to_owned()))
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::RemoveReservedPeer { address } => {
             controller
                 .p2p_remove_reserved_node(address)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            Ok(EditConsole::Print("Success".to_owned()))
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
-        WalletCommand::Exit => Ok(EditConsole::Exit),
-        WalletCommand::History => Ok(EditConsole::PrintHistory),
-        WalletCommand::ClearScreen => Ok(EditConsole::ClearScreen),
-        WalletCommand::ClearHistory => Ok(EditConsole::ClearHistory),
+        WalletCommand::Exit => Ok(ConsoleCommand::Exit),
+        WalletCommand::History => Ok(ConsoleCommand::PrintHistory),
+        WalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
+        WalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
     }
 }

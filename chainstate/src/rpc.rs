@@ -55,7 +55,8 @@ trait ChainstateRpc {
     #[method(name = "best_block_height")]
     async fn best_block_height(&self) -> RpcResult<BlockHeight>;
 
-    /// Get last common block id and height of two chains (none if any of the given chains is not found)
+    /// Returns last common block id and height of two chains.
+    /// Returns None if no block indexes are found and therefore the last common ancestor is unknown.
     #[method(name = "last_common_block")]
     async fn last_common_block(
         &self,
