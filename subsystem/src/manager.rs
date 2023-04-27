@@ -298,7 +298,7 @@ impl Manager {
 
     /// Create a trigger object that can be used to shut down the system
     pub fn make_shutdown_trigger(&self) -> ShutdownTrigger {
-        ShutdownTrigger(self.shutting_down_tx.clone())
+        ShutdownTrigger(self.shutting_down_tx.downgrade())
     }
 
     /// Run the application main task.
@@ -375,16 +375,22 @@ impl Manager {
 
 /// Used to initiate shutdown of manager and subsystems.
 #[derive(Clone)]
-pub struct ShutdownTrigger(mpsc::Sender<()>);
+pub struct ShutdownTrigger(mpsc::WeakSender<()>);
 
 impl ShutdownTrigger {
     /// Initiate shutdown
     pub fn initiate(self) {
         use mpsc::error::TrySendError as E;
-        self.0.try_send(()).unwrap_or_else(|err| match err {
-            E::Full(_) => log::info!("Shutdown requested but the system is already shutting down"),
-            E::Closed(_) => log::info!("Shutdown requested but the system is already down"),
-        })
+        if let Some(sender) = self.0.upgrade() {
+            sender.try_send(()).unwrap_or_else(|err| match err {
+                E::Full(_) => {
+                    log::info!("Shutdown requested but the system is already shutting down")
+                }
+                E::Closed(_) => log::info!("Shutdown requested but the system is already down"),
+            })
+        } else {
+            log::info!("Shutdown requested but the system is already down")
+        }
     }
 }
 
