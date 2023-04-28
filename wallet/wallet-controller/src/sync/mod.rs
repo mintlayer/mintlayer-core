@@ -15,7 +15,6 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::ChainInfo;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -25,9 +24,6 @@ use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
 use tokio::{sync::mpsc, task::JoinHandle};
 use wallet::DefaultWallet;
-
-// Disabled until wallet implements required API
-const BLOCK_SYNC_ENABLED: bool = false;
 
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
@@ -61,11 +57,11 @@ pub struct BlockSyncing<T: NodeInterface> {
 
     rpc_client: T,
 
-    node_state_rx: mpsc::Receiver<ChainInfo>,
+    node_state_rx: mpsc::Receiver<NodeState>,
 
     /// Last known chain state information of the remote node.
     /// Used to start block synchronization when a new block is found.
-    node_chain_info: Option<ChainInfo>,
+    node_chain_state: Option<NodeState>,
 
     state_sync_task: JoinHandle<()>,
 
@@ -73,6 +69,11 @@ pub struct BlockSyncing<T: NodeInterface> {
     /// If successful, the wallet will be updated.
     /// If there was an error, the block sync process will be retried later.
     block_fetch_task: Option<JoinHandle<BlockFetchResult<T>>>,
+}
+
+struct NodeState {
+    block_height: BlockHeight,
+    block_id: Id<GenBlock>,
 }
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
@@ -84,32 +85,28 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
             chain_config,
             rpc_client,
             node_state_rx,
-            node_chain_info: None,
+            node_chain_state: None,
             state_sync_task,
             block_fetch_task: None,
         }
     }
 
-    fn handle_node_state_change(&mut self, chain_info: ChainInfo) {
+    fn handle_node_state_change(&mut self, node_state: NodeState) {
         log::info!(
-            "Node chainstate updated, best block height: {}, best block id: {}",
-            chain_info.best_block_height,
-            chain_info.best_block_id.hex_encode()
+            "Node chainstate updated, block height: {}, top block id: {}",
+            node_state.block_height,
+            node_state.block_id.hex_encode()
         );
-        self.node_chain_info = Some(chain_info);
+        self.node_chain_state = Some(node_state);
     }
 
     fn start_block_fetch_if_needed(&mut self, wallet: &mut DefaultWallet) {
-        if !BLOCK_SYNC_ENABLED {
-            return;
-        }
-
         if self.block_fetch_task.is_some() {
             return;
         }
 
-        let (node_block_id, node_block_height) = match self.node_chain_info.as_ref() {
-            Some(info) => (info.best_block_id, info.best_block_height),
+        let (node_block_id, node_block_height) = match self.node_chain_state.as_ref() {
+            Some(info) => (info.block_id, info.block_height),
             None => return,
         };
 
@@ -191,16 +188,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
     }
 }
 
-async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<ChainInfo>, rpc_client: T) {
-    let mut last_state = None;
+async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<NodeState>, rpc_client: T) {
+    let mut last_block_id = None;
 
     while !state_tx.is_closed() {
         let state_res = rpc_client.chainstate_info().await;
         match state_res {
             Ok(state) => {
-                if last_state.as_ref() != Some(&state) {
-                    _ = state_tx.send(state.clone()).await;
-                    last_state = Some(state);
+                if last_block_id.as_ref() != Some(&state.best_block_id) {
+                    _ = state_tx
+                        .send(NodeState {
+                            block_height: state.best_block_height,
+                            block_id: state.best_block_id,
+                        })
+                        .await;
+                    last_block_id = Some(state.best_block_id);
                 }
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }

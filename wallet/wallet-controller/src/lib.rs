@@ -32,6 +32,9 @@ pub use node_comm::{
 };
 use wallet::DefaultWallet;
 
+// Disabled until wallet implements required API
+const BLOCK_SYNC_ENABLED: bool = false;
+
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
     #[error("Node call error: {0}")]
@@ -171,7 +174,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     /// Sync the wallet block chain from the node.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
-        self.block_sync.run(&mut self.wallet).await;
+        if BLOCK_SYNC_ENABLED {
+            self.block_sync.run(&mut self.wallet).await;
+        } else {
+            std::future::pending::<()>().await;
+        }
     }
 }
 
