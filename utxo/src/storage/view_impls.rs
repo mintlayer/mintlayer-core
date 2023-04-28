@@ -32,7 +32,7 @@ impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
     }
 
     fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
-        Ok(self.get_best_block_for_utxos()?.expect("Failed to get best block hash"))
+        self.get_best_block_for_utxos()
     }
 
     fn estimated_size(&self) -> Option<usize> {

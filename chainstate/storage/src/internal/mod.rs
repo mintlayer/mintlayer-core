@@ -254,7 +254,7 @@ impl<B: storage::Backend> UtxosStorageRead for Store<B> {
     type Error = crate::Error;
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-        fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
 }

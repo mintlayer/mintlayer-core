@@ -119,8 +119,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             .expect("Utxo cache setup failed");
         let best_block = storage
             .get_best_block_for_utxos()
-            .expect("Database error while reading utxos best block")
-            .expect("best block should be some");
+            .expect("Database error while reading utxos best block");
         let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
         Self {
             storage,
@@ -151,8 +150,7 @@ where
     ) -> Self {
         let best_block = storage
             .get_best_block_for_utxos()
-            .expect("Database error while reading utxos best block")
-            .expect("best block should be some");
+            .expect("Database error while reading utxos best block");
         let tx_index_cache = OptionalTxIndexCache::from_config(&verifier_config);
         Self {
             storage,

@@ -71,9 +71,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
     .unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -151,9 +149,7 @@ fn tx_index_set_hierarchy(#[case] seed: Seed) {
     let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -221,9 +217,7 @@ fn tokens_set_hierarchy(#[case] seed: Seed) {
     );
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -303,9 +297,7 @@ fn utxo_del_from_chain_hierarchy(#[case] seed: Seed) {
     let block_2_undo: UtxosBlockUndo = Default::default();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_utxo()
         .with(eq(outpoint1.clone()))
@@ -383,9 +375,7 @@ fn tx_index_del_hierarchy(#[case] seed: Seed) {
     let outpoint2 = OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng)));
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -446,9 +436,7 @@ fn tokens_del_hierarchy(#[case] seed: Seed) {
     let tx_id_2 = Transaction::new(2, vec![], vec![], 2).unwrap().get_id();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -509,9 +497,7 @@ fn utxo_conflict_hierarchy(#[case] seed: Seed) {
     let (_, utxo2) = create_utxo(&mut rng, 2000);
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -586,9 +572,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
     .unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_set_utxo_undo_data()
         .with(
@@ -655,9 +639,7 @@ fn tx_index_conflict_hierarchy(#[case] seed: Seed) {
     let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -719,9 +701,7 @@ fn tokens_conflict_hierarchy(#[case] seed: Seed) {
     );
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -795,9 +775,7 @@ fn pos_accounting_stake_pool_set_hierarchy(#[case] seed: Seed) {
     let pool_id_2 = pos_accounting::make_pool_id(&outpoint2);
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -865,9 +843,7 @@ fn pos_accounting_stake_pool_undo_set_hierarchy(#[case] seed: Seed) {
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
@@ -959,9 +935,7 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store.expect_batch_write().times(1).return_const(Ok(()));
     store
         .expect_batch_write_delta()
