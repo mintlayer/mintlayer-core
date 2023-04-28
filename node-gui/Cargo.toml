@@ -16,4 +16,4 @@ iced = { version = "0.9", features = ["canvas", "debug", "tokio"] }
 iced_aw = { version = "0.5", features = ["cupertino"] }
 iced_native = "0.10"
 
-tokio = { version = "1.27", features = ["time"] }
+tokio.workspace = true
