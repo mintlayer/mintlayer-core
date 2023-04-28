@@ -122,7 +122,13 @@ impl Application for MintlayerNodeGUI {
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::Loaded(_) => Command::none(),
-                Message::EventOccurred(_) => Command::none(),
+                Message::EventOccurred(event) => {
+                    if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                        iced::window::close()
+                    } else {
+                        Command::none()
+                    }
+                }
                 Message::ShuttingDownFinished => iced::window::close(),
             },
         }
