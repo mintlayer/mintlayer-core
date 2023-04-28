@@ -42,7 +42,7 @@ enum MintlayerNodeGUI {
 #[derive(Debug, Clone)]
 enum Message {
     Loaded(Result<NodeBackendController, String>),
-    EventOccurred(iced_native::Event),
+    EventOccurred(iced::Event),
     ShuttingDownFinished,
 }
 

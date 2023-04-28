@@ -3589,7 +3589,6 @@ dependencies = [
  "common",
  "iced",
  "iced_aw",
- "iced_native",
  "logging",
  "node-lib",
  "subsystem",
