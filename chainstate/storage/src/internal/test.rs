@@ -373,13 +373,8 @@ fn utxo_db_impl_test(#[case] seed: Seed) {
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     assert!(db_interface.set_best_block_for_utxos(&block_id.into()).is_ok());
 
-    let block_id = Id::new(
-        db_interface
-            .get_best_block_for_utxos()
-            .expect("query should not fail")
-            .expect("should return the block id")
-            .get(),
-    );
+    let block_id =
+        Id::new(db_interface.get_best_block_for_utxos().expect("query should not fail").get());
 
     // undo checking
     let undo = create_rand_block_undo(&mut rng, 10, 10);

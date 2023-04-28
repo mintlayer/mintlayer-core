@@ -210,8 +210,9 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
 
-            fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>> {
+            fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>> {
                 self.read_value::<well_known::UtxosBestBlockId>()
+                    .map(|id| id.expect("Best block for UTXOs to be present"))
             }
 
             fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>> {

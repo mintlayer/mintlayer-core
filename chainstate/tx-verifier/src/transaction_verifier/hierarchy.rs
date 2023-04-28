@@ -120,8 +120,8 @@ where
         self.utxo_cache.utxo(outpoint).map_err(|e| e.into())
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
-        Ok(Some(self.best_block))
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
+        Ok(self.best_block)
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error> {

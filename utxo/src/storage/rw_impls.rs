@@ -48,7 +48,7 @@ impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         self.0.get_best_block_for_utxos()
     }
 

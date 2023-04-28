@@ -52,8 +52,8 @@ impl UtxosStorageRead for UtxosDBInMemoryImpl {
         Ok(res.cloned())
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Error> {
-        Ok(Some(self.best_block_id))
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Error> {
+        Ok(self.best_block_id)
     }
 }
 

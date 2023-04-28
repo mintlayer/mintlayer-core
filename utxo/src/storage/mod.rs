@@ -26,7 +26,7 @@ use std::ops::{Deref, DerefMut};
 pub trait UtxosStorageRead {
     type Error: std::error::Error;
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error>;
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error>;
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Self::Error>;
 }
 
@@ -45,15 +45,7 @@ pub struct UtxosDB<S>(S);
 
 impl<S: UtxosStorageRead> UtxosDB<S> {
     pub fn new(store: S) -> Self {
-        let utxos_db = Self(store);
-        debug_assert!(
-            utxos_db
-                .get_best_block_for_utxos()
-                .expect("Database error while reading utxos best block")
-                .is_some(),
-            "Attempted to load an uninitialized utxos db"
-        );
-        utxos_db
+        Self(store)
     }
 }
 
@@ -98,7 +90,7 @@ where
         self.deref().get_utxo(outpoint)
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Self::Error> {
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Self::Error> {
         self.deref().get_best_block_for_utxos()
     }
 

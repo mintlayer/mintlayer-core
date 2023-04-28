@@ -66,7 +66,7 @@ fn store_coin(#[case] seed: Seed) {
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
+            db_tx.get_best_block_for_utxos().expect("ok"),
             Id::<GenBlock>::from(block_id)
         );
         assert_eq!(
@@ -147,7 +147,7 @@ fn store_token(#[case] seed: Seed) {
 
         // best block has changed
         assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
+            db_tx.get_best_block_for_utxos().expect("ok"),
             Id::<GenBlock>::from(block_id)
         );
         assert_eq!(
@@ -264,7 +264,7 @@ fn reorg_store_coin(#[case] seed: Seed) {
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
+            db_tx.get_best_block_for_utxos().expect("ok"),
             Id::<GenBlock>::from(block_3_id)
         );
         assert_eq!(
@@ -461,7 +461,7 @@ fn reorg_store_token(#[case] seed: Seed) {
         // best block has changed
         let db_tx = storage.transaction_ro().unwrap();
         assert_eq!(
-            db_tx.get_best_block_for_utxos().expect("ok").expect("some"),
+            db_tx.get_best_block_for_utxos().expect("ok"),
             Id::<GenBlock>::from(block_3_id)
         );
         assert_eq!(

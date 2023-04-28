@@ -50,9 +50,7 @@ fn hierarchy_test_utxo(#[case] seed: Seed) {
     let (outpoint2, utxo2) = create_utxo(&mut rng, 2000);
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_utxo()
         .with(eq(outpoint0.clone()))
@@ -147,9 +145,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
     .unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_undo_data()
         .with(eq(block_undo_id_0))
@@ -236,9 +232,7 @@ fn hierarchy_test_tx_index(#[case] seed: Seed) {
     let tx_index_2 = TxMainChainIndex::new(pos2, 2).unwrap();
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_mainchain_tx_index()
         .with(eq(outpoint0.clone()))
@@ -326,9 +320,7 @@ fn hierarchy_test_tokens(#[case] seed: Seed) {
     );
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_token_aux_data()
         .with(eq(token_id_0))
@@ -452,9 +444,7 @@ fn hierarchy_test_block_index(#[case] seed: Seed) {
     let block_id: Id<Block> = Id::new(H256::random_using(&mut rng));
     let block_index = GenBlockIndex::Genesis(Arc::clone(chain_config.genesis_block()));
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_gen_block_index()
         .with(eq(Id::<GenBlock>::from(block_id)))
@@ -507,9 +497,7 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let block_undo_id_2: Id<Block> = Id::new(H256::random_using(&mut rng));
 
     let mut store = mock::MockStore::new();
-    store
-        .expect_get_best_block_for_utxos()
-        .return_const(Ok(Some(H256::zero().into())));
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
     store
         .expect_get_pool_balance()
         .with(eq(pool_id_0))

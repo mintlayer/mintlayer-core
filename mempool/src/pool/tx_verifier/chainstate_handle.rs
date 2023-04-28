@@ -126,8 +126,8 @@ impl UtxosStorageRead for ChainstateHandle {
         self.call(move |c| c.utxo(&outpoint))
     }
 
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Error> {
-        self.call(|c| c.get_best_block_id()).map(Some)
+    fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, Error> {
+        self.call(|c| c.get_best_block_id())
     }
 
     fn get_undo_data(&self, _id: Id<Block>) -> Result<Option<UtxosBlockUndo>, Error> {
@@ -240,7 +240,7 @@ impl UtxosView for ChainstateHandle {
     }
 
     fn best_block_hash(&self) -> Result<Id<GenBlock>, Error> {
-        self.get_best_block_for_utxos().map(|id| id.expect("Best block to be set"))
+        self.get_best_block_for_utxos()
     }
 
     fn estimated_size(&self) -> Option<usize> {
