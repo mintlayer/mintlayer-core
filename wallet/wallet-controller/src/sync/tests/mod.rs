@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
-use crypto::random::{CryptoRng, Rng};
+use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
@@ -246,4 +246,40 @@ async fn restart_from_genesis(#[case] seed: Seed) {
 
     create_chain(&node, &mut rng, 0, 10);
     wait_new_tip(&node, &mut new_tip_rx).await;
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn randomized(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let node = MockNode::new(&mut rng);
+    let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
+    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let mut wallet = MockWallet::new(&chain_config, new_tip_tx);
+    let mut block_syncing =
+        BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
+
+    tokio::spawn(async move {
+        block_syncing.run(&mut wallet).await;
+    });
+
+    create_chain(&node, &mut rng, 0, 1);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    for _ in 0..100 {
+        let new_tip = {
+            let mut tf = node.tf.lock().unwrap();
+            let old_best_block = tf.best_block_id();
+            let parent =
+                *tf.block_indexes.iter().rev().take(5).choose(&mut rng).unwrap().block_id();
+            tf.create_chain(&parent.into(), 1, &mut rng).unwrap();
+            old_best_block != tf.best_block_id()
+        };
+
+        if new_tip {
+            wait_new_tip(&node, &mut new_tip_rx).await;
+        }
+    }
 }
