@@ -85,7 +85,7 @@ async fn get_next_block_info<T: NodeInterface>(
     assert!(node_block_height >= wallet_block_height);
 
     let common_block_opt = rpc_client
-        .get_last_common_block(wallet_block_id, node_block_id)
+        .get_last_common_ancestor(wallet_block_id, node_block_id)
         .await
         .map_err(FetchBlockError::UnexpectedRpcError)?;
 

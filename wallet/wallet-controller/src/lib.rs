@@ -38,8 +38,8 @@ use wallet::DefaultWallet;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
-    #[error("RPC error: {0}")]
-    RpcError(T::Error),
+    #[error("Node call error: {0}")]
+    NodeCallError(T::Error),
 }
 
 pub struct Controller<T: NodeInterface> {
@@ -86,22 +86,31 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     }
 
     pub async fn chainstate_info(&self) -> Result<ChainInfo, ControllerError<T>> {
-        self.rpc_client.chainstate_info().await.map_err(ControllerError::RpcError)
+        self.rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)
     }
 
     pub async fn get_best_block_id(&self) -> Result<Id<GenBlock>, ControllerError<T>> {
-        self.rpc_client.get_best_block_id().await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .get_best_block_id()
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn get_block(
         &self,
         block_id: Id<Block>,
     ) -> Result<Option<Block>, ControllerError<T>> {
-        self.rpc_client.get_block(block_id).await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .get_block(block_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn get_best_block_height(&self) -> Result<BlockHeight, ControllerError<T>> {
-        self.rpc_client.get_best_block_height().await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .get_best_block_height()
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn get_block_id_at_height(
@@ -111,11 +120,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.rpc_client
             .get_block_id_at_height(height)
             .await
-            .map_err(ControllerError::RpcError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn submit_block(&self, block_hex: String) -> Result<(), ControllerError<T>> {
-        self.rpc_client.submit_block(block_hex).await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .submit_block(block_hex)
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn submit_transaction(
@@ -125,41 +137,50 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.rpc_client
             .submit_transaction(transaction_hex)
             .await
-            .map_err(ControllerError::RpcError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn node_shutdown(&self) -> Result<(), ControllerError<T>> {
-        self.rpc_client.node_shutdown().await.map_err(ControllerError::RpcError)
+        self.rpc_client.node_shutdown().await.map_err(ControllerError::NodeCallError)
     }
 
     pub async fn node_version(&self) -> Result<String, ControllerError<T>> {
-        self.rpc_client.node_version().await.map_err(ControllerError::RpcError)
+        self.rpc_client.node_version().await.map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_connect(&self, address: String) -> Result<(), ControllerError<T>> {
-        self.rpc_client.p2p_connect(address).await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .p2p_connect(address)
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), ControllerError<T>> {
-        self.rpc_client.p2p_disconnect(peer_id).await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .p2p_disconnect(peer_id)
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_get_peer_count(&self) -> Result<usize, ControllerError<T>> {
-        self.rpc_client.p2p_get_peer_count().await.map_err(ControllerError::RpcError)
+        self.rpc_client
+            .p2p_get_peer_count()
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, ControllerError<T>> {
         self.rpc_client
             .p2p_get_connected_peers()
             .await
-            .map_err(ControllerError::RpcError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_add_reserved_node(&self, address: String) -> Result<(), ControllerError<T>> {
         self.rpc_client
             .p2p_add_reserved_node(address)
             .await
-            .map_err(ControllerError::RpcError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     pub async fn p2p_remove_reserved_node(
@@ -169,7 +190,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.rpc_client
             .p2p_remove_reserved_node(address)
             .await
-            .map_err(ControllerError::RpcError)
+            .map_err(ControllerError::NodeCallError)
     }
 
     fn handle_node_state_change(&mut self, chain_info: ChainInfo) {
@@ -290,7 +311,7 @@ pub async fn make_rpc_controller(
 ) -> Result<RpcController, ControllerError<NodeRpcClient>> {
     let rpc_client = make_rpc_client(remote_socket_address, username_password)
         .await
-        .map_err(ControllerError::RpcError)?;
+        .map_err(ControllerError::NodeCallError)?;
     Ok(Controller::new(chain_config, rpc_client, wallet))
 }
 

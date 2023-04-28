@@ -92,14 +92,14 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
-    async fn get_last_common_block(
+    async fn get_last_common_ancestor(
         &self,
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
         let result = self
             .chainstate_handle
-            .call(move |this| this.last_common_block(&first_block, &second_block))
+            .call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
             .await??;
         Ok(result)
     }

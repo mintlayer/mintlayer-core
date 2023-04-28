@@ -33,7 +33,7 @@ pub trait NodeInterface {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;
-    async fn get_last_common_block(
+    async fn get_last_common_ancestor(
         &self,
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,

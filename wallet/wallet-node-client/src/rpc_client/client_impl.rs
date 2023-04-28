@@ -69,14 +69,18 @@ impl NodeInterface for NodeRpcClient {
             .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn get_last_common_block(
+    async fn get_last_common_ancestor(
         &self,
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
-        ChainstateRpcClient::last_common_block(&self.http_client, first_block, second_block)
-            .await
-            .map_err(NodeRpcError::ResponseError)
+        ChainstateRpcClient::last_common_ancestor_by_id(
+            &self.http_client,
+            first_block,
+            second_block,
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {

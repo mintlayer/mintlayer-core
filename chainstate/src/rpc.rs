@@ -57,8 +57,8 @@ trait ChainstateRpc {
 
     /// Returns last common block id and height of two chains.
     /// Returns None if no block indexes are found and therefore the last common ancestor is unknown.
-    #[method(name = "last_common_block")]
-    async fn last_common_block(
+    #[method(name = "last_common_ancestor_by_id")]
+    async fn last_common_ancestor_by_id(
         &self,
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
@@ -119,13 +119,14 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call(move |this| this.get_best_block_height()).await)
     }
 
-    async fn last_common_block(
+    async fn last_common_ancestor_by_id(
         &self,
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>> {
         handle_error(
-            self.call(move |this| this.last_common_block(&first_block, &second_block)).await,
+            self.call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
+                .await,
         )
     }
 
