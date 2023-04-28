@@ -229,6 +229,10 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBAccountingPoolDataTip, _, _>(pool_id)
             }
 
+            fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+                self.read::<db::DBAccountingPoolOwnerBalancesTip, _, _>(pool_id)
+            }
+
             fn get_delegation_balance(
                 &self,
                 delegation_id: DelegationId,
@@ -283,6 +287,10 @@ macro_rules! impl_read_ops {
 
             fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
                 self.read::<db::DBAccountingPoolDataSealed, _, _>(pool_id)
+            }
+
+            fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+                self.read::<db::DBAccountingPoolOwnerBalancesSealed, _, _>(pool_id)
             }
 
             fn get_delegation_balance(
@@ -536,6 +544,17 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Stor
             .map_err(Into::into)
     }
 
+    fn set_pool_owner_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
+        self.write::<db::DBAccountingPoolOwnerBalancesTip, _, _, _>(pool_id, amount)
+    }
+
+    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountingPoolOwnerBalancesTip, _>()
+            .del(pool_id)
+            .map_err(Into::into)
+    }
+
     fn set_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
@@ -609,6 +628,17 @@ impl<'st, B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for S
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
         self.0
             .get_mut::<db::DBAccountingPoolDataSealed, _>()
+            .del(pool_id)
+            .map_err(Into::into)
+    }
+
+    fn set_pool_owner_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
+        self.write::<db::DBAccountingPoolOwnerBalancesSealed, _, _, _>(pool_id, amount)
+    }
+
+    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBAccountingPoolOwnerBalancesSealed, _>()
             .del(pool_id)
             .map_err(Into::into)
     }

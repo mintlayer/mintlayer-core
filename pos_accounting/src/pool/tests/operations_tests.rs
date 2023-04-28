@@ -123,6 +123,7 @@ fn create_pool_decommission_pool_undo_merge(#[case] seed: Seed) {
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, pledge_amount)]),
+        BTreeMap::from([(pool_id, pledge_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -154,6 +155,7 @@ fn create_pool_decommission_pool_merge_undo_merge(#[case] seed: Seed) {
 
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
+            BTreeMap::from([(pool_id, pledge_amount)]),
             BTreeMap::from([(pool_id, pledge_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),

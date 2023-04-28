@@ -76,6 +76,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             |s, id| s.del_pool_balance(id),
         )?;
 
+        let pool_owner_balances_undo = self.merge_balances_generic(
+            other.pool_owner_balances.consume().into_iter(),
+            |s, id| s.get_pool_owner_balance(id),
+            |s, id, amount| s.set_pool_owner_balance(id, amount),
+            |s, id| s.del_pool_owner_balance(id),
+        )?;
+
         let delegation_balances_undo = self.merge_balances_generic(
             other.delegation_balances.consume().into_iter(),
             |s, id| s.get_delegation_balance(id),
@@ -96,6 +103,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             pool_data_undo,
             delegation_data_undo,
             pool_balances_undo,
+            pool_owner_balances_undo,
             pool_delegation_shares_undo,
             delegation_balances_undo,
         })
@@ -121,6 +129,13 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             |s, id| s.get_pool_balance(id),
             |s, id, amount| s.set_pool_balance(id, amount),
             |s, id| s.del_pool_balance(id),
+        )?;
+
+        self.merge_balances_generic(
+            undo.pool_owner_balances_undo.consume().into_iter(),
+            |s, id| s.get_pool_owner_balance(id),
+            |s, id, amount| s.set_pool_owner_balance(id, amount),
+            |s, id| s.del_pool_owner_balance(id),
         )?;
 
         self.merge_balances_generic(
@@ -280,6 +295,38 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             self.store.del_pool_balance(pool_id)?;
         } else {
             self.store.set_pool_balance(pool_id, new_amount)?;
+        }
+        Ok(())
+    }
+
+    fn add_balance_to_pool_owner(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        let pool_amount = self
+            .store
+            .get_pool_owner_balance(pool_id)?
+            .ok_or(Error::DelegateToNonexistingPool)?;
+        let new_amount = (pool_amount + amount_to_add).ok_or(Error::PoolBalanceAdditionError)?;
+        self.store.set_pool_owner_balance(pool_id, new_amount)?;
+        Ok(())
+    }
+
+    fn sub_balance_from_pool_owner(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        let pool_amount = self
+            .store
+            .get_pool_owner_balance(pool_id)?
+            .ok_or(Error::DelegateToNonexistingPool)?;
+        let new_amount = (pool_amount - amount_to_add).ok_or(Error::PoolBalanceSubtractionError)?;
+        if new_amount == Amount::ZERO {
+            self.store.del_pool_owner_balance(pool_id)?;
+        } else {
+            self.store.set_pool_owner_balance(pool_id, new_amount)?;
         }
         Ok(())
     }

@@ -29,6 +29,7 @@ use super::{PoSAccountingStorageRead, PoSAccountingStorageWrite};
 pub struct InMemoryPoSAccounting {
     pool_data: BTreeMap<PoolId, PoolData>,
     pool_balances: BTreeMap<PoolId, Amount>,
+    pool_owner_balances: BTreeMap<PoolId, Amount>,
     pool_delegation_shares: BTreeMap<(PoolId, DelegationId), Amount>,
     delegation_balances: BTreeMap<DelegationId, Amount>,
     delegation_data: BTreeMap<DelegationId, DelegationData>,
@@ -39,6 +40,7 @@ impl InMemoryPoSAccounting {
         Self {
             pool_data: Default::default(),
             pool_balances: Default::default(),
+            pool_owner_balances: Default::default(),
             pool_delegation_shares: Default::default(),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
@@ -47,6 +49,7 @@ impl InMemoryPoSAccounting {
     pub fn from_values(
         pool_data: BTreeMap<PoolId, PoolData>,
         pool_balances: BTreeMap<PoolId, Amount>,
+        pool_owner_balances: BTreeMap<PoolId, Amount>,
         pool_delegation_shares: BTreeMap<(PoolId, DelegationId), Amount>,
         delegation_balances: BTreeMap<DelegationId, Amount>,
         delegation_data: BTreeMap<DelegationId, DelegationData>,
@@ -54,6 +57,7 @@ impl InMemoryPoSAccounting {
         Self {
             pool_data,
             pool_balances,
+            pool_owner_balances,
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
@@ -64,6 +68,10 @@ impl InMemoryPoSAccounting {
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {
     fn get_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
         Ok(self.pool_balances.get(&pool_id).copied())
+    }
+
+    fn get_pool_owner_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+        Ok(self.pool_owner_balances.get(&pool_id).copied())
     }
 
     fn get_pool_delegations_shares(
@@ -113,6 +121,16 @@ impl PoSAccountingStorageWrite for InMemoryPoSAccounting {
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), Error> {
         self.pool_balances.remove(&pool_id);
+        Ok(())
+    }
+
+    fn set_pool_owner_balance(&mut self, pool_id: PoolId, amount: Amount) -> Result<(), Error> {
+        self.pool_owner_balances.insert(pool_id, amount);
+        Ok(())
+    }
+
+    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> Result<(), Error> {
+        self.pool_owner_balances.remove(&pool_id);
         Ok(())
     }
 

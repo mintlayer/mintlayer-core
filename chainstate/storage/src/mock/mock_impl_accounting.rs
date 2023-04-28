@@ -30,6 +30,7 @@ use super::{MockStore, MockStoreTxRo, MockStoreTxRw};
 pub trait PoSAccountingStorageReadTip {
     fn get_pool_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
     fn get_pool_data_tip(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
+    fn get_pool_owner_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
     fn get_delegation_balance_tip(
         &self,
         delegation_id: DelegationId,
@@ -52,6 +53,7 @@ pub trait PoSAccountingStorageReadTip {
 pub trait PoSAccountingStorageReadSealed {
     fn get_pool_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
     fn get_pool_data_sealed(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
+    fn get_pool_owner_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
     fn get_delegation_balance_sealed(
         &self,
         delegation_id: DelegationId,
@@ -77,6 +79,9 @@ pub trait PoSAccountingStorageWriteTip: PoSAccountingStorageReadTip {
 
     fn set_pool_data_tip(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
     fn del_pool_data_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
+
+    fn set_pool_owner_balance_tip(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
+    fn del_pool_owner_balance_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
     fn set_delegation_balance_tip(
         &mut self,
@@ -111,6 +116,13 @@ pub trait PoSAccountingStorageWriteSealed: PoSAccountingStorageReadSealed {
 
     fn set_pool_data_sealed(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
     fn del_pool_data_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
+
+    fn set_pool_owner_balance_sealed(
+        &mut self,
+        pool_id: PoolId,
+        amount: Amount,
+    ) -> crate::Result<()>;
+    fn del_pool_owner_balance_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
     fn set_delegation_balance_sealed(
         &mut self,
@@ -151,6 +163,9 @@ macro_rules! impl_sealed_read_ops {
             fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
                 self.get_pool_data_sealed(pool_id)
             }
+            fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+                self.get_pool_owner_balance_sealed(pool_id)
+            }
             fn get_delegation_balance(
                 &self,
                 delegation_target: DelegationId,
@@ -188,6 +203,9 @@ macro_rules! impl_tip_read_ops {
             }
             fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
                 self.get_pool_data_tip(pool_id)
+            }
+            fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
+                self.get_pool_owner_balance_tip(pool_id)
             }
             fn get_delegation_balance(
                 &self,
@@ -237,6 +255,17 @@ macro_rules! impl_sealed_write_ops {
             }
             fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
                 self.del_pool_data_sealed(pool_id)
+            }
+
+            fn set_pool_owner_balance(
+                &mut self,
+                pool_id: PoolId,
+                amount: Amount,
+            ) -> crate::Result<()> {
+                self.set_pool_owner_balance_sealed(pool_id, amount)
+            }
+            fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
+                self.del_pool_owner_balance_sealed(pool_id)
             }
 
             fn set_delegation_balance(
@@ -305,6 +334,17 @@ macro_rules! impl_tip_write_ops {
             }
             fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
                 self.del_pool_data_tip(pool_id)
+            }
+
+            fn set_pool_owner_balance(
+                &mut self,
+                pool_id: PoolId,
+                amount: Amount,
+            ) -> crate::Result<()> {
+                self.set_pool_owner_balance_tip(pool_id, amount)
+            }
+            fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
+                self.del_pool_owner_balance_tip(pool_id)
             }
 
             fn set_delegation_balance(

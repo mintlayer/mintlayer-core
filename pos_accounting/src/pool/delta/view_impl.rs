@@ -25,7 +25,6 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers,
         pool_data::PoolData,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
@@ -90,8 +89,11 @@ impl<P: PoSAccountingView> PoSAccountingView for PoSAccountingDelta<P> {
         }
     }
 
-    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        helpers::calculate_staker_balance(self, pool_id)
+    fn get_pool_owner_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
+        let parent_balance =
+            self.parent.get_pool_owner_balance(pool_id).map_err(|_| Error::ViewFail)?;
+        let local_delta = self.data.pool_owner_balances.data().get(&pool_id).cloned();
+        combine_amount_delta(&parent_balance, &local_delta).map_err(Error::AccountingError)
     }
 
     fn get_pool_delegations_shares(

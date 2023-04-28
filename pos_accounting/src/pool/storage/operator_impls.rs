@@ -25,7 +25,7 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, IncreasePoolBalanceUndo, PoSAccountingOperations,
+            DelegationDataUndo, IncreasePoolOwnerBalanceUndo, PoSAccountingOperations,
             PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -57,6 +57,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.store.set_pool_balance(pool_id, pool_data.pledge_amount())?;
         self.store.set_pool_data(pool_id, &pool_data)?;
+        self.store.set_pool_owner_balance(pool_id, pool_data.pledge_amount())?;
 
         Ok((
             pool_id,
@@ -75,6 +76,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.store.del_pool_balance(pool_id)?;
         self.store.del_pool_data(pool_id)?;
+        self.store.del_pool_owner_balance(pool_id)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
@@ -82,15 +84,16 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         }))
     }
 
-    fn increase_pool_balance(
+    fn increase_pool_owner_balance(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
         self.add_balance_to_pool(pool_id, amount_to_add)?;
+        self.add_balance_to_pool_owner(pool_id, amount_to_add)?;
 
-        Ok(PoSAccountingUndo::IncreasePoolBalance(
-            IncreasePoolBalanceUndo {
+        Ok(PoSAccountingUndo::IncreasePoolOwnerBalance(
+            IncreasePoolOwnerBalanceUndo {
                 pool_id,
                 amount_added: amount_to_add,
             },
@@ -180,7 +183,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
-            PoSAccountingUndo::IncreasePoolBalance(undo) => self.undo_increase_pool_balance(undo),
+            PoSAccountingUndo::IncreasePoolOwnerBalance(undo) => {
+                self.undo_increase_pool_balance(undo)
+            }
         }
     }
 }
@@ -208,6 +213,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
 
         self.store.del_pool_balance(undo.pool_id)?;
+        self.store.del_pool_owner_balance(undo.pool_id)?;
         self.store.del_pool_data(undo.pool_id)?;
 
         Ok(())
@@ -228,6 +234,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         }
 
         self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
+        self.store.set_pool_owner_balance(undo.pool_id, data_undo.pledge_amount())?;
         self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
@@ -297,9 +304,10 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
 
     fn undo_increase_pool_balance(
         &mut self,
-        undo_data: IncreasePoolBalanceUndo,
+        undo_data: IncreasePoolOwnerBalanceUndo,
     ) -> Result<(), Error> {
         self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_added)?;
+        self.sub_balance_from_pool_owner(undo_data.pool_id, undo_data.amount_added)?;
 
         Ok(())
     }

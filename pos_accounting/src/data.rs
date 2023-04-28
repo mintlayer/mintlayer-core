@@ -27,11 +27,17 @@ use crate::{DelegationData, PoolData};
 pub struct PoSAccountingData {
     /// A collection of all the pools and their data.
     pub pool_data: BTreeMap<PoolId, PoolData>,
-    /// A collection of all the pools and their balances.
+    /// A collection of all the pools and their total balances
+    /// which are owners balance + balances of all the delegations
     pub pool_balances: BTreeMap<PoolId, Amount>,
-    /// A collection of all the pools and their delegation shares.
+    /// A collection of pool owners balances
+    /// which are pledge amount + reward collected
+    pub pool_owner_balances: BTreeMap<PoolId, Amount>,
+    /// A collection of shares of delegations in pools.
+    /// Useful to retrieve all delegation balances for a pool.
     pub pool_delegation_shares: BTreeMap<(PoolId, DelegationId), Amount>,
-    /// A collection of all the delegations and their balances.
+    /// A collection of shares of delegations.
+    /// Same as `pool_delegation_shares` but can be used to retrieve a specific balance.
     pub delegation_balances: BTreeMap<DelegationId, Amount>,
     /// A collection of all the delegations and their data.
     pub delegation_data: BTreeMap<DelegationId, DelegationData>,
@@ -42,6 +48,7 @@ impl PoSAccountingData {
         Self {
             pool_data: BTreeMap::new(),
             pool_balances: BTreeMap::new(),
+            pool_owner_balances: BTreeMap::new(),
             pool_delegation_shares: BTreeMap::new(),
             delegation_balances: BTreeMap::new(),
             delegation_data: BTreeMap::new(),
@@ -52,6 +59,7 @@ impl PoSAccountingData {
     pub fn is_empty(&self) -> bool {
         self.pool_data.is_empty()
             && self.pool_balances.is_empty()
+            && self.pool_owner_balances.is_empty()
             && self.pool_delegation_shares.is_empty()
             && self.delegation_balances.is_empty()
             && self.delegation_data.is_empty()

@@ -43,6 +43,7 @@ pub struct DeltaMergeUndo {
     pub(crate) pool_data_undo: DeltaDataUndoCollection<PoolId, PoolData>,
     pub(crate) delegation_data_undo: DeltaDataUndoCollection<DelegationId, DelegationData>,
     pub(crate) pool_balances_undo: DeltaAmountCollection<PoolId>,
+    pub(crate) pool_owner_balances_undo: DeltaAmountCollection<PoolId>,
     pub(crate) pool_delegation_shares_undo: DeltaAmountCollection<(PoolId, DelegationId)>,
     pub(crate) delegation_balances_undo: DeltaAmountCollection<DelegationId>,
 }
@@ -53,6 +54,7 @@ impl DeltaMergeUndo {
             pool_data_undo: DeltaDataUndoCollection::new(),
             delegation_data_undo: DeltaDataUndoCollection::new(),
             pool_balances_undo: DeltaAmountCollection::new(),
+            pool_owner_balances_undo: DeltaAmountCollection::new(),
             pool_delegation_shares_undo: DeltaAmountCollection::new(),
             delegation_balances_undo: DeltaAmountCollection::new(),
         }
@@ -142,6 +144,28 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     ) -> Result<(), Error> {
         self.data
             .pool_balances
+            .sub_unsigned(pool_id, amount_to_add)
+            .map_err(Error::AccountingError)
+    }
+
+    fn add_balance_to_pool_owner(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        self.data
+            .pool_owner_balances
+            .add_unsigned(pool_id, amount_to_add)
+            .map_err(Error::AccountingError)
+    }
+
+    fn sub_balance_from_pool_owner(
+        &mut self,
+        pool_id: PoolId,
+        amount_to_add: Amount,
+    ) -> Result<(), Error> {
+        self.data
+            .pool_owner_balances
             .sub_unsigned(pool_id, amount_to_add)
             .map_err(Error::AccountingError)
     }

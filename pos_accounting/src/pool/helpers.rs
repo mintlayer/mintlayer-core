@@ -15,14 +15,9 @@
 
 use common::{
     chain::{DelegationId, OutPoint, PoolId},
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        Amount,
-    },
+    primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
 };
 use crypto::hash::StreamHasher;
-
-use crate::{Error, PoSAccountingView};
 
 pub fn pool_id_preimage_suffix() -> u32 {
     // arbitrary, we use this to create different values when hashing with no security requirements
@@ -48,26 +43,4 @@ pub fn make_delegation_id(input0_outpoint: &OutPoint) -> DelegationId {
     // 1 is arbitrary here, we use this as prefix to use this information again
     hash_encoded_to(&delegation_id_preimage_suffix(), &mut hasher);
     DelegationId::new(hasher.finalize().into())
-}
-
-// FIXME: staker balance as a field in db
-pub fn calculate_staker_balance<V: PoSAccountingView<Error = crate::Error>>(
-    view: &V,
-    pool_id: PoolId,
-) -> Result<Option<Amount>, <V as PoSAccountingView>::Error> {
-    view.get_pool_balance(pool_id)?
-        .map(|pool_balance| {
-            let total_delegations_shares = view.get_pool_delegations_shares(pool_id)?.map_or(
-                Ok(Amount::ZERO),
-                |delegation_shares| {
-                    delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
-                        (acc + *v).ok_or(Error::DelegationSharesAdditionError)
-                    })
-                },
-            )?;
-
-            (pool_balance - total_delegations_shares)
-                .ok_or(Error::InvariantErrorDelegationSharesMoreThanPoolBalance)
-        })
-        .transpose()
 }

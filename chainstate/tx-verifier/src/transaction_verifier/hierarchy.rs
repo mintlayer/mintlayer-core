@@ -278,8 +278,8 @@ impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A: PoSAccountingView> Po
         self.accounting_delta_adapter.accounting_delta().get_pool_data(pool_id)
     }
 
-    fn get_staker_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
-        self.accounting_delta_adapter.accounting_delta().get_staker_balance(pool_id)
+    fn get_pool_owner_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        self.accounting_delta_adapter.accounting_delta().get_pool_owner_balance(pool_id)
     }
 
     fn get_delegation_balance(
