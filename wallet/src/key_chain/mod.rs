@@ -232,19 +232,20 @@ mod tests {
         let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
         let mut db_tx = db.transaction_rw(None).unwrap();
         let master_key_chain =
-            MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+            MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None)
+                .unwrap();
         let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
         db_tx.commit().unwrap();
 
         let id = key_chain.get_account_id();
 
         let mut db_tx = db.transaction_rw(None).unwrap();
-        key_chain.set_lookahead_size(&mut db_tx, 5).unwrap();
-        assert_eq!(key_chain.get_lookahead_size(), 5);
+        assert_eq!(key_chain.get_lookahead_size(), LOOKAHEAD_SIZE);
 
         // Issue new addresses until the lookahead size is reached
-        for _ in 0..5 {
-            key_chain.issue_address(&mut db_tx, purpose).unwrap();
+        let mut last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
+        for _ in 1..key_chain.get_lookahead_size() {
+            last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
         }
         assert_eq!(
             key_chain.issue_address(&mut db_tx, purpose),
@@ -256,20 +257,31 @@ mod tests {
         let mut key_chain = master_key_chain
             .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
             .unwrap();
-        assert_eq!(key_chain.get_lookahead_size(), 5);
+        assert_eq!(key_chain.get_lookahead_size(), LOOKAHEAD_SIZE);
         assert_eq!(key_chain.get_leaf_key_chain(purpose).get_last_used(), None);
         assert_eq!(
             key_chain.get_leaf_key_chain(purpose).get_last_issued(),
-            Some(ChildNumber::from_normal(U31::from_u32_with_msb(4).0))
+            Some(ChildNumber::from_normal(
+                U31::from_u32_with_msb(LOOKAHEAD_SIZE - 1).0
+            ))
         );
 
         let mut db_tx = db.transaction_rw(None).unwrap();
 
-        // Increase the lookahead size
-        key_chain.set_lookahead_size(&mut db_tx, 10).unwrap();
+        assert_eq!(
+            key_chain.issue_address(&mut db_tx, purpose),
+            Err(KeyChainError::LookAheadExceeded)
+        );
+
+        key_chain
+            .mark_public_key_hash_as_used(
+                &mut db_tx,
+                &PublicKeyHash::try_from(last_address.data(&chain_config).unwrap()).unwrap(),
+            )
+            .unwrap();
 
         // Should be able to issue more addresses
-        for _ in 0..5 {
+        for _ in 0..key_chain.get_lookahead_size() {
             key_chain.issue_address(&mut db_tx, purpose).unwrap();
         }
         assert_eq!(
@@ -306,33 +318,6 @@ mod tests {
 
         let mut db_tx = db.transaction_rw(None).unwrap();
 
-        key_chain.set_lookahead_size(&mut db_tx, 5).unwrap();
-        {
-            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
-            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(19);
-            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-            assert_eq!(leaf_keys.usage_state().get_last_issued(), None);
-            assert_eq!(leaf_keys.usage_state().get_last_used(), None);
-        }
-
-        key_chain.set_lookahead_size(&mut db_tx, 30).unwrap();
-        {
-            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
-            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
-            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-            assert_eq!(leaf_keys.usage_state().get_last_issued(), None);
-            assert_eq!(leaf_keys.usage_state().get_last_used(), None);
-        }
-
-        key_chain.set_lookahead_size(&mut db_tx, 10).unwrap();
-        {
-            let leaf_keys = key_chain.get_leaf_key_chain(purpose);
-            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
-            assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-            assert_eq!(leaf_keys.usage_state().get_last_issued(), None);
-            assert_eq!(leaf_keys.usage_state().get_last_used(), None);
-        }
-
         let mut issued_key = key_chain.issue_key(&mut db_tx, purpose).unwrap();
 
         // Mark the last key as used
@@ -342,7 +327,7 @@ mod tests {
 
         {
             let leaf_keys = key_chain.get_leaf_key_chain(purpose);
-            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(20);
             assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
             assert_eq!(
                 leaf_keys.usage_state().get_last_issued(),
@@ -366,15 +351,15 @@ mod tests {
 
         {
             let leaf_keys = key_chain.get_leaf_key_chain(purpose);
-            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(29);
+            let last_derived_idx = ChildNumber::from_index_with_hardened_bit(40);
             assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
             assert_eq!(
                 leaf_keys.usage_state().get_last_issued(),
-                Some(ChildNumber::from_index_with_hardened_bit(10))
+                Some(ChildNumber::from_index_with_hardened_bit(20))
             );
             assert_eq!(
                 leaf_keys.usage_state().get_last_used(),
-                Some(ChildNumber::from_index_with_hardened_bit(10))
+                Some(ChildNumber::from_index_with_hardened_bit(20))
             );
         }
     }
