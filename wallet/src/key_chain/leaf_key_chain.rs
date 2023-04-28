@@ -61,9 +61,6 @@ pub struct LeafKeyChain {
 
     /// The usage state of this key chain
     usage_state: KeychainUsageState,
-
-    /// A copy of the lookahead size of the account
-    lookahead_size: u32,
 }
 
 impl LeafKeyChain {
@@ -72,7 +69,6 @@ impl LeafKeyChain {
         account_id: AccountId,
         purpose: KeyPurpose,
         parent_pubkey: ExtendedPublicKey,
-        lookahead_size: u32,
     ) -> Self {
         Self {
             chain_config,
@@ -84,7 +80,6 @@ impl LeafKeyChain {
             public_key_to_index: BTreeMap::new(),
             public_key_hash_to_index: BTreeMap::new(),
             usage_state: KeychainUsageState::default(),
-            lookahead_size,
         }
     }
 
@@ -98,7 +93,6 @@ impl LeafKeyChain {
         addresses: BTreeMap<ChildNumber, Address>,
         derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
         usage_state: KeychainUsageState,
-        lookahead_size: u32,
     ) -> KeyChainResult<Self> {
         // TODO optimize for database structure
         let public_keys_to_index: BTreeMap<PublicKey, ChildNumber> = derived_public_keys
@@ -120,7 +114,6 @@ impl LeafKeyChain {
             public_key_to_index: public_keys_to_index,
             public_key_hash_to_index: public_key_hashes_to_index,
             usage_state,
-            lookahead_size,
         })
     }
 
@@ -179,7 +172,6 @@ impl LeafKeyChain {
                 usage_states.remove(&KeyPurpose::ReceiveFunds).ok_or(
                     KeyChainError::MissingDatabaseProperty("ReceiveFunds usage state"),
                 )?,
-                account_info.get_lookahead_size(),
             )?,
             LeafKeyChain::new_from_parts(
                 chain_config,
@@ -193,7 +185,6 @@ impl LeafKeyChain {
                 usage_states
                     .remove(&KeyPurpose::Change)
                     .ok_or(KeyChainError::MissingDatabaseProperty("Change usage state"))?,
-                account_info.get_lookahead_size(),
             )?,
         ))
     }
@@ -201,8 +192,9 @@ impl LeafKeyChain {
     pub fn issue_address<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
+        lookahead_size: u32,
     ) -> KeyChainResult<Address> {
-        let new_issued_index = self.get_new_issued_index()?;
+        let new_issued_index = self.get_new_issued_index(lookahead_size)?;
 
         // Get address or derive one if necessary
         let issued_address = match self.addresses.get(&new_issued_index) {
@@ -225,8 +217,9 @@ impl LeafKeyChain {
     pub fn issue_key<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
+        lookahead_size: u32,
     ) -> KeyChainResult<ExtendedPublicKey> {
-        let new_issued_index = self.get_new_issued_index()?;
+        let new_issued_index = self.get_new_issued_index(lookahead_size)?;
 
         // Get key or derive one if necessary
         let issued_key = match self.derived_public_keys.get(&new_issued_index) {
@@ -259,7 +252,7 @@ impl LeafKeyChain {
     }
 
     /// Get a new issued index and check that it is a valid one i.e. not exceeding the lookahead
-    fn get_new_issued_index(&self) -> KeyChainResult<ChildNumber> {
+    fn get_new_issued_index(&self, lookahead_size: u32) -> KeyChainResult<ChildNumber> {
         // TODO consider last used index as well
         let new_issued_index = {
             match self.usage_state.get_last_issued() {
@@ -269,21 +262,25 @@ impl LeafKeyChain {
         };
 
         // Check if we can issue a key
-        self.check_issued_lookahead(new_issued_index)?;
+        self.check_issued_lookahead(new_issued_index, lookahead_size)?;
         Ok(new_issued_index)
     }
 
     /// Check if a new key can be issued with the provided index
-    fn check_issued_lookahead(&self, new_index_to_issue: ChildNumber) -> KeyChainResult<()> {
+    fn check_issued_lookahead(
+        &self,
+        new_index_to_issue: ChildNumber,
+        lookahead_size: u32,
+    ) -> KeyChainResult<()> {
         let usage_state = &self.usage_state;
 
         let new_issued_index = new_index_to_issue.get_index();
 
         // Check if the issued addresses are less or equal to lookahead size
         let lookahead_exceeded = match usage_state.get_last_used() {
-            None => new_issued_index >= self.lookahead_size,
+            None => new_issued_index >= lookahead_size,
             Some(last_used_index) => {
-                new_issued_index > last_used_index.get_index() + self.lookahead_size
+                new_issued_index > last_used_index.get_index() + lookahead_size
             }
         };
 
@@ -357,15 +354,19 @@ impl LeafKeyChain {
 
     /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
     /// used key to the last derived key is already `lookahead_size`, this method has no effect
-    pub fn top_up<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
+    pub fn top_up<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        lookahead_size: u32,
+    ) -> KeyChainResult<()> {
         // Find how many keys to derive
         let (starting_index, up_to_index) = match self.get_last_derived_index() {
-            None => (0u32, self.lookahead_size),
+            None => (0u32, lookahead_size),
             Some(last_derived_index) => {
                 let start_index = last_derived_index.increment()?.get_index();
                 let up_to_index = match self.usage_state.get_last_used() {
-                    None => self.lookahead_size,
-                    Some(last_used) => last_used.get_index() + self.lookahead_size + 1,
+                    None => lookahead_size,
+                    Some(last_used) => last_used.get_index() + lookahead_size + 1,
                 };
                 (start_index, up_to_index)
             }
@@ -381,11 +382,6 @@ impl LeafKeyChain {
         }
 
         Ok(())
-    }
-
-    /// Set the copy of `lookahead_size` of this leaf keychain. This shouldn't be used directly
-    pub fn set_lookahead_size(&mut self, lookahead_size: u32) {
-        self.lookahead_size = lookahead_size;
     }
 
     /// Return true if `public_key` belongs to this key chain's derived pool. If the key can be
@@ -456,6 +452,7 @@ impl LeafKeyChain {
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         extended_public_key: &ExtendedPublicKey,
+        lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         // Check if public key is in the key pool
         if self.is_pubkey_mine_in_key_pool(extended_public_key) {
@@ -467,6 +464,7 @@ impl LeafKeyChain {
                 &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
                 &self.usage_state,
             )?;
+            self.top_up(db_tx, lookahead_size)?;
             return Ok(true);
         }
         Ok(false)
@@ -476,10 +474,11 @@ impl LeafKeyChain {
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         public_key: &PublicKey,
+        lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         if let Some(xpub) = self.get_xpub_from_public_key(public_key) {
             // TODO maybe refactor code to remove this clone()
-            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone())
+            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone(), lookahead_size)
         } else {
             Ok(false)
         }
@@ -489,10 +488,11 @@ impl LeafKeyChain {
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         public_key_hash: &PublicKeyHash,
+        lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         if let Some(xpub) = self.get_xpub_from_public_key_hash(public_key_hash) {
             // TODO maybe refactor code to remove this clone()
-            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone())
+            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone(), lookahead_size)
         } else {
             Ok(false)
         }
