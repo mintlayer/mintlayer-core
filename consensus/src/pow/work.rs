@@ -124,11 +124,10 @@ where
                 block_timestamp,
                 get_ancestor,
             ),
-            GenBlockIndex::Genesis(_) => match pow_status {
+            GenBlockIndex::Genesis(_) => {
                 // If this is genesis, then the status can't be on-going
-                PoWStatus::Ongoing => unreachable!(),
-                PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
-            },
+                unreachable!()
+            }
         },
     }
 }
