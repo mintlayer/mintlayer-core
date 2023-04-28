@@ -17,12 +17,13 @@ use common::chain::ChainConfig;
 use node_lib::node_controller::NodeController;
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 
+#[derive(Clone)]
 pub struct NodeBackendController {
     chain_config: Arc<ChainConfig>,
     controller: NodeController,
-    manager_join_handle: Option<tokio::task::JoinHandle<()>>,
+    manager_join_handle: Option<Arc<tokio::sync::Mutex<tokio::task::JoinHandle<()>>>>,
 }
 
 impl Debug for NodeBackendController {
@@ -60,7 +61,7 @@ impl NodeBackendController {
         let node_controller = NodeBackendController {
             chain_config,
             controller,
-            manager_join_handle: Some(manager_join_handle),
+            manager_join_handle: Some(Arc::new(manager_join_handle.into())),
         };
 
         Ok(node_controller)
@@ -69,7 +70,7 @@ impl NodeBackendController {
     /// Triggers shutdown process synchronously
     /// Returns the subsystem manager join handle ONLY ONCE.
     /// If the shutdown was already triggered, returns None.
-    pub fn trigger_shutdown(&mut self) -> Option<tokio::task::JoinHandle<()>> {
+    pub fn trigger_shutdown(&mut self) -> Option<Arc<Mutex<tokio::task::JoinHandle<()>>>> {
         if self.manager_join_handle.is_none() {
             // We shutdown and join only once, so this being None means we took the handle already
             logging::log::warn!("Shutdown already requested.");
