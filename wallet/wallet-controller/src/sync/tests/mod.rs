@@ -1,0 +1,226 @@
+// Copyright (c) 2023 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::sync::Mutex;
+
+use chainstate::ChainInfo;
+use chainstate_test_framework::TestFramework;
+use crypto::random::{CryptoRng, Rng};
+use node_comm::{
+    node_traits::{ConnectedPeer, PeerId},
+    rpc_client::NodeRpcError,
+};
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
+
+use super::*;
+
+struct MockWallet {
+    genesis_id: Id<GenBlock>,
+    blocks: Vec<Id<Block>>,
+    new_tip_tx: mpsc::UnboundedSender<Id<Block>>,
+}
+
+impl MockWallet {
+    fn new(chain_config: &ChainConfig, new_tip_tx: mpsc::UnboundedSender<Id<Block>>) -> Self {
+        Self {
+            genesis_id: chain_config.genesis_block_id(),
+            blocks: Vec::new(),
+            new_tip_tx,
+        }
+    }
+
+    fn get_best_block_id(&self) -> Id<GenBlock> {
+        self.blocks.last().cloned().map_or(self.genesis_id, Into::into)
+    }
+
+    fn get_block_height(&self) -> BlockHeight {
+        BlockHeight::from(self.blocks.len() as u64)
+    }
+}
+
+impl SyncingWallet for MockWallet {
+    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        Ok((self.get_best_block_id(), self.get_block_height()))
+    }
+
+    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()> {
+        assert!(!blocks.is_empty());
+        assert!(
+            block_height > BlockHeight::zero()
+                && block_height <= self.get_block_height().next_height(),
+            "Invalid block height: {block_height}, max: {}",
+            self.get_block_height()
+        );
+
+        self.blocks.truncate((block_height.into_int() - 1) as usize);
+        for block in blocks {
+            assert_eq!(*block.header().prev_block_id(), self.get_best_block_id());
+            self.blocks.push(block.header().block_id());
+            let _ = self.new_tip_tx.send(block.header().block_id());
+        }
+
+        log::debug!(
+            "new block added to wallet: {}, block height: {}",
+            self.get_best_block_id(),
+            self.get_block_height()
+        );
+
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct MockNode {
+    tf: Arc<Mutex<TestFramework>>,
+}
+
+impl MockNode {
+    fn new(rng: &mut (impl Rng + CryptoRng)) -> Self {
+        let tf = Arc::new(Mutex::new(TestFramework::builder(rng).build()));
+        Self { tf }
+    }
+}
+
+#[async_trait::async_trait]
+impl NodeInterface for MockNode {
+    type Error = NodeRpcError;
+
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
+        Ok(self.tf.lock().unwrap().chainstate.info().unwrap())
+    }
+    async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
+        unreachable!()
+    }
+    async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
+        Ok(self.tf.lock().unwrap().chainstate.get_block(block_id).unwrap())
+    }
+    async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error> {
+        unreachable!()
+    }
+    async fn get_block_id_at_height(
+        &self,
+        height: BlockHeight,
+    ) -> Result<Option<Id<GenBlock>>, Self::Error> {
+        Ok(self.tf.lock().unwrap().chainstate.get_block_id_from_height(&height).unwrap())
+    }
+    async fn get_last_common_ancestor(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
+        Ok(self
+            .tf
+            .lock()
+            .unwrap()
+            .chainstate
+            .last_common_ancestor_by_id(&first_block, &second_block)
+            .unwrap())
+    }
+
+    async fn submit_block(&self, _block_hex: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn submit_transaction(&self, _transaction_hex: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+
+    async fn node_shutdown(&self) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn node_version(&self) -> Result<String, Self::Error> {
+        unreachable!()
+    }
+
+    async fn p2p_connect(&self, _address: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_add_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+}
+
+fn test_block_syncing_config() -> BlockSyncingConfig {
+    BlockSyncingConfig {
+        normal_delay: Duration::from_millis(1),
+        error_delay: Duration::from_millis(10),
+    }
+}
+
+fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
+    let parent_id = node
+        .tf
+        .lock()
+        .unwrap()
+        .chainstate
+        .get_block_id_from_height(&parent.into())
+        .unwrap()
+        .unwrap();
+    node.tf.lock().unwrap().create_chain(&parent_id, count, rng).unwrap();
+}
+
+async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<Id<Block>>) {
+    let expected_block_id = node.tf.lock().unwrap().best_block_id();
+    let wait_fut = async move { while new_tip_tx.recv().await.unwrap() != expected_block_id {} };
+    tokio::time::timeout(Duration::from_secs(60), wait_fut).await.unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn basic_sync(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let node = MockNode::new(&mut rng);
+    let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
+    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let mut wallet = MockWallet::new(&chain_config, new_tip_tx);
+    let mut block_syncing =
+        BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
+
+    tokio::spawn(async move {
+        block_syncing.run(&mut wallet).await;
+    });
+
+    create_chain(&node, &mut rng, 0, 1);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 0, 2);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 0, 3);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 1, 3);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 1, 4);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 0, 6);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+}

@@ -6468,13 +6468,18 @@ dependencies = [
 name = "wallet-controller"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "bip39",
  "chainstate",
+ "chainstate-test-framework",
  "common",
  "crypto",
  "logging",
  "node-comm",
+ "rstest",
  "serialization",
+ "test-utils",
  "thiserror",
  "tokio",
  "utils",

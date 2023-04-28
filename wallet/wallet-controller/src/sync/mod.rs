@@ -23,12 +23,33 @@ use logging::log;
 use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
 use tokio::{sync::mpsc, task::JoinHandle};
-use wallet::DefaultWallet;
+use wallet::{DefaultWallet, WalletResult};
+
+pub trait SyncingWallet {
+    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)>;
+
+    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()>;
+}
+
+impl SyncingWallet for DefaultWallet {
+    fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        self.get_best_block()
+    }
+
+    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()> {
+        self.scan_new_blocks(block_height, blocks)
+    }
+}
 
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
     block_id: Id<Block>,
     block_height: BlockHeight,
+}
+
+struct NodeState {
+    block_height: BlockHeight,
+    block_id: Id<GenBlock>,
 }
 
 struct FetchedBlock {
@@ -53,6 +74,8 @@ enum FetchBlockError<T: NodeInterface> {
 type BlockFetchResult<T> = Result<FetchedBlock, FetchBlockError<T>>;
 
 pub struct BlockSyncing<T: NodeInterface> {
+    config: BlockSyncingConfig,
+
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
@@ -71,17 +94,32 @@ pub struct BlockSyncing<T: NodeInterface> {
     block_fetch_task: Option<JoinHandle<BlockFetchResult<T>>>,
 }
 
-struct NodeState {
-    block_height: BlockHeight,
-    block_id: Id<GenBlock>,
+#[derive(Clone)]
+pub struct BlockSyncingConfig {
+    normal_delay: Duration,
+    error_delay: Duration,
+}
+
+impl BlockSyncingConfig {
+    pub fn new() -> Self {
+        Self {
+            normal_delay: Duration::from_secs(1),
+            error_delay: Duration::from_secs(10),
+        }
+    }
 }
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
-    pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T) -> Self {
+    pub fn new(config: BlockSyncingConfig, chain_config: Arc<ChainConfig>, rpc_client: T) -> Self {
         let (node_state_tx, node_state_rx) = mpsc::channel(1);
-        let state_sync_task = tokio::spawn(run_state_sync(node_state_tx, rpc_client.clone()));
+        let state_sync_task = tokio::spawn(run_state_sync(
+            config.clone(),
+            node_state_tx,
+            rpc_client.clone(),
+        ));
 
         Self {
+            config,
             chain_config,
             rpc_client,
             node_state_rx,
@@ -100,7 +138,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         self.node_chain_state = Some(node_state);
     }
 
-    fn start_block_fetch_if_needed(&mut self, wallet: &mut DefaultWallet) {
+    fn start_block_fetch_if_needed(&mut self, wallet: &mut impl SyncingWallet) {
         if self.block_fetch_task.is_some() {
             return;
         }
@@ -111,7 +149,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         };
 
         let (wallet_block_id, wallet_block_height) =
-            wallet.get_best_block().expect("`get_best_block` should not fail normally");
+            wallet.best_block().expect("`get_best_block` should not fail normally");
 
         // Wait until the node has enough block height.
         // Block sync may not work correctly otherwise.
@@ -122,6 +160,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         let chain_config = Arc::clone(&self.chain_config);
         let mut rpc_client = self.rpc_client.clone();
 
+        let error_delay = self.config.error_delay;
         self.block_fetch_task = Some(tokio::spawn(async move {
             let sync_res = fetch_new_block(
                 &chain_config,
@@ -136,20 +175,24 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
             if let Err(e) = &sync_res {
                 log::error!("Block fetch failed: {e}");
                 // Wait a bit to not spam constantly if the node is unreachable
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(error_delay).await;
             }
 
             sync_res
         }));
     }
 
-    fn handle_block_fetch_result(&mut self, res: BlockFetchResult<T>, wallet: &mut DefaultWallet) {
+    fn handle_block_fetch_result(
+        &mut self,
+        res: BlockFetchResult<T>,
+        wallet: &mut impl SyncingWallet,
+    ) {
         if let Ok(FetchedBlock {
             block,
             block_height,
         }) = res
         {
-            let scan_res = wallet.scan_new_blocks(block_height, vec![block]);
+            let scan_res = wallet.scan_blocks(block_height, vec![block]);
             if let Err(e) = scan_res {
                 log::error!("Block scan failed: {e}");
             }
@@ -170,7 +213,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         }
     }
 
-    pub async fn run(&mut self, wallet: &mut DefaultWallet) {
+    pub async fn run(&mut self, wallet: &mut impl SyncingWallet) {
         // This must be cancel safe!
         loop {
             self.start_block_fetch_if_needed(wallet);
@@ -188,7 +231,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
     }
 }
 
-async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<NodeState>, rpc_client: T) {
+async fn run_state_sync<T: NodeInterface>(
+    config: BlockSyncingConfig,
+    state_tx: mpsc::Sender<NodeState>,
+    rpc_client: T,
+) {
     let mut last_block_id = None;
 
     while !state_tx.is_closed() {
@@ -204,11 +251,11 @@ async fn run_state_sync<T: NodeInterface>(state_tx: mpsc::Sender<NodeState>, rpc
                         .await;
                     last_block_id = Some(state.best_block_id);
                 }
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(config.normal_delay).await;
             }
             Err(e) => {
                 logging::log::error!("Node state sync error: {}", e);
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(config.error_delay).await;
             }
         }
     }
@@ -310,3 +357,6 @@ async fn fetch_new_block<T: NodeInterface>(
         block_height,
     })
 }
+
+#[cfg(test)]
+mod tests;

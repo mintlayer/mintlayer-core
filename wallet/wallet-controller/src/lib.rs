@@ -54,7 +54,11 @@ pub type HandlesController = Controller<WalletHandlesClient>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        let block_sync = sync::BlockSyncing::new(Arc::clone(&chain_config), rpc_client.clone());
+        let block_sync = sync::BlockSyncing::new(
+            sync::BlockSyncingConfig::new(),
+            Arc::clone(&chain_config),
+            rpc_client.clone(),
+        );
 
         Self {
             rpc_client,
@@ -193,5 +197,3 @@ pub async fn make_rpc_controller(
         .map_err(ControllerError::NodeCallError)?;
     Ok(Controller::new(chain_config, rpc_client, wallet))
 }
-
-// TODO: Add tests for block sync
