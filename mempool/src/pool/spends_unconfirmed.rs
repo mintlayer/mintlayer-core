@@ -21,15 +21,12 @@ use super::Mempool;
 
 pub trait SpendsUnconfirmed<M>
 where
-    M: GetMemoryUsage + Send + Sync,
+    M: GetMemoryUsage,
 {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
 }
 
-impl<M> SpendsUnconfirmed<M> for TxInput
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
         let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
         outpoint_id.is_some()
