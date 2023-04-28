@@ -172,15 +172,9 @@ fn test_block_syncing_config() -> BlockSyncingConfig {
 }
 
 fn create_chain(node: &MockNode, rng: &mut (impl Rng + CryptoRng), parent: u64, count: usize) {
-    let parent_id = node
-        .tf
-        .lock()
-        .unwrap()
-        .chainstate
-        .get_block_id_from_height(&parent.into())
-        .unwrap()
-        .unwrap();
-    node.tf.lock().unwrap().create_chain(&parent_id, count, rng).unwrap();
+    let mut tf = node.tf.lock().unwrap();
+    let parent_id = tf.chainstate.get_block_id_from_height(&parent.into()).unwrap().unwrap();
+    tf.create_chain(&parent_id, count, rng).unwrap();
 }
 
 async fn wait_new_tip(node: &MockNode, new_tip_tx: &mut mpsc::UnboundedReceiver<Id<Block>>) {
@@ -222,5 +216,34 @@ async fn basic_sync(#[case] seed: Seed) {
     wait_new_tip(&node, &mut new_tip_rx).await;
 
     create_chain(&node, &mut rng, 0, 6);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    create_chain(&node, &mut rng, 6, 10);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+}
+
+#[rstest]
+#[trace]
+#[case(test_utils::random::Seed::from_entropy())]
+#[tokio::test]
+async fn restart_from_genesis(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let node = MockNode::new(&mut rng);
+    let chain_config = Arc::clone(node.tf.lock().unwrap().chainstate.get_chain_config());
+    let (new_tip_tx, mut new_tip_rx) = mpsc::unbounded_channel();
+    let mut wallet = MockWallet::new(&chain_config, new_tip_tx);
+    let mut block_syncing =
+        BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
+
+    tokio::spawn(async move {
+        block_syncing.run(&mut wallet).await;
+    });
+
+    create_chain(&node, &mut rng, 0, 10);
+    wait_new_tip(&node, &mut new_tip_rx).await;
+
+    *node.tf.lock().unwrap() = TestFramework::builder(&mut rng).build();
+
+    create_chain(&node, &mut rng, 0, 10);
     wait_new_tip(&node, &mut new_tip_rx).await;
 }
