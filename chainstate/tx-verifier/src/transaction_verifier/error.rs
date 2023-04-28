@@ -104,17 +104,16 @@ pub enum ConnectTransactionError {
     InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
     InvalidOutputTypeInReward,
-    #[error("Staker balance of pool {0} not found")]
-    StakerBalanceNotFound(PoolId),
+    #[error("Pool owner balance of pool {0} not found")]
+    PoolOwnerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
-    // FIXME: rename and pass more info
     #[error("Failed to calculate reward for block {0} for owner of the pool {1}")]
-    StakerRewardCalculationFailed(Id<Block>, PoolId),
+    PoolOwnerRewardCalculationFailed(Id<Block>, PoolId),
     #[error(
         "Reward in block {0} for owner of the pool {1} which is {2:?} cannot be bigger than total reward {3:?}"
     )]
-    StakerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    PoolOwnerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
     #[error("Failed to sum block {0} reward for pool {1} delegations")]
     DelegationsRewardSumFailed(Id<Block>, PoolId),
     #[error("Reward for delegation {0} in block {1} overflowed")]

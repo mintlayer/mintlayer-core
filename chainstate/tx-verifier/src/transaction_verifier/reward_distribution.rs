@@ -42,7 +42,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
     let total_staker_reward = calculate_pool_owner_reward(total_reward, &pool_data).ok_or(
-        ConnectTransactionError::StakerRewardCalculationFailed(block_id, pool_id),
+        ConnectTransactionError::PoolOwnerRewardCalculationFailed(block_id, pool_id),
     )?;
 
     let increase_pool_balance_undo = accounting_adapter
@@ -50,7 +50,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .increase_pool_owner_balance(pool_id, total_staker_reward)?;
 
     let total_delegations_reward = (total_reward - total_staker_reward).ok_or(
-        ConnectTransactionError::StakerRewardCannotExceedTotalReward(
+        ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
             block_id,
             pool_id,
             total_staker_reward,

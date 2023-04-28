@@ -110,7 +110,7 @@ fn get_output_value<P: PoSAccountingView>(
             let staker_balance = pos_accounting_view
                 .get_pool_owner_balance(*pool_id)
                 .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::StakerBalanceNotFound(*pool_id))?;
+                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?;
             OutputValue::Coin(staker_balance)
         }
         TxOutput::DecommissionPool(v, _, _, _) => OutputValue::Coin(*v),
