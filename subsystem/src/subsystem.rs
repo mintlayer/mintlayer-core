@@ -16,8 +16,9 @@
 use std::{pin::Pin, task};
 
 use futures::future::BoxFuture;
+use tokio::sync::{mpsc, oneshot};
+
 use logging::log;
-use tokio::sync::{broadcast, mpsc, oneshot};
 use utils::shallow_clone::ShallowClone;
 
 /// Defines hooks into a subsystem lifecycle.
@@ -76,19 +77,13 @@ impl<T> std::future::Future for CallResponse<T> {
 }
 
 /// Shutdown request
-pub struct ShutdownRequest(pub(crate) broadcast::Receiver<()>);
+pub struct ShutdownRequest(pub(crate) oneshot::Receiver<()>);
 
 impl ShutdownRequest {
     /// Receive a shutdown request.
     pub async fn recv(&mut self) {
-        match self.0.recv().await {
-            Err(broadcast::error::RecvError::Lagged(_)) => {
-                panic!("Multiple shutdown broadcast requests issued")
-            }
-            Err(broadcast::error::RecvError::Closed) => {
-                log::error!("Shutdown channel sender closed prematurely")
-            }
-            Ok(()) => (),
+        if let Err(_) = (&mut self.0).await {
+            log::error!("Shutdown channel sender closed prematurely")
         }
     }
 }

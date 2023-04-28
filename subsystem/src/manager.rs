@@ -16,7 +16,7 @@
 use core::{future::Future, time::Duration};
 use futures::future::{select_all, BoxFuture, FutureExt};
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::{mpsc, oneshot},
     task::{self, JoinHandle},
 };
 
@@ -29,13 +29,13 @@ pub struct ManagerConfig {
     /// Subsystem manager name
     name: &'static str,
     /// Shutdown timeout. Set to `None` for no (i.e. unlimited) timeout.
-    shutdown_timeout: Option<Duration>,
+    shutdown_timeout_per_subsystem: Option<Duration>,
 }
 
 impl ManagerConfig {
     /// Default shutdown timeout.
     const DEFAULT_SHUTDOWN_TIMEOUT: Option<Duration> = if cfg!(all(feature = "time", not(loom))) {
-        Some(Duration::from_secs(20))
+        Some(Duration::from_secs(5))
     } else {
         None
     };
@@ -44,7 +44,7 @@ impl ManagerConfig {
     fn named(name: &'static str) -> Self {
         Self {
             name,
-            shutdown_timeout: Self::DEFAULT_SHUTDOWN_TIMEOUT,
+            shutdown_timeout_per_subsystem: Self::DEFAULT_SHUTDOWN_TIMEOUT,
         }
     }
 }
@@ -53,7 +53,7 @@ impl Default for ManagerConfig {
     fn default() -> Self {
         Self {
             name: "<manager>",
-            shutdown_timeout: Self::DEFAULT_SHUTDOWN_TIMEOUT,
+            shutdown_timeout_per_subsystem: Self::DEFAULT_SHUTDOWN_TIMEOUT,
         }
     }
 }
@@ -68,10 +68,7 @@ pub struct Manager {
     name: &'static str,
 
     // Shutdown timeout settings
-    shutdown_timeout: Option<Duration>,
-
-    // Used by the manager to order all subsystems to shut down.
-    shutdown_request_tx: broadcast::Sender<()>,
+    shutdown_timeout_per_subsystem: Option<Duration>,
 
     // Used by a subsystem to notify the manager it is shutting down. This is taken as a command
     // for all subsystems to shut down. Shutdown completion is detected by all senders having closed
@@ -81,6 +78,7 @@ pub struct Manager {
 
     // List of subsystem tasks.
     subsystem_tasks: Vec<BoxFuture<'static, ()>>,
+    subsystem_shutdown_txs: Vec<oneshot::Sender<()>>,
 }
 
 impl Manager {
@@ -93,21 +91,21 @@ impl Manager {
     pub fn new_with_config(config: ManagerConfig) -> Self {
         let ManagerConfig {
             name,
-            shutdown_timeout,
+            shutdown_timeout_per_subsystem,
         } = config;
         log::info!("Initializing subsystem manager {}", name);
 
-        let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
         let subsystem_tasks = Vec::new();
+        let subsystem_shutdown_txs = Vec::new();
 
         Self {
             name,
-            shutdown_request_tx,
             shutting_down_tx,
             shutting_down_rx,
-            shutdown_timeout,
+            shutdown_timeout_per_subsystem,
             subsystem_tasks,
+            subsystem_shutdown_txs,
         }
     }
 
@@ -154,7 +152,8 @@ impl Manager {
 
         // Shutdown-related channels
         let shutting_down_tx = self.shutting_down_tx.clone();
-        let shutdown_rq = ShutdownRequest(self.shutdown_request_tx.subscribe());
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let shutdown_rq = ShutdownRequest(shutdown_rx);
         // Call related channels
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let call_rq = CallRequest(action_rx);
@@ -176,6 +175,7 @@ impl Manager {
             // Close the channel to signal the completion of the shutdown.
             drop(shutting_down_tx);
         }));
+        self.subsystem_shutdown_txs.push(shutdown_tx);
 
         log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
 
@@ -260,41 +260,6 @@ impl Manager {
         );
     }
 
-    async fn wait_for_shutdown(mut shutting_down_rx: mpsc::Receiver<()>) {
-        // Wait for the subsystems to go down, signalled by closing the shutting_down channel.
-        while let Some(()) = shutting_down_rx.recv().await {}
-    }
-
-    #[allow(unused)]
-    async fn wait_for_shutdown_with_timeout(
-        name: &'static str,
-        shutting_down_rx: mpsc::Receiver<()>,
-        timeout: Option<Duration>,
-    ) {
-        let shutdown_future = Self::wait_for_shutdown(shutting_down_rx);
-        if let Some(timeout) = timeout {
-            cfg_if::cfg_if! {
-                if #[cfg(all(feature = "time", not(loom)))] {
-                    // Wait for shutdown under a timeout
-                    if let Err(elapsed) = tokio::time::timeout(timeout, shutdown_future).await {
-                        log::error!("Manager {} shutdown timed out", name);
-                    }
-                } else {
-                    // Timeout was requested but is not supported
-                    if cfg!(not(feature = "time")) {
-                        log::error!("Shutdown timeout support not compiled in");
-                    } else if cfg!(loom) {
-                        log::warn!("Shutdown timeout disabled under loom");
-                    }
-                    shutdown_future.await
-                }
-            }
-        } else {
-            // No timeout requested, just wait for shutdown
-            shutdown_future.await
-        }
-    }
-
     /// Create a trigger object that can be used to shut down the system
     pub fn make_shutdown_trigger(&self) -> ShutdownTrigger {
         ShutdownTrigger(self.shutting_down_tx.clone())
@@ -304,59 +269,70 @@ impl Manager {
     ///
     /// Completes when all the subsystems are fully shut down.
     pub async fn main(mut self) {
+        assert_eq!(
+            self.subsystem_tasks.len(),
+            self.subsystem_shutdown_txs.len()
+        );
+
         log::info!("Manager {} starting subsystems", self.name);
 
         // Run all the subsystem tasks.
-        let mut task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
+        let task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
 
         // Signal the manager is shut down so it does not wait for itself
         drop(self.shutting_down_tx);
 
-        // Wait for a subsystem to shut down
-        loop {
-            // We have to handle the empty case explicitly to avoid panic
-            let tasks_join_future = if task_handles.is_empty() {
-                std::future::pending().left_future()
-            } else {
-                select_all(task_handles).right_future()
-            };
-            // Wait for either the shutdown signal or task crash
-            tokio::select! {
-                (result, _, rest) = tasks_join_future => {
-                    task_handles = rest;
-                    match result {
-                        // Task terminated gracefully
-                        Ok(()) => continue,
-                        // Task terminated in an unexpected way
-                        Err(e) => {
-                            let msg =
-                                format!("Manager {}: error from a subsystem: {}", self.name, e);
-                            log::error!("{}", msg);
-                            panic!("{}", msg);
-                        }
-                    }
-                }
-                shut = self.shutting_down_rx.recv() => {
-                    if shut.is_none() {
-                        log::info!("Manager {}: all subsystems already down", self.name);
-                    }
-                }
-            }
-            break;
+        // Wait for the shutdown trigger.
+        if self.shutting_down_rx.recv().await.is_none() {
+            log::warn!("Manager {}: all subsystems already down", self.name);
         }
-
         log::info!("Manager {} shutting down", self.name);
 
-        // Order all the remaining subsystems to shut down.
-        let _ = self.shutdown_request_tx.send(());
+        // Shut down the subsystems in the reverse order of creation.
+        for (handle, shutdown_tx) in task_handles.into_iter().zip(self.subsystem_shutdown_txs).rev()
+        {
+            if let Err(()) = tx.send(()) {
+                // TODO: FIXME: Report the subsystem name?
+                log::warn!("Manager {}: FIXME subsystem is already down", self.name);
+            }
 
-        // Wait for the subsystems to go down.
-        Self::wait_for_shutdown_with_timeout(
-            self.name,
-            self.shutting_down_rx,
-            self.shutdown_timeout,
-        )
-        .await;
+            // TODO: FIXME: Move to a function?
+            if let Some(timeout) = self.shutdown_timeout_per_subsystem {
+                cfg_if::cfg_if! {
+                    if #[cfg(all(feature = "time", not(loom)))] {
+                        // Wait for shutdown under a timeout
+                        if let Err(elapsed) = tokio::time::timeout(timeout, handle).await {
+                            log::error!("Manager {}: subsystem FIXME shutdown timed out", self.name);
+                        }
+                    } else {
+                        // Timeout was requested but is not supported
+                        if cfg!(not(feature = "time")) {
+                            log::error!("Shutdown timeout support not compiled in");
+                        } else if cfg!(loom) {
+                            log::warn!("Shutdown timeout disabled under loom");
+                        }
+                        handle.await
+                    }
+                }
+            } else {
+                // No timeout requested, just wait for shutdown
+                handle.await
+            };
+
+            // TODO: FIXME: Process/log the result.
+
+            //             match result {
+            //                 // Task terminated gracefully
+            //                 Ok(()) => continue,
+            //                 // Task terminated in an unexpected way
+            //                 Err(e) => {
+            //                     let msg =
+            //                         format!("Manager {}: error from a subsystem: {}", self.name, e);
+            //                     log::error!("{}", msg);
+            //                     panic!("{}", msg);
+            //                 }
+            //             }
+        }
 
         log::info!("Manager {} terminated", self.name);
     }
@@ -424,7 +400,7 @@ mod test {
 
         let mut man = Manager::new_with_config(ManagerConfig {
             name: "timeout_test",
-            shutdown_timeout: Some(Duration::from_secs(1)),
+            shutdown_timeout_per_subsystem: Some(Duration::from_secs(1)),
         });
 
         man.add_subsystem_with_custom_eventloop(
