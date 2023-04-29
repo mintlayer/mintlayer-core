@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use common::chain::tokens::OutputValue;
-use test_utils::mock_time_getter::mocked_time_getter_seconds;
 
 use super::*;
 use crate::SystemUsageEstimator;

@@ -21,9 +21,6 @@ use crate::{
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
 };
-use chainstate_test_framework::{
-    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
-};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
@@ -35,17 +32,13 @@ use common::{
     },
     primitives::{Id, H256},
 };
-use rstest::rstest;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
 };
-use test_utils::{
-    mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
-};
 
 mod expiry;
+mod reorg;
 mod replacement;
 mod utils;
 
