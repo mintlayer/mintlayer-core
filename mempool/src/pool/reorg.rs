@@ -92,7 +92,7 @@ fn find_disconnected_txs(
         return Ok(Vec::new());
     }
 
-    // Collect IDs of trancsactions included in the newly connected chain
+    // Collect IDs of transactions included in the newly connected chain
     let mut connected_txs = BTreeSet::new();
     for_each_block(chainstate, new_tip_id, common_id, |block| {
         connected_txs.extend(block.transactions().iter().map(|t| t.transaction().get_id()))
@@ -102,9 +102,9 @@ fn find_disconnected_txs(
     let mut disconnected_txs = Vec::new();
     for_each_block(chainstate, old_tip_id, common_id, |block| {
         // We iterate blocks in the reverse order, so for consistent transaction input/output
-        // dependencies, take transacitons in reverse too,
+        // dependencies, take transactions in reverse too,
         let txns = block.transactions().iter().rev();
-        // We disregerd transactions that are re-added on the newly connected chain
+        // We disregard transactions that are re-added on the newly connected chain
         let txns = txns.filter(|txn| !connected_txs.contains(&txn.transaction().get_id()));
         disconnected_txs.extend(txns.cloned())
     })?;
