@@ -14,6 +14,8 @@
 // limitations under the License.
 
 use core::{future::Future, time::Duration};
+use std::panic;
+
 use futures::future::BoxFuture;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -21,6 +23,7 @@ use tokio::{
 };
 
 use logging::log;
+use utils::once_destructor::OnceDestructor;
 
 use crate::subsystem::{CallRequest, Handle, ShutdownRequest, Subsystem, SubsystemConfig};
 
@@ -74,8 +77,8 @@ pub struct Manager {
     // Used by a subsystem to notify the manager it is shutting down. This is taken as a command
     // for all subsystems to shut down. Shutdown completion is detected by all senders having closed
     // this channel.
-    shutting_down_tx: mpsc::Sender<()>,
-    shutting_down_rx: mpsc::Receiver<()>,
+    shutting_down_tx: mpsc::UnboundedSender<()>,
+    shutting_down_rx: mpsc::UnboundedReceiver<()>,
 
     // List of subsystem tasks.
     subsystems: Vec<SubsystemInfo>,
@@ -101,7 +104,7 @@ impl Manager {
         } = config;
         log::info!("Initializing subsystem manager {}", name);
 
-        let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
+        let (shutting_down_tx, shutting_down_rx) = mpsc::unbounded_channel();
         let subsystems = Vec::new();
 
         Self {
@@ -165,16 +168,18 @@ impl Manager {
         let task = Box::pin(async move {
             log::info!("Subsystem {}/{} started", manager_name, subsys_name);
 
+            // Make sure that we send the shutdown signal even in case of a panic.
+            let _shutdown_sender = OnceDestructor::new(|| {
+                let _ = shutting_down_tx.send(());
+
+                log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
+
+                // Close the channel to signal the completion of the shutdown.
+                drop(shutting_down_tx);
+            });
+
             // Perform the subsystem task.
             subsystem(call_rq, shutdown_rq).await;
-
-            // Signal the intent to shut down to the other parts of the application.
-            let _ = shutting_down_tx.send(()).await;
-
-            log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
-
-            // Close the channel to signal the completion of the shutdown.
-            drop(shutting_down_tx);
         });
         self.subsystems.push(SubsystemInfo {
             name: subsys_name,
@@ -315,9 +320,12 @@ impl Manager {
     async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
         match handle.await {
             Ok(()) => {}
-            Err(e) => log::error!(
-                "Manager {manager_name}: failed to join the {subsystem_name} subsystem task: {e:?}"
-            ),
+            Err(e) => {
+                log::error!("Manager {manager_name}: failed to join the {subsystem_name} subsystem task: {e:?}");
+                if let Ok(p) = e.try_into_panic() {
+                    panic::resume_unwind(p);
+                }
+            }
         }
     }
 
@@ -365,18 +373,14 @@ impl Manager {
 
 /// Used to initiate shutdown of manager and subsystems.
 #[derive(Clone)]
-pub struct ShutdownTrigger(mpsc::WeakSender<()>);
+pub struct ShutdownTrigger(mpsc::WeakUnboundedSender<()>);
 
 impl ShutdownTrigger {
     /// Initiate shutdown
     pub fn initiate(self) {
-        use mpsc::error::TrySendError as E;
-        match self.0.upgrade().map(|s| s.try_send(())) {
-            None | Some(Err(E::Closed(_))) => {
+        match self.0.upgrade().map(|s| s.send(())) {
+            None | Some(Err(mpsc::error::SendError(_))) => {
                 log::info!("Shutdown requested but the system is already down")
-            }
-            Some(Err(E::Full(_))) => {
-                log::info!("Shutdown requested but the system is already shutting down")
             }
             Some(Ok(())) => {}
         }
