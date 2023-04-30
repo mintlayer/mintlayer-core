@@ -38,7 +38,7 @@ pub struct ManagerConfig {
 impl ManagerConfig {
     /// Default shutdown timeout.
     const DEFAULT_SHUTDOWN_TIMEOUT: Option<Duration> = if cfg!(all(feature = "time", not(loom))) {
-        Some(Duration::from_secs(5))
+        Some(Duration::from_secs(30))
     } else {
         None
     };
