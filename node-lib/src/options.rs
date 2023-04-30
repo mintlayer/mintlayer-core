@@ -37,10 +37,10 @@ pub struct Options {
     pub data_dir: Option<PathBuf>,
 
     #[clap(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Clone, Debug)]
 pub enum Command {
     /// Run the mainnet node.
     Mainnet(RunOptions),
@@ -50,7 +50,7 @@ pub enum Command {
     Regtest(RegtestOptions),
 }
 
-#[derive(Args, Debug, Default)]
+#[derive(Args, Clone, Debug, Default)]
 pub struct RunOptions {
     /// Storage backend to use.
     #[clap(long)]
