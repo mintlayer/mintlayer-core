@@ -334,7 +334,7 @@ impl Manager {
             cfg_if::cfg_if! {
                 if #[cfg(all(feature = "time", not(loom)))] {
                     // Wait for shutdown under a timeout.
-                    if let Err(_) = tokio::time::timeout(timeout, shutdown_future).await {
+                    if tokio::time::timeout(timeout, shutdown_future).await.is_err() {
                         log::error!("Manager {manager_name}: subsystem {subsystem_name} shutdown timed out");
                     }
                 } else {

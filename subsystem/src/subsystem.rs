@@ -82,7 +82,7 @@ pub struct ShutdownRequest(pub(crate) oneshot::Receiver<()>);
 impl ShutdownRequest {
     /// Receive a shutdown request.
     pub async fn recv(&mut self) {
-        if let Err(_) = (&mut self.0).await {
+        if (&mut self.0).await.is_err() {
             log::error!("Shutdown channel sender closed prematurely")
         }
     }
