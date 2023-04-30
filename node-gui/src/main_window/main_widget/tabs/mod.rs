@@ -50,13 +50,13 @@ const TAB_PADDING: u16 = 16;
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
     TabSelected(usize),
-    Counter(SummaryMessage),
+    Summary(SummaryMessage),
     Settings(SettingsMessage),
 }
 
 pub struct TabsWidget {
     active_tab: usize,
-    counter_tab: SummaryTab,
+    summary_tab: SummaryTab,
     settings_tab: SettingsTab,
 }
 
@@ -64,7 +64,7 @@ impl TabsWidget {
     pub fn new(backend_controller: NodeBackendController) -> Self {
         TabsWidget {
             active_tab: 0,
-            counter_tab: SummaryTab::new(backend_controller),
+            summary_tab: SummaryTab::new(backend_controller),
             settings_tab: SettingsTab::new(),
         }
     }
@@ -77,7 +77,7 @@ impl TabsWidget {
         let theme = self.settings_tab.settings().tab_bar_theme.unwrap_or_default();
 
         Tabs::new(self.active_tab, TabsMessage::TabSelected)
-            .push(self.counter_tab.tab_label(), self.counter_tab.view())
+            .push(self.summary_tab.tab_label(), self.summary_tab.view())
             .push(self.settings_tab.tab_label(), self.settings_tab.view())
             .tab_bar_style(theme)
             // .icon_font(ICON_FONT)
@@ -94,8 +94,8 @@ impl TabsWidget {
                 self.active_tab = n;
                 Command::none()
             }
-            TabsMessage::Counter(message) => {
-                self.counter_tab.update(message).map(TabsMessage::Counter)
+            TabsMessage::Summary(message) => {
+                self.summary_tab.update(message).map(TabsMessage::Summary)
             }
             TabsMessage::Settings(message) => {
                 self.settings_tab.update(message).map(TabsMessage::Settings)

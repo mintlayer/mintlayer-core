@@ -49,7 +49,7 @@ impl Tab for SummaryTab {
     type Message = TabsMessage;
 
     fn title(&self) -> String {
-        String::from("Counter")
+        String::from("Summary")
     }
 
     fn tab_label(&self) -> TabLabel {
