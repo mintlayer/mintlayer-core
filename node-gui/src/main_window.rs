@@ -20,7 +20,7 @@ use iced::{
 };
 use iced_aw::menu::{CloseCondition, ItemHeight, ItemWidth, MenuBar, MenuTree, PathHighlight};
 
-use crate::Message;
+use crate::{backend_controller::NodeBackendController, Message};
 
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
@@ -105,11 +105,13 @@ fn make_menu_help<'a>() -> MenuTree<'a, Message, iced::Renderer> {
     root
 }
 
-pub fn view<'a>() -> Element<'a, Message, iced::Renderer> {
+pub fn view<'a>(
+    backend_controller: &NodeBackendController,
+) -> Element<'a, Message, iced::Renderer> {
     let file_menu = make_menu_file();
     let help_menu = make_menu_help();
 
-    let mb = MenuBar::new(vec![file_menu, help_menu])
+    let menu_bar = MenuBar::new(vec![file_menu, help_menu])
         .item_width(ItemWidth::Uniform(180))
         .item_height(ItemHeight::Uniform(25))
         .spacing(4.0)
@@ -121,7 +123,16 @@ pub fn view<'a>() -> Element<'a, Message, iced::Renderer> {
             click_inside: false,
         });
 
-    let c = iced::widget::column![container(mb)];
+    let main_widget = text(&format!(
+        "Genesis block: {}",
+        backend_controller.chain_config().genesis_block_id(),
+    ))
+    .width(Length::Fill)
+    .size(25)
+    .horizontal_alignment(alignment::Horizontal::Center)
+    .vertical_alignment(alignment::Vertical::Center);
+
+    let c = iced::widget::column![container(menu_bar), container(main_widget)];
 
     c.into()
 }

@@ -146,7 +146,7 @@ impl Application for MintlayerNodeGUI {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerNodeGUI::Loaded(_state) => main_window::view(),
+            MintlayerNodeGUI::Loaded(state) => main_window::view(state),
 
             MintlayerNodeGUI::IntializationError(e) => {
                 let error_box = column![
