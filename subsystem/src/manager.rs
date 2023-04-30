@@ -169,10 +169,7 @@ impl Manager {
             subsystem(call_rq, shutdown_rq).await;
 
             // Signal the intent to shut down to the other parts of the application.
-            let res = shutting_down_tx.send(()).await;
-            if res.is_err() {
-                log::error!("Subsystem outlived the manager!?");
-            }
+            let _ = shutting_down_tx.send(()).await;
 
             log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
 
@@ -294,6 +291,8 @@ impl Manager {
             log::warn!("Manager {}: all subsystems already down", self.name);
         }
         log::info!("Manager {} shutting down", self.name);
+        // Drop the receiver in order to prevent blocking of subsystems.
+        drop(self.shutting_down_rx);
 
         // Shut down the subsystems in the reverse order of creation.
         for (name, handle, shutdown_tx) in subsystems.into_iter().rev() {
