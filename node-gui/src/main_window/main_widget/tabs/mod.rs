@@ -18,7 +18,7 @@ use iced::{
     widget::{Column, Container, Text},
     Command, Element, Length,
 };
-use iced_aw::{TabLabel, Tabs, ICON_FONT};
+use iced_aw::{TabLabel, Tabs};
 
 use crate::backend_controller::NodeBackendController;
 
@@ -33,19 +33,19 @@ pub mod summary;
 const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
 
-enum Icon {
-    User,
-    CogAlt,
-}
+// enum Icon {
+//     User,
+//     CogAlt,
+// }
 
-impl From<Icon> for char {
-    fn from(icon: Icon) -> Self {
-        match icon {
-            Icon::User => '\u{E800}',
-            Icon::CogAlt => '\u{E802}',
-        }
-    }
-}
+// impl From<Icon> for char {
+//     fn from(icon: Icon) -> Self {
+//         match icon {
+//             Icon::User => '\u{E800}',
+//             Icon::CogAlt => '\u{E802}',
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
@@ -80,7 +80,7 @@ impl TabsWidget {
             .push(self.counter_tab.tab_label(), self.counter_tab.view())
             .push(self.settings_tab.tab_label(), self.settings_tab.view())
             .tab_bar_style(theme)
-            .icon_font(ICON_FONT)
+            // .icon_font(ICON_FONT)
             .tab_bar_position(match position {
                 TabBarPosition::Top => iced_aw::TabBarPosition::Top,
                 TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,

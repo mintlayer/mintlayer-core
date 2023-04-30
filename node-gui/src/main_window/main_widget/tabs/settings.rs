@@ -20,7 +20,7 @@ use iced::{
 use iced_aw::style::TabBarStyles;
 use iced_aw::tab_bar::TabLabel;
 
-use super::{Icon, Tab, TabsMessage};
+use super::{Tab, TabsMessage};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TabBarPosition {
     #[default]
@@ -99,8 +99,8 @@ impl Tab for SettingsTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        //TabLabel::Text(self.title())
-        TabLabel::IconText(Icon::CogAlt.into(), self.title())
+        TabLabel::Text(self.title())
+        // TabLabel::IconText(Icon::CogAlt.into(), self.title())
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
