@@ -14,15 +14,17 @@
 // limitations under the License.
 
 mod backend_controller;
+mod main_window;
 
 use std::ops::DerefMut;
 
 use backend_controller::NodeBackendController;
 use iced::futures::TryFutureExt;
 use iced::widget::{column, container, text};
-use iced::{alignment, Subscription};
+use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
+use main_window::MenuMessage;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -40,10 +42,11 @@ enum MintlayerNodeGUI {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     Loaded(Result<NodeBackendController, String>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
+    MenuMessage(MenuMessage),
 }
 
 fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
@@ -107,6 +110,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => Command::none(),
+                Message::MenuMessage(_) => Command::none(),
             },
             MintlayerNodeGUI::Loaded(ref mut controller) => match message {
                 Message::Loaded(_) => unreachable!("Already loaded"),
@@ -119,6 +123,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
+                Message::MenuMessage(menu_msg) => main_window::message_to_action(menu_msg),
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::Loaded(_) => Command::none(),
@@ -130,6 +135,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
+                Message::MenuMessage(_) => Command::none(),
             },
         }
     }
@@ -140,24 +146,7 @@ impl Application for MintlayerNodeGUI {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerNodeGUI::Loaded(state) => {
-                let main_widget = text(&format!(
-                    "Genesis block: {}",
-                    state.chain_config().genesis_block_id(),
-                ))
-                .width(Length::Fill)
-                .size(25)
-                .horizontal_alignment(alignment::Horizontal::Center)
-                .vertical_alignment(alignment::Vertical::Center);
-
-                let window_contents = column![main_widget];
-
-                container(window_contents)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_y()
-                    .into()
-            }
+            MintlayerNodeGUI::Loaded(_state) => main_window::view(),
 
             MintlayerNodeGUI::IntializationError(e) => {
                 let error_box = column![
