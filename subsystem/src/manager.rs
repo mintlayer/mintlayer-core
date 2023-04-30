@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use core::{future::Future, time::Duration};
-use futures::future::{select_all, BoxFuture, FutureExt};
+use futures::future::BoxFuture;
 use tokio::{
     sync::{mpsc, oneshot},
     task::{self, JoinHandle},
@@ -77,8 +77,13 @@ pub struct Manager {
     shutting_down_rx: mpsc::Receiver<()>,
 
     // List of subsystem tasks.
-    subsystem_tasks: Vec<BoxFuture<'static, ()>>,
-    subsystem_shutdown_txs: Vec<oneshot::Sender<()>>,
+    subsystems: Vec<SubsystemInfo>,
+}
+
+struct SubsystemInfo {
+    name: &'static str,
+    task: BoxFuture<'static, ()>,
+    shutdown_tx: oneshot::Sender<()>,
 }
 
 impl Manager {
@@ -96,16 +101,14 @@ impl Manager {
         log::info!("Initializing subsystem manager {}", name);
 
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
-        let subsystem_tasks = Vec::new();
-        let subsystem_shutdown_txs = Vec::new();
+        let subsystems = Vec::new();
 
         Self {
             name,
             shutting_down_tx,
             shutting_down_rx,
             shutdown_timeout_per_subsystem,
-            subsystem_tasks,
-            subsystem_shutdown_txs,
+            subsystems,
         }
     }
 
@@ -158,7 +161,7 @@ impl Manager {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         let call_rq = CallRequest(action_rx);
 
-        self.subsystem_tasks.push(Box::pin(async move {
+        let task = Box::pin(async move {
             log::info!("Subsystem {}/{} started", manager_name, subsys_name);
 
             // Perform the subsystem task.
@@ -174,8 +177,12 @@ impl Manager {
 
             // Close the channel to signal the completion of the shutdown.
             drop(shutting_down_tx);
-        }));
-        self.subsystem_shutdown_txs.push(shutdown_tx);
+        });
+        self.subsystems.push(SubsystemInfo {
+            name: subsys_name,
+            task,
+            shutdown_tx,
+        });
 
         log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
 
@@ -269,15 +276,14 @@ impl Manager {
     ///
     /// Completes when all the subsystems are fully shut down.
     pub async fn main(mut self) {
-        assert_eq!(
-            self.subsystem_tasks.len(),
-            self.subsystem_shutdown_txs.len()
-        );
-
         log::info!("Manager {} starting subsystems", self.name);
 
         // Run all the subsystem tasks.
-        let task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
+        let subsystems: Vec<_> = self
+            .subsystems
+            .into_iter()
+            .map(|s| (s.name, task::spawn(s.task), s.shutdown_tx))
+            .collect();
 
         // Signal the manager is shut down so it does not wait for itself
         drop(self.shutting_down_tx);
@@ -289,52 +295,61 @@ impl Manager {
         log::info!("Manager {} shutting down", self.name);
 
         // Shut down the subsystems in the reverse order of creation.
-        for (handle, shutdown_tx) in task_handles.into_iter().zip(self.subsystem_shutdown_txs).rev()
-        {
-            if let Err(()) = tx.send(()) {
-                // TODO: FIXME: Report the subsystem name?
-                log::warn!("Manager {}: FIXME subsystem is already down", self.name);
+        for (name, handle, shutdown_tx) in subsystems.into_iter().rev() {
+            if let Err(()) = shutdown_tx.send(()) {
+                log::warn!("Manager {}: {name} subsystem is already down", self.name);
             }
 
-            // TODO: FIXME: Move to a function?
-            if let Some(timeout) = self.shutdown_timeout_per_subsystem {
-                cfg_if::cfg_if! {
-                    if #[cfg(all(feature = "time", not(loom)))] {
-                        // Wait for shutdown under a timeout
-                        if let Err(elapsed) = tokio::time::timeout(timeout, handle).await {
-                            log::error!("Manager {}: subsystem FIXME shutdown timed out", self.name);
-                        }
-                    } else {
-                        // Timeout was requested but is not supported
-                        if cfg!(not(feature = "time")) {
-                            log::error!("Shutdown timeout support not compiled in");
-                        } else if cfg!(loom) {
-                            log::warn!("Shutdown timeout disabled under loom");
-                        }
-                        handle.await
-                    }
-                }
-            } else {
-                // No timeout requested, just wait for shutdown
-                handle.await
-            };
-
-            // TODO: FIXME: Process/log the result.
-
-            //             match result {
-            //                 // Task terminated gracefully
-            //                 Ok(()) => continue,
-            //                 // Task terminated in an unexpected way
-            //                 Err(e) => {
-            //                     let msg =
-            //                         format!("Manager {}: error from a subsystem: {}", self.name, e);
-            //                     log::error!("{}", msg);
-            //                     panic!("{}", msg);
-            //                 }
-            //             }
+            Self::wait_for_subsystem_shutdown(
+                self.name,
+                name,
+                self.shutdown_timeout_per_subsystem,
+                handle,
+            )
+            .await;
         }
 
         log::info!("Manager {} terminated", self.name);
+    }
+
+    async fn wait_for_shutdown(manager_name: &str, subsystem_name: &str, handle: JoinHandle<()>) {
+        match handle.await {
+            Ok(()) => {}
+            Err(e) => log::error!(
+                "Manager {manager_name}: failed to join the {subsystem_name} subsystem task: {e:?}"
+            ),
+        }
+    }
+
+    async fn wait_for_subsystem_shutdown(
+        manager_name: &str,
+        subsystem_name: &str,
+        timeout: Option<Duration>,
+        handle: JoinHandle<()>,
+    ) {
+        let shutdown_future = Self::wait_for_shutdown(manager_name, subsystem_name, handle);
+
+        if let Some(timeout) = timeout {
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "time", not(loom)))] {
+                    // Wait for shutdown under a timeout.
+                    if let Err(_) = tokio::time::timeout(timeout, shutdown_future).await {
+                        log::error!("Manager {manager_name}: subsystem {subsystem_name} shutdown timed out");
+                    }
+                } else {
+                    // Timeout was requested but is not supported
+                    if cfg!(not(feature = "time")) {
+                        log::error!("Shutdown timeout support not compiled in");
+                    } else if cfg!(loom) {
+                        log::warn!("Shutdown timeout disabled under loom");
+                    }
+                    shutdown_future.await
+                }
+            }
+        } else {
+            // No timeout requested, just wait for shutdown
+            shutdown_future.await
+        };
     }
 
     /// Runs the application in a separate task.
