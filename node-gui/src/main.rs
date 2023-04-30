@@ -24,7 +24,8 @@ use iced::widget::{column, container, text};
 use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use main_window::MenuMessage;
+use main_window::main_menu::{main_menu_action, MenuMessage};
+use main_window::main_widget::{main_widget_action, MainWidgetMessage};
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -47,6 +48,7 @@ pub enum Message {
     EventOccurred(iced::Event),
     ShuttingDownFinished,
     MenuMessage(MenuMessage),
+    MainWidgetMessage(MainWidgetMessage),
 }
 
 fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
@@ -111,6 +113,7 @@ impl Application for MintlayerNodeGUI {
                 }
                 Message::ShuttingDownFinished => Command::none(),
                 Message::MenuMessage(_) => Command::none(),
+                Message::MainWidgetMessage(_) => Command::none(),
             },
             MintlayerNodeGUI::Loaded(ref mut controller) => match message {
                 Message::Loaded(_) => unreachable!("Already loaded"),
@@ -123,7 +126,8 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
-                Message::MenuMessage(menu_msg) => main_window::message_to_action(menu_msg),
+                Message::MenuMessage(menu_msg) => main_menu_action(menu_msg),
+                Message::MainWidgetMessage(main_widget_msg) => main_widget_action(main_widget_msg),
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::Loaded(_) => Command::none(),
@@ -136,6 +140,7 @@ impl Application for MintlayerNodeGUI {
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
                 Message::MenuMessage(_) => Command::none(),
+                Message::MainWidgetMessage(_) => Command::none(),
             },
         }
     }
