@@ -13,38 +13,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{
-    alignment,
-    widget::{container, text},
-    Command, Element, Length,
-};
+mod tabs;
 
-use crate::{backend_controller::NodeBackendController, Message};
+use iced::{Command, Element};
+
+use crate::backend_controller::NodeBackendController;
 
 #[derive(Debug, Clone)]
 pub enum MainWidgetMessage {
     NoOp,
+    TabsMessage(tabs::TabsMessage),
 }
 
-pub fn view<'a>(
-    backend_controller: &NodeBackendController,
-) -> Element<'a, Message, iced::Renderer> {
-    let main_widget = text(&format!(
-        "Genesis block: {}",
-        backend_controller.chain_config().genesis_block_id(),
-    ))
-    .width(Length::Fill)
-    .size(25)
-    .horizontal_alignment(alignment::Horizontal::Center)
-    .vertical_alignment(alignment::Vertical::Center);
-
-    let c = container(main_widget);
-
-    c.into()
+pub struct MainWidget {
+    tabs: tabs::TabsWidget,
 }
 
-pub fn main_widget_action(msg: MainWidgetMessage) -> Command<Message> {
-    match msg {
-        MainWidgetMessage::NoOp => Command::none(),
+impl MainWidget {
+    pub fn new(backend_controller: NodeBackendController) -> Self {
+        Self {
+            tabs: tabs::TabsWidget::new(backend_controller),
+        }
+    }
+
+    pub fn view(
+        &self,
+        backend_controller: &NodeBackendController,
+    ) -> Element<'_, MainWidgetMessage, iced::Renderer> {
+        self.tabs.view(backend_controller).map(MainWidgetMessage::TabsMessage)
+    }
+
+    pub fn update(&mut self, msg: MainWidgetMessage) -> Command<MainWidgetMessage> {
+        match msg {
+            MainWidgetMessage::NoOp => Command::none(),
+            MainWidgetMessage::TabsMessage(tabs_message) => {
+                self.tabs.update(tabs_message).map(MainWidgetMessage::TabsMessage)
+            }
+        }
     }
 }

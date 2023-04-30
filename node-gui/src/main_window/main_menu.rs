@@ -20,7 +20,7 @@ use iced::{
 };
 use iced_aw::menu::{CloseCondition, ItemHeight, ItemWidth, MenuBar, MenuTree, PathHighlight};
 
-use crate::{backend_controller::NodeBackendController, Message};
+use crate::backend_controller::NodeBackendController;
 
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
@@ -28,9 +28,46 @@ pub enum MenuMessage {
     Exit,
 }
 
-impl From<MenuMessage> for Message {
-    fn from(msg: MenuMessage) -> Self {
-        Message::MenuMessage(msg)
+pub struct MainMenu {
+    _backend_controller: NodeBackendController,
+}
+
+impl MainMenu {
+    pub fn new(backend_controller: NodeBackendController) -> Self {
+        Self {
+            _backend_controller: backend_controller,
+        }
+    }
+
+    pub fn view(
+        &self,
+        _backend_controller: &NodeBackendController,
+    ) -> Element<'_, MenuMessage, iced::Renderer> {
+        let file_menu = make_menu_file();
+        let help_menu = make_menu_help();
+
+        let menu_bar = MenuBar::new(vec![file_menu, help_menu])
+            .item_width(ItemWidth::Uniform(180))
+            .item_height(ItemHeight::Uniform(25))
+            .spacing(4.0)
+            .bounds_expand(30)
+            .path_highlight(Some(PathHighlight::MenuActive))
+            .close_condition(CloseCondition {
+                leave: true,
+                click_outside: false,
+                click_inside: false,
+            });
+
+        let c = iced::widget::column![container(menu_bar)];
+
+        c.into()
+    }
+
+    pub fn update(&self, msg: MenuMessage) -> Command<MenuMessage> {
+        match msg {
+            MenuMessage::NoOp => Command::none(),
+            MenuMessage::Exit => iced::window::close(),
+        }
     }
 }
 
@@ -59,16 +96,19 @@ impl button::StyleSheet for ButtonStyle {
 }
 
 fn base_button<'a>(
-    content: impl Into<Element<'a, Message, iced::Renderer>>,
-    msg: Message,
-) -> button::Button<'a, Message, iced::Renderer> {
+    content: impl Into<Element<'a, MenuMessage, iced::Renderer>>,
+    msg: MenuMessage,
+) -> button::Button<'a, MenuMessage, iced::Renderer> {
     button(content)
         .padding([4, 8])
         .style(iced::theme::Button::Custom(Box::new(ButtonStyle {})))
         .on_press(msg)
 }
 
-fn labeled_button<'a>(label: &str, msg: Message) -> button::Button<'a, Message, iced::Renderer> {
+fn labeled_button<'a>(
+    label: &str,
+    msg: MenuMessage,
+) -> button::Button<'a, MenuMessage, iced::Renderer> {
     base_button(
         text(label)
             .width(Length::Fill)
@@ -78,59 +118,26 @@ fn labeled_button<'a>(label: &str, msg: Message) -> button::Button<'a, Message, 
     )
 }
 
-fn menu_item<'a>(label: &str, msg: Message) -> MenuTree<'a, Message, iced::Renderer> {
+fn menu_item<'a>(label: &str, msg: MenuMessage) -> MenuTree<'a, MenuMessage, iced::Renderer> {
     MenuTree::new(labeled_button(label, msg).width(Length::Fill).height(Length::Fill))
 }
 
-fn make_menu_file<'a>() -> MenuTree<'a, Message, iced::Renderer> {
+fn make_menu_file<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
     let root = MenuTree::with_children(
-        labeled_button("File", Message::MenuMessage(MenuMessage::NoOp)),
-        vec![
-            menu_item("Settings", Message::MenuMessage(MenuMessage::NoOp)),
-            menu_item("Exit", Message::MenuMessage(MenuMessage::Exit)),
-        ],
+        labeled_button("File", MenuMessage::NoOp),
+        vec![menu_item("Settings", MenuMessage::NoOp), menu_item("Exit", MenuMessage::Exit)],
     )
     .width(110);
 
     root
 }
 
-fn make_menu_help<'a>() -> MenuTree<'a, Message, iced::Renderer> {
+fn make_menu_help<'a>() -> MenuTree<'a, MenuMessage, iced::Renderer> {
     let root = MenuTree::with_children(
-        labeled_button("Help", Message::MenuMessage(MenuMessage::NoOp)),
-        vec![menu_item("About", Message::MenuMessage(MenuMessage::NoOp))],
+        labeled_button("Help", MenuMessage::NoOp),
+        vec![menu_item("About", MenuMessage::NoOp)],
     )
     .width(110);
 
     root
-}
-
-pub fn view<'a>(
-    _backend_controller: &NodeBackendController,
-) -> Element<'a, Message, iced::Renderer> {
-    let file_menu = make_menu_file();
-    let help_menu = make_menu_help();
-
-    let menu_bar = MenuBar::new(vec![file_menu, help_menu])
-        .item_width(ItemWidth::Uniform(180))
-        .item_height(ItemHeight::Uniform(25))
-        .spacing(4.0)
-        .bounds_expand(30)
-        .path_highlight(Some(PathHighlight::MenuActive))
-        .close_condition(CloseCondition {
-            leave: true,
-            click_outside: false,
-            click_inside: false,
-        });
-
-    let c = iced::widget::column![container(menu_bar)];
-
-    c.into()
-}
-
-pub fn main_menu_action(msg: MenuMessage) -> Command<Message> {
-    match msg {
-        MenuMessage::NoOp => Command::none(),
-        MenuMessage::Exit => iced::window::close(),
-    }
 }
