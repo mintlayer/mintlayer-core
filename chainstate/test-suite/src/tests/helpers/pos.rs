@@ -15,7 +15,9 @@
 
 use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
-use chainstate_types::{pos_randomness::PoSRandomness, vrf_tools::construct_transcript};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, BlockIndexHandle,
+};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp},
@@ -102,6 +104,9 @@ pub fn calculate_new_target(
         &pos_status,
         tf.best_block_id(),
         &block_index_handle,
+        |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        },
     )
 }
 

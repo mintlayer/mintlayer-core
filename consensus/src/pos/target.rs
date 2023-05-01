@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::{BlockIndex, BlockIndexHandle, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::ConsensusData, ChainConfig, GenBlock, GenBlockId, PoSChainConfig, PoSStatus,
@@ -26,12 +26,15 @@ use utils::ensure;
 
 use crate::pos::error::ConsensusPoSError;
 
-fn calculate_average_block_time(
+fn calculate_average_block_time<F>(
     chain_config: &ChainConfig,
     pos_config: &PoSChainConfig,
     block_index: &BlockIndex,
-    block_index_handle: &impl BlockIndexHandle,
-) -> Result<u64, ConsensusPoSError> {
+    get_ancestor: F,
+) -> Result<u64, ConsensusPoSError>
+where
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
     // Determine net upgrade version that current block belongs to.
     // Across versions config parameters might change so it's invalid to mix versions for target calculations
     let (_, net_version) = chain_config
@@ -53,8 +56,7 @@ fn calculate_average_block_time(
     let timespan_start_height =
         std::cmp::max(net_version_range.start, block_height_to_stare_averaging);
 
-    let time_span_start = block_index_handle
-        .get_ancestor(block_index, timespan_start_height)?
+    let time_span_start = get_ancestor(block_index, timespan_start_height)?
         .block_timestamp()
         .as_int_seconds();
     let current_block_time = block_index.block_timestamp().as_int_seconds();
@@ -92,12 +94,16 @@ fn calculate_new_target(
     Ok(Compact::from(new_target))
 }
 
-pub fn calculate_target_required(
+pub fn calculate_target_required<F>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
     prev_block_id: Id<GenBlock>,
     block_index_handle: &impl BlockIndexHandle,
-) -> Result<Compact, ConsensusPoSError> {
+    get_ancestor: F,
+) -> Result<Compact, ConsensusPoSError>
+where
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
     // check if current block is a net upgrade threshold
     let pos_config = match pos_status {
         PoSStatus::Threshold {
@@ -145,12 +151,8 @@ pub fn calculate_target_required(
         }
     };
 
-    let average_block_time = calculate_average_block_time(
-        chain_config,
-        pos_config,
-        &prev_block_index,
-        block_index_handle,
-    )?;
+    let average_block_time =
+        calculate_average_block_time(chain_config, pos_config, &prev_block_index, get_ancestor)?;
     calculate_new_target(pos_config, &prev_target, average_block_time)
 }
 
@@ -388,11 +390,15 @@ mod tests {
             &[10, 20, 60, 80, 100, 101, 102, 103],
         );
 
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
         let average_block_time = calculate_average_block_time(
             &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(1)).unwrap(),
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap();
         assert_eq!(average_block_time, 10);
@@ -401,7 +407,7 @@ mod tests {
             &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(2)).unwrap(),
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap();
         assert_eq!(average_block_time, 10);
@@ -410,7 +416,7 @@ mod tests {
             &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(5)).unwrap(),
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap();
         assert_eq!(average_block_time, 20);
@@ -419,7 +425,7 @@ mod tests {
             &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(8)).unwrap(),
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap();
         assert_eq!(average_block_time, 8);
@@ -453,11 +459,15 @@ mod tests {
             timestamp,
         );
 
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
         let res = calculate_average_block_time(
             &chain_config,
             &pos_config,
             &random_block_index,
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap_err();
         assert_eq!(
@@ -518,6 +528,10 @@ mod tests {
             &[1, 2, 6, 8, 10, 12, 14],
         );
 
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
         {
             // check with prev genesis
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(1));
@@ -530,6 +544,7 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
+                get_ancestor,
             )
             .unwrap();
             assert_eq!(target, Compact::from(target_limit_1));
@@ -547,6 +562,7 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
+                get_ancestor,
             )
             .unwrap();
             assert_ne!(target, Compact::from(target_limit_1));
@@ -564,6 +580,7 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
+                get_ancestor,
             )
             .unwrap();
             assert_eq!(target, Compact::from(target_limit_2));
@@ -581,6 +598,7 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
+                get_ancestor,
             )
             .unwrap();
             assert_ne!(target, Compact::from(target_limit_2));
@@ -619,11 +637,15 @@ mod tests {
         let block_index_handle =
             TestBlockIndexHandle::new_with_blocks(&mut rng, &chain_config, &[30, 20, 10]);
 
+        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+            block_index_handle.get_ancestor(block_index, ancestor_height)
+        };
+
         let res = calculate_average_block_time(
             &chain_config,
             &pos_config,
             block_index_handle.get_block_index_by_height(BlockHeight::new(3)).unwrap(),
-            &block_index_handle,
+            get_ancestor,
         )
         .unwrap_err();
         assert_eq!(res, ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime);

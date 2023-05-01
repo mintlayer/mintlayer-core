@@ -20,7 +20,7 @@ pub mod target;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
-    BlockIndexHandle,
+    BlockIndex, BlockIndexHandle,
 };
 use common::{
     chain::{
@@ -116,11 +116,16 @@ where
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
+    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+        block_index_handle.get_ancestor(block_index, ancestor_height)
+    };
+
     let target = target::calculate_target_required(
         chain_config,
         pos_status,
         *header.prev_block_id(),
         block_index_handle,
+        get_ancestor,
     )?;
 
     utils::ensure!(
