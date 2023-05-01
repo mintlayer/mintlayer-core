@@ -196,9 +196,15 @@ impl Block {
         }
     }
 
-    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+    pub fn transactions(&self) -> &[SignedTransaction] {
         match self {
             Block::V1(blk) => blk.transactions(),
+        }
+    }
+
+    pub fn into_transactions(self) -> Vec<SignedTransaction> {
+        match self {
+            Block::V1(blk) => blk.into_transactions(),
         }
     }
 

@@ -89,8 +89,12 @@ impl BlockV1 {
         self.header.timestamp()
     }
 
-    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+    pub fn transactions(&self) -> &[SignedTransaction] {
         &self.body.transactions
+    }
+
+    pub fn into_transactions(self) -> Vec<SignedTransaction> {
+        self.body.transactions
     }
 
     pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
