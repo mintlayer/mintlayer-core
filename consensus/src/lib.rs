@@ -73,7 +73,7 @@ where
                 get_ancestor,
             );
 
-            unimplemented!();
+            todo!();
         }
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
@@ -97,10 +97,10 @@ pub fn finalize_consensus_data(
 ) -> Result<(), ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
-        RequiredConsensus::PoS(_) => unimplemented!(),
+        RequiredConsensus::PoS(_) => todo!(),
         RequiredConsensus::PoW(_) => match block_header.consensus_data() {
             ConsensusData::None => Ok(()),
-            ConsensusData::PoS(_) => unimplemented!(),
+            ConsensusData::PoS(_) => todo!(),
             ConsensusData::PoW(pow_data) => {
                 let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
 
