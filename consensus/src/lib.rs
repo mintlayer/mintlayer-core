@@ -37,6 +37,7 @@ pub use crate::{
     pos::{
         block_sig::BlockSignatureError, check_pos_hash, error::ConsensusPoSError,
         kernel::get_kernel_output, target::calculate_target_required,
+        target::calculate_target_required_from_block_index,
     },
     pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError, MiningResult},
     validator::validate_consensus,
@@ -64,7 +65,16 @@ where
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
-        RequiredConsensus::PoS(_) => unimplemented!(),
+        RequiredConsensus::PoS(pos_status) => {
+            let _target_required = calculate_target_required_from_block_index(
+                chain_config,
+                &pos_status,
+                prev_block_index,
+                get_ancestor,
+            );
+
+            unimplemented!();
+        }
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,

@@ -94,6 +94,30 @@ fn calculate_new_target(
     Ok(Compact::from(new_target))
 }
 
+pub fn calculate_target_required_from_block_index<F>(
+    chain_config: &ChainConfig,
+    pos_status: &PoSStatus,
+    prev_gen_block_index: &GenBlockIndex,
+    get_ancestor: F,
+) -> Result<Compact, ConsensusPoSError>
+where
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
+    let pos_config = match pos_status {
+        PoSStatus::Threshold {
+            initial_difficulty, ..
+        } => return Ok(*initial_difficulty),
+        PoSStatus::Ongoing(config) => config,
+    };
+
+    let prev_block_index = match prev_gen_block_index {
+        GenBlockIndex::Genesis(_) => return Ok(pos_config.target_limit().into()),
+        GenBlockIndex::Block(block_index) => block_index,
+    };
+
+    calculate_target_required_internal(chain_config, pos_config, prev_block_index, get_ancestor)
+}
+
 pub fn calculate_target_required<F>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
