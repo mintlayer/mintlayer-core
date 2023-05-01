@@ -125,6 +125,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 100,
             ConnectTransactionError::DelegationRewardOverflow(_, _) => 100,
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
+            ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
         }
     }
 }

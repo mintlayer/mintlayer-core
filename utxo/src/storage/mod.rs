@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod in_memory;
+
 mod rw_impls;
 mod view_impls;
 
@@ -124,9 +126,6 @@ where
         self.deref_mut().del_undo_data(id)
     }
 }
-
-#[cfg(test)]
-mod in_memory;
 
 #[cfg(test)]
 mod test;

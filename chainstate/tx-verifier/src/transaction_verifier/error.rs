@@ -54,6 +54,8 @@ pub enum ConnectTransactionError {
     TxUndoWithDependency(Id<Transaction>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
+    #[error("Block reward inputs and outputs value mismatch (total inputs: `{0:?}` vs total outputs `{1:?}`")]
+    BlockRewardInputOutputMismatch(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
     #[error("Signature verification failed in transaction")]

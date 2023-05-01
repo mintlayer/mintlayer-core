@@ -77,9 +77,10 @@ use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);
 
 /// The change that a block has caused to the blockchain state
