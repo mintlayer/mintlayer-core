@@ -104,7 +104,6 @@ pub fn calculate_target_required<F>(
 where
     F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
-    // check if current block is a net upgrade threshold
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
@@ -117,19 +116,29 @@ where
         GenBlockId::Genesis(_) => return Ok(pos_config.target_limit().into()),
         GenBlockId::Block(id) => id,
     };
+
     let prev_block_index = block_index_handle
         .get_block_index(&prev_block_id)?
         .ok_or(ConsensusPoSError::PrevBlockIndexNotFound(prev_block_id))?;
 
+    calculate_target_required_internal(chain_config, pos_config, &prev_block_index, get_ancestor)
+}
+
+fn calculate_target_required_internal<F>(
+    chain_config: &ChainConfig,
+    pos_config: &PoSChainConfig,
+    prev_block_index: &BlockIndex,
+    get_ancestor: F,
+) -> Result<Compact, ConsensusPoSError>
+where
+    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
     // check if prev block is a net upgrade threshold
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
         RequiredConsensus::PoS(status) => match status {
             PoSStatus::Threshold {
-                initial_difficulty,
-                config: _,
-            } => {
-                return Ok(initial_difficulty);
-            }
+                initial_difficulty, ..
+            } => return Ok(initial_difficulty),
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
         RequiredConsensus::PoW(_) | RequiredConsensus::IgnoreConsensus => {
@@ -152,7 +161,8 @@ where
     };
 
     let average_block_time =
-        calculate_average_block_time(chain_config, pos_config, &prev_block_index, get_ancestor)?;
+        calculate_average_block_time(chain_config, pos_config, prev_block_index, get_ancestor)?;
+
     calculate_new_target(pos_config, &prev_target, average_block_time)
 }
 
