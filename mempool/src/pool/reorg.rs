@@ -45,100 +45,101 @@ pub enum ReorgError {
     ChainstateCall(#[from] subsystem::subsystem::CallError),
 }
 
-/// Iterate over blocks following the parent link. Apply given function to each block.
-fn for_each_block<C: ChainstateInterface + ?Sized>(
+/// Collect blocks between the given two points
+fn collect_blocks<C: ChainstateInterface + ?Sized>(
     chainstate: &C,
-    mut curr_id: Id<Block>,
+    mut curr_id: Id<GenBlock>,
     stop_id: Id<GenBlock>,
-    mut func: impl FnMut(Block),
-) -> Result<(), ReorgError> {
+) -> Result<Vec<Block>, ReorgError> {
     let chain_config = chainstate.get_chain_config();
+    let mut result = Vec::new();
     while curr_id != stop_id {
+        let curr_block_id = curr_id
+            .classify(chain_config)
+            .chain_block_id()
+            .expect("Reached genesis before the stopping block");
         let block = chainstate
-            .get_block(curr_id)?
-            .ok_or_else(|| ReorgError::BlockNotFound(curr_id))?;
-        curr_id = match block.prev_block_id().classify(chain_config) {
-            common::chain::GenBlockId::Genesis(_) => break,
-            common::chain::GenBlockId::Block(block_id) => block_id,
-        };
-        func(block);
+            .get_block(curr_block_id)?
+            .ok_or_else(|| ReorgError::BlockNotFound(curr_block_id))?;
+        curr_id = block.prev_block_id();
+        result.push(block);
     }
-    Ok(())
+    Ok(result)
 }
 
-fn find_disconnected_txs<C: ChainstateInterface + ?Sized>(
-    chainstate: &C,
-    old_tip_id: Id<GenBlock>,
-    new_tip_id: Id<Block>,
-) -> Result<Vec<SignedTransaction>, ReorgError> {
-    let chain_config = chainstate.get_chain_config();
-    let old_tip_id = match old_tip_id.classify(chain_config) {
-        common::chain::GenBlockId::Genesis(_) => return Ok(Vec::new()),
-        common::chain::GenBlockId::Block(id) => id,
-    };
+/// Blocks affected by a reorg
+struct ReorgInfo {
+    disconnected: Vec<Block>,
+    connected: Vec<Block>,
+}
 
-    let common_id = {
-        let old_index = chainstate.get_block_index(&old_tip_id)?.ok_or(ReorgError::OldTipIndex)?;
-        let new_index = chainstate.get_block_index(&new_tip_id)?.ok_or(ReorgError::NewTipIndex)?;
-        let common_index = chainstate.last_common_ancestor(&old_index.into(), &new_index.into())?;
-        common_index.block_id()
-    };
+impl ReorgInfo {
+    /// Extract blocks that have been disconnected and connected from the chainstate.
+    fn from_chainstate<C: ChainstateInterface + ?Sized>(
+        chainstate: &C,
+        old_tip_id: Id<GenBlock>,
+        new_tip_id: Id<GenBlock>,
+    ) -> Result<Self, ReorgError> {
+        let common_id = {
+            let old_index =
+                chainstate.get_gen_block_index(&old_tip_id)?.ok_or(ReorgError::OldTipIndex)?;
+            let new_index =
+                chainstate.get_gen_block_index(&new_tip_id)?.ok_or(ReorgError::NewTipIndex)?;
+            let common_index = chainstate.last_common_ancestor(&old_index, &new_index)?;
+            common_index.block_id()
+        };
 
-    // Short circuit the expensive processing below if no blocks are being disconnected
-    if old_tip_id == common_id {
-        return Ok(Vec::new());
+        Ok(Self {
+            disconnected: collect_blocks(chainstate, old_tip_id, common_id)?,
+            connected: collect_blocks(chainstate, new_tip_id, common_id)?,
+        })
     }
 
-    // Collect IDs of transactions included in the newly connected chain
-    let mut connected_txs = BTreeSet::new();
-    for_each_block(chainstate, new_tip_id, common_id, |block| {
-        connected_txs.extend(block.transactions().iter().map(|t| t.transaction().get_id()))
-    })?;
-
-    // Collect txns that have been removed from the blockchain and not added on the new fork
-    let mut disconnected_txs = Vec::new();
-    for_each_block(chainstate, old_tip_id, common_id, |block| {
-        // We iterate blocks in the reverse order, so for consistent transaction input/output
-        // dependencies, take transactions in reverse too,
-        let txns = block.transactions().iter().rev();
-        // We disregard transactions that are re-added on the newly connected chain
-        let txns = txns.filter(|txn| !connected_txs.contains(&txn.transaction().get_id()));
-        disconnected_txs.extend(txns.cloned())
-    })?;
-
-    Ok(disconnected_txs)
+    /// Get transactions that have been disconnected and not reconnected
+    fn into_disconnected_transactions(self) -> impl Iterator<Item = SignedTransaction> {
+        let connected_txs: BTreeSet<_> = self
+            .connected
+            .into_iter()
+            .flat_map(|block| {
+                block.into_transactions().into_iter().map(|tx| tx.transaction().get_id())
+            })
+            .collect();
+        self.disconnected
+            .into_iter()
+            .rev()
+            .flat_map(|block| block.into_transactions())
+            .filter(move |tx| !connected_txs.contains(&tx.transaction().get_id()))
+    }
 }
 
 fn fetch_disconnected_txs<M>(
     mempool: &Mempool<M>,
     new_tip: Id<Block>,
-) -> Result<Vec<SignedTransaction>, ReorgError> {
-    let chainstate = mempool.blocking_chainstate_handle();
-
+) -> Result<impl Iterator<Item = SignedTransaction>, ReorgError> {
     let old_tip = mempool.tx_verifier.get_best_block_for_utxos().map_err(|_| ReorgError::OldTip)?;
-    if old_tip == new_tip {
-        return Ok(Vec::new());
-    }
-
-    chainstate.call(move |c| find_disconnected_txs(c.as_ref(), old_tip, new_tip))?
+    mempool
+        .blocking_chainstate_handle()
+        .call(move |c| ReorgInfo::from_chainstate(c.as_ref(), old_tip, new_tip.into()))?
+        .map(ReorgInfo::into_disconnected_transactions)
 }
 
 pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
-    let mut disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
-        .log_err_pfx("Fetching disconnected transactions on a reorg")
-        .unwrap_or_default();
+    let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)
+        .log_err_pfx("Fetching disconnected transactions on a reorg");
 
     let old_transactions = mempool.reset();
 
     // Re-populate the verifier with transactions from disconnected chain.
     // The transactions are returned in the order of them being disconnected which is the opposite
     // of what we want, so we need to reverse the iterator here.
-    while let Some(tx) = disconnected_txs.pop() {
-        let tx_id = tx.transaction().get_id();
-        if let Err(e) = mempool.add_transaction(tx) {
-            log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
+    if let Ok(disconnected_txs) = disconnected_txs {
+        for tx in disconnected_txs {
+            let tx_id = tx.transaction().get_id();
+            if let Err(e) = mempool.add_transaction(tx) {
+                log::debug!("Disconnected transaction {tx_id:?} no longer validates: {e:?}")
+            }
         }
     }
 
