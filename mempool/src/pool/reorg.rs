@@ -46,7 +46,7 @@ pub enum ReorgError {
 }
 
 /// Collect blocks between the given two points
-fn collect_blocks<C: ChainstateInterface + ?Sized>(
+fn collect_blocks<C: ChainstateInterface>(
     chainstate: &C,
     mut curr_id: Id<GenBlock>,
     stop_id: Id<GenBlock>,
@@ -68,14 +68,15 @@ fn collect_blocks<C: ChainstateInterface + ?Sized>(
 }
 
 /// Blocks affected by a reorg
-struct ReorgInfo {
+struct ReorgData {
+    // List of connected / disconnected blocks, both in reverse chronological order
     disconnected: Vec<Block>,
     connected: Vec<Block>,
 }
 
-impl ReorgInfo {
+impl ReorgData {
     /// Extract blocks that have been disconnected and connected from the chainstate.
-    fn from_chainstate<C: ChainstateInterface + ?Sized>(
+    fn from_chainstate<C: ChainstateInterface>(
         chainstate: &C,
         old_tip_id: Id<GenBlock>,
         new_tip_id: Id<GenBlock>,
@@ -119,8 +120,8 @@ fn fetch_disconnected_txs<M>(
     let old_tip = mempool.tx_verifier.get_best_block_for_utxos().map_err(|_| ReorgError::OldTip)?;
     mempool
         .blocking_chainstate_handle()
-        .call(move |c| ReorgInfo::from_chainstate(c.as_ref(), old_tip, new_tip.into()))?
-        .map(ReorgInfo::into_disconnected_transactions)
+        .call(move |c| ReorgData::from_chainstate(c, old_tip, new_tip.into()))?
+        .map(ReorgData::into_disconnected_transactions)
 }
 
 pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
