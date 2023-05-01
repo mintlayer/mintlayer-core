@@ -38,8 +38,11 @@ impl MainWindow {
         backend_controller: &NodeBackendController,
     ) -> Element<'_, Message, iced::Renderer> {
         let c = iced::widget::column![
-            self.main_menu.view(backend_controller).map(Message::MenuMessage),
-            self.main_widget.view(backend_controller).map(Message::MainWidgetMessage)
+            iced::widget::row!(self.main_menu.view(backend_controller).map(Message::MenuMessage)),
+            iced::widget::row!(self
+                .main_widget
+                .view(backend_controller)
+                .map(Message::MainWidgetMessage))
         ];
 
         c.into()
