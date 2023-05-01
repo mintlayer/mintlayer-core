@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::{ChainConfig, PoolId};
+use crate::chain::{chaintrust, ChainConfig, PoolId};
 use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
 use crypto::vrf::VRFReturn;
 
@@ -31,11 +31,17 @@ pub enum ConsensusData {
 }
 
 impl ConsensusData {
-    pub fn get_block_proof(&self) -> Option<Uint256> {
+    /// Block proof is the amount of trust a block adds to the blockchain. It basically quantifies the
+    /// amount of work/trust that was put into the block based on criteria that depend on the consensus
+    /// algorithm.
+    pub fn get_block_proof(&self, timestamp_diff: u64) -> Option<Uint256> {
         match self {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
-            ConsensusData::PoS(_) => Some(1u64.into()),
+            ConsensusData::PoS(_) => {
+                let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
+                Some(block_proof)
+            }
         }
     }
 

@@ -58,6 +58,7 @@ impl BanScore for BlockError {
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
             BlockError::SpendStakeError(_) => 100,
             BlockError::PoolDataNotFound(_) => 0,
+            BlockError::BlockProofCalculationTimeOrderError(_, _, _) => 100,
         }
     }
 }
@@ -195,6 +196,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::InvalidBlockRewardMaturityDistanceValue(_, _) => 100,
             CheckBlockError::InvalidBlockRewardMaturityTimelockType(_) => 100,
             CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
+            CheckBlockError::PrevBlockRetrievalError(_, _, _) => 100,
+            CheckBlockError::BlockTimeStrictOrderInvalid => 100,
         }
     }
 }

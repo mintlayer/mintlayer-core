@@ -19,6 +19,8 @@ typename = { path = "../utils/typename" }
 anyhow = "1.0"
 bech32 = "0.9"
 fixed-hash = "0.8"
+lazy_static = "1.4"
+num = "0.4"
 
 generic-array.workspace = true
 hex.workspace = true

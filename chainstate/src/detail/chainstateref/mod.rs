@@ -25,7 +25,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
+            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
+            BlockHeader, BlockReward,
         },
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
@@ -384,6 +385,22 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             CheckBlockError::BlockTimeOrderInvalid,
         );
 
+        let prev_block_timestamp = self
+            .get_gen_block_index(prev_block_id)
+            .map_err(|e| {
+                CheckBlockError::PrevBlockRetrievalError(e, *prev_block_id, header.block_id())
+            })?
+            .ok_or(CheckBlockError::PrevBlockNotFound(
+                *prev_block_id,
+                header.block_id(),
+            ))?
+            .block_timestamp();
+
+        ensure!(
+            header.timestamp() >= prev_block_timestamp,
+            CheckBlockError::BlockTimeStrictOrderInvalid
+        );
+
         let max_future_offset = self.chain_config.max_future_block_time_offset();
         let current_time = self.current_time();
         let block_timestamp = header.timestamp();
@@ -669,11 +686,25 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn get_block_proof(&self, block: &Block) -> Result<Uint256, BlockError> {
+    fn get_block_proof(
+        &self,
+        prev_block_timestamp: BlockTimestamp,
+        block: &Block,
+    ) -> Result<Uint256, BlockError> {
+        let timestamp_diff = block
+            .timestamp()
+            .as_int_seconds()
+            .checked_sub(prev_block_timestamp.as_int_seconds())
+            .ok_or(BlockError::BlockProofCalculationTimeOrderError(
+                block.get_id(),
+                prev_block_timestamp,
+                block.timestamp(),
+            ))?;
+
         block
             .header()
             .consensus_data()
-            .get_block_proof()
+            .get_block_proof(timestamp_diff)
             .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
@@ -937,9 +968,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         // Set Time Max
         let time_max = std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp());
 
+        let current_block_proof =
+            self.get_block_proof(prev_block_index.block_timestamp(), block).log_err()?;
+
         // Set Chain Trust
         let prev_block_chaintrust: Uint256 = prev_block_index.chain_trust();
-        let chain_trust = prev_block_chaintrust + self.get_block_proof(block).log_err()?;
+        let chain_trust = prev_block_chaintrust + current_block_proof;
         let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }

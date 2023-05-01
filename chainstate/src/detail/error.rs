@@ -22,7 +22,7 @@ use super::{
 };
 use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
-    chain::{Block, GenBlock, PoolId, Transaction},
+    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId, Transaction},
     primitives::{BlockDistance, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
@@ -61,6 +61,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
+    #[error("Block proof calculation error due to time ordering for block: {0}; this is most likely a bug ({1} -> {2})")]
+    BlockProofCalculationTimeOrderError(Id<Block>, BlockTimestamp, BlockTimestamp),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Changing tx index state is not implemented for existing DB")]
@@ -88,9 +90,13 @@ pub enum CheckBlockError {
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
     #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<Block>, Id<Block>),
+    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
+    #[error("Previous block with id {0} retrieval error starting from block {1}")]
+    PrevBlockRetrievalError(PropertyQueryError, Id<GenBlock>, Id<Block>),
     #[error("Block time must be equal or higher than the median of its ancestors")]
     BlockTimeOrderInvalid,
+    #[error("Block time must be a notch higher than the previous block")]
+    BlockTimeStrictOrderInvalid,
     #[error("Block time too far into the future")]
     BlockFromTheFuture,
     #[error("Block size is too large: {0}")]
