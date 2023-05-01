@@ -104,3 +104,68 @@ async fn basic_reorg(#[case] seed: Seed) {
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn tx_chain_in_block(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let tf = TestFramework::builder(&mut rng).build();
+    let genesis = tf.genesis();
+    let mut mempool = setup_with_chainstate(tf.chainstate()).await;
+    let chainstate = mempool.chainstate_handle().shallow_clone();
+
+    // Add the first transaction
+    let tx1 = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            empty_witness(&mut rng),
+        )
+        .add_anyone_can_spend_output(10_000_000)
+        .build();
+    let tx1_id = tx1.transaction().get_id();
+    mempool.add_transaction(tx1.clone()).expect("adding tx1");
+
+    // Add another transaction
+    let tx2 = TransactionBuilder::new()
+        .add_input(
+            TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+            empty_witness(&mut rng),
+        )
+        .add_anyone_can_spend_output(9_000_000)
+        .build();
+    let tx2_id = tx2.transaction().get_id();
+    mempool.add_transaction(tx2.clone()).expect("adding tx2");
+
+    // Check the transactions are there
+    assert!(mempool.contains_transaction(&tx1_id));
+    assert!(mempool.contains_transaction(&tx2_id));
+
+    // Submit a block with both transactions
+    let block1 = make_test_block(vec![tx1, tx2], genesis.get_id());
+    let block1_id = block1.get_id();
+    chainstate
+        .call_mut(move |c| c.process_block(block1, BlockSource::Local))
+        .await
+        .unwrap()
+        .expect("block1");
+    mempool.new_tip_set(block1_id, BlockHeight::new(1));
+    assert!(!mempool.contains_transaction(&tx1_id));
+    assert!(!mempool.contains_transaction(&tx2_id));
+
+    // Reorg the transactions out and check they are back in mempool
+    let block2 = make_test_block(vec![], genesis.get_id());
+    let block3 = make_test_block(vec![], block2.get_id());
+    let block3_id = block3.get_id();
+    for (block, name) in [(block2, "block2"), (block3, "block3")] {
+        chainstate
+            .call_mut(move |c| c.process_block(block, BlockSource::Local))
+            .await
+            .unwrap()
+            .expect(name);
+    }
+    mempool.new_tip_set(block3_id, BlockHeight::new(2));
+    assert!(mempool.contains_transaction(&tx1_id));
+    assert!(mempool.contains_transaction(&tx2_id));
+}
