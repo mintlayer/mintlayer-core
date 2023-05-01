@@ -218,6 +218,22 @@ impl backend::BackendImpl for SqliteImpl {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
+pub struct Options {
+    /// If enabled, sets synchronous pragma to OFF, see <https://www.sqlite.org/pragma.html#pragma_synchronous>.
+    /// It should normally only be used in unit tests.
+    pub disable_fsync: bool,
+}
+
+#[allow(clippy::derivable_impls)]
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            disable_fsync: false,
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Clone, Debug)]
 enum SqliteStorageMode {
     InMemory,
     File(PathBuf),
@@ -226,12 +242,14 @@ enum SqliteStorageMode {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Sqlite {
     backend: SqliteStorageMode,
+    options: Options,
 }
 
 impl Sqlite {
     pub fn new_in_memory() -> Self {
         Self {
             backend: SqliteStorageMode::InMemory,
+            options: Default::default(),
         }
     }
 
@@ -239,6 +257,14 @@ impl Sqlite {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
             backend: SqliteStorageMode::File(path.as_ref().to_path_buf()),
+            options: Default::default(),
+        }
+    }
+
+    pub fn with_options(self, options: Options) -> Self {
+        Self {
+            backend: self.backend,
+            options,
         }
     }
 
@@ -254,8 +280,14 @@ impl Sqlite {
             SqliteStorageMode::File(path) => Connection::open_with_flags(path, flags)?,
         };
 
+        let Options { disable_fsync } = self.options;
+
         // Set the locking mode to exclusive
         connection.pragma_update(None, "locking_mode", "exclusive")?;
+
+        if disable_fsync {
+            connection.pragma_update(None, "synchronous", "OFF")?;
+        }
 
         // Begin a transaction to acquire the exclusive lock
         connection.execute("BEGIN EXCLUSIVE TRANSACTION", ())?;

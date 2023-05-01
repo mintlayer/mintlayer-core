@@ -28,7 +28,9 @@ fn main() {
                 .as_ref()
                 .to_path_buf()
                 .join("database.sqlite");
-            Sqlite::new(db_file_path)
+            Sqlite::new(db_file_path).with_options(storage_sqlite::Options {
+                disable_fsync: true,
+            })
         }
     };
 
