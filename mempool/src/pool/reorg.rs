@@ -15,7 +15,7 @@
 
 //! Support for updating the mempool upon a reorg
 
-use std::{collections::BTreeSet, mem};
+use std::collections::BTreeSet;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -23,13 +23,10 @@ use common::{
     primitives::{Id, Idable},
 };
 use logging::log;
-use utils::{shallow_clone::ShallowClone, tap_error_log::LogError};
+use utils::tap_error_log::LogError;
 use utxo::UtxosStorageRead;
 
-use crate::{
-    get_memory_usage::GetMemoryUsage,
-    pool::{tx_verifier, Mempool, MempoolStore},
-};
+use crate::{get_memory_usage::GetMemoryUsage, pool::Mempool};
 
 /// An error that can happen in mempool on chain reorg
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -49,8 +46,8 @@ pub enum ReorgError {
 }
 
 /// Iterate over blocks following the parent link. Apply given function to each block.
-fn for_each_block(
-    chainstate: &dyn ChainstateInterface,
+fn for_each_block<C: ChainstateInterface + ?Sized>(
+    chainstate: &C,
     mut curr_id: Id<Block>,
     stop_id: Id<GenBlock>,
     mut func: impl FnMut(Block),
@@ -69,8 +66,8 @@ fn for_each_block(
     Ok(())
 }
 
-fn find_disconnected_txs(
-    chainstate: &dyn ChainstateInterface,
+fn find_disconnected_txs<C: ChainstateInterface + ?Sized>(
+    chainstate: &C,
     old_tip_id: Id<GenBlock>,
     new_tip_id: Id<Block>,
 ) -> Result<Vec<SignedTransaction>, ReorgError> {
@@ -133,14 +130,7 @@ pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<B
         .log_err_pfx("Fetching disconnected transactions on a reorg")
         .unwrap_or_default();
 
-    // Take all the mempool previous transactions
-    let old_store = mem::replace(&mut mempool.store, MempoolStore::new());
-
-    // Discard the old tx verifier and replace it with a fresh one
-    mempool.tx_verifier = tx_verifier::create(
-        mempool.chain_config.shallow_clone(),
-        mempool.chainstate_handle.shallow_clone(),
-    );
+    let old_transactions = mempool.reset();
 
     // Re-populate the verifier with transactions from disconnected chain.
     // The transactions are returned in the order of them being disconnected which is the opposite
@@ -153,7 +143,7 @@ pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<B
     }
 
     // Re-populate the verifier with transactions from mempool
-    for tx in old_store.into_transactions() {
+    for tx in old_transactions {
         let tx_id = tx.transaction().get_id();
         if let Err(e) = mempool.add_transaction(tx) {
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")

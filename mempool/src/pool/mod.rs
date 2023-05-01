@@ -126,6 +126,18 @@ impl<M> Mempool<M> {
     ) -> subsystem::blocking::BlockingHandle<Box<dyn ChainstateInterface>> {
         subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone())
     }
+
+    // Reset the mempool state, returning the list of transactions previously stored in mempool
+    fn reset(&mut self) -> impl Iterator<Item = SignedTransaction> {
+        // Discard the old tx verifier and replace it with a fresh one
+        self.tx_verifier = tx_verifier::create(
+            self.chain_config.shallow_clone(),
+            self.chainstate_handle.shallow_clone(),
+        );
+
+        // Clear the store, returning the list of transacitons it contained previously
+        std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+    }
 }
 
 // Rolling-fee-related methods
