@@ -17,7 +17,6 @@ use iced::{
     widget::{Column, Container, Radio, Text},
     Command, Element,
 };
-use iced_aw::style::TabBarStyles;
 use iced_aw::tab_bar::TabLabel;
 
 use super::{Icon, Tab, TabsMessage};
@@ -43,14 +42,12 @@ impl From<TabBarPosition> for String {
 
 pub struct TabSettings {
     pub tab_bar_position: Option<TabBarPosition>,
-    pub tab_bar_theme: Option<TabBarStyles>,
 }
 
 impl TabSettings {
     pub fn new() -> Self {
         TabSettings {
             tab_bar_position: Some(TabBarPosition::Top),
-            tab_bar_theme: Some(TabBarStyles::default()),
         }
     }
 }
