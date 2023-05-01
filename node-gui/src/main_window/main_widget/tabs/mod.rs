@@ -15,8 +15,8 @@
 
 use iced::{
     alignment,
-    widget::{Column, Container, Text},
-    Command, Element, Length,
+    widget::{Column, Container},
+    Command, Element, Font, Length,
 };
 use iced_aw::{TabLabel, Tabs};
 
@@ -30,22 +30,26 @@ use self::{
 pub mod settings;
 pub mod summary;
 
-const HEADER_SIZE: u16 = 32;
 const TAB_PADDING: u16 = 16;
 
-// enum Icon {
-//     User,
-//     CogAlt,
-// }
+const ICON_FONT: Font = iced::Font::External {
+    name: "Icons",
+    bytes: include_bytes!("../../../../fonts/icons.ttf"),
+};
 
-// impl From<Icon> for char {
-//     fn from(icon: Icon) -> Self {
-//         match icon {
-//             Icon::User => '\u{E800}',
-//             Icon::CogAlt => '\u{E802}',
-//         }
-//     }
-// }
+enum Icon {
+    User,
+    CogAlt,
+}
+
+impl From<Icon> for char {
+    fn from(icon: Icon) -> Self {
+        match icon {
+            Icon::User => '\u{E800}',
+            Icon::CogAlt => '\u{E802}',
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
@@ -80,7 +84,7 @@ impl TabsWidget {
             .push(self.summary_tab.tab_label(), self.summary_tab.view())
             .push(self.settings_tab.tab_label(), self.settings_tab.view())
             .tab_bar_style(theme)
-            // .icon_font(ICON_FONT)
+            .icon_font(ICON_FONT)
             .tab_bar_position(match position {
                 TabBarPosition::Top => iced_aw::TabBarPosition::Top,
                 TabBarPosition::Bottom => iced_aw::TabBarPosition::Bottom,
@@ -112,10 +116,7 @@ trait Tab {
     fn tab_label(&self) -> TabLabel;
 
     fn view(&self) -> Element<'_, Self::Message> {
-        let column = Column::new()
-            .spacing(20)
-            .push(Text::new(self.title()).size(HEADER_SIZE))
-            .push(self.content());
+        let column = Column::new().spacing(20).push(self.content());
 
         Container::new(column)
             .width(Length::Fill)

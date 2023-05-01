@@ -22,7 +22,7 @@ use iced_aw::tab_bar::TabLabel;
 
 use crate::backend_controller::NodeBackendController;
 
-use super::{Tab, TabsMessage};
+use super::{Icon, Tab, TabsMessage};
 
 #[derive(Debug, Clone)]
 pub enum SummaryMessage {
@@ -53,8 +53,8 @@ impl Tab for SummaryTab {
     }
 
     fn tab_label(&self) -> TabLabel {
-        TabLabel::Text(self.title())
-        // TabLabel::IconText(Icon::User.into(), self.title())
+        // TabLabel::Text(self.title())
+        TabLabel::IconText(Icon::User.into(), self.title())
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
