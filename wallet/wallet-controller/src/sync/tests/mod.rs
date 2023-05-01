@@ -200,26 +200,29 @@ async fn basic_sync(#[case] seed: Seed) {
         block_syncing.run(&mut wallet).await;
     });
 
-    create_chain(&node, &mut rng, 0, 1);
-    wait_new_tip(&node, &mut new_tip_rx).await;
+    // Build blocks
+    for height in 1..10 {
+        create_chain(&node, &mut rng, height - 1, 1);
+        wait_new_tip(&node, &mut new_tip_rx).await;
+    }
 
-    create_chain(&node, &mut rng, 0, 2);
-    wait_new_tip(&node, &mut new_tip_rx).await;
+    // Reorgs
+    for height in 10..20 {
+        create_chain(&node, &mut rng, height - 5, 5);
+        wait_new_tip(&node, &mut new_tip_rx).await;
+    }
 
-    create_chain(&node, &mut rng, 0, 3);
-    wait_new_tip(&node, &mut new_tip_rx).await;
+    // More blocks
+    for height in 20..30 {
+        create_chain(&node, &mut rng, height - 1, 1);
+        wait_new_tip(&node, &mut new_tip_rx).await;
+    }
 
-    create_chain(&node, &mut rng, 1, 3);
-    wait_new_tip(&node, &mut new_tip_rx).await;
-
-    create_chain(&node, &mut rng, 1, 4);
-    wait_new_tip(&node, &mut new_tip_rx).await;
-
-    create_chain(&node, &mut rng, 0, 6);
-    wait_new_tip(&node, &mut new_tip_rx).await;
-
-    create_chain(&node, &mut rng, 6, 10);
-    wait_new_tip(&node, &mut new_tip_rx).await;
+    // More reorgs
+    for height in 30..40 {
+        create_chain(&node, &mut rng, height - 5, 5);
+        wait_new_tip(&node, &mut new_tip_rx).await;
+    }
 }
 
 #[rstest]
@@ -272,6 +275,7 @@ async fn randomized(#[case] seed: Seed) {
         let new_tip = {
             let mut tf = node.tf.lock().unwrap();
             let old_best_block = tf.best_block_id();
+            // Select a random block from the 5 lastest to build a new chain
             let parent =
                 *tf.block_indexes.iter().rev().take(5).choose(&mut rng).unwrap().block_id();
             tf.create_chain(&parent.into(), 1, &mut rng).unwrap();

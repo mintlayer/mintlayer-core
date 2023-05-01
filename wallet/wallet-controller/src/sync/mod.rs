@@ -100,8 +100,8 @@ pub struct BlockSyncingConfig {
     error_delay: Duration,
 }
 
-impl BlockSyncingConfig {
-    pub fn new() -> Self {
+impl Default for BlockSyncingConfig {
+    fn default() -> Self {
         Self {
             normal_delay: Duration::from_secs(1),
             error_delay: Duration::from_secs(10),

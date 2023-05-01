@@ -55,7 +55,7 @@ pub type HandlesController = Controller<WalletHandlesClient>;
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
         let block_sync = sync::BlockSyncing::new(
-            sync::BlockSyncingConfig::new(),
+            sync::BlockSyncingConfig::default(),
             Arc::clone(&chain_config),
             rpc_client.clone(),
         );
