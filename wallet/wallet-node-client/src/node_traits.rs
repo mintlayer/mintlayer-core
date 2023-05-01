@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::ChainInfo;
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -22,8 +23,9 @@ pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait NodeInterface {
-    type Error: std::error::Error;
+    type Error: std::error::Error + Send + Sync;
 
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error>;
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error>;
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error>;
     async fn get_best_block_height(&self) -> Result<BlockHeight, Self::Error>;
@@ -31,6 +33,11 @@ pub trait NodeInterface {
         &self,
         height: BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, Self::Error>;
+    async fn get_last_common_ancestor(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
     async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
 

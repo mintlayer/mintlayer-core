@@ -13,21 +13,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
+
 use clap::Parser;
-use reedline::Reedline;
+use common::primitives::{BlockHeight, H256};
 use serialization::hex::HexEncode;
 use wallet_controller::{PeerId, RpcController};
 
-use crate::{cli_println, console::ConsoleContext, errors::WalletCliError};
+use crate::errors::WalletCliError;
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
-pub enum WalletCommands {
+pub enum WalletCommand {
+    /// Returns the node chainstate
+    ChainstateInfo,
+
     /// Returns the current best block hash
     BestBlock,
 
     /// Returns the current best block height
     BestBlockHeight,
+
+    /// Get a block hash at height
+    BlockHash {
+        /// Block height
+        height: BlockHeight,
+    },
+
+    /// Get a block by its hash
+    GetBlock {
+        /// Block hash
+        hash: String,
+    },
 
     /// Submit a block to be included in the chain
     ///
@@ -90,109 +107,123 @@ pub enum WalletCommands {
     ClearHistory,
 }
 
+#[derive(Debug)]
+pub enum ConsoleCommand {
+    Print(String),
+    ClearScreen,
+    PrintHistory,
+    ClearHistory,
+    Exit,
+}
+
 pub async fn handle_wallet_command(
-    output: &ConsoleContext,
     controller: &mut RpcController,
-    line_editor: &mut Reedline,
-    command: WalletCommands,
-) -> Result<(), WalletCliError> {
+    command: WalletCommand,
+) -> Result<ConsoleCommand, WalletCliError> {
     match command {
-        WalletCommands::BestBlock => {
-            let id = controller.get_best_block_id().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "{}", id.hex_encode());
-            Ok(())
+        WalletCommand::ChainstateInfo => {
+            let info = controller.chainstate_info().await.map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(format!("{info:?}")))
         }
 
-        WalletCommands::BestBlockHeight => {
+        WalletCommand::BestBlock => {
+            let id = controller.get_best_block_id().await.map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(id.hex_encode()))
+        }
+
+        WalletCommand::BestBlockHeight => {
             let height =
                 controller.get_best_block_height().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "{}", height);
-            Ok(())
+            Ok(ConsoleCommand::Print(height.to_string()))
         }
 
-        WalletCommands::SubmitBlock { block } => {
+        WalletCommand::BlockHash { height } => {
+            let hash = controller
+                .get_block_id_at_height(height)
+                .await
+                .map_err(WalletCliError::Controller)?;
+            match hash {
+                Some(id) => Ok(ConsoleCommand::Print(id.hex_encode())),
+                None => Ok(ConsoleCommand::Print("Not found".to_owned())),
+            }
+        }
+
+        WalletCommand::GetBlock { hash } => {
+            let hash =
+                H256::from_str(&hash).map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
+            let hash =
+                controller.get_block(hash.into()).await.map_err(WalletCliError::Controller)?;
+            match hash {
+                Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
+                None => Ok(ConsoleCommand::Print("Not found".to_owned())),
+            }
+        }
+
+        WalletCommand::SubmitBlock { block } => {
             controller.submit_block(block).await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "The block was submitted successfully");
-            Ok(())
+            Ok(ConsoleCommand::Print(
+                "The block was submitted successfully".to_owned(),
+            ))
         }
 
-        WalletCommands::SubmitTransaction { transaction } => {
+        WalletCommand::SubmitTransaction { transaction } => {
             controller
                 .submit_transaction(transaction)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            cli_println!(output, "The transaction was submitted successfully");
-            Ok(())
+            Ok(ConsoleCommand::Print(
+                "The transaction was submitted successfully".to_owned(),
+            ))
         }
 
-        WalletCommands::Rescan => {
-            cli_println!(output, "Not implemented");
-            Ok(())
-        }
+        WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
-        WalletCommands::NodeVersion => {
+        WalletCommand::NodeVersion => {
             let version = controller.node_version().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "{}", version);
-            Ok(())
+            Ok(ConsoleCommand::Print(version))
         }
 
-        WalletCommands::NodeShutdown => {
+        WalletCommand::NodeShutdown => {
             controller.node_shutdown().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "Success");
-            Ok(())
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
-        WalletCommands::Connect { address } => {
+        WalletCommand::Connect { address } => {
             controller.p2p_connect(address).await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "Success");
-            Ok(())
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
-        WalletCommands::Disconnect { peer_id } => {
+        WalletCommand::Disconnect { peer_id } => {
             controller.p2p_disconnect(peer_id).await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "Success");
-            Ok(())
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
-        WalletCommands::PeerCount => {
+        WalletCommand::PeerCount => {
             let peer_count =
                 controller.p2p_get_peer_count().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "{}", peer_count);
-            Ok(())
+            Ok(ConsoleCommand::Print(peer_count.to_string()))
         }
-        WalletCommands::ConnectedPeers => {
+        WalletCommand::ConnectedPeers => {
             let peers =
                 controller.p2p_get_connected_peers().await.map_err(WalletCliError::Controller)?;
-            cli_println!(output, "{:?}", peers);
-            Ok(())
+            Ok(ConsoleCommand::Print(format!("{peers:?}")))
         }
-        WalletCommands::AddReservedPeer { address } => {
+        WalletCommand::AddReservedPeer { address } => {
             controller
                 .p2p_add_reserved_node(address)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            cli_println!(output, "Success");
-            Ok(())
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
-        WalletCommands::RemoveReservedPeer { address } => {
+        WalletCommand::RemoveReservedPeer { address } => {
             controller
                 .p2p_remove_reserved_node(address)
                 .await
                 .map_err(WalletCliError::Controller)?;
-            cli_println!(output, "Success");
-            Ok(())
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
-        WalletCommands::Exit => Err(WalletCliError::Exit),
-        WalletCommands::History => {
-            line_editor.print_history().expect("Should not fail normally");
-            Ok(())
-        }
-        WalletCommands::ClearScreen => {
-            line_editor.clear_scrollback().expect("Should not fail normally");
-            Ok(())
-        }
-        WalletCommands::ClearHistory => {
-            line_editor.history_mut().clear().expect("Should not fail normally");
-            Ok(())
-        }
+        WalletCommand::Exit => Ok(ConsoleCommand::Exit),
+        WalletCommand::History => Ok(ConsoleCommand::PrintHistory),
+        WalletCommand::ClearScreen => Ok(ConsoleCommand::ClearScreen),
+        WalletCommand::ClearHistory => Ok(ConsoleCommand::ClearHistory),
     }
 }

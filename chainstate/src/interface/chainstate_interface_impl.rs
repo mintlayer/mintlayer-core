@@ -286,6 +286,28 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn last_common_ancestor_by_id(
+        &self,
+        first_block: &Id<GenBlock>,
+        second_block: &Id<GenBlock>,
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, ChainstateError> {
+        let tx = self
+            .chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
+        let first_block = tx.get_gen_block_index(first_block)?;
+        let second_block = tx.get_gen_block_index(second_block)?;
+        if let (Some(first_block), Some(second_block)) = (first_block, second_block) {
+            let common_ancestor = tx.last_common_ancestor(&first_block, &second_block)?;
+            Ok(Some((
+                common_ancestor.block_id(),
+                common_ancestor.block_height(),
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn get_block_reward(
         &self,
         block_index: &BlockIndex,

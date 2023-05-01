@@ -16,12 +16,15 @@
 #[macro_export]
 macro_rules! cli_println {
     ($context:expr, $($arg:tt)*) => {
-        ConsoleContext::begin_output($context);
-        println!($($arg)*)
+        {
+            ConsoleContext::begin_output($context);
+            println!($($arg)*);
+        }
     };
 }
 
 /// Input/output devices used to interact with a user (stub for now)
+#[derive(Clone)]
 pub struct ConsoleContext {}
 
 // TODO: Use `external_printer` from reedline to print output in background if needed

@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
@@ -15,8 +16,15 @@ utils = { path = "../../utils" }
 wallet = { path = ".." }
 wallet-storage = { path = "../storage" }
 
+async-trait.workspace = true
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
 thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize = "1.5"
 
 [dev-dependencies]
+chainstate-test-framework = { path = "../../chainstate/test-framework" }
+test-utils = { path = "../../test-utils" }
+
+anyhow = "1.0"
+rstest.workspace = true

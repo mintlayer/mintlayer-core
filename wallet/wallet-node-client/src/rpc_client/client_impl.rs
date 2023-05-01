@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::rpc::ChainstateRpcClient;
+use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -28,6 +28,12 @@ use super::{NodeRpcClient, NodeRpcError};
 #[async_trait::async_trait]
 impl NodeInterface for NodeRpcClient {
     type Error = NodeRpcError;
+
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
+        ChainstateRpcClient::info(&self.http_client)
+            .await
+            .map_err(NodeRpcError::ResponseError)
+    }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
         let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
@@ -61,6 +67,20 @@ impl NodeInterface for NodeRpcClient {
         ChainstateRpcClient::block_id_at_height(&self.http_client, height)
             .await
             .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_last_common_ancestor(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
+        ChainstateRpcClient::last_common_ancestor_by_id(
+            &self.http_client,
+            first_block,
+            second_block,
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
     }
 
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {

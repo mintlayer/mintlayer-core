@@ -18,8 +18,8 @@ use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 pub use bip39::{Language, Mnemonic};
-use common::chain::{ChainConfig, Transaction};
-use common::primitives::Id;
+use common::chain::{Block, ChainConfig, GenBlock, SignedTransaction, Transaction};
+use common::primitives::{BlockHeight, Id};
 use wallet_storage::{
     DefaultBackend, Store, TransactionRw, Transactional, WalletStorageRead, WalletStorageWrite,
 };
@@ -44,6 +44,8 @@ pub enum WalletError {
     KeyChainError(#[from] KeyChainError),
     #[error("No account found")] // TODO implement display for AccountId
     NoAccountFound(AccountId),
+    #[error("Not implemented")]
+    NotImplemented,
 }
 
 /// Result type used for the wallet
@@ -113,6 +115,27 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn get_database(&self) -> &Store<B> {
         &self.db
+    }
+
+    /// Returns the last scanned block hash and height.
+    /// Returns genesis block when the wallet is just created.
+    pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
+        Err(WalletError::NotImplemented)
+    }
+
+    /// Scan new blocks and update best block hash/height.
+    /// New block may reset the chain of previously scanned blocks.
+    pub fn scan_new_blocks(
+        &mut self,
+        _block_height: BlockHeight,
+        _blocks: Vec<Block>,
+    ) -> WalletResult<()> {
+        Err(WalletError::NotImplemented)
+    }
+
+    /// Rescan mempool for unconfirmed transactions and UTXOs
+    pub fn scan_mempool(&mut self, _transactions: Vec<SignedTransaction>) -> WalletResult<()> {
+        Err(WalletError::NotImplemented)
     }
 }
 

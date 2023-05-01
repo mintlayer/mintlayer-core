@@ -96,6 +96,11 @@ mockall::mock! {
             first_block_index: &GenBlockIndex,
             second_block_index: &GenBlockIndex,
         ) -> Result<GenBlockIndex, ChainstateError>;
+        fn last_common_ancestor_by_id(
+            &self,
+            first_block: &Id<GenBlock>,
+            second_block: &Id<GenBlock>,
+        ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, ChainstateError>;
         fn get_block_reward(
             &self,
             block_index: &BlockIndex,

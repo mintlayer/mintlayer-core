@@ -16,11 +16,12 @@
 use std::path::PathBuf;
 
 use utils::default_data_dir::PrepareDataDirError;
+use wallet_controller::NodeRpcClient;
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
-    Controller(wallet_controller::ControllerError),
+    Controller(wallet_controller::ControllerError<NodeRpcClient>),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),
     #[error("Console IO error: {0}")]
@@ -41,10 +42,10 @@ pub enum WalletCliError {
     InvalidQuoting,
     #[error("{0}")]
     InvalidCommandInput(clap::Error),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Cancelled")]
     Cancelled,
-    #[error("Quit")]
-    Exit,
 }

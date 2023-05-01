@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate::{BlockSource, ChainstateError, ChainstateHandle};
+use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
@@ -23,6 +23,7 @@ use serialization::hex::{HexDecode, HexError};
 
 use crate::node_traits::NodeInterface;
 
+#[derive(Clone)]
 pub struct WalletHandlesClient {
     chainstate_handle: ChainstateHandle,
 }
@@ -59,6 +60,11 @@ impl WalletHandlesClient {
 impl NodeInterface for WalletHandlesClient {
     type Error = WalletHandlesClientError;
 
+    async fn chainstate_info(&self) -> Result<ChainInfo, Self::Error> {
+        let result = self.chainstate_handle.call(move |this| this.info()).await??;
+        Ok(result)
+    }
+
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
         let result = self.chainstate_handle.call(move |this| this.get_best_block_id()).await??;
         Ok(result)
@@ -82,6 +88,18 @@ impl NodeInterface for WalletHandlesClient {
         let result = self
             .chainstate_handle
             .call(move |this| this.get_block_id_from_height(&height))
+            .await??;
+        Ok(result)
+    }
+
+    async fn get_last_common_ancestor(
+        &self,
+        first_block: Id<GenBlock>,
+        second_block: Id<GenBlock>,
+    ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error> {
+        let result = self
+            .chainstate_handle
+            .call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
             .await??;
         Ok(result)
     }

@@ -16,6 +16,7 @@
 // Use `cli_println` instead
 #![deny(clippy::print_stdout)]
 
+mod cli_event_loop;
 mod commands;
 mod config;
 mod console;
@@ -32,6 +33,7 @@ use config::WalletCliArgs;
 use console::ConsoleContext;
 use dialoguer::theme::ColorfulTheme;
 use errors::WalletCliError;
+use tokio::sync::mpsc;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 use wallet::Wallet;
 use wallet_controller::cookie::load_cookie;
@@ -108,6 +110,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     };
 
     let controller = wallet_controller::make_rpc_controller(
+        chain_config,
         rpc_address,
         Some((&rpc_username, &rpc_password)),
         wallet,
@@ -115,14 +118,30 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     .await
     .map_err(WalletCliError::Controller)?;
 
-    repl::start_cli_repl(output, controller, &data_dir, vi_mode).await
+    let (event_tx, event_rx) = mpsc::unbounded_channel();
+
+    let output_copy = output.clone();
+    let repl_command = repl::get_repl_command();
+    let create_line_editor =
+        repl::create_line_editor(repl_command.clone(), output, &data_dir, vi_mode)?;
+
+    let repl_handle = std::thread::spawn(move || {
+        // Run a blocking loop in a separate thread
+        repl::run(create_line_editor, repl_command, event_tx, &output_copy);
+    });
+
+    cli_event_loop::run(controller, event_rx).await;
+
+    repl_handle.join().expect("Should not panic");
+
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
     let output = ConsoleContext::new();
     run(&output).await.unwrap_or_else(|err| match err {
-        WalletCliError::Cancelled | WalletCliError::Exit => {}
+        WalletCliError::Cancelled => {}
         e => {
             cli_println!(&output, "wallet-cli launch failed: {e}");
             std::process::exit(1)
