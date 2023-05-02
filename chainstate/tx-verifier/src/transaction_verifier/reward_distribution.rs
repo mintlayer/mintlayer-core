@@ -154,25 +154,30 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
 fn calculate_rewards_per_delegation(
     delegation_shares: &BTreeMap<DelegationId, Amount>,
     pool_id: PoolId,
-    total_delegations_balance: Amount,
-    total_delegations_reward: Amount,
+    total_delegations_amount: Amount,
+    total_delegations_reward_amount: Amount,
 ) -> Result<Vec<(DelegationId, Amount)>, ConnectTransactionError> {
     assert_eq_size!(Amount, Uint128);
     ensure!(
-        total_delegations_balance != Amount::ZERO,
+        total_delegations_amount != Amount::ZERO,
         ConnectTransactionError::TotalDelegationBalanceZero(pool_id)
     );
 
-    let total_delegations_balance = Uint256::from_amount(total_delegations_balance);
-    let total_delegations_reward = Uint256::from_amount(total_delegations_reward);
+    let total_delegations_balance = Uint256::from_amount(total_delegations_amount);
+    let total_delegations_reward = Uint256::from_amount(total_delegations_reward_amount);
     delegation_shares
         .iter()
         .map(
-            |(delegation_id, balance)| -> Result<_, ConnectTransactionError> {
-                let balance = Uint256::from_amount(*balance);
+            |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
+                let balance = Uint256::from_amount(*balance_amount);
                 let reward = (total_delegations_reward * balance) / total_delegations_balance;
                 let reward: UnsignedIntType = reward.try_into().map_err(|_| {
-                    ConnectTransactionError::DelegationRewardOverflow(*delegation_id)
+                    ConnectTransactionError::DelegationRewardOverflow(
+                        *delegation_id,
+                        total_delegations_amount,
+                        total_delegations_reward_amount,
+                        *balance_amount,
+                    )
                 })?;
                 Ok((*delegation_id, Amount::from_atoms(reward)))
             },

@@ -118,8 +118,8 @@ pub enum ConnectTransactionError {
     PoolOwnerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
     #[error("Failed to sum block {0} reward for pool {1} delegations")]
     DelegationsRewardSumFailed(Id<Block>, PoolId),
-    #[error("Reward for delegation {0} overflowed")]
-    DelegationRewardOverflow(DelegationId),
+    #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
+    DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
     #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Total balance of delegations in pool {0} is zero")]

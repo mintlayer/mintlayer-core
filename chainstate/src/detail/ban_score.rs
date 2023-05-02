@@ -123,7 +123,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 100,
-            ConnectTransactionError::DelegationRewardOverflow(_) => 100,
+            ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 100,
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
