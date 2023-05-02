@@ -26,7 +26,10 @@ use iced::{
 };
 use iced_aw::{tab_bar::TabLabel, Grid};
 use subsystem::Handle;
-use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 use utils::tap_error_log::LogError;
 
 use crate::backend_controller::NodeBackendController;
@@ -49,8 +52,9 @@ pub enum WidgetDataUpdate {
 
 #[derive(Clone)]
 pub struct RegisteredSubscriptions {
-    chainstate_event_receiver:
-        Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<(Id<GenBlock>, BlockHeight)>>>,
+    // Unfortunately, GUI messages must support Clone, and async channel receivers are not Clone, so we need this (ugly) Arc.
+    #[allow(clippy::type_complexity)]
+    chainstate_event_receiver: Arc<Mutex<UnboundedReceiver<(Id<GenBlock>, BlockHeight)>>>,
 }
 
 impl Debug for RegisteredSubscriptions {
@@ -166,7 +170,6 @@ impl Tab for SummaryTab {
     fn content(&self) -> Element<'_, Self::Message> {
         let (best_id, best_height) = self
             .current_tip
-            .map(|v| v)
             .unwrap_or((self.controller.chain_config().genesis_block_id(), 0.into()));
 
         let grid = Grid::with_columns(2);
