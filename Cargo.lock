@@ -6506,6 +6506,7 @@ dependencies = [
  "chainstate-test-framework",
  "common",
  "crypto",
+ "futures",
  "logging",
  "node-comm",
  "rstest",

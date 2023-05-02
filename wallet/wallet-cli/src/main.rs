@@ -110,14 +110,15 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
             .map_err(WalletCliError::WalletError)?
     };
 
-    let controller = wallet_controller::make_rpc_controller(
+    let mut controller = wallet_controller::make_rpc_controller(
         chain_config,
         rpc_address,
         Some((&rpc_username, &rpc_password)),
-        wallet,
     )
     .await
     .map_err(WalletCliError::Controller)?;
+
+    controller.add_wallet(wallet);
 
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 

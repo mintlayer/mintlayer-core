@@ -9,6 +9,7 @@ edition = "2021"
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
+futures.workspace = true
 logging = { path = "../../logging" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }

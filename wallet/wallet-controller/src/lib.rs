@@ -26,6 +26,7 @@ use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use futures::future::join_all;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -42,10 +43,15 @@ pub enum ControllerError<T: NodeInterface> {
 }
 
 pub struct Controller<T: NodeInterface> {
+    chain_config: Arc<ChainConfig>,
+
     rpc_client: T,
 
-    wallet: DefaultWallet,
+    wds: Vec<WalletData<T>>,
+}
 
+struct WalletData<T: NodeInterface> {
+    wallet: DefaultWallet,
     block_sync: sync::BlockSyncing<T>,
 }
 
@@ -53,17 +59,11 @@ pub type RpcController = Controller<NodeRpcClient>;
 pub type HandlesController = Controller<WalletHandlesClient>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
-    pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        let block_sync = sync::BlockSyncing::new(
-            sync::BlockSyncingConfig::default(),
-            Arc::clone(&chain_config),
-            rpc_client.clone(),
-        );
-
+    pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T) -> Self {
         Self {
+            chain_config,
             rpc_client,
-            wallet,
-            block_sync,
+            wds: Vec::new(),
         }
     }
 
@@ -175,11 +175,36 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
+    pub fn add_wallet(&mut self, wallet: DefaultWallet) {
+        let block_sync = sync::BlockSyncing::new(
+            sync::BlockSyncingConfig::default(),
+            Arc::clone(&self.chain_config),
+            self.rpc_client.clone(),
+        );
+        self.wds.push(WalletData { wallet, block_sync })
+    }
+
+    pub fn del_wallet(&mut self, index: usize) {
+        self.wds.remove(index);
+    }
+
+    pub fn wallets_len(&mut self) -> usize {
+        self.wds.len()
+    }
+
+    pub fn get_wallet(&self, index: usize) -> &DefaultWallet {
+        &self.wds[index].wallet
+    }
+
+    pub fn get_wallet_mut(&mut self, index: usize) -> &mut DefaultWallet {
+        &mut self.wds[index].wallet
+    }
+
     /// Sync the wallet block chain from the node.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
-        if BLOCK_SYNC_ENABLED {
-            self.block_sync.run(&mut self.wallet).await;
+        if BLOCK_SYNC_ENABLED && !self.wds.is_empty() {
+            join_all(self.wds.iter_mut().map(|wd| wd.block_sync.run(&mut wd.wallet))).await;
         } else {
             std::future::pending::<()>().await;
         }
@@ -190,10 +215,9 @@ pub async fn make_rpc_controller(
     chain_config: Arc<ChainConfig>,
     remote_socket_address: SocketAddr,
     username_password: Option<(&str, &str)>,
-    wallet: DefaultWallet,
 ) -> Result<RpcController, ControllerError<NodeRpcClient>> {
     let rpc_client = make_rpc_client(remote_socket_address, username_password)
         .await
         .map_err(ControllerError::NodeCallError)?;
-    Ok(Controller::new(chain_config, rpc_client, wallet))
+    Ok(Controller::new(chain_config, rpc_client))
 }
