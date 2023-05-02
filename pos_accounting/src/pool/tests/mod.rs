@@ -104,7 +104,6 @@ fn create_storage_with_pool(
     let storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data.clone())]),
         BTreeMap::from([(pool_id, pledged_amount)]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -132,7 +131,6 @@ fn create_storage_with_pool_and_delegation(
     let storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data.clone())]),
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),
         BTreeMap::from([(

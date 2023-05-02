@@ -69,8 +69,6 @@ storage::decl_schema! {
         pub DBAccountingPoolDataTip: Map<PoolId, PoolData>,
         /// Store for tip accounting pool balances
         pub DBAccountingPoolBalancesTip: Map<PoolId, Amount>,
-        /// Store for tip accounting pool owner balances
-        pub DBAccountingPoolOwnerBalancesTip: Map<PoolId, Amount>,
         /// Store for tip accounting delegation data
         pub DBAccountingDelegationDataTip: Map<DelegationId, DelegationData>,
         /// Store for tip accounting delegation data
@@ -82,8 +80,6 @@ storage::decl_schema! {
         pub DBAccountingPoolDataSealed: Map<PoolId, PoolData>,
         /// Store for sealed accounting pool balances
         pub DBAccountingPoolBalancesSealed: Map<PoolId, Amount>,
-        /// Store for sealed accounting pool owner balances
-        pub DBAccountingPoolOwnerBalancesSealed: Map<PoolId, Amount>,
         /// Store for sealed accounting delegation data
         pub DBAccountingDelegationDataSealed: Map<DelegationId, DelegationData>,
         /// Store for sealed accounting delegation data

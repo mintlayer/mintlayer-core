@@ -141,7 +141,6 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let expected_tip_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, pool_data)]),
             pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
-            pool_owner_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -229,10 +228,6 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
                 (pool_id1, amount_to_stake),
                 (pool_id2, amount_to_stake),
             ]),
-            pool_owner_balances: BTreeMap::from([
-                (pool_id1, amount_to_stake),
-                (pool_id2, amount_to_stake),
-            ]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -256,13 +251,6 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
                 .into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [
-                    (pool_id1, amount_to_stake.into_signed().unwrap()),
-                    (pool_id2, amount_to_stake.into_signed().unwrap()),
-                ]
-                .into_iter(),
-            ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
                 [
                     (pool_id1, amount_to_stake.into_signed().unwrap()),
                     (pool_id2, amount_to_stake.into_signed().unwrap()),
@@ -357,10 +345,6 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
                 (pool_id1, amount_to_stake),
                 (pool_id2, amount_to_stake),
             ]),
-            pool_owner_balances: BTreeMap::from([
-                (pool_id1, amount_to_stake),
-                (pool_id2, amount_to_stake),
-            ]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -382,9 +366,6 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             pool_balances: DeltaAmountCollection::from_iter(
                 [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
             ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
-            ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
             delegation_data: DeltaDataCollection::new(),
@@ -401,9 +382,6 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
                 [(pool_id2, DataDelta::new(None, Some(pool_data2)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
-            ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
                 [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
@@ -497,10 +475,6 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
                 (pool_id1, amount_to_stake),
                 (pool_id2, amount_to_stake),
             ]),
-            pool_owner_balances: BTreeMap::from([
-                (pool_id1, amount_to_stake),
-                (pool_id2, amount_to_stake),
-            ]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -514,7 +488,6 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let expected_sealed_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id1, pool_data1.clone())]),
             pool_balances: BTreeMap::from([(pool_id1, amount_to_stake)]),
-            pool_owner_balances: BTreeMap::from([(pool_id1, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -530,9 +503,6 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
                 [(pool_id1, DataDelta::new(None, Some(pool_data1)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
-            ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
                 [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
@@ -551,9 +521,6 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
                 [(pool_id2, DataDelta::new(None, Some(pool_data2)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
-            ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
                 [(pool_id2, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
@@ -621,7 +588,6 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         let expected_storage_data = pos_accounting::PoSAccountingData {
             pool_data: BTreeMap::from([(pool_id, pool_data.clone())]),
             pool_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
-            pool_owner_balances: BTreeMap::from([(pool_id, amount_to_stake)]),
             delegation_balances: Default::default(),
             delegation_data: Default::default(),
             pool_delegation_shares: Default::default(),
@@ -641,9 +607,6 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
                 [(pool_id, DataDelta::new(None, Some(pool_data)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id, amount_to_stake.into_signed().unwrap())].into_iter(),
-            ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
                 [(pool_id, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),

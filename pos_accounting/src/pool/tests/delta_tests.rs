@@ -56,13 +56,6 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             ]
             .into_iter(),
         ),
-        pool_owner_balances: DeltaAmountCollection::from_iter(
-            [
-                (new_pool_id(3), SignedAmount::from_atoms(300)),
-                (new_pool_id(4), SignedAmount::from_atoms(400)),
-            ]
-            .into_iter(),
-        ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
                 (new_pool_id(5), new_delegation_id(6)),
@@ -115,13 +108,6 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             ]
             .into_iter(),
         ),
-        pool_owner_balances: DeltaAmountCollection::from_iter(
-            [
-                (new_pool_id(3), SignedAmount::from_atoms(-300)),
-                (new_pool_id(4), SignedAmount::from_atoms(50)),
-            ]
-            .into_iter(),
-        ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
                 (new_pool_id(5), new_delegation_id(6)),
@@ -163,9 +149,6 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
         pool_balances: DeltaAmountCollection::from_iter(
             [(new_pool_id(4), SignedAmount::from_atoms(450))].into_iter(),
         ),
-        pool_owner_balances: DeltaAmountCollection::from_iter(
-            [(new_pool_id(4), SignedAmount::from_atoms(450))].into_iter(),
-        ),
         pool_delegation_shares: DeltaAmountCollection::from_iter(
             [(
                 (new_pool_id(5), new_delegation_id(6)),
@@ -199,13 +182,6 @@ fn merge_deltas_check_undo_check(#[case] seed: Seed) {
             .into_iter(),
         ),
         pool_balances: DeltaAmountCollection::from_iter(
-            [
-                (new_pool_id(3), SignedAmount::from_atoms(300)),
-                (new_pool_id(4), SignedAmount::from_atoms(400)),
-            ]
-            .into_iter(),
-        ),
-        pool_owner_balances: DeltaAmountCollection::from_iter(
             [
                 (new_pool_id(3), SignedAmount::from_atoms(300)),
                 (new_pool_id(4), SignedAmount::from_atoms(400)),
@@ -260,10 +236,6 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
             (new_pool_id(3), Amount::from_atoms(300)),
             (new_pool_id(4), Amount::from_atoms(400)),
         ]),
-        BTreeMap::from([
-            (new_pool_id(3), Amount::from_atoms(300)),
-            (new_pool_id(4), Amount::from_atoms(400)),
-        ]),
         BTreeMap::from([(
             (new_pool_id(5), new_delegation_id(6)),
             Amount::from_atoms(100),
@@ -303,13 +275,6 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
                 ]
                 .into_iter(),
             ),
-            pool_owner_balances: DeltaAmountCollection::from_iter(
-                [
-                    (new_pool_id(3), SignedAmount::from_atoms(-300)),
-                    (new_pool_id(4), SignedAmount::from_atoms(50)),
-                ]
-                .into_iter(),
-            ),
             pool_delegation_shares: DeltaAmountCollection::from_iter(
                 [(
                     (new_pool_id(5), new_delegation_id(6)),
@@ -341,7 +306,6 @@ fn merge_store_with_delta_check_undo_check(#[case] seed: Seed) {
 
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(new_pool_id(1), pool_data1_increased), (new_pool_id(10), pool_data2)]),
-        BTreeMap::from([(new_pool_id(4), Amount::from_atoms(450))]),
         BTreeMap::from([(new_pool_id(4), Amount::from_atoms(450))]),
         BTreeMap::from([(
             (new_pool_id(5), new_delegation_id(6)),

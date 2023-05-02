@@ -80,11 +80,6 @@ impl<B: storage::Backend> Store<B> {
                 .prefix_iter_decoded(&())?
                 .collect::<BTreeMap<_, _>>();
 
-        let pool_owner_balances =
-            db.0.get::<db::DBAccountingPoolOwnerBalancesTip, _>()
-                .prefix_iter_decoded(&())?
-                .collect::<BTreeMap<_, _>>();
-
         let delegation_data =
             db.0.get::<db::DBAccountingDelegationDataTip, _>()
                 .prefix_iter_decoded(&())?
@@ -103,7 +98,6 @@ impl<B: storage::Backend> Store<B> {
         Ok(pos_accounting::PoSAccountingData {
             pool_data,
             pool_balances,
-            pool_owner_balances,
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
@@ -121,11 +115,6 @@ impl<B: storage::Backend> Store<B> {
 
         let pool_balances =
             db.0.get::<db::DBAccountingPoolBalancesSealed, _>()
-                .prefix_iter_decoded(&())?
-                .collect::<BTreeMap<_, _>>();
-
-        let pool_owner_balances =
-            db.0.get::<db::DBAccountingPoolOwnerBalancesSealed, _>()
                 .prefix_iter_decoded(&())?
                 .collect::<BTreeMap<_, _>>();
 
@@ -147,7 +136,6 @@ impl<B: storage::Backend> Store<B> {
         Ok(pos_accounting::PoSAccountingData {
             pool_data,
             pool_balances,
-            pool_owner_balances,
             pool_delegation_shares,
             delegation_balances,
             delegation_data,
@@ -280,10 +268,6 @@ impl<B: storage::Backend> PoSAccountingStorageRead<TipStorageTag> for Store<B> {
         let tx = self.transaction_ro()?;
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_data(&tx, pool_id)
     }
-    fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
-        let tx = self.transaction_ro()?;
-        PoSAccountingStorageRead::<TipStorageTag>::get_pool_owner_balance(&tx, pool_id)
-    }
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
         PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(&tx, delegation_id)
@@ -324,10 +308,6 @@ impl<B: storage::Backend> PoSAccountingStorageRead<SealedStorageTag> for Store<B
     fn get_pool_data(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>> {
         let tx = self.transaction_ro()?;
         PoSAccountingStorageRead::<SealedStorageTag>::get_pool_data(&tx, pool_id)
-    }
-    fn get_pool_owner_balance(&self, pool_id: PoolId) -> crate::Result<Option<Amount>> {
-        let tx = self.transaction_ro()?;
-        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_owner_balance(&tx, pool_id)
     }
     fn get_delegation_balance(&self, delegation_id: DelegationId) -> crate::Result<Option<Amount>> {
         let tx = self.transaction_ro()?;
@@ -455,19 +435,6 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<TipStorageTag> for Store<B> 
         tx.commit()
     }
 
-    fn set_pool_owner_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
-        let mut tx = self.transaction_rw(None)?;
-        PoSAccountingStorageWrite::<TipStorageTag>::set_pool_owner_balance(
-            &mut tx, pool_id, amount,
-        )?;
-        tx.commit()
-    }
-    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        let mut tx = self.transaction_rw(None)?;
-        PoSAccountingStorageWrite::<TipStorageTag>::del_pool_owner_balance(&mut tx, pool_id)?;
-        tx.commit()
-    }
-
     fn set_delegation_balance(
         &mut self,
         delegation_target: DelegationId,
@@ -566,19 +533,6 @@ impl<B: storage::Backend> PoSAccountingStorageWrite<SealedStorageTag> for Store<
     fn del_pool_data(&mut self, pool_id: PoolId) -> crate::Result<()> {
         let mut tx = self.transaction_rw(None)?;
         PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_data(&mut tx, pool_id)?;
-        tx.commit()
-    }
-
-    fn set_pool_owner_balance(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()> {
-        let mut tx = self.transaction_rw(None)?;
-        PoSAccountingStorageWrite::<SealedStorageTag>::set_pool_owner_balance(
-            &mut tx, pool_id, amount,
-        )?;
-        tx.commit()
-    }
-    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> crate::Result<()> {
-        let mut tx = self.transaction_rw(None)?;
-        PoSAccountingStorageWrite::<SealedStorageTag>::del_pool_owner_balance(&mut tx, pool_id)?;
         tx.commit()
     }
 

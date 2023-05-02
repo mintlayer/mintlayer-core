@@ -27,7 +27,6 @@ use serialization::{Decode, Encode};
 pub struct PoSAccountingDeltaData {
     pub pool_data: DeltaDataCollection<PoolId, PoolData>,
     pub pool_balances: DeltaAmountCollection<PoolId>,
-    pub pool_owner_balances: DeltaAmountCollection<PoolId>,
     pub pool_delegation_shares: DeltaAmountCollection<(PoolId, DelegationId)>,
     pub delegation_balances: DeltaAmountCollection<DelegationId>,
     pub delegation_data: DeltaDataCollection<DelegationId, DelegationData>,
@@ -38,7 +37,6 @@ impl PoSAccountingDeltaData {
         Self {
             pool_data: DeltaDataCollection::new(),
             pool_balances: DeltaAmountCollection::new(),
-            pool_owner_balances: DeltaAmountCollection::new(),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
             delegation_data: DeltaDataCollection::new(),
@@ -51,9 +49,6 @@ impl PoSAccountingDeltaData {
     ) -> Result<DeltaMergeUndo, Error> {
         let pool_balances_undo = other.pool_balances.clone();
         self.pool_balances.merge_delta_amounts(other.pool_balances)?;
-
-        let pool_owner_balances_undo = other.pool_owner_balances.clone();
-        self.pool_owner_balances.merge_delta_amounts(other.pool_owner_balances)?;
 
         let pool_delegation_shares_undo = other.pool_delegation_shares.clone();
         self.pool_delegation_shares.merge_delta_amounts(other.pool_delegation_shares)?;
@@ -68,7 +63,6 @@ impl PoSAccountingDeltaData {
             pool_data_undo,
             delegation_data_undo,
             pool_balances_undo,
-            pool_owner_balances_undo,
             delegation_balances_undo,
             pool_delegation_shares_undo,
         })
@@ -76,9 +70,6 @@ impl PoSAccountingDeltaData {
 
     pub fn undo_delta_merge(&mut self, undo_data: DeltaMergeUndo) -> Result<(), Error> {
         self.pool_balances.undo_merge_delta_amounts(undo_data.pool_balances_undo)?;
-
-        self.pool_owner_balances
-            .undo_merge_delta_amounts(undo_data.pool_owner_balances_undo)?;
 
         self.pool_delegation_shares
             .undo_merge_delta_amounts(undo_data.pool_delegation_shares_undo)?;

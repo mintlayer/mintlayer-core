@@ -73,16 +73,11 @@ fn create_pool_check_undo_check(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
     );
-    assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
     assert_eq!(op.get_pool_delegations_shares(pool_id).unwrap(), None);
 
     op.undo(undo).unwrap();
 
     assert_eq!(op.get_pool_balance(pool_id).unwrap(), None);
-    assert_eq!(op.get_pool_owner_balance(pool_id).unwrap(), None);
     assert_eq!(op.get_pool_data(pool_id).unwrap(), None);
     assert_eq!(op.get_pool_delegations_shares(pool_id).unwrap(), None);
 }
@@ -104,7 +99,6 @@ fn create_pool_flush_undo(#[case] seed: Seed) {
 
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -174,7 +168,6 @@ fn decommission_pool_check_undo_check(
     let undo = op.decommission_pool(pool_id).unwrap();
 
     assert_eq!(op.get_pool_balance(pool_id).expect("ok"), None);
-    assert_eq!(op.get_pool_owner_balance(pool_id).expect("ok"), None);
     assert_eq!(op.get_pool_data(pool_id).expect("ok"), None);
     assert_eq!(op.get_pool_delegations_shares(pool_id).expect("ok"), None);
 
@@ -182,10 +175,6 @@ fn decommission_pool_check_undo_check(
 
     assert_eq!(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
         pledged_amount
     );
     assert_eq!(
@@ -224,7 +213,6 @@ fn decommission_pool_flush_undo(#[case] seed: Seed) {
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -252,7 +240,6 @@ fn decommission_pool_undo_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -311,10 +298,6 @@ fn check_delegation_id(
         pledged_amount
     );
     assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
     );
@@ -344,7 +327,6 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data.clone())]),
             BTreeMap::from([(pool_id, pledged_amount)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key))]),
@@ -362,7 +344,6 @@ fn create_delegation_id_flush_undo(#[case] seed: Seed) {
 
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -392,7 +373,6 @@ fn create_delegation_id_undo_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -447,10 +427,6 @@ fn check_delegate_staking(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
         (pledged_amount + delegated_amount).unwrap()
     );
-    assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
 
     op.undo(undo).unwrap();
 
@@ -460,10 +436,6 @@ fn check_delegate_staking(
     );
     assert_eq!(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
         pledged_amount
     );
     assert_eq!(
@@ -494,7 +466,6 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data.clone())]),
             BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
             BTreeMap::from([(delegation_id, delegated_amount)]),
             BTreeMap::from([(
@@ -515,7 +486,6 @@ fn delegate_staking_delta_flush_undo(#[case] seed: Seed) {
 
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -546,7 +516,6 @@ fn delegate_staking_delta_undo_flush(#[case] seed: Seed) {
 
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::new(),
         BTreeMap::new(),
@@ -601,10 +570,6 @@ fn check_spend_share(
         ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap()
     );
     assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
-    );
-    assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
         pool_data
     );
@@ -626,10 +591,6 @@ fn check_spend_share(
     assert_eq!(
         op.get_pool_balance(pool_id).expect("ok").expect("some"),
         (pledged_amount + delegated_amount).unwrap()
-    );
-    assert_eq!(
-        op.get_pool_owner_balance(pool_id).expect("ok").expect("some"),
-        pledged_amount
     );
     assert_eq!(
         op.get_pool_data(pool_id).expect("ok").expect("some"),
@@ -669,7 +630,6 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
                 pool_id,
                 ((pledged_amount + delegated_amount).unwrap() - spent_amount).unwrap(),
             )]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([(
                 (pool_id, delegation_id),
                 (delegated_amount - spent_amount).unwrap(),
@@ -694,7 +654,6 @@ fn spend_share_delta_flush_undo(#[case] seed: Seed) {
         let expected_storage = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
             BTreeMap::from([(delegation_id, delegated_amount)]),
             BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key))]),
@@ -724,7 +683,6 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
     let expected_storage = InMemoryPoSAccounting::from_values(
         BTreeMap::from([(pool_id, pool_data)]),
         BTreeMap::from([(pool_id, (pledged_amount + delegated_amount).unwrap())]),
-        BTreeMap::from([(pool_id, pledged_amount)]),
         BTreeMap::from([((pool_id, delegation_id), delegated_amount)]),
         BTreeMap::from([(delegation_id, delegated_amount)]),
         BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key))]),

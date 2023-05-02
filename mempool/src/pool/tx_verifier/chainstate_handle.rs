@@ -150,10 +150,6 @@ impl PoSAccountingView for ChainstateHandle {
         self.call(move |c| c.get_stake_pool_data(pool_id))
     }
 
-    fn get_pool_owner_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Error> {
-        self.call(move |c| c.get_stake_pool_owner_balance(pool_id))
-    }
-
     fn get_pool_delegations_shares(
         &self,
         pool_id: PoolId,

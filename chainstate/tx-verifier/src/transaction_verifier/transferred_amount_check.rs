@@ -107,11 +107,12 @@ fn get_output_value<P: PoSAccountingView>(
         }
         TxOutput::StakePool(data) => OutputValue::Coin(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let staker_balance = pos_accounting_view
-                .get_pool_owner_balance(*pool_id)
+            let pledge_amount = pos_accounting_view
+                .get_pool_data(*pool_id)
                 .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?;
-            OutputValue::Coin(staker_balance)
+                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                .pledge_amount();
+            OutputValue::Coin(pledge_amount)
         }
         TxOutput::DecommissionPool(v, _, _, _) => OutputValue::Coin(*v),
     };
@@ -423,14 +424,15 @@ mod tests {
         let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
-        let input_utxo = TxOutput::StakePool(Box::new(StakePoolData::new(
+        let stake_pool_data = StakePoolData::new(
             pledge_amount,
             Destination::AnyoneCanSpend,
             vrf_pk,
             Destination::AnyoneCanSpend,
             PerThousand::new(0).unwrap(),
             Amount::ZERO,
-        )));
+        );
+        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
@@ -439,9 +441,8 @@ mod tests {
             )]),
         );
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, stake_pool_data.into())]),
             BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::from([(pool_id, pledge_amount)]),
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),
@@ -486,14 +487,23 @@ mod tests {
         let pledge_amount_2 = Amount::from_atoms(rng.gen_range(0..100_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
-        let input_utxo = TxOutput::StakePool(Box::new(StakePoolData::new(
+        let stake_pool_data_1 = StakePoolData::new(
             pledge_amount_1,
+            Destination::AnyoneCanSpend,
+            vrf_pk.clone(),
+            Destination::AnyoneCanSpend,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        );
+        let stake_pool_data_2 = StakePoolData::new(
+            pledge_amount_2,
             Destination::AnyoneCanSpend,
             vrf_pk,
             Destination::AnyoneCanSpend,
             PerThousand::new(0).unwrap(),
             Amount::ZERO,
-        )));
+        );
+        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data_1.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
@@ -502,9 +512,11 @@ mod tests {
             )]),
         );
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::from([
+                (pool_id_1, stake_pool_data_1.into()),
+                (pool_id_2, stake_pool_data_2.into()),
+            ]),
             BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::from([(pool_id_1, pledge_amount_1), (pool_id_2, pledge_amount_2)]),
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),

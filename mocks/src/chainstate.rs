@@ -135,7 +135,6 @@ mockall::mock! {
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError>;
-        fn get_stake_pool_owner_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;
         fn get_stake_pool_delegations_shares(
             &self,
             pool_id: PoolId,

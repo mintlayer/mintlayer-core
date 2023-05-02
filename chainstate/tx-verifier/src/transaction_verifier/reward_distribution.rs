@@ -47,7 +47,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
 
     let increase_pool_balance_undo = accounting_adapter
         .operations(TransactionSource::Chain(block_id))
-        .increase_pool_owner_balance(pool_id, total_staker_reward)?;
+        .increase_pool_pledge_amount(pool_id, total_staker_reward)?;
 
     let total_delegations_reward = (total_reward - total_staker_reward).ok_or(
         ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
@@ -138,7 +138,7 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
                 // if total balance of all delegations is 0 then give the reward to the pool's owner
                 let increase_pool_balance_undo = accounting_adapter
                     .operations(TransactionSource::Chain(block_id))
-                    .increase_pool_owner_balance(pool_id, total_delegations_reward)?;
+                    .increase_pool_pledge_amount(pool_id, total_delegations_reward)?;
                 Ok(vec![increase_pool_balance_undo])
             }
         })
@@ -200,7 +200,7 @@ fn distribute_delegations_reward_remainder<P: PoSAccountingView>(
         debug_assert!(delegations_reward_remainder == Amount::from_atoms(1));
         let increase_balance_undo = accounting_adapter
             .operations(TransactionSource::Chain(block_id))
-            .increase_pool_owner_balance(pool_id, delegations_reward_remainder)?;
+            .increase_pool_pledge_amount(pool_id, delegations_reward_remainder)?;
         Ok(Some(vec![increase_balance_undo]))
     } else {
         Ok(None)
@@ -270,19 +270,26 @@ mod tests {
         let delegation_data_a = DelegationData::new(pool_id_a, Destination::AnyoneCanSpend);
         let delegation_data_b = DelegationData::new(pool_id_b, Destination::AnyoneCanSpend);
 
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
-            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
+            vrf_pk.clone(),
             PerThousand::new(100).unwrap(),
             Amount::from_atoms(50),
         );
         let expected_owner_reward = Amount::from_atoms(150);
+        let expected_pool_data_a = PoolData::new(
+            Destination::AnyoneCanSpend,
+            (pledged_amount + expected_owner_reward).unwrap(),
+            vrf_pk,
+            PerThousand::new(100).unwrap(),
+            Amount::from_atoms(50),
+        );
 
         let mut store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id_a, pool_data.clone()), (pool_id_b, pool_data.clone())]),
             BTreeMap::from([(pool_id_a, pool_balance_a), (pool_id_b, pool_balance_b)]),
-            BTreeMap::from([(pool_id_a, pledged_amount), (pool_id_b, pledged_amount)]),
             BTreeMap::from([
                 ((pool_id_a, delegation_a_1), delegation_a_1_amount),
                 ((pool_id_b, delegation_b_1), delegation_b_1_amount),
@@ -307,14 +314,10 @@ mod tests {
         let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
 
         let expected_store = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id_a, pool_data.clone()), (pool_id_b, pool_data)]),
+            BTreeMap::from([(pool_id_a, expected_pool_data_a), (pool_id_b, pool_data)]),
             BTreeMap::from([
                 (pool_id_a, (pool_balance_a + reward).unwrap()),
                 (pool_id_b, pool_balance_b),
-            ]),
-            BTreeMap::from([
-                (pool_id_a, (pledged_amount + expected_owner_reward).unwrap()),
-                (pool_id_b, pledged_amount),
             ]),
             BTreeMap::from([
                 (
@@ -411,7 +414,6 @@ mod tests {
         let store = InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, original_pool_balance)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([
                 ((pool_id, delegation_id_1), delegation_id_1_amount),
                 ((pool_id, delegation_id_2), delegation_id_2_amount),
@@ -458,6 +460,7 @@ mod tests {
         }
     }
 
+    // Check that if delegation is present but its balance is 0 then all the reward goes to pool owner
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -478,18 +481,25 @@ mod tests {
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
-            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
+            vrf_pk.clone(),
+            mpt,
+            cost_per_block,
+        );
+        let expected_pool_data = PoolData::new(
+            Destination::AnyoneCanSpend,
+            (pledged_amount + reward).unwrap(),
+            vrf_pk,
             mpt,
             cost_per_block,
         );
 
         let mut store = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, pool_data.clone())]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, original_pool_balance)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([((pool_id, delegation_id), delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_data.clone())]),
@@ -501,9 +511,8 @@ mod tests {
         distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
 
         let expected_store = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, pool_data)]),
+            BTreeMap::from([(pool_id, expected_pool_data)]),
             BTreeMap::from([(pool_id, (original_pool_balance + reward).unwrap())]),
-            BTreeMap::from([(pool_id, (pledged_amount + reward).unwrap())]),
             BTreeMap::from([((pool_id, delegation_id), delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_data)]),
@@ -515,6 +524,7 @@ mod tests {
         assert_eq!(store, expected_store);
     }
 
+    // Check that pool owner can set its reward to 100% and the reward goes entirely to the owner
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
@@ -535,19 +545,25 @@ mod tests {
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
             pledged_amount,
-            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
+            vrf_pk.clone(),
             mpt,
             cost_per_block,
         );
-        let expected_owner_reward = calculate_pool_owner_reward(reward, &pool_data).unwrap();
+        let expected_pool_data = PoolData::new(
+            Destination::AnyoneCanSpend,
+            (pledged_amount + reward).unwrap(),
+            vrf_pk,
+            mpt,
+            cost_per_block,
+        );
 
         let mut store = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, pool_data.clone())]),
+            BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, original_pool_balance)]),
-            BTreeMap::from([(pool_id, pledged_amount)]),
             BTreeMap::from([((pool_id, delegation_id), delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_data.clone())]),
@@ -559,9 +575,8 @@ mod tests {
         distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
 
         let expected_store = InMemoryPoSAccounting::from_values(
-            BTreeMap::from([(pool_id, pool_data)]),
+            BTreeMap::from([(pool_id, expected_pool_data)]),
             BTreeMap::from([(pool_id, (original_pool_balance + reward).unwrap())]),
-            BTreeMap::from([(pool_id, (pledged_amount + expected_owner_reward).unwrap())]),
             BTreeMap::from([((pool_id, delegation_id), delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_data)]),

@@ -99,7 +99,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadTip for Store {
         fn get_pool_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_tip(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_tip(
             &self,
             delegation_id: DelegationId,
@@ -122,7 +121,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadSealed for Store {
         fn get_pool_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_sealed(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_sealed(
             &self,
             delegation_id: DelegationId,
@@ -207,9 +205,6 @@ mockall::mock! {
         fn set_pool_data_tip(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
         fn del_pool_data_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
-        fn set_pool_owner_balance_tip(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
-        fn del_pool_owner_balance_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
-
         fn set_delegation_balance_tip(
             &mut self,
             delegation_target: DelegationId,
@@ -243,9 +238,6 @@ mockall::mock! {
 
         fn set_pool_data_sealed(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
         fn del_pool_data_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
-
-        fn set_pool_owner_balance_sealed(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
-        fn del_pool_owner_balance_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
         fn set_delegation_balance_sealed(
             &mut self,
@@ -346,7 +338,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadTip for StoreTxRo {
         fn get_pool_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_tip(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_tip(
             &self,
             delegation_id: DelegationId,
@@ -369,7 +360,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadSealed for StoreTxRo {
         fn get_pool_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_sealed(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_sealed(
             &self,
             delegation_id: DelegationId,
@@ -455,7 +445,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadTip for StoreTxRw {
         fn get_pool_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_tip(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_tip(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_tip(
             &self,
             delegation_id: DelegationId,
@@ -478,7 +467,6 @@ mockall::mock! {
     impl PoSAccountingStorageReadSealed for StoreTxRw {
         fn get_pool_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_pool_data_sealed(&self, pool_id: PoolId) -> crate::Result<Option<PoolData>>;
-        fn get_pool_owner_balance_sealed(&self, pool_id: PoolId) -> crate::Result<Option<Amount>>;
         fn get_delegation_balance_sealed(
             &self,
             delegation_id: DelegationId,
@@ -564,9 +552,6 @@ mockall::mock! {
         fn set_pool_data_tip(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
         fn del_pool_data_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
-        fn set_pool_owner_balance_tip(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
-        fn del_pool_owner_balance_tip(&mut self, pool_id: PoolId) -> crate::Result<()>;
-
         fn set_delegation_balance_tip(
             &mut self,
             delegation_target: DelegationId,
@@ -600,9 +585,6 @@ mockall::mock! {
 
         fn set_pool_data_sealed(&mut self, pool_id: PoolId, pool_data: &PoolData) -> crate::Result<()>;
         fn del_pool_data_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
-
-        fn set_pool_owner_balance_sealed(&mut self, pool_id: PoolId, amount: Amount) -> crate::Result<()>;
-        fn del_pool_owner_balance_sealed(&mut self, pool_id: PoolId) -> crate::Result<()>;
 
         fn set_delegation_balance_sealed(
             &mut self,

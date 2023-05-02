@@ -477,17 +477,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
     }
 
-    fn get_stake_pool_owner_balance(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<Amount>, ChainstateError> {
-        self.chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
-            .get_pool_owner_balance(pool_id)
-            .map_err(|e| ChainstateError::ProcessBlockError(e.into()))
-    }
-
     fn get_stake_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
@@ -571,17 +560,18 @@ fn get_output_coin_amount(
         }
         TxOutput::StakePool(data) => Some(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let staker_balance = pos_accounting_view
-                .get_pool_owner_balance(*pool_id)
+            let pledge_amount = pos_accounting_view
+                .get_pool_data(*pool_id)
                 .map_err(|_| {
                     ChainstateError::FailedToReadProperty(
-                        PropertyQueryError::StakerBalanceNotFound(*pool_id),
+                        PropertyQueryError::StakePoolDataNotFound(*pool_id),
                     )
                 })?
                 .ok_or(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::StakerBalanceNotFound(*pool_id),
-                ))?;
-            Some(staker_balance)
+                    PropertyQueryError::StakePoolDataNotFound(*pool_id),
+                ))?
+                .pledge_amount();
+            Some(pledge_amount)
         }
         TxOutput::DecommissionPool(v, _, _, _) => Some(*v),
     };

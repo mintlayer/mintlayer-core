@@ -39,11 +39,6 @@ pub trait PoSAccountingStorageRead<Tag: StorageTag = DefaultStorageTag> {
 
     fn get_pool_data(&self, pool_id: PoolId) -> Result<Option<PoolData>, storage_result::Error>;
 
-    fn get_pool_owner_balance(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<Amount>, storage_result::Error>;
-
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
@@ -76,14 +71,6 @@ pub trait PoSAccountingStorageWrite<Tag: StorageTag = DefaultStorageTag>:
     ) -> Result<(), storage_result::Error>;
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
-
-    fn set_pool_owner_balance(
-        &mut self,
-        pool_id: PoolId,
-        amount: Amount,
-    ) -> Result<(), storage_result::Error>;
-
-    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error>;
 
     fn set_pool_data(
         &mut self,
@@ -143,13 +130,6 @@ where
         self.deref().get_pool_data(pool_id)
     }
 
-    fn get_pool_owner_balance(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<Amount>, storage_result::Error> {
-        self.deref().get_pool_owner_balance(pool_id)
-    }
-
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
@@ -196,18 +176,6 @@ where
 
     fn del_pool_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error> {
         self.deref_mut().del_pool_balance(pool_id)
-    }
-
-    fn set_pool_owner_balance(
-        &mut self,
-        pool_id: PoolId,
-        amount: Amount,
-    ) -> Result<(), storage_result::Error> {
-        self.deref_mut().set_pool_owner_balance(pool_id, amount)
-    }
-
-    fn del_pool_owner_balance(&mut self, pool_id: PoolId) -> Result<(), storage_result::Error> {
-        self.deref_mut().del_pool_owner_balance(pool_id)
     }
 
     fn set_pool_data(

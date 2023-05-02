@@ -192,7 +192,6 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                             [(pool_id_a, DataDelta::new(None, None))].into_iter(),
                         ),
                         pool_balances: DeltaAmountCollection::new(),
-                        pool_owner_balances: DeltaAmountCollection::new(),
                         pool_delegation_shares: DeltaAmountCollection::new(),
                         delegation_balances: DeltaAmountCollection::new(),
                         delegation_data: DeltaDataCollection::new(),

@@ -134,13 +134,6 @@ impl PoSAccountingView for InMemoryStorageWrapper {
         PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_data(pool_id)
     }
 
-    fn get_pool_owner_balance(
-        &self,
-        pool_id: PoolId,
-    ) -> Result<Option<Amount>, pos_accounting::Error> {
-        PoSAccountingDB::<_, TipStorageTag>::new(&self.storage).get_pool_owner_balance(pool_id)
-    }
-
     fn get_delegation_balance(
         &self,
         delegation_id: DelegationId,
