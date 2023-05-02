@@ -21,7 +21,6 @@ mod commands;
 mod config;
 mod console;
 mod errors;
-mod log;
 mod repl;
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
@@ -30,6 +29,7 @@ use clap::Parser;
 use common::chain::config::ChainType;
 use config::WalletCliArgs;
 use console::ConsoleContext;
+use crossterm::tty::IsTty;
 use errors::WalletCliError;
 use tokio::sync::mpsc;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
@@ -37,10 +37,23 @@ use wallet_controller::cookie::load_cookie;
 
 const COOKIE_FILENAME: &str = ".cookie";
 
-async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
-    let printer = log::init();
+enum Mode {
+    Interactive {
+        printer: reedline::ExternalPrinter<String>,
+    },
+    NonInteractive,
+}
 
+async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     let args = config::WalletCliArgs::parse();
+
+    let mode = if std::io::stdin().is_tty() {
+        let printer = repl::interactive::log::init();
+        Mode::Interactive { printer }
+    } else {
+        repl::non_interactive::log::init();
+        Mode::NonInteractive
+    };
 
     let WalletCliArgs {
         network,
@@ -97,21 +110,18 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
 
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
+    // Run a blocking loop in a separate thread
     let output_copy = output.clone();
-    let repl_command = repl::get_repl_command();
-    let create_line_editor =
-        repl::create_line_editor(printer, repl_command.clone(), output, &data_dir, vi_mode)?;
-
-    let repl_handle = std::thread::spawn(move || {
-        // Run a blocking loop in a separate thread
-        repl::run(create_line_editor, repl_command, event_tx, &output_copy);
+    let repl_handle = std::thread::spawn(move || match mode {
+        Mode::Interactive { printer } => {
+            repl::interactive::run(&output_copy, event_tx, printer, &data_dir, vi_mode)
+        }
+        Mode::NonInteractive => repl::non_interactive::run(&output_copy, event_tx),
     });
 
     cli_event_loop::run(controller, event_rx).await;
 
-    repl_handle.join().expect("Should not panic");
-
-    Ok(())
+    repl_handle.join().expect("Should not panic")
 }
 
 #[tokio::main]
