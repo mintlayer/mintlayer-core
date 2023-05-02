@@ -3589,6 +3589,7 @@ name = "node-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chainstate",
  "common",
  "iced",
  "iced_aw",
@@ -3596,6 +3597,7 @@ dependencies = [
  "node-lib",
  "subsystem",
  "tokio",
+ "utils",
 ]
 
 [[package]]

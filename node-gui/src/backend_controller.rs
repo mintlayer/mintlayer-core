@@ -86,6 +86,10 @@ impl NodeBackendController {
     pub fn chain_config(&self) -> &ChainConfig {
         self.chain_config.as_ref()
     }
+
+    pub fn node(&self) -> &NodeController {
+        &self.controller
+    }
 }
 
 // TODO: tests, especially startup and shutdown
