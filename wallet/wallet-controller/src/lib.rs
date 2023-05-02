@@ -19,7 +19,11 @@ pub mod cookie;
 pub mod mnemonic;
 mod sync;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use chainstate::ChainInfo;
 use common::{
@@ -40,6 +44,10 @@ const BLOCK_SYNC_ENABLED: bool = false;
 pub enum ControllerError<T: NodeInterface> {
     #[error("Node call error: {0}")]
     NodeCallError(T::Error),
+    #[error("Wallet file {0} error: {0}")]
+    WalletFileError(PathBuf, String),
+    #[error("Wallet error: {0}")]
+    WalletError(wallet::wallet::WalletError),
 }
 
 pub struct Controller<T: NodeInterface> {
@@ -179,6 +187,52 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
+    pub fn create_wallet(
+        &mut self,
+        file_path: impl AsRef<Path>,
+        mnemonic: mnemonic::Mnemonic,
+        passphrase: Option<&str>,
+    ) -> Result<(), ControllerError<T>> {
+        utils::ensure!(
+            !file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File already exists".to_owned()
+            )
+        );
+
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::new_wallet(
+            Arc::clone(&self.chain_config),
+            db,
+            &mnemonic.to_string(),
+            passphrase,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        self.add_wallet(wallet);
+        Ok(())
+    }
+
+    pub fn open_wallet(&mut self, file_path: impl AsRef<Path>) -> Result<(), ControllerError<T>> {
+        utils::ensure!(
+            file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File does not exist".to_owned()
+            )
+        );
+
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::load_wallet(Arc::clone(&self.chain_config), db)
+            .map_err(ControllerError::WalletError)?;
+
+        self.add_wallet(wallet);
+        Ok(())
+    }
+
     pub fn add_wallet(&mut self, wallet: DefaultWallet) {
         let block_sync = sync::BlockSyncing::new(
             sync::BlockSyncingConfig::default(),
@@ -188,7 +242,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wds.push(WalletData { wallet, block_sync })
     }
 
-    pub fn del_wallet(&mut self, index: usize) {
+    pub fn remove_wallet(&mut self, index: usize) {
         self.wds.remove(index);
     }
 

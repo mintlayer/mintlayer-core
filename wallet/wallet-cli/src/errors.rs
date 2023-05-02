@@ -22,8 +22,6 @@ use wallet_controller::NodeRpcClient;
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
     Controller(wallet_controller::ControllerError<NodeRpcClient>),
-    #[error("Wallet error: {0}")]
-    WalletError(wallet::wallet::WalletError),
     #[error("History file {0} I/O error: {1}")]
     HistoryFileError(PathBuf, std::io::Error),
     #[error(
@@ -46,8 +44,4 @@ pub enum WalletCliError {
     WalletFileAlreadyOpen,
     #[error("No wallet file is opened")]
     NoWalletIsOpened,
-    #[error("File {0} already exists")]
-    FileAlreadyExists(PathBuf),
-    #[error("File {0} does not exist")]
-    FileDoesNotExist(PathBuf),
 }

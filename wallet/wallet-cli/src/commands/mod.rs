@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
 use common::primitives::{BlockHeight, H256};
 use serialization::hex::HexEncode;
-use wallet::Wallet;
 use wallet_controller::{PeerId, RpcController};
 
 use crate::errors::WalletCliError;
@@ -148,10 +147,6 @@ pub async fn handle_wallet_command(
                 controller.wallets_len() == 0,
                 WalletCliError::WalletFileAlreadyOpen
             );
-            utils::ensure!(
-                !wallet_path.exists(),
-                WalletCliError::FileAlreadyExists(wallet_path.clone())
-            );
 
             // TODO: Support other languages
             let language = wallet::wallet::Language::English;
@@ -162,16 +157,9 @@ pub async fn handle_wallet_command(
                 None => wallet_controller::mnemonic::generate_new_mnemonic(language),
             };
 
-            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
-                .map_err(WalletCliError::WalletError)?;
-            let wallet = Wallet::new_wallet(
-                Arc::clone(controller.chain_config()),
-                db,
-                &mnemonic.to_string(),
-                None,
-            )
-            .map_err(WalletCliError::WalletError)?;
-            controller.add_wallet(wallet);
+            controller
+                .create_wallet(wallet_path, mnemonic.clone(), None)
+                .map_err(WalletCliError::Controller)?;
 
             let msg = if need_mnemonic_backup {
                 format!(
@@ -188,16 +176,8 @@ pub async fn handle_wallet_command(
                 controller.wallets_len() == 0,
                 WalletCliError::WalletFileAlreadyOpen
             );
-            utils::ensure!(
-                wallet_path.exists(),
-                WalletCliError::FileDoesNotExist(wallet_path.clone())
-            );
 
-            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
-                .map_err(WalletCliError::WalletError)?;
-            let wallet = Wallet::load_wallet(Arc::clone(controller.chain_config()), db)
-                .map_err(WalletCliError::WalletError)?;
-            controller.add_wallet(wallet);
+            controller.open_wallet(wallet_path).map_err(WalletCliError::Controller)?;
 
             Ok(ConsoleCommand::Print(
                 "Wallet loaded successfully".to_owned(),
@@ -209,7 +189,7 @@ pub async fn handle_wallet_command(
                 controller.wallets_len() != 0,
                 WalletCliError::NoWalletIsOpened
             );
-            controller.del_wallet(0);
+            controller.remove_wallet(0);
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
