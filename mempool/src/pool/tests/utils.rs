@@ -17,6 +17,17 @@ use common::chain::tokens::OutputValue;
 use common::chain::OutPoint;
 use common::primitives::H256;
 
+// Re-export various testing utils from other crates
+pub use chainstate_test_framework::{
+    anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
+};
+pub use logging::log;
+pub use rstest::rstest;
+pub use test_utils::{
+    mock_time_getter::mocked_time_getter_seconds,
+    random::{make_seedable_rng, Seed},
+};
+
 use super::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]

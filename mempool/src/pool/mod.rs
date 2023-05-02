@@ -49,6 +49,7 @@ use self::fee::Fee;
 
 pub mod fee;
 mod feerate;
+mod reorg;
 mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
@@ -75,28 +76,19 @@ pub struct Mempool<M> {
     tx_verifier: tx_verifier::TransactionVerifier,
 }
 
-impl<M> std::fmt::Debug for Mempool<M>
-where
-    M: GetMemoryUsage + 'static + Send + Sync,
-{
+impl<M> std::fmt::Debug for Mempool<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.store)
     }
 }
 
-impl<M> GetMemoryUsage for Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> GetMemoryUsage for Mempool<M> {
     fn get_memory_usage(&self) -> usize {
         self.memory_usage_estimator.get_memory_usage()
     }
 }
 
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M> Mempool<M> {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
@@ -128,13 +120,28 @@ where
     pub fn chainstate_handle(&self) -> &subsystem::Handle<Box<dyn ChainstateInterface>> {
         &self.chainstate_handle
     }
+
+    pub fn blocking_chainstate_handle(
+        &self,
+    ) -> subsystem::blocking::BlockingHandle<Box<dyn ChainstateInterface>> {
+        subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone())
+    }
+
+    // Reset the mempool state, returning the list of transactions previously stored in mempool
+    fn reset(&mut self) -> impl Iterator<Item = SignedTransaction> {
+        // Discard the old tx verifier and replace it with a fresh one
+        self.tx_verifier = tx_verifier::create(
+            self.chain_config.shallow_clone(),
+            self.chainstate_handle.shallow_clone(),
+        );
+
+        // Clear the store, returning the list of transacitons it contained previously
+        std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+    }
 }
 
 // Rolling-fee-related methods
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> Mempool<M> {
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
         if mem_usage < self.max_size / 4 {
@@ -200,10 +207,7 @@ where
 }
 
 // Entry Creation
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M> Mempool<M> {
     fn create_entry(&self, tx: TxWithFee) -> Result<TxMempoolEntry, MempoolPolicyError> {
         let (tx, fee) = tx.into_tx_and_fee();
 
@@ -229,10 +233,7 @@ where
 }
 
 // Transaction Validation
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> Mempool<M> {
     fn validate_transaction(
         &self,
         tx: SignedTransaction,
@@ -285,8 +286,7 @@ where
         &self,
         tx: SignedTransaction,
     ) -> Result<(TxWithFee, TransactionVerifierDelta), TxValidationError> {
-        let chainstate_handle =
-            subsystem::blocking::BlockingHandle::new(self.chainstate_handle().shallow_clone());
+        let chainstate_handle = self.blocking_chainstate_handle();
 
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
             let (tip, current_best) = chainstate_handle.call(|chainstate| {
@@ -413,10 +413,7 @@ where
 }
 
 // RBF checks
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> Mempool<M> {
     fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
             .conflicting_tx_ids(tx.tx())
@@ -574,10 +571,7 @@ where
 }
 
 // Transaction Finalization
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> Mempool<M> {
     fn finalize_tx(&mut self, tx: TxWithFee) -> Result<(), Error> {
         let entry = self.create_entry(tx)?;
         let id = entry.tx_id();
@@ -671,10 +665,7 @@ where
 }
 
 // Mempool Interface and Event Reactions
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M: GetMemoryUsage> Mempool<M> {
     pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
         log::debug!("Adding transaction {:?}", tx.transaction().get_id());
         log::trace!("Adding transaction {tx:?}");
@@ -752,29 +743,10 @@ where
     }
 
     pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
+        log::info!("new tip: block {block_id:?} height {block_height:?}");
+        reorg::handle_new_tip(self, block_id)
         // TODO: turn on mempool new tip broadcasts when ready
         // self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
-
-        log::info!("new tip with block_id {block_id:?} and block_height {block_height:?}");
-
-        self.rolling_fee_rate.write().set_block_since_last_rolling_fee_bump(true);
-
-        // Take all the mempool previous transactions
-        let old_store = std::mem::replace(&mut self.store, MempoolStore::new());
-
-        // Discard the old tx verifier and replace it with a fresh one
-        self.tx_verifier = tx_verifier::create(
-            self.chain_config.shallow_clone(),
-            self.chainstate_handle.shallow_clone(),
-        );
-
-        // Re-populate the verifier with transactions
-        for tx in old_store.into_transactions() {
-            let tx_id = tx.transaction().get_id();
-            if let Err(e) = self.add_transaction(tx) {
-                log::trace!("Evicting {tx_id} from mempool: {e:?}")
-            }
-        }
     }
 }
 
