@@ -14,15 +14,19 @@
 // limitations under the License.
 
 mod backend_controller;
+mod main_window;
 
 use std::ops::DerefMut;
 
 use backend_controller::NodeBackendController;
 use iced::futures::TryFutureExt;
 use iced::widget::{column, container, text};
-use iced::{alignment, Subscription};
+use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
+use main_window::main_menu::MenuMessage;
+use main_window::main_widget::MainWidgetMessage;
+use main_window::MainWindow;
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -35,15 +39,17 @@ pub fn main() -> iced::Result {
 
 enum MintlayerNodeGUI {
     Loading,
-    Loaded(NodeBackendController),
+    Loaded(NodeBackendController, MainWindow),
     IntializationError(String),
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     Loaded(Result<NodeBackendController, String>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
+    MenuMessage(MenuMessage),
+    MainWidgetMessage(MainWidgetMessage),
 }
 
 fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
@@ -80,7 +86,7 @@ impl Application for MintlayerNodeGUI {
     fn title(&self) -> String {
         match self {
             MintlayerNodeGUI::Loading => ("Mintlayer Node - Loading...").to_string(),
-            MintlayerNodeGUI::Loaded(d) => {
+            MintlayerNodeGUI::Loaded(d, _w) => {
                 format!("Mintlayer Node - {}", d.chain_config().chain_type().name())
             }
             MintlayerNodeGUI::IntializationError(_) => "Mintlayer initialization error".to_string(),
@@ -91,7 +97,8 @@ impl Application for MintlayerNodeGUI {
         match self {
             MintlayerNodeGUI::Loading => match message {
                 Message::Loaded(Ok(controller)) => {
-                    *self = MintlayerNodeGUI::Loaded(controller);
+                    *self =
+                        MintlayerNodeGUI::Loaded(controller.clone(), MainWindow::new(controller));
                     Command::none()
                 }
                 Message::Loaded(Err(e)) => {
@@ -107,8 +114,10 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => Command::none(),
+                Message::MenuMessage(_) => Command::none(),
+                Message::MainWidgetMessage(_) => Command::none(),
             },
-            MintlayerNodeGUI::Loaded(ref mut controller) => match message {
+            MintlayerNodeGUI::Loaded(ref mut controller, ref mut w) => match message {
                 Message::Loaded(_) => unreachable!("Already loaded"),
                 Message::EventOccurred(event) => {
                     if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
@@ -119,6 +128,12 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
+                Message::MenuMessage(menu_msg) => {
+                    w.main_menu.update(menu_msg).map(Message::MenuMessage)
+                }
+                Message::MainWidgetMessage(main_widget_msg) => {
+                    w.main_widget.update(main_widget_msg).map(Message::MainWidgetMessage)
+                }
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::Loaded(_) => Command::none(),
@@ -130,6 +145,8 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
+                Message::MenuMessage(_) => Command::none(),
+                Message::MainWidgetMessage(_) => Command::none(),
             },
         }
     }
@@ -140,24 +157,7 @@ impl Application for MintlayerNodeGUI {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerNodeGUI::Loaded(state) => {
-                let main_widget = text(&format!(
-                    "Genesis block: {}",
-                    state.chain_config().genesis_block_id(),
-                ))
-                .width(Length::Fill)
-                .size(25)
-                .horizontal_alignment(alignment::Horizontal::Center)
-                .vertical_alignment(alignment::Vertical::Center);
-
-                let window_contents = column![main_widget];
-
-                container(window_contents)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .center_y()
-                    .into()
-            }
+            MintlayerNodeGUI::Loaded(state, w) => w.view(state),
 
             MintlayerNodeGUI::IntializationError(e) => {
                 let error_box = column![
@@ -180,7 +180,7 @@ impl Application for MintlayerNodeGUI {
     }
 
     fn theme(&self) -> Self::Theme {
-        Theme::Dark
+        Theme::Light
     }
 
     fn subscription(&self) -> Subscription<Message> {
