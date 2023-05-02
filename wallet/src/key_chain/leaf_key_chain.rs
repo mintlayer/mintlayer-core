@@ -21,7 +21,7 @@ use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::PublicKey;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 use storage::Backend;
@@ -54,10 +54,10 @@ pub struct LeafKeyChain {
     derived_public_keys: BTreeMap<ChildNumber, ExtendedPublicKey>,
 
     /// All the public key that this key chain holds
-    public_keys: BTreeSet<PublicKey>,
+    public_key_to_index: BTreeMap<PublicKey, ChildNumber>,
 
     /// All the public key hashes that this key chain holds
-    public_key_hashes: BTreeSet<PublicKeyHash>,
+    public_key_hash_to_index: BTreeMap<PublicKeyHash, ChildNumber>,
 
     /// The usage state of this key chain
     usage_state: KeychainUsageState,
@@ -81,8 +81,8 @@ impl LeafKeyChain {
             parent_pubkey,
             addresses: BTreeMap::new(),
             derived_public_keys: BTreeMap::new(),
-            public_keys: BTreeSet::new(),
-            public_key_hashes: BTreeSet::new(),
+            public_key_to_index: BTreeMap::new(),
+            public_key_hash_to_index: BTreeMap::new(),
             usage_state: KeychainUsageState::default(),
             lookahead_size,
         }
@@ -101,16 +101,14 @@ impl LeafKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<Self> {
         // TODO optimize for database structure
-        let mut public_key_hashes = BTreeSet::new();
-        for address in addresses.values() {
-            let pkh = PublicKeyHash::try_from(address.data(&chain_config)?)?;
-            public_key_hashes.insert(pkh);
-        }
-
-        let mut public_keys = BTreeSet::new();
-        for xpub in derived_public_keys.values() {
-            public_keys.insert(xpub.clone().into_public_key());
-        }
+        let public_keys_to_index: BTreeMap<PublicKey, ChildNumber> = derived_public_keys
+            .iter()
+            .map(|(idx, xpub)| (xpub.clone().into_public_key(), *idx))
+            .collect();
+        let public_key_hashes_to_index: BTreeMap<PublicKeyHash, ChildNumber> = public_keys_to_index
+            .iter()
+            .map(|(pk, idx)| (PublicKeyHash::from(pk), *idx))
+            .collect();
 
         Ok(Self {
             chain_config,
@@ -119,8 +117,8 @@ impl LeafKeyChain {
             parent_pubkey,
             addresses,
             derived_public_keys,
-            public_keys,
-            public_key_hashes,
+            public_key_to_index: public_keys_to_index,
+            public_key_hash_to_index: public_key_hashes_to_index,
             usage_state,
             lookahead_size,
         })
@@ -346,8 +344,8 @@ impl LeafKeyChain {
         // Add key and address the maps
         self.derived_public_keys.insert(key_index, derived_key.clone());
         self.addresses.insert(key_index, address);
-        self.public_keys.insert(public_key);
-        self.public_key_hashes.insert(public_key_hash);
+        self.public_key_to_index.insert(public_key, key_index);
+        self.public_key_hash_to_index.insert(public_key_hash, key_index);
 
         Ok(derived_key)
     }
@@ -435,24 +433,34 @@ impl LeafKeyChain {
     }
 
     pub fn is_public_key_mine(&self, public_key: &PublicKey) -> bool {
-        self.public_keys.contains(public_key)
+        self.public_key_to_index.contains_key(public_key)
     }
 
     pub fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool {
-        self.public_key_hashes.contains(pubkey_hash)
+        self.public_key_hash_to_index.contains_key(pubkey_hash)
+    }
+
+    /// Get the extended public key provided a public key or None if no key found
+    pub fn get_xpub_from_public_key(&self, pub_key: &PublicKey) -> Option<&ExtendedPublicKey> {
+        self.derived_public_keys.get(self.public_key_to_index.get(pub_key)?)
+    }
+
+    /// Get the extended public key provided a public key hash or None if no key found
+    pub fn get_xpub_from_public_key_hash(&self, pkh: &PublicKeyHash) -> Option<&ExtendedPublicKey> {
+        self.derived_public_keys.get(self.public_key_hash_to_index.get(pkh)?)
     }
 
     /// Mark a specific key as used in the key pool. This will update the last used key index if
     /// necessary. Returns false if a key was found and set to used.
-    pub fn mark_key_pool_pubkey_as_used<B: Backend>(
+    pub fn mark_extended_pubkey_as_used<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        public_key: &ExtendedPublicKey,
+        extended_public_key: &ExtendedPublicKey,
     ) -> KeyChainResult<bool> {
         // Check if public key is in the key pool
-        if self.is_pubkey_mine_in_key_pool(public_key) {
+        if self.is_pubkey_mine_in_key_pool(extended_public_key) {
             // Get the key index of the public key, this should always be Some
-            let key_index = public_key.get_derivation_path().as_slice().last()
+            let key_index = extended_public_key.get_derivation_path().as_slice().last()
                 .expect("The provided public key belongs to this key chain, hence it should always have a key index");
             self.usage_state.set_last_used(Some(*key_index));
             db_tx.set_keychain_usage_state(
@@ -462,6 +470,32 @@ impl LeafKeyChain {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    pub fn mark_pubkey_as_used<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        public_key: &PublicKey,
+    ) -> KeyChainResult<bool> {
+        if let Some(xpub) = self.get_xpub_from_public_key(public_key) {
+            // TODO maybe refactor code to remove this clone()
+            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone())
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn mark_pub_key_hash_as_used<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        public_key_hash: &PublicKeyHash,
+    ) -> KeyChainResult<bool> {
+        if let Some(xpub) = self.get_xpub_from_public_key_hash(public_key_hash) {
+            // TODO maybe refactor code to remove this clone()
+            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone())
+        } else {
+            Ok(false)
+        }
     }
 
     /// Get the index of the last used key or None if no key is used

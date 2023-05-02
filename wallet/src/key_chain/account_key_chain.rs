@@ -247,14 +247,28 @@ impl AccountKeyChain {
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
-    pub fn mark_as_used<B: Backend>(
+    pub fn mark_public_key_as_used<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        public_key: &ExtendedPublicKey,
+        public_key: &PublicKey,
     ) -> KeyChainResult<bool> {
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
-            if leaf_keys.mark_key_pool_pubkey_as_used(db_tx, public_key)? {
+            if leaf_keys.mark_pubkey_as_used(db_tx, public_key)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn mark_public_key_hash_as_used<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        pub_key_hash: &PublicKeyHash,
+    ) -> KeyChainResult<bool> {
+        for purpose in KeyPurpose::ALL {
+            let leaf_keys = self.get_leaf_key_chain_mut(purpose);
+            if leaf_keys.mark_pub_key_hash_as_used(db_tx, pub_key_hash)? {
                 return Ok(true);
             }
         }

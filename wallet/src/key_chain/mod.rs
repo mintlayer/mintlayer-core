@@ -336,7 +336,9 @@ mod tests {
         let mut issued_key = key_chain.issue_key(&mut db_tx, purpose).unwrap();
 
         // Mark the last key as used
-        assert!(key_chain.mark_as_used(&mut db_tx, &issued_key).unwrap());
+        assert!(key_chain
+            .mark_public_key_as_used(&mut db_tx, &issued_key.clone().into_public_key())
+            .unwrap());
 
         {
             let leaf_keys = key_chain.get_leaf_key_chain(purpose);
@@ -358,7 +360,9 @@ mod tests {
         }
 
         // Mark the last key as used
-        assert!(key_chain.mark_as_used(&mut db_tx, &issued_key).unwrap());
+        assert!(key_chain
+            .mark_public_key_as_used(&mut db_tx, &issued_key.into_public_key())
+            .unwrap());
 
         {
             let leaf_keys = key_chain.get_leaf_key_chain(purpose);
