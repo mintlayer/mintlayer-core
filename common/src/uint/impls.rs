@@ -1090,4 +1090,29 @@ mod tests {
             UintConversionError::ConversionOverflow
         );
     }
+
+    #[test]
+    pub fn uint128_from_uint256_simple() {
+        assert_eq!(1u128, u128::try_from(Uint256::ONE).unwrap());
+
+        let a = u128::from_str_radix("FB00000000000000FA", 16).unwrap();
+        let b = Uint256([0xFA, 0xFB, 0x00, 0x00]);
+        assert_eq!(u128::try_from(b).unwrap(), a);
+
+        let a = u128::MAX;
+        let b = Uint256([u64::MAX, u64::MAX, 0x00, 0x00]);
+        assert_eq!(u128::try_from(b).unwrap(), a);
+
+        let a = Uint256::from(u128::MAX) + Uint256::ONE;
+        assert_eq!(
+            u128::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
+
+        let a = Uint256::MAX;
+        assert_eq!(
+            u128::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
+    }
 }

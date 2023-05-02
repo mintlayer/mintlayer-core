@@ -17,6 +17,7 @@ pos_accounting = {path = '../../pos_accounting'}
 utils = {path = '../../utils'}
 utxo = {path = '../../utxo'}
 
+static_assertions.workspace = true
 thiserror.workspace = true
 fallible-iterator = "0.2"
 replace_with = "0.1"

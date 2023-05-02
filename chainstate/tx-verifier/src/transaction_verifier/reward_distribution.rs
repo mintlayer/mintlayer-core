@@ -13,19 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
 use crate::{error::ConnectTransactionError, TransactionSource};
 
 use common::{
     chain::{Block, DelegationId, PoolId},
-    primitives::{Amount, Id},
-    Uint256,
+    primitives::{amount::UnsignedIntType, Amount, Id},
+    Uint128, Uint256,
 };
 use pos_accounting::{
     AccountingBlockRewardUndo, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
     PoolData,
 };
+use utils::ensure;
 
 use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
 
@@ -58,19 +60,14 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         ),
     )?;
 
-    let delegation_undos = if total_delegations_reward != Amount::ZERO {
-        distribute_delegations_pos_reward(
-            accounting_adapter,
-            block_id,
-            pool_id,
-            total_delegations_reward,
-        )?
-    } else {
-        None
-    };
+    let delegation_undos = distribute_delegations_pos_reward(
+        accounting_adapter,
+        block_id,
+        pool_id,
+        total_delegations_reward,
+    )?;
 
     let undos = delegation_undos
-        .unwrap_or_default()
         .into_iter()
         .chain(vec![increase_pool_balance_undo].into_iter())
         .collect();
@@ -91,11 +88,13 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     block_id: Id<Block>,
     pool_id: PoolId,
     total_delegations_reward: Amount,
-) -> Result<Option<Vec<PoSAccountingUndo>>, ConnectTransactionError> {
-    accounting_adapter
-        .accounting_delta()
-        .get_pool_delegations_shares(pool_id)?
-        .map(|delegation_shares| {
+) -> Result<Vec<PoSAccountingUndo>, ConnectTransactionError> {
+    if total_delegations_reward == Amount::ZERO {
+        return Ok(Vec::new());
+    }
+
+    match accounting_adapter.accounting_delta().get_pool_delegations_shares(pool_id)? {
+        Some(delegation_shares) => {
             let total_delegations_balance =
                 delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
                     (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
@@ -103,10 +102,10 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
                     ))
                 })?;
 
-            if total_delegations_balance != Amount::ZERO {
+            if total_delegations_balance > Amount::ZERO {
                 let rewards_per_delegation = calculate_rewards_per_delegation(
                     &delegation_shares,
-                    block_id,
+                    pool_id,
                     total_delegations_balance,
                     total_delegations_reward,
                 )?;
@@ -119,18 +118,18 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
                     &rewards_per_delegation,
                 )?;
 
+                // increase the delegation balances
                 let delegation_undos = rewards_per_delegation
                     .iter()
                     .map(|(delegation_id, reward)| {
                         accounting_adapter
                             .operations(TransactionSource::Chain(block_id))
-                            .delegate_staking(*delegation_id, Amount::from_atoms(*reward))
+                            .delegate_staking(*delegation_id, *reward)
                             .map_err(ConnectTransactionError::PoSAccountingError)
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(distribute_remainder_undo
-                    .unwrap_or_default()
                     .into_iter()
                     .chain(delegation_undos.into_iter())
                     .collect())
@@ -141,16 +140,29 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
                     .increase_pool_pledge_amount(pool_id, total_delegations_reward)?;
                 Ok(vec![increase_pool_balance_undo])
             }
-        })
-        .transpose()
+        }
+        None => {
+            // if no delegations then give the reward to the pool's owner
+            let increase_pool_balance_undo = accounting_adapter
+                .operations(TransactionSource::Chain(block_id))
+                .increase_pool_pledge_amount(pool_id, total_delegations_reward)?;
+            Ok(vec![increase_pool_balance_undo])
+        }
+    }
 }
 
 fn calculate_rewards_per_delegation(
     delegation_shares: &BTreeMap<DelegationId, Amount>,
-    block_id: Id<Block>,
+    pool_id: PoolId,
     total_delegations_balance: Amount,
     total_delegations_reward: Amount,
-) -> Result<Vec<(DelegationId, u128)>, ConnectTransactionError> {
+) -> Result<Vec<(DelegationId, Amount)>, ConnectTransactionError> {
+    assert_eq_size!(Amount, Uint128);
+    ensure!(
+        total_delegations_balance != Amount::ZERO,
+        ConnectTransactionError::TotalDelegationBalanceZero(pool_id)
+    );
+
     let total_delegations_balance = Uint256::from_amount(total_delegations_balance);
     let total_delegations_reward = Uint256::from_amount(total_delegations_reward);
     delegation_shares
@@ -159,10 +171,10 @@ fn calculate_rewards_per_delegation(
             |(delegation_id, balance)| -> Result<_, ConnectTransactionError> {
                 let balance = Uint256::from_amount(*balance);
                 let reward = (total_delegations_reward * balance) / total_delegations_balance;
-                let reward: u128 = reward.try_into().map_err(|_| {
-                    ConnectTransactionError::DelegationRewardOverflow(*delegation_id, block_id)
+                let reward: UnsignedIntType = reward.try_into().map_err(|_| {
+                    ConnectTransactionError::DelegationRewardOverflow(*delegation_id)
                 })?;
-                Ok((*delegation_id, reward))
+                Ok((*delegation_id, Amount::from_atoms(reward)))
             },
         )
         .collect::<Result<Vec<_>, _>>()
@@ -175,13 +187,11 @@ fn distribute_delegations_reward_remainder<P: PoSAccountingView>(
     block_id: Id<Block>,
     pool_id: PoolId,
     total_delegations_reward: Amount,
-    rewards_per_delegation: &[(DelegationId, u128)],
-) -> Result<Option<Vec<PoSAccountingUndo>>, ConnectTransactionError> {
-    let total_delegations_reward_distributed = rewards_per_delegation
-        .iter()
-        .map(|(_, v)| Amount::from_atoms(*v))
-        .try_fold(Amount::ZERO, |acc, v| {
-            (acc + v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
+    rewards_per_delegation: &[(DelegationId, Amount)],
+) -> Result<Vec<PoSAccountingUndo>, ConnectTransactionError> {
+    let total_delegations_reward_distributed =
+        rewards_per_delegation.iter().try_fold(Amount::ZERO, |acc, (_, v)| {
+            (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
                 block_id, pool_id,
             ))
         })?;
@@ -196,14 +206,14 @@ fn distribute_delegations_reward_remainder<P: PoSAccountingView>(
             ),
         )?;
 
-    if delegations_reward_remainder != Amount::ZERO {
+    if delegations_reward_remainder > Amount::ZERO {
         debug_assert!(delegations_reward_remainder == Amount::from_atoms(1));
         let increase_balance_undo = accounting_adapter
             .operations(TransactionSource::Chain(block_id))
             .increase_pool_pledge_amount(pool_id, delegations_reward_remainder)?;
-        Ok(Some(vec![increase_balance_undo]))
+        Ok(vec![increase_balance_undo])
     } else {
-        Ok(None)
+        Ok(Vec::new())
     }
 }
 
@@ -580,6 +590,65 @@ mod tests {
             BTreeMap::from([((pool_id, delegation_id), delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_id_amount)]),
             BTreeMap::from_iter([(delegation_id, delegation_data)]),
+        );
+
+        let (consumed, _) = accounting_adapter.consume();
+        db.batch_write_delta(consumed).unwrap();
+
+        assert_eq!(store, expected_store);
+    }
+
+    // Check that if there are no delegations then the whole reward goes to the pool owner
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn no_delegations(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let block_id = Id::new(H256::random_using(&mut rng));
+        let pool_id = new_pool_id(1);
+
+        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let original_pool_balance = pledged_amount;
+
+        let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
+        let mpt = PerThousand::new(rng.gen_range(0..1000)).unwrap();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let pool_data = PoolData::new(
+            Destination::AnyoneCanSpend,
+            pledged_amount,
+            vrf_pk.clone(),
+            mpt,
+            cost_per_block,
+        );
+        let expected_pool_data = PoolData::new(
+            Destination::AnyoneCanSpend,
+            (pledged_amount + reward).unwrap(),
+            vrf_pk,
+            mpt,
+            cost_per_block,
+        );
+
+        let mut store = InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, pool_data)]),
+            BTreeMap::from([(pool_id, original_pool_balance)]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+
+        let mut db = PoSAccountingDB::new(&mut store);
+        let mut accounting_adapter = PoSAccountingDeltaAdapter::new(&mut db);
+
+        distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
+
+        let expected_store = InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, expected_pool_data)]),
+            BTreeMap::from([(pool_id, (original_pool_balance + reward).unwrap())]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
         );
 
         let (consumed, _) = accounting_adapter.consume();

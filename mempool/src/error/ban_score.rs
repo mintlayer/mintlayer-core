@@ -169,9 +169,10 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 0,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 0,
-            ConnectTransactionError::DelegationRewardOverflow(_, _) => 0,
+            ConnectTransactionError::DelegationRewardOverflow(_) => 0,
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
+            ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
         }
     }
 }
