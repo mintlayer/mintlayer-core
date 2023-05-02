@@ -6446,7 +6446,6 @@ dependencies = [
  "common",
  "crossterm",
  "directories",
- "env_logger",
  "logging",
  "reedline",
  "serialization",

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 pub use log;
 
 pub fn is_only_terminal_output_logging() -> bool {
@@ -27,6 +29,12 @@ static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
 
 pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
     INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
+}
+
+pub fn init_logging_custom(file: impl Write + Send + 'static) {
+    INITIALIZE_LOGGER_ONCE_FLAG.call_once(|| {
+        env_logger::builder().target(env_logger::Target::Pipe(Box::new(file))).init()
+    });
 }
 
 #[cfg(test)]

@@ -9,7 +9,6 @@ edition = "2021"
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 crypto = { path = "../../crypto" }
-futures.workspace = true
 logging = { path = "../../logging" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
@@ -19,6 +18,7 @@ wallet-storage = { path = "../storage" }
 
 async-trait.workspace = true
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
+futures.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize = "1.5"
