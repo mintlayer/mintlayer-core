@@ -24,10 +24,6 @@ pub enum WalletCliError {
     Controller(wallet_controller::ControllerError<NodeRpcClient>),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),
-    #[error("Console IO error: {0}")]
-    ConsoleIoError(std::io::Error),
-    #[error("File '{0}' IO error: {1}")]
-    FileIoError(PathBuf, std::io::Error),
     #[error("History file {0} I/O error: {1}")]
     HistoryFileError(PathBuf, std::io::Error),
     #[error(
@@ -46,6 +42,12 @@ pub enum WalletCliError {
     InvalidInput(String),
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
-    #[error("Cancelled")]
-    Cancelled,
+    #[error("Wallet file already open")]
+    WalletFileAlreadyOpen,
+    #[error("No wallet file is opened")]
+    NoWalletIsOpened,
+    #[error("File {0} already exists")]
+    FileAlreadyExists(PathBuf),
+    #[error("File {0} does not exist")]
+    FileDoesNotExist(PathBuf),
 }

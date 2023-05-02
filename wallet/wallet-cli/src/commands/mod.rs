@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::primitives::{BlockHeight, H256};
 use serialization::hex::HexEncode;
+use wallet::Wallet;
 use wallet_controller::{PeerId, RpcController};
 
 use crate::errors::WalletCliError;
@@ -25,6 +26,24 @@ use crate::errors::WalletCliError;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
+    /// Open exiting wallet
+    NewWallet {
+        /// File path
+        wallet_path: PathBuf,
+
+        // Mnemonic
+        mnemonic: Option<String>,
+    },
+
+    /// Open exiting wallet
+    OpenWallet {
+        /// File path
+        wallet_path: PathBuf,
+    },
+
+    /// Close wallet file
+    CloseWallet,
+
     /// Returns the node chainstate
     ChainstateInfo,
 
@@ -121,6 +140,79 @@ pub async fn handle_wallet_command(
     command: WalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError> {
     match command {
+        WalletCommand::NewWallet {
+            wallet_path,
+            mnemonic,
+        } => {
+            utils::ensure!(
+                controller.wallets_len() == 0,
+                WalletCliError::WalletFileAlreadyOpen
+            );
+            utils::ensure!(
+                !wallet_path.exists(),
+                WalletCliError::FileAlreadyExists(wallet_path.clone())
+            );
+
+            // TODO: Support other languages
+            let language = wallet::wallet::Language::English;
+            let need_mnemonic_backup = mnemonic.is_none();
+            let mnemonic = match &mnemonic {
+                Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
+                    .map_err(WalletCliError::InvalidMnemonic)?,
+                None => wallet_controller::mnemonic::generate_new_mnemonic(language),
+            };
+
+            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
+                .map_err(WalletCliError::WalletError)?;
+            let wallet = Wallet::new_wallet(
+                Arc::clone(controller.chain_config()),
+                db,
+                &mnemonic.to_string(),
+                None,
+            )
+            .map_err(WalletCliError::WalletError)?;
+            controller.add_wallet(wallet);
+
+            let msg = if need_mnemonic_backup {
+                format!(
+                    "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
+                , mnemonic)
+            } else {
+                "New wallet created successfully".to_owned()
+            };
+            Ok(ConsoleCommand::Print(msg))
+        }
+
+        WalletCommand::OpenWallet { wallet_path } => {
+            utils::ensure!(
+                controller.wallets_len() == 0,
+                WalletCliError::WalletFileAlreadyOpen
+            );
+            utils::ensure!(
+                wallet_path.exists(),
+                WalletCliError::FileDoesNotExist(wallet_path.clone())
+            );
+
+            let db = wallet::wallet::open_or_create_wallet_file(&wallet_path)
+                .map_err(WalletCliError::WalletError)?;
+            let wallet = Wallet::load_wallet(Arc::clone(controller.chain_config()), db)
+                .map_err(WalletCliError::WalletError)?;
+            controller.add_wallet(wallet);
+
+            Ok(ConsoleCommand::Print(
+                "Wallet loaded successfully".to_owned(),
+            ))
+        }
+
+        WalletCommand::CloseWallet => {
+            utils::ensure!(
+                controller.wallets_len() != 0,
+                WalletCliError::NoWalletIsOpened
+            );
+            controller.del_wallet(0);
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
         WalletCommand::ChainstateInfo => {
             let info = controller.chainstate_info().await.map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(format!("{info:?}")))

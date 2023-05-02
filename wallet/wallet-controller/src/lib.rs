@@ -67,6 +67,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         }
     }
 
+    pub fn chain_config(&self) -> &Arc<ChainConfig> {
+        &self.chain_config
+    }
+
     pub async fn chainstate_info(&self) -> Result<ChainInfo, ControllerError<T>> {
         self.rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)
     }
