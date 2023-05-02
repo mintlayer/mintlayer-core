@@ -26,7 +26,7 @@ use crate::errors::WalletCliError;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
-    /// Open exiting wallet
+    /// Create new wallet
     NewWallet {
         /// File path
         wallet_path: PathBuf,

@@ -45,8 +45,6 @@ enum Mode {
 }
 
 async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
-    let args = config::WalletCliArgs::parse();
-
     let mode = if std::io::stdin().is_tty() {
         let printer = repl::interactive::log::init();
         Mode::Interactive { printer }
@@ -54,6 +52,8 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         repl::non_interactive::log::init();
         Mode::NonInteractive
     };
+
+    let args = config::WalletCliArgs::parse();
 
     let WalletCliArgs {
         network,

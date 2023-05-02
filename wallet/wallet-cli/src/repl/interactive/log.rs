@@ -30,10 +30,13 @@ impl ReedlineLogWriter {
 impl std::io::Write for ReedlineLogWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.buf.extend_from_slice(buf);
-        if self.buf.ends_with(&[b'\n']) {
-            let mut line = std::mem::take(&mut self.buf);
-            line.pop();
-            let _ = self.printer.print(String::from_utf8_lossy(line.as_slice()).to_string());
+        if self.buf.last() == Some(&b'\n') {
+            let line = std::mem::take(&mut self.buf);
+            // Try to send without blocking to avoid deadlocks (which can happen when the send buffer is full)
+            let _ = self
+                .printer
+                .sender()
+                .try_send(String::from_utf8_lossy(&line.as_slice()[0..line.len() - 1]).to_string());
         }
         Ok(buf.len())
     }
@@ -45,7 +48,10 @@ impl std::io::Write for ReedlineLogWriter {
 
 /// Use [reedline::ExternalPrinter] to print log output without mangling reedline console input
 pub fn init() -> reedline::ExternalPrinter<String> {
-    let external_printer = reedline::ExternalPrinter::default();
+    // Increase the buffer to prevent dropped log output.
+    // Do not use very large buffers here, as this will increase
+    // the amount of allocated memory (even if the buffer is not used).
+    let external_printer = reedline::ExternalPrinter::new(1024);
 
     let log_writer = ReedlineLogWriter::new(external_printer.clone());
 

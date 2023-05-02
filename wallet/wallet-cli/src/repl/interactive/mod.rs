@@ -18,7 +18,7 @@ pub mod log;
 mod wallet_completions;
 mod wallet_prompt;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
@@ -106,12 +106,12 @@ pub fn run(
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
     printer: reedline::ExternalPrinter<String>,
-    data_dir: &PathBuf,
+    data_dir: &Path,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
     let mut line_editor =
-        create_line_editor(printer, repl_command.clone(), output, &data_dir, vi_mode)?;
+        create_line_editor(printer, repl_command.clone(), output, data_dir, vi_mode)?;
 
     let prompt = wallet_prompt::WalletPrompt::new();
 
