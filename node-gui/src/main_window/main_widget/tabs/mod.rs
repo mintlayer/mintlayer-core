@@ -119,8 +119,8 @@ trait Tab {
         Container::new(column)
             .width(Length::Fill)
             .height(Length::Fill)
-            .align_x(alignment::Horizontal::Center)
-            .align_y(alignment::Vertical::Center)
+            .align_x(alignment::Horizontal::Left)
+            .align_y(alignment::Vertical::Top)
             .padding(TAB_PADDING)
             .into()
     }
