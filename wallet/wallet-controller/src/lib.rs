@@ -233,7 +233,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(())
     }
 
-    pub fn add_wallet(&mut self, wallet: DefaultWallet) {
+    fn add_wallet(&mut self, wallet: DefaultWallet) {
         let block_sync = sync::BlockSyncing::new(
             sync::BlockSyncingConfig::default(),
             Arc::clone(&self.chain_config),

@@ -14,5 +14,5 @@
 // limitations under the License.
 
 pub fn init() {
-    env_logger::builder().init();
+    logging::init_logging::<&std::path::Path>(None);
 }
