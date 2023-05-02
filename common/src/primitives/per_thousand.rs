@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode};
+use serialization::{Decode, Encode, Error, Input, Output};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Encode, Decode)]
-pub struct PerThousand(#[codec(compact)] u16);
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub struct PerThousand(u16);
 
 impl PerThousand {
     pub fn new(value: u16) -> Option<Self> {
@@ -29,6 +29,22 @@ impl PerThousand {
 
     pub fn value(&self) -> u16 {
         self.0
+    }
+}
+
+impl Encode for PerThousand {
+    fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
+        dest.write(&self.0.to_be_bytes());
+    }
+}
+
+impl Decode for PerThousand {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
+        let mut num_be_bytes = [0u8; 2];
+        input.read(&mut num_be_bytes)?;
+        Self::new(u16::from_be_bytes(num_be_bytes)).ok_or(serialization::Error::from(
+            "PerThousand deserialization failed",
+        ))
     }
 }
 
@@ -61,5 +77,18 @@ mod tests {
             let invalid_value = rng.gen_range(1001..=u16::MAX);
             assert!(PerThousand::new(invalid_value).is_none());
         }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_encode_decode(#[case] seed: Seed) {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        let encoded_valid = PerThousand::new(rng.gen_range(0..=1000)).unwrap().encode();
+        PerThousand::decode(&mut encoded_valid.as_slice()).unwrap();
+
+        let encoded_invalid = rng.gen_range(1001..=u16::MAX).encode();
+        PerThousand::decode(&mut encoded_invalid.as_slice()).unwrap_err();
     }
 }

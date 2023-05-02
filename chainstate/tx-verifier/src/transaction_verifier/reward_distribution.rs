@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use fallible_iterator::FallibleIterator;
 use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
@@ -119,20 +120,19 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
                 )?;
 
                 // increase the delegation balances
-                let delegation_undos = rewards_per_delegation
-                    .iter()
-                    .map(|(delegation_id, reward)| {
+                let delegation_undos_iter =
+                    rewards_per_delegation.iter().map(|(delegation_id, reward)| {
                         accounting_adapter
                             .operations(TransactionSource::Chain(block_id))
                             .delegate_staking(*delegation_id, *reward)
                             .map_err(ConnectTransactionError::PoSAccountingError)
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    });
 
-                Ok(distribute_remainder_undo
-                    .into_iter()
-                    .chain(delegation_undos.into_iter())
-                    .collect())
+                let distribute_remainder_undo_iter =
+                    fallible_iterator::convert(distribute_remainder_undo.into_iter().map(Ok));
+                distribute_remainder_undo_iter
+                    .chain(fallible_iterator::convert(delegation_undos_iter))
+                    .collect()
             } else {
                 // if total balance of all delegations is 0 then give the reward to the pool's owner
                 let increase_pool_balance_undo = accounting_adapter
@@ -179,6 +179,9 @@ fn calculate_rewards_per_delegation(
         )
         .collect::<Result<Vec<_>, _>>()
 }
+
+//where
+//T: IntoFallibleIterator<Item = PoSAccountingUndo, Error = ConnectTransactionError>,
 
 /// Due to integer arithmetics there can be a small remainder after all the delegations distributed.
 /// This remainder goes to the pool's owner
