@@ -59,6 +59,68 @@ impl InMemoryPoSAccounting {
             delegation_data,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn all_pool_data(&self) -> &BTreeMap<PoolId, PoolData> {
+        &self.pool_data
+    }
+
+    #[cfg(test)]
+    pub(crate) fn all_delegation_data(&self) -> &BTreeMap<DelegationId, DelegationData> {
+        &self.delegation_data
+    }
+
+    #[cfg(test)]
+    pub(crate) fn all_delegation_balances(&self) -> &BTreeMap<DelegationId, Amount> {
+        &self.delegation_balances
+    }
+
+    #[cfg(test)]
+    pub(crate) fn check_consistancy(&self) {
+        // pool_balance and pool_data must contain the same keys
+        assert_eq!(self.pool_balances.len(), self.pool_data.len());
+        let pool_balance_and_data_consistant =
+            self.pool_balances.keys().all(|key| self.pool_data.contains_key(key));
+        assert!(pool_balance_and_data_consistant);
+
+        // delegation_balance and delegation_data must contain the same keys
+        //assert_eq!(self.delegation_balances.len(), self.delegation_data.len());
+        let delegation_balance_and_data_consistant = self
+            .delegation_balances
+            .keys()
+            .all(|key| self.delegation_data.contains_key(key));
+        assert!(delegation_balance_and_data_consistant);
+
+        // pool balance = pledge amount + delegations balances
+        self.pool_balances.iter().for_each(|(pool_id, pool_balance)| {
+            let pledge_amount =
+                self.pool_data.get(pool_id).expect("pool_data is missing").pledge_amount();
+            let total_delegations_balance = self
+                .pool_delegation_shares
+                .iter()
+                .filter_map(|((key, _), v)| if key == pool_id { Some(v) } else { None })
+                .fold(Amount::ZERO, |acc, v| {
+                    (acc + *v).expect("Delegation balance must not overflow")
+                });
+            assert_eq!(
+                Some(*pool_balance),
+                pledge_amount + total_delegations_balance,
+                "Pledge amount and delegations don't add up to pool balance {}",
+                pool_id
+            );
+        });
+
+        // delegation balances and delegation shares must contain the same amounts
+        assert_eq!(
+            self.delegation_balances.len(),
+            self.pool_delegation_shares.len()
+        );
+        let delegation_shares_and_balances_consistent = self
+            .pool_delegation_shares
+            .iter()
+            .all(|((_, key), balance)| self.delegation_balances.get(key) == Some(balance));
+        assert!(delegation_shares_and_balances_consistent);
+    }
 }
 
 impl PoSAccountingStorageRead for InMemoryPoSAccounting {

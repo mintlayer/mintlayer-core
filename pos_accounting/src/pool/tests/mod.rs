@@ -32,6 +32,7 @@ use crate::{
 
 mod delta_tests;
 mod operations_tests;
+mod simulation_tests;
 mod undo_tests;
 
 fn new_pool_id(v: u64) -> PoolId {

@@ -25,7 +25,7 @@ use crate::error::Error;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub(crate) enum PoolDataUndo {
     Data(Box<PoolData>),
-    DataDelta(Box<(Amount, DataDeltaUndo<PoolData>)>),
+    DataDelta(Box<DataDeltaUndo<PoolData>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
@@ -37,6 +37,7 @@ pub(crate) enum DelegationDataUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct CreatePoolUndo {
     pub(crate) pool_id: PoolId,
+    pub(crate) pledge_amount: Amount,
     pub(crate) data_undo: PoolDataUndo,
 }
 
@@ -49,6 +50,7 @@ pub struct CreateDelegationIdUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DecommissionPoolUndo {
     pub(crate) pool_id: PoolId,
+    pub(crate) pool_balance: Amount,
     pub(crate) data_undo: PoolDataUndo,
 }
 
@@ -67,6 +69,7 @@ pub struct SpendFromShareUndo {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct IncreasePledgeAmountUndo {
     pub(crate) pool_id: PoolId,
+    pub(crate) amount_added: Amount,
     pub(crate) data_undo: PoolDataUndo,
 }
 
