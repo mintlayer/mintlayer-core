@@ -52,6 +52,10 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub rpc_password: Option<String>,
 
+    /// Run commands from the file
+    #[clap(long)]
+    pub commands_file: Option<PathBuf>,
+
     /// vi input mode
     #[clap(long)]
     pub vi_mode: bool,

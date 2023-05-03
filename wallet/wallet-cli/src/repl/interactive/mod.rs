@@ -53,7 +53,7 @@ fn create_line_editor(
     let history_file_path = data_dir.join(HISTORY_FILE_NAME);
     let history = Box::new(
         FileBackedHistory::with_file(HISTORY_MAX_LINES, history_file_path.clone())
-            .map_err(|e| WalletCliError::HistoryFileError(history_file_path, e))?,
+            .map_err(|e| WalletCliError::FileError(history_file_path, e))?,
     );
 
     let commands = repl_command

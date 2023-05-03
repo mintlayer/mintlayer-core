@@ -23,7 +23,7 @@ mod console;
 mod errors;
 mod repl;
 
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{io::BufRead, net::SocketAddr, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::chain::config::ChainType;
@@ -42,17 +42,10 @@ enum Mode {
         printer: reedline::ExternalPrinter<String>,
     },
     NonInteractive,
+    Commands(std::fs::File),
 }
 
 async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
-    let mode = if std::io::stdin().is_tty() {
-        let printer = repl::interactive::log::init();
-        Mode::Interactive { printer }
-    } else {
-        repl::non_interactive::log::init();
-        Mode::NonInteractive
-    };
-
     let args = config::WalletCliArgs::parse();
 
     let WalletCliArgs {
@@ -63,7 +56,20 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         rpc_username,
         rpc_password,
         vi_mode,
+        commands_file,
     } = args;
+
+    let mode = if let Some(file_name) = commands_file {
+        let file =
+            std::fs::File::open(&file_name).map_err(|e| WalletCliError::FileError(file_name, e))?;
+        Mode::Commands(file)
+    } else if std::io::stdin().is_tty() {
+        let printer = repl::interactive::log::init();
+        Mode::Interactive { printer }
+    } else {
+        repl::non_interactive::log::init();
+        Mode::NonInteractive
+    };
 
     let chain_type: ChainType = network.into();
     let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
@@ -117,7 +123,14 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         Mode::Interactive { printer } => {
             repl::interactive::run(&output_copy, event_tx, printer, &data_dir, vi_mode)
         }
-        Mode::NonInteractive => repl::non_interactive::run(&output_copy, event_tx),
+        Mode::NonInteractive => {
+            repl::non_interactive::run(std::io::stdin().lines(), &output_copy, event_tx)
+        }
+        Mode::Commands(file) => repl::non_interactive::run(
+            std::io::BufReader::new(file).lines(),
+            &output_copy,
+            event_tx,
+        ),
     });
 
     cli_event_loop::run(&chain_config, &rpc_client, controller_opt, event_rx).await;

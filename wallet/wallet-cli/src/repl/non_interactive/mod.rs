@@ -24,13 +24,14 @@ use crate::{
 
 use super::{get_repl_command, parse_input};
 
-pub fn run(
+pub fn run<T: std::io::BufRead>(
+    input: std::io::Lines<T>,
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
 
-    for line in std::io::stdin().lines() {
+    for line in input {
         match line {
             Ok(line) => {
                 let res = parse_input(&line, &repl_command);

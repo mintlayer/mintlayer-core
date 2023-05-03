@@ -24,8 +24,8 @@ pub enum WalletCliError {
     Controller(wallet_controller::ControllerError<NodeRpcClient>),
     #[error("RPC error: {0}")]
     RpcError(node_comm::rpc_client::NodeRpcError),
-    #[error("History file {0} I/O error: {1}")]
-    HistoryFileError(PathBuf, std::io::Error),
+    #[error("File {0} I/O error: {1}")]
+    FileError(PathBuf, std::io::Error),
     #[error(
         "RPC authentication cookie-file {0} read error: {1}. Please make sure the node is started."
     )]
