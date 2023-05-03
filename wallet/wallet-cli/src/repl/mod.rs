@@ -64,7 +64,7 @@ fn parse_input(
     repl_command: &Command,
 ) -> Result<Option<WalletCommand>, WalletCliError> {
     let line = line.trim();
-    if line.is_empty() {
+    if line.is_empty() || line.starts_with('#') {
         return Ok(None);
     }
     // Split arguments as a normal shell would do

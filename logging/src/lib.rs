@@ -31,7 +31,8 @@ pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
     INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
 }
 
-pub fn init_logging_custom(file: impl Write + Send + 'static) {
+/// Send log output to the specified [Write] instance, log lines are separated by '\n'
+pub fn init_logging_pipe(file: impl Write + Send + 'static) {
     INITIALIZE_LOGGER_ONCE_FLAG.call_once(|| {
         env_logger::builder().target(env_logger::Target::Pipe(Box::new(file))).init()
     });

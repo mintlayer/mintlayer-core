@@ -22,6 +22,8 @@ use wallet_controller::NodeRpcClient;
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
     Controller(wallet_controller::ControllerError<NodeRpcClient>),
+    #[error("RPC error: {0}")]
+    RpcError(node_comm::rpc_client::NodeRpcError),
     #[error("History file {0} I/O error: {1}")]
     HistoryFileError(PathBuf, std::io::Error),
     #[error(
@@ -42,6 +44,6 @@ pub enum WalletCliError {
     InvalidMnemonic(wallet_controller::mnemonic::Error),
     #[error("Wallet file already open")]
     WalletFileAlreadyOpen,
-    #[error("No wallet file is opened")]
-    NoWalletIsOpened,
+    #[error("Please open or create wallet file first")]
+    NoWallet,
 }

@@ -18,7 +18,6 @@ wallet-storage = { path = "../storage" }
 
 async-trait.workspace = true
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
-futures.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize = "1.5"

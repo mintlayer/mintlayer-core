@@ -55,7 +55,7 @@ pub fn init() -> reedline::ExternalPrinter<String> {
 
     let log_writer = ReedlineLogWriter::new(external_printer.clone());
 
-    logging::init_logging_custom(log_writer);
+    logging::init_logging_pipe(log_writer);
 
     external_printer
 }

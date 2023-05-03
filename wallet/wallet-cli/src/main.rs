@@ -92,17 +92,18 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     let data_dir = prepare_data_dir(|| default_data_dir_for_chain(chain_type.name()), &None)
         .map_err(WalletCliError::PrepareData)?;
 
-    let mut controller = wallet_controller::make_rpc_controller(
-        Arc::clone(&chain_config),
-        rpc_address,
-        Some((&rpc_username, &rpc_password)),
-    )
-    .await
-    .map_err(WalletCliError::Controller)?;
+    let rpc_client =
+        wallet_controller::make_rpc_client(rpc_address, Some((&rpc_username, &rpc_password)))
+            .await
+            .map_err(WalletCliError::RpcError)?;
+
+    let mut controller_opt = None;
 
     if let Some(wallet_path) = wallet_file {
         commands::handle_wallet_command(
-            &mut controller,
+            &chain_config,
+            &rpc_client,
+            &mut controller_opt,
             commands::WalletCommand::OpenWallet { wallet_path },
         )
         .await?;
@@ -119,7 +120,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         Mode::NonInteractive => repl::non_interactive::run(&output_copy, event_tx),
     });
 
-    cli_event_loop::run(controller, event_rx).await;
+    cli_event_loop::run(&chain_config, &rpc_client, controller_opt, event_rx).await;
 
     repl_handle.join().expect("Should not panic")
 }
