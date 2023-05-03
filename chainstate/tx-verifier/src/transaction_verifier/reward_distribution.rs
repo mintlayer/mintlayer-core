@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use fallible_iterator::FallibleIterator;
 use static_assertions::assert_eq_size;
 use std::collections::BTreeMap;
 
@@ -44,29 +43,60 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
-    let total_staker_reward = calculate_pool_owner_reward(total_reward, &pool_data).ok_or(
+    let pool_owner_reward = calculate_pool_owner_reward(total_reward, &pool_data).ok_or(
         ConnectTransactionError::PoolOwnerRewardCalculationFailed(block_id, pool_id),
     )?;
 
-    let increase_pool_balance_undo = accounting_adapter
-        .operations(TransactionSource::Chain(block_id))
-        .increase_pool_pledge_amount(pool_id, total_staker_reward)?;
-
-    let total_delegations_reward = (total_reward - total_staker_reward).ok_or(
+    let total_delegations_reward = (total_reward - pool_owner_reward).ok_or(
         ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
             block_id,
             pool_id,
-            total_staker_reward,
+            pool_owner_reward,
             total_reward,
         ),
     )?;
 
-    let delegation_undos = distribute_delegations_pos_reward(
-        accounting_adapter,
-        block_id,
-        pool_id,
-        total_delegations_reward,
-    )?;
+    // Distribute reward among delegators.
+    // In some cases this process can yield reward unallocated to delegators. This reward goes to the pool owner.
+    let (delegation_undos, unallocated_reward) = if total_delegations_reward > Amount::ZERO {
+        match accounting_adapter.accounting_delta().get_pool_delegations_shares(pool_id)? {
+            Some(delegation_shares) => {
+                let total_delegations_balance =
+                    delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
+                        (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
+                            block_id, pool_id,
+                        ))
+                    })?;
+
+                if total_delegations_balance > Amount::ZERO {
+                    let (delegation_undos, delegations_reward_remainder) =
+                        distribute_delegations_pos_reward(
+                            accounting_adapter,
+                            &delegation_shares,
+                            block_id,
+                            pool_id,
+                            total_delegations_balance,
+                            total_delegations_reward,
+                        )?;
+                    (delegation_undos, delegations_reward_remainder)
+                } else {
+                    // If total balance of all delegations is 0 then give the reward to the pool's owner
+                    (Vec::new(), total_delegations_reward)
+                }
+            }
+            // If no delegations then give the reward to the pool's owner
+            None => (Vec::new(), total_delegations_reward),
+        }
+    } else {
+        // Do nothing if no delegations
+        (Vec::new(), Amount::ZERO)
+    };
+
+    let total_owner_reward = (pool_owner_reward + unallocated_reward)
+        .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+    let increase_pool_balance_undo = accounting_adapter
+        .operations(TransactionSource::Chain(block_id))
+        .increase_pool_pledge_amount(pool_id, total_owner_reward)?;
 
     let undos = delegation_undos
         .into_iter()
@@ -86,69 +116,49 @@ fn calculate_pool_owner_reward(total_reward: Amount, pool_data: &PoolData) -> Op
 /// The reward is distributed among delegations proportionally to their balance
 fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
+    delegation_shares: &BTreeMap<DelegationId, Amount>,
     block_id: Id<Block>,
     pool_id: PoolId,
+    total_delegations_balance: Amount,
     total_delegations_reward: Amount,
-) -> Result<Vec<PoSAccountingUndo>, ConnectTransactionError> {
-    if total_delegations_reward == Amount::ZERO {
-        return Ok(Vec::new());
-    }
+) -> Result<(Vec<PoSAccountingUndo>, Amount), ConnectTransactionError> {
+    let rewards_per_delegation = calculate_rewards_per_delegation(
+        delegation_shares,
+        pool_id,
+        total_delegations_balance,
+        total_delegations_reward,
+    )?;
 
-    match accounting_adapter.accounting_delta().get_pool_delegations_shares(pool_id)? {
-        Some(delegation_shares) => {
-            let total_delegations_balance =
-                delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
-                    (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
-                        block_id, pool_id,
-                    ))
-                })?;
-
-            if total_delegations_balance > Amount::ZERO {
-                let rewards_per_delegation = calculate_rewards_per_delegation(
-                    &delegation_shares,
-                    pool_id,
-                    total_delegations_balance,
-                    total_delegations_reward,
-                )?;
-
-                let distribute_remainder_undo = distribute_delegations_reward_remainder(
-                    accounting_adapter,
-                    block_id,
-                    pool_id,
-                    total_delegations_reward,
-                    &rewards_per_delegation,
-                )?;
-
-                // increase the delegation balances
-                let delegation_undos_iter =
-                    rewards_per_delegation.iter().map(|(delegation_id, reward)| {
-                        accounting_adapter
-                            .operations(TransactionSource::Chain(block_id))
-                            .delegate_staking(*delegation_id, *reward)
-                            .map_err(ConnectTransactionError::PoSAccountingError)
-                    });
-
-                let distribute_remainder_undo_iter =
-                    fallible_iterator::convert(distribute_remainder_undo.into_iter().map(Ok));
-                distribute_remainder_undo_iter
-                    .chain(fallible_iterator::convert(delegation_undos_iter))
-                    .collect()
-            } else {
-                // if total balance of all delegations is 0 then give the reward to the pool's owner
-                let increase_pool_balance_undo = accounting_adapter
-                    .operations(TransactionSource::Chain(block_id))
-                    .increase_pool_pledge_amount(pool_id, total_delegations_reward)?;
-                Ok(vec![increase_pool_balance_undo])
-            }
-        }
-        None => {
-            // if no delegations then give the reward to the pool's owner
-            let increase_pool_balance_undo = accounting_adapter
+    // increase the delegation balances
+    let delegation_undos = rewards_per_delegation
+        .iter()
+        .map(|(delegation_id, reward)| {
+            accounting_adapter
                 .operations(TransactionSource::Chain(block_id))
-                .increase_pool_pledge_amount(pool_id, total_delegations_reward)?;
-            Ok(vec![increase_pool_balance_undo])
-        }
-    }
+                .delegate_staking(*delegation_id, *reward)
+                .map_err(ConnectTransactionError::PoSAccountingError)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Due to integer arithmetics there can be a small remainder after all the delegations distributed.
+    // This remainder goes to the pool's owner
+    let total_delegations_reward_distributed =
+        rewards_per_delegation.iter().try_fold(Amount::ZERO, |acc, (_, v)| {
+            (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
+                block_id, pool_id,
+            ))
+        })?;
+
+    let delegations_reward_remainder =
+        (total_delegations_reward - total_delegations_reward_distributed).ok_or(
+            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(
+                pool_id,
+                block_id,
+                total_delegations_reward_distributed,
+                total_delegations_reward,
+            ),
+        )?;
+    Ok((delegation_undos, delegations_reward_remainder))
 }
 
 fn calculate_rewards_per_delegation(
@@ -183,43 +193,6 @@ fn calculate_rewards_per_delegation(
             },
         )
         .collect::<Result<Vec<_>, _>>()
-}
-
-/// Due to integer arithmetics there can be a small remainder after all the delegations distributed.
-/// This remainder goes to the pool's owner
-fn distribute_delegations_reward_remainder<P: PoSAccountingView>(
-    accounting_adapter: &mut PoSAccountingDeltaAdapter<P>,
-    block_id: Id<Block>,
-    pool_id: PoolId,
-    total_delegations_reward: Amount,
-    rewards_per_delegation: &[(DelegationId, Amount)],
-) -> Result<Vec<PoSAccountingUndo>, ConnectTransactionError> {
-    let total_delegations_reward_distributed =
-        rewards_per_delegation.iter().try_fold(Amount::ZERO, |acc, (_, v)| {
-            (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
-                block_id, pool_id,
-            ))
-        })?;
-
-    let delegations_reward_remainder =
-        (total_delegations_reward - total_delegations_reward_distributed).ok_or(
-            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(
-                pool_id,
-                block_id,
-                total_delegations_reward_distributed,
-                total_delegations_reward,
-            ),
-        )?;
-
-    if delegations_reward_remainder > Amount::ZERO {
-        debug_assert!(delegations_reward_remainder == Amount::from_atoms(1));
-        let increase_balance_undo = accounting_adapter
-            .operations(TransactionSource::Chain(block_id))
-            .increase_pool_pledge_amount(pool_id, delegations_reward_remainder)?;
-        Ok(vec![increase_balance_undo])
-    } else {
-        Ok(Vec::new())
-    }
 }
 
 #[cfg(test)]
