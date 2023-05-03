@@ -15,13 +15,10 @@
 
 use std::path::PathBuf;
 
-use utils::default_data_dir::PrepareDataDirError;
-use wallet_controller::NodeRpcClient;
-
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
-    Controller(wallet_controller::ControllerError<NodeRpcClient>),
+    Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
     #[error("RPC error: {0}")]
     RpcError(node_comm::rpc_client::NodeRpcError),
     #[error("File {0} I/O error: {1}")]
@@ -30,8 +27,6 @@ pub enum WalletCliError {
         "RPC authentication cookie-file {0} read error: {1}. Please make sure the node is started."
     )]
     CookieFileReadError(PathBuf, String),
-    #[error("Prepare data dir error: {0}")]
-    PrepareData(PrepareDataDirError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
     #[error("Invalid quoting")]

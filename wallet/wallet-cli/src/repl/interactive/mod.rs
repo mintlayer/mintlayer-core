@@ -18,7 +18,7 @@ pub mod log;
 mod wallet_completions;
 mod wallet_prompt;
 
-use std::path::Path;
+use std::path::PathBuf;
 
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
@@ -34,7 +34,6 @@ use crate::{
 
 use super::{get_repl_command, parse_input};
 
-const HISTORY_FILE_NAME: &str = "history.txt";
 const HISTORY_MAX_LINES: usize = 1000;
 
 const HISTORY_MENU_NAME: &str = "history_menu";
@@ -44,17 +43,11 @@ fn create_line_editor(
     printer: reedline::ExternalPrinter<String>,
     repl_command: super::Command,
     output: &ConsoleContext,
-    data_dir: &Path,
+    history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<Reedline, WalletCliError> {
     cli_println!(output, "Use 'help' to see all available commands.");
     cli_println!(output, "Use 'exit' or Ctrl-D to quit.");
-
-    let history_file_path = data_dir.join(HISTORY_FILE_NAME);
-    let history = Box::new(
-        FileBackedHistory::with_file(HISTORY_MAX_LINES, history_file_path.clone())
-            .map_err(|e| WalletCliError::FileError(history_file_path, e))?,
-    );
 
     let commands = repl_command
         .get_subcommands()
@@ -66,12 +59,19 @@ fn create_line_editor(
 
     let mut line_editor = Reedline::create()
         .with_external_printer(printer)
-        .with_history(history)
         .with_completer(completer)
         .with_quick_completions(false)
         .with_partial_completions(true)
         .with_validator(Box::new(DefaultValidator))
         .with_ansi_colors(true);
+
+    if let Some(file_name) = history_file {
+        let history = Box::new(
+            FileBackedHistory::with_file(HISTORY_MAX_LINES, file_name.clone())
+                .map_err(|e| WalletCliError::FileError(file_name, e))?,
+        );
+        line_editor = line_editor.with_history(history);
+    }
 
     // Adding default menus for the compiled reedline
     line_editor = line_editor
@@ -106,12 +106,12 @@ pub fn run(
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
     printer: reedline::ExternalPrinter<String>,
-    data_dir: &Path,
+    history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
     let mut line_editor =
-        create_line_editor(printer, repl_command.clone(), output, data_dir, vi_mode)?;
+        create_line_editor(printer, repl_command.clone(), output, history_file, vi_mode)?;
 
     let prompt = wallet_prompt::WalletPrompt::new();
 

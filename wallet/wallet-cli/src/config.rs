@@ -56,6 +56,11 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub commands_file: Option<PathBuf>,
 
+    /// Preserve history file between application runs.
+    /// This can be very insecure, use at your own risk!
+    #[clap(long)]
+    pub history_file: Option<PathBuf>,
+
     /// vi input mode
     #[clap(long)]
     pub vi_mode: bool,

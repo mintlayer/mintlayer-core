@@ -32,7 +32,7 @@ use console::ConsoleContext;
 use crossterm::tty::IsTty;
 use errors::WalletCliError;
 use tokio::sync::mpsc;
-use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
+use utils::default_data_dir::default_data_dir_for_chain;
 use wallet_controller::cookie::load_cookie;
 
 const COOKIE_FILENAME: &str = ".cookie";
@@ -55,11 +55,13 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         rpc_cookie_file,
         rpc_username,
         rpc_password,
-        vi_mode,
         commands_file,
+        history_file,
+        vi_mode,
     } = args;
 
     let mode = if let Some(file_name) = commands_file {
+        repl::non_interactive::log::init();
         let file =
             std::fs::File::open(&file_name).map_err(|e| WalletCliError::FileError(file_name, e))?;
         Mode::Commands(file)
@@ -95,9 +97,6 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         }
     };
 
-    let data_dir = prepare_data_dir(|| default_data_dir_for_chain(chain_type.name()), &None)
-        .map_err(WalletCliError::PrepareData)?;
-
     let rpc_client =
         wallet_controller::make_rpc_client(rpc_address, Some((&rpc_username, &rpc_password)))
             .await
@@ -121,7 +120,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     let output_copy = output.clone();
     let repl_handle = std::thread::spawn(move || match mode {
         Mode::Interactive { printer } => {
-            repl::interactive::run(&output_copy, event_tx, printer, &data_dir, vi_mode)
+            repl::interactive::run(&output_copy, event_tx, printer, history_file, vi_mode)
         }
         Mode::NonInteractive => {
             repl::non_interactive::run(std::io::stdin().lines(), &output_copy, event_tx)
