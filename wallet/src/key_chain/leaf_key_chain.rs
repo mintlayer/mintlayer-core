@@ -33,7 +33,6 @@ use wallet_types::{
 
 /// A child key hierarchy for an AccountKeyChain. This normally implements the receiving and change
 /// addresses key chains
-#[allow(dead_code)] // TODO remove
 pub struct LeafKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
@@ -47,6 +46,8 @@ pub struct LeafKeyChain {
     /// The parent key of this key chain
     parent_pubkey: ExtendedPublicKey,
 
+    // TODO: many of these members (the BTreeMaps) are highly coupled and are used in certain ways in tandem.
+    //       See if we can move them into submodules that are individually testable
     /// The derived addresses for the receiving funds or change. Those are derived as needed.
     addresses: BTreeMap<ChildNumber, Address>,
 

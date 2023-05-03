@@ -29,9 +29,9 @@ use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo};
 
-#[allow(dead_code)] // TODO remove
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
+    #[allow(dead_code)] // TODO remove
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
 
@@ -161,7 +161,6 @@ impl AccountKeyChain {
     }
 
     /// Get the private key that corresponds to the provided public key
-    #[allow(dead_code)] // TODO remove
     pub fn get_private_key(
         &self,
         parent_key: &ExtendedPrivateKey,

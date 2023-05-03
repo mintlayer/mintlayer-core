@@ -116,7 +116,6 @@ impl MasterKeyChain {
         self.create_account_key_chain_with_lookahead(db_tx, account_index, LOOKAHEAD_SIZE)
     }
 
-    #[allow(dead_code)] // TODO remove
     pub fn create_account_key_chain_with_lookahead<B: Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,
