@@ -140,6 +140,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidInputTypeInReward => 100,
             ConnectTransactionError::InvalidOutputTypeInReward => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
+            ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
+            ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -166,8 +168,6 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
-            ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 0,
-            ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 0,
             ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 0,
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,

@@ -185,9 +185,6 @@ fn calculate_rewards_per_delegation(
         .collect::<Result<Vec<_>, _>>()
 }
 
-//where
-//T: IntoFallibleIterator<Item = PoSAccountingUndo, Error = ConnectTransactionError>,
-
 /// Due to integer arithmetics there can be a small remainder after all the delegations distributed.
 /// This remainder goes to the pool's owner
 fn distribute_delegations_reward_remainder<P: PoSAccountingView>(

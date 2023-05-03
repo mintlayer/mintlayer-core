@@ -90,5 +90,8 @@ mod tests {
 
         let encoded_invalid = rng.gen_range(1001..=u16::MAX).encode();
         PerThousand::decode(&mut encoded_invalid.as_slice()).unwrap_err();
+
+        let mut encoded_1001: &[u8] = b"\xE9\x03";
+        PerThousand::decode(&mut encoded_1001).unwrap_err();
     }
 }
