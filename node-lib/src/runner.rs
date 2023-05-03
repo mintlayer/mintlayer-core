@@ -36,8 +36,10 @@ use common::{
 use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
-
-use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
+use p2p::{
+    interface::p2p_interface::P2pSubsystemInterface,
+    peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer,
+};
 use rpc::rpc_creds::RpcCreds;
 use tokio::sync::oneshot;
 use utils::default_data_dir::prepare_data_dir;
@@ -91,18 +93,17 @@ pub async fn initialize(
         Default::default(),
         Default::default(),
     ))?;
-    let p2p = manager.add_subsystem(
-        "p2p",
-        p2p::make_p2p(
-            Arc::clone(&chain_config),
-            Arc::new(node_config.p2p.unwrap_or_default().into()),
-            chainstate.clone(),
-            mempool.clone(),
-            Default::default(),
-            peerdb_storage,
-        )
-        .await?,
-    );
+    let p2p = p2p::make_p2p(
+        Arc::clone(&chain_config),
+        Arc::new(node_config.p2p.unwrap_or_default().into()),
+        chainstate.clone(),
+        mempool.clone(),
+        Default::default(),
+        peerdb_storage,
+    )?;
+    let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
+        move |call, shutdown| p2p.run(call, shutdown)
+    });
 
     // Block production
     let block_prod = manager.add_subsystem(

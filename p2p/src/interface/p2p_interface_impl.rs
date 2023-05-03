@@ -14,18 +14,23 @@
 // limitations under the License.
 
 use common::{chain::SignedTransaction, primitives::Idable};
+use logging::log;
+use subsystem::{CallRequest, ShutdownRequest};
 
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
+    interface::{
+        p2p_interface::{P2pInterface, P2pSubsystemInterface},
+        types::ConnectedPeer,
+    },
     message::SyncMessage,
     net::NetworkingService,
+    start_p2p,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, P2p,
+    MessagingService, P2p, P2pInit, PeerDbStorage,
 };
-
-use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
@@ -101,5 +106,39 @@ where
         let id = tx.transaction().get_id();
         self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
         self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))
+    }
+}
+
+#[async_trait::async_trait]
+impl<S: PeerDbStorage + 'static> P2pSubsystemInterface for P2pInit<S> {
+    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
+        let mut p2p = match start_p2p(
+            self.chain_config,
+            self.p2p_config,
+            self.chainstate_handle,
+            self.mempool_handle,
+            self.time_getter,
+            self.peerdb_storage,
+            self.bind_addresses,
+        )
+        .await
+        {
+            Ok(p2p) => p2p,
+            Err(e) => {
+                log::error!("Failed to run p2p: {e:?}");
+                return;
+            }
+        };
+
+        log::trace!("Entering p2p main loop");
+        loop {
+            tokio::select! {
+                () = shutdown.recv() => {
+                    p2p.shutdown().await;
+                    break;
+                },
+                call = call.recv() => call(&mut p2p).await,
+            }
+        }
     }
 }

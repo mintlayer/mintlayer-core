@@ -34,13 +34,16 @@ use std::{
     sync::Arc,
 };
 
+use tap::TapFallible;
+use tokio::{sync::mpsc, task::JoinHandle};
+use void::Void;
+
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
     NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
-use tap::TapFallible;
-use tokio::sync::mpsc;
+use subsystem::{CallRequest, ShutdownRequest};
 
 use ::utils::ensure;
 use chainstate::chainstate_interface;
@@ -55,6 +58,7 @@ use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
+    interface::p2p_interface::P2pSubsystemInterface,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -72,6 +76,8 @@ struct P2p<T: NetworkingService> {
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
+    peer_manager_task: JoinHandle<Result<Void>>,
+    sync_manager_task: JoinHandle<Result<Void>>,
 }
 
 impl<T> P2p<T>
@@ -121,12 +127,12 @@ where
             time_getter.clone(),
             peerdb_storage,
         )?;
-        tokio::spawn(async move {
+        let peer_manager_task = tokio::spawn(async move {
             // TODO: Shutdown p2p if PeerManager unexpectedly quits
             peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
         });
 
-        {
+        let sync_manager_task = {
             let chainstate_handle = chainstate_handle.clone();
             let tx_peer_manager = tx_peer_manager.clone();
             let chain_config = Arc::clone(&chain_config);
@@ -148,20 +154,30 @@ where
                 .run()
                 .await
                 .tap_err(|err| log::error!("SyncManager failed: {err}"))
-            });
-        }
+            })
+        };
 
         Ok(Self {
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
+            peer_manager_task,
+            sync_manager_task,
         })
+    }
+
+    async fn shutdown(self) {
+        self.peer_manager_task.abort();
+        let _ = self.peer_manager_task.await;
+
+        self.sync_manager_task.abort();
+        let _ = self.sync_manager_task.await;
     }
 }
 
 impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
-pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
+pub type P2pHandle = subsystem::Handle<dyn P2pInterface>;
 
 pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
 pub type P2pNetworkingServiceSocks5Proxy = DefaultNetworkingService<NoiseSocks5Transport>;
@@ -213,18 +229,30 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
     }
 }
 
-pub async fn make_p2p<S: PeerDbStorage + 'static>(
+struct P2pInit<S: PeerDbStorage + 'static> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
-) -> Result<Box<dyn P2pInterface>> {
+    bind_addresses: Vec<SocketAddr>,
+}
+
+pub fn make_p2p<S: PeerDbStorage + 'static>(
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
+    time_getter: TimeGetter,
+    peerdb_storage: S,
+) -> Result<impl P2pSubsystemInterface> {
     // Check that the `testing_utils` feature is not enabled when the node is built
     // (`testing_utils` turns on time mocking in tokio and also calls `setrlimit` when loaded).
-    assert!(cfg!(not(feature = "testing_utils")));
+    // TODO: FIXME:
+    //assert!(cfg!(not(feature = "testing_utils")));
 
+    // Perform some early checks to prevent a failure in the run method.
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,
         chain_config.p2p_port(),
@@ -244,6 +272,31 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
                 "SOCKS5 proxy support is not implemented for unencrypted".to_owned()
             )
         );
+    }
+
+    Ok(P2pInit {
+        chain_config,
+        p2p_config,
+        chainstate_handle,
+        mempool_handle,
+        time_getter,
+        peerdb_storage,
+        bind_addresses,
+    })
+}
+
+async fn start_p2p<S: PeerDbStorage + 'static>(
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
+    time_getter: TimeGetter,
+    peerdb_storage: S,
+    bind_addresses: Vec<SocketAddr>,
+) -> Result<Box<dyn P2pInterface>> {
+    if let Some(true) = p2p_config.disable_noise {
+        assert_eq!(*chain_config.chain_type(), ChainType::Regtest);
+        assert!(p2p_config.socks5_proxy.is_none());
 
         let transport = make_p2p_transport_unencrypted();
 

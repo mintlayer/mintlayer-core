@@ -49,6 +49,7 @@ chainstate-storage = { path = "../chainstate/storage" }
 chainstate-test-framework = { path = "../chainstate/test-framework" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
+storage-lmdb = { path = "../storage/lmdb" }
 p2p-backend-test-suite = { path = "backend-test-suite" }
 p2p-test-utils = { path = "p2p-test-utils" }
 test-utils = { path = "../test-utils" }
@@ -56,6 +57,7 @@ test-utils = { path = "../test-utils" }
 criterion = "0.4"
 portpicker = "0.1"
 rstest.workspace = true
+tempfile = "3.3"
 
 [[test]]
 name = "backend_tcp"
