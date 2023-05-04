@@ -29,7 +29,7 @@ use crate::errors::WalletCliError;
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
     /// Create new wallet
-    NewWallet {
+    CreateWallet {
         /// File path
         wallet_path: PathBuf,
 
@@ -144,7 +144,7 @@ pub async fn handle_wallet_command(
     command: WalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError> {
     match command {
-        WalletCommand::NewWallet {
+        WalletCommand::CreateWallet {
             wallet_path,
             mnemonic,
         } => {

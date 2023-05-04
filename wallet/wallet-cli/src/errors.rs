@@ -24,7 +24,7 @@ pub enum WalletCliError {
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, std::io::Error),
     #[error(
-        "RPC authentication cookie-file {0} read error: {1}. Please make sure the node is started."
+        "RPC authentication cookie-file read error: {0}: {1}. Please make sure the node is started."
     )]
     CookieFileReadError(PathBuf, String),
     #[error("Invalid config: {0}")]

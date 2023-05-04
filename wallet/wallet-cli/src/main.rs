@@ -42,7 +42,9 @@ enum Mode {
         printer: reedline::ExternalPrinter<String>,
     },
     NonInteractive,
-    Commands(Vec<String>),
+    CommandsList {
+        list: Vec<String>,
+    },
 }
 
 fn read_file(file_path: PathBuf) -> Result<Vec<String>, WalletCliError> {
@@ -84,8 +86,8 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
 
     let mode = if let Some(file_name) = commands_file {
         repl::non_interactive::log::init();
-        let lines = read_file(file_name)?;
-        Mode::Commands(lines)
+        let list = read_file(file_name)?;
+        Mode::CommandsList { list }
     } else if std::io::stdin().is_tty() {
         let printer = repl::interactive::log::init();
         Mode::Interactive { printer }
@@ -154,8 +156,8 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
             event_tx,
             exit_on_error.unwrap_or(true),
         ),
-        Mode::Commands(lines) => repl::non_interactive::run(
-            lines.into_iter(),
+        Mode::CommandsList { list } => repl::non_interactive::run(
+            list.into_iter(),
             &output_copy,
             event_tx,
             exit_on_error.unwrap_or(false),
