@@ -30,7 +30,7 @@ pub enum BlockHeaderSignature {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged)]
 pub struct SignedBlockHeader {
     block_header: BlockHeader,
-    // TODO(PR): Do we want to include the public key to make it possible to cross-check with the spent kernel?
+    // TODO: Do we want to include the public key to make it possible to cross-check with the spent kernel?
     signature: BlockHeaderSignature,
 }
 
