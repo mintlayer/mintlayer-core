@@ -84,7 +84,9 @@ impl InMemoryPoSAccounting {
         assert!(pool_balance_and_data_consistant);
 
         // delegation_balance and delegation_data must contain the same keys
-        //assert_eq!(self.delegation_balances.len(), self.delegation_data.len());
+        //
+        // Note: delegation_balances and delegation_data can have different length
+        // because zero balances are removed.
         let delegation_balance_and_data_consistant = self
             .delegation_balances
             .keys()
@@ -98,10 +100,9 @@ impl InMemoryPoSAccounting {
             let total_delegations_balance = self
                 .pool_delegation_shares
                 .iter()
-                .filter_map(|((key, _), v)| if key == pool_id { Some(v) } else { None })
-                .fold(Amount::ZERO, |acc, v| {
-                    (acc + *v).expect("Delegation balance must not overflow")
-                });
+                .filter_map(|((key, _), v)| if key == pool_id { Some(*v) } else { None })
+                .sum::<Option<Amount>>()
+                .expect("Delegation balance must not overflow");
             assert_eq!(
                 Some(*pool_balance),
                 pledge_amount + total_delegations_balance,

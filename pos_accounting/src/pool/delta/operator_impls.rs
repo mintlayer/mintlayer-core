@@ -193,7 +193,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
 
-        self.sub_balance_from_pool(pool_id, amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.sub_balance_from_pool(pool_id, amount)?;
+        }
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
@@ -227,8 +230,8 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         };
 
         match self.get_pool_balance(undo.pool_id)? {
-            Some(amount) => {
-                if amount != undo.pledge_amount {
+            Some(pool_balance) => {
+                if pool_balance != undo.pledge_amount {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
@@ -314,7 +317,10 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
 
         self.add_to_delegation_balance(undo_data.delegation_id, undo_data.amount)?;
 
-        self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        }
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
 

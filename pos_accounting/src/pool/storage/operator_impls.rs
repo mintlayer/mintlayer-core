@@ -217,8 +217,8 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         };
 
         match self.store.get_pool_balance(undo.pool_id)? {
-            Some(amount) => {
-                if amount != undo.pledge_amount {
+            Some(pool_balance) => {
+                if pool_balance != undo.pledge_amount {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }

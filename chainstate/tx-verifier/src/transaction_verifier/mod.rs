@@ -213,9 +213,8 @@ where
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _) => None,
             })
-            .try_fold(Amount::ZERO, |so_far, v| {
-                (so_far + v).ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))
-            })?;
+            .sum::<Option<Amount>>()
+            .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
 
         if total_burned < self.chain_config.as_ref().token_min_issuance_fee() {
             return Err(ConnectTransactionError::TokensError(
