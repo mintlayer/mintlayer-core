@@ -119,6 +119,10 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_ping_timeout: Option<NonZeroU64>,
 
+    /// A timeout after which a peer is disconnected.
+    #[clap(long)]
+    pub p2p_sync_stalling_timeout: Option<NonZeroU64>,
+
     /// A maximum tip age in seconds.
     ///
     /// The initial block download is finished if the difference between the current time and the

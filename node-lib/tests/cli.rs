@@ -93,6 +93,7 @@ fn read_config_override_values() {
     let p2p_timeout = NonZeroU64::new(10000).unwrap();
     let p2p_ping_check_period = 30;
     let p2p_ping_timeout = NonZeroU64::new(60).unwrap();
+    let p2p_sync_stalling_timeout = NonZeroU64::new(37).unwrap();
     let http_rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
     let ws_rpc_addr = SocketAddr::from_str("127.0.0.1:5433").unwrap();
     let backend_type = StorageBackendConfigFile::InMemory;
@@ -119,6 +120,7 @@ fn read_config_override_values() {
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         p2p_ping_check_period: Some(p2p_ping_check_period),
         p2p_ping_timeout: Some(p2p_ping_timeout),
+        p2p_sync_stalling_timeout: Some(p2p_sync_stalling_timeout),
         max_tip_age: Some(max_tip_age),
         http_rpc_addr: Some(http_rpc_addr),
         http_rpc_enabled: Some(true),
@@ -186,6 +188,10 @@ fn read_config_override_values() {
     assert_eq!(
         config.p2p.clone().unwrap().ping_timeout,
         Some(p2p_ping_timeout)
+    );
+    assert_eq!(
+        config.p2p.clone().unwrap().sync_stalling_timeout,
+        Some(p2p_sync_stalling_timeout)
     );
     assert_eq!(config.p2p.clone().unwrap().node_type, Some(node_type));
 

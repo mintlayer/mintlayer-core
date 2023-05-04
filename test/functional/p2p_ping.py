@@ -13,6 +13,7 @@ from test_framework.util import assert_equal
 
 PING_INTERVAL = 60
 TIMEOUT_INTERVAL = 150
+SYNC_TIMEOUT = 30
 
 
 class NodeNoPong(P2PInterface):
@@ -27,7 +28,8 @@ class PingPongTest(BitcoinTestFramework):
         self.extra_args = [[
             '--p2p-ping-timeout={}'.format(TIMEOUT_INTERVAL),
             '--p2p-ping-check-period={}'.format(PING_INTERVAL),
-            '--p2p-disable-noise=true'
+            '--p2p-disable-noise=true',
+            '--p2p-sync-stalling-timeout={}'.format(SYNC_TIMEOUT)
         ]]
 
     def check_peer_info(self, *, ping_last, ping_min, ping_wait):
