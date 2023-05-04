@@ -221,8 +221,8 @@ where
             .call(move |c| c.get_block_header(block_id))
             .await??
             // This should never happen because this block has just been produced by chainstate.
-            .expect("A new tip block unavailable")
-            .clone();
+            .expect("A new tip block unavailable");
+
         self.messaging_handle
             .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![header])))
     }
