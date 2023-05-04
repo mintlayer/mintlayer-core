@@ -15,6 +15,8 @@
 
 use std::path::Path;
 
+pub const COOKIE_FILENAME: &str = ".cookie";
+
 // TODO: Replace String with custom error
 pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), String> {
     let content = std::fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;

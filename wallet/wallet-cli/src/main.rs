@@ -32,10 +32,10 @@ use console::ConsoleContext;
 use crossterm::tty::IsTty;
 use errors::WalletCliError;
 use tokio::sync::mpsc;
-use utils::default_data_dir::default_data_dir_for_chain;
-use wallet_controller::cookie::load_cookie;
-
-const COOKIE_FILENAME: &str = ".cookie";
+use utils::{
+    cookie::{load_cookie, COOKIE_FILENAME},
+    default_data_dir::default_data_dir_for_chain,
+};
 
 enum Mode {
     Interactive {

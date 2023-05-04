@@ -15,7 +15,6 @@
 
 //! Common code for wallet UI applications
 
-pub mod cookie;
 pub mod mnemonic;
 mod sync;
 
