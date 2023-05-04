@@ -176,10 +176,9 @@ impl Tab for SummaryTab {
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
-        let (best_id, best_height) = self.current_tip.unwrap_or((
-            self.controller.chain_config().genesis_block_id(),
-            1000.into(),
-        ));
+        let (best_id, best_height) = self
+            .current_tip
+            .unwrap_or((self.controller.chain_config().genesis_block_id(), 0.into()));
 
         let grid = Grid::with_columns(2);
         let grid = grid.push(Text::new("Best block id ")).push(Text::new(best_id.to_string()));
