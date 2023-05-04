@@ -13,12 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use iced::{
-    alignment,
-    widget::{container, text},
-    Command, Element, Length,
+use std::{fmt::Debug, sync::Arc};
+
+use chainstate::{chainstate_interface::ChainstateInterface, ChainstateEvent};
+use common::{
+    chain::GenBlock,
+    primitives::{BlockHeight, Id},
 };
-use iced_aw::tab_bar::TabLabel;
+use iced::{
+    widget::{container, Column, Scrollable, Text},
+    Command, Element,
+};
+use iced_aw::{tab_bar::TabLabel, Grid};
+use subsystem::Handle;
+use tokio::sync::{
+    mpsc::{UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
+use utils::tap_error_log::LogError;
 
 use crate::backend_controller::NodeBackendController;
 
@@ -26,21 +38,119 @@ use super::{Icon, Tab, TabsMessage};
 
 #[derive(Debug, Clone)]
 pub enum SummaryMessage {
+    Starting,
+    Ready(RegisteredSubscriptions),
+    UpdateState((RegisteredSubscriptions, WidgetDataUpdate)),
     NoOp,
+}
+
+#[derive(Debug, Clone)]
+pub enum WidgetDataUpdate {
+    TipUpdated((Id<GenBlock>, BlockHeight)),
+    NoOp,
+}
+
+#[derive(Clone)]
+pub struct RegisteredSubscriptions {
+    // Unfortunately, GUI messages must support Clone, and async channel receivers are not Clone, so we need this (ugly) Arc.
+    #[allow(clippy::type_complexity)]
+    chainstate_event_receiver: Arc<Mutex<UnboundedReceiver<(Id<GenBlock>, BlockHeight)>>>,
+}
+
+impl Debug for RegisteredSubscriptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegisteredSubscriptions")
+            .field("chainstate_event_receiver", &self.chainstate_event_receiver)
+            .finish()
+    }
 }
 
 pub struct SummaryTab {
     controller: NodeBackendController,
+    current_tip: Option<(Id<GenBlock>, BlockHeight)>,
 }
 
 impl SummaryTab {
     pub fn new(controller: NodeBackendController) -> Self {
-        SummaryTab { controller }
+        SummaryTab {
+            controller,
+            current_tip: None,
+        }
     }
 
     pub fn update(&mut self, message: SummaryMessage) -> Command<SummaryMessage> {
         match message {
             SummaryMessage::NoOp => Command::none(),
+            SummaryMessage::Starting => Command::perform(
+                Self::initialize_subscriptions(self.controller.node().chainstate.clone()),
+                SummaryMessage::Ready,
+            ),
+            SummaryMessage::Ready(subs) => Command::perform(
+                Self::event_loop_single_iteration(subs),
+                SummaryMessage::UpdateState,
+            ),
+            SummaryMessage::UpdateState((subs, new_data)) => {
+                match new_data {
+                    WidgetDataUpdate::TipUpdated(tip) => self.current_tip = Some(tip),
+                    WidgetDataUpdate::NoOp => (),
+                }
+                Command::perform(
+                    Self::event_loop_single_iteration(subs),
+                    SummaryMessage::UpdateState,
+                )
+            }
+        }
+    }
+
+    async fn subscribe_to_chainstate(
+        chainstate_handle: Handle<Box<dyn ChainstateInterface>>,
+        chainstate_sender: UnboundedSender<(Id<GenBlock>, BlockHeight)>,
+    ) {
+        chainstate_handle
+            .call_mut(|this| {
+                let subscribe_func =
+                    Arc::new(
+                        move |chainstate_event: ChainstateEvent| match chainstate_event {
+                            ChainstateEvent::NewTip(block_id, block_height) => {
+                                _ = chainstate_sender
+                                    .send((block_id.into(), block_height))
+                                    .log_err_pfx("Chainstate subscriber failed to send new tip");
+                            }
+                        },
+                    );
+
+                this.subscribe_to_events(subscribe_func);
+            })
+            .await
+            .expect("Failed to subscribe to chainstate");
+    }
+
+    async fn initialize_subscriptions(
+        chainstate_handle: Handle<Box<dyn ChainstateInterface>>,
+    ) -> RegisteredSubscriptions {
+        let (chainstate_event_sender, chainstate_event_receiver) =
+            tokio::sync::mpsc::unbounded_channel();
+
+        Self::subscribe_to_chainstate(chainstate_handle.clone(), chainstate_event_sender).await;
+
+        RegisteredSubscriptions {
+            chainstate_event_receiver: Arc::new(chainstate_event_receiver.into()),
+        }
+    }
+
+    async fn event_loop_single_iteration(
+        subs: RegisteredSubscriptions,
+    ) -> (RegisteredSubscriptions, WidgetDataUpdate) {
+        let mut chainstate_event_receiver = subs.chainstate_event_receiver.lock().await;
+        tokio::select! {
+            event = (*chainstate_event_receiver).recv() => {
+                drop(chainstate_event_receiver);
+                if let Some((block_id, block_height)) = event {
+                    (subs, WidgetDataUpdate::TipUpdated((block_id, block_height)))
+                } else {
+                    (subs, WidgetDataUpdate::NoOp)
+                }
+            }
         }
     }
 }
@@ -58,23 +168,27 @@ impl Tab for SummaryTab {
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
-        genesis_block_label_field(&self.controller)
+        let (best_id, best_height) = self
+            .current_tip
+            .unwrap_or((self.controller.chain_config().genesis_block_id(), 0.into()));
+
+        let grid = Grid::with_columns(2);
+        let grid = grid.push(Text::new("Best block id ")).push(Text::new(best_id.to_string()));
+        let grid = grid
+            .push(Text::new("Best block height "))
+            .push(Text::new(best_height.to_string()));
+
+        let main_widget: Element<'_, Self::Message> = Column::new()
+            .spacing(15)
+            .max_width(600)
+            .align_items(iced::Alignment::Center)
+            .push(grid)
+            .into();
+
+        let main_widget = Scrollable::new(main_widget);
+
+        let c = container(main_widget);
+
+        c.into()
     }
-}
-
-pub fn genesis_block_label_field<'a>(
-    backend_controller: &NodeBackendController,
-) -> Element<'a, TabsMessage, iced::Renderer> {
-    let main_widget = text(&format!(
-        "Genesis block: {}",
-        backend_controller.chain_config().genesis_block_id(),
-    ))
-    .width(Length::Fill)
-    .size(25)
-    .horizontal_alignment(alignment::Horizontal::Center)
-    .vertical_alignment(alignment::Vertical::Center);
-
-    let c = container(main_widget);
-
-    c.into()
 }
