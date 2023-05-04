@@ -38,10 +38,9 @@ use super::{Icon, Tab, TabsMessage};
 
 #[derive(Debug, Clone)]
 pub enum SummaryMessage {
-    Starting,
+    Start,
     Ready(RegisteredSubscriptions),
     UpdateState((RegisteredSubscriptions, WidgetDataUpdate)),
-    NoOp,
 }
 
 #[derive(Debug, Clone)]
@@ -72,19 +71,24 @@ pub struct SummaryTab {
 
 impl SummaryTab {
     pub fn new(controller: NodeBackendController) -> Self {
-        SummaryTab {
+        let summary_tab = SummaryTab {
             controller,
             current_tip: None,
-        }
+        };
+        // let _ = summary_tab.update(SummaryMessage::Starting);
+        summary_tab
+    }
+
+    pub fn start(controller: NodeBackendController) -> Vec<Command<SummaryMessage>> {
+        vec![Command::perform(
+            Self::initialize_subscriptions(controller.node().chainstate.clone()),
+            SummaryMessage::Ready,
+        )]
     }
 
     pub fn update(&mut self, message: SummaryMessage) -> Command<SummaryMessage> {
         match message {
-            SummaryMessage::NoOp => Command::none(),
-            SummaryMessage::Starting => Command::perform(
-                Self::initialize_subscriptions(self.controller.node().chainstate.clone()),
-                SummaryMessage::Ready,
-            ),
+            SummaryMessage::Start => iced::Command::batch(Self::start(self.controller.clone())),
             SummaryMessage::Ready(subs) => Command::perform(
                 Self::event_loop_single_iteration(subs),
                 SummaryMessage::UpdateState,
@@ -146,6 +150,8 @@ impl SummaryTab {
             event = (*chainstate_event_receiver).recv() => {
                 drop(chainstate_event_receiver);
                 if let Some((block_id, block_height)) = event {
+                    std::thread::sleep(std::time::Duration::from_millis(3000));
+                    println!("Updating state: new tip: {:?} at height {:?}", block_id, block_height);
                     (subs, WidgetDataUpdate::TipUpdated((block_id, block_height)))
                 } else {
                     (subs, WidgetDataUpdate::NoOp)
@@ -168,9 +174,10 @@ impl Tab for SummaryTab {
     }
 
     fn content(&self) -> Element<'_, Self::Message> {
-        let (best_id, best_height) = self
-            .current_tip
-            .unwrap_or((self.controller.chain_config().genesis_block_id(), 0.into()));
+        let (best_id, best_height) = self.current_tip.unwrap_or((
+            self.controller.chain_config().genesis_block_id(),
+            1000.into(),
+        ));
 
         let grid = Grid::with_columns(2);
         let grid = grid.push(Text::new("Best block id ")).push(Text::new(best_id.to_string()));

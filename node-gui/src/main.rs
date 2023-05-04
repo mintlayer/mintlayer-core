@@ -24,9 +24,7 @@ use iced::widget::{column, container, text};
 use iced::Subscription;
 use iced::{executor, Application, Command, Element, Length, Settings, Theme};
 use iced_aw::native::cupertino::cupertino_spinner::CupertinoSpinner;
-use main_window::main_menu::MenuMessage;
-use main_window::main_widget::MainWidgetMessage;
-use main_window::MainWindow;
+use main_window::{MainWindow, MainWindowMessage};
 
 pub fn main() -> iced::Result {
     MintlayerNodeGUI::run(Settings {
@@ -48,8 +46,7 @@ pub enum Message {
     Loaded(Result<NodeBackendController, String>),
     EventOccurred(iced::Event),
     ShuttingDownFinished,
-    MenuMessage(MenuMessage),
-    MainWidgetMessage(MainWidgetMessage),
+    MainWindowMessage(MainWindowMessage),
 }
 
 fn gui_shutdown(controller: &mut NodeBackendController) -> Command<Message> {
@@ -99,7 +96,9 @@ impl Application for MintlayerNodeGUI {
                 Message::Loaded(Ok(controller)) => {
                     *self =
                         MintlayerNodeGUI::Loaded(controller.clone(), MainWindow::new(controller));
-                    Command::none()
+                    iced::Command::perform(async {}, |_| {
+                        Message::MainWindowMessage(MainWindowMessage::Start)
+                    })
                 }
                 Message::Loaded(Err(e)) => {
                     *self = MintlayerNodeGUI::IntializationError(e);
@@ -114,8 +113,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => Command::none(),
-                Message::MenuMessage(_) => Command::none(),
-                Message::MainWidgetMessage(_) => Command::none(),
+                Message::MainWindowMessage(_) => Command::none(),
             },
             MintlayerNodeGUI::Loaded(ref mut controller, ref mut w) => match message {
                 Message::Loaded(_) => unreachable!("Already loaded"),
@@ -128,12 +126,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
-                Message::MenuMessage(menu_msg) => {
-                    w.main_menu.update(menu_msg).map(Message::MenuMessage)
-                }
-                Message::MainWidgetMessage(main_widget_msg) => {
-                    w.main_widget.update(main_widget_msg).map(Message::MainWidgetMessage)
-                }
+                Message::MainWindowMessage(msg) => w.update(msg).map(Message::MainWindowMessage),
             },
             MintlayerNodeGUI::IntializationError(_) => match message {
                 Message::Loaded(_) => Command::none(),
@@ -145,8 +138,7 @@ impl Application for MintlayerNodeGUI {
                     }
                 }
                 Message::ShuttingDownFinished => iced::window::close(),
-                Message::MenuMessage(_) => Command::none(),
-                Message::MainWidgetMessage(_) => Command::none(),
+                Message::MainWindowMessage(_) => Command::none(),
             },
         }
     }
@@ -157,7 +149,7 @@ impl Application for MintlayerNodeGUI {
                 container(CupertinoSpinner::new().width(Length::Fill).height(Length::Fill)).into()
             }
 
-            MintlayerNodeGUI::Loaded(state, w) => w.view(state),
+            MintlayerNodeGUI::Loaded(state, w) => w.view(state).map(Message::MainWindowMessage),
 
             MintlayerNodeGUI::IntializationError(e) => {
                 let error_box = column![

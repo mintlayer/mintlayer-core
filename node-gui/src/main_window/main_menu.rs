@@ -24,6 +24,7 @@ use crate::backend_controller::NodeBackendController;
 
 #[derive(Debug, Clone)]
 pub enum MenuMessage {
+    Start,
     NoOp,
     Exit,
 }
@@ -63,8 +64,13 @@ impl MainMenu {
         c.into()
     }
 
+    pub fn start() -> Vec<Command<MenuMessage>> {
+        vec![]
+    }
+
     pub fn update(&self, msg: MenuMessage) -> Command<MenuMessage> {
         match msg {
+            MenuMessage::Start => iced::Command::batch(Self::start()),
             MenuMessage::NoOp => Command::none(),
             MenuMessage::Exit => iced::window::close(),
         }

@@ -22,6 +22,7 @@ use crate::backend_controller::NodeBackendController;
 #[derive(Debug, Clone)]
 pub enum MainWidgetMessage {
     NoOp,
+    Start,
     TabsMessage(tabs::TabsMessage),
 }
 
@@ -36,19 +37,26 @@ impl MainWidget {
         }
     }
 
-    pub fn view(
-        &self,
-        backend_controller: &NodeBackendController,
-    ) -> Element<'_, MainWidgetMessage, iced::Renderer> {
-        self.tabs.view(backend_controller).map(MainWidgetMessage::TabsMessage)
+    pub fn start() -> Vec<Command<MainWidgetMessage>> {
+        vec![iced::Command::perform(async {}, |_| {
+            MainWidgetMessage::TabsMessage(tabs::TabsMessage::Start)
+        })]
     }
 
     pub fn update(&mut self, msg: MainWidgetMessage) -> Command<MainWidgetMessage> {
         match msg {
             MainWidgetMessage::NoOp => Command::none(),
+            MainWidgetMessage::Start => iced::Command::batch(Self::start()),
             MainWidgetMessage::TabsMessage(tabs_message) => {
                 self.tabs.update(tabs_message).map(MainWidgetMessage::TabsMessage)
             }
         }
+    }
+
+    pub fn view(
+        &self,
+        backend_controller: &NodeBackendController,
+    ) -> Element<'_, MainWidgetMessage, iced::Renderer> {
+        self.tabs.view(backend_controller).map(MainWidgetMessage::TabsMessage)
     }
 }
