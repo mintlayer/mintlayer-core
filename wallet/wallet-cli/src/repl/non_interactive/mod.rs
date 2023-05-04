@@ -57,18 +57,15 @@ fn process_line(
     }
 }
 
-pub fn run<T: std::io::BufRead>(
-    input: std::io::Lines<T>,
+pub fn run(
+    lines: impl Iterator<Item = String>,
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
-    exit_on_error: Option<bool>,
+    exit_on_error: bool,
 ) -> Result<(), WalletCliError> {
-    let exit_on_error = exit_on_error.unwrap_or(true);
     let repl_command = get_repl_command();
 
-    for line_res in input {
-        let line = line_res.expect("Should not fail normally");
-
+    for line in lines {
         let res = process_line(&repl_command, &event_tx, &line);
 
         match res {

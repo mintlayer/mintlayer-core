@@ -132,12 +132,11 @@ fn process_line(
 pub fn run(
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
-    exit_on_error: Option<bool>,
+    exit_on_error: bool,
     printer: reedline::ExternalPrinter<String>,
     history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
-    let exit_on_error = exit_on_error.unwrap_or(false);
     let repl_command = get_repl_command();
     let mut line_editor =
         create_line_editor(printer, repl_command.clone(), output, history_file, vi_mode)?;

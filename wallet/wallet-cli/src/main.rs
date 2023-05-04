@@ -23,7 +23,7 @@ mod console;
 mod errors;
 mod repl;
 
-use std::{io::BufRead, net::SocketAddr, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::chain::config::ChainType;
@@ -42,7 +42,28 @@ enum Mode {
         printer: reedline::ExternalPrinter<String>,
     },
     NonInteractive,
-    Commands(std::fs::File),
+    Commands(Vec<String>),
+}
+
+fn read_file(file_path: PathBuf) -> Result<Vec<String>, WalletCliError> {
+    let data =
+        std::fs::read_to_string(&file_path).map_err(|e| WalletCliError::FileError(file_path, e))?;
+    Ok(data.lines().map(|line| line.to_owned()).collect())
+}
+
+struct StdinReader;
+
+impl Iterator for StdinReader {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut input = String::new();
+        match std::io::stdin().read_line(&mut input) {
+            Ok(0) => None,
+            Ok(_) => Some(input),
+            Err(error) => panic!("stdin read failed unexpectedly: {error}"),
+        }
+    }
 }
 
 async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
@@ -63,9 +84,8 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
 
     let mode = if let Some(file_name) = commands_file {
         repl::non_interactive::log::init();
-        let file =
-            std::fs::File::open(&file_name).map_err(|e| WalletCliError::FileError(file_name, e))?;
-        Mode::Commands(file)
+        let lines = read_file(file_name)?;
+        Mode::Commands(lines)
     } else if std::io::stdin().is_tty() {
         let printer = repl::interactive::log::init();
         Mode::Interactive { printer }
@@ -123,22 +143,22 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         Mode::Interactive { printer } => repl::interactive::run(
             &output_copy,
             event_tx,
-            exit_on_error,
+            exit_on_error.unwrap_or(false),
             printer,
             history_file,
             vi_mode,
         ),
         Mode::NonInteractive => repl::non_interactive::run(
-            std::io::stdin().lines(),
+            StdinReader,
             &output_copy,
             event_tx,
-            exit_on_error,
+            exit_on_error.unwrap_or(true),
         ),
-        Mode::Commands(file) => repl::non_interactive::run(
-            std::io::BufReader::new(file).lines(),
+        Mode::Commands(lines) => repl::non_interactive::run(
+            lines.into_iter(),
             &output_copy,
             event_tx,
-            exit_on_error,
+            exit_on_error.unwrap_or(false),
         ),
     });
 
