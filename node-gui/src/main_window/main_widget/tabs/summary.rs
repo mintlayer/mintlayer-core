@@ -40,11 +40,11 @@ use super::{Icon, Tab, TabsMessage};
 pub enum SummaryMessage {
     Start,
     Ready(RegisteredSubscriptions),
-    UpdateState((RegisteredSubscriptions, WidgetDataUpdate)),
+    UpdateState((RegisteredSubscriptions, SummaryWidgetDataUpdate)),
 }
 
 #[derive(Debug, Clone)]
-pub enum WidgetDataUpdate {
+pub enum SummaryWidgetDataUpdate {
     TipUpdated((Id<GenBlock>, BlockHeight)),
     NoOp,
 }
@@ -95,8 +95,8 @@ impl SummaryTab {
             ),
             SummaryMessage::UpdateState((subs, new_data)) => {
                 match new_data {
-                    WidgetDataUpdate::TipUpdated(tip) => self.current_tip = Some(tip),
-                    WidgetDataUpdate::NoOp => (),
+                    SummaryWidgetDataUpdate::TipUpdated(tip) => self.current_tip = Some(tip),
+                    SummaryWidgetDataUpdate::NoOp => (),
                 }
                 Command::perform(
                     Self::event_loop_single_iteration(subs),
@@ -144,7 +144,7 @@ impl SummaryTab {
 
     async fn event_loop_single_iteration(
         subs: RegisteredSubscriptions,
-    ) -> (RegisteredSubscriptions, WidgetDataUpdate) {
+    ) -> (RegisteredSubscriptions, SummaryWidgetDataUpdate) {
         let mut chainstate_event_receiver = subs.chainstate_event_receiver.lock().await;
         tokio::select! {
             event = (*chainstate_event_receiver).recv() => {
@@ -152,9 +152,9 @@ impl SummaryTab {
                 if let Some((block_id, block_height)) = event {
                     std::thread::sleep(std::time::Duration::from_millis(3000));
                     println!("Updating state: new tip: {:?} at height {:?}", block_id, block_height);
-                    (subs, WidgetDataUpdate::TipUpdated((block_id, block_height)))
+                    (subs, SummaryWidgetDataUpdate::TipUpdated((block_id, block_height)))
                 } else {
-                    (subs, WidgetDataUpdate::NoOp)
+                    (subs, SummaryWidgetDataUpdate::NoOp)
                 }
             }
         }
