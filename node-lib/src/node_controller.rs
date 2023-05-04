@@ -13,13 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, net::SocketAddr};
 
 use blockprod::interface::blockprod_interface::BlockProductionInterface;
 use chainstate_launcher::ChainstateInterface;
 use mempool::MempoolInterface;
 use p2p::interface::p2p_interface::P2pInterface;
 use subsystem::{manager::ShutdownTrigger, Handle};
+
+#[derive(Debug, Clone)]
+pub struct RuntimeInfo {
+    pub rpc_http_address: Option<SocketAddr>,
+    pub rpc_websocket_address: Option<SocketAddr>,
+}
 
 /// Controller for the node subsystems.
 /// It contains handles to the subsystems to be used by components
@@ -31,6 +37,7 @@ pub struct NodeController {
     pub mempool: Handle<dyn MempoolInterface>,
     pub block_prod: Handle<Box<dyn BlockProductionInterface>>,
     pub p2p: Handle<Box<dyn P2pInterface>>,
+    pub runtime_info: RuntimeInfo,
 }
 
 impl Debug for NodeController {

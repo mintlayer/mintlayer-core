@@ -25,6 +25,7 @@ use crate::{
 
 use super::{get_repl_command, parse_input};
 
+#[derive(Debug)]
 enum LineOutput {
     Print(String),
     None,
@@ -63,10 +64,13 @@ pub fn run(
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
 ) -> Result<(), WalletCliError> {
+    logging::log::info!("Start run...");
     let repl_command = get_repl_command();
 
     for line in lines {
+        logging::log::info!("Start process line...");
         let res = process_line(&repl_command, &event_tx, &line);
+        logging::log::info!("Process line result: {res:?}");
 
         match res {
             Ok(LineOutput::Print(text)) => {

@@ -1,0 +1,28 @@
+[package]
+name = "wallet-cli-lib"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+common = { path = "../../common" }
+logging = { path = "../../logging" }
+node-comm = { path = "../wallet-node-client" }
+serialization = { path = "../../serialization" }
+utils = { path = "../../utils" }
+wallet = { path = ".." }
+wallet-controller = { path = "../wallet-controller" }
+wallet-storage = { path = "../storage" }
+
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.26"
+directories = "5.0"
+reedline = { version = "0.19", features = ["external_printer"] }
+shlex = "1.0"
+thiserror.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
+
+[dev-dependencies]
+node-lib = { path = "../../node-lib" }
+test-utils = { path = "../../test-utils" }

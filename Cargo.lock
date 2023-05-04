@@ -6443,14 +6443,25 @@ name = "wallet-cli"
 version = "0.1.0"
 dependencies = [
  "clap 4.2.4",
+ "tokio",
+ "wallet-cli-lib",
+]
+
+[[package]]
+name = "wallet-cli-lib"
+version = "0.1.0"
+dependencies = [
+ "clap 4.2.4",
  "common",
  "crossterm",
  "directories",
  "logging",
  "node-comm",
+ "node-lib",
  "reedline",
  "serialization",
  "shlex",
+ "test-utils",
  "thiserror",
  "tokio",
  "utils",
