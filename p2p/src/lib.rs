@@ -166,7 +166,23 @@ where
         })
     }
 
+    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
+        log::trace!("Entering p2p main loop");
+        loop {
+            tokio::select! {
+                () = shutdown.recv() => {
+                    self.shutdown().await;
+                    break;
+                },
+                call = call.recv() => call(&mut self).await,
+            }
+        }
+    }
+
     async fn shutdown(self) {
+        // TODO: Send the shutdown message instead of aborting the tasks?
+        // TODO: Shut down the backend.
+
         self.peer_manager_task.abort();
         let _ = self.peer_manager_task.await;
 
@@ -285,7 +301,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     })
 }
 
-async fn start_p2p<S: PeerDbStorage + 'static>(
+async fn run_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -293,14 +309,16 @@ async fn start_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
     bind_addresses: Vec<SocketAddr>,
-) -> Result<Box<dyn P2pInterface>> {
+    call: CallRequest<dyn P2pInterface>,
+    shutdown: ShutdownRequest,
+) -> Result<()> {
     if let Some(true) = p2p_config.disable_noise {
         assert_eq!(*chain_config.chain_type(), ChainType::Regtest);
         assert!(p2p_config.socks5_proxy.is_none());
 
         let transport = make_p2p_transport_unencrypted();
 
-        let p2p = P2p::<P2pNetworkingServiceUnencrypted>::new(
+        P2p::<P2pNetworkingServiceUnencrypted>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -310,13 +328,13 @@ async fn start_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
         let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
-        let p2p = P2p::<P2pNetworkingServiceSocks5Proxy>::new(
+        P2p::<P2pNetworkingServiceSocks5Proxy>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -326,13 +344,13 @@ async fn start_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     } else {
         let transport = make_p2p_transport();
 
-        let p2p = P2p::<P2pNetworkingService>::new(
+        P2p::<P2pNetworkingService>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -342,8 +360,10 @@ async fn start_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     }
+
+    Ok(())
 }

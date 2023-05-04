@@ -26,7 +26,7 @@ use crate::{
     },
     message::SyncMessage,
     net::NetworkingService,
-    start_p2p,
+    run_p2p,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, P2p, P2pInit, PeerDbStorage,
@@ -111,8 +111,8 @@ where
 
 #[async_trait::async_trait]
 impl<S: PeerDbStorage + 'static> P2pSubsystemInterface for P2pInit<S> {
-    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
-        let mut p2p = match start_p2p(
+    async fn run(mut self, call: CallRequest<dyn P2pInterface>, shutdown: ShutdownRequest) {
+        if let Err(e) = run_p2p(
             self.chain_config,
             self.p2p_config,
             self.chainstate_handle,
@@ -120,25 +120,12 @@ impl<S: PeerDbStorage + 'static> P2pSubsystemInterface for P2pInit<S> {
             self.time_getter,
             self.peerdb_storage,
             self.bind_addresses,
+            call,
+            shutdown,
         )
         .await
         {
-            Ok(p2p) => p2p,
-            Err(e) => {
-                log::error!("Failed to run p2p: {e:?}");
-                return;
-            }
-        };
-
-        log::trace!("Entering p2p main loop");
-        loop {
-            tokio::select! {
-                () = shutdown.recv() => {
-                    p2p.shutdown().await;
-                    break;
-                },
-                call = call.recv() => call(&mut p2p).await,
-            }
+            log::error!("Failed to run p2p: {e:?}");
         }
     }
 }
