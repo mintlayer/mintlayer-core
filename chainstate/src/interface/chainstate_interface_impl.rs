@@ -27,10 +27,10 @@ use crate::{
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::chain::TxOutput;
+use common::chain::{block::signed_block_header::SignedBlockHeader, TxOutput};
 use common::{
     chain::{
-        block::{Block, BlockHeader, BlockReward, GenBlock},
+        block::{Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
@@ -68,7 +68,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::ProcessBlockError)
     }
 
-    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
+    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
         self.chainstate
             .preliminary_header_check(header)
             .map_err(ChainstateError::ProcessBlockError)
@@ -149,7 +149,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         &self,
         locator: Locator,
         header_count_limit: usize,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -159,8 +159,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
     fn filter_already_existing_blocks(
         &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -179,7 +179,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(best_block_index.block_height())
     }
 
-    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+    fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?

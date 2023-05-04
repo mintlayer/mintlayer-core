@@ -322,7 +322,7 @@ impl BlockProduction {
                         }
                     };
 
-                    let block = Block::new_from_header(block_header, block_body.clone())?;
+                    let block = Block::new_from_header(block_header.with_no_signature(), block_body.clone())?;
                     return Ok((block, end_confirm_receiver));
                 }
             }

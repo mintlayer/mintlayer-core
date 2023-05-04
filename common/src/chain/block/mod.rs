@@ -25,6 +25,7 @@ pub use crate::chain::{
 pub mod block_header;
 pub mod block_size;
 pub mod consensus_data;
+pub mod signed_block_header;
 pub mod timestamp;
 
 mod block_reward;
@@ -48,6 +49,8 @@ use crate::{
 };
 
 use merkletree::{tree::MerkleTree, MerkleTreeFormError};
+
+use self::signed_block_header::SignedBlockHeader;
 
 use super::signed_transaction::SignedTransaction;
 
@@ -130,27 +133,29 @@ impl Block {
             witness_merkle_root,
         };
 
+        let header = header.with_no_signature();
+
         let block = Block::V1(BlockV1 { header, body });
 
         Ok(block)
     }
 
     pub fn new_from_header(
-        header: BlockHeader,
+        header: SignedBlockHeader,
         body: BlockBody,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&body)?;
         let witness_merkle_root = calculate_witness_merkle_root(&body)?;
 
         ensure!(
-            header.tx_merkle_root == tx_merkle_root,
-            BlockCreationError::MerkleTreeMismatch(header.tx_merkle_root, tx_merkle_root,)
+            header.header().tx_merkle_root == tx_merkle_root,
+            BlockCreationError::MerkleTreeMismatch(header.header().tx_merkle_root, tx_merkle_root,)
         );
 
         ensure!(
-            header.witness_merkle_root == witness_merkle_root,
+            header.header().witness_merkle_root == witness_merkle_root,
             BlockCreationError::WitnessMerkleTreeMismatch(
-                header.witness_merkle_root,
+                header.header().witness_merkle_root,
                 witness_merkle_root,
             )
         );
@@ -184,7 +189,7 @@ impl Block {
         }
     }
 
-    pub fn header(&self) -> &BlockHeader {
+    pub fn header(&self) -> &SignedBlockHeader {
         match self {
             Block::V1(blk) => blk.header(),
         }
@@ -243,7 +248,7 @@ impl Idable for Block {
     fn get_id(&self) -> Id<Self> {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.
-        self.header().get_id()
+        self.header().header().get_id()
     }
 }
 
@@ -301,6 +306,8 @@ mod tests {
             transactions: Vec::new(),
         };
 
+        let header = header.with_no_signature();
+
         let block = Block::V1(BlockV1 { header, body });
         calculate_tx_merkle_root(block.body()).unwrap();
 
@@ -324,6 +331,8 @@ mod tests {
             reward: BlockReward::new(Vec::new()),
             transactions: Vec::new(),
         };
+
+        let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
         let res = calculate_tx_merkle_root(block.body()).unwrap();
@@ -354,6 +363,8 @@ mod tests {
             transactions: Vec::new(),
         };
 
+        let header = header.with_no_signature();
+
         let block = Block::V1(BlockV1 { header, body });
         let res = calculate_tx_merkle_root(block.body()).unwrap();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
@@ -383,6 +394,8 @@ mod tests {
             reward: BlockReward::new(Vec::new()),
             transactions: vec![one_transaction],
         };
+
+        let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
         calculate_tx_merkle_root(block.body()).unwrap();
@@ -433,6 +446,8 @@ mod tests {
             reward: BlockReward::new(Vec::new()),
             transactions: Vec::new(),
         };
+
+        let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
 

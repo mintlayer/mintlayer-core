@@ -50,7 +50,7 @@ use chainstate_storage::{
 use chainstate_types::{BlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, BlockHeader},
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         config::ChainConfig,
         Block,
     },
@@ -448,9 +448,9 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         Ok(block)
     }
 
-    pub fn preliminary_header_check(&self, block: BlockHeader) -> Result<(), BlockError> {
+    pub fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), BlockError> {
         let chainstate_ref = self.make_db_tx_ro().map_err(BlockError::from)?;
-        chainstate_ref.check_block_header(&block).log_err()?;
+        chainstate_ref.check_block_header(&header).log_err()?;
         Ok(())
     }
 

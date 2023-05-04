@@ -16,7 +16,7 @@
 use chainstate::Locator;
 use common::{
     chain::{
-        block::{Block, BlockHeader},
+        block::{signed_block_header::SignedBlockHeader, Block},
         SignedTransaction, Transaction,
     },
     primitives::Id,
@@ -102,19 +102,19 @@ pub struct PingRequest {
 /// announcement.
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderList {
-    headers: Vec<BlockHeader>,
+    headers: Vec<SignedBlockHeader>,
 }
 
 impl HeaderList {
-    pub fn new(headers: Vec<BlockHeader>) -> Self {
+    pub fn new(headers: Vec<SignedBlockHeader>) -> Self {
         Self { headers }
     }
 
-    pub fn headers(&self) -> &[BlockHeader] {
+    pub fn headers(&self) -> &[SignedBlockHeader] {
         &self.headers
     }
 
-    pub fn into_headers(self) -> Vec<BlockHeader> {
+    pub fn into_headers(self) -> Vec<SignedBlockHeader> {
         self.headers
     }
 }

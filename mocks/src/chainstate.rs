@@ -21,7 +21,10 @@ use chainstate::{
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, Block, BlockReward,
+            GenBlock,
+        },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
         TxMainChainIndex,
@@ -41,10 +44,10 @@ mockall::mock! {
         fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
         fn process_block(&mut self, block: Block, source: BlockSource) -> Result<Option<BlockIndex>, ChainstateError>;
         fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
-        fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError>;
+        fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
         fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
         fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
-        fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError>;
+        fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError>;
         fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError>;
         fn get_block_height_in_main_chain(
             &self,
@@ -61,11 +64,11 @@ mockall::mock! {
             &self,
             locator: Locator,
             header_count_limit: usize,
-        ) -> Result<Vec<BlockHeader>, ChainstateError>;
+        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
         fn filter_already_existing_blocks(
             &self,
-            headers: Vec<BlockHeader>,
-        ) -> Result<Vec<BlockHeader>, ChainstateError>;
+            headers: Vec<SignedBlockHeader>,
+        ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
         fn get_block_index(
             &self,
             id: &Id<Block>

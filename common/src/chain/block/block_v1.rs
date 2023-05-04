@@ -20,13 +20,10 @@ use crate::{
         block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
         signed_transaction::SignedTransaction,
     },
-    primitives::{
-        id::{self, Idable},
-        Id, H256,
-    },
+    primitives::{id::Idable, Id, H256},
 };
 
-use super::{block_header::BlockHeader, timestamp::BlockTimestamp};
+use super::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockBody {
@@ -53,40 +50,40 @@ impl BlockBody {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
-    pub(super) header: BlockHeader,
+    pub(super) header: SignedBlockHeader,
     pub(super) body: BlockBody,
 }
 
 impl Idable for BlockV1 {
     type Tag = Block;
     fn get_id(&self) -> Id<Block> {
-        Id::new(id::hash_encoded(self.header()))
+        self.header().get_id()
     }
 }
 
 impl BlockV1 {
     pub fn tx_merkle_root(&self) -> H256 {
-        self.header.tx_merkle_root
+        self.header.header().tx_merkle_root
     }
 
     pub fn witness_merkle_root(&self) -> H256 {
-        self.header.witness_merkle_root
+        self.header.header().witness_merkle_root
     }
 
-    pub fn header(&self) -> &BlockHeader {
+    pub fn header(&self) -> &SignedBlockHeader {
         &self.header
     }
 
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
-        self.header.consensus_data = consensus_data;
+        self.header.header_mut().consensus_data = consensus_data;
     }
 
     pub fn consensus_data(&self) -> &ConsensusData {
-        &self.header.consensus_data
+        &self.header.header().consensus_data
     }
 
     pub fn timestamp(&self) -> BlockTimestamp {
-        self.header.timestamp()
+        self.header.header().timestamp()
     }
 
     pub fn transactions(&self) -> &[SignedTransaction] {
@@ -98,7 +95,7 @@ impl BlockV1 {
     }
 
     pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
-        &self.header.prev_block_id
+        &self.header.header().prev_block_id
     }
 
     pub fn body(&self) -> &BlockBody {
@@ -110,11 +107,11 @@ impl BlockV1 {
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        let inputs = match &self.header.consensus_data {
+        let inputs = match &self.header.header().consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
             ConsensusData::PoS(data) => Some(data.kernel_inputs()),
         };
-        let witness = match &self.header.consensus_data {
+        let witness = match &self.header.header().consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
             ConsensusData::PoS(data) => Some(data.kernel_witness()),
         };
