@@ -46,7 +46,7 @@ fn create_pool_data(
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
+    let margin_ratio = PerThousand::new_from_rng(rng);
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     PoolData::new(
         decomission_destination,

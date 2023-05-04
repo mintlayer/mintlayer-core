@@ -364,7 +364,6 @@ impl BanScore for pos_accounting::Error {
             E::PoolBalanceSubtractionError => 100,
             E::DelegationSharesAdditionError => 100,
             E::DelegationSharesSubtractionError => 100,
-            E::InvariantErrorDelegationSharesMoreThanPoolBalance => 100,
             E::InvariantErrorPoolCreationReversalFailedBalanceNotFound => 100,
             E::InvariantErrorPoolCreationReversalFailedDataNotFound => 100,
             E::InvariantErrorPoolCreationReversalFailedAmountChanged => 100,

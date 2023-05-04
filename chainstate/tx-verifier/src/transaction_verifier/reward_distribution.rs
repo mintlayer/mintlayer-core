@@ -20,12 +20,11 @@ use crate::{error::ConnectTransactionError, TransactionSource};
 
 use common::{
     chain::{Block, DelegationId, PoolId},
-    primitives::{amount::UnsignedIntType, Amount, Id},
-    Uint128, Uint256,
+    primitives::{per_thousand::PerThousand, Amount, Id},
+    Uint256,
 };
 use pos_accounting::{
     AccountingBlockRewardUndo, PoSAccountingOperations, PoSAccountingUndo, PoSAccountingView,
-    PoolData,
 };
 use utils::ensure;
 
@@ -43,9 +42,14 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         .get_pool_data(pool_id)?
         .ok_or(ConnectTransactionError::PoolDataNotFound(pool_id))?;
 
-    let pool_owner_reward = calculate_pool_owner_reward(total_reward, &pool_data).ok_or(
-        ConnectTransactionError::PoolOwnerRewardCalculationFailed(block_id, pool_id),
-    )?;
+    let pool_owner_reward = calculate_pool_owner_reward(
+        total_reward,
+        pool_data.cost_per_block(),
+        pool_data.margin_ratio_per_thousand(),
+    )
+    .ok_or(ConnectTransactionError::PoolOwnerRewardCalculationFailed(
+        block_id, pool_id,
+    ))?;
 
     let total_delegations_reward = (total_reward - pool_owner_reward).ok_or(
         ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(
@@ -62,23 +66,19 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
         match accounting_adapter.accounting_delta().get_pool_delegations_shares(pool_id)? {
             Some(delegation_shares) => {
                 let total_delegations_balance =
-                    delegation_shares.values().try_fold(Amount::ZERO, |acc, v| {
-                        (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
-                            block_id, pool_id,
-                        ))
-                    })?;
+                    delegation_shares.values().copied().sum::<Option<Amount>>().ok_or(
+                        ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
+                    )?;
 
                 if total_delegations_balance > Amount::ZERO {
-                    let (delegation_undos, delegations_reward_remainder) =
-                        distribute_delegations_pos_reward(
-                            accounting_adapter,
-                            &delegation_shares,
-                            block_id,
-                            pool_id,
-                            total_delegations_balance,
-                            total_delegations_reward,
-                        )?;
-                    (delegation_undos, delegations_reward_remainder)
+                    distribute_delegations_pos_reward(
+                        accounting_adapter,
+                        &delegation_shares,
+                        block_id,
+                        pool_id,
+                        total_delegations_balance,
+                        total_delegations_reward,
+                    )?
                 } else {
                     // If total balance of all delegations is 0 then give the reward to the pool's owner
                     (Vec::new(), total_delegations_reward)
@@ -88,7 +88,7 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
             None => (Vec::new(), total_delegations_reward),
         }
     } else {
-        // Do nothing if no delegations
+        // Do nothing if no delegations reward
         (Vec::new(), Amount::ZERO)
     };
 
@@ -100,17 +100,24 @@ pub fn distribute_pos_reward<P: PoSAccountingView>(
 
     let undos = delegation_undos
         .into_iter()
-        .chain(vec![increase_pool_balance_undo].into_iter())
+        .chain(std::iter::once(increase_pool_balance_undo))
         .collect();
 
     Ok(AccountingBlockRewardUndo::new(undos))
 }
 
-fn calculate_pool_owner_reward(total_reward: Amount, pool_data: &PoolData) -> Option<Amount> {
-    (total_reward - pool_data.cost_per_block())
-        .and_then(|v| v * pool_data.margin_ratio_per_thousand().value().into())
+fn calculate_pool_owner_reward(
+    total_reward: Amount,
+    cost_per_block: Amount,
+    mpt: PerThousand,
+) -> Option<Amount> {
+    let pool_owner_reward = (total_reward - cost_per_block)
+        .and_then(|v| v * mpt.value().into())
         .and_then(|v| v / 1000)
-        .and_then(|v| v + pool_data.cost_per_block())
+        .and_then(|v| v + cost_per_block)?;
+
+    debug_assert!(pool_owner_reward <= total_reward);
+    Some(pool_owner_reward)
 }
 
 /// The reward is distributed among delegations proportionally to their balance
@@ -143,11 +150,9 @@ fn distribute_delegations_pos_reward<P: PoSAccountingView>(
     // Due to integer arithmetics there can be a small remainder after all the delegations distributed.
     // This remainder goes to the pool's owner
     let total_delegations_reward_distributed =
-        rewards_per_delegation.iter().try_fold(Amount::ZERO, |acc, (_, v)| {
-            (acc + *v).ok_or(ConnectTransactionError::DelegationsRewardSumFailed(
-                block_id, pool_id,
-            ))
-        })?;
+        rewards_per_delegation.iter().map(|(_, v)| *v).sum::<Option<Amount>>().ok_or(
+            ConnectTransactionError::DelegationsRewardSumFailed(block_id, pool_id),
+        )?;
 
     let delegations_reward_remainder =
         (total_delegations_reward - total_delegations_reward_distributed).ok_or(
@@ -167,7 +172,10 @@ fn calculate_rewards_per_delegation(
     total_delegations_amount: Amount,
     total_delegations_reward_amount: Amount,
 ) -> Result<Vec<(DelegationId, Amount)>, ConnectTransactionError> {
-    assert_eq_size!(Amount, Uint128);
+    // this condition is necessary to ensure that the multiplication of balance and rewards won't overflow;
+    // if this is to change, please ensure that the output of the operations below has twice as many bits
+    assert_eq_size!(Amount, common::primitives::amount::UnsignedIntType);
+
     ensure!(
         total_delegations_amount != Amount::ZERO,
         ConnectTransactionError::TotalDelegationBalanceZero(pool_id)
@@ -181,14 +189,15 @@ fn calculate_rewards_per_delegation(
             |(delegation_id, balance_amount)| -> Result<_, ConnectTransactionError> {
                 let balance = Uint256::from_amount(*balance_amount);
                 let reward = (total_delegations_reward * balance) / total_delegations_balance;
-                let reward: UnsignedIntType = reward.try_into().map_err(|_| {
-                    ConnectTransactionError::DelegationRewardOverflow(
-                        *delegation_id,
-                        total_delegations_amount,
-                        total_delegations_reward_amount,
-                        *balance_amount,
-                    )
-                })?;
+                let reward: common::primitives::amount::UnsignedIntType =
+                    reward.try_into().map_err(|_| {
+                        ConnectTransactionError::DelegationRewardOverflow(
+                            *delegation_id,
+                            total_delegations_amount,
+                            total_delegations_reward_amount,
+                            *balance_amount,
+                        )
+                    })?;
                 Ok((*delegation_id, Amount::from_atoms(reward)))
             },
         )
@@ -220,6 +229,30 @@ mod tests {
 
     fn new_delegation_id(v: u64) -> DelegationId {
         DelegationId::new(H256::from_low_u64_be(v))
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn calculate_pool_owner_reward_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
+        let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let mpt = PerThousand::new_from_rng(&mut rng);
+        let mpt_zero = PerThousand::new(0).unwrap();
+
+        assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt).is_some());
+        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt).is_some());
+        assert!(calculate_pool_owner_reward(reward, Amount::ZERO, mpt_zero).is_some());
+        assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt_zero).is_some());
+        assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt).is_some());
+        // negative amount
+        assert!(calculate_pool_owner_reward(Amount::ZERO, cost_per_block, mpt_zero).is_none());
+        // overflow
+        assert!(calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt).is_none());
     }
 
     // Create 2 pools: pool_a and pool_b.
@@ -384,7 +417,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = PerThousand::new(rng.gen_range(0..=1000)).unwrap();
+        let mpt = PerThousand::new_from_rng(&mut rng);
 
         let original_pool_balance =
             ((pledged_amount + delegation_id_1_amount).unwrap() + delegation_id_2_amount).unwrap();
@@ -465,7 +498,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = PerThousand::new(rng.gen_range(0..1000)).unwrap();
+        let mpt = PerThousand::new_from_rng(&mut rng);
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
@@ -590,7 +623,7 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
-        let mpt = PerThousand::new(rng.gen_range(0..1000)).unwrap();
+        let mpt = PerThousand::new_from_rng(&mut rng);
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let pool_data = PoolData::new(

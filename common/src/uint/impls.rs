@@ -588,6 +588,13 @@ impl Uint256 {
     }
 }
 
+impl From<Uint128> for u128 {
+    #[inline]
+    fn from(n: Uint128) -> Self {
+        u128::from_le_bytes(n.to_bytes())
+    }
+}
+
 impl From<Uint256> for Uint512 {
     #[inline]
     fn from(n: Uint256) -> Self {
@@ -608,7 +615,7 @@ impl TryFrom<Uint256> for u128 {
         if n > Uint256::from_u128(u128::MAX) {
             Err(UintConversionError::ConversionOverflow)
         } else {
-            Ok(u128::from_le_bytes(n.low_128().to_bytes()))
+            Ok(n.low_128().into())
         }
     }
 }
@@ -1089,6 +1096,21 @@ mod tests {
             Uint256::try_from(a).unwrap_err(),
             UintConversionError::ConversionOverflow
         );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn u128_from_uint128(#[case] seed: Seed) {
+        assert_eq!(1u128, Uint128::ONE.into());
+        assert_eq!(u128::MAX, Uint128::MAX.into());
+
+        let mut rng = make_seedable_rng(seed);
+        for _ in 0..1000 {
+            let a = rng.gen::<u128>();
+            let b = Uint128::from_u128(a);
+            assert_eq!(a, b.into());
+        }
     }
 
     #[test]

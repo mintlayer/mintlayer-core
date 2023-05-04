@@ -550,6 +550,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 }
 
+// TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
+// because it can be invalid for certain contexts.
 fn get_output_coin_amount(
     pos_accounting_view: &impl PoSAccountingView,
     output: &TxOutput,

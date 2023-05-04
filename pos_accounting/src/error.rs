@@ -51,8 +51,6 @@ pub enum Error {
     DelegationSharesAdditionError,
     #[error("Delegation shares arithmetic sub error")]
     DelegationSharesSubtractionError,
-    #[error("Sum of all delegations shares cannot be more than pool balance")]
-    InvariantErrorDelegationSharesMoreThanPoolBalance,
     #[error("Pool creation undo failed; pool balance cannot be found")]
     InvariantErrorPoolCreationReversalFailedBalanceNotFound,
     #[error("Pool creation undo failed; pool data cannot be found")]

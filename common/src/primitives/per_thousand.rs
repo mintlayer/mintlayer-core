@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode, Error, Input, Output};
+use crypto::random::Rng;
+use serialization::{Decode, Encode, Error, Input};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Encode, Debug)]
 pub struct PerThousand(u16);
 
 impl PerThousand {
@@ -27,22 +28,18 @@ impl PerThousand {
         }
     }
 
+    pub fn new_from_rng(rng: &mut impl Rng) -> Self {
+        Self(rng.gen_range(0..=1000))
+    }
+
     pub fn value(&self) -> u16 {
         self.0
     }
 }
 
-impl Encode for PerThousand {
-    fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
-        dest.write(&self.0.to_be_bytes());
-    }
-}
-
 impl Decode for PerThousand {
     fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        let mut num_be_bytes = [0u8; 2];
-        input.read(&mut num_be_bytes)?;
-        Self::new(u16::from_be_bytes(num_be_bytes)).ok_or(serialization::Error::from(
+        Self::new(u16::decode(input)?).ok_or(serialization::Error::from(
             "PerThousand deserialization failed",
         ))
     }
@@ -61,6 +58,8 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn test_per_thousand(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
+
+        assert!(PerThousand::new_from_rng(&mut rng).value() <= 1000);
 
         assert_eq!(PerThousand::new(0).unwrap().value(), 0);
         assert_eq!(PerThousand::new(1000).unwrap().value(), 1000);
@@ -85,7 +84,7 @@ mod tests {
     fn test_encode_decode(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
 
-        let encoded_valid = PerThousand::new(rng.gen_range(0..=1000)).unwrap().encode();
+        let encoded_valid = PerThousand::new_from_rng(&mut rng).encode();
         PerThousand::decode(&mut encoded_valid.as_slice()).unwrap();
 
         let encoded_invalid = rng.gen_range(1001..=u16::MAX).encode();
