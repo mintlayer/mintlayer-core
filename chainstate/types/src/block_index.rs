@@ -32,8 +32,6 @@ pub struct BlockIndex {
     time_max: BlockTimestamp,
 }
 
-// TODO(PR): there's a get_block() call for ChainstateInterface in p2p that fetches a whole block just for the header. Fix it.
-
 impl BlockIndex {
     pub fn new(
         block: &Block,

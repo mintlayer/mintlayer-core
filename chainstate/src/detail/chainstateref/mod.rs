@@ -204,6 +204,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
     }
 
+    pub fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
+        Ok(self.db_tx.get_block_header(block_id).log_err()?)
+    }
+
     pub fn is_block_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,

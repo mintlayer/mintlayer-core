@@ -129,6 +129,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_header(block_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
         self.chainstate
             .query()

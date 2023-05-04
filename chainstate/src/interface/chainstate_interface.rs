@@ -57,6 +57,10 @@ pub trait ChainstateInterface: Send {
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError>;
 
     /// Returns a list of block headers whose heights distances increase exponentially starting
     /// from the current tip.

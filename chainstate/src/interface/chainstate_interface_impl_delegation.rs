@@ -320,6 +320,13 @@ where
     fn info(&self) -> Result<ChainInfo, ChainstateError> {
         self.deref().info()
     }
+
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
+        self.deref().get_block_header(block_id)
+    }
 }
 
 #[cfg(test)]

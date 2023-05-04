@@ -18,6 +18,7 @@
 use std::collections::BTreeMap;
 
 use chainstate_types::{BlockIndex, EpochData};
+use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::{
     chain::{
@@ -48,6 +49,7 @@ mockall::mock! {
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
+        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
         fn get_mainchain_tx_index(
@@ -290,6 +292,7 @@ mockall::mock! {
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
+        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
         fn get_mainchain_tx_index(
@@ -396,6 +399,7 @@ mockall::mock! {
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
+        fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
         fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
 

@@ -62,6 +62,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_header_from_height(height)
     }
 
+    pub fn get_block_header(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
+        self.chainstate_ref.get_block_header(id)
+    }
+
     pub fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
