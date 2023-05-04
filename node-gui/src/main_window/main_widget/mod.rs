@@ -21,7 +21,6 @@ use crate::backend_controller::NodeBackendController;
 
 #[derive(Debug, Clone)]
 pub enum MainWidgetMessage {
-    NoOp,
     Start,
     TabsMessage(tabs::TabsMessage),
 }
@@ -45,7 +44,6 @@ impl MainWidget {
 
     pub fn update(&mut self, msg: MainWidgetMessage) -> Command<MainWidgetMessage> {
         match msg {
-            MainWidgetMessage::NoOp => Command::none(),
             MainWidgetMessage::Start => iced::Command::batch(Self::start()),
             MainWidgetMessage::TabsMessage(tabs_message) => {
                 self.tabs.update(tabs_message).map(MainWidgetMessage::TabsMessage)
