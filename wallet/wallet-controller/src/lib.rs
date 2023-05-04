@@ -38,7 +38,7 @@ const BLOCK_SYNC_ENABLED: bool = false;
 pub enum ControllerError<T: NodeInterface> {
     #[error("Node call error: {0}")]
     NodeCallError(T::Error),
-    #[error("Wallet file {0} error: {0}")]
+    #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
     WalletError(wallet::wallet::WalletError),

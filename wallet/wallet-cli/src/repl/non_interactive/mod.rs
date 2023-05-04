@@ -15,6 +15,7 @@
 
 pub mod log;
 
+use clap::Command;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -24,49 +25,66 @@ use crate::{
 
 use super::{get_repl_command, parse_input};
 
+enum LineOutput {
+    Print(String),
+    None,
+    Exit,
+}
+
+fn process_line(
+    repl_command: &Command,
+    event_tx: &mpsc::UnboundedSender<Event>,
+    line: &str,
+) -> Result<LineOutput, WalletCliError> {
+    let command_opt = parse_input(line, repl_command)?;
+
+    let command = match command_opt {
+        Some(command) => command,
+        None => return Ok(LineOutput::None),
+    };
+
+    let command_output = super::run_command_blocking(event_tx, command)?;
+
+    match command_output {
+        ConsoleCommand::Print(text) => Ok(LineOutput::Print(text)),
+        ConsoleCommand::ClearScreen
+        | ConsoleCommand::PrintHistory
+        | ConsoleCommand::ClearHistory => Err(WalletCliError::InvalidInput(format!(
+            "Unsupported command in non-interactive mode: {}",
+            line,
+        ))),
+        ConsoleCommand::Exit => Ok(LineOutput::Exit),
+    }
+}
+
 pub fn run<T: std::io::BufRead>(
     input: std::io::Lines<T>,
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
+    exit_on_error: Option<bool>,
 ) -> Result<(), WalletCliError> {
+    let exit_on_error = exit_on_error.unwrap_or(true);
     let repl_command = get_repl_command();
 
-    for line in input {
-        match line {
-            Ok(line) => {
-                let res = parse_input(&line, &repl_command);
-                match res {
-                    Ok(Some(command)) => {
-                        let res = super::run_command_blocking(&event_tx, command);
+    for line_res in input {
+        let line = line_res.expect("Should not fail normally");
 
-                        match res {
-                            Ok(cmd) => match cmd {
-                                ConsoleCommand::Print(text) => {
-                                    cli_println!(output, "{}", text);
-                                }
-                                ConsoleCommand::ClearScreen => {
-                                    cli_println!(output, "Not supported");
-                                }
-                                ConsoleCommand::PrintHistory => {
-                                    cli_println!(output, "Not supported");
-                                }
-                                ConsoleCommand::ClearHistory => {
-                                    cli_println!(output, "Not supported");
-                                }
-                                ConsoleCommand::Exit => return Ok(()),
-                            },
-                            Err(e) => {
-                                cli_println!(output, "{}", e);
-                            }
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        cli_println!(output, "{}", e);
-                    }
-                }
+        let res = process_line(&repl_command, &event_tx, &line);
+
+        match res {
+            Ok(LineOutput::Print(text)) => {
+                cli_println!(output, "{}", text);
             }
-            Err(err) => cli_println!(output, "Error: {err:?}"),
+            Ok(LineOutput::None) => {}
+            Ok(LineOutput::Exit) => return Ok(()),
+
+            Err(err) => {
+                if exit_on_error {
+                    return Err(err);
+                }
+
+                cli_println!(output, "{}", err);
+            }
         }
     }
 

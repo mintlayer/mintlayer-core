@@ -57,6 +57,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
         rpc_password,
         commands_file,
         history_file,
+        exit_on_error,
         vi_mode,
     } = args;
 
@@ -119,16 +120,25 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
     // Run a blocking loop in a separate thread
     let output_copy = output.clone();
     let repl_handle = std::thread::spawn(move || match mode {
-        Mode::Interactive { printer } => {
-            repl::interactive::run(&output_copy, event_tx, printer, history_file, vi_mode)
-        }
-        Mode::NonInteractive => {
-            repl::non_interactive::run(std::io::stdin().lines(), &output_copy, event_tx)
-        }
+        Mode::Interactive { printer } => repl::interactive::run(
+            &output_copy,
+            event_tx,
+            exit_on_error,
+            printer,
+            history_file,
+            vi_mode,
+        ),
+        Mode::NonInteractive => repl::non_interactive::run(
+            std::io::stdin().lines(),
+            &output_copy,
+            event_tx,
+            exit_on_error,
+        ),
         Mode::Commands(file) => repl::non_interactive::run(
             std::io::BufReader::new(file).lines(),
             &output_copy,
             event_tx,
+            exit_on_error,
         ),
     });
 
@@ -141,7 +151,7 @@ async fn run(output: &ConsoleContext) -> Result<(), WalletCliError> {
 async fn main() {
     let output = ConsoleContext::new();
     run(&output).await.unwrap_or_else(|err| {
-        cli_println!(&output, "wallet-cli launch failed: {err}");
+        cli_println!(&output, "{err}");
         std::process::exit(1);
     })
 }

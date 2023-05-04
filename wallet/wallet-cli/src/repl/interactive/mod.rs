@@ -20,6 +20,7 @@ mod wallet_prompt;
 
 use std::path::PathBuf;
 
+use clap::Command;
 use reedline::{
     default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
     ColumnarMenu, DefaultValidator, EditMode, Emacs, FileBackedHistory, ListMenu, Reedline,
@@ -102,13 +103,41 @@ fn create_line_editor(
     Ok(line_editor)
 }
 
+fn process_line(
+    repl_command: &Command,
+    event_tx: &mpsc::UnboundedSender<Event>,
+    sig: reedline::Signal,
+) -> Result<Option<ConsoleCommand>, WalletCliError> {
+    let line = match sig {
+        Signal::Success(line) => line,
+        Signal::CtrlC => {
+            // Prompt has been cleared and should start on the next line
+            return Ok(None);
+        }
+        Signal::CtrlD => {
+            return Ok(Some(ConsoleCommand::Exit));
+        }
+    };
+
+    let command_opt = parse_input(&line, repl_command)?;
+
+    let command = match command_opt {
+        Some(command) => command,
+        None => return Ok(None),
+    };
+
+    super::run_command_blocking(event_tx, command).map(Option::Some)
+}
+
 pub fn run(
     output: &ConsoleContext,
     event_tx: mpsc::UnboundedSender<Event>,
+    exit_on_error: Option<bool>,
     printer: reedline::ExternalPrinter<String>,
     history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
+    let exit_on_error = exit_on_error.unwrap_or(false);
     let repl_command = get_repl_command();
     let mut line_editor =
         create_line_editor(printer, repl_command.clone(), output, history_file, vi_mode)?;
@@ -116,59 +145,38 @@ pub fn run(
     let prompt = wallet_prompt::WalletPrompt::new();
 
     loop {
-        let sig = line_editor.read_line(&prompt);
+        let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
 
-        match sig {
-            Ok(Signal::Success(line)) => {
-                let res = parse_input(&line, &repl_command);
-                match res {
-                    Ok(Some(command)) => {
-                        let res = super::run_command_blocking(&event_tx, command);
+        let res = process_line(&repl_command, &event_tx, sig);
 
-                        match res {
-                            Ok(cmd) => match cmd {
-                                ConsoleCommand::Print(text) => {
-                                    cli_println!(output, "{}", text);
-                                }
-                                ConsoleCommand::ClearScreen => {
-                                    line_editor
-                                        .clear_scrollback()
-                                        .expect("Should not fail normally");
-                                }
-                                ConsoleCommand::PrintHistory => {
-                                    line_editor.print_history().expect("Should not fail normally");
-                                }
-                                ConsoleCommand::ClearHistory => {
-                                    line_editor
-                                        .history_mut()
-                                        .clear()
-                                        .expect("Should not fail normally");
-                                }
-                                ConsoleCommand::Exit => return Ok(()),
-                            },
-                            Err(e) => {
-                                cli_println!(output, "{}", e);
-                            }
-                        }
-                    }
-                    Ok(None) => {}
-                    Err(WalletCliError::InvalidCommandInput(e)) => {
-                        // Print help and parse errors using styles
-                        e.print().expect("Should not fail normally");
-                    }
-                    Err(e) => {
-                        cli_println!(output, "{}", e);
-                    }
-                }
+        match res {
+            Ok(Some(ConsoleCommand::Print(text))) => {
+                cli_println!(output, "{}", text);
             }
-            Ok(Signal::CtrlC) => {
-                // Prompt has been cleared and should start on the next line
+            Ok(Some(ConsoleCommand::ClearScreen)) => {
+                line_editor.clear_scrollback().expect("Should not fail normally");
             }
-            Ok(Signal::CtrlD) => {
-                return Ok(());
+            Ok(Some(ConsoleCommand::ClearHistory)) => {
+                line_editor.history_mut().clear().expect("Should not fail normally");
             }
+            Ok(Some(ConsoleCommand::PrintHistory)) => {
+                line_editor.print_history().expect("Should not fail normally");
+            }
+            Ok(Some(ConsoleCommand::Exit)) => return Ok(()),
+
+            Ok(None) => {}
+
             Err(err) => {
-                cli_println!(output, "Error: {err:?}");
+                if exit_on_error {
+                    return Err(err);
+                }
+
+                if let WalletCliError::InvalidCommandInput(e) = &err {
+                    // Print help and parse errors using styles
+                    e.print().expect("Should not fail normally");
+                } else {
+                    cli_println!(output, "{}", err);
+                }
             }
         }
     }
