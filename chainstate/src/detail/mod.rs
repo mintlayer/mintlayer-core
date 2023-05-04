@@ -299,7 +299,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .map_err(BlockError::CheckBlockFailed)
                 .log_err()?;
 
-            let block_index = chainstate_ref.accept_block(&block).log_err()?;
+            let block_index = chainstate_ref.persist_block(&block).log_err()?;
             let result =
                 chainstate_ref.activate_best_chain(block_index, best_block_id).log_err()?;
             let db_commit_result = chainstate_ref.commit_db_tx().log_err();

@@ -986,7 +986,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
     }
 
     // TODO(PR): rename this to persist block
-    pub fn accept_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
+    pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
         let block_index = self.add_to_block_index(block).log_err()?;
         if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from).log_err()?).is_some() {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
