@@ -105,6 +105,7 @@ BASE_SCRIPTS = [
     'p2p_syncing_test.py',
     'p2p_relay_transactions.py',
     'feature_lmdb_backend_test.py',
+    'mempool_basic_reorg.py',
     'mempool_submit_tx.py',
 
     # Don't append tests at the end to avoid merge conflicts
