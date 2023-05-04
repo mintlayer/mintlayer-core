@@ -71,12 +71,10 @@ pub struct SummaryTab {
 
 impl SummaryTab {
     pub fn new(controller: NodeBackendController) -> Self {
-        let summary_tab = SummaryTab {
+        SummaryTab {
             controller,
             current_tip: None,
-        };
-        // let _ = summary_tab.update(SummaryMessage::Starting);
-        summary_tab
+        }
     }
 
     pub fn start(
