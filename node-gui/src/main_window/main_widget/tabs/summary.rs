@@ -79,8 +79,10 @@ impl SummaryTab {
         summary_tab
     }
 
-    pub fn start(controller: NodeBackendController) -> Vec<Command<SummaryMessage>> {
-        vec![Command::perform(
+    pub fn start(
+        controller: NodeBackendController,
+    ) -> impl IntoIterator<Item = Command<SummaryMessage>> {
+        [Command::perform(
             Self::initialize_subscriptions(controller.node().chainstate.clone()),
             SummaryMessage::Ready,
         )]

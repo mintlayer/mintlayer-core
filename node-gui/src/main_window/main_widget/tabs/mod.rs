@@ -91,8 +91,8 @@ impl TabsWidget {
             .into()
     }
 
-    pub fn start() -> Vec<Command<TabsMessage>> {
-        vec![
+    pub fn start() -> impl IntoIterator<Item = Command<TabsMessage>> {
+        [
             iced::Command::perform(async {}, |_| TabsMessage::Summary(SummaryMessage::Start)),
             iced::Command::perform(async {}, |_| TabsMessage::Settings(SettingsMessage::Start)),
         ]

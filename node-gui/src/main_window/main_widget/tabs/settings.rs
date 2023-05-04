@@ -73,8 +73,8 @@ impl SettingsTab {
         &self.settings
     }
 
-    pub fn start() -> Vec<Command<SettingsMessage>> {
-        vec![]
+    pub fn start() -> impl IntoIterator<Item = Command<SettingsMessage>> {
+        []
     }
 
     pub fn update(&mut self, message: SettingsMessage) -> Command<SettingsMessage> {

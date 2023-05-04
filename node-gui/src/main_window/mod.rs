@@ -43,8 +43,8 @@ impl MainWindow {
         }
     }
 
-    pub fn start() -> Vec<Command<MainWindowMessage>> {
-        vec![
+    pub fn start() -> impl IntoIterator<Item = Command<MainWindowMessage>> {
+        [
             iced::Command::perform(async {}, |_| {
                 MainWindowMessage::MainWidgetMessage(MainWidgetMessage::Start)
             }),

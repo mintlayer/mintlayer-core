@@ -36,8 +36,8 @@ impl MainWidget {
         }
     }
 
-    pub fn start() -> Vec<Command<MainWidgetMessage>> {
-        vec![iced::Command::perform(async {}, |_| {
+    pub fn start() -> impl IntoIterator<Item = Command<MainWidgetMessage>> {
+        [iced::Command::perform(async {}, |_| {
             MainWidgetMessage::TabsMessage(tabs::TabsMessage::Start)
         })]
     }

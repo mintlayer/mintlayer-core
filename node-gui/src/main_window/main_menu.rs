@@ -64,8 +64,8 @@ impl MainMenu {
         c.into()
     }
 
-    pub fn start() -> Vec<Command<MenuMessage>> {
-        vec![]
+    pub fn start() -> impl IntoIterator<Item = Command<MenuMessage>> {
+        []
     }
 
     pub fn update(&self, msg: MenuMessage) -> Command<MenuMessage> {
