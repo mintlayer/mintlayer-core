@@ -136,6 +136,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         outbound_connection_timeout,
         ping_check_period,
         ping_timeout,
+        sync_stalling_timeout,
         node_type,
     } = config;
 
@@ -150,6 +151,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
     let ping_timeout = options.p2p_ping_timeout.or(ping_timeout);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.or(outbound_connection_timeout);
+    let sync_stalling_timeout = options.p2p_sync_stalling_timeout.or(sync_stalling_timeout);
     let node_type = options.node_type.or(node_type);
 
     P2pConfigFile {
@@ -164,6 +166,7 @@ fn p2p_config(config: P2pConfigFile, options: &RunOptions) -> P2pConfigFile {
         outbound_connection_timeout,
         ping_check_period,
         ping_timeout,
+        sync_stalling_timeout,
         node_type,
     }
 }
