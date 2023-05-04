@@ -332,6 +332,7 @@ impl NetworkingService for NetworkingServiceStub {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         panic!("Stub service shouldn't be used directly");
     }

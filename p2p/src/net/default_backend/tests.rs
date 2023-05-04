@@ -37,7 +37,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -46,7 +46,7 @@ where
     .await
     .unwrap();
 
-    let (conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -97,7 +97,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -106,7 +106,7 @@ where
     .await
     .unwrap();
 
-    let (mut conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -155,7 +155,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -163,7 +163,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         config,
@@ -210,7 +210,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -219,7 +219,7 @@ where
     .await
     .unwrap();
 
-    let (conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -290,7 +290,7 @@ where
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![],
         Arc::clone(&config),

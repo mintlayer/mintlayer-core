@@ -58,7 +58,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (connectivity, _messaging_handle, _sync) = N::start(
+    let (connectivity, _messaging_handle, _sync, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -97,7 +97,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut service1, _, _) = N::start(
+    let (mut service1, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -105,7 +105,7 @@ where
     )
     .await
     .unwrap();
-    let (mut service2, _, _) = N::start(
+    let (mut service2, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),

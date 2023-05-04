@@ -21,7 +21,7 @@ pub mod types;
 use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use logging::log;
 
@@ -114,6 +114,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
@@ -122,7 +123,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let p2p_config_ = Arc::clone(&p2p_config);
-        tokio::spawn(async move {
+        let backend_task = tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 socket,
@@ -143,6 +144,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
             MessagingHandle::new(cmd_tx),
             Self::SyncingEventReceiver { sync_rx },
+            backend_task,
         ))
     }
 }

@@ -42,7 +42,7 @@ use p2p::{
     testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use crate::{
     crawler_p2p::crawler_manager::{
@@ -124,6 +124,7 @@ impl NetworkingService for MockNetworkingService {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         unreachable!()
     }

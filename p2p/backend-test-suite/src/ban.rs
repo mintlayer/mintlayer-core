@@ -56,7 +56,7 @@ where
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
 
-    let (mut conn1, messaging_handle, sync_event_receiver) = N::start(
+    let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -76,7 +76,7 @@ where
         TimeGetter::default(),
     );
 
-    let (mut conn2, mut messaging_handle_2, mut sync2) = N::start(
+    let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),

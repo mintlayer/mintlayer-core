@@ -49,7 +49,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut messaging_handle1, _sync1) = S::start(
+    let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),

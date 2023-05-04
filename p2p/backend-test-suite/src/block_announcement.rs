@@ -43,7 +43,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn1, mut messaging_handle1, mut sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -51,7 +51,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, mut messaging_handle2, mut sync2) = N::start(
+    let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -161,7 +161,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let (mut conn1, mut messaging_handle1, _sync1) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -169,7 +169,7 @@ where
     )
     .await
     .unwrap();
-    let (mut conn2, _messaging_handle2, _sync2) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,

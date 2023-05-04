@@ -19,6 +19,7 @@ pub mod types;
 use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
+use tokio::task::JoinHandle;
 
 use crate::{
     config,
@@ -72,11 +73,7 @@ pub trait NetworkingService {
     /// A receiver for syncing events.
     type SyncingEventReceiver: Send;
 
-    /// Initialize the network service provider
-    ///
-    /// # Arguments
-    /// `bind_addr` - socket address for incoming P2P traffic
-    /// `chain_config` - chain config of the node
+    /// Initializes the network service provider.
     async fn start(
         transport: Self::Transport,
         bind_addresses: Vec<Self::Address>,
@@ -86,6 +83,7 @@ pub trait NetworkingService {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )>;
 }
 

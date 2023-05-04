@@ -76,6 +76,7 @@ struct P2p<T: NetworkingService> {
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
+    backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<Result<Void>>,
     sync_manager_task: JoinHandle<Result<Void>>,
 }
@@ -101,7 +102,7 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
-        let (conn, messaging_handle, sync_event_receiver) = T::start(
+        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -161,6 +162,7 @@ where
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
+            backend_task,
             peer_manager_task,
             sync_manager_task,
         })
@@ -182,6 +184,9 @@ where
     async fn shutdown(self) {
         // TODO: Send the shutdown message instead of aborting the tasks?
         // TODO: Shut down the backend.
+
+        self.backend_task.abort();
+        let _ = self.backend_task.await;
 
         self.peer_manager_task.abort();
         let _ = self.peer_manager_task.await;
