@@ -7,7 +7,6 @@ rust-version.workspace = true
 
 [features]
 default = []
-testing_utils = []
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
