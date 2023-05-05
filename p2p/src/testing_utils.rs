@@ -274,29 +274,6 @@ impl P2pBasicTestTimeGetter {
     }
 }
 
-pub struct P2pTokioTestTimeGetter {
-    time_getter: P2pBasicTestTimeGetter,
-}
-
-impl P2pTokioTestTimeGetter {
-    pub fn new() -> Self {
-        Self {
-            time_getter: P2pBasicTestTimeGetter::new(),
-        }
-    }
-
-    pub fn get_time_getter(&self) -> TimeGetter {
-        self.time_getter.get_time_getter()
-    }
-
-    pub async fn advance_time(&self, duration: Duration) {
-        tokio::time::pause();
-        self.time_getter.advance_time(duration);
-        tokio::time::advance(duration).await;
-        tokio::time::resume();
-    }
-}
-
 /// Receive a message from the tokio channel.
 /// Panics if the channel is closed or no message received in 10 seconds.
 #[macro_export]

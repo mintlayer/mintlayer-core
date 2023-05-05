@@ -39,7 +39,7 @@ use p2p::{
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::P2pTokioTestTimeGetter,
+    testing_utils::P2pBasicTestTimeGetter,
     types::peer_id::PeerId,
 };
 use tokio::sync::mpsc;
@@ -209,7 +209,7 @@ pub fn test_crawler(
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
     mpsc::UnboundedReceiver<DnsServerCommand>,
-    P2pTokioTestTimeGetter,
+    P2pBasicTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let reserved_nodes = reserved_nodes.iter().map(ToString::to_string).collect();
@@ -238,7 +238,10 @@ pub fn test_crawler(
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
+    let time_getter = P2pBasicTestTimeGetter::new();
+
     let crawler = CrawlerManager::<MockNetworkingService, _>::new(
+        time_getter.get_time_getter(),
         crawler_config,
         chain_config,
         conn,
@@ -247,8 +250,6 @@ pub fn test_crawler(
         dns_server_cmd_tx,
     )
     .unwrap();
-
-    let time_getter = P2pTokioTestTimeGetter::new();
 
     (crawler, state, dns_server_cmd_rx, time_getter)
 }
@@ -260,17 +261,19 @@ pub async fn advance_time(
         MockNetworkingService,
         DnsServerStorageImpl<storage::inmemory::InMemory>,
     >,
-    time_getter: &P2pTokioTestTimeGetter,
+    time_getter: &P2pBasicTestTimeGetter,
     step: Duration,
     count: u32,
 ) {
     for _ in 0..count {
+        time_getter.advance_time(step);
+        crawler.heartbeat();
         tokio::select! {
             biased;
             _ = crawler.run() => {
                 unreachable!("run should not return")
             }
-            _ = time_getter.advance_time(step) => {}
+            _ = tokio::time::sleep(Duration::from_millis(1)) => {}
         }
     }
 }

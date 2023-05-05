@@ -28,8 +28,8 @@ use crate::{
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, P2pTokioTestTimeGetter,
-        TestTransportChannel, TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, TestTransportChannel,
+        TestTransportMaker, TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -658,7 +658,7 @@ where
     T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let time_getter = P2pTokioTestTimeGetter::new();
+    let time_getter = P2pBasicTestTimeGetter::new();
     let chain_config = Arc::new(config::create_mainnet());
 
     // Start first peer manager
@@ -737,7 +737,7 @@ where
     let started_at = Instant::now();
     loop {
         tokio::time::sleep(Duration::from_millis(10)).await;
-        time_getter.advance_time(Duration::from_secs(1)).await;
+        time_getter.advance_time(Duration::from_secs(1));
         let (rtx, rrx) = oneshot_nofail::channel();
         tx1.send(PeerManagerEvent::GetConnectedPeers(rtx)).unwrap();
         let connected_peers = timeout(Duration::from_secs(10), rrx).await.unwrap().unwrap();

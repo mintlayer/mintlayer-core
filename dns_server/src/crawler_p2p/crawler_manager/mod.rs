@@ -24,7 +24,7 @@ use std::{
     time::Duration,
 };
 
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
 use p2p::{
     message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
@@ -36,7 +36,7 @@ use p2p::{
     peer_manager::global_ip::IsGlobalIp,
     types::{peer_address::PeerAddress, peer_id::PeerId},
 };
-use tokio::{sync::mpsc, time::Instant};
+use tokio::sync::mpsc;
 
 use crate::{dns_server::DnsServerCommand, error::DnsServerError};
 
@@ -64,8 +64,10 @@ pub struct CrawlerManagerConfig {
 }
 
 pub struct CrawlerManager<N: NetworkingService, S> {
+    time_getter: TimeGetter,
+
     /// The time when the crawler was updated last time
-    last_crawler_timer: Instant,
+    last_crawler_timer: Duration,
 
     /// Crawler
     crawler: Crawler<N::Address>,
@@ -93,6 +95,7 @@ where
     DnsServerError: From<<<N as NetworkingService>::Address as FromStr>::Err>,
 {
     pub fn new(
+        time_getter: TimeGetter,
         config: CrawlerManagerConfig,
         chain_config: Arc<ChainConfig>,
         conn: N::ConnectivityHandle,
@@ -100,7 +103,7 @@ where
         storage: S,
         dns_server_cmd_tx: mpsc::UnboundedSender<DnsServerCommand>,
     ) -> Result<Self, DnsServerError> {
-        let last_crawler_timer = Instant::now();
+        let last_crawler_timer = time_getter.get_time();
 
         // Addresses that are stored in the DB as reachable
         let loaded_addresses: BTreeSet<N::Address> = Self::load_storage(&storage)?;
@@ -117,6 +120,7 @@ where
         let crawler = Crawler::new(chain_config, loaded_addresses, reserved_addresses);
 
         Ok(Self {
+            time_getter,
             last_crawler_timer,
             crawler,
             config,
@@ -219,8 +223,8 @@ where
     }
 
     fn heartbeat(&mut self) {
-        let now = Instant::now();
-        let period = now.duration_since(self.last_crawler_timer);
+        let now = self.time_getter.get_time();
+        let period = now.saturating_sub(self.last_crawler_timer);
         self.last_crawler_timer = now;
 
         self.send_crawler_event(CrawlerEvent::Timer { period });
