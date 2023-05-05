@@ -20,9 +20,10 @@ use crate::detail::BlockSource;
 use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
+use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, BlockHeader, BlockReward, GenBlock},
+        block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
         TxMainChainIndex,
@@ -42,7 +43,7 @@ pub trait ChainstateInterface: Send {
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, ChainstateError>;
     fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError>;
-    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError>;
+    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError>;
     fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError>;
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError>;
     fn get_block_height_in_main_chain(
@@ -50,12 +51,16 @@ pub trait ChainstateInterface: Send {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, ChainstateError>;
     fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
-    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError>;
+    fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError>;
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, ChainstateError>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError>;
 
     /// Returns a list of block headers whose heights distances increase exponentially starting
     /// from the current tip.
@@ -76,13 +81,13 @@ pub trait ChainstateInterface: Send {
         &self,
         locator: Locator,
         header_count_limit: usize,
-    ) -> Result<Vec<BlockHeader>, ChainstateError>;
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
     /// Removes all headers that are already known to the chain from the given vector.
     fn filter_already_existing_blocks(
         &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, ChainstateError>;
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError>;
 
     fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, ChainstateError>;
     fn get_gen_block_index(

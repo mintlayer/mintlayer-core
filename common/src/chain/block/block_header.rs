@@ -15,6 +15,7 @@
 
 use serialization::{Decode, Encode};
 
+use super::signed_block_header::{BlockHeaderSignature, SignedBlockHeader};
 use super::timestamp::BlockTimestamp;
 use crate::chain::{block::ConsensusData, Block, GenBlock};
 use crate::primitives::id::{Id, Idable, H256};
@@ -64,12 +65,16 @@ impl BlockHeader {
         self.timestamp
     }
 
-    pub fn header_size(&self) -> usize {
-        self.encoded_size()
-    }
-
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.consensus_data = consensus_data;
+    }
+
+    pub fn with_signature(self, signature: BlockHeaderSignature) -> SignedBlockHeader {
+        SignedBlockHeader::new(signature, self)
+    }
+
+    pub fn with_no_signature(self) -> SignedBlockHeader {
+        SignedBlockHeader::new(BlockHeaderSignature::None, self)
     }
 }
 

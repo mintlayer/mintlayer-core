@@ -17,7 +17,7 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_types::{BlockIndex, GenBlockIndex, Locator, PropertyQueryError};
 use common::{
     chain::{
-        block::{BlockHeader, BlockReward},
+        block::{signed_block_header::SignedBlockHeader, BlockReward},
         tokens::{
             RPCFungibleTokenInfo, RPCNonFungibleTokenInfo, RPCTokenInfo, TokenAuxiliaryData,
             TokenData, TokenId,
@@ -58,8 +58,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_header_from_height(
         &self,
         height: &BlockHeight,
-    ) -> Result<Option<BlockHeader>, PropertyQueryError> {
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         self.chainstate_ref.get_header_from_height(height)
+    }
+
+    pub fn get_block_header(
+        &self,
+        id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
+        self.chainstate_ref.get_block_header(id)
     }
 
     pub fn get_block_id_from_height(
@@ -93,7 +100,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.chainstate_ref.get_best_block_index()
     }
 
-    pub fn get_best_block_header(&self) -> Result<BlockHeader, PropertyQueryError> {
+    pub fn get_best_block_header(&self) -> Result<SignedBlockHeader, PropertyQueryError> {
         let best_block_index = self
             .chainstate_ref
             .get_best_block_index()?
@@ -136,7 +143,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         locator: Locator,
         header_count_limit: usize,
-    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
         let header_count_limit = BlockDistance::new(
             header_count_limit.try_into().expect("Unreasonable header count limit"),
         );
@@ -173,8 +180,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
     pub fn filter_already_existing_blocks(
         &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<Vec<SignedBlockHeader>, PropertyQueryError> {
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
         let config = &self.chainstate_ref.chain_config();
         // verify that the first block attaches to our chain

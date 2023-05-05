@@ -33,7 +33,7 @@ use void::Void;
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
 use common::{
-    chain::{block::BlockHeader, Block, Transaction},
+    chain::{block::signed_block_header::SignedBlockHeader, Block, Transaction},
     primitives::{BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -76,7 +76,7 @@ pub struct Peer<T: NetworkingService> {
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
-    known_headers: Vec<BlockHeader>,
+    known_headers: Vec<SignedBlockHeader>,
     /// A list of blocks that we requested from this peer.
     requested_blocks: BTreeSet<Id<Block>>,
     /// A queue of the blocks requested this peer.
@@ -272,7 +272,7 @@ where
         Ok(())
     }
 
-    async fn handle_header_list(&mut self, headers: Vec<BlockHeader>) -> Result<()> {
+    async fn handle_header_list(&mut self, headers: Vec<SignedBlockHeader>) -> Result<()> {
         log::debug!("Headers list from peer {}", self.id());
         self.last_activity = Some(self.time_getter.get_time());
 
@@ -557,7 +557,7 @@ where
     ///
     /// The number of headers sent equals to `P2pConfig::requested_blocks_limit`, the remaining
     /// headers are stored in the peer context.
-    fn request_blocks(&mut self, mut headers: Vec<BlockHeader>) -> Result<()> {
+    fn request_blocks(&mut self, mut headers: Vec<SignedBlockHeader>) -> Result<()> {
         debug_assert!(self.known_headers.is_empty());
 
         // Remove already requested blocks.

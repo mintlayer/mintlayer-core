@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::{BlockIndex, EpochData};
+use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
         block::BlockReward,
@@ -90,6 +91,11 @@ macro_rules! impl_read_ops {
 
             fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
                 self.read::<db::DBBlock, _, _>(id)
+            }
+
+            fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>> {
+                let block_index = self.read::<db::DBBlockIndex, _, _>(id)?;
+                Ok(block_index.map(|block_index| block_index.into_block_header()))
             }
 
             fn get_block_reward(
