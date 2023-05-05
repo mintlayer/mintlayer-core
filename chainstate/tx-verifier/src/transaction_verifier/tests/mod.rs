@@ -20,7 +20,7 @@ mod mock;
 use super::*;
 use common::{
     chain::{stakelock::StakePoolData, tokens::OutputValue, Destination, OutPoint},
-    primitives::{amount::UnsignedIntType, BlockHeight, H256},
+    primitives::{amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, H256},
 };
 use crypto::{
     key::{KeyKind, PrivateKey},
@@ -55,14 +55,14 @@ fn create_pool_data(
     pledged_amount: Amount,
 ) -> StakePoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let margin_ration = rng.gen_range(0u64..1000);
-    let cost_per_epoch = Amount::from_atoms(rng.gen_range(0..1000));
+    let margin_ratio = PerThousand::new_from_rng(rng);
+    let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     StakePoolData::new(
         pledged_amount,
         staker,
         vrf_pk,
         decomission_destination,
-        margin_ration,
-        cost_per_epoch,
+        margin_ratio,
+        cost_per_block,
     )
 }

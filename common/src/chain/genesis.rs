@@ -49,11 +49,7 @@ impl Genesis {
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        BlockRewardTransactable {
-            inputs: None,
-            witness: None,
-            outputs: Some(self.utxos()),
-        }
+        BlockRewardTransactable::new(None, Some(self.utxos()), None)
     }
 }
 

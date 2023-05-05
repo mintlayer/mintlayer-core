@@ -27,6 +27,8 @@ use crate::pool::{delegation::DelegationData, pool_data::PoolData};
 
 use chainstate_types::storage_result;
 
+pub mod in_memory;
+
 pub trait StorageTag {}
 
 pub struct DefaultStorageTag;
@@ -235,6 +237,3 @@ where
         self.deref_mut().del_pool_delegation_share(pool_id, delegation_id)
     }
 }
-
-#[cfg(test)]
-pub(crate) mod in_memory;

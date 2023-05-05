@@ -79,6 +79,14 @@ pub enum Error {
     InvariantErrorDelegationUndoFailedDataNotFound,
     #[error("Delta reverts merge failed due to duplicates")]
     DuplicatesInDeltaAndUndo,
+    #[error("Increase pledge amount of nonexisting pool")]
+    IncreasePledgeAmountOfNonexistingPool,
+    #[error("Pledge amount addition error")]
+    PledgeAmountAdditionError,
+    #[error("Undo of increase pledge amount failed as pool balance is not in storage")]
+    InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound,
+    #[error("Undo of increase pledge amount failed as pool data is not in storage")]
+    InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound,
 
     // TODO Need a more granular error reporting in the following
     //      https://github.com/mintlayer/mintlayer-core/issues/811

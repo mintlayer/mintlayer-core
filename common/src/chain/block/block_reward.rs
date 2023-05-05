@@ -39,9 +39,27 @@ impl BlockReward {
 }
 
 pub struct BlockRewardTransactable<'a> {
-    pub(in crate::chain) inputs: Option<&'a [TxInput]>,
-    pub(in crate::chain) outputs: Option<&'a [TxOutput]>,
-    pub(in crate::chain) witness: Option<&'a [InputWitness]>,
+    inputs: Option<&'a [TxInput]>,
+    outputs: Option<&'a [TxOutput]>,
+    witness: Option<&'a [InputWitness]>,
+}
+
+impl<'a> BlockRewardTransactable<'a> {
+    pub fn new(
+        inputs: Option<&'a [TxInput]>,
+        outputs: Option<&'a [TxOutput]>,
+        witness: Option<&'a [InputWitness]>,
+    ) -> Self {
+        Self {
+            inputs,
+            outputs,
+            witness,
+        }
+    }
+
+    pub fn witness(&self) -> Option<&[InputWitness]> {
+        self.witness
+    }
 }
 
 impl<'a> Signable for BlockRewardTransactable<'a> {

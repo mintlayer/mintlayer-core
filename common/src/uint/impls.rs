@@ -588,6 +588,13 @@ impl Uint256 {
     }
 }
 
+impl From<Uint128> for u128 {
+    #[inline]
+    fn from(n: Uint128) -> Self {
+        u128::from_le_bytes(n.to_bytes())
+    }
+}
+
 impl From<Uint256> for Uint512 {
     #[inline]
     fn from(n: Uint256) -> Self {
@@ -599,6 +606,18 @@ impl From<Uint256> for Uint512 {
 pub enum UintConversionError {
     #[error("Conversion would overflow result type")]
     ConversionOverflow,
+}
+
+impl TryFrom<Uint256> for u128 {
+    type Error = UintConversionError;
+
+    fn try_from(n: Uint256) -> Result<Self, UintConversionError> {
+        if n > Uint256::from_u128(u128::MAX) {
+            Err(UintConversionError::ConversionOverflow)
+        } else {
+            Ok(n.low_128().into())
+        }
+    }
 }
 
 impl TryFrom<Uint512> for Uint256 {
@@ -1075,6 +1094,46 @@ mod tests {
         let a = Uint512::MAX;
         assert_eq!(
             Uint256::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn u128_from_uint128(#[case] seed: Seed) {
+        assert_eq!(1u128, Uint128::ONE.into());
+        assert_eq!(u128::MAX, Uint128::MAX.into());
+
+        let mut rng = make_seedable_rng(seed);
+        for _ in 0..1000 {
+            let a = rng.gen::<u128>();
+            let b = Uint128::from_u128(a);
+            assert_eq!(a, b.into());
+        }
+    }
+
+    #[test]
+    pub fn uint128_from_uint256_simple() {
+        assert_eq!(1u128, u128::try_from(Uint256::ONE).unwrap());
+
+        let a = u128::from_str_radix("FB00000000000000FA", 16).unwrap();
+        let b = Uint256([0xFA, 0xFB, 0x00, 0x00]);
+        assert_eq!(u128::try_from(b).unwrap(), a);
+
+        let a = u128::MAX;
+        let b = Uint256([u64::MAX, u64::MAX, 0x00, 0x00]);
+        assert_eq!(u128::try_from(b).unwrap(), a);
+
+        let a = Uint256::from(u128::MAX) + Uint256::ONE;
+        assert_eq!(
+            u128::try_from(a).unwrap_err(),
+            UintConversionError::ConversionOverflow
+        );
+
+        let a = Uint256::MAX;
+        assert_eq!(
+            u128::try_from(a).unwrap_err(),
             UintConversionError::ConversionOverflow
         );
     }

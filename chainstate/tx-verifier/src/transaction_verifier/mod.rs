@@ -19,6 +19,7 @@ mod amounts_map;
 mod cached_inputs_operation;
 mod input_output_policy;
 mod optional_tx_index_cache;
+mod reward_distribution;
 mod signature_check;
 mod timelock_check;
 mod token_issuance_cache;
@@ -31,9 +32,6 @@ pub mod error;
 pub mod flush;
 pub mod hierarchy;
 pub mod storage;
-
-mod block_transactable;
-pub use block_transactable::{BlockTransactableRef, BlockTransactableWithIndexRef};
 
 mod tx_source;
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
@@ -66,22 +64,23 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
-    AccountingBlockRewardUndo, PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations,
-    PoSAccountingView, PoolData,
+    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingView,
+    PoolData,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
 // TODO: We can move it to mod common, because in chain config we have `token_min_issuance_fee`
 //       that essentially belongs to this type, but return Amount
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Fee(pub Amount);
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Subsidy(pub Amount);
 
 /// The change that a block has caused to the blockchain state
@@ -304,6 +303,7 @@ where
             &self.accounting_delta_adapter.accounting_delta(),
             &block.block_reward_transactable(),
             block.get_id(),
+            block.consensus_data(),
             total_fees,
             block_subsidy_at_height,
         )
@@ -385,6 +385,7 @@ where
         tx_source: &TransactionSourceForConnect,
         tx: &SignedTransaction,
         median_time_past: &BlockTimestamp,
+        tx_index: Option<TxMainChainIndex>,
     ) -> Result<Fee, ConnectTransactionError> {
         let block_id = tx_source.chain_block_index().map(|c| *c.block_id());
 
@@ -461,6 +462,11 @@ where
                     // mark tx index as spent
                     tx_index_cache
                         .spend_tx_index_inputs(tx.inputs(), tx.transaction().get_id().into())?;
+
+                    tx_index_cache.add_tx_index(
+                        OutPointSourceId::Transaction(tx.transaction().get_id()),
+                        tx_index.expect("Guaranteed by verifier_config"),
+                    )?;
                 }
             }
             TransactionSourceForConnect::Mempool { current_best: _ } => { /* do nothing */ }
@@ -469,11 +475,12 @@ where
         Ok(fee)
     }
 
-    fn connect_block_reward(
+    pub fn connect_block_reward(
         &mut self,
         block_index: &BlockIndex,
-        tx_source: TransactionSource,
         reward_transactable: BlockRewardTransactable,
+        total_fees: Fee,
+        tx_index: Option<TxMainChainIndex>,
     ) -> Result<(), ConnectTransactionError> {
         // TODO: test spending block rewards from chains outside the mainchain
         if let Some(inputs) = reward_transactable.inputs() {
@@ -514,69 +521,41 @@ where
                 .set_block_reward_undo(reward_undo);
         }
 
-        if let (Some(inputs), Some(tx_index_cache)) =
-            (reward_transactable.inputs(), self.tx_index_cache.as_mut())
-        {
-            // mark tx index as spend
-            tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
+        if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
+            if let Some(inputs) = reward_transactable.inputs() {
+                // mark tx index as spend
+                tx_index_cache.spend_tx_index_inputs(inputs, block_id.into())?;
+            }
+
+            tx_index_cache.add_tx_index(
+                OutPointSourceId::BlockReward(block_id.into()),
+                tx_index.expect("Guaranteed by verifier_config"),
+            )?;
         }
 
-        // add subsidy to the pool balance
         match block_index.block_header().consensus_data() {
-            ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+            ConsensusData::None | ConsensusData::PoW(_) => { /* do nothing */ }
             ConsensusData::PoS(pos_data) => {
+                // distribute reward among staker and delegators
                 let block_subsidy =
                     self.chain_config.as_ref().block_subsidy_at_height(&block_index.block_height());
-                let undo = self
-                    .accounting_delta_adapter
-                    .operations(tx_source)
-                    .increase_pool_balance(*pos_data.stake_pool_id(), block_subsidy)?;
+                let total_reward = (block_subsidy + total_fees.0)
+                    .ok_or(ConnectTransactionError::RewardAdditionError(block_id))?;
+
+                let undos = reward_distribution::distribute_pos_reward(
+                    &mut self.accounting_delta_adapter,
+                    block_id,
+                    *pos_data.stake_pool_id(),
+                    total_reward,
+                )?;
 
                 self.accounting_block_undo
                     .get_or_create_block_undo(&TransactionSource::Chain(block_id))
-                    .set_reward_undo(AccountingBlockRewardUndo::new(vec![undo]));
+                    .set_reward_undo(undos);
             }
         };
 
         Ok(())
-    }
-
-    pub fn connect_transactable(
-        &mut self,
-        block_index: &BlockIndex,
-        spend_ref: BlockTransactableWithIndexRef,
-        median_time_past: &BlockTimestamp,
-    ) -> Result<Option<Fee>, ConnectTransactionError> {
-        let transaction_source = TransactionSourceForConnect::Chain {
-            new_block_index: block_index,
-        };
-        let fee = match spend_ref {
-            BlockTransactableWithIndexRef::Transaction(block, tx_num, ref _tx_index) => {
-                let block_id = block.get_id();
-                let tx = block.transactions().get(tx_num).ok_or(
-                    ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block_id),
-                )?;
-
-                Some(self.connect_transaction(&transaction_source, tx, median_time_past)?)
-            }
-            BlockTransactableWithIndexRef::BlockReward(block, _) => {
-                self.connect_block_reward(
-                    block_index,
-                    (&transaction_source).into(),
-                    block.block_reward_transactable(),
-                )?;
-                None
-            }
-        };
-        // add tx index to the cache
-        if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
-            tx_index_cache.add_tx_index(
-                spend_ref.without_tx_index(),
-                spend_ref.take_tx_index().expect("Guaranteed by verifier_config"),
-            )?;
-        }
-
-        Ok(fee)
     }
 
     pub fn can_disconnect_transaction(
@@ -638,6 +617,11 @@ where
             block_undo_fetcher,
         )?;
 
+        if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
+            tx_index_cache
+                .remove_tx_index(OutPointSourceId::Transaction(tx.transaction().get_id()))?;
+        }
+
         match tx_source {
             TransactionSource::Chain(_) => {
                 let tx_index_fetcher = |tx_id: &OutPointSourceId| {
@@ -677,73 +661,61 @@ where
         Ok(())
     }
 
-    pub fn disconnect_transactable(
+    pub fn disconnect_block_reward(
         &mut self,
-        spend_ref: BlockTransactableRef,
+        block: &WithId<Block>,
     ) -> Result<(), ConnectTransactionError> {
         if let Some(tx_index_cache) = self.tx_index_cache.as_mut() {
-            // Delete TxMainChainIndex for the current tx
-            tx_index_cache.remove_tx_index(spend_ref)?;
+            tx_index_cache.remove_tx_index(OutPointSourceId::BlockReward(block.get_id().into()))?;
         }
 
-        match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                let block_id = block.get_id();
-                let tx = block.transactions().get(tx_num).ok_or(
-                    ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block_id),
-                )?;
-                self.disconnect_transaction(&TransactionSource::Chain(block_id), tx)?;
-            }
-            BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.block_reward_transactable();
-                let tx_source = TransactionSource::Chain(block.get_id());
+        let reward_transactable = block.block_reward_transactable();
+        let tx_source = TransactionSource::Chain(block.get_id());
 
+        let block_undo_fetcher = |id: Id<Block>| {
+            self.storage
+                .get_undo_data(id)
+                .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+        };
+        let reward_undo =
+            self.utxo_block_undo.take_block_reward_undo(&tx_source, block_undo_fetcher)?;
+        self.utxo_cache.disconnect_block_transactable(
+            &reward_transactable,
+            &block.get_id().into(),
+            reward_undo,
+        )?;
+
+        if let (Some(inputs), Some(tx_index_cache)) =
+            (reward_transactable.inputs(), self.tx_index_cache.as_mut())
+        {
+            // pre-cache all inputs
+            let tx_index_fetcher = |tx_id: &OutPointSourceId| {
+                self.storage
+                    .get_mainchain_tx_index(tx_id)
+                    .map_err(|_| ConnectTransactionError::TxVerifierStorage)
+            };
+            tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
+
+            // unspend inputs
+            tx_index_cache.unspend_tx_index_inputs(inputs)?;
+        }
+
+        match block.header().consensus_data() {
+            ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
+            ConsensusData::PoS(_) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
-                        .get_undo_data(id)
-                        .map_err(|_| ConnectTransactionError::UndoFetchFailure)
+                        .get_accounting_undo(id)
+                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)
                 };
-                let reward_undo =
-                    self.utxo_block_undo.take_block_reward_undo(&tx_source, block_undo_fetcher)?;
-                self.utxo_cache.disconnect_block_transactable(
-                    &reward_transactable,
-                    &block.get_id().into(),
-                    reward_undo,
+                let reward_undo = self.accounting_block_undo.take_block_reward_undo(
+                    &TransactionSource::Chain(block.get_id()),
+                    block_undo_fetcher,
                 )?;
-
-                if let (Some(inputs), Some(tx_index_cache)) =
-                    (reward_transactable.inputs(), self.tx_index_cache.as_mut())
-                {
-                    // pre-cache all inputs
-                    let tx_index_fetcher = |tx_id: &OutPointSourceId| {
-                        self.storage
-                            .get_mainchain_tx_index(tx_id)
-                            .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-                    };
-                    tx_index_cache.precache_inputs(inputs, tx_index_fetcher)?;
-
-                    // unspend inputs
-                    tx_index_cache.unspend_tx_index_inputs(inputs)?;
-                }
-
-                match block.header().consensus_data() {
-                    ConsensusData::None | ConsensusData::PoW(_) => { /*do nothing*/ }
-                    ConsensusData::PoS(_) => {
-                        let block_undo_fetcher = |id: Id<Block>| {
-                            self.storage
-                                .get_accounting_undo(id)
-                                .map_err(|_| ConnectTransactionError::TxVerifierStorage)
-                        };
-                        let reward_undo = self.accounting_block_undo.take_block_reward_undo(
-                            &TransactionSource::Chain(block.get_id()),
-                            block_undo_fetcher,
-                        )?;
-                        if let Some(reward_undo) = reward_undo {
-                            reward_undo.into_inner().into_iter().try_for_each(|undo| {
-                                self.accounting_delta_adapter.operations(tx_source).undo(undo)
-                            })?;
-                        }
-                    }
+                if let Some(reward_undo) = reward_undo {
+                    reward_undo.into_inner().into_iter().try_for_each(|undo| {
+                        self.accounting_delta_adapter.operations(tx_source).undo(undo)
+                    })?;
                 }
             }
         }

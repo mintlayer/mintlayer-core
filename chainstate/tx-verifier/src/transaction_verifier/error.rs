@@ -19,7 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        OutPointSourceId, PoolId, SpendError, Spender, Transaction, TxMainChainIndexError,
+        DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -53,6 +54,8 @@ pub enum ConnectTransactionError {
     TxUndoWithDependency(Id<Transaction>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
+    #[error("Block reward inputs and outputs value mismatch (total inputs: `{0:?}` vs total outputs `{1:?}`")]
+    BlockRewardInputOutputMismatch(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
     #[error("Signature verification failed in transaction")]
@@ -103,10 +106,24 @@ pub enum ConnectTransactionError {
     InvalidInputTypeInReward,
     #[error("Attempted to use a invalid output type in block reward")]
     InvalidOutputTypeInReward,
-    #[error("Balance of pool {0} not found")]
-    PoolBalanceNotFound(PoolId),
+    #[error("Pool owner balance of pool {0} not found")]
+    PoolOwnerBalanceNotFound(PoolId),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),
+    #[error("Failed to calculate reward for block {0} for owner of the pool {1}")]
+    PoolOwnerRewardCalculationFailed(Id<Block>, PoolId),
+    #[error(
+        "Reward in block {0} for owner of the pool {1} which is {2:?} cannot be bigger than total reward {3:?}"
+    )]
+    PoolOwnerRewardCannotExceedTotalReward(Id<Block>, PoolId, Amount, Amount),
+    #[error("Failed to sum block {0} reward for pool {1} delegations")]
+    DelegationsRewardSumFailed(Id<Block>, PoolId),
+    #[error("Reward for delegation {0} overflowed: {1:?}*{2:?}/{3:?}")]
+    DelegationRewardOverflow(DelegationId, Amount, Amount, Amount),
+    #[error("Actually distributed delegation rewards {0} for pool {1} in block {2:?} is bigger then total delegations reward {3:?}")]
+    DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
+    #[error("Total balance of delegations in pool {0} is zero")]
+    TotalDelegationBalanceZero(PoolId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811

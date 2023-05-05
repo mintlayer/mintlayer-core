@@ -29,7 +29,7 @@ use common::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, GenBlock,
         OutPoint, OutPointSourceId, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
 use crypto::random::Rng;
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
@@ -85,7 +85,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     anyonecanspend_address(),
                     vrf_pub_key_a,
                     destination_a,
-                    0,
+                    PerThousand::new(0).unwrap(),
                     Amount::ZERO,
                 ))))
                 .build();
@@ -122,7 +122,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     anyonecanspend_address(),
                     vrf_pub_key_c,
                     destination_c,
-                    0,
+                    PerThousand::new(0).unwrap(),
                     Amount::ZERO,
                 ))))
                 .build();

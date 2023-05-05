@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::helpers::pos::create_stake_pool_data;
+use super::helpers::pos::create_stake_pool_data_with_all_reward_to_owner;
 
 use chainstate::BlockSource;
 use chainstate::{BlockError, ChainstateError, ConnectTransactionError};
@@ -50,7 +50,8 @@ fn stake_pool_basic(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -87,7 +88,8 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -122,7 +124,8 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -187,7 +190,8 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100..100_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         // stake pool with coin input and transfer tokens with token input
         let tx1 = TransactionBuilder::new()
@@ -234,7 +238,8 @@ fn stake_pool_twice(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -279,7 +284,11 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let stake_pool_data = create_stake_pool_data(&mut rng, genesis_overspend_amount, vrf_pk);
+        let stake_pool_data = create_stake_pool_data_with_all_reward_to_owner(
+            &mut rng,
+            genesis_overspend_amount,
+            vrf_pk,
+        );
 
         let tx = TransactionBuilder::new()
             .add_input(
@@ -313,7 +322,8 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
@@ -388,7 +398,8 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data = create_stake_pool_data(&mut rng, amount_to_stake, vrf_pk);
+        let stake_pool_data =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),

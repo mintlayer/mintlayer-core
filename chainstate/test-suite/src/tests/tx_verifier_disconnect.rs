@@ -154,7 +154,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .build();
 
         verifier
-            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp())
+            .connect_transaction(&tx_source, &tx1, &tf.genesis().timestamp(), None)
             .unwrap();
 
         // create and connect a tx from mempool based on previous tx from mempool
@@ -170,7 +170,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
             .build();
 
         verifier
-            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp())
+            .connect_transaction(&tx_source, &tx2, &tf.genesis().timestamp(), None)
             .unwrap();
 
         {

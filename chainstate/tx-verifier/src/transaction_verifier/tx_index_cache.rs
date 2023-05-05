@@ -18,12 +18,8 @@ use std::collections::btree_map::Entry;
 use super::{
     cached_inputs_operation::CachedInputsOperation,
     error::{ConnectTransactionError, TxIndexError},
-    BlockTransactableRef,
 };
-use common::{
-    chain::{signature::Signable, OutPointSourceId, Spender, TxInput, TxMainChainIndex},
-    primitives::Idable,
-};
+use common::chain::{OutPointSourceId, Spender, TxInput, TxMainChainIndex};
 
 pub type TxIndexMap = std::collections::BTreeMap<OutPointSourceId, CachedInputsOperation>;
 
@@ -49,40 +45,25 @@ impl TxIndexCache {
 
     pub fn add_tx_index(
         &mut self,
-        spend_ref: BlockTransactableRef,
+        outpoint_source_id: OutPointSourceId,
         tx_index: TxMainChainIndex,
     ) -> Result<(), TxIndexError> {
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(&spend_ref)?;
-
-        let tx_index = match spend_ref {
-            BlockTransactableRef::Transaction(_block, _tx_num) => {
-                CachedInputsOperation::Write(tx_index)
-            }
-            BlockTransactableRef::BlockReward(block) => {
-                match block.block_reward_transactable().outputs() {
-                    Some(outputs) => CachedInputsOperation::Write(TxMainChainIndex::new(
-                        block.get_id().into(),
-                        outputs.len().try_into().map_err(|_| TxIndexError::InvalidOutputCount)?,
-                    )?),
-                    None => return Ok(()), // no outputs to add
-                }
-            }
-        };
-
         match self.data.entry(outpoint_source_id) {
             Entry::Occupied(_) => {
                 return Err(TxIndexError::OutputAlreadyPresentInInputsCache);
             }
             Entry::Vacant(entry) => {
-                entry.insert(tx_index);
+                entry.insert(CachedInputsOperation::Write(tx_index));
             }
         };
 
         Ok(())
     }
 
-    pub fn remove_tx_index(&mut self, spend_ref: BlockTransactableRef) -> Result<(), TxIndexError> {
-        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(&spend_ref)?;
+    pub fn remove_tx_index(
+        &mut self,
+        outpoint_source_id: OutPointSourceId,
+    ) -> Result<(), TxIndexError> {
         self.remove_tx_index_by_id(outpoint_source_id)
     }
 
@@ -100,22 +81,6 @@ impl TxIndexCache {
         // possible overwrite is ok
         self.data.insert(tx_id.clone(), CachedInputsOperation::Write(tx_index));
         Ok(())
-    }
-
-    fn outpoint_source_id_from_spend_ref(
-        spend_ref: &BlockTransactableRef,
-    ) -> Result<OutPointSourceId, TxIndexError> {
-        let outpoint_source_id = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block.transactions().get(*tx_num).ok_or_else(|| {
-                    TxIndexError::InvariantErrorTxNumWrongInBlock(*tx_num, block.get_id())
-                })?;
-                let tx_id = tx.transaction().get_id();
-                OutPointSourceId::from(tx_id)
-            }
-            BlockTransactableRef::BlockReward(block) => OutPointSourceId::from(block.get_id()),
-        };
-        Ok(outpoint_source_id)
     }
 
     fn get_from_cached_mut(

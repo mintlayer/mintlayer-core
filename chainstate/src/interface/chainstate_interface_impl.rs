@@ -561,6 +561,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 }
 
+// TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
+// because it can be invalid for certain contexts.
 fn get_output_coin_amount(
     pos_accounting_view: &impl PoSAccountingView,
     output: &TxOutput,
@@ -571,17 +573,18 @@ fn get_output_coin_amount(
         }
         TxOutput::StakePool(data) => Some(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pool_balance = pos_accounting_view
-                .get_pool_balance(*pool_id)
+            let pledge_amount = pos_accounting_view
+                .get_pool_data(*pool_id)
                 .map_err(|_| {
-                    ChainstateError::FailedToReadProperty(PropertyQueryError::PoolBalanceNotFound(
-                        *pool_id,
-                    ))
+                    ChainstateError::FailedToReadProperty(
+                        PropertyQueryError::StakePoolDataNotFound(*pool_id),
+                    )
                 })?
                 .ok_or(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::PoolBalanceNotFound(*pool_id),
-                ))?;
-            Some(pool_balance)
+                    PropertyQueryError::StakePoolDataNotFound(*pool_id),
+                ))?
+                .pledge_amount();
+            Some(pledge_amount)
         }
         TxOutput::DecommissionPool(v, _, _, _) => Some(*v),
     };

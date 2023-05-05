@@ -255,7 +255,7 @@ mod tests {
             tokens::OutputValue,
             Block, Destination, GenBlock, OutPoint, OutPointSourceId, PoolId, TxInput,
         },
-        primitives::{Amount, Compact, Id, H256},
+        primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
     };
     use crypto::{
         random::{seq::IteratorRandom, Rng},
@@ -264,41 +264,9 @@ mod tests {
     use itertools::Itertools;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::{Utxo, UtxosView};
+    use utxo::{Utxo, UtxosDBInMemoryImpl};
 
     use super::*;
-
-    struct TestUtxosDB {
-        store: BTreeMap<OutPoint, Utxo>,
-    }
-
-    impl TestUtxosDB {
-        fn new(initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
-            Self {
-                store: initial_utxos,
-            }
-        }
-    }
-
-    impl UtxosView for TestUtxosDB {
-        type Error = std::convert::Infallible;
-
-        fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
-            Ok(self.store.get(outpoint).cloned())
-        }
-
-        fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
-            Ok(self.store.get(outpoint).is_some())
-        }
-
-        fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
-            unimplemented!()
-        }
-
-        fn estimated_size(&self) -> Option<usize> {
-            None
-        }
-    }
 
     fn transfer() -> TxOutput {
         TxOutput::Transfer(OutputValue::Coin(Amount::ZERO), Destination::AnyoneCanSpend)
@@ -323,7 +291,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             vrf_pub_key,
             Destination::AnyoneCanSpend,
-            0,
+            PerThousand::new(0).unwrap(),
             Amount::ZERO,
         )))
     }
@@ -435,10 +403,13 @@ mod tests {
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(input_utxo, false),
-        )]));
+        let utxo_db = UtxosDBInMemoryImpl::new(
+            Id::<GenBlock>::new(H256::zero()), 
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                Utxo::new_for_mempool(input_utxo, false),
+            )]),
+        );
 
         let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
         assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &utxo_db));
@@ -452,10 +423,13 @@ mod tests {
             let mut rng = make_seedable_rng(seed);
             let inputs_utxos = get_random_outputs_combination(&mut rng, inputs_utxos, 1);
             let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-            let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-                outpoint.clone(),
-                Utxo::new_for_mempool(inputs_utxos.first().unwrap().clone(), false),
-            )]));
+            let utxo_db = UtxosDBInMemoryImpl::new(
+                Id::<GenBlock>::new(H256::zero()),
+                BTreeMap::from_iter([(
+                    outpoint.clone(),
+                    Utxo::new_for_mempool(inputs_utxos.first().unwrap().clone(), false),
+                )]),
+            );
 
             let number_of_outputs = rng.gen_range(2..10);
             let mut outputs =
@@ -495,10 +469,14 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
-        )]));
+        let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+        let utxo_db = UtxosDBInMemoryImpl::new(
+            best_block_id,
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+            )]),
+        );
 
         let number_of_valid_outputs = rng.gen_range(0..10);
         let number_of_invalid_outputs = rng.gen_range(1..10);
@@ -530,10 +508,14 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
-        )]));
+        let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+        let utxo_db = UtxosDBInMemoryImpl::new(
+            best_block_id,
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+            )]),
+        );
 
         let number_of_valid_outputs = rng.gen_range(0..10);
         let number_of_invalid_outputs = rng.gen_range(2..10);
@@ -575,7 +557,8 @@ mod tests {
                 })
                 .collect::<BTreeMap<_, _>>();
             let inputs: Vec<TxInput> = utxos.keys().map(|k| k.clone().into()).collect();
-            let utxo_db = TestUtxosDB::new(utxos);
+            let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+            let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, utxos);
 
             let outputs = get_random_outputs_combination(&mut rng, source_outputs, 1);
 
@@ -619,7 +602,8 @@ mod tests {
                 })
                 .collect::<BTreeMap<_, _>>();
             let inputs: Vec<TxInput> = utxos.keys().map(|k| k.clone().into()).collect();
-            let utxo_db = TestUtxosDB::new(utxos);
+            let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+            let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, utxos);
 
             let number_of_outputs = rng.gen_range(2..10);
             let outputs =
@@ -699,10 +683,13 @@ mod tests {
         #[case] result: Result<(), ConnectTransactionError>,
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(input_utxo, false),
-        )]));
+        let utxo_db = UtxosDBInMemoryImpl::new(
+            Id::<GenBlock>::new(H256::zero()), 
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                Utxo::new_for_mempool(input_utxo, false),
+            )]),
+        );
 
         let block = make_block(vec![outpoint.into()], vec![output]);
 
@@ -723,10 +710,11 @@ mod tests {
             .unwrap();
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
-        let utxo_db = TestUtxosDB::new(BTreeMap::from_iter([(
-            outpoint.clone(),
-            Utxo::new_for_mempool(input, false),
-        )]));
+        let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+        let utxo_db = UtxosDBInMemoryImpl::new(
+            best_block_id,
+            BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input, false))]),
+        );
 
         let block = make_block(vec![outpoint.into()], vec![]);
 
@@ -744,7 +732,8 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn reward_none_to_any(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let utxo_db = TestUtxosDB::new(BTreeMap::new());
+        let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+        let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, BTreeMap::new());
 
         {
             // valid cases
@@ -808,7 +797,8 @@ mod tests {
                 .collect::<BTreeMap<_, _>>();
 
         let inputs: Vec<TxInput> = kernel_outputs.keys().map(|k| k.clone().into()).collect();
-        let utxo_db = TestUtxosDB::new(kernel_outputs);
+        let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
+        let utxo_db = UtxosDBInMemoryImpl::new(best_block_id, kernel_outputs);
 
         let block = make_block(inputs, vec![]);
 

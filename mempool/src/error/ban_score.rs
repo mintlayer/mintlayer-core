@@ -140,6 +140,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidInputTypeInReward => 100,
             ConnectTransactionError::InvalidOutputTypeInReward => 100,
             ConnectTransactionError::SpendStakeError(_) => 100,
+            ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
+            ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -159,13 +161,18 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::MissingPoSAccountingUndo(_) => 0,
             ConnectTransactionError::UtxoBlockUndoError(_) => 0,
             ConnectTransactionError::AccountingBlockUndoError(_) => 0,
-            ConnectTransactionError::PoolBalanceNotFound(_) => 0,
+            ConnectTransactionError::PoolOwnerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::StorageError(_) => 0,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
             ConnectTransactionError::MissingMempoolTxsUndo => 0,
+            ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 0,
+            ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 0,
+            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
+            ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
+            ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
         }
     }
 }
@@ -256,6 +263,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationCreationFailedPoolDoesNotExist => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
+            E::IncreasePledgeAmountOfNonexistingPool => 0,
 
             // Accounting error has to be inspected further
             E::AccountingError(err) => err.mempool_ban_score(),
@@ -279,6 +287,7 @@ impl MempoolBanScore for pos_accounting::Error {
             E::DelegationSharesAdditionError => 100,
             E::DelegationSharesSubtractionError => 100,
             E::PledgeValueToSignedError => 100,
+            E::PledgeAmountAdditionError => 100,
 
             // Not undo-ing in mempool
             E::InvariantErrorDecommissionUndoFailedPoolBalanceAlreadyExists => 0,
@@ -290,6 +299,8 @@ impl MempoolBanScore for pos_accounting::Error {
             E::InvariantErrorDelegationSharesAdditionUndoError => 0,
             E::InvariantErrorDelegationUndoFailedDataNotFound => 0,
             E::DuplicatesInDeltaAndUndo => 0,
+            E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 0,
+            E::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound => 0,
 
             // Internal errors
             E::StorageError(_) => 0,

@@ -116,10 +116,6 @@ impl BlockV1 {
             ConsensusData::PoS(data) => Some(data.kernel_witness()),
         };
 
-        BlockRewardTransactable {
-            inputs,
-            witness,
-            outputs: Some(self.body.reward.outputs()),
-        }
+        BlockRewardTransactable::new(inputs, Some(self.body.reward.outputs()), witness)
     }
 }

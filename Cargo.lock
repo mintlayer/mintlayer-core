@@ -6201,6 +6201,7 @@ dependencies = [
  "pos_accounting",
  "replace_with",
  "rstest",
+ "static_assertions",
  "test-utils",
  "thiserror",
  "utils",

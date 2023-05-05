@@ -31,10 +31,13 @@ use common::{
 use crypto::random::{Rng, RngCore};
 use pos_accounting::PoSAccountingView;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
-    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
-    Fee, Subsidy, TransactionVerifier, TransactionVerifierDelta,
+use tx_verifier::{
+    transaction_verifier::{
+        config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
+        storage::TransactionVerifierStorageRef, Fee, Subsidy, TransactionSourceForConnect,
+        TransactionVerifier, TransactionVerifierDelta,
+    },
+    TransactionSource,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -162,7 +165,7 @@ impl RandomizedTransactionVerificationStrategy {
 
         let mut tx_verifier = tx_verifier_maker(storage_backend, chain_config, verifier_config);
 
-        let mut total_fee = Amount::ZERO;
+        let mut total_fees = Amount::ZERO;
         let mut tx_num = 0usize;
         while tx_num < block.transactions().len() {
             if self.rng.borrow_mut().gen::<bool>() {
@@ -176,7 +179,7 @@ impl RandomizedTransactionVerificationStrategy {
                     tx_num,
                 )?;
 
-                total_fee = (total_fee + fee).ok_or_else(|| {
+                total_fees = (total_fees + fee).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
 
@@ -185,31 +188,32 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_num = new_tx_index;
             } else {
                 // connect transactable using current verifier
-                tx_verifier.connect_transactable(
-                    block_index,
-                    BlockTransactableWithIndexRef::Transaction(
-                        block,
-                        tx_num,
-                        take_front_tx_index(&mut tx_indices),
-                    ),
+
+                tx_verifier.connect_transaction(
+                    &TransactionSourceForConnect::Chain {
+                        new_block_index: block_index,
+                    },
+                    &block.transactions()[tx_num],
                     median_time_past,
+                    take_front_tx_index(&mut tx_indices),
                 )?;
                 tx_num += 1;
             }
         }
 
         tx_verifier
-            .check_block_reward(block, Fee(total_fee), Subsidy(block_subsidy))
+            .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
-        let reward_fees = tx_verifier
-            .connect_transactable(
+        tx_verifier
+            .connect_block_reward(
                 block_index,
-                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
-                median_time_past,
+                block.block_reward_transactable(),
+                Fee(total_fees),
+                block_reward_tx_index,
             )
             .log_err()?;
-        debug_assert!(reward_fees.is_none());
+
         Ok(tx_verifier)
     }
 
@@ -230,31 +234,30 @@ impl RandomizedTransactionVerificationStrategy {
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
         let mut tx_verifier = base_tx_verifier.derive_child();
-        let mut total_fee = Amount::ZERO;
+        let mut total_fees = Amount::ZERO;
         while tx_num < block.transactions().len() {
             if self.rng.borrow_mut().gen::<bool>() {
                 // break the loop, which effectively would flush current state to the parent
                 break;
             } else {
                 // connect transactable using current verifier
-                let fee = tx_verifier.connect_transactable(
-                    block_index,
-                    BlockTransactableWithIndexRef::Transaction(
-                        block,
-                        tx_num,
-                        take_front_tx_index(tx_indices),
-                    ),
+                let fee = tx_verifier.connect_transaction(
+                    &TransactionSourceForConnect::Chain {
+                        new_block_index: block_index,
+                    },
+                    &block.transactions()[tx_num],
                     median_time_past,
+                    take_front_tx_index(tx_indices),
                 )?;
 
-                total_fee = (total_fee + fee.expect("some").0).ok_or_else(|| {
+                total_fees = (total_fees + fee.0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })?;
                 tx_num += 1;
             }
         }
         let cache = tx_verifier.consume()?;
-        Ok((cache, total_fee, tx_num))
+        Ok((cache, total_fees, tx_num))
     }
 
     fn disconnect_with_base<C, S, M, U, A>(
@@ -286,17 +289,17 @@ impl RandomizedTransactionVerificationStrategy {
                 tx_num = new_tx_index;
             } else {
                 // disconnect transactable using current verifier
-                tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(
-                    block,
-                    tx_num as usize,
-                ))?;
+                tx_verifier
+                    .disconnect_transaction(
+                        &TransactionSource::Chain(block.get_id()),
+                        &block.transactions()[tx_num as usize],
+                    )
+                    .log_err()?;
                 tx_num -= 1;
             }
         }
 
-        tx_verifier
-            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
-            .log_err()?;
+        tx_verifier.disconnect_block_reward(block).log_err()?;
 
         Ok(tx_verifier)
     }
@@ -321,10 +324,10 @@ impl RandomizedTransactionVerificationStrategy {
                 break;
             } else {
                 // disconnect transactable using current verifier
-                tx_verifier.disconnect_transactable(BlockTransactableRef::Transaction(
-                    block,
-                    tx_num as usize,
-                ))?;
+                tx_verifier.disconnect_transaction(
+                    &TransactionSource::Chain(block.get_id()),
+                    &block.transactions()[tx_num as usize],
+                )?;
                 tx_num -= 1;
             }
         }

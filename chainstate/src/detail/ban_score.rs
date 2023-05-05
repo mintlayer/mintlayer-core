@@ -115,11 +115,18 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidInputTypeInReward => 100,
             ConnectTransactionError::InvalidOutputTypeInTx => 100,
             ConnectTransactionError::InvalidOutputTypeInReward => 100,
-            ConnectTransactionError::PoolBalanceNotFound(_) => 0,
+            ConnectTransactionError::PoolOwnerBalanceNotFound(_) => 0,
             ConnectTransactionError::PoolDataNotFound(_) => 0,
             ConnectTransactionError::MissingTxInputs => 100,
             ConnectTransactionError::UndoFetchFailure => 0,
             ConnectTransactionError::TxVerifierStorage => 0,
+            ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
+            ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
+            ConnectTransactionError::DelegationsRewardSumFailed(_, _) => 100,
+            ConnectTransactionError::DelegationRewardOverflow(_, _, _, _) => 100,
+            ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
+            ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
+            ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
         }
     }
 }
@@ -372,6 +379,10 @@ impl BanScore for pos_accounting::Error {
             E::InvariantErrorDelegationUndoFailedDataNotFound => 100,
             E::DuplicatesInDeltaAndUndo => 100,
             E::ViewFail => 0,
+            E::IncreasePledgeAmountOfNonexistingPool => 100,
+            E::PledgeAmountAdditionError => 100,
+            E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 100,
+            E::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound => 100,
         }
     }
 }

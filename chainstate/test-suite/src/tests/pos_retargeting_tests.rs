@@ -38,7 +38,7 @@ use common::{
         ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
         UpgradeVersion,
     },
-    primitives::{Amount, BlockHeight, Compact, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Idable},
     Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
@@ -92,7 +92,7 @@ fn setup_test_chain_with_staked_pool(
         anyonecanspend_address(),
         vrf_pk,
         new_pub_key_destination(rng),
-        0,
+        PerThousand::new(0).unwrap(),
         Amount::ZERO,
     );
 
