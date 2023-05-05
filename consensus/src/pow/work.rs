@@ -254,7 +254,7 @@ pub fn mine(
             return Ok(MiningResult::Success);
         }
 
-        if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+        if stop_flag.load(std::sync::atomic::Ordering::SeqCst) {
             return Ok(MiningResult::Stopped);
         }
     }
