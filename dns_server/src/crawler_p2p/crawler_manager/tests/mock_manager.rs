@@ -268,12 +268,9 @@ pub async fn advance_time(
     for _ in 0..count {
         time_getter.advance_time(step);
         crawler.heartbeat();
-        tokio::select! {
-            biased;
-            _ = crawler.run() => {
-                unreachable!("run should not return")
-            }
-            _ = tokio::time::sleep(Duration::from_millis(1)) => {}
-        }
     }
+
+    tokio::time::timeout(Duration::from_millis(10), crawler.run())
+        .await
+        .expect_err("run should not return");
 }

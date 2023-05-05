@@ -279,7 +279,7 @@ async fn pending_handshakes() {
 async fn handshake_timeout() {
     let time_getter = P2pBasicTestTimeGetter::new();
     let transport = WrappedTransportSocket::<NoiseEncryptionAdapter, TcpTransportSocket>::new(
-        NoiseEncryptionAdapter::gen_new(),
+        NoiseEncryptionAdapter::gen_new().with_handshake_timeout(Duration::from_millis(100)),
         TcpTransportSocket::new(),
     );
     let mut server = transport.bind(vec![TestTransportTcp::make_address()]).await.unwrap();
