@@ -79,19 +79,25 @@ impl InMemoryPoSAccounting {
     pub(crate) fn check_consistancy(&self) {
         // pool_balance and pool_data must contain the same keys
         assert_eq!(self.pool_balances.len(), self.pool_data.len());
-        let pool_balance_and_data_consistant =
-            self.pool_balances.keys().all(|key| self.pool_data.contains_key(key));
-        assert!(pool_balance_and_data_consistant);
+        self.pool_balances.keys().for_each(|key| {
+            assert!(
+                self.pool_data.contains_key(key),
+                "Pool data doesn't exist for {}",
+                key
+            )
+        });
 
         // delegation_balance and delegation_data must contain the same keys
         //
         // Note: delegation_balances and delegation_data can have different length
         // because zero balances are removed.
-        let delegation_balance_and_data_consistant = self
-            .delegation_balances
-            .keys()
-            .all(|key| self.delegation_data.contains_key(key));
-        assert!(delegation_balance_and_data_consistant);
+        self.delegation_balances.keys().for_each(|key| {
+            assert!(
+                self.delegation_data.contains_key(key),
+                "Delegation data doesn't exist for {}",
+                key
+            )
+        });
 
         // pool balance = pledge amount + delegations balances
         self.pool_balances.iter().for_each(|(pool_id, pool_balance)| {
@@ -116,11 +122,14 @@ impl InMemoryPoSAccounting {
             self.delegation_balances.len(),
             self.pool_delegation_shares.len()
         );
-        let delegation_shares_and_balances_consistent = self
-            .pool_delegation_shares
-            .iter()
-            .all(|((_, key), balance)| self.delegation_balances.get(key) == Some(balance));
-        assert!(delegation_shares_and_balances_consistent);
+        self.pool_delegation_shares.iter().for_each(|((_, key), balance)| {
+            assert_eq!(
+                self.delegation_balances.get(key),
+                Some(balance),
+                "Delegation shares and balance mismatch for: {}",
+                key
+            )
+        });
     }
 }
 
