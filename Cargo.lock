@@ -6441,16 +6441,22 @@ dependencies = [
 name = "wallet-cli-lib"
 version = "0.1.0"
 dependencies = [
+ "chainstate",
+ "chainstate-storage",
  "clap 4.2.4",
  "common",
  "crossterm",
  "directories",
  "logging",
+ "mempool",
  "node-comm",
  "node-lib",
+ "p2p",
  "reedline",
+ "rpc",
  "serialization",
  "shlex",
+ "subsystem",
  "test-utils",
  "thiserror",
  "tokio",

@@ -15,10 +15,19 @@
 
 use std::{
     collections::VecDeque,
+    net::SocketAddr,
     sync::{Arc, Mutex},
 };
 
-use tokio::sync::oneshot;
+use chainstate::{
+    make_chainstate, rpc::ChainstateRpcServer, ChainstateConfig,
+    DefaultTransactionVerificationStrategy,
+};
+use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
+use p2p::rpc::P2pRpcServer;
+use rpc::{rpc_creds::RpcCreds, RpcConfig};
+use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use test_utils::test_dir::TestRoot;
 use wallet_cli_lib::{
     config::{Network, WalletCliArgs},
     console::{ConsoleInput, ConsoleOutput},
@@ -61,90 +70,136 @@ impl ConsoleOutput for MockConsole {
     }
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn basic_wallet_cli() {
-    // logging::init_logging::<std::path::PathBuf>(None);
+const RPC_USERNAME: &str = "username";
+const RPC_PASSWORD: &str = "password";
 
-    let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
-    let test_dir = test_root.fresh_test_dir("basic_wallet_cli");
+async fn start_node() -> (subsystem::Manager, SocketAddr) {
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let p2p_config = p2p::testing_utils::test_p2p_config();
+    let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
 
-    let rpc_username = "username";
-    let rpc_password = "password";
-
-    let (node_controller_tx, node_controller_rx) = oneshot::channel();
-
-    let node_options = node_lib::Options {
-        data_dir: Some(test_dir.as_ref().to_owned()),
-        command: Some(node_lib::Command::Regtest(
-            node_lib::regtest_options::RegtestOptions {
-                run_options: node_lib::RunOptions {
-                    storage_backend: None,
-                    node_type: None,
-                    mock_time: None,
-                    max_db_commit_attempts: None,
-                    max_orphan_blocks: None,
-                    tx_index_enabled: None,
-                    p2p_addr: Some(vec!["127.0.0.1:0".to_owned()]),
-                    p2p_socks5_proxy: None,
-                    p2p_disable_noise: None,
-                    p2p_boot_node: None,
-                    p2p_reserved_node: None,
-                    p2p_max_inbound_connections: None,
-                    p2p_ban_threshold: None,
-                    p2p_outbound_connection_timeout: None,
-                    p2p_ping_check_period: None,
-                    p2p_ping_timeout: None,
-                    max_tip_age: None,
-                    http_rpc_addr: Some("127.0.0.1:0".parse().unwrap()),
-                    http_rpc_enabled: None,
-                    ws_rpc_addr: None,
-                    ws_rpc_enabled: None,
-                    rpc_username: Some(rpc_username.to_owned()),
-                    rpc_password: Some(rpc_password.to_owned()),
-                    rpc_cookie_file: None,
-                    p2p_sync_stalling_timeout: None,
-                },
-                chain_config: node_lib::regtest_options::ChainConfigOptions {
-                    chain_address_prefix: None,
-                    chain_max_future_block_time_offset: None,
-                    chain_version: None,
-                    chain_target_block_spacing: None,
-                    chain_coin_decimals: None,
-                    chain_emission_schedule: None,
-                    chain_max_block_header_size: None,
-                    chain_max_block_size_with_standard_txs: None,
-                    chain_max_block_size_with_smart_contracts: None,
-                },
-            },
-        )),
+    let rpc_config = RpcConfig {
+        http_bind_address: "127.0.0.1:0".parse::<SocketAddr>().unwrap().into(),
+        http_enabled: true.into(),
+        ws_bind_address: Default::default(),
+        ws_enabled: false.into(),
     };
 
-    let node_task = tokio::spawn(async move {
-        let manager = node_lib::setup(node_options, Some(node_controller_tx)).await.unwrap();
-        manager.main().await;
+    let mut manager = subsystem::Manager::new("wallet-cli-test-manager");
+
+    let chainstate = make_chainstate(
+        Arc::clone(&chain_config),
+        ChainstateConfig::new(),
+        chainstate_storage::inmemory::Store::new_empty().unwrap(),
+        DefaultTransactionVerificationStrategy::new(),
+        None,
+        Default::default(),
+    )
+    .unwrap();
+
+    let chainstate = manager.add_subsystem("wallet-cli-test-chainstate", chainstate);
+
+    let mempool = mempool::make_mempool(
+        Arc::clone(&chain_config),
+        chainstate.clone(),
+        Default::default(),
+        mempool::SystemUsageEstimator {},
+    );
+    let mempool = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
+        move |call, shutdn| mempool.run(call, shutdn)
     });
 
-    let node_controller = node_controller_rx.await.unwrap();
+    let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
+    let p2p = manager.add_subsystem(
+        "p2p",
+        p2p::make_p2p(
+            Arc::clone(&chain_config),
+            Arc::new(p2p_config),
+            chainstate.clone(),
+            mempool.clone(),
+            Default::default(),
+            peerdb_storage,
+        )
+        .await
+        .unwrap(),
+    );
 
-    let wallet_options = WalletCliArgs {
-        network: Network::Regtest,
-        wallet_file: None,
-        rpc_address: node_controller.runtime_info.rpc_http_address,
-        rpc_cookie_file: None,
-        rpc_username: Some(rpc_username.to_owned()),
-        rpc_password: Some(rpc_password.to_owned()),
-        commands_file: None,
-        history_file: None,
-        exit_on_error: None,
-        vi_mode: false,
-    };
+    let rpc = rpc::Builder::new(rpc_config, Some(rpc_creds))
+        .register(node_lib::rpc::init(
+            manager.make_shutdown_trigger(),
+            chain_config,
+        ))
+        // .register(block_prod.clone().into_rpc())
+        .register(chainstate.clone().into_rpc())
+        .register(mempool.clone().into_rpc())
+        .register(p2p.clone().into_rpc())
+        .build()
+        .await
+        .unwrap();
+    let rpc_http_address = rpc.http_address().cloned().unwrap();
+    manager.add_subsystem("rpc", rpc);
 
-    let console = MockConsole::new(&["nodeversion"]);
-    wallet_cli_lib::run(console.clone(), wallet_options).await.unwrap();
-    assert!(console.output.lock().unwrap().last().unwrap() == "0.1.0");
+    (manager, rpc_http_address)
+}
 
-    node_controller.shutdown_trigger.initiate();
-    node_task.await.unwrap();
+struct CliTestFramework {
+    rpc_address: SocketAddr,
+    shutdown_trigger: ShutdownTrigger,
+    manager_task: ManagerJoinHandle,
+    test_root: TestRoot,
+}
 
-    test_root.delete();
+impl CliTestFramework {
+    async fn setup() -> Self {
+        // logging::init_logging::<std::path::PathBuf>(None);
+
+        let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
+        // let test_dir = test_root.fresh_test_dir("basic_wallet_cli");
+
+        let (manager, rpc_address) = start_node().await;
+
+        let shutdown_trigger = manager.make_shutdown_trigger();
+        let manager_task = manager.main_in_task();
+
+        Self {
+            manager_task,
+            shutdown_trigger,
+            rpc_address,
+            test_root,
+        }
+    }
+
+    async fn run(&self, command: &str, expected: &str) {
+        let wallet_options = WalletCliArgs {
+            network: Network::Regtest,
+            wallet_file: None,
+            rpc_address: Some(self.rpc_address),
+            rpc_cookie_file: None,
+            rpc_username: Some(RPC_USERNAME.to_owned()),
+            rpc_password: Some(RPC_PASSWORD.to_owned()),
+            commands_file: None,
+            history_file: None,
+            exit_on_error: None,
+            vi_mode: false,
+        };
+
+        let console = MockConsole::new(&[command]);
+        wallet_cli_lib::run(console.clone(), wallet_options).await.unwrap();
+        assert_eq!(console.output.lock().unwrap().last().unwrap(), expected);
+    }
+
+    async fn shutdown(self) {
+        self.shutdown_trigger.initiate();
+        self.manager_task.join().await;
+        self.test_root.delete();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_cli_basic_test() {
+    let test = CliTestFramework::setup().await;
+
+    test.run("nodeversion", "0.1.0").await;
+
+    test.shutdown().await;
 }
