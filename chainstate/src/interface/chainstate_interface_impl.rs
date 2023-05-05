@@ -26,14 +26,14 @@ use crate::{
     ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 use chainstate_storage::BlockchainStorage;
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::chain::{block::signed_block_header::SignedBlockHeader, TxOutput};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{Block, BlockReward, GenBlock},
+        block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
+        TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
 };
@@ -327,6 +327,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
             .get_block_reward(block_index)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_epoch_data(epoch_index)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 

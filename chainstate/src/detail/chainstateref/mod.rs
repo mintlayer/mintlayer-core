@@ -325,6 +325,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block_reward(block_index).log_err()?)
     }
 
+    pub fn get_epoch_data(
+        &self,
+        epoch_index: u64,
+    ) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
+    }
+
     pub fn get_block_height_in_main_chain(
         &self,
         id: &Id<GenBlock>,

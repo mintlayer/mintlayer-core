@@ -20,7 +20,7 @@ use std::{
 };
 
 use chainstate_types::Locator;
-use chainstate_types::{BlockIndex, GenBlockIndex};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::chain::{
     block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
@@ -211,6 +211,10 @@ where
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError> {
         self.deref().get_block_reward(block_index)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError> {
+        self.deref().get_epoch_data(epoch_index)
     }
 
     fn get_token_info_for_rpc(

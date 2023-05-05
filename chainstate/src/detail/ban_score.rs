@@ -313,6 +313,7 @@ impl BanScore for ConsensusPoSError {
         match self {
             ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
+            ConsensusPoSError::StakePrivateKeyNotProvided => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
             ConsensusPoSError::NoKernel => 100,
             ConsensusPoSError::MultipleKernels => 100,
