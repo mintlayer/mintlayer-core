@@ -105,7 +105,8 @@ where
 {
     let pos_config = match pos_status {
         PoSStatus::Threshold {
-            initial_difficulty, ..
+            initial_difficulty,
+            config: _,
         } => return Ok(*initial_difficulty),
         PoSStatus::Ongoing(config) => config,
     };
@@ -161,7 +162,8 @@ where
     match chain_config.net_upgrade().consensus_status(prev_block_index.block_height()) {
         RequiredConsensus::PoS(status) => match status {
             PoSStatus::Threshold {
-                initial_difficulty, ..
+                initial_difficulty,
+                config: _,
             } => return Ok(initial_difficulty),
             PoSStatus::Ongoing(_) => { /*do nothing*/ }
         },
