@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [features]
 default = []
-testing_utils = ["dep:rlimit", "dep:ctor", "dep:test-utils", "tokio/test-util"]
+testing_utils = ["dep:rlimit", "dep:ctor", "dep:test-utils"]
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
