@@ -15,18 +15,33 @@
 
 //! Mempool subsystem RPC handler
 
-use common::{chain::Transaction, primitives::Id};
+use common::{
+    chain::{SignedTransaction, Transaction},
+    primitives::Id,
+};
+use serialization::hex::HexDecode;
 
 #[rpc::rpc(server, namespace = "mempool")]
 trait MempoolRpc {
     #[method(name = "contains_tx")]
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool>;
+
+    #[method(name = "submit_transaction")]
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
 }
 
 #[async_trait::async_trait]
 impl MempoolRpcServer for super::MempoolHandle {
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
         self.call(move |this| this.contains_transaction(&tx_id))
+            .await
+            .map_err(rpc::Error::to_call_error)?
+            .map_err(rpc::Error::to_call_error)
+    }
+
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
+        let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
+        self.call_mut(|s| s.add_transaction(tx))
             .await
             .map_err(rpc::Error::to_call_error)?
             .map_err(rpc::Error::to_call_error)
