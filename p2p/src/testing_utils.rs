@@ -18,16 +18,11 @@
 use std::{
     fmt::Debug,
     net::{IpAddr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
     time::Duration,
 };
 
-use common::{primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter};
+use common::primitives::user_agent::mintlayer_core_user_agent;
 use crypto::random::{make_pseudo_rng, Rng};
-use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
 
 use crate::{
@@ -246,31 +241,6 @@ where
 pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory> {
     let storage = storage::inmemory::InMemory::new();
     PeerDbStorageImpl::new(storage).unwrap()
-}
-
-pub struct P2pBasicTestTimeGetter {
-    current_time_millis: Arc<AtomicU64>,
-}
-
-impl P2pBasicTestTimeGetter {
-    pub fn new() -> Self {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap();
-        let current_time_millis = Arc::new(AtomicU64::new(current_time.as_millis() as u64));
-        Self {
-            current_time_millis,
-        }
-    }
-
-    pub fn get_time_getter(&self) -> TimeGetter {
-        mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
-    }
-
-    pub fn advance_time(&self, duration: Duration) {
-        self.current_time_millis
-            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
-    }
 }
 
 /// Receive a message from the tokio channel.

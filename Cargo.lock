@@ -1550,6 +1550,7 @@ dependencies = [
  "directories",
  "logging",
  "p2p",
+ "p2p-test-utils",
  "parity-scale-codec",
  "rstest",
  "serialization",
@@ -3959,6 +3960,7 @@ dependencies = [
  "mempool",
  "portpicker",
  "subsystem",
+ "test-utils",
  "tokio",
 ]
 

@@ -28,6 +28,7 @@ clap = { version = "4", features = ["derive"] }
 directories = "5.0"
 
 [dev-dependencies]
+p2p-test-utils = { path = "../p2p/p2p-test-utils" }
 test-utils = { path = "../test-utils" }
 
 rstest.workspace = true

@@ -21,6 +21,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, StreamExt};
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     time::timeout,
@@ -44,9 +45,7 @@ use crate::{
         },
         types::Message,
     },
-    testing_utils::{
-        P2pBasicTestTimeGetter, TestTransportChannel, TestTransportMaker, TestTransportTcp,
-    },
+    testing_utils::{TestTransportChannel, TestTransportMaker, TestTransportTcp},
 };
 
 use super::wrapped_socket::WrappedTransportSocket;

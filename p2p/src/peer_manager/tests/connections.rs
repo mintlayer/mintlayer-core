@@ -19,6 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use tokio::time::timeout;
 
 use crate::{
@@ -28,8 +29,8 @@ use crate::{
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         connect_and_accept_services, connect_services, get_connectivity_event,
-        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, TestTransportChannel,
-        TestTransportMaker, TestTransportNoise, TestTransportTcp,
+        peerdb_inmemory_store, test_p2p_config, TestTransportChannel, TestTransportMaker,
+        TestTransportNoise, TestTransportTcp,
     },
     types::peer_id::PeerId,
     utils::oneshot_nofail,

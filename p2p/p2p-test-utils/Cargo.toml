@@ -6,13 +6,14 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chainstate = { path = "../../chainstate/" }
 chainstate-storage = { path = "../../chainstate/storage" }
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
-chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }
 mempool = { path = "../../mempool/" }
 subsystem = { path = "../../subsystem/" }
+test-utils = { path = "../../test-utils" }
 
 portpicker = "0.1"
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }

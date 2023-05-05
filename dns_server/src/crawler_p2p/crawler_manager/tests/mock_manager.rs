@@ -39,9 +39,9 @@ use p2p::{
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::P2pBasicTestTimeGetter,
     types::peer_id::PeerId,
 };
+use p2p_test_utils::P2pBasicTestTimeGetter;
 use tokio::sync::mpsc;
 
 use crate::{

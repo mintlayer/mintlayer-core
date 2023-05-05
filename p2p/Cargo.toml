@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [features]
 default = []
-testing_utils = ["dep:test-utils"]
+testing_utils = []
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
@@ -19,7 +19,6 @@ rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 storage = { path = "../storage" }
 subsystem = { path = "../subsystem/" }
-test-utils = { path = "../test-utils", optional = true }
 utils = { path = "../utils/" }
 
 async-trait.workspace = true

@@ -16,6 +16,7 @@
 use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::NodeType,
@@ -32,8 +33,8 @@ use crate::{
     peer_manager::{tests::make_peer_manager_custom, PeerManager},
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker,
-        TestTcpAddressMaker, TestTransportChannel, TestTransportMaker,
+        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
+        TestTransportChannel, TestTransportMaker,
     },
     types::peer_id::PeerId,
 };
