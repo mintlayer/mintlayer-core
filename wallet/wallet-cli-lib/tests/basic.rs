@@ -223,10 +223,12 @@ async fn wallet_cli_file() {
         .unwrap()
         .to_owned();
 
-    let output = test.run(&[&format!("createwallet \"{file_name}\"")]).await;
+    // Start the wallet, create it, and shutdown the wallet
+    let output = test.run(&[&format!("createwallet \"{file_name}\""), "closewallet"]).await;
     assert_eq!(output.len(), 1);
     assert!(output[0].starts_with("New wallet created successfully\n"));
 
+    // Start the wallet, open it, then close it, then shutdown
     let output = test.run(&[&format!("openwallet \"{file_name}\""), "closewallet"]).await;
     assert_eq!(output, vec!["Wallet loaded successfully", "Success"]);
 
