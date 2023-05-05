@@ -28,12 +28,13 @@ use crate::errors::WalletCliError;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
+    // TODO: Add optional password
     /// Create new wallet
     CreateWallet {
         /// File path
         wallet_path: PathBuf,
 
-        // Mnemonic
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
         mnemonic: Option<String>,
     },
 
