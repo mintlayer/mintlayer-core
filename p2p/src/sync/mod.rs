@@ -26,7 +26,7 @@ use std::{
     },
 };
 
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{self, UnboundedReceiver};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -46,6 +46,7 @@ use crate::{
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::Peer,
     types::peer_id::PeerId,
+    utils::shutdown_channel,
     Result,
 };
 
@@ -62,7 +63,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     sync_event_receiver: T::SyncingEventReceiver,
 
     /// A sender for the peer manager events.
-    peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+    peer_manager_sender: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
 
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
@@ -71,9 +72,11 @@ pub struct BlockSyncManager<T: NetworkingService> {
     is_initial_block_download: Arc<AtomicBool>,
 
     /// A mapping from a peer identifier to the channel.
-    peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
+    peers: HashMap<PeerId, shutdown_channel::UnboundedSender<SyncMessage>>,
 
     time_getter: TimeGetter,
+
+    shutdown: Arc<AtomicBool>,
 }
 
 /// Syncing manager
@@ -92,8 +95,9 @@ where
         sync_event_receiver: T::SyncingEventReceiver,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         Self {
             _chain_config: chain_config,
@@ -106,6 +110,7 @@ where
             is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
             time_getter,
+            shutdown,
         }
     }
 
@@ -115,7 +120,11 @@ where
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
         self.is_initial_block_download.store(
-            self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
+            self.chainstate_handle
+                .call(|c| c.is_initial_block_download())
+                .await
+                // This shouldn't fail unless the chainstate subsystem is down.
+                .expect("Chainstate call failed")?,
             Ordering::Release,
         );
 
@@ -159,7 +168,7 @@ where
     pub fn register_peer(&mut self, peer: PeerId) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 
-        let (sender, receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = shutdown_channel::unbounded_channel("peer channel");
         self.peers
             .insert(peer, sender)
             // This should never happen because a peer can only connect once.
@@ -173,6 +182,7 @@ where
         let p2p_config = Arc::clone(&self.p2p_config);
         let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
         let time_getter = self.time_getter.clone();
+        let shutdown = Arc::clone(&self.shutdown);
         tokio::spawn(async move {
             let mut peer = Peer::<T>::new(
                 peer,
@@ -184,6 +194,7 @@ where
                 receiver,
                 is_initial_block_download,
                 time_getter,
+                shutdown,
             );
             if let Err(e) = peer.run().await {
                 log::error!("Sync manager peer ({}) error: {e:?}", peer.id());
@@ -204,7 +215,12 @@ where
     /// Announces the header of a new block to peers.
     async fn handle_new_tip(&mut self, block_id: Id<Block>) -> Result<()> {
         let is_initial_block_download = if self.is_initial_block_download.load(Ordering::Relaxed) {
-            let is_ibd = self.chainstate_handle.call(|c| c.is_initial_block_download()).await??;
+            let is_ibd = self
+                .chainstate_handle
+                .call(|c| c.is_initial_block_download())
+                .await
+                // This shouldn't fail unless the chainstate subsystem is down.
+                .expect("Chainstate call failed")?;
             self.is_initial_block_download.store(is_ibd, Ordering::Release);
             is_ibd
         } else {
@@ -218,7 +234,9 @@ where
         let header = self
             .chainstate_handle
             .call(move |c| c.get_block(block_id))
-            .await??
+            .await
+            // This shouldn't fail unless the chainstate subsystem is down.
+            .expect("Chainstate call failed")?
             // This should never happen because this block has just been produced by chainstate.
             .expect("A new tip block unavailable")
             .header()
@@ -245,8 +263,7 @@ where
             panic!("Received a message from unknown peer ({peer}): {message:?}")
         });
 
-        if let Err(e) = peer_channel.send(message) {
-            log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");
+        if peer_channel.send(message, &self.shutdown).is_err() {
             self.unregister_peer(peer);
         }
         Ok(())

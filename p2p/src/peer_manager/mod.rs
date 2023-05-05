@@ -28,7 +28,6 @@ use std::{
 };
 
 use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
-use tokio::sync::mpsc;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -59,7 +58,7 @@ use crate::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
     },
-    utils::{oneshot_nofail, rate_limiter::RateLimiter},
+    utils::{oneshot_nofail, rate_limiter::RateLimiter, shutdown_channel},
 };
 
 use self::{
@@ -118,7 +117,7 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
-    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+    rx_peer_manager: shutdown_channel::UnboundedReceiver<PeerManagerEvent<T>>,
 
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
@@ -151,9 +150,10 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
+        rx_peer_manager: shutdown_channel::UnboundedReceiver<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
         peerdb_storage: S,
+        shutdown: Arc<AtomicBool>,
     ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
         let peerdb =
@@ -172,6 +172,7 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
+            shutdown,
         })
     }
 
@@ -1106,8 +1107,12 @@ where
 
         loop {
             tokio::select! {
-                event_res = self.rx_peer_manager.recv() => {
-                    self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
+                event_res = self.rx_peer_manager.recv(&self.shutdown) => {
+                    let event_res = match event_res {
+                        None => break Ok(()),
+                        Some(e) => e,
+                    };
+                    self.handle_control_event(event_res);
                     heartbeat_call_needed = true;
                 },
 

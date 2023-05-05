@@ -145,24 +145,6 @@ impl From<serialization::Error> for P2pError {
     }
 }
 
-impl From<tokio::sync::oneshot::error::RecvError> for P2pError {
-    fn from(_: tokio::sync::oneshot::error::RecvError) -> P2pError {
-        P2pError::ChannelClosed
-    }
-}
-
-impl<T> From<tokio::sync::mpsc::error::SendError<T>> for P2pError {
-    fn from(_: tokio::sync::mpsc::error::SendError<T>) -> P2pError {
-        P2pError::ChannelClosed
-    }
-}
-
-impl From<subsystem::subsystem::CallError> for P2pError {
-    fn from(_e: subsystem::subsystem::CallError) -> P2pError {
-        P2pError::ChannelClosed
-    }
-}
-
 impl From<ChainstateError> for P2pError {
     fn from(e: ChainstateError) -> P2pError {
         P2pError::ChainstateError(e)
@@ -174,7 +156,6 @@ impl BanScore for P2pError {
         match self {
             P2pError::ProtocolError(err) => err.ban_score(),
             P2pError::DialError(_) => 0,
-            P2pError::ChannelClosed => 0,
             P2pError::PeerError(_) => 0,
             P2pError::SubsystemFailure => 0,
             P2pError::ChainstateError(_) => 20,

@@ -84,7 +84,7 @@ pub trait NetworkingService {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-        shutdown_flag: Arc<AtomicBool>,
+        shutdown: Arc<AtomicBool>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

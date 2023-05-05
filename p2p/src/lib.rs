@@ -37,7 +37,7 @@ use std::{
     },
 };
 
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::task::JoinHandle;
 
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
@@ -67,6 +67,7 @@ use crate::{
         },
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
+    utils::shutdown_channel,
 };
 
 /// Result type with P2P errors
@@ -74,11 +75,11 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
+    pub tx_peer_manager: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
 
-    shutdown_flag: Arc<AtomicBool>,
+    shutdown: Arc<AtomicBool>,
 
     backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<()>,
@@ -106,14 +107,14 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
-        let shutdown_flag = Arc::new(AtomicBool::new(false));
+        let shutdown = Arc::new(AtomicBool::new(false));
 
         let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
-            Arc::clone(&shutdown_flag),
+            Arc::clone(&shutdown),
         )
         .await?;
 
@@ -125,7 +126,8 @@ where
         //
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
-        let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
+        let (tx_peer_manager, rx_peer_manager) =
+            shutdown_channel::unbounded_channel("peer manager");
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
@@ -134,11 +136,13 @@ where
             rx_peer_manager,
             time_getter.clone(),
             peerdb_storage,
+            Arc::clone(&shutdown),
         )?;
+        let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
             if let Err(e) = peer_manager.run().await {
                 log::error!("PeerManager failed: {e}");
-                shutdown_flag.store(true, Ordering::Release);
+                shutdown_.store(true, Ordering::Release);
             }
         });
 
@@ -148,6 +152,7 @@ where
             let chain_config = Arc::clone(&chain_config);
             let mempool_handle_ = mempool_handle.clone();
             let messaging_handle_ = messaging_handle.clone();
+            let shutdown_ = Arc::clone(&shutdown);
 
             tokio::spawn(async move {
                 if let Err(e) = sync::BlockSyncManager::<T>::new(
@@ -159,12 +164,13 @@ where
                     mempool_handle_,
                     tx_peer_manager,
                     time_getter,
+                    Arc::clone(&shutdown_),
                 )
                 .run()
                 .await
                 {
                     log::error!("SyncManager failed: {e}");
-                    shutdown_flag.store(true, Ordering::Release);
+                    shutdown_.store(true, Ordering::Release);
                 }
             })
         };
@@ -173,7 +179,7 @@ where
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
-            shutdown_flag,
+            shutdown,
             backend_task,
             peer_manager_task,
             sync_manager_task,
@@ -194,7 +200,7 @@ where
     }
 
     async fn shutdown(self) {
-        self.shutdown_flag.store(true, Ordering::Release);
+        self.shutdown.store(true, Ordering::Release);
 
         futures::future::join_all(
             [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),

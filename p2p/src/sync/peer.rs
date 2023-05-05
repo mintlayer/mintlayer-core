@@ -24,10 +24,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use tokio::{
-    sync::mpsc::{UnboundedReceiver, UnboundedSender},
-    time::MissedTickBehavior,
-};
+use tokio::{sync::mpsc::UnboundedSender, time::MissedTickBehavior};
 use void::Void;
 
 use chainstate::chainstate_interface::ChainstateInterface;
@@ -56,7 +53,7 @@ use crate::{
         NetworkingService,
     },
     types::peer_id::PeerId,
-    utils::oneshot_nofail,
+    utils::{oneshot_nofail, shutdown_channel},
     MessagingService, PeerManagerEvent, Result,
 };
 
@@ -72,7 +69,7 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
-    message_receiver: UnboundedReceiver<SyncMessage>,
+    message_receiver: shutdown_channel::UnboundedReceiver<SyncMessage>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -94,6 +91,7 @@ pub struct Peer<T: NetworkingService> {
     /// we aren't waiting for specific messages.
     last_activity: Option<Duration>,
     time_getter: TimeGetter,
+    shutdown: Arc<AtomicBool>,
 }
 
 impl<T> Peer<T>
@@ -107,11 +105,12 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
         messaging_handle: T::MessagingHandle,
-        message_receiver: UnboundedReceiver<SyncMessage>,
+        message_receiver: shutdown_channel::UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         let services = (*p2p_config.node_type).into();
 
@@ -133,6 +132,7 @@ where
             unconnected_headers: 0,
             last_activity: None,
             time_getter,
+            shutdown,
         }
     }
 
@@ -150,8 +150,11 @@ where
 
         loop {
             tokio::select! {
-                message = self.message_receiver.recv() => {
-                    let message = message.ok_or(P2pError::ChannelClosed)?;
+                message = self.message_receiver.recv(&self.shutdown) => {
+                    let message = match message {
+                        Some(m) => m,
+                        None => break Ok(()),
+                    };
                     self.handle_message(message).await?;
                 },
 
@@ -546,8 +549,7 @@ where
             | P2pError::InvalidConfigurationValue(_)
             | P2pError::ChainstateError(_)) => Err(e),
             // Fatal errors, simply propagate them to stop the sync manager.
-            e @ (P2pError::ChannelClosed
-            | P2pError::SubsystemFailure
+            e @ (P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
             | P2pError::InvalidStorageState(_)) => Err(e),
         }

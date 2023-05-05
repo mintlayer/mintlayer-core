@@ -116,7 +116,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        shutdown_flag: Arc<AtomicBool>,
+        shutdown: Arc<AtomicBool>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
@@ -143,7 +143,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
             if let Err(err) = backend.run().await {
                 log::error!("failed to run backend: {err}");
-                shutdown_flag.store(true, Ordering::Release);
+                shutdown.store(true, Ordering::Release);
             }
         });
 

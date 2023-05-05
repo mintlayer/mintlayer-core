@@ -24,16 +24,16 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc::{self, error::SendError};
 
 #[derive(Debug)]
-pub struct Sender<T> {
+pub struct UnboundedSender<T> {
     name: &'static str,
-    sender: mpsc::Sender<T>,
+    sender: mpsc::UnboundedSender<T>,
 }
 
-impl<T> Sender<T> {
+impl<T> UnboundedSender<T> {
     /// Sends a value to the channel. Returns `SendError` if the opposite side of the channels is
     /// closed and the shutdown is in progress, panics otherwise.
-    pub async fn send(&self, val: T, shutdown: &AtomicBool) -> Result<(), SendError<T>> {
-        match self.sender.send(val).await {
+    pub fn send(&self, val: T, shutdown: &AtomicBool) -> Result<(), SendError<T>> {
+        match self.sender.send(val) {
             Ok(()) => Ok(()),
             Err(e) => {
                 if shutdown.load(Ordering::Acquire) {
@@ -46,18 +46,27 @@ impl<T> Sender<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct Receiver<T> {
-    name: &'static str,
-    receiver: mpsc::Receiver<T>,
+impl<T> Clone for UnboundedSender<T> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name,
+            sender: self.sender.clone(),
+        }
+    }
 }
 
-impl<T> Sender<T> {
+#[derive(Debug)]
+pub struct UnboundedReceiver<T> {
+    name: &'static str,
+    receiver: mpsc::UnboundedReceiver<T>,
+}
+
+impl<T> UnboundedReceiver<T> {
     /// Receives a value from the channel. Returns `None` if the opposite side of the channel is
     /// closed and the shutdown is in progress, panics otherwise.
     pub async fn recv(&mut self, shutdown: &AtomicBool) -> Option<T> {
-        match self.0.recv().await {
-            Some(val) => val,
+        match self.receiver.recv().await {
+            Some(val) => Some(val),
             None => {
                 if shutdown.load(Ordering::Acquire) {
                     None
@@ -69,9 +78,9 @@ impl<T> Sender<T> {
     }
 }
 
-pub fn channel<T>(name: &'static str) -> (Sender<T>, Receiver<T>) {
-    let (sender, receiver) = mpsc::channel();
-    let sender = Sender { name, sender };
-    let receiver = Receiver { name, receiver };
+pub fn unbounded_channel<T>(name: &'static str) -> (UnboundedSender<T>, UnboundedReceiver<T>) {
+    let (sender, receiver) = mpsc::unbounded_channel();
+    let sender = UnboundedSender { name, sender };
+    let receiver = UnboundedReceiver { name, receiver };
     (sender, receiver)
 }
