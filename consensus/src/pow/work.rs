@@ -82,7 +82,7 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
     // TODO: add test for a block with invalid target
     utils::ensure!(
         work_required == block_pow_data.bits(),
-        ConsensusPoWError::InvalidTargetBits(block_pow_data.bits())
+        ConsensusPoWError::InvalidTargetBits(block_pow_data.bits(), work_required)
     );
 
     if check_proof_of_work(header.block_id().get(), work_required)? {

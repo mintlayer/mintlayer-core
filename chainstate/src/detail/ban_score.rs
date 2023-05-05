@@ -194,7 +194,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::WitnessMerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
-            CheckBlockError::BlockTimeOrderInvalid => 100,
+            CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
@@ -277,7 +277,7 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
-            ConsensusPoWError::InvalidTargetBits(_) => 100,
+            ConsensusPoWError::InvalidTargetBits(_, _) => 100,
         }
     }
 }

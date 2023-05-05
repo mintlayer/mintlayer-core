@@ -38,6 +38,6 @@ pub enum ConsensusPoWError {
     DecodingBitsFailed(Compact),
     #[error("Previous bits conversion failed: `{0:?}`")]
     PreviousBitsDecodingFailed(Compact),
-    #[error("Invalid target value: `{0:?}`")]
-    InvalidTargetBits(Compact),
+    #[error("Invalid target value: `{0:?}`, should be `{1:?}`")]
+    InvalidTargetBits(Compact, Compact),
 }

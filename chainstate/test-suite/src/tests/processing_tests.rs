@@ -1107,7 +1107,7 @@ fn blocks_from_the_future(#[case] seed: Seed) {
 
         {
             // submit a block one second before genesis in time
-            assert_eq!(
+            assert!(matches!(
                 tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load(Ordering::SeqCst) - 1
@@ -1115,9 +1115,9 @@ fn blocks_from_the_future(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                    CheckBlockError::BlockTimeOrderInvalid
+                    CheckBlockError::BlockTimeOrderInvalid(_, _)
                 ))
-            );
+            ));
         }
     });
 }
