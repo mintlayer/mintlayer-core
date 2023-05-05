@@ -22,15 +22,22 @@ mod validator;
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    vrf_tools::construct_transcript, BlockIndex, EpochData, GenBlockIndex, PropertyQueryError,
+};
 use common::{
-    chain::block::{consensus_data::PoWData, ConsensusData},
+    chain::block::{
+        consensus_data::{PoSData, PoWData},
+        ConsensusData,
+    },
     chain::{
         block::{timestamp::BlockTimestamp, BlockHeader},
         ChainConfig, RequiredConsensus,
     },
-    primitives::BlockHeight,
+    primitives::{BlockHeight, Id},
+    Uint256,
 };
+use crypto::vrf::VRFPrivateKey;
 
 pub use crate::{
     error::ConsensusVerificationError,
@@ -51,11 +58,15 @@ pub enum ConsensusCreationError {
     MiningStopped,
     #[error("Mining failed")]
     MiningFailed,
+    #[error("Staking error")]
+    StakingError(#[from] ConsensusPoSError),
 }
 
 pub fn generate_consensus_data<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
+    sealed_epoch_randomness: Option<EpochData>,
+    stake_private_key: Option<VRFPrivateKey>,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
@@ -66,14 +77,44 @@ where
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
         RequiredConsensus::PoS(pos_status) => {
-            let _target_required = calculate_target_required_from_block_index(
+            // TODO
+            let kernel_inputs = vec![];
+
+            // TODO
+            let kernel_witness = vec![];
+
+            // TODO
+            let pool_id = Id::new(Uint256::ONE.into());
+
+            let vrf_data = {
+                let sealed_epoch_randomness =
+                    sealed_epoch_randomness.ok_or(ConsensusPoSError::NoEpochData)?;
+
+                let transcript = construct_transcript(
+                    chain_config.epoch_index_from_height(&block_height),
+                    &sealed_epoch_randomness.randomness().value(),
+                    block_timestamp,
+                );
+
+                stake_private_key
+                    .ok_or(ConsensusPoSError::StakePrivateKeyNotProvided)?
+                    .produce_vrf_data(transcript.into())
+            };
+
+            let target_required = calculate_target_required_from_block_index(
                 chain_config,
                 &pos_status,
                 prev_block_index,
                 get_ancestor,
-            );
+            )?;
 
-            todo!();
+            Ok(ConsensusData::PoS(Box::new(PoSData::new(
+                kernel_inputs,
+                kernel_witness,
+                pool_id,
+                vrf_data,
+                target_required,
+            ))))
         }
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(

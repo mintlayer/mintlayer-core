@@ -30,6 +30,10 @@ pub enum ConsensusPoSError {
     PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
+    #[error("Stake private key was not provided")]
+    StakePrivateKeyNotProvided,
+    #[error("Epoch data not provided")]
+    NoEpochData,
     #[error(
         "Stake block timestamp cannot be smaller than the kernel's (kernel: {0} < stake: {1})"
     )]

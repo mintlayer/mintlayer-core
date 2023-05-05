@@ -24,7 +24,9 @@ use std::sync::{atomic::AtomicBool, mpsc, Arc};
 
 use chainstate::{ChainstateHandle, PropertyQueryError};
 
-use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, EpochData, GenBlockIndex, GetAncestorError,
+};
 use common::{
     chain::{
         block::{
@@ -36,6 +38,8 @@ use common::{
     primitives::BlockHeight,
     time_getter::TimeGetter,
 };
+use consensus::ConsensusPoSError;
+use crypto::vrf::VRFPrivateKey;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
@@ -114,12 +118,14 @@ impl BlockProduction {
 
     async fn pull_consensus_data(
         &self,
+        stake_private_key: &Option<VRFPrivateKey>,
         block_timestamp: BlockTimestamp,
     ) -> Result<(ConsensusData, GenBlockIndex), BlockProductionError> {
         let consensus_data = self
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
+                let stake_private_key = stake_private_key.clone();
 
                 move |this| {
                     let best_block_index = this
@@ -141,13 +147,30 @@ impl BlockProduction {
                         })
                     };
 
+                    let block_height = best_block_index.block_height().next_height();
+
+                    let sealed_epoch_randomness = chain_config
+                        .sealed_epoch_index(&block_height)
+                        .map(|index| this.get_epoch_data(index))
+                        .transpose()
+                        .map_err(|_| {
+                            ConsensusPoSError::PropertyQueryError(
+                                PropertyQueryError::EpochDataNotFound,
+                            )
+                        })?
+                        .flatten()
+                        .or_else(|| Some(EpochData::new(PoSRandomness::at_genesis(&chain_config))));
+
                     let consensus_data = consensus::generate_consensus_data(
                         &chain_config,
                         &best_block_index,
+                        sealed_epoch_randomness,
+                        stake_private_key,
                         block_timestamp,
-                        best_block_index.block_height().next_height(),
+                        block_height,
                         get_ancestor,
                     );
+
                     consensus_data.map(|cons_data| (cons_data, best_block_index))
                 }
             })
@@ -180,15 +203,22 @@ impl BlockProduction {
     /// remnants in the job manager.
     pub async fn produce_block(
         &self,
+        stake_private_key: Option<VRFPrivateKey>,
         reward_destination: Destination,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(reward_destination, transactions_source, None)
-            .await
+        self.produce_block_with_custom_id(
+            stake_private_key,
+            reward_destination,
+            transactions_source,
+            None,
+        )
+        .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
+        stake_private_key: Option<VRFPrivateKey>,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
@@ -197,7 +227,7 @@ impl BlockProduction {
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
+        let (_, tip_at_start) = self.pull_consensus_data(&stake_private_key, timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -210,7 +240,8 @@ impl BlockProduction {
             let timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-            let (consensus_data, current_tip_index) = self.pull_consensus_data(timestamp).await?;
+            let (consensus_data, current_tip_index) =
+                self.pull_consensus_data(&stake_private_key, timestamp).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
@@ -642,6 +673,7 @@ mod tests {
                     let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
 
                     block_production.produce_block_with_custom_id(
+                        None,
                         Destination::AnyoneCanSpend,
                         TransactionsSource::Provided(vec![]),
                         Some(id),
