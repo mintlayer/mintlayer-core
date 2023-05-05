@@ -54,6 +54,7 @@ impl TabSettings {
 
 #[derive(Debug, Clone)]
 pub enum SettingsMessage {
+    Start,
     PositionSelected(TabBarPosition),
 }
 
@@ -72,8 +73,13 @@ impl SettingsTab {
         &self.settings
     }
 
+    pub fn start() -> impl IntoIterator<Item = Command<SettingsMessage>> {
+        []
+    }
+
     pub fn update(&mut self, message: SettingsMessage) -> Command<SettingsMessage> {
         match message {
+            SettingsMessage::Start => iced::Command::batch(Self::start()),
             SettingsMessage::PositionSelected(position) => {
                 self.settings.tab_bar_position = Some(position);
                 Command::none()

@@ -38,14 +38,13 @@ use super::{Icon, Tab, TabsMessage};
 
 #[derive(Debug, Clone)]
 pub enum SummaryMessage {
-    Starting,
+    Start,
     Ready(RegisteredSubscriptions),
-    UpdateState((RegisteredSubscriptions, WidgetDataUpdate)),
-    NoOp,
+    UpdateState((RegisteredSubscriptions, SummaryWidgetDataUpdate)),
 }
 
 #[derive(Debug, Clone)]
-pub enum WidgetDataUpdate {
+pub enum SummaryWidgetDataUpdate {
     TipUpdated((Id<GenBlock>, BlockHeight)),
     NoOp,
 }
@@ -78,21 +77,26 @@ impl SummaryTab {
         }
     }
 
+    pub fn start(
+        controller: NodeBackendController,
+    ) -> impl IntoIterator<Item = Command<SummaryMessage>> {
+        [Command::perform(
+            Self::initialize_subscriptions(controller.node().chainstate.clone()),
+            SummaryMessage::Ready,
+        )]
+    }
+
     pub fn update(&mut self, message: SummaryMessage) -> Command<SummaryMessage> {
         match message {
-            SummaryMessage::NoOp => Command::none(),
-            SummaryMessage::Starting => Command::perform(
-                Self::initialize_subscriptions(self.controller.node().chainstate.clone()),
-                SummaryMessage::Ready,
-            ),
+            SummaryMessage::Start => iced::Command::batch(Self::start(self.controller.clone())),
             SummaryMessage::Ready(subs) => Command::perform(
                 Self::event_loop_single_iteration(subs),
                 SummaryMessage::UpdateState,
             ),
             SummaryMessage::UpdateState((subs, new_data)) => {
                 match new_data {
-                    WidgetDataUpdate::TipUpdated(tip) => self.current_tip = Some(tip),
-                    WidgetDataUpdate::NoOp => (),
+                    SummaryWidgetDataUpdate::TipUpdated(tip) => self.current_tip = Some(tip),
+                    SummaryWidgetDataUpdate::NoOp => (),
                 }
                 Command::perform(
                     Self::event_loop_single_iteration(subs),
@@ -140,15 +144,17 @@ impl SummaryTab {
 
     async fn event_loop_single_iteration(
         subs: RegisteredSubscriptions,
-    ) -> (RegisteredSubscriptions, WidgetDataUpdate) {
+    ) -> (RegisteredSubscriptions, SummaryWidgetDataUpdate) {
         let mut chainstate_event_receiver = subs.chainstate_event_receiver.lock().await;
         tokio::select! {
             event = (*chainstate_event_receiver).recv() => {
                 drop(chainstate_event_receiver);
                 if let Some((block_id, block_height)) = event {
-                    (subs, WidgetDataUpdate::TipUpdated((block_id, block_height)))
+                    std::thread::sleep(std::time::Duration::from_millis(3000));
+                    println!("Updating state: new tip: {:?} at height {:?}", block_id, block_height);
+                    (subs, SummaryWidgetDataUpdate::TipUpdated((block_id, block_height)))
                 } else {
-                    (subs, WidgetDataUpdate::NoOp)
+                    (subs, SummaryWidgetDataUpdate::NoOp)
                 }
             }
         }

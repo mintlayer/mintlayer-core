@@ -53,6 +53,7 @@ impl From<Icon> for char {
 
 #[derive(Debug, Clone)]
 pub enum TabsMessage {
+    Start,
     TabSelected(usize),
     Summary(SummaryMessage),
     Settings(SettingsMessage),
@@ -90,8 +91,16 @@ impl TabsWidget {
             .into()
     }
 
+    pub fn start() -> impl IntoIterator<Item = Command<TabsMessage>> {
+        [
+            iced::Command::perform(async {}, |_| TabsMessage::Summary(SummaryMessage::Start)),
+            iced::Command::perform(async {}, |_| TabsMessage::Settings(SettingsMessage::Start)),
+        ]
+    }
+
     pub fn update(&mut self, msg: TabsMessage) -> iced::Command<TabsMessage> {
         match msg {
+            TabsMessage::Start => iced::Command::batch(Self::start()),
             TabsMessage::TabSelected(n) => {
                 self.active_tab = n;
                 Command::none()
