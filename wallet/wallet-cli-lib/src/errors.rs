@@ -15,27 +15,18 @@
 
 use std::path::PathBuf;
 
-use utils::default_data_dir::PrepareDataDirError;
-use wallet_controller::NodeRpcClient;
-
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
-    Controller(wallet_controller::ControllerError<NodeRpcClient>),
-    #[error("Wallet error: {0}")]
-    WalletError(wallet::wallet::WalletError),
-    #[error("Console IO error: {0}")]
-    ConsoleIoError(std::io::Error),
-    #[error("File '{0}' IO error: {1}")]
-    FileIoError(PathBuf, std::io::Error),
-    #[error("History file {0} I/O error: {1}")]
-    HistoryFileError(PathBuf, std::io::Error),
+    Controller(wallet_controller::ControllerError<wallet_controller::NodeRpcClient>),
+    #[error("RPC error: {0}")]
+    RpcError(node_comm::rpc_client::NodeRpcError),
+    #[error("File {0} I/O error: {1}")]
+    FileError(PathBuf, std::io::Error),
     #[error(
-        "RPC authentication cookie-file {0} read error: {1}. Please make sure the node is started."
+        "RPC authentication cookie-file read error: {0}: {1}. Please make sure the node is started."
     )]
     CookieFileReadError(PathBuf, String),
-    #[error("Prepare data dir error: {0}")]
-    PrepareData(PrepareDataDirError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
     #[error("Invalid quoting")]
@@ -46,6 +37,8 @@ pub enum WalletCliError {
     InvalidInput(String),
     #[error("Invalid mnemonic: {0}")]
     InvalidMnemonic(wallet_controller::mnemonic::Error),
-    #[error("Cancelled")]
-    Cancelled,
+    #[error("Wallet file already open")]
+    WalletFileAlreadyOpen,
+    #[error("Please open or create wallet file first")]
+    NoWallet,
 }

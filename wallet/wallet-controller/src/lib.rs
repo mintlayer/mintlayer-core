@@ -15,17 +15,15 @@
 
 //! Common code for wallet UI applications
 
-pub mod cookie;
 pub mod mnemonic;
 mod sync;
 
-use std::{net::SocketAddr, sync::Arc};
-
-use chainstate::ChainInfo;
-use common::{
-    chain::{Block, ChainConfig, GenBlock},
-    primitives::{BlockHeight, Id},
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+
+use common::chain::ChainConfig;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -39,11 +37,13 @@ const BLOCK_SYNC_ENABLED: bool = false;
 pub enum ControllerError<T: NodeInterface> {
     #[error("Node call error: {0}")]
     NodeCallError(T::Error),
+    #[error("Wallet file {0} error: {1}")]
+    WalletFileError(PathBuf, String),
+    #[error("Wallet error: {0}")]
+    WalletError(wallet::wallet::WalletError),
 }
 
 pub struct Controller<T: NodeInterface> {
-    rpc_client: T,
-
     wallet: DefaultWallet,
 
     block_sync: sync::BlockSyncing<T>,
@@ -57,122 +57,57 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let block_sync = sync::BlockSyncing::new(
             sync::BlockSyncingConfig::default(),
             Arc::clone(&chain_config),
-            rpc_client.clone(),
+            rpc_client,
         );
 
-        Self {
-            rpc_client,
-            wallet,
-            block_sync,
-        }
+        Self { wallet, block_sync }
     }
 
-    pub async fn chainstate_info(&self) -> Result<ChainInfo, ControllerError<T>> {
-        self.rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)
+    pub fn create_wallet(
+        chain_config: Arc<ChainConfig>,
+        file_path: impl AsRef<Path>,
+        mnemonic: mnemonic::Mnemonic,
+        passphrase: Option<&str>,
+    ) -> Result<DefaultWallet, ControllerError<T>> {
+        utils::ensure!(
+            !file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File already exists".to_owned()
+            )
+        );
+
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::new_wallet(
+            Arc::clone(&chain_config),
+            db,
+            &mnemonic.to_string(),
+            passphrase,
+        )
+        .map_err(ControllerError::WalletError)?;
+
+        Ok(wallet)
     }
 
-    pub async fn get_best_block_id(&self) -> Result<Id<GenBlock>, ControllerError<T>> {
-        self.rpc_client
-            .get_best_block_id()
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
+    pub fn open_wallet(
+        chain_config: Arc<ChainConfig>,
+        file_path: impl AsRef<Path>,
+    ) -> Result<DefaultWallet, ControllerError<T>> {
+        utils::ensure!(
+            file_path.as_ref().exists(),
+            ControllerError::WalletFileError(
+                file_path.as_ref().to_owned(),
+                "File does not exist".to_owned()
+            )
+        );
 
-    pub async fn get_block(
-        &self,
-        block_id: Id<Block>,
-    ) -> Result<Option<Block>, ControllerError<T>> {
-        self.rpc_client
-            .get_block(block_id)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
+        let db = wallet::wallet::open_or_create_wallet_file(file_path)
+            .map_err(ControllerError::WalletError)?;
+        let wallet = wallet::Wallet::load_wallet(Arc::clone(&chain_config), db)
+            .map_err(ControllerError::WalletError)?;
 
-    pub async fn get_best_block_height(&self) -> Result<BlockHeight, ControllerError<T>> {
-        self.rpc_client
-            .get_best_block_height()
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn get_block_id_at_height(
-        &self,
-        height: BlockHeight,
-    ) -> Result<Option<Id<GenBlock>>, ControllerError<T>> {
-        self.rpc_client
-            .get_block_id_at_height(height)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn submit_block(&self, block_hex: String) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .submit_block(block_hex)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn submit_transaction(
-        &self,
-        transaction_hex: String,
-    ) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .submit_transaction(transaction_hex)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn node_shutdown(&self) -> Result<(), ControllerError<T>> {
-        self.rpc_client.node_shutdown().await.map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn node_version(&self) -> Result<String, ControllerError<T>> {
-        self.rpc_client.node_version().await.map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_connect(&self, address: String) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .p2p_connect(address)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .p2p_disconnect(peer_id)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_get_peer_count(&self) -> Result<usize, ControllerError<T>> {
-        self.rpc_client
-            .p2p_get_peer_count()
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, ControllerError<T>> {
-        self.rpc_client
-            .p2p_get_connected_peers()
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_add_reserved_node(&self, address: String) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .p2p_add_reserved_node(address)
-            .await
-            .map_err(ControllerError::NodeCallError)
-    }
-
-    pub async fn p2p_remove_reserved_node(
-        &self,
-        address: String,
-    ) -> Result<(), ControllerError<T>> {
-        self.rpc_client
-            .p2p_remove_reserved_node(address)
-            .await
-            .map_err(ControllerError::NodeCallError)
+        Ok(wallet)
     }
 
     /// Sync the wallet block chain from the node.
@@ -184,16 +119,4 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             std::future::pending::<()>().await;
         }
     }
-}
-
-pub async fn make_rpc_controller(
-    chain_config: Arc<ChainConfig>,
-    remote_socket_address: SocketAddr,
-    username_password: Option<(&str, &str)>,
-    wallet: DefaultWallet,
-) -> Result<RpcController, ControllerError<NodeRpcClient>> {
-    let rpc_client = make_rpc_client(remote_socket_address, username_password)
-        .await
-        .map_err(ControllerError::NodeCallError)?;
-    Ok(Controller::new(chain_config, rpc_client, wallet))
 }

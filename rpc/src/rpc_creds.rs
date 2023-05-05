@@ -20,9 +20,9 @@ use std::{
 
 use crypto::random::{distributions::DistString, make_true_rng, CryptoRng, Rng};
 use logging::log;
+use utils::cookie::COOKIE_FILENAME;
 
 const COOKIE_PASSWORD_LEN: usize = 32;
-const COOKIE_FILENAME: &str = ".cookie";
 const COOKIE_USERNAME: &str = "__cookie__";
 
 // TODO: Add support for hashed passwords (--rpcauth in Bitcoin Core)
@@ -75,15 +75,7 @@ impl RpcCreds {
                     cookie_file.is_none(),
                     RpcCredsError::InvalidCookieFileConfig
                 );
-                utils::ensure!(
-                    username.as_ref().find(':').is_none(),
-                    RpcCredsError::InvalidSymbolsInUsername(':')
-                );
-                Ok(Self {
-                    username: username.as_ref().to_owned(),
-                    password: password.as_ref().to_owned(),
-                    cookie_file: None,
-                })
+                Self::basic(username, password)
             }
 
             (None, None) => {
@@ -107,6 +99,21 @@ impl RpcCreds {
 
             _ => Err(RpcCredsError::InvalidUsernamePasswordConfig),
         }
+    }
+
+    pub fn basic(
+        username: impl AsRef<str>,
+        password: impl AsRef<str>,
+    ) -> Result<Self, RpcCredsError> {
+        utils::ensure!(
+            username.as_ref().find(':').is_none(),
+            RpcCredsError::InvalidSymbolsInUsername(':')
+        );
+        Ok(Self {
+            username: username.as_ref().to_owned(),
+            password: password.as_ref().to_owned(),
+            cookie_file: None,
+        })
     }
 
     pub fn username(&self) -> &str {

@@ -27,7 +27,7 @@ use crate::{
 use super::StreamAdapter;
 
 // How much time is allowed to spend setting up (optionally) encrypted stream.
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 static NOISE_HANDSHAKE_PATTERN: &str = "Noise_XX_25519_ChaChaPoly_SHA256";
 
@@ -37,6 +37,7 @@ static NOISE_HANDSHAKE_PARAMS: once_cell::sync::Lazy<snowstorm::NoiseParams> =
 #[derive(Clone)]
 pub struct NoiseEncryptionAdapter {
     local_key: Arc<snowstorm::Keypair>,
+    handshake_timeout: Duration,
 }
 
 impl NoiseEncryptionAdapter {
@@ -46,7 +47,17 @@ impl NoiseEncryptionAdapter {
                 .generate_keypair()
                 .expect("key generation must succeed"),
         );
-        Self { local_key }
+        Self {
+            local_key,
+            handshake_timeout: DEFAULT_HANDSHAKE_TIMEOUT,
+        }
+    }
+
+    pub fn with_handshake_timeout(self, handshake_timeout: Duration) -> Self {
+        Self {
+            local_key: self.local_key,
+            handshake_timeout,
+        }
     }
 }
 
@@ -62,6 +73,7 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
 
     fn handshake(&self, base: T, role: Role) -> BoxFuture<'static, crate::Result<Self::Stream>> {
         let local_key = Arc::clone(&self.local_key);
+        let handshake_timeout = self.handshake_timeout;
         Box::pin(async move {
             let builder = snowstorm::Builder::new(NOISE_HANDSHAKE_PARAMS.clone())
                 .local_private_key(&local_key.private);
@@ -71,7 +83,7 @@ impl<T: PeerStream + 'static> StreamAdapter<T> for NoiseEncryptionAdapter {
             }
             .expect("snowstorm builder must succeed");
 
-            let stream = timeout(HANDSHAKE_TIMEOUT, NoiseStream::handshake(base, state))
+            let stream = timeout(handshake_timeout, NoiseStream::handshake(base, state))
                 .await
                 .map_err(|_err| P2pError::NoiseHandshakeError("Handshake timeout".to_owned()))?
                 .map_err(|err| P2pError::NoiseHandshakeError(err.to_string()))?;

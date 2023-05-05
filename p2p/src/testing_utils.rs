@@ -18,17 +18,11 @@
 use std::{
     fmt::Debug,
     net::{IpAddr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
     time::Duration,
 };
 
-use common::{primitives::user_agent::mintlayer_core_user_agent, time_getter::TimeGetter};
+use common::primitives::user_agent::mintlayer_core_user_agent;
 use crypto::random::{make_pseudo_rng, Rng};
-use ctor::ctor;
-use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 use tokio::time::timeout;
 
 use crate::{
@@ -249,54 +243,6 @@ pub fn peerdb_inmemory_store() -> PeerDbStorageImpl<storage::inmemory::InMemory>
     PeerDbStorageImpl::new(storage).unwrap()
 }
 
-pub struct P2pBasicTestTimeGetter {
-    current_time_millis: Arc<AtomicU64>,
-}
-
-impl P2pBasicTestTimeGetter {
-    pub fn new() -> Self {
-        let current_time = std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap();
-        let current_time_millis = Arc::new(AtomicU64::new(current_time.as_millis() as u64));
-        Self {
-            current_time_millis,
-        }
-    }
-
-    pub fn get_time_getter(&self) -> TimeGetter {
-        mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
-    }
-
-    pub fn advance_time(&self, duration: Duration) {
-        self.current_time_millis
-            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
-    }
-}
-
-pub struct P2pTokioTestTimeGetter {
-    time_getter: P2pBasicTestTimeGetter,
-}
-
-impl P2pTokioTestTimeGetter {
-    pub fn new() -> Self {
-        Self {
-            time_getter: P2pBasicTestTimeGetter::new(),
-        }
-    }
-
-    pub fn get_time_getter(&self) -> TimeGetter {
-        self.time_getter.get_time_getter()
-    }
-
-    pub async fn advance_time(&self, duration: Duration) {
-        tokio::time::pause();
-        self.time_getter.advance_time(duration);
-        tokio::time::advance(duration).await;
-        tokio::time::resume();
-    }
-}
-
 /// Receive a message from the tokio channel.
 /// Panics if the channel is closed or no message received in 10 seconds.
 #[macro_export]
@@ -332,12 +278,4 @@ pub fn test_p2p_config() -> P2pConfig {
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     }
-}
-
-// Increase `RLIMIT_NOFILE` because it's too low on macOS by default (256)
-// and the tests fail (p2p tests open a lot of connections).
-// The `ctor` crate is used because there is no easy way to run some code before the tests start.
-#[ctor]
-fn set_nofile_limit() {
-    rlimit::increase_nofile_limit(10 * 1024).unwrap();
 }

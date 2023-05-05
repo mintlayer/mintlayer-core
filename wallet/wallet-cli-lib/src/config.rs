@@ -52,6 +52,19 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub rpc_password: Option<String>,
 
+    /// Run commands from the file
+    #[clap(long)]
+    pub commands_file: Option<PathBuf>,
+
+    /// Preserve history file between application runs.
+    /// This can be very insecure, use at your own risk!
+    #[clap(long)]
+    pub history_file: Option<PathBuf>,
+
+    /// Exit on error. The default is true in non-interactive mode and false in interactive mode.
+    #[clap(long)]
+    pub exit_on_error: Option<bool>,
+
     /// vi input mode
     #[clap(long)]
     pub vi_mode: bool,
