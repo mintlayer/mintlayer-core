@@ -29,7 +29,7 @@ use reedline::{
 use tokio::sync::mpsc;
 
 use crate::{
-    cli_event_loop::Event, cli_println, commands::ConsoleCommand, console::ConsoleContext,
+    cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
     errors::WalletCliError, repl::interactive::key_bindings::add_menu_keybindings,
 };
 
@@ -43,13 +43,9 @@ const COMPLETION_MENU_NAME: &str = "completion_menu";
 fn create_line_editor(
     printer: reedline::ExternalPrinter<String>,
     repl_command: super::Command,
-    output: &ConsoleContext,
     history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<Reedline, WalletCliError> {
-    cli_println!(output, "Use 'help' to see all available commands.");
-    cli_println!(output, "Use 'exit' or Ctrl-D to quit.");
-
     let commands = repl_command
         .get_subcommands()
         .map(|command| command.get_name().to_owned())
@@ -130,7 +126,7 @@ fn process_line(
 }
 
 pub fn run(
-    output: &ConsoleContext,
+    mut console: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
     printer: reedline::ExternalPrinter<String>,
@@ -138,8 +134,11 @@ pub fn run(
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
     let repl_command = get_repl_command();
-    let mut line_editor =
-        create_line_editor(printer, repl_command.clone(), output, history_file, vi_mode)?;
+
+    console.print_line("Use 'help' to see all available commands.");
+    console.print_line("Use 'exit' or Ctrl-D to quit.");
+
+    let mut line_editor = create_line_editor(printer, repl_command.clone(), history_file, vi_mode)?;
 
     let prompt = wallet_prompt::WalletPrompt::new();
 
@@ -150,7 +149,7 @@ pub fn run(
 
         match res {
             Ok(Some(ConsoleCommand::Print(text))) => {
-                cli_println!(output, "{}", text);
+                console.print_line(&text);
             }
             Ok(Some(ConsoleCommand::ClearScreen)) => {
                 line_editor.clear_scrollback().expect("Should not fail normally");
@@ -169,13 +168,7 @@ pub fn run(
                 if exit_on_error {
                     return Err(err);
                 }
-
-                if let WalletCliError::InvalidCommandInput(e) = &err {
-                    // Print help and parse errors using styles
-                    e.print().expect("Should not fail normally");
-                } else {
-                    cli_println!(output, "{}", err);
-                }
+                console.print_error(err);
             }
         }
     }

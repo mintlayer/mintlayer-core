@@ -13,22 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Use `cli_println` instead
-#![deny(clippy::print_stdout)]
-
 mod cli_event_loop;
 mod commands;
 pub mod config;
 pub mod console;
-mod errors;
+pub mod errors;
 mod repl;
 
-use std::{net::SocketAddr, path::PathBuf, str::FromStr, sync::Arc};
+use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use common::chain::config::ChainType;
 use config::WalletCliArgs;
-use console::ConsoleContext;
-use crossterm::tty::IsTty;
+use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
 use tokio::sync::mpsc;
 use utils::{
@@ -42,33 +38,12 @@ enum Mode {
     },
     NonInteractive,
     CommandsList {
-        list: Vec<String>,
+        file_input: console::FileInput,
     },
 }
 
-fn read_file(file_path: PathBuf) -> Result<Vec<String>, WalletCliError> {
-    let data =
-        std::fs::read_to_string(&file_path).map_err(|e| WalletCliError::FileError(file_path, e))?;
-    Ok(data.lines().map(|line| line.to_owned()).collect())
-}
-
-struct StdinReader;
-
-impl Iterator for StdinReader {
-    type Item = String;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
-            Ok(0) => None,
-            Ok(_) => Some(input),
-            Err(error) => panic!("stdin read failed unexpectedly: {error}"),
-        }
-    }
-}
-
 pub async fn run(
-    output: &ConsoleContext,
+    console: impl ConsoleInput + ConsoleOutput,
     args: config::WalletCliArgs,
 ) -> Result<(), WalletCliError> {
     let WalletCliArgs {
@@ -84,11 +59,11 @@ pub async fn run(
         vi_mode,
     } = args;
 
-    let mode = if let Some(file_name) = commands_file {
+    let mode = if let Some(file_path) = commands_file {
         repl::non_interactive::log::init();
-        let list = read_file(file_name)?;
-        Mode::CommandsList { list }
-    } else if std::io::stdin().is_tty() {
+        let file_input = console::FileInput::new(file_path)?;
+        Mode::CommandsList { file_input }
+    } else if console.is_tty() {
         let printer = repl::interactive::log::init();
         Mode::Interactive { printer }
     } else {
@@ -140,10 +115,9 @@ pub async fn run(
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
     // Run a blocking loop in a separate thread
-    let output_copy = output.clone();
     let repl_handle = std::thread::spawn(move || match mode {
         Mode::Interactive { printer } => repl::interactive::run(
-            &output_copy,
+            console,
             event_tx,
             exit_on_error.unwrap_or(false),
             printer,
@@ -151,17 +125,14 @@ pub async fn run(
             vi_mode,
         ),
         Mode::NonInteractive => repl::non_interactive::run(
-            StdinReader,
-            &output_copy,
+            console.clone(),
+            console,
             event_tx,
             exit_on_error.unwrap_or(false),
         ),
-        Mode::CommandsList { list } => repl::non_interactive::run(
-            list.into_iter(),
-            &output_copy,
-            event_tx,
-            exit_on_error.unwrap_or(true),
-        ),
+        Mode::CommandsList { file_input } => {
+            repl::non_interactive::run(file_input, console, event_tx, exit_on_error.unwrap_or(true))
+        }
     });
 
     cli_event_loop::run(&chain_config, &rpc_client, controller_opt, event_rx).await;

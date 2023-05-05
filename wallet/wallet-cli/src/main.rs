@@ -14,14 +14,17 @@
 // limitations under the License.
 
 use clap::Parser;
-use wallet_cli_lib::{config::WalletCliArgs, console::ConsoleContext};
+use wallet_cli_lib::{
+    config::WalletCliArgs,
+    console::{ConsoleOutput, StdioConsole},
+};
 
 #[tokio::main]
 async fn main() {
     let args = WalletCliArgs::parse();
-    let output = ConsoleContext::new();
-    wallet_cli_lib::run(&output, args).await.unwrap_or_else(|err| {
-        wallet_cli_lib::cli_println!(&output, "{err}");
+    let mut console = StdioConsole;
+    wallet_cli_lib::run(console.clone(), args).await.unwrap_or_else(|err| {
+        console.print_error(err);
         std::process::exit(1);
     })
 }

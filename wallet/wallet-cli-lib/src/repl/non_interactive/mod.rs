@@ -19,8 +19,8 @@ use clap::Command;
 use tokio::sync::mpsc;
 
 use crate::{
-    cli_event_loop::Event, cli_println, commands::ConsoleCommand, console::ConsoleContext,
-    errors::WalletCliError,
+    cli_event_loop::Event, commands::ConsoleCommand, console::ConsoleOutput,
+    errors::WalletCliError, ConsoleInput,
 };
 
 use super::{get_repl_command, parse_input};
@@ -59,22 +59,19 @@ fn process_line(
 }
 
 pub fn run(
-    lines: impl Iterator<Item = String>,
-    output: &ConsoleContext,
+    mut input: impl ConsoleInput,
+    mut output: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
 ) -> Result<(), WalletCliError> {
-    logging::log::info!("Start run...");
     let repl_command = get_repl_command();
 
-    for line in lines {
-        logging::log::info!("Start process line...");
+    while let Some(line) = input.read_line() {
         let res = process_line(&repl_command, &event_tx, &line);
-        logging::log::info!("Process line result: {res:?}");
 
         match res {
             Ok(LineOutput::Print(text)) => {
-                cli_println!(output, "{}", text);
+                output.print_line(&text);
             }
             Ok(LineOutput::None) => {}
             Ok(LineOutput::Exit) => return Ok(()),
@@ -84,7 +81,7 @@ pub fn run(
                     return Err(err);
                 }
 
-                cli_println!(output, "{}", err);
+                output.print_error(err);
             }
         }
     }

@@ -13,11 +13,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
+
 use tokio::sync::oneshot;
 use wallet_cli_lib::{
     config::{Network, WalletCliArgs},
-    console::ConsoleContext,
+    console::{ConsoleInput, ConsoleOutput},
+    errors::WalletCliError,
 };
+
+#[derive(Clone)]
+struct MockConsole {
+    input: Arc<Mutex<VecDeque<String>>>,
+    output: Arc<Mutex<Vec<String>>>,
+}
+
+impl MockConsole {
+    fn new(input: &[&str]) -> Self {
+        let input = input.iter().map(|&s| s.to_owned()).collect();
+        MockConsole {
+            input: Arc::new(Mutex::new(input)),
+            output: Default::default(),
+        }
+    }
+}
+
+impl ConsoleInput for MockConsole {
+    fn is_tty(&self) -> bool {
+        false
+    }
+
+    fn read_line(&mut self) -> Option<String> {
+        self.input.lock().unwrap().pop_front()
+    }
+}
+
+impl ConsoleOutput for MockConsole {
+    fn print_line(&mut self, line: &str) {
+        self.output.lock().unwrap().push(line.to_owned());
+    }
+
+    fn print_error(&mut self, error: WalletCliError) {
+        self.output.lock().unwrap().push(error.to_string());
+    }
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn basic_wallet_cli() {
@@ -25,10 +67,6 @@ async fn basic_wallet_cli() {
 
     let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
     let test_dir = test_root.fresh_test_dir("basic_wallet_cli");
-
-    let commands_file = test_dir.as_ref().join("commands.txt");
-    let commands = "nodeversion";
-    std::fs::write(&commands_file, commands).unwrap();
 
     let rpc_username = "username";
     let rpc_password = "password";
@@ -95,14 +133,15 @@ async fn basic_wallet_cli() {
         rpc_cookie_file: None,
         rpc_username: Some(rpc_username.to_owned()),
         rpc_password: Some(rpc_password.to_owned()),
-        commands_file: Some(commands_file),
+        commands_file: None,
         history_file: None,
         exit_on_error: None,
         vi_mode: false,
     };
 
-    let output = ConsoleContext::new();
-    wallet_cli_lib::run(&output, wallet_options).await.unwrap();
+    let console = MockConsole::new(&["nodeversion"]);
+    wallet_cli_lib::run(console.clone(), wallet_options).await.unwrap();
+    assert!(console.output.lock().unwrap().last().unwrap() == "0.1.0");
 
     node_controller.shutdown_trigger.initiate();
     node_task.await.unwrap();
