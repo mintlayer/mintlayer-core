@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::Signature;
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
@@ -28,15 +27,33 @@ pub enum SignedHeaderError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
+pub struct BlockHeaderSignatureData {
+    // TODO: determine the proper types for these fields.
+    //       So far, the plan is to make the public key match
+    //       the kernel input destination and hence it should
+    //       be able to verify it too.
+    public_key: Vec<u8>,
+    signature: Vec<u8>,
+}
+
+impl BlockHeaderSignatureData {
+    pub fn new(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
+        Self {
+            public_key,
+            signature,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub enum BlockHeaderSignature {
     None,
-    PoSBlock(Signature),
+    PoSBlock(BlockHeaderSignatureData),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged)]
 pub struct SignedBlockHeader {
     block_header: BlockHeader,
-    // TODO: Do we want to include the public key to make it possible to cross-check with the spent kernel?
     signature: BlockHeaderSignature,
 }
 
