@@ -75,7 +75,29 @@ const RPC_PASSWORD: &str = "password";
 
 async fn start_node() -> (subsystem::Manager, SocketAddr) {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
-    let p2p_config = p2p::testing_utils::test_p2p_config();
+    let p2p_config = p2p::config::P2pConfig {
+        bind_addresses: vec!["127.0.0.1:0".to_owned()],
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    };
     let rpc_creds = RpcCreds::basic(RPC_USERNAME, RPC_PASSWORD).unwrap();
 
     let rpc_config = RpcConfig {
@@ -223,14 +245,17 @@ async fn wallet_cli_file() {
         .unwrap()
         .to_owned();
 
-    // Start the wallet, create it, and shutdown the wallet
+    // Start the wallet, create it, then close it, then shutdown
     let output = test.run(&[&format!("createwallet \"{file_name}\""), "closewallet"]).await;
-    assert_eq!(output.len(), 1);
+    assert_eq!(output.len(), 2, "Unexpected output: {:?}", output);
     assert!(output[0].starts_with("New wallet created successfully\n"));
+    assert_eq!(output[1], "Success");
 
     // Start the wallet, open it, then close it, then shutdown
     let output = test.run(&[&format!("openwallet \"{file_name}\""), "closewallet"]).await;
-    assert_eq!(output, vec!["Wallet loaded successfully", "Success"]);
+    assert_eq!(output.len(), 2, "Unexpected output: {:?}", output);
+    assert_eq!(output[0], "Wallet loaded successfully");
+    assert_eq!(output[1], "Success");
 
     test.shutdown().await;
 }
