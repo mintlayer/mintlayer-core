@@ -16,7 +16,12 @@
 pub mod default_backend;
 pub mod types;
 
-use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
+use std::{
+    fmt::Debug,
+    hash::Hash,
+    str::FromStr,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use async_trait::async_trait;
 use tokio::task::JoinHandle;
@@ -79,6 +84,7 @@ pub trait NetworkingService {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
+        shutdown_flag: Arc<AtomicBool>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

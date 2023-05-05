@@ -93,8 +93,3 @@ async fn shutdown_timeout() {
     tokio::time::timeout(timeout, task.join()).await.unwrap();
     log::info!("FIXME: EVERYTHING IS SHUT DOWN");
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn shutdown_order() {
-    // TODO: FIXME: Use mocks to test the shutdown order.
-}

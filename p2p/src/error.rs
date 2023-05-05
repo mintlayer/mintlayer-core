@@ -107,8 +107,6 @@ pub enum P2pError {
     ProtocolError(ProtocolError),
     #[error("Failed to dial peer: `{0}`")]
     DialError(DialError),
-    #[error("Connection to other task lost")]
-    ChannelClosed,
     #[error("Peer-related error: `{0}`")]
     PeerError(PeerError),
     #[error("SubsystemFailure")]

@@ -31,12 +31,13 @@ pub mod testing_utils;
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
-use tap::TapFallible;
 use tokio::{sync::mpsc, task::JoinHandle};
-use void::Void;
 
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
@@ -76,9 +77,12 @@ struct P2p<T: NetworkingService> {
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
+
+    shutdown_flag: Arc<AtomicBool>,
+
     backend_task: JoinHandle<()>,
-    peer_manager_task: JoinHandle<Result<Void>>,
-    sync_manager_task: JoinHandle<Result<Void>>,
+    peer_manager_task: JoinHandle<()>,
+    sync_manager_task: JoinHandle<()>,
 }
 
 impl<T> P2p<T>
@@ -102,11 +106,14 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
+        let shutdown_flag = Arc::new(AtomicBool::new(false));
+
         let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
+            Arc::clone(&shutdown_flag),
         )
         .await?;
 
@@ -129,8 +136,10 @@ where
             peerdb_storage,
         )?;
         let peer_manager_task = tokio::spawn(async move {
-            // TODO: Shutdown p2p if PeerManager unexpectedly quits
-            peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
+            if let Err(e) = peer_manager.run().await {
+                log::error!("PeerManager failed: {e}");
+                shutdown_flag.store(true, Ordering::Release);
+            }
         });
 
         let sync_manager_task = {
@@ -141,8 +150,7 @@ where
             let messaging_handle_ = messaging_handle.clone();
 
             tokio::spawn(async move {
-                // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
-                sync::BlockSyncManager::<T>::new(
+                if let Err(e) = sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     messaging_handle_,
@@ -154,7 +162,10 @@ where
                 )
                 .run()
                 .await
-                .tap_err(|err| log::error!("SyncManager failed: {err}"))
+                {
+                    log::error!("SyncManager failed: {e}");
+                    shutdown_flag.store(true, Ordering::Release);
+                }
             })
         };
 
@@ -162,6 +173,7 @@ where
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
+            shutdown_flag,
             backend_task,
             peer_manager_task,
             sync_manager_task,
@@ -182,17 +194,12 @@ where
     }
 
     async fn shutdown(self) {
-        // TODO: Send the shutdown message instead of aborting the tasks?
-        // TODO: Shut down the backend.
+        self.shutdown_flag.store(true, Ordering::Release);
 
-        self.backend_task.abort();
-        let _ = self.backend_task.await;
-
-        self.peer_manager_task.abort();
-        let _ = self.peer_manager_task.await;
-
-        self.sync_manager_task.abort();
-        let _ = self.sync_manager_task.await;
+        futures::future::join_all(
+            [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),
+        )
+        .await;
     }
 }
 

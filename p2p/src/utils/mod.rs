@@ -15,3 +15,4 @@
 
 pub mod oneshot_nofail;
 pub mod rate_limiter;
+pub mod shutdown_receiver;

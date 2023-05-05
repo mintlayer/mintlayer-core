@@ -23,7 +23,7 @@ mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
@@ -137,6 +137,8 @@ where
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
 
     peer_eviction_random_state: peers_eviction::RandomState,
+
+    shutdown: Arc<AtomicBool>,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -1088,7 +1090,7 @@ where
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<void::Void> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called

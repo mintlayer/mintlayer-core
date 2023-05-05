@@ -27,7 +27,6 @@ use std::{
 };
 
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use void::Void;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -111,7 +110,7 @@ where
     }
 
     /// Runs the sync manager event loop.
-    pub async fn run(&mut self) -> Result<Void> {
+    pub async fn run(&mut self) -> Result<()> {
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
@@ -124,7 +123,7 @@ where
             tokio::select! {
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
-                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+                    let block_id = block_id.expect("New tip sender was closed");
                     self.handle_new_tip(block_id).await?;
                 },
 

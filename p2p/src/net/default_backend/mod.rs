@@ -18,7 +18,13 @@ pub mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use async_trait::async_trait;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -110,6 +116,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        shutdown_flag: Arc<AtomicBool>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
@@ -134,9 +141,9 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 sync_tx,
             );
 
-            // TODO: Shutdown p2p if the backend unexpectedly quits
             if let Err(err) = backend.run().await {
                 log::error!("failed to run backend: {err}");
+                shutdown_flag.store(true, Ordering::Release);
             }
         });
 
