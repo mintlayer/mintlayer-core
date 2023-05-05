@@ -169,7 +169,7 @@ impl CliTestFramework {
         }
     }
 
-    async fn run(&self, command: &str, expected: &str) {
+    async fn run(&self, commands: &[&str]) -> Vec<String> {
         let wallet_options = WalletCliArgs {
             network: Network::Regtest,
             wallet_file: None,
@@ -183,9 +183,10 @@ impl CliTestFramework {
             vi_mode: false,
         };
 
-        let console = MockConsole::new(&[command]);
+        let console = MockConsole::new(commands);
         wallet_cli_lib::run(console.clone(), wallet_options).await.unwrap();
-        assert_eq!(console.output.lock().unwrap().last().unwrap(), expected);
+        let res = console.output.lock().unwrap().clone();
+        res
     }
 
     async fn shutdown(self) {
@@ -196,10 +197,38 @@ impl CliTestFramework {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn wallet_cli_basic_test() {
+async fn wallet_cli_basic() {
     let test = CliTestFramework::setup().await;
 
-    test.run("nodeversion", "0.1.0").await;
+    let output = test.run(&["nodeversion"]).await;
+    assert_eq!(output, vec!["0.1.0"]);
+
+    let output = test.run(&["bestblockheight"]).await;
+    assert_eq!(output, vec!["0"]);
+
+    test.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn wallet_cli_file() {
+    let test = CliTestFramework::setup().await;
+
+    // Use dir name with spaces to make sure quoting works as expected
+    let file_name = test
+        .test_root
+        .fresh_test_dir("wallet dir")
+        .as_ref()
+        .join("wallet1")
+        .to_str()
+        .unwrap()
+        .to_owned();
+
+    let output = test.run(&[&format!("createwallet \"{file_name}\"")]).await;
+    assert_eq!(output.len(), 1);
+    assert!(output[0].starts_with("New wallet created successfully\n"));
+
+    let output = test.run(&[&format!("openwallet \"{file_name}\""), "closewallet"]).await;
+    assert_eq!(output, vec!["Wallet loaded successfully", "Success"]);
 
     test.shutdown().await;
 }
