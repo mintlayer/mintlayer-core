@@ -165,12 +165,6 @@ impl Block {
         Ok(block)
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
-        match self {
-            Block::V1(blk) => blk.update_consensus_data(consensus_data),
-        }
-    }
-
     pub fn consensus_data(&self) -> &ConsensusData {
         match self {
             Block::V1(blk) => blk.consensus_data(),
@@ -192,6 +186,12 @@ impl Block {
     pub fn header(&self) -> &SignedBlockHeader {
         match self {
             Block::V1(blk) => blk.header(),
+        }
+    }
+
+    pub fn header_mut(&mut self) -> &mut SignedBlockHeader {
+        match self {
+            Block::V1(blk) => blk.header_mut(),
         }
     }
 

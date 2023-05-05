@@ -770,7 +770,7 @@ fn consensus_type(#[case] seed: Seed) {
         let bits = min_difficulty.into();
         assert_eq!(
             consensus::mine(
-                block_header.header_mut(),
+                block_header.header_mut().unwrap(),
                 u128::MAX,
                 bits,
                 Arc::new(false.into())
@@ -794,7 +794,7 @@ fn consensus_type(#[case] seed: Seed) {
     let mut block_header = mined_block.header().clone();
     assert_eq!(
         consensus::mine(
-            block_header.header_mut(),
+            block_header.header_mut().unwrap(),
             u128::MAX,
             bits,
             Arc::new(false.into())
@@ -857,7 +857,7 @@ fn consensus_type(#[case] seed: Seed) {
         let mut block_header = mined_block.header().clone();
         assert_eq!(
             consensus::mine(
-                block_header.header_mut(),
+                block_header.header_mut().unwrap(),
                 u128::MAX,
                 bits,
                 Arc::new(false.into())
@@ -937,7 +937,7 @@ fn pow(#[case] seed: Seed) {
     let mut block_header = valid_block.header().clone();
     assert_eq!(
         consensus::mine(
-            block_header.header_mut(),
+            block_header.header_mut().unwrap(),
             u128::MAX,
             bits,
             Arc::new(false.into())
@@ -1015,7 +1015,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         let mut block_header = valid_block.header().clone();
         assert_eq!(
             consensus::mine(
-                block_header.header_mut(),
+                block_header.header_mut().unwrap(),
                 u128::MAX,
                 bits,
                 Arc::new(false.into())
@@ -1243,7 +1243,11 @@ fn make_invalid_pow_block(
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         data.update_nonce(nonce);
-        block.update_consensus_data(ConsensusData::PoW(data.clone()));
+        block
+            .header_mut()
+            .header_mut()
+            .unwrap()
+            .update_consensus_data(ConsensusData::PoW(data.clone()));
 
         if !consensus::check_proof_of_work(block.get_id().get(), bits)? {
             return Ok(true);

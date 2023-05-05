@@ -74,8 +74,8 @@ impl BlockV1 {
         &self.header
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
-        self.header.header_mut().consensus_data = consensus_data;
+    pub fn header_mut(&mut self) -> &mut SignedBlockHeader {
+        &mut self.header
     }
 
     pub fn consensus_data(&self) -> &ConsensusData {

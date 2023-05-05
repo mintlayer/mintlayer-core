@@ -21,6 +21,12 @@ use crate::primitives::id::{Id, Idable};
 
 use super::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData, GenBlock};
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum SignedHeaderError {
+    #[error("Attempted to mutate a header that is already signed")]
+    AttemptedMutatingSignedHeader,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub enum BlockHeaderSignature {
     None,
@@ -50,16 +56,35 @@ impl SignedBlockHeader {
         &self.block_header
     }
 
-    pub fn header_mut(&mut self) -> &mut BlockHeader {
-        &mut self.block_header
+    /// Returns the inner header as mutable reference.
+    /// If the header is already signed, it will return None, to enforce immutability.
+    /// To mutate the header, first use `take_header()` to take ownership of the unsigned header.
+    pub fn header_mut(&mut self) -> Option<&mut BlockHeader> {
+        match self.signature() {
+            BlockHeaderSignature::None => Some(&mut self.block_header),
+            BlockHeaderSignature::PoSBlock(_) => None,
+        }
     }
 
-    pub fn take_block_header(self) -> BlockHeader {
+    pub fn take_header(self) -> BlockHeader {
         self.block_header
     }
 
     pub fn consensus_data(&self) -> &ConsensusData {
         &self.header().consensus_data
+    }
+
+    /// Consensus data can be only updated if the header is not signed.
+    /// Keep in mind that this doesn't necessitate a valid header. For example,
+    /// Mutating a header can ruin proof of work consensus as the nonce is not valid.
+    pub fn try_update_consensus_data(
+        &mut self,
+        consensus_data: ConsensusData,
+    ) -> Result<(), SignedHeaderError> {
+        self.header_mut()
+            .ok_or(SignedHeaderError::AttemptedMutatingSignedHeader)?
+            .consensus_data = consensus_data;
+        Ok(())
     }
 
     pub fn block_id(&self) -> Id<Block> {
