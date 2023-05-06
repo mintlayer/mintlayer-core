@@ -220,7 +220,10 @@ impl SyncManagerHandle {
 
     /// Awaits on the sync manager join handle and rethrows the panic.
     pub async fn resume_panic(self) {
-        panic::resume_unwind(self.sync_manager_handle.await.unwrap_err().into_panic());
+        let err = self.sync_manager_handle.await.unwrap_err();
+        self.shutdown_trigger.initiate();
+        self.subsystem_manager_handle.join().await;
+        panic::resume_unwind(err.into_panic());
     }
 
     pub async fn join_subsystem_manager(self) {
