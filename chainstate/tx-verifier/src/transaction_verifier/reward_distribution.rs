@@ -208,8 +208,9 @@ fn calculate_rewards_per_delegation(
 mod tests {
     use super::*;
     use common::{
+        amount_sum,
         chain::{DelegationId, Destination, PoolId},
-        primitives::{per_thousand::PerThousand, Amount, H256},
+        primitives::{per_thousand::PerThousand, signed_amount::SignedAmount, Amount, H256},
     };
     use crypto::{
         random::Rng,
@@ -411,7 +412,7 @@ mod tests {
         let delegation_id_1 = new_delegation_id(1);
         let delegation_id_2 = new_delegation_id(2);
 
-        let pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let original_pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let delegation_id_1_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let delegation_id_2_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
 
@@ -419,14 +420,18 @@ mod tests {
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
 
-        let original_pool_balance =
-            ((pledged_amount + delegation_id_1_amount).unwrap() + delegation_id_2_amount).unwrap();
+        let original_pool_balance = amount_sum!(
+            original_pledged_amount,
+            delegation_id_1_amount,
+            delegation_id_2_amount
+        )
+        .unwrap();
 
         let delegation_data = DelegationData::new(pool_id, Destination::AnyoneCanSpend);
 
         let pool_data = PoolData::new(
             Destination::AnyoneCanSpend,
-            pledged_amount,
+            original_pledged_amount,
             VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel).1,
             mpt,
             cost_per_block,
@@ -453,7 +458,14 @@ mod tests {
 
         distribute_pos_reward(&mut accounting_adapter, block_id, pool_id, reward).unwrap();
 
-        // check that whole reward is added to the balance
+        let new_pledge_amount = accounting_adapter
+            .accounting_delta()
+            .get_pool_data(pool_id)
+            .unwrap()
+            .unwrap()
+            .pledge_amount();
+
+        // check that the whole reward is added to the balance
         let expected_pool_balance = (original_pool_balance + reward).unwrap();
         assert_eq!(
             expected_pool_balance,
@@ -464,19 +476,30 @@ mod tests {
                 .unwrap()
         );
 
-        // check that that delegation's reward is proportional to their balances
         let (consumed_data, _) = accounting_adapter.consume();
         let delegation_1_reward = consumed_data.delegation_balances.data().get(&delegation_id_1);
         let delegation_2_reward = consumed_data.delegation_balances.data().get(&delegation_id_2);
+
+        // check that owner reward and delegation rewards add up to total reward
+        assert_eq!(
+            reward,
+            amount_sum!(
+                (new_pledge_amount - original_pledged_amount).unwrap(),
+                delegation_1_reward.unwrap_or(&SignedAmount::ZERO).into_unsigned().unwrap(),
+                delegation_2_reward.unwrap_or(&SignedAmount::ZERO).into_unsigned().unwrap()
+            )
+            .unwrap()
+        );
 
         // the difference between delegations can be so big that the reward can be 0
         if let (Some(delegation_1_reward), Some(delegation_2_reward)) =
             (delegation_1_reward, delegation_2_reward)
         {
+            // due to integer arithmetics it's hard to check that reward is proportional to the balance,
+            // so check the ordering at least
             assert_eq!(
-                delegation_1_reward.into_unsigned().unwrap().into_atoms()
-                    / delegation_2_reward.into_unsigned().unwrap().into_atoms(),
-                delegation_id_1_amount.into_atoms() / delegation_id_2_amount.into_atoms()
+                delegation_1_reward.cmp(delegation_2_reward),
+                delegation_id_1_amount.cmp(&delegation_id_2_amount)
             );
         }
     }
