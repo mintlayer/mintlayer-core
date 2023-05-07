@@ -84,7 +84,7 @@ pub fn check_block_signature(
         BlockHeaderSignature::HeaderSignature(sig_data) => sig_data,
     };
 
-    if public_key.verify_message(signature.signature(), &header.header().encode()) {
+    if !public_key.verify_message(signature.signature(), &header.header().encode()) {
         return Err(BlockSignatureError::BadSignature(header.get_id()));
     }
 
