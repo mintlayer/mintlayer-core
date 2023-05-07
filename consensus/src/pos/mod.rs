@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod block_sig;
 pub mod error;
 pub mod kernel;
 pub mod target;
@@ -23,7 +24,10 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockHeader},
+        block::{
+            consensus_data::PoSData, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp,
+        },
         config::EpochIndex,
         ChainConfig, PoSStatus, TxOutput,
     },
@@ -35,7 +39,9 @@ use pos_accounting::PoSAccountingView;
 use utils::ensure;
 use utxo::UtxosView;
 
-use crate::pos::{error::ConsensusPoSError, kernel::get_kernel_output};
+use crate::pos::{
+    block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output,
+};
 
 pub fn check_pos_hash(
     epoch_index: EpochIndex,
@@ -99,7 +105,7 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
 pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
-    header: &BlockHeader,
+    header: &SignedBlockHeader,
     pos_data: &PoSData,
     block_index_handle: &H,
     utxos_view: &U,
@@ -131,6 +137,9 @@ where
 
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
     let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;
+
+    // Proof of stake mandates signing the block with the same key of the kernel output
+    check_block_signature(header, &kernel_output)?;
 
     let vrf_pub_key = match kernel_output {
         TxOutput::Transfer(_, _)

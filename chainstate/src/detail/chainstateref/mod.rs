@@ -376,14 +376,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
-        self.check_block_signature(header)?;
-
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
-        consensus::validate_consensus(self.chain_config, header.header(), self, &utxos_db, &pos_db)
+        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -509,11 +507,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             )
         );
 
-        Ok(())
-    }
-
-    fn check_block_signature(&self, _header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        // TODO
         Ok(())
     }
 

@@ -22,6 +22,8 @@ use common::{
     UintConversionError,
 };
 
+use super::block_sig::BlockSignatureError;
+
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoSError {
     #[error("Property query error: `{0}`")]
@@ -65,4 +67,6 @@ pub enum ConsensusPoSError {
     //      https://github.com/mintlayer/mintlayer-core/issues/811
     #[error("Failed to fetch utxo")]
     FailedToFetchUtxo,
+    #[error("Block signature error: `{0}`")]
+    BlockSignatureError(#[from] BlockSignatureError),
 }

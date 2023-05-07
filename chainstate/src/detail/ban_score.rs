@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
-use consensus::{ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError};
+use consensus::{
+    BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
+};
 
 use super::{
     transaction_verifier::{
@@ -313,6 +315,18 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::InvalidTargetBlockTime => 100,
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
             ConsensusPoSError::FailedToFetchUtxo => 0,
+            ConsensusPoSError::BlockSignatureError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for BlockSignatureError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            BlockSignatureError::BlockSignatureNotFound(_) => 100,
+            BlockSignatureError::WrongOutputType(_) => 100,
+            BlockSignatureError::WrongDestination(_) => 100,
+            BlockSignatureError::BadSignature(_) => 100,
         }
     }
 }

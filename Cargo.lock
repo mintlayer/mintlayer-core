@@ -1024,6 +1024,7 @@ dependencies = [
  "num",
  "pos_accounting",
  "rstest",
+ "serialization",
  "test-utils",
  "thiserror",
  "utils",
