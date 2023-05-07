@@ -61,7 +61,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
 
         let block = tf.make_block_builder().add_transaction(tx).build();
@@ -99,7 +99,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 anyonecanspend_address(),
@@ -135,7 +135,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .add_output(TxOutput::Transfer(
                 random_token_issuance(tf.chainstate.get_chain_config().clone(), &mut rng).into(),
                 anyonecanspend_address(),
@@ -211,7 +211,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
                 .into(),
                 anyonecanspend_address(),
             ))
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
 
         let best_block_index = tf
@@ -249,8 +249,8 @@ fn stake_pool_twice(#[case] seed: Seed) {
                 ),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data.clone())))
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data.clone())))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -295,7 +295,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
                 TxInput::new(OutPointSourceId::BlockReward(genesis_id), 0),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
 
         let result = tf.make_block_builder().add_transaction(tx).build_and_process();
@@ -333,7 +333,7 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
 
         let tx1 = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 
@@ -409,7 +409,7 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
 
         let tx1 = TransactionBuilder::new()
             .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
             .build();
         let stake_pool_tx_id = tx1.transaction().get_id();
 

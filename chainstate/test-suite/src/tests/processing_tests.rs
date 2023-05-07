@@ -196,14 +196,16 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::StakePool(Box::new(StakePoolData::new(
-                Amount::from_atoms(10),
-                anyonecanspend_address(),
-                vrf_pub_key,
-                decommission_destination,
-                PerThousand::new(0).unwrap(),
-                Amount::ZERO,
-            )))])
+            .with_reward(vec![TxOutput::CreateStakePool(Box::new(
+                StakePoolData::new(
+                    Amount::from_atoms(10),
+                    anyonecanspend_address(),
+                    vrf_pub_key,
+                    decommission_destination,
+                    PerThousand::new(0).unwrap(),
+                    Amount::ZERO,
+                ),
+            ))])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
 

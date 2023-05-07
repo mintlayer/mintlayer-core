@@ -80,7 +80,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                     empty_witness(&mut rng),
                 )
-                .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                .add_output(TxOutput::CreateStakePool(Box::new(StakePoolData::new(
                     Amount::from_atoms(rng.gen_range(100_000..200_000)),
                     anyonecanspend_address(),
                     vrf_pub_key_a,
@@ -117,7 +117,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     ),
                     empty_witness(&mut rng),
                 )
-                .add_output(TxOutput::StakePool(Box::new(StakePoolData::new(
+                .add_output(TxOutput::CreateStakePool(Box::new(StakePoolData::new(
                     Amount::from_atoms(rng.gen_range(1000..100_000)),
                     anyonecanspend_address(),
                     vrf_pub_key_c,

@@ -76,7 +76,7 @@ fn add_block_with_stake_pool(
             TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
-        .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
         .build();
     let tx_id = tx.transaction().get_id();
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
@@ -104,7 +104,7 @@ fn add_block_with_2_stake_pools(
     );
     let tx1 = TransactionBuilder::new()
         .add_input(TxInput::from(outpoint_genesis.clone()), empty_witness(rng))
-        .add_output(TxOutput::StakePool(Box::new(stake_pool_data1)))
+        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data1)))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1)),
             anyonecanspend_address(),
@@ -120,7 +120,7 @@ fn add_block_with_2_stake_pools(
             TxInput::from(transfer_outpoint1.clone()),
             empty_witness(rng),
         )
-        .add_output(TxOutput::StakePool(Box::new(stake_pool_data2)))
+        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data2)))
         .build();
     let outpoint2 = OutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
@@ -836,7 +836,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let stake_pool_data =
         create_stake_pool_data_with_all_reward_to_owner(&mut rng, Amount::from_atoms(1), vrf_pk);
-    let reward_output = TxOutput::StakePool(Box::new(stake_pool_data));
+    let reward_output = TxOutput::CreateStakePool(Box::new(stake_pool_data));
     let block = tf.make_block_builder().with_reward(vec![reward_output]).build();
     let block_id = block.get_id();
     assert_eq!(

@@ -50,7 +50,7 @@ fn get_staking_kernel_destination(
             return Err(BlockSignatureError::WrongOutputType(header.get_id()))
         }
 
-        TxOutput::StakePool(stake_pool) => stake_pool.staker(),
+        TxOutput::CreateStakePool(stake_pool) => stake_pool.staker(),
         TxOutput::ProduceBlockFromStake(dest, _) => dest,
     };
 

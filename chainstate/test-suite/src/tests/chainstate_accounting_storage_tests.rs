@@ -80,7 +80,7 @@ fn make_tx_with_stake_pool(
 ) -> (SignedTransaction, PoolId, PoolData) {
     let destination = new_pub_key_destination(rng);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
-    let stake_output = TxOutput::StakePool(Box::new(StakePoolData::new(
+    let stake_output = TxOutput::CreateStakePool(Box::new(StakePoolData::new(
         amount_to_stake,
         anyonecanspend_address(),
         pool_data.vrf_public_key().clone(),

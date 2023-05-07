@@ -105,7 +105,7 @@ fn get_output_value<P: PoSAccountingView>(
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             v.clone()
         }
-        TxOutput::StakePool(data) => OutputValue::Coin(data.value()),
+        TxOutput::CreateStakePool(data) => OutputValue::Coin(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pledge_amount = pos_accounting_view
                 .get_pool_data(*pool_id)
@@ -432,7 +432,7 @@ mod tests {
             PerThousand::new(0).unwrap(),
             Amount::ZERO,
         );
-        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data.clone()));
+        let input_utxo = TxOutput::CreateStakePool(Box::new(stake_pool_data.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
@@ -503,7 +503,7 @@ mod tests {
             PerThousand::new(0).unwrap(),
             Amount::ZERO,
         );
-        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data_1.clone()));
+        let input_utxo = TxOutput::CreateStakePool(Box::new(stake_pool_data_1.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
