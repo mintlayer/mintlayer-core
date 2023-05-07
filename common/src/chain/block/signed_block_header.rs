@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crypto::key::Signature;
 use serialization::{Decode, Encode};
 use typename::TypeName;
 
@@ -28,20 +29,16 @@ pub enum SignedHeaderError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub struct BlockHeaderSignatureData {
-    // TODO: determine the proper types for these fields.
-    //       So far, the plan is to make the public key match
-    //       the kernel input destination and hence it should
-    //       be able to verify it too.
-    public_key: Vec<u8>,
-    signature: Vec<u8>,
+    signature: Signature,
 }
 
 impl BlockHeaderSignatureData {
-    pub fn new(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
-        Self {
-            public_key,
-            signature,
-        }
+    pub fn new(signature: Signature) -> Self {
+        Self { signature }
+    }
+
+    pub fn signature(&self) -> &Signature {
+        &self.signature
     }
 }
 
@@ -54,19 +51,19 @@ pub enum BlockHeaderSignature {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged)]
 pub struct SignedBlockHeader {
     block_header: BlockHeader,
-    signature: BlockHeaderSignature,
+    signature_data: BlockHeaderSignature,
 }
 
 impl SignedBlockHeader {
     pub fn new(signature: BlockHeaderSignature, block_header: BlockHeader) -> Self {
         Self {
-            signature,
+            signature_data: signature,
             block_header,
         }
     }
 
-    pub fn signature(&self) -> &BlockHeaderSignature {
-        &self.signature
+    pub fn signature_data(&self) -> &BlockHeaderSignature {
+        &self.signature_data
     }
 
     pub fn header(&self) -> &BlockHeader {
@@ -77,7 +74,7 @@ impl SignedBlockHeader {
     /// If the header is already signed, it will return None, to enforce immutability.
     /// To mutate the header, first use `take_header()` to take ownership of the unsigned header.
     pub fn header_mut(&mut self) -> Option<&mut BlockHeader> {
-        match self.signature() {
+        match self.signature_data() {
             BlockHeaderSignature::None => Some(&mut self.block_header),
             BlockHeaderSignature::PoSBlock(_) => None,
         }
