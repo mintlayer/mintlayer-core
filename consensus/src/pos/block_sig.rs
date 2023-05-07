@@ -81,7 +81,7 @@ pub fn check_block_signature(
         BlockHeaderSignature::None => {
             return Err(BlockSignatureError::BlockSignatureNotFound(header.get_id()))
         }
-        BlockHeaderSignature::PoSBlock(sig_data) => sig_data,
+        BlockHeaderSignature::HeaderSignature(sig_data) => sig_data,
     };
 
     if public_key.verify_message(signature.signature(), &header.header().encode()) {

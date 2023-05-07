@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use merkletree::MerkleTreeFormError;
 use serialization::{Decode, Encode};
 
 use crate::{
@@ -23,8 +24,13 @@ use crate::{
     primitives::{id::Idable, Id, H256},
 };
 
-use super::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp};
+use super::{
+    block_merkle::{calculate_tx_merkle_root, calculate_witness_merkle_root},
+    signed_block_header::SignedBlockHeader,
+    timestamp::BlockTimestamp,
+};
 
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockBody {
     pub(super) reward: BlockReward,
@@ -46,8 +52,17 @@ impl BlockBody {
     pub fn reward(&self) -> &BlockReward {
         &self.reward
     }
+
+    pub fn tx_merkle_root(&self) -> Result<H256, MerkleTreeFormError> {
+        calculate_tx_merkle_root(self)
+    }
+
+    pub fn witness_merkle_root(&self) -> Result<H256, MerkleTreeFormError> {
+        calculate_witness_merkle_root(self)
+    }
 }
 
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: SignedBlockHeader,

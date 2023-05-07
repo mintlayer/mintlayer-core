@@ -24,10 +24,7 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root,
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
-        },
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -661,7 +658,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.body())
+        block
+            .body()
+            .tx_merkle_root()
             .map_or(Err(CheckBlockError::MerkleRootMismatch), |merkle_tree| {
                 ensure!(
                     merkle_tree_root == merkle_tree,
@@ -673,7 +672,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // Witness merkle root
         let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.body())
+        block
+            .body()
+            .witness_merkle_root()
             .map_or(
                 Err(CheckBlockError::WitnessMerkleRootMismatch),
                 |witness_merkle| {
