@@ -42,10 +42,13 @@ impl BlockHeaderSignatureData {
     }
 }
 
+#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName)]
 pub enum BlockHeaderSignature {
+    #[codec(index = 0)]
     None,
-    PoSBlock(BlockHeaderSignatureData),
+    #[codec(index = 1)]
+    HeaderSignature(BlockHeaderSignatureData),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeName, serialization::Tagged)]
@@ -76,7 +79,7 @@ impl SignedBlockHeader {
     pub fn header_mut(&mut self) -> Option<&mut BlockHeader> {
         match self.signature_data() {
             BlockHeaderSignature::None => Some(&mut self.block_header),
-            BlockHeaderSignature::PoSBlock(_) => None,
+            BlockHeaderSignature::HeaderSignature(_) => None,
         }
     }
 

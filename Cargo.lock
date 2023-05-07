@@ -706,6 +706,7 @@ dependencies = [
  "logging",
  "pos_accounting",
  "rstest",
+ "serialization",
  "test-utils",
  "tx-verifier",
  "utils",
