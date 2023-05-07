@@ -41,7 +41,7 @@ fn check_timelock(
     let timelock = match output {
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
-        | TxOutput::StakePool(_)
+        | TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _) => return Ok(()),
         TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
     };

@@ -40,7 +40,7 @@ pub fn get_tokens_issuance_count(outputs: &[TxOutput]) -> usize {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
                 is_tokens_issuance(v)
             }
-            TxOutput::StakePool(_)
+            TxOutput::CreateStakePool(_)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::DecommissionPool(_, _, _, _) => false,
         })

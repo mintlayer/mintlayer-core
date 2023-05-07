@@ -151,7 +151,7 @@ where
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
             ));
         }
-        TxOutput::StakePool(d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::CreateStakePool(d) => d.as_ref().vrf_public_key().clone(),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pool_data = pos_accounting_view
                 .get_pool_data(pool_id)?

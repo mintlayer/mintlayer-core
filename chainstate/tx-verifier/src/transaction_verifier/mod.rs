@@ -209,7 +209,7 @@ where
                 TxOutput::Burn(v) => v.coin_amount(),
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::StakePool(_)
+                | TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _) => None,
             })
@@ -237,7 +237,7 @@ where
             TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
-            TxOutput::StakePool(d) => Ok(d.as_ref().clone().into()),
+            TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id)
             | TxOutput::DecommissionPool(_, _, pool_id, _) => self
                 .accounting_delta_adapter
@@ -320,7 +320,7 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::StakePool(data) => {
+                TxOutput::CreateStakePool(data) => {
                     let res = self
                         .accounting_delta_adapter
                         .operations(tx_source)
@@ -358,7 +358,7 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::StakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
+            TxOutput::CreateStakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
