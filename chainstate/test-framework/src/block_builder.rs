@@ -219,8 +219,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Builds a block without processing it.
-    pub fn build(self) -> Block {
+    fn build_impl(self) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
         let unsigned_header = BlockHeader::new(
             self.prev_block_hash,
@@ -239,20 +238,22 @@ impl<'f> BlockBuilder<'f> {
             unsigned_header.with_no_signature()
         };
 
-        Block::new_from_header(signed_header, block_body).unwrap()
+        (
+            Block::new_from_header(signed_header, block_body).unwrap(),
+            self.framework,
+        )
+    }
+
+    /// Builds a block without processing it.
+    pub fn build(self) -> Block {
+        self.build_impl().0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
-        let block = Block::new(
-            self.transactions,
-            self.prev_block_hash,
-            self.timestamp,
-            self.consensus_data,
-            self.reward,
-        )
-        .unwrap();
-        self.framework.process_block(block, self.block_source)
+        let block_source = self.block_source;
+        let (block, framework) = self.build_impl();
+        framework.process_block(block, block_source)
     }
 
     /// Produces a new set of inputs and outputs from the transactions of the specified block.
