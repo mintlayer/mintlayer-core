@@ -23,13 +23,19 @@ use chainstate_test_framework::{
 };
 use common::{
     chain::{
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            TransactionSigError,
+        },
+        stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::{OutputValue, TokenData, TokenTransfer},
-        GenBlock, OutPoint, OutPointSourceId, TxInput, TxOutput,
+        Destination, GenBlock, OutPoint, OutPointSourceId, SignedTransaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::Rng,
     vrf::{VRFKeyKind, VRFPrivateKey},
 };
@@ -50,7 +56,7 @@ fn stake_pool_basic(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
@@ -88,7 +94,7 @@ fn stake_pool_and_spend_coin_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
@@ -124,7 +130,7 @@ fn stake_pool_and_issue_tokens_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
@@ -190,7 +196,7 @@ fn stake_pool_and_transfer_tokens_same_tx(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100..100_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         // stake pool with coin input and transfer tokens with token input
@@ -238,7 +244,7 @@ fn stake_pool_twice(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let tx = TransactionBuilder::new()
@@ -284,7 +290,7 @@ fn stake_pool_overspend(#[case] seed: Seed) {
         let genesis_overspend_amount = (genesis_output_amount + Amount::from_atoms(1)).unwrap();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let stake_pool_data = create_stake_pool_data_with_all_reward_to_owner(
+        let (stake_pool_data, _) = create_stake_pool_data_with_all_reward_to_owner(
             &mut rng,
             genesis_overspend_amount,
             vrf_pk,
@@ -322,7 +328,7 @@ fn decommission_from_stake_pool(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
@@ -398,7 +404,7 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
-        let stake_pool_data =
+        let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
         let stake_pool_outpoint = OutPoint::new(
@@ -434,5 +440,128 @@ fn decommission_from_stake_pool_same_block(#[case] seed: Seed) {
             PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
                 .unwrap();
         assert!(pool_balance.is_none());
+    });
+}
+
+// check that `CreateStakePool` output can be decommissioned only with `decommission_key`
+// and not `staking_key`
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (staking_sk, staking_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (decommission_sk, decommission_pk) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+
+        let stake_pool_data = StakePoolData::new(
+            amount_to_stake,
+            Destination::PublicKey(staking_pk.clone()),
+            vrf_pk,
+            Destination::PublicKey(decommission_pk.clone()),
+            PerThousand::new_from_rng(&mut rng),
+            Amount::ZERO,
+        );
+
+        let stake_pool_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+        let pool_id = pos_accounting::make_pool_id(&stake_pool_outpoint);
+
+        let tx1 = TransactionBuilder::new()
+            .add_input(stake_pool_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let (best_block_source_id, best_block_utxos) =
+            tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
+
+        {
+            // sign with staking key
+            let tx2 = {
+                let tx = TransactionBuilder::new()
+                    .add_input(
+                        TxInput::new(best_block_source_id.clone(), 0),
+                        InputWitness::NoSignature(None),
+                    )
+                    .add_output(TxOutput::DecommissionPool(
+                        amount_to_stake,
+                        anyonecanspend_address(),
+                        pool_id,
+                        OutputTimeLock::ForBlockCount(1),
+                    ))
+                    .build()
+                    .transaction()
+                    .clone();
+
+                let staking_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                    &staking_sk,
+                    Default::default(),
+                    Destination::PublicKey(staking_pk),
+                    &tx,
+                    &best_block_utxos.iter().collect::<Vec<_>>(),
+                    0,
+                )
+                .unwrap();
+
+                SignedTransaction::new(tx, vec![InputWitness::Standard(staking_sig)]).unwrap()
+            };
+
+            let result =
+                tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap_err();
+
+            assert_eq!(
+                result,
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::SignatureVerificationFailed(
+                        TransactionSigError::SignatureVerificationFailed
+                    )
+                ))
+            );
+        }
+
+        let tx2 = {
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(best_block_source_id, 0),
+                    InputWitness::NoSignature(None),
+                )
+                .add_output(TxOutput::DecommissionPool(
+                    amount_to_stake,
+                    anyonecanspend_address(),
+                    pool_id,
+                    OutputTimeLock::ForBlockCount(1),
+                ))
+                .build()
+                .transaction()
+                .clone();
+
+            let decommission_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+                &decommission_sk,
+                Default::default(),
+                Destination::PublicKey(decommission_pk),
+                &tx,
+                &best_block_utxos.iter().collect::<Vec<_>>(),
+                0,
+            )
+            .unwrap();
+
+            SignedTransaction::new(tx, vec![InputWitness::Standard(decommission_sig)]).unwrap()
+        };
+
+        tf.make_block_builder()
+            .add_transaction(tx2)
+            .build_and_process()
+            .unwrap()
+            .unwrap();
     });
 }
