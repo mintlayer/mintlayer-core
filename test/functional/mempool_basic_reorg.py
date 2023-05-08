@@ -81,7 +81,7 @@ def make_empty_block(parent_id, nonce):
 def mine_empty_block(parent_id):
     for nonce in range(1000):
         (block, block_id) = make_empty_block(parent_id, nonce)
-        if block_id[-2] in "01234567":
+        if block_id[-2] in "0123456":
             return (block, block_id)
     assert False, "Cannot mine block"
 
