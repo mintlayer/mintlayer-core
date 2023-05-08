@@ -15,10 +15,7 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::{
-    new_pub_key_destination,
-    pos::{calculate_new_target, pos_mine},
-};
+use super::helpers::pos::{calculate_new_target, pos_mine};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
@@ -91,7 +88,7 @@ fn setup_test_chain_with_staked_pool(
         STAKED_BALANCE,
         anyonecanspend_address(),
         vrf_pk,
-        new_pub_key_destination(rng),
+        anyonecanspend_address(),
         PerThousand::new(0).unwrap(),
         Amount::ZERO,
     );

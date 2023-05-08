@@ -64,7 +64,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
+        Block, ChainConfig, Destination, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
+        TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -433,7 +434,31 @@ where
         )?;
 
         // verify input signatures
-        signature_check::verify_signatures(self.chain_config.as_ref(), &self.utxo_cache, tx)?;
+        let destination_getter =
+            |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
+                match output {
+                    TxOutput::Transfer(_, d)
+                    | TxOutput::LockThenTransfer(_, d, _)
+                    | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
+                    TxOutput::Burn(_) => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
+                    TxOutput::CreateStakePool(pool_data) => {
+                        Ok(pool_data.decommission_key().clone())
+                    }
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(self
+                        .accounting_delta_adapter
+                        .accounting_delta()
+                        .get_pool_data(*pool_id)?
+                        .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?
+                        .decommission_destination()
+                        .clone()),
+                }
+            };
+        signature_check::verify_signatures(
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            tx,
+            destination_getter,
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 
@@ -494,10 +519,24 @@ where
             }
 
             // verify input signatures
+            let destination_getter =
+                |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
+                    match output {
+                        TxOutput::Transfer(_, d)
+                        | TxOutput::LockThenTransfer(_, d, _)
+                        | TxOutput::DecommissionPool(_, d, _, _)
+                        | TxOutput::ProduceBlockFromStake(d, _) => Ok(d.clone()),
+                        TxOutput::Burn(_) => {
+                            Err(ConnectTransactionError::AttemptToSpendBurnedAmount)
+                        }
+                        TxOutput::CreateStakePool(pool_data) => Ok(pool_data.staker().clone()),
+                    }
+                };
             signature_check::verify_signatures(
                 self.chain_config.as_ref(),
                 &self.utxo_cache,
                 &reward_transactable,
+                destination_getter,
             )?;
         }
 
