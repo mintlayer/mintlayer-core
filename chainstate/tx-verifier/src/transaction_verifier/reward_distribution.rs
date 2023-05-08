@@ -242,6 +242,7 @@ mod tests {
         let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
+        let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
 
         assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt_zero).is_some());
         assert!(calculate_pool_owner_reward(Amount::ZERO, Amount::ZERO, mpt).is_some());
@@ -253,7 +254,9 @@ mod tests {
         // negative amount
         assert!(calculate_pool_owner_reward(Amount::ZERO, cost_per_block, mpt_zero).is_none());
         // overflow
-        assert!(calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt).is_none());
+        assert!(
+            calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none()
+        );
     }
 
     // Create 2 pools: pool_a and pool_b.
