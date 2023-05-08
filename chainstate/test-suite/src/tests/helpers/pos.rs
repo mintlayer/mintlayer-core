@@ -103,16 +103,15 @@ pub fn calculate_new_target(
 }
 
 pub fn create_stake_pool_data_with_all_reward_to_owner(
-    rng: &mut (impl Rng + CryptoRng),
+    _rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
     vrf_pk: VRFPublicKey,
 ) -> StakePoolData {
-    let destination = super::new_pub_key_destination(rng);
     StakePoolData::new(
         amount,
         anyonecanspend_address(),
         vrf_pk,
-        destination,
+        anyonecanspend_address(),
         PerThousand::new(1000).unwrap(), // give all reward to the owner
         Amount::ZERO,
     )

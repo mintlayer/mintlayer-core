@@ -61,18 +61,6 @@ pub enum TxOutput {
 }
 
 impl TxOutput {
-    // TODO: this has to go
-    pub fn destination(&self) -> Option<&Destination> {
-        match self {
-            TxOutput::Transfer(_, d) => Some(d),
-            TxOutput::LockThenTransfer(_, d, _) => Some(d),
-            TxOutput::Burn(_) => None,
-            TxOutput::CreateStakePool(d) => Some(d.staker()),
-            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-            TxOutput::DecommissionPool(_, d, _, _) => Some(d),
-        }
-    }
-
     pub fn is_burn(&self) -> bool {
         match self {
             TxOutput::Transfer(_, _)
