@@ -51,7 +51,7 @@ def make_tx(inputs, output_amounts, time_lock = 0, flags = 0):
     encoded_tx = signed_tx_obj.encode(signed_tx).to_hex()[2:]
     return (encoded_tx, tx_id)
 
-def make_empty_block(parent_id, nonce):
+def make_empty_block(parent_id, nonce, transactions = []):
     empty_merkle_root = "0x" + hash_object(vec_output_obj, [])
     pow_data = {
         'bits': 0x207fffff,
@@ -72,7 +72,7 @@ def make_empty_block(parent_id, nonce):
     block = {
         'header': signed_header,
         'reward': [],
-        'transactions': [],
+        'transactions': transactions,
     }
     block_id = hash_object(block_header_obj, header)
     encoded_block = block_obj.encode(block).to_hex()[2:]
@@ -121,7 +121,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         block1 = node.blockprod_generate_block("00", [tx1])
         node.chainstate_submit_block(block1)
         block1_id = node.chainstate_best_block_id()
-        self.log.debug('Tip block1: {}'.format(block1_id))
+        self.wait_until(lambda: node.mempool_local_best_block_id() == block1_id, timeout = 5)
         assert not node.mempool_contains_tx(tx1_id)
         assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
@@ -136,6 +136,8 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         # Submit a block with the other two transactions
         block2 = node.blockprod_generate_block("00", [tx2, tx3])
         node.chainstate_submit_block(block2)
+        block2_id = node.chainstate_best_block_id()
+        self.wait_until(lambda: node.mempool_local_best_block_id() == block2_id, timeout = 5)
         assert not node.mempool_contains_tx(tx1_id)
         assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
@@ -149,7 +151,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         # Submit the two blocks and verify block3a in the new tip
         node.chainstate_submit_block(block2a)
         node.chainstate_submit_block(block3a)
-        assert node.chainstate_best_block_id() == block3a_id
+        self.wait_until(lambda: node.mempool_local_best_block_id() == block3a_id, timeout = 5)
 
         # Check transactions from disconnected blocks are back in the mempool
         assert not node.mempool_contains_tx(tx1_id)
