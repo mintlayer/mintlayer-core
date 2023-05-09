@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::key_chain::leaf_key_chain::LeafKeyChain;
+use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
@@ -41,11 +42,8 @@ pub struct AccountKeyChain {
     /// The master/root key that this account key was derived from
     root_hierarchy_key: ConstValue<Option<ExtendedPublicKey>>,
 
-    /// Key chain for receiving funds
-    receiving_key_chain: LeafKeyChain,
-
-    /// Key chain for change addresses
-    change_key_chain: LeafKeyChain,
+    /// Key chains for receiving and change funds
+    sub_chains: WithPurpose<LeafKeyChain>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -87,12 +85,13 @@ impl AccountKeyChain {
         );
         change_key_chain.save_usage_state(db_tx)?;
 
+        let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
+
         let mut new_account = AccountKeyChain {
             chain_config,
             account_pubkey: account_pubkey.into(),
             root_hierarchy_key: Some(root_key.to_public_key()).into(),
-            receiving_key_chain,
-            change_key_chain,
+            sub_chains,
             lookahead_size: lookahead_size.into(),
         };
 
@@ -119,15 +118,14 @@ impl AccountKeyChain {
 
         let account_pubkey = account_info.get_account_key().clone();
 
-        let (receiving_key_chain, change_key_chain) =
+        let sub_chains =
             LeafKeyChain::load_leaf_keys(chain_config.clone(), &account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
             chain_config,
             account_pubkey: account_pubkey.into(),
             root_hierarchy_key: account_info.get_root_hierarchy_key().clone().into(),
-            receiving_key_chain,
-            change_key_chain,
+            sub_chains,
             lookahead_size: account_info.get_lookahead_size().into(),
         })
     }
@@ -146,7 +144,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<Address> {
-        let lookahead_size = self.lookahead_size.take();
+        let lookahead_size = self.get_lookahead_size();
         self.get_leaf_key_chain_mut(purpose).issue_address(db_tx, lookahead_size)
     }
 
@@ -156,7 +154,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
-        let lookahead_size = self.lookahead_size.take();
+        let lookahead_size = self.get_lookahead_size();
         self.get_leaf_key_chain_mut(purpose).issue_key(db_tx, lookahead_size)
     }
 
@@ -177,60 +175,47 @@ impl AccountKeyChain {
 
     /// Get the leaf key chain for a particular key purpose
     pub fn get_leaf_key_chain(&self, purpose: KeyPurpose) -> &LeafKeyChain {
-        match purpose {
-            KeyPurpose::ReceiveFunds => &self.receiving_key_chain,
-            KeyPurpose::Change => &self.change_key_chain,
-        }
+        self.sub_chains.get_for(purpose)
     }
 
     /// Get the mutable leaf key chain for a particular key purpose. This is used internally with
     /// database persistence done externally.
     fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeyChain {
-        match purpose {
-            KeyPurpose::ReceiveFunds => &mut self.receiving_key_chain,
-            KeyPurpose::Change => &mut self.change_key_chain,
-        }
+        self.sub_chains.mut_for(purpose)
     }
 
     // Return true if the provided public key belongs to this key chain
     pub fn is_public_key_mine(&self, public_key: &PublicKey) -> bool {
-        for purpose in KeyPurpose::ALL {
-            if self.get_leaf_key_chain(purpose).is_public_key_mine(public_key) {
-                return true; // Return early to avoid checking all leaf key chains
-            }
-        }
-        false
+        KeyPurpose::ALL
+            .iter()
+            .any(|purpose| self.get_leaf_key_chain(*purpose).is_public_key_mine(public_key))
     }
 
     // Return true if the provided public key hash belongs to this key chain
     pub fn is_public_key_hash_mine(&self, pubkey_hash: &PublicKeyHash) -> bool {
-        for purpose in KeyPurpose::ALL {
-            if self.get_leaf_key_chain(purpose).is_public_key_hash_mine(pubkey_hash) {
-                return true; // Return early to avoid checking all leaf key chains
-            }
-        }
-        false
+        KeyPurpose::ALL
+            .iter()
+            .any(|purpose| self.get_leaf_key_chain(*purpose).is_public_key_hash_mine(pubkey_hash))
     }
 
     /// Derive addresses until there are lookahead unused ones
     pub fn top_up_all<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
-        let lookahead_size = self.lookahead_size.take();
-        for purpose in KeyPurpose::ALL {
-            self.get_leaf_key_chain_mut(purpose).top_up(db_tx, lookahead_size)?;
-        }
-        Ok(())
+        let lookahead_size = self.get_lookahead_size();
+        KeyPurpose::ALL.iter().try_for_each(|purpose| {
+            self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
+        })
     }
 
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
             self.root_hierarchy_key.clone().take(),
             self.account_pubkey.clone().take(),
-            self.lookahead_size.take(),
+            self.get_lookahead_size(),
         ))
     }
 
     pub fn get_lookahead_size(&self) -> u32 {
-        self.lookahead_size.take()
+        *self.lookahead_size
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
@@ -239,7 +224,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         xpub: &ExtendedPublicKey,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.lookahead_size.take();
+        let lookahead_size = self.get_lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_extended_pubkey_as_used(db_tx, xpub, lookahead_size)? {
@@ -255,7 +240,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         public_key: &PublicKey,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.lookahead_size.take();
+        let lookahead_size = self.get_lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_pubkey_as_used(db_tx, public_key, lookahead_size)? {
@@ -270,7 +255,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         pub_key_hash: &PublicKeyHash,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.lookahead_size.take();
+        let lookahead_size = self.get_lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_pub_key_hash_as_used(db_tx, pub_key_hash, lookahead_size)? {

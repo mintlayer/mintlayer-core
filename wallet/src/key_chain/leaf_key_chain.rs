@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{get_purpose_and_index, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
@@ -123,29 +124,20 @@ impl LeafKeyChain {
         account_info: &DeterministicAccountInfo,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-    ) -> KeyChainResult<(LeafKeyChain, LeafKeyChain)> {
-        let mut receiving_addresses = BTreeMap::new();
-        let mut change_addresses = BTreeMap::new();
-
+    ) -> KeyChainResult<WithPurpose<LeafKeyChain>> {
+        let mut addresses = WithPurpose::new(BTreeMap::new(), BTreeMap::new());
         for (address_id, address) in db_tx.get_addresses(id)? {
             let (purpose, key_index) = get_purpose_and_index(&address_id.into_item_id())?;
-            let old_value = match purpose {
-                KeyPurpose::ReceiveFunds => receiving_addresses.insert(key_index, address),
-                KeyPurpose::Change => change_addresses.insert(key_index, address),
-            };
+            let old_value = addresses.mut_for(purpose).insert(key_index, address);
             if old_value.is_some() {
                 return Err(KeyChainError::CouldNotLoadKeyChain);
             }
         }
 
-        let mut receiving_public_keys = BTreeMap::new();
-        let mut change_public_keys = BTreeMap::new();
+        let mut public_keys = WithPurpose::new(BTreeMap::new(), BTreeMap::new());
         for (pubkey_id, xpub) in db_tx.get_public_keys(id)? {
             let (purpose, key_index) = get_purpose_and_index(&pubkey_id.into_item_id())?;
-            let old_value = match purpose {
-                KeyPurpose::ReceiveFunds => receiving_public_keys.insert(key_index, xpub),
-                KeyPurpose::Change => change_public_keys.insert(key_index, xpub),
-            };
+            let old_value = public_keys.mut_for(purpose).insert(key_index, xpub);
             if old_value.is_some() {
                 return Err(KeyChainError::CouldNotLoadKeyChain);
             }
@@ -160,7 +152,7 @@ impl LeafKeyChain {
 
         let account_pubkey = account_info.get_account_key();
 
-        Ok((
+        Ok(WithPurpose::new(
             LeafKeyChain::new_from_parts(
                 chain_config.clone(),
                 id.clone(),
@@ -168,8 +160,8 @@ impl LeafKeyChain {
                 account_pubkey
                     .clone()
                     .derive_child(KeyPurpose::ReceiveFunds.get_deterministic_index())?,
-                receiving_addresses,
-                receiving_public_keys,
+                addresses.receive,
+                public_keys.receive,
                 usage_states.remove(&KeyPurpose::ReceiveFunds).ok_or(
                     KeyChainError::MissingDatabaseProperty("ReceiveFunds usage state"),
                 )?,
@@ -181,8 +173,8 @@ impl LeafKeyChain {
                 account_pubkey
                     .clone()
                     .derive_child(KeyPurpose::Change.get_deterministic_index())?,
-                change_addresses,
-                change_public_keys,
+                addresses.change,
+                public_keys.change,
                 usage_states
                     .remove(&KeyPurpose::Change)
                     .ok_or(KeyChainError::MissingDatabaseProperty("Change usage state"))?,
@@ -240,7 +232,7 @@ impl LeafKeyChain {
         new_issued_index: ChildNumber,
     ) -> KeyChainResult<()> {
         // Save usage state
-        self.usage_state.set_last_issued(Some(new_issued_index));
+        self.usage_state.increment_up_to_last_issued(new_issued_index);
         self.save_usage_state(db_tx)
     }
 
@@ -256,7 +248,7 @@ impl LeafKeyChain {
     fn get_new_issued_index(&self, lookahead_size: u32) -> KeyChainResult<ChildNumber> {
         // TODO consider last used index as well
         let new_issued_index = {
-            match self.usage_state.get_last_issued() {
+            match self.get_last_issued() {
                 None => ChildNumber::ZERO,
                 Some(last_issued) => last_issued.increment()?,
             }
@@ -273,12 +265,10 @@ impl LeafKeyChain {
         new_index_to_issue: ChildNumber,
         lookahead_size: u32,
     ) -> KeyChainResult<()> {
-        let usage_state = &self.usage_state;
-
         let new_issued_index = new_index_to_issue.get_index();
 
         // Check if the issued addresses are less or equal to lookahead size
-        let lookahead_exceeded = match usage_state.get_last_used() {
+        let lookahead_exceeded = match self.get_last_used() {
             None => new_issued_index >= lookahead_size,
             Some(last_used_index) => {
                 new_issued_index > last_used_index.get_index() + lookahead_size
@@ -361,21 +351,20 @@ impl LeafKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<()> {
         // Find how many keys to derive
-        let (starting_index, up_to_index) = match self.get_last_derived_index() {
-            None => (0u32, lookahead_size),
-            Some(last_derived_index) => {
-                let start_index = last_derived_index.increment()?.get_index();
-                let up_to_index = match self.usage_state.get_last_used() {
-                    None => lookahead_size,
-                    Some(last_used) => last_used.get_index() + lookahead_size + 1,
-                };
-                (start_index, up_to_index)
-            }
+        let starting_index = match self.get_last_derived_index() {
+            None => 0u32,
+            Some(last_derived_index) => last_derived_index.increment()?.get_index(),
+        };
+
+        let up_to_index = match self.get_last_used() {
+            None => lookahead_size,
+            Some(last_used) => last_used.increment()?.get_index() + lookahead_size,
         };
 
         // If there are any keys that need to be derived
         if starting_index < up_to_index {
             // Derive the needed keys
+            // TODO iterate ChildNumbers to avoid the from_index_with_hardened_bit conversion
             for i in starting_index..up_to_index {
                 let index = ChildNumber::from_index_with_hardened_bit(i);
                 self.derive_and_add_key(db_tx, index)?;
@@ -460,7 +449,7 @@ impl LeafKeyChain {
             // Get the key index of the public key, this should always be Some
             let key_index = extended_public_key.get_derivation_path().as_slice().last()
                 .expect("The provided public key belongs to this key chain, hence it should always have a key index");
-            self.usage_state.set_last_used(Some(*key_index));
+            self.usage_state.increment_up_to_last_used(*key_index);
             db_tx.set_keychain_usage_state(
                 &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
                 &self.usage_state,
@@ -500,13 +489,11 @@ impl LeafKeyChain {
     }
 
     /// Get the index of the last used key or None if no key is used
-    #[allow(dead_code)] // TODO remove
     pub fn get_last_used(&self) -> Option<ChildNumber> {
         self.usage_state.get_last_used()
     }
 
     /// Get the index of the last issued key or None if no key is issued
-    #[allow(dead_code)] // TODO remove
     pub fn get_last_issued(&self) -> Option<ChildNumber> {
         self.usage_state.get_last_issued()
     }

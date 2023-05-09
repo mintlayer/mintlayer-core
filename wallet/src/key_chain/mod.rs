@@ -17,7 +17,7 @@
 //! The KeyChain struct holds and constantly derives keys for the wallet addresses
 //! It uses the following derivation scheme:
 //!
-//! m/44'/19788'/<account_number>'/<key_purpose>'/<key_index>'
+//! m/44'/19788'/<account_number>'/<key_purpose>/<key_index>
 //!
 //! Where 44' is the standard BIP44 prefix
 //!       19788' or 0x4D4C' (1' for the testnets) is Mintlayer's BIP44 registered coin type
@@ -29,6 +29,7 @@
 mod account_key_chain;
 mod leaf_key_chain;
 mod master_key_chain;
+mod with_purpose;
 
 pub use account_key_chain::AccountKeyChain;
 pub use master_key_chain::MasterKeyChain;
