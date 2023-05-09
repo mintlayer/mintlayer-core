@@ -44,6 +44,11 @@ pub enum SignatureDestinationGetterError {
 /// supposed to be extended to support more complex cases, where the caller can
 /// request the correct mapping from output type to destination for signature
 /// verification.
+///
+/// The errors returned in the functions based on the output type are generally
+/// checked in other places, but this is just double-checking and ensuring sanity,
+/// since there's close to zero harm doing it right anyway (e.g., pulling in more
+/// dependencies).
 pub struct SignatureDestinationGetter<'a> {
     f: Box<SignatureDestinationGetterFn<'a>>,
 }
