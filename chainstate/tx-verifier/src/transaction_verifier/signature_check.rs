@@ -15,22 +15,23 @@
 
 use common::chain::{
     signature::{verify_signature, Transactable},
-    ChainConfig, Destination, TxOutput,
+    ChainConfig,
 };
 use utxo::UtxosView;
 
-use super::error::ConnectTransactionError;
+use super::{
+    error::ConnectTransactionError, signature_destination_getter::SignatureDestinationGetter,
+};
 
-pub fn verify_signatures<U, T, G>(
+pub fn verify_signatures<U, T>(
     chain_config: &ChainConfig,
     utxo_view: &U,
     transactable: &T,
-    destination_getter: G,
+    destination_getter: SignatureDestinationGetter,
 ) -> Result<(), ConnectTransactionError>
 where
     U: UtxosView,
     T: Transactable,
-    G: Fn(&TxOutput) -> Result<Destination, ConnectTransactionError>,
 {
     let inputs = match transactable.inputs() {
         Some(ins) => ins,
@@ -50,9 +51,8 @@ where
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
     inputs_utxos.iter().enumerate().try_for_each(|(input_idx, utxo)| {
-        // TODO: see if a different treatment should be done for different output purposes
         // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-        let destination = destination_getter(utxo)?;
+        let destination = destination_getter.call(utxo)?;
         verify_signature(
             chain_config,
             &destination,

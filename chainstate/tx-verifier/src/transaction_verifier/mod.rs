@@ -21,6 +21,7 @@ mod input_output_policy;
 mod optional_tx_index_cache;
 mod reward_distribution;
 mod signature_check;
+mod signature_destination_getter;
 mod timelock_check;
 mod token_issuance_cache;
 mod transferred_amount_check;
@@ -48,6 +49,7 @@ use self::{
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
+    signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     transferred_amount_check::{
@@ -64,8 +66,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, Destination, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
-        TxOutput,
+        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -434,35 +435,11 @@ where
         )?;
 
         // verify input signatures
-        let destination_getter =
-            |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
-                match output {
-                    TxOutput::Transfer(_, d)
-                    | TxOutput::LockThenTransfer(_, d, _)
-                    | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
-                    TxOutput::Burn(_) => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
-                    TxOutput::CreateStakePool(pool_data) => {
-                        // Spending an output of a pool creation transaction is only allowed in a
-                        // context of a transaction (as opposed to block reward) only if this pool
-                        // is being decommissioned.
-                        // If this rule is being invalidated, it will be detected in other parts
-                        // of the code.
-                        Ok(pool_data.decommission_key().clone())
-                    }
-                    TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(self
-                        .accounting_delta_adapter
-                        .accounting_delta()
-                        .get_pool_data(*pool_id)?
-                        .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?
-                        .decommission_destination()
-                        .clone()),
-                }
-            };
         signature_check::verify_signatures(
             self.chain_config.as_ref(),
             &self.utxo_cache,
             tx,
-            destination_getter,
+            SignatureDestinationGetter::new_for_transaction(&self.accounting_delta_adapter),
         )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
@@ -523,30 +500,12 @@ where
                 })?;
             }
 
-            let destination_getter =
-                |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
-                    match output {
-                        TxOutput::Transfer(_, d)
-                        | TxOutput::LockThenTransfer(_, d, _)
-                        | TxOutput::DecommissionPool(_, d, _, _)
-                        | TxOutput::ProduceBlockFromStake(d, _) => Ok(d.clone()),
-                        TxOutput::Burn(_) => {
-                            Err(ConnectTransactionError::AttemptToSpendBurnedAmount)
-                        }
-                        TxOutput::CreateStakePool(pool_data) => {
-                            // Spending an output of a pool creation transaction is only allowed when
-                            // creating a block, hence the staker key is checked.
-                            Ok(pool_data.staker().clone())
-                        }
-                    }
-                };
-
             // verify input signatures
             signature_check::verify_signatures(
                 self.chain_config.as_ref(),
                 &self.utxo_cache,
                 &reward_transactable,
-                destination_getter,
+                SignatureDestinationGetter::new_for_block_reward(),
             )?;
         }
 
