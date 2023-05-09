@@ -442,6 +442,11 @@ where
                     | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
                     TxOutput::Burn(_) => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
                     TxOutput::CreateStakePool(pool_data) => {
+                        // Spending an output of a pool creation transaction is only allowed in a
+                        // context of a transaction (as opposed to block reward) only if this pool
+                        // is being decommissioned.
+                        // If this rule is being invalidated, it will be detected in other parts
+                        // of the code.
                         Ok(pool_data.decommission_key().clone())
                     }
                     TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(self
@@ -518,7 +523,6 @@ where
                 })?;
             }
 
-            // verify input signatures
             let destination_getter =
                 |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
                     match output {
@@ -529,9 +533,15 @@ where
                         TxOutput::Burn(_) => {
                             Err(ConnectTransactionError::AttemptToSpendBurnedAmount)
                         }
-                        TxOutput::CreateStakePool(pool_data) => Ok(pool_data.staker().clone()),
+                        TxOutput::CreateStakePool(pool_data) => {
+                            // Spending an output of a pool creation transaction is only allowed when
+                            // creating a block, hence the staker key is checked.
+                            Ok(pool_data.staker().clone())
+                        }
                     }
                 };
+
+            // verify input signatures
             signature_check::verify_signatures(
                 self.chain_config.as_ref(),
                 &self.utxo_cache,
