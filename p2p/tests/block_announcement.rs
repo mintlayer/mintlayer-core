@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
@@ -49,27 +52,32 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
     let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
     )
     .await
     .unwrap();
 
     let (mut peer1, mut peer2, mut peer3) = {
-        let mut peers = futures::future::join_all((0..3).map(|_| async {
-            let res = S::start(
-                A::make_transport(),
-                vec![A::make_address()],
-                Arc::clone(&config),
-                Arc::clone(&p2p_config),
-            )
-            .await
-            .unwrap();
-            (res.0, res.2)
-        }))
+        let mut peers = futures::future::join_all(
+            std::iter::repeat_with(|| Arc::clone(&shutdown)).take(3).map(|shutdown| async {
+                let res = S::start(
+                    A::make_transport(),
+                    vec![A::make_address()],
+                    Arc::clone(&config),
+                    Arc::clone(&p2p_config),
+                    shutdown,
+                )
+                .await
+                .unwrap();
+                (res.0, res.2)
+            }),
+        )
         .await;
 
         (

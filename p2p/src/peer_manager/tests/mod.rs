@@ -18,7 +18,10 @@ mod ban;
 mod connections;
 mod ping;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use common::time_getter::TimeGetter;
 use crypto::random::Rng;
@@ -60,11 +63,13 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
+    let shutdown = Arc::new(AtomicBool::new(false));
     let (conn, _, _, _) = T::start(
         transport,
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
     )
     .await
     .unwrap();
@@ -77,6 +82,7 @@ where
         rx,
         time_getter,
         peerdb_inmemory_store(),
+        shutdown,
     )
     .unwrap();
 

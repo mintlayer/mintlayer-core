@@ -37,7 +37,7 @@ use std::{
     },
 };
 
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
@@ -60,6 +60,7 @@ use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
     interface::p2p_interface::P2pSubsystemInterface,
+    message::{BlockListRequest, SyncMessage},
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -67,7 +68,7 @@ use crate::{
         },
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    utils::shutdown_channel,
+    utils::oneshot_nofail,
 };
 
 /// Result type with P2P errors
@@ -75,7 +76,7 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 struct P2p<T: NetworkingService> {
     /// A sender for the peer manager events.
-    pub tx_peer_manager: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
+    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
 
@@ -126,8 +127,7 @@ where
         //
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
-        let (tx_peer_manager, rx_peer_manager) =
-            shutdown_channel::unbounded_channel("peer manager");
+        let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
 
         let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
             Arc::clone(&chain_config),
@@ -140,9 +140,16 @@ where
         )?;
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
-            if let Err(e) = peer_manager.run().await {
-                log::error!("PeerManager failed: {e}");
-                shutdown_.store(true, Ordering::Release);
+            match peer_manager.run().await {
+                Ok(_) => {}
+                // The channel can be closed during the shutdown process.
+                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::Acquire) => {
+                    log::info!("Peer manager is shut down");
+                }
+                Err(e) => {
+                    shutdown_.store(true, Ordering::Release);
+                    log::error!("Peer manager failed: {e:?}");
+                }
             }
         });
 
@@ -155,7 +162,7 @@ where
             let shutdown_ = Arc::clone(&shutdown);
 
             tokio::spawn(async move {
-                if let Err(e) = sync::BlockSyncManager::<T>::new(
+                match sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     messaging_handle_,
@@ -169,8 +176,15 @@ where
                 .run()
                 .await
                 {
-                    log::error!("SyncManager failed: {e}");
-                    shutdown_.store(true, Ordering::Release);
+                    Ok(_) => unreachable!(),
+                    // The channel can be closed during the shutdown process.
+                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::Acquire) => {
+                        log::info!("Sync manager is shut down");
+                    }
+                    Err(e) => {
+                        shutdown_.store(true, Ordering::Release);
+                        log::error!("Sync manager failed: {e:?}");
+                    }
                 }
             })
         };
@@ -199,9 +213,20 @@ where
         }
     }
 
-    async fn shutdown(self) {
+    async fn shutdown(mut self) {
         self.shutdown.store(true, Ordering::Release);
 
+        // Send messages to trigger the shutdown processing. This is only needed in a rare case
+        // of no activity in the p2p parts which can happen in the tests.
+        let (sender, receiver) = oneshot_nofail::channel();
+        drop(receiver);
+        let _ = self.tx_peer_manager.send(PeerManagerEvent::GetPeerCount(sender));
+
+        let _ = self.messaging_handle.broadcast_message(SyncMessage::BlockListRequest(
+            BlockListRequest::new(Vec::new()),
+        ));
+
+        // Wait for the tasks to shut dow.
         futures::future::join_all(
             [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),
         )

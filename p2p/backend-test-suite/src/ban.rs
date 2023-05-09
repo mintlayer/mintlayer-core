@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use tokio::sync::mpsc;
 
@@ -55,12 +58,14 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
+    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
+        Arc::clone(&shutdown),
     )
     .await
     .unwrap();
@@ -74,6 +79,7 @@ where
         mempool,
         tx_peer_manager,
         TimeGetter::default(),
+        Arc::clone(&shutdown),
     );
 
     let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
@@ -81,6 +87,7 @@ where
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        shutdown,
     )
     .await
     .unwrap();

@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
@@ -43,11 +46,13 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
     let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
     )
     .await
     .unwrap();
@@ -56,6 +61,7 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        shutdown,
     )
     .await
     .unwrap();
@@ -161,11 +167,13 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
+    let shutdown = Arc::new(AtomicBool::new(false));
     let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
     )
     .await
     .unwrap();
@@ -174,6 +182,7 @@ where
         vec![T::make_address()],
         chain_config,
         p2p_config,
+        shutdown,
     )
     .await
     .unwrap();

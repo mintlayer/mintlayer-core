@@ -23,11 +23,15 @@ mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
+use tokio::sync::mpsc;
+use void::Void;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -35,6 +39,7 @@ use common::{
     primitives::time::duration_to_int,
     time_getter::TimeGetter,
 };
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 
@@ -58,7 +63,7 @@ use crate::{
         peer_address::{PeerAddress, PeerAddressIp4, PeerAddressIp6},
         peer_id::PeerId,
     },
-    utils::{oneshot_nofail, rate_limiter::RateLimiter, shutdown_channel},
+    utils::{oneshot_nofail, rate_limiter::RateLimiter},
 };
 
 use self::{
@@ -117,7 +122,7 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
-    rx_peer_manager: shutdown_channel::UnboundedReceiver<PeerManagerEvent<T>>,
+    rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
 
     /// Hashmap of pending outbound connections
     pending_outbound_connects:
@@ -150,7 +155,7 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_peer_manager: shutdown_channel::UnboundedReceiver<PeerManagerEvent<T>>,
+        rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
         peerdb_storage: S,
         shutdown: Arc<AtomicBool>,
@@ -1091,7 +1096,7 @@ where
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<Void> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
@@ -1106,15 +1111,15 @@ where
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
         loop {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(P2pError::ChannelClosed);
+            }
+
             tokio::select! {
-                event_res = self.rx_peer_manager.recv(&self.shutdown) => {
-                    let event_res = match event_res {
-                        None => break Ok(()),
-                        Some(e) => e,
-                    };
-                    self.handle_control_event(event_res);
+                event_res = self.rx_peer_manager.recv() => {
+                    self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
                     heartbeat_call_needed = true;
-                },
+                }
 
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);

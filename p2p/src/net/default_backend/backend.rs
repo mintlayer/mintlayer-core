@@ -17,10 +17,17 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{sync::mpsc, time::timeout};
+use void::Void;
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -54,9 +61,6 @@ struct PeerContext {
     services: Services,
 
     /// Channel used to send messages to the peer's event loop.
-    ///
-    /// Note that sending may fail unexpectedly if the connection is closed!
-    /// Do not propagate ChannelClosed error to the higher level, handle it locally!
     tx: mpsc::UnboundedSender<Event>,
 
     /// True if the peer was accepted by PeerManager and SyncManager was notified
@@ -112,6 +116,8 @@ pub struct Backend<T: TransportSocket> {
     /// List of incoming commands to the backend; we put them in a queue
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
+
+    shutdown: Arc<AtomicBool>,
 }
 
 impl<T> Backend<T>
@@ -127,6 +133,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
+        shutdown: Arc<AtomicBool>,
     ) -> Self {
         Self {
             transport,
@@ -140,6 +147,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
             command_queue: FuturesUnordered::new(),
+            shutdown,
         }
     }
 
@@ -230,8 +238,12 @@ where
     }
 
     /// Runs the backend events loop.
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<Void> {
         loop {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(P2pError::ChannelClosed);
+            }
+
             tokio::select! {
                 // Select from the channels in the specified order
                 biased;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use clap::Parser;
 use common::primitives::user_agent::UserAgent;
@@ -71,12 +71,14 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     });
 
     let transport = p2p::make_p2p_transport();
+    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        shutdown,
     )
     .await?;
 

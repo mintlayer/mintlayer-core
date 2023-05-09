@@ -24,8 +24,10 @@ use std::{
 };
 
 use itertools::Itertools;
-use tokio::{sync::mpsc::UnboundedSender, time::MissedTickBehavior};
-use void::Void;
+use tokio::{
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+    time::MissedTickBehavior,
+};
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
@@ -53,7 +55,7 @@ use crate::{
         NetworkingService,
     },
     types::peer_id::PeerId,
-    utils::{oneshot_nofail, shutdown_channel},
+    utils::oneshot_nofail,
     MessagingService, PeerManagerEvent, Result,
 };
 
@@ -69,7 +71,7 @@ pub struct Peer<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
     messaging_handle: T::MessagingHandle,
-    message_receiver: shutdown_channel::UnboundedReceiver<SyncMessage>,
+    message_receiver: UnboundedReceiver<SyncMessage>,
     is_initial_block_download: Arc<AtomicBool>,
     /// A list of headers received via the `HeaderListResponse` message that we haven't yet
     /// requested the blocks for.
@@ -105,9 +107,9 @@ where
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
-        peer_manager_sender: shutdown_channel::UnboundedSender<PeerManagerEvent<T>>,
+        peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         messaging_handle: T::MessagingHandle,
-        message_receiver: shutdown_channel::UnboundedReceiver<SyncMessage>,
+        message_receiver: UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
         shutdown: Arc<AtomicBool>,
@@ -141,7 +143,16 @@ where
         *self.id
     }
 
-    pub async fn run(&mut self) -> Result<Void> {
+    pub async fn run(&mut self) {
+        match self.main_loop().await {
+            Ok(()) => {}
+            // The channel can be closed during the shutdown process.
+            Err(P2pError::ChannelClosed) if self.shutdown.load(Ordering::Acquire) => {}
+            Err(e) => panic!("{} peer task failed: {e:?}", self.id()),
+        }
+    }
+
+    async fn main_loop(&mut self) -> Result<()> {
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -150,13 +161,10 @@ where
 
         loop {
             tokio::select! {
-                message = self.message_receiver.recv(&self.shutdown) => {
-                    let message = match message {
-                        Some(m) => m,
-                        None => break Ok(()),
-                    };
+                message = self.message_receiver.recv() => {
+                    let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
-                },
+                }
 
                 block_to_send_to_peer = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
                     self.send_block(block_to_send_to_peer).await?;
@@ -549,7 +557,8 @@ where
             | P2pError::InvalidConfigurationValue(_)
             | P2pError::ChainstateError(_)) => Err(e),
             // Fatal errors, simply propagate them to stop the sync manager.
-            e @ (P2pError::SubsystemFailure
+            e @ (P2pError::ChannelClosed
+            | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
             | P2pError::InvalidStorageState(_)) => Err(e),
         }

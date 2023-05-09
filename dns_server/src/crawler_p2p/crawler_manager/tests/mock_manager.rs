@@ -20,7 +20,7 @@
 use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     time::Duration,
 };
 
@@ -120,6 +120,7 @@ impl NetworkingService for MockNetworkingService {
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
+        _shutdown: Arc<AtomicBool>,
     ) -> p2p::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

@@ -139,11 +139,18 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
+                Arc::clone(&shutdown),
             );
 
-            if let Err(err) = backend.run().await {
-                log::error!("failed to run backend: {err}");
-                shutdown.store(true, Ordering::Release);
+            match backend.run().await {
+                Ok(_) => unreachable!(),
+                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::Acquire) => {
+                    log::info!("Backend is shut down");
+                }
+                Err(e) => {
+                    shutdown.store(true, Ordering::Release);
+                    log::error!("Failed to run backend: {e}");
+                }
             }
         });
 
