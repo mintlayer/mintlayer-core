@@ -26,7 +26,10 @@ use common::{
 };
 use thiserror::Error;
 
-use super::storage::TransactionVerifierStorageError;
+use super::{
+    signature_destination_getter::SignatureDestinationGetterError,
+    storage::TransactionVerifierStorageError,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConnectTransactionError {
@@ -131,6 +134,9 @@ pub enum ConnectTransactionError {
     UndoFetchFailure,
     #[error("Some transaction verifier storage error")]
     TxVerifierStorage,
+
+    #[error("Destination retrieval error for signature verification {0}")]
+    DestinationRetrievalError(#[from] SignatureDestinationGetterError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

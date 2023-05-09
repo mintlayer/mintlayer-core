@@ -1,12 +1,22 @@
-use common::chain::{Destination, TxOutput};
+use common::chain::{Destination, PoolId, TxOutput};
 use pos_accounting::PoSAccountingView;
-
-use crate::error::ConnectTransactionError;
 
 use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
 
 pub type SignatureDestinationGetterFn<'a> =
-    dyn Fn(&TxOutput) -> Result<Destination, ConnectTransactionError> + 'a;
+    dyn Fn(&TxOutput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+pub enum SignatureDestinationGetterError {
+    #[error("Attempted to spend output in block reward")]
+    SpendingOutputInBlockReward,
+    #[error("Attempted to verify signature for burning output")]
+    SigVerifyOfBurnedOutput,
+    #[error("Pool data not found for signature verification {0}")]
+    PoolDataNotFound(PoolId),
+    #[error("During destination getting for signature verification: PoS accounting error {0}")]
+    SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
+}
 
 /// Given a signed transaction input, which spends an output of some type,
 /// what is the destination of the output being spent, against which
@@ -28,12 +38,14 @@ impl<'a> SignatureDestinationGetter<'a> {
         accounting_delta: &'a PoSAccountingDeltaAdapter<P>,
     ) -> Self {
         let destination_getter =
-            |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
+            |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
                 match output {
                     TxOutput::Transfer(_, d)
                     | TxOutput::LockThenTransfer(_, d, _)
                     | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
-                    TxOutput::Burn(_) => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
+                    TxOutput::Burn(_) => {
+                        Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                    }
                     TxOutput::CreateStakePool(pool_data) => {
                         // Spending an output of a pool creation transaction is only allowed in a
                         // context of a transaction (as opposed to block reward) only if this pool
@@ -45,7 +57,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                     TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(accounting_delta
                         .accounting_delta()
                         .get_pool_data(*pool_id)?
-                        .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id))?
+                        .ok_or(SignatureDestinationGetterError::PoolDataNotFound(*pool_id))?
                         .decommission_destination()
                         .clone()),
                 }
@@ -58,13 +70,15 @@ impl<'a> SignatureDestinationGetter<'a> {
 
     pub fn new_for_block_reward() -> Self {
         let destination_getter =
-            |output: &TxOutput| -> Result<Destination, ConnectTransactionError> {
+            |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
                 match output {
                     TxOutput::Transfer(_, d)
                     | TxOutput::LockThenTransfer(_, d, _)
                     | TxOutput::DecommissionPool(_, d, _, _)
                     | TxOutput::ProduceBlockFromStake(d, _) => Ok(d.clone()),
-                    TxOutput::Burn(_) => Err(ConnectTransactionError::AttemptToSpendBurnedAmount),
+                    TxOutput::Burn(_) => {
+                        Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                    }
                     TxOutput::CreateStakePool(pool_data) => {
                         // Spending an output of a pool creation transaction is only allowed when
                         // creating a block, hence the staker key is checked.
@@ -83,7 +97,7 @@ impl<'a> SignatureDestinationGetter<'a> {
         Self { f }
     }
 
-    pub fn call(&self, output: &TxOutput) -> Result<Destination, ConnectTransactionError> {
+    pub fn call(&self, output: &TxOutput) -> Result<Destination, SignatureDestinationGetterError> {
         (self.f)(output)
     }
 }

@@ -21,7 +21,6 @@ mod input_output_policy;
 mod optional_tx_index_cache;
 mod reward_distribution;
 mod signature_check;
-mod signature_destination_getter;
 mod timelock_check;
 mod token_issuance_cache;
 mod transferred_amount_check;
@@ -32,6 +31,7 @@ pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
+pub mod signature_destination_getter;
 pub mod storage;
 
 mod tx_source;

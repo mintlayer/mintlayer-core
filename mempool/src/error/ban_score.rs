@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate::{
+    tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
     ChainstateError, ConnectTransactionError, TokensError, TransactionVerifierStorageError,
     TxIndexError,
 };
@@ -173,6 +174,18 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
+            ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
+        }
+    }
+}
+
+impl MempoolBanScore for SignatureDestinationGetterError {
+    fn mempool_ban_score(&self) -> u32 {
+        match self {
+            SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }
 }

@@ -17,6 +17,7 @@ use chainstate_types::pos_randomness::PoSRandomnessError;
 use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
 };
+use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError;
 
 use super::{
     transaction_verifier::{
@@ -129,6 +130,18 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
+            ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for SignatureDestinationGetterError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }
 }
