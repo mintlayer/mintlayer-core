@@ -59,6 +59,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                     | TxOutput::LockThenTransfer(_, d, _)
                     | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
                     TxOutput::Burn(_) => {
+                        // This error is emitted in other places for attempting to make this spend,
+                        // but this is just a double-check.
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                     }
                     TxOutput::CreateStakePool(pool_data) => {
@@ -69,12 +71,16 @@ impl<'a> SignatureDestinationGetter<'a> {
                         // of the code.
                         Ok(pool_data.decommission_key().clone())
                     }
-                    TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(accounting_delta
-                        .accounting_delta()
-                        .get_pool_data(*pool_id)?
-                        .ok_or(SignatureDestinationGetterError::PoolDataNotFound(*pool_id))?
-                        .decommission_destination()
-                        .clone()),
+                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                        // The only way we can spend this output in a transaction
+                        // (as opposed to block reward), is if we're decommissioning a mempool
+                        Ok(accounting_delta
+                            .accounting_delta()
+                            .get_pool_data(*pool_id)?
+                            .ok_or(SignatureDestinationGetterError::PoolDataNotFound(*pool_id))?
+                            .decommission_destination()
+                            .clone())
+                    }
                 }
             };
 
@@ -87,16 +93,25 @@ impl<'a> SignatureDestinationGetter<'a> {
         let destination_getter =
             |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
                 match output {
-                    TxOutput::Transfer(_, d)
-                    | TxOutput::LockThenTransfer(_, d, _)
-                    | TxOutput::DecommissionPool(_, d, _, _)
-                    | TxOutput::ProduceBlockFromStake(d, _) => Ok(d.clone()),
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::LockThenTransfer(_, _, _)
+                    | TxOutput::DecommissionPool(_, _, _, _) => {
+                        Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
+                    }
                     TxOutput::Burn(_) => {
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                     }
+
+                    TxOutput::ProduceBlockFromStake(d, _) => {
+                        // Spending an output of a block creation output is only allowed to
+                        // create another block, given that this is a block reward.
+                        Ok(d.clone())
+                    }
                     TxOutput::CreateStakePool(pool_data) => {
-                        // Spending an output of a pool creation transaction is only allowed when
-                        // creating a block, hence the staker key is checked.
+                        // Spending an output of a pool creation output is only allowed when
+                        // creating a block (given it's in a block reward; otherwise it should
+                        // be a transaction for decommissioning the pool), hence the staker key
+                        // is checked.
                         Ok(pool_data.staker().clone())
                     }
                 }
