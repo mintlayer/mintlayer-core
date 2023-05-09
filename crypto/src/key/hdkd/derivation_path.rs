@@ -57,19 +57,12 @@ impl DerivationPath {
 
     /// Get the difference of this path and a sub path.
     pub fn get_super_path_diff(&self, sub_path: &DerivationPath) -> Option<&[ChildNumber]> {
-        let super_path_slice = self.as_slice();
-        // If the other path is longer or equal to this path then it's not a sub-path
-        if sub_path.len() >= super_path_slice.len() {
-            return None;
+        if let Some(diff_path) = self.as_slice().strip_prefix(sub_path.as_slice()) {
+            if !diff_path.is_empty() {
+                return Some(diff_path);
+            }
         }
-        // Make sure that the paths have a common sub-path
-        let sub_path_slice = sub_path.as_slice();
-        let (common_path, diff_path) = super_path_slice.split_at(sub_path_slice.len());
-        if common_path != sub_path_slice {
-            return None;
-        }
-
-        Some(diff_path)
+        None
     }
 }
 
