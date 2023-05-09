@@ -24,7 +24,7 @@ use chainstate::{
     DefaultTransactionVerificationStrategy,
 };
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
-use p2p::rpc::P2pRpcServer;
+use p2p::{interface::p2p_interface::P2pSubsystemInterface, rpc::P2pRpcServer};
 use rpc::{rpc_creds::RpcCreds, RpcConfig};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;
@@ -132,19 +132,18 @@ async fn start_node() -> (subsystem::Manager, SocketAddr) {
     });
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
-    let p2p = manager.add_subsystem(
-        "p2p",
-        p2p::make_p2p(
-            Arc::clone(&chain_config),
-            Arc::new(p2p_config),
-            chainstate.clone(),
-            mempool.clone(),
-            Default::default(),
-            peerdb_storage,
-        )
-        .await
-        .unwrap(),
-    );
+    let p2p = p2p::make_p2p(
+        Arc::clone(&chain_config),
+        Arc::new(p2p_config),
+        chainstate.clone(),
+        mempool.clone(),
+        Default::default(),
+        peerdb_storage,
+    )
+    .unwrap();
+    let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
+        move |call, shutdown| p2p.run(call, shutdown)
+    });
 
     let rpc = rpc::Builder::new(rpc_config, Some(rpc_creds))
         .register(node_lib::rpc::init(
