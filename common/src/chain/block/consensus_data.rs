@@ -16,7 +16,7 @@
 use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::{chaintrust, ChainConfig, PoolId};
 use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
-use crypto::vrf::VRFReturn;
+use crypto::vrf::{VRFPrivateKey, VRFReturn};
 
 use serialization::{Decode, Encode};
 
@@ -143,5 +143,37 @@ impl PoWData {
         ret = ret / ret1;
         ret.increment();
         Some(ret)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub enum GenerateBlockInputData {
+    PoW,
+    PoS(PoSGenerateBlockInputData),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct PoSGenerateBlockInputData {
+    vrf_private_key: VRFPrivateKey,
+    pool_id: PoolId,
+    kernel_input: TxInput,
+    kernel_witness: InputWitness,
+}
+
+impl PoSGenerateBlockInputData {
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
+    }
+
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id
+    }
+
+    pub fn kernel_input(&self) -> &TxInput {
+        &self.kernel_input
+    }
+
+    pub fn kernel_witness(&self) -> &InputWitness {
+        &self.kernel_witness
     }
 }

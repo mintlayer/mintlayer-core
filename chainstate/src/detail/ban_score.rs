@@ -313,7 +313,6 @@ impl BanScore for ConsensusPoSError {
         match self {
             ConsensusPoSError::PropertyQueryError(_) => 0,
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
-            ConsensusPoSError::StakePrivateKeyNotProvided => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
             ConsensusPoSError::NoKernel => 100,
             ConsensusPoSError::NoEpochData => 0,
@@ -332,6 +331,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
             ConsensusPoSError::FailedToFetchUtxo => 0,
             ConsensusPoSError::BlockSignatureError(err) => err.ban_score(),
+            ConsensusPoSError::NoInputDataProvided => 100,
+            ConsensusPoSError::PoWInputDataProvided => 100,
         }
     }
 }

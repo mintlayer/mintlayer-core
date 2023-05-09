@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common::chain::block::consensus_data::GenerateBlockInputData;
 use common::chain::{Block, Destination, SignedTransaction};
-use crypto::vrf::VRFPrivateKey;
 
 use crate::{
     detail::{job_manager::JobKey, BlockProduction},
@@ -35,7 +35,7 @@ impl BlockProductionInterface for BlockProduction {
 
     async fn generate_block(
         &mut self,
-        stake_private_key: Option<VRFPrivateKey>,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError> {
@@ -45,7 +45,7 @@ impl BlockProductionInterface for BlockProduction {
         };
 
         let (block, end_receiver) =
-            self.produce_block(stake_private_key, reward_destination, transactions).await?;
+            self.produce_block(input_data, reward_destination, transactions).await?;
 
         // The only error that can happen is if the channel is closed. We don't care about that here.
         let _finished = end_receiver.await;

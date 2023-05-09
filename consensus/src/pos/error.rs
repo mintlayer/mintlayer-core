@@ -30,8 +30,6 @@ pub enum ConsensusPoSError {
     PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
-    #[error("Stake private key was not provided")]
-    StakePrivateKeyNotProvided,
     #[error("Epoch data not provided")]
     NoEpochData,
     #[error(
@@ -66,6 +64,10 @@ pub enum ConsensusPoSError {
     InvalidTargetBlockTime,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
+    #[error("No input data was provided for PoS block generation")]
+    NoInputDataProvided,
+    #[error("PoW input data was provided for PoS block generation")]
+    PoWInputDataProvided,
 
     // TODO the following error should include the corresponding error from UtxosView
     //      https://github.com/mintlayer/mintlayer-core/issues/811

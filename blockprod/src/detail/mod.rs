@@ -30,8 +30,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
-            BlockReward, ConsensusData,
+            block_body::BlockBody, consensus_data::GenerateBlockInputData,
+            timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
@@ -39,7 +39,6 @@ use common::{
     time_getter::TimeGetter,
 };
 use consensus::ConsensusPoSError;
-use crypto::vrf::VRFPrivateKey;
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
@@ -118,14 +117,13 @@ impl BlockProduction {
 
     async fn pull_consensus_data(
         &self,
-        stake_private_key: &Option<VRFPrivateKey>,
+        input_data: Option<GenerateBlockInputData>,
         block_timestamp: BlockTimestamp,
     ) -> Result<(ConsensusData, GenBlockIndex), BlockProductionError> {
         let consensus_data = self
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
-                let stake_private_key = stake_private_key.clone();
 
                 move |this| {
                     let best_block_index = this
@@ -165,7 +163,7 @@ impl BlockProduction {
                         &chain_config,
                         &best_block_index,
                         sealed_epoch_randomness,
-                        stake_private_key,
+                        input_data,
                         block_timestamp,
                         block_height,
                         get_ancestor,
@@ -203,22 +201,17 @@ impl BlockProduction {
     /// remnants in the job manager.
     pub async fn produce_block(
         &self,
-        stake_private_key: Option<VRFPrivateKey>,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(
-            stake_private_key,
-            reward_destination,
-            transactions_source,
-            None,
-        )
-        .await
+        self.produce_block_with_custom_id(input_data, reward_destination, transactions_source, None)
+            .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
-        stake_private_key: Option<VRFPrivateKey>,
+        input_data: Option<GenerateBlockInputData>,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
@@ -227,7 +220,7 @@ impl BlockProduction {
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let (_, tip_at_start) = self.pull_consensus_data(&stake_private_key, timestamp).await?;
+        let (_, tip_at_start) = self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -241,7 +234,7 @@ impl BlockProduction {
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
             let (consensus_data, current_tip_index) =
-                self.pull_consensus_data(&stake_private_key, timestamp).await?;
+                self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(

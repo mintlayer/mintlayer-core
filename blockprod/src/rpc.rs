@@ -16,6 +16,7 @@
 //! Block production subsystem RPC handler
 
 use common::{
+    chain::block::consensus_data::GenerateBlockInputData,
     chain::Block,
     chain::{Destination, SignedTransaction},
 };
@@ -43,7 +44,7 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
-        stake_private_key_hex: Option<String>,
+        input_data_hex: Option<String>,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String>;
@@ -72,14 +73,14 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
-        _stake_private_key_hex: Option<String>,
+        input_data_hex: Option<String>,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String> {
-        // TODO stake private key will be provided in a new struct
-        // along with other fields, so decode properly once all other
-        // fields are working
-        let stake_private_key = None;
+        let input_data = input_data_hex
+            .map(|input_data| GenerateBlockInputData::hex_decode_all(input_data))
+            .transpose()
+            .map_err(rpc::Error::to_call_error)?;
 
         let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
@@ -96,7 +97,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(stake_private_key, reward_destination, signed_transactions)
+                this.generate_block(input_data, reward_destination, signed_transactions)
             })
             .await,
         )?;

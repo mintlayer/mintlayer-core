@@ -27,17 +27,15 @@ use chainstate_types::{
 };
 use common::{
     chain::block::{
-        consensus_data::{PoSData, PoWData},
+        consensus_data::{GenerateBlockInputData, PoSData, PoWData},
         ConsensusData,
     },
     chain::{
         block::{timestamp::BlockTimestamp, BlockHeader},
         ChainConfig, RequiredConsensus,
     },
-    primitives::{BlockHeight, Id},
-    Uint256,
+    primitives::BlockHeight,
 };
-use crypto::vrf::VRFPrivateKey;
 
 pub use crate::{
     error::ConsensusVerificationError,
@@ -66,7 +64,7 @@ pub fn generate_consensus_data<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
     sealed_epoch_randomness: Option<EpochData>,
-    stake_private_key: Option<VRFPrivateKey>,
+    input_data: Option<GenerateBlockInputData>,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
@@ -77,14 +75,11 @@ where
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
         RequiredConsensus::PoS(pos_status) => {
-            // TODO
-            let kernel_inputs = vec![];
-
-            // TODO
-            let kernel_witness = vec![];
-
-            // TODO
-            let pool_id = Id::new(Uint256::ONE.into());
+            let pos_input_data = match input_data {
+                Some(GenerateBlockInputData::PoS(pos_input_data)) => pos_input_data,
+                Some(GenerateBlockInputData::PoW) => Err(ConsensusPoSError::PoWInputDataProvided)?,
+                None => Err(ConsensusPoSError::NoInputDataProvided)?
+            };
 
             let vrf_data = {
                 let sealed_epoch_randomness =
@@ -96,9 +91,7 @@ where
                     block_timestamp,
                 );
 
-                stake_private_key
-                    .ok_or(ConsensusPoSError::StakePrivateKeyNotProvided)?
-                    .produce_vrf_data(transcript.into())
+                pos_input_data.vrf_private_key().produce_vrf_data(transcript.into())
             };
 
             let target_required = calculate_target_required_from_block_index(
@@ -109,9 +102,9 @@ where
             )?;
 
             Ok(ConsensusData::PoS(Box::new(PoSData::new(
-                kernel_inputs,
-                kernel_witness,
-                pool_id,
+                vec![pos_input_data.kernel_input().clone()],
+                vec![pos_input_data.kernel_witness().clone()],
+                pos_input_data.pool_id(),
                 vrf_data,
                 target_required,
             ))))

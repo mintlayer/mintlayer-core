@@ -21,10 +21,10 @@ use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 
+use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
-        signed_block_header::SignedBlockHeader,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
         TxMainChainIndex,
