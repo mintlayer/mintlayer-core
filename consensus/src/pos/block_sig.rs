@@ -77,14 +77,14 @@ pub fn check_block_signature(
 
     let signature_in_header = header.signature_data();
 
-    let signature = match signature_in_header {
+    let sig_data = match signature_in_header {
         BlockHeaderSignature::None => {
             return Err(BlockSignatureError::BlockSignatureNotFound(header.get_id()))
         }
         BlockHeaderSignature::HeaderSignature(sig_data) => sig_data,
     };
 
-    if !public_key.verify_message(signature.signature(), &header.header().encode()) {
+    if !public_key.verify_message(sig_data.signature(), &header.header().encode()) {
         return Err(BlockSignatureError::BadSignature(header.get_id()));
     }
 
