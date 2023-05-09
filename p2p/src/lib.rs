@@ -337,6 +337,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
