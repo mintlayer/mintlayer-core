@@ -119,6 +119,8 @@ pub async fn initialize(
     let rpc_config = node_config.rpc.unwrap_or_default();
 
     // RPC subsystem
+    let rpc_http_address;
+    let rpc_websocket_address;
     if rpc_config.http_enabled.unwrap_or(true) || rpc_config.ws_enabled.unwrap_or(true) {
         let rpc_creds = RpcCreds::new(
             &data_dir,
@@ -137,17 +139,28 @@ pub async fn initialize(
             .register(mempool.clone().into_rpc())
             .register(p2p.clone().into_rpc())
             .build();
-        let rpc = rpc.await;
-        let _rpc = manager.add_subsystem("rpc", rpc?);
-    }
+        let rpc = rpc.await?;
+        rpc_http_address = rpc.http_address().cloned();
+        rpc_websocket_address = rpc.websocket_address().cloned();
+        let _rpc = manager.add_subsystem("rpc", rpc);
+    } else {
+        rpc_http_address = None;
+        rpc_websocket_address = None;
+    };
 
     if let Some(sender) = node_controller {
+        let runtime_info = crate::node_controller::RuntimeInfo {
+            rpc_http_address,
+            rpc_websocket_address,
+        };
+
         let controller = NodeController {
             shutdown_trigger: manager.make_shutdown_trigger(),
             chainstate: chainstate.clone(),
             block_prod: block_prod.clone(),
             mempool: mempool.clone(),
             p2p: p2p.clone(),
+            runtime_info,
         };
         sender.send(controller).expect("RemoteController channel closed");
     }

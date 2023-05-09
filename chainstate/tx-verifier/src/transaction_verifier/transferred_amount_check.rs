@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use common::{
     amount_sum,
     chain::{
-        block::BlockRewardTransactable,
+        block::{BlockRewardTransactable, ConsensusData},
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
         Block, OutPointSourceId, Transaction, TxInput, TxOutput,
@@ -107,11 +107,12 @@ fn get_output_value<P: PoSAccountingView>(
         }
         TxOutput::StakePool(data) => OutputValue::Coin(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pool_balance = pos_accounting_view
-                .get_pool_balance(*pool_id)
+            let pledge_amount = pos_accounting_view
+                .get_pool_data(*pool_id)
                 .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::PoolBalanceNotFound(*pool_id))?;
-            OutputValue::Coin(pool_balance)
+                .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                .pledge_amount();
+            OutputValue::Coin(pledge_amount)
         }
         TxOutput::DecommissionPool(v, _, _, _) => OutputValue::Coin(*v),
     };
@@ -251,6 +252,7 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
     pos_accounting_view: &P,
     block_reward_transactable: &BlockRewardTransactable,
     block_id: Id<Block>,
+    consensus_data: &ConsensusData,
     total_fees: Fee,
     block_subsidy_at_height: Subsidy,
 ) -> Result<(), ConnectTransactionError> {
@@ -278,15 +280,277 @@ pub fn check_transferred_amount_in_reward<U: UtxosView, P: PoSAccountingView>(
         },
     )?;
 
-    let max_allowed_outputs_total =
-        amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
-            .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?;
+    match consensus_data {
+        ConsensusData::None | ConsensusData::PoW(_) => {
+            let max_allowed_outputs_total =
+                amount_sum!(inputs_total, block_subsidy_at_height.0, total_fees.0)
+                    .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block_id))?;
+            ensure!(
+                outputs_total <= max_allowed_outputs_total,
+                ConnectTransactionError::AttemptToPrintMoney(
+                    max_allowed_outputs_total,
+                    outputs_total
+                )
+            );
+        }
+        ConsensusData::PoS(_) => {
+            ensure!(
+                outputs_total == inputs_total,
+                ConnectTransactionError::BlockRewardInputOutputMismatch(
+                    inputs_total,
+                    outputs_total
+                )
+            );
+        }
+    };
 
-    ensure!(
-        outputs_total <= max_allowed_outputs_total,
-        ConnectTransactionError::AttemptToPrintMoney(inputs_total, outputs_total,)
-    );
     Ok(())
 }
 
-// TODO: unit tests
+// TODO: add more tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::{
+        chain::{
+            block::consensus_data::{PoSData, PoWData},
+            stakelock::StakePoolData,
+            timelock::OutputTimeLock,
+            Destination, GenBlock, OutPoint, PoolId,
+        },
+        primitives::{per_thousand::PerThousand, Compact, H256},
+    };
+    use crypto::{
+        random::Rng,
+        vrf::{transcript::TranscriptAssembler, VRFKeyKind, VRFPrivateKey},
+    };
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_block_reward_pow(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let input_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        let input_utxo =
+            TxOutput::Transfer(OutputValue::Coin(input_amount), Destination::AnyoneCanSpend);
+        let utxo_db = utxo::UtxosDBInMemoryImpl::new(
+            Id::<GenBlock>::new(H256::zero()),
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                utxo::Utxo::new_for_mempool(input_utxo, false),
+            )]),
+        );
+        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::new();
+        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
+
+        let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+        let subsidy = Subsidy(Amount::from_atoms(rng.gen_range(0..100_000)));
+        let total_input_value = ((input_amount + fee.0).unwrap() + subsidy.0).unwrap();
+
+        let check = |output_value| {
+            let inputs = vec![outpoint.clone().into()];
+            let outputs = vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(output_value),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            )];
+            let block_reward = BlockRewardTransactable::new(Some(&inputs), Some(&outputs), None);
+            check_transferred_amount_in_reward(
+                &utxo_db,
+                &pos_accounting_db,
+                &block_reward,
+                Id::<Block>::new(H256::zero()),
+                &ConsensusData::PoW(PoWData::new(Compact(1), 1)),
+                fee,
+                subsidy,
+            )
+        };
+
+        // invalid case min case
+        {
+            let invalid_output_value = Amount::from_atoms(total_input_value.into_atoms() + 1);
+            let result = check(invalid_output_value);
+            assert_eq!(
+                result,
+                Err(ConnectTransactionError::AttemptToPrintMoney(
+                    total_input_value,
+                    invalid_output_value
+                ))
+            );
+        }
+
+        // invalid random case
+        {
+            let invalid_output_value =
+                Amount::from_atoms(rng.gen_range((total_input_value.into_atoms() + 1)..u128::MAX));
+            let result = check(invalid_output_value);
+            assert_eq!(
+                result,
+                Err(ConnectTransactionError::AttemptToPrintMoney(
+                    total_input_value,
+                    invalid_output_value
+                ))
+            );
+        }
+
+        // valid max case
+        {
+            let result = check(total_input_value);
+            assert_eq!(result, Ok(()));
+        }
+
+        // valid random case
+        {
+            let valid_output_value =
+                Amount::from_atoms(rng.gen_range(0..total_input_value.into_atoms()));
+            let result = check(valid_output_value);
+            assert_eq!(result, Ok(()));
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_block_reward_pos(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let pool_id = PoolId::new(H256::zero());
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        let stake_pool_data = StakePoolData::new(
+            pledge_amount,
+            Destination::AnyoneCanSpend,
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        );
+        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data.clone()));
+        let utxo_db = utxo::UtxosDBInMemoryImpl::new(
+            Id::<GenBlock>::new(H256::zero()),
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                utxo::Utxo::new_for_mempool(input_utxo, false),
+            )]),
+        );
+        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::from([(pool_id, stake_pool_data.into())]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
+
+        let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+        let subsidy = Subsidy(Amount::from_atoms(rng.gen_range(0..100_000)));
+
+        let inputs = vec![outpoint.into()];
+        let outputs = vec![TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id)];
+        let block_reward = BlockRewardTransactable::new(Some(&inputs), Some(&outputs), None);
+        check_transferred_amount_in_reward(
+            &utxo_db,
+            &pos_accounting_db,
+            &block_reward,
+            Id::<Block>::new(H256::zero()),
+            &ConsensusData::PoS(Box::new(PoSData::new(
+                vec![],
+                vec![],
+                pool_id,
+                vrf_data,
+                Compact(1),
+            ))),
+            fee,
+            subsidy,
+        )
+        .unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_block_reward_pos_mismatch(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let pool_id_1 = PoolId::new(H256::random_using(&mut rng));
+        let pool_id_2 = PoolId::new(H256::random_using(&mut rng));
+
+        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
+        let pledge_amount_2 = Amount::from_atoms(rng.gen_range(0..100_000));
+        let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
+        let stake_pool_data_1 = StakePoolData::new(
+            pledge_amount_1,
+            Destination::AnyoneCanSpend,
+            vrf_pk.clone(),
+            Destination::AnyoneCanSpend,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        );
+        let stake_pool_data_2 = StakePoolData::new(
+            pledge_amount_2,
+            Destination::AnyoneCanSpend,
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        );
+        let input_utxo = TxOutput::StakePool(Box::new(stake_pool_data_1.clone()));
+        let utxo_db = utxo::UtxosDBInMemoryImpl::new(
+            Id::<GenBlock>::new(H256::zero()),
+            BTreeMap::from_iter([(
+                outpoint.clone(),
+                utxo::Utxo::new_for_mempool(input_utxo, false),
+            )]),
+        );
+        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::from([
+                (pool_id_1, stake_pool_data_1.into()),
+                (pool_id_2, stake_pool_data_2.into()),
+            ]),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        );
+        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
+
+        let fee = Fee(Amount::from_atoms(rng.gen_range(0..100_000)));
+        let subsidy = Subsidy(Amount::from_atoms(rng.gen_range(0..100_000)));
+
+        let inputs = vec![outpoint.into()];
+        let outputs = vec![TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, pool_id_2)];
+        let block_reward = BlockRewardTransactable::new(Some(&inputs), Some(&outputs), None);
+        let result = check_transferred_amount_in_reward(
+            &utxo_db,
+            &pos_accounting_db,
+            &block_reward,
+            Id::<Block>::new(H256::zero()),
+            &ConsensusData::PoS(Box::new(PoSData::new(
+                vec![],
+                vec![],
+                pool_id_1,
+                vrf_data,
+                Compact(1),
+            ))),
+            fee,
+            subsidy,
+        )
+        .unwrap_err();
+        assert_eq!(
+            result,
+            ConnectTransactionError::BlockRewardInputOutputMismatch(
+                pledge_amount_1,
+                pledge_amount_2
+            )
+        )
+    }
+}

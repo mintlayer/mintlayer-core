@@ -13,8 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common::chain::ChainConfig;
 use tokio::sync::{mpsc, oneshot};
-use wallet_controller::RpcController;
+use wallet_controller::{NodeRpcClient, RpcController};
 
 use crate::{
     commands::{handle_wallet_command, ConsoleCommand, WalletCommand},
@@ -29,27 +32,44 @@ pub enum Event {
     },
 }
 
-async fn handle_event(controller: &mut RpcController, event: Event) {
+async fn handle_event(
+    chain_config: &Arc<ChainConfig>,
+    rpc_client: &NodeRpcClient,
+    controller_opt: &mut Option<RpcController>,
+    event: Event,
+) {
     match event {
         Event::HandleCommand { command, res_tx } => {
-            let res = handle_wallet_command(controller, command).await;
+            let res =
+                handle_wallet_command(chain_config, rpc_client, controller_opt, command).await;
             let _ = res_tx.send(res);
         }
     }
 }
 
-pub async fn run(mut controller: RpcController, mut event_rx: mpsc::UnboundedReceiver<Event>) {
+pub async fn run(
+    chain_config: &Arc<ChainConfig>,
+    rpc_client: &NodeRpcClient,
+    mut controller_opt: Option<RpcController>,
+    mut event_rx: mpsc::UnboundedReceiver<Event>,
+) {
     loop {
+        let sync_task = async {
+            match controller_opt.as_mut() {
+                Some(controller) => controller.run_sync().await,
+                None => std::future::pending().await,
+            }
+        };
         tokio::select! {
             event_opt = event_rx.recv() => {
                 match event_opt {
                     Some(event) => {
-                        handle_event(&mut controller, event).await;
+                        handle_event(chain_config, rpc_client, &mut controller_opt, event).await;
                     },
                     None => return,
                 }
             }
-            _ = controller.run_sync() => {}
+            _ = sync_task => {}
         }
     }
 }

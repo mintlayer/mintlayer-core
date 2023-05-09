@@ -27,10 +27,13 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 use pos_accounting::PoSAccountingView;
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
-    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
-    Fee, Subsidy, TransactionVerifier,
+use tx_verifier::{
+    transaction_verifier::{
+        config::TransactionVerifierConfig, error::ConnectTransactionError, flush::flush_to_storage,
+        storage::TransactionVerifierStorageRef, Fee, Subsidy, TransactionSourceForConnect,
+        TransactionVerifier,
+    },
+    TransactionSource,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -87,18 +90,16 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         let total_fees = block
             .transactions()
             .iter()
-            .enumerate()
-            .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
+            .try_fold(Amount::from_atoms(0), |total, tx| {
                 let mut tx_verifier = base_tx_verifier.derive_child();
                 let fee = tx_verifier
-                    .connect_transactable(
-                        block_index,
-                        BlockTransactableWithIndexRef::Transaction(
-                            block,
-                            tx_num,
-                            take_front_tx_index(&mut tx_indices),
-                        ),
+                    .connect_transaction(
+                        &TransactionSourceForConnect::Chain {
+                            new_block_index: block_index,
+                        },
+                        tx,
                         &median_time_past,
+                        take_front_tx_index(&mut tx_indices),
                     )
                     .map_err(BlockError::StateUpdateFailed)
                     .log_err()?;
@@ -107,7 +108,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                     .map_err(BlockError::TransactionVerifierError)
                     .log_err()?;
 
-                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
+                (total + fee.0).ok_or_else(|| {
                     BlockError::StateUpdateFailed(
                         ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()),
                     )
@@ -119,14 +120,14 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
-        let reward_fees = base_tx_verifier
-            .connect_transactable(
+        base_tx_verifier
+            .connect_block_reward(
                 block_index,
-                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
-                &median_time_past,
+                block.block_reward_transactable(),
+                Fee(total_fees),
+                block_reward_tx_index,
             )
             .log_err()?;
-        debug_assert!(reward_fees.is_none());
 
         base_tx_verifier.set_best_block(block.get_id().into());
 
@@ -155,13 +156,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block
             .transactions()
             .iter()
-            .enumerate()
             .rev()
-            .try_for_each(|(tx_num, _)| {
+            .try_for_each(|tx| {
                 let mut tx_verifier = base_tx_verifier.derive_child();
 
                 tx_verifier
-                    .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
+                    .disconnect_transaction(&TransactionSource::Chain(block.get_id()), tx)
                     .log_err()?;
 
                 let consumed_cache = tx_verifier.consume()?;
@@ -171,9 +171,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
             .log_err()?;
 
         let mut tx_verifier = base_tx_verifier.derive_child();
-        tx_verifier
-            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
-            .log_err()?;
+        tx_verifier.disconnect_block_reward(block).log_err()?;
         let consumed_cache = tx_verifier.consume()?;
         flush_to_storage(&mut base_tx_verifier, consumed_cache)?;
 

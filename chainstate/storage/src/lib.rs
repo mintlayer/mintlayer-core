@@ -23,6 +23,7 @@ pub mod schema;
 
 use std::collections::BTreeMap;
 
+use common::chain::block::signed_block_header::SignedBlockHeader;
 pub use internal::Store;
 
 use chainstate_types::{BlockIndex, EpochData};
@@ -70,6 +71,8 @@ pub trait BlockchainStorageRead:
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+
+    fn get_block_header(&self, id: Id<Block>) -> crate::Result<Option<SignedBlockHeader>>;
 
     fn get_is_mainchain_tx_index_enabled(&self) -> crate::Result<Option<bool>>;
 

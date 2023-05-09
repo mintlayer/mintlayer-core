@@ -25,7 +25,7 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, IncreasePoolBalanceUndo, PoSAccountingOperations,
+            DelegationDataUndo, IncreasePledgeAmountUndo, PoSAccountingOperations,
             PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
@@ -82,17 +82,30 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         }))
     }
 
-    fn increase_pool_balance(
+    fn increase_pool_pledge_amount(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,
     ) -> Result<PoSAccountingUndo, Error> {
+        let pool_data = self
+            .store
+            .get_pool_data(pool_id)?
+            .ok_or(Error::IncreasePledgeAmountOfNonexistingPool)?;
+        let new_pool_data = PoolData::new(
+            pool_data.decommission_destination().clone(),
+            (pool_data.pledge_amount() + amount_to_add).ok_or(Error::PledgeAmountAdditionError)?,
+            pool_data.vrf_public_key().clone(),
+            pool_data.margin_ratio_per_thousand(),
+            pool_data.cost_per_block(),
+        );
+        self.store.set_pool_data(pool_id, &new_pool_data)?;
+
         self.add_balance_to_pool(pool_id, amount_to_add)?;
 
-        Ok(PoSAccountingUndo::IncreasePoolBalance(
-            IncreasePoolBalanceUndo {
+        Ok(PoSAccountingUndo::IncreasePledgeAmount(
+            IncreasePledgeAmountUndo {
                 pool_id,
-                amount_added: amount_to_add,
+                data_undo: PoolDataUndo::Data(Box::new(pool_data)),
             },
         ))
     }
@@ -180,7 +193,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
             }
-            PoSAccountingUndo::IncreasePoolBalance(undo) => self.undo_increase_pool_balance(undo),
+            PoSAccountingUndo::IncreasePledgeAmount(undo) => self.undo_increase_pledge_amount(undo),
         }
     }
 }
@@ -295,11 +308,22 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         Ok(())
     }
 
-    fn undo_increase_pool_balance(
-        &mut self,
-        undo_data: IncreasePoolBalanceUndo,
-    ) -> Result<(), Error> {
-        self.sub_balance_from_pool(undo_data.pool_id, undo_data.amount_added)?;
+    fn undo_increase_pledge_amount(&mut self, undo: IncreasePledgeAmountUndo) -> Result<(), Error> {
+        let data_undo = match undo.data_undo {
+            PoolDataUndo::Data(v) => v,
+            PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
+        };
+
+        if self.store.get_pool_balance(undo.pool_id)?.is_some() {
+            return Err(Error::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound);
+        }
+
+        if self.store.get_pool_data(undo.pool_id)?.is_some() {
+            return Err(Error::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound);
+        }
+
+        self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
+        self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
     }

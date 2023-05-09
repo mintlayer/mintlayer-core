@@ -19,6 +19,7 @@ use std::{
 };
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
+use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::{NodeType, P2pConfig},
@@ -35,7 +36,7 @@ use crate::{
     },
     peer_manager::{tests::send_and_sync, PeerManager},
     protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::{peerdb_inmemory_store, P2pTokioTestTimeGetter},
+    testing_utils::peerdb_inmemory_store,
     types::peer_id::PeerId,
 };
 
@@ -74,7 +75,7 @@ async fn ping_timeout() {
     let (conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
     let (_peer_tx, peer_rx) =
         tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
-    let time_getter = P2pTokioTestTimeGetter::new();
+    let time_getter = P2pBasicTestTimeGetter::new();
     let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
         vec![],
         cmd_tx,
@@ -121,7 +122,7 @@ async fn ping_timeout() {
 
     // Receive ping requests and send responses normally
     for _ in 0..5 {
-        time_getter.advance_time(ping_check_period).await;
+        time_getter.advance_time(ping_check_period);
 
         let event = expect_recv!(&mut cmd_rx);
         match event {
@@ -142,7 +143,7 @@ async fn ping_timeout() {
     }
 
     // Receive one more ping request but do not send a ping response
-    time_getter.advance_time(ping_check_period).await;
+    time_getter.advance_time(ping_check_period);
     let event = expect_recv!(&mut cmd_rx);
     match event {
         Command::SendMessage {
@@ -152,7 +153,7 @@ async fn ping_timeout() {
         _ => panic!("unexpected event: {event:?}"),
     }
 
-    time_getter.advance_time(ping_timeout).await;
+    time_getter.advance_time(ping_timeout);
 
     // PeerManager should ask backend to close connection
     let event = expect_recv!(&mut cmd_rx);

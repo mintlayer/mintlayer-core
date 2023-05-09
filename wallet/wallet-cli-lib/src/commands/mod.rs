@@ -13,18 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
-use common::primitives::{BlockHeight, H256};
+use common::{
+    chain::ChainConfig,
+    primitives::{BlockHeight, H256},
+};
 use serialization::hex::HexEncode;
-use wallet_controller::{PeerId, RpcController};
+use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
 use crate::errors::WalletCliError;
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
+    // TODO: Add optional password
+    /// Create new wallet
+    CreateWallet {
+        /// File path
+        wallet_path: PathBuf,
+
+        /// Mnemonic phrase (12, 15, or 24 words as a single quoted argument). If not specified, a new mnemonic phrase is generated and printed.
+        mnemonic: Option<String>,
+    },
+
+    /// Open exiting wallet
+    OpenWallet {
+        /// File path
+        wallet_path: PathBuf,
+    },
+
+    /// Close wallet file
+    CloseWallet,
+
     /// Returns the node chainstate
     ChainstateInfo,
 
@@ -117,31 +139,103 @@ pub enum ConsoleCommand {
 }
 
 pub async fn handle_wallet_command(
-    controller: &mut RpcController,
+    chain_config: &Arc<ChainConfig>,
+    rpc_client: &NodeRpcClient,
+    controller_opt: &mut Option<RpcController>,
     command: WalletCommand,
 ) -> Result<ConsoleCommand, WalletCliError> {
     match command {
+        WalletCommand::CreateWallet {
+            wallet_path,
+            mnemonic,
+        } => {
+            utils::ensure!(
+                controller_opt.is_none(),
+                WalletCliError::WalletFileAlreadyOpen
+            );
+
+            // TODO: Support other languages
+            let language = wallet::wallet::Language::English;
+            let need_mnemonic_backup = mnemonic.is_none();
+            let mnemonic = match &mnemonic {
+                Some(mnemonic) => wallet_controller::mnemonic::parse_mnemonic(language, mnemonic)
+                    .map_err(WalletCliError::InvalidMnemonic)?,
+                None => wallet_controller::mnemonic::generate_new_mnemonic(language),
+            };
+
+            let wallet = RpcController::create_wallet(
+                Arc::clone(chain_config),
+                wallet_path,
+                mnemonic.clone(),
+                None,
+            )
+            .map_err(WalletCliError::Controller)?;
+
+            *controller_opt = Some(RpcController::new(
+                Arc::clone(chain_config),
+                rpc_client.clone(),
+                wallet,
+            ));
+
+            let msg = if need_mnemonic_backup {
+                format!(
+                    "New wallet created successfully\nYour mnemonic: {}\nPlease write it somewhere safe to be able to restore your wallet."
+                , mnemonic)
+            } else {
+                "New wallet created successfully".to_owned()
+            };
+            Ok(ConsoleCommand::Print(msg))
+        }
+
+        WalletCommand::OpenWallet { wallet_path } => {
+            utils::ensure!(
+                controller_opt.is_none(),
+                WalletCliError::WalletFileAlreadyOpen
+            );
+
+            let wallet = RpcController::open_wallet(Arc::clone(chain_config), wallet_path)
+                .map_err(WalletCliError::Controller)?;
+
+            *controller_opt = Some(RpcController::new(
+                Arc::clone(chain_config),
+                rpc_client.clone(),
+                wallet,
+            ));
+
+            Ok(ConsoleCommand::Print(
+                "Wallet loaded successfully".to_owned(),
+            ))
+        }
+
+        WalletCommand::CloseWallet => {
+            utils::ensure!(controller_opt.is_some(), WalletCliError::NoWallet);
+
+            *controller_opt = None;
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
         WalletCommand::ChainstateInfo => {
-            let info = controller.chainstate_info().await.map_err(WalletCliError::Controller)?;
+            let info = rpc_client.chainstate_info().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(format!("{info:?}")))
         }
 
         WalletCommand::BestBlock => {
-            let id = controller.get_best_block_id().await.map_err(WalletCliError::Controller)?;
+            let id = rpc_client.get_best_block_id().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(id.hex_encode()))
         }
 
         WalletCommand::BestBlockHeight => {
             let height =
-                controller.get_best_block_height().await.map_err(WalletCliError::Controller)?;
+                rpc_client.get_best_block_height().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(height.to_string()))
         }
 
         WalletCommand::BlockHash { height } => {
-            let hash = controller
+            let hash = rpc_client
                 .get_block_id_at_height(height)
                 .await
-                .map_err(WalletCliError::Controller)?;
+                .map_err(WalletCliError::RpcError)?;
             match hash {
                 Some(id) => Ok(ConsoleCommand::Print(id.hex_encode())),
                 None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -151,8 +245,7 @@ pub async fn handle_wallet_command(
         WalletCommand::GetBlock { hash } => {
             let hash =
                 H256::from_str(&hash).map_err(|e| WalletCliError::InvalidInput(e.to_string()))?;
-            let hash =
-                controller.get_block(hash.into()).await.map_err(WalletCliError::Controller)?;
+            let hash = rpc_client.get_block(hash.into()).await.map_err(WalletCliError::RpcError)?;
             match hash {
                 Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
                 None => Ok(ConsoleCommand::Print("Not found".to_owned())),
@@ -160,17 +253,17 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::SubmitBlock { block } => {
-            controller.submit_block(block).await.map_err(WalletCliError::Controller)?;
+            rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
                 "The block was submitted successfully".to_owned(),
             ))
         }
 
         WalletCommand::SubmitTransaction { transaction } => {
-            controller
+            rpc_client
                 .submit_transaction(transaction)
                 .await
-                .map_err(WalletCliError::Controller)?;
+                .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
                 "The transaction was submitted successfully".to_owned(),
             ))
@@ -179,45 +272,45 @@ pub async fn handle_wallet_command(
         WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
         WalletCommand::NodeVersion => {
-            let version = controller.node_version().await.map_err(WalletCliError::Controller)?;
+            let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(version))
         }
 
         WalletCommand::NodeShutdown => {
-            controller.node_shutdown().await.map_err(WalletCliError::Controller)?;
+            rpc_client.node_shutdown().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
         WalletCommand::Connect { address } => {
-            controller.p2p_connect(address).await.map_err(WalletCliError::Controller)?;
+            rpc_client.p2p_connect(address).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::Disconnect { peer_id } => {
-            controller.p2p_disconnect(peer_id).await.map_err(WalletCliError::Controller)?;
+            rpc_client.p2p_disconnect(peer_id).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::PeerCount => {
             let peer_count =
-                controller.p2p_get_peer_count().await.map_err(WalletCliError::Controller)?;
+                rpc_client.p2p_get_peer_count().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(peer_count.to_string()))
         }
         WalletCommand::ConnectedPeers => {
             let peers =
-                controller.p2p_get_connected_peers().await.map_err(WalletCliError::Controller)?;
+                rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(format!("{peers:?}")))
         }
         WalletCommand::AddReservedPeer { address } => {
-            controller
+            rpc_client
                 .p2p_add_reserved_node(address)
                 .await
-                .map_err(WalletCliError::Controller)?;
+                .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
         WalletCommand::RemoveReservedPeer { address } => {
-            controller
+            rpc_client
                 .p2p_remove_reserved_node(address)
                 .await
-                .map_err(WalletCliError::Controller)?;
+                .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 

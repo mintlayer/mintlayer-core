@@ -65,9 +65,9 @@ pub struct SpendFromShareUndo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub struct IncreasePoolBalanceUndo {
+pub struct IncreasePledgeAmountUndo {
     pub(crate) pool_id: PoolId,
-    pub(crate) amount_added: Amount,
+    pub(crate) data_undo: PoolDataUndo,
 }
 
 #[must_use]
@@ -78,7 +78,7 @@ pub enum PoSAccountingUndo {
     CreateDelegationId(CreateDelegationIdUndo),
     DelegateStaking(DelegateStakingUndo),
     SpendFromShare(SpendFromShareUndo),
-    IncreasePoolBalance(IncreasePoolBalanceUndo),
+    IncreasePledgeAmount(IncreasePledgeAmountUndo),
 }
 
 use super::{delegation::DelegationData, pool_data::PoolData};
@@ -92,7 +92,7 @@ pub trait PoSAccountingOperations {
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;
 
-    fn increase_pool_balance(
+    fn increase_pool_pledge_amount(
         &mut self,
         pool_id: PoolId,
         amount_to_add: Amount,

@@ -27,10 +27,10 @@ use crate::{
 };
 use chainstate_storage::BlockchainStorage;
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
-use common::chain::TxOutput;
+use common::chain::{block::signed_block_header::SignedBlockHeader, TxOutput};
 use common::{
     chain::{
-        block::{Block, BlockHeader, BlockReward, GenBlock},
+        block::{Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
         DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
@@ -68,7 +68,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::ProcessBlockError)
     }
 
-    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
+    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
         self.chainstate
             .preliminary_header_check(header)
             .map_err(ChainstateError::ProcessBlockError)
@@ -129,6 +129,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
+        self.chainstate
+            .query()
+            .map_err(ChainstateError::from)?
+            .get_block_header(block_id)
+            .map_err(ChainstateError::FailedToReadProperty)
+    }
+
     fn get_locator(&self) -> Result<Locator, ChainstateError> {
         self.chainstate
             .query()
@@ -149,7 +160,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         &self,
         locator: Locator,
         header_count_limit: usize,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -159,8 +170,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
     fn filter_already_existing_blocks(
         &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -179,7 +190,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(best_block_index.block_height())
     }
 
-    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+    fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError> {
         self.chainstate
             .query()
             .map_err(ChainstateError::from)?
@@ -550,6 +561,8 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     }
 }
 
+// TODO: remove this function. The value of an output cannot be generalized and exposed from ChainstateInterface in such way
+// because it can be invalid for certain contexts.
 fn get_output_coin_amount(
     pos_accounting_view: &impl PoSAccountingView,
     output: &TxOutput,
@@ -560,17 +573,18 @@ fn get_output_coin_amount(
         }
         TxOutput::StakePool(data) => Some(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pool_balance = pos_accounting_view
-                .get_pool_balance(*pool_id)
+            let pledge_amount = pos_accounting_view
+                .get_pool_data(*pool_id)
                 .map_err(|_| {
-                    ChainstateError::FailedToReadProperty(PropertyQueryError::PoolBalanceNotFound(
-                        *pool_id,
-                    ))
+                    ChainstateError::FailedToReadProperty(
+                        PropertyQueryError::StakePoolDataNotFound(*pool_id),
+                    )
                 })?
                 .ok_or(ChainstateError::FailedToReadProperty(
-                    PropertyQueryError::PoolBalanceNotFound(*pool_id),
-                ))?;
-            Some(pool_balance)
+                    PropertyQueryError::StakePoolDataNotFound(*pool_id),
+                ))?
+                .pledge_amount();
+            Some(pledge_amount)
         }
         TxOutput::DecommissionPool(v, _, _, _) => Some(*v),
     };

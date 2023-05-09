@@ -16,6 +16,7 @@
 use std::{sync::Arc, time::Duration};
 
 use common::primitives::user_agent::mintlayer_core_user_agent;
+use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::P2pConfig,
@@ -23,8 +24,7 @@ use crate::{
     net::AsBannableAddress,
     peer_manager::peerdb::storage::{PeerDbStorageRead, PeerDbTransactional},
     testing_utils::{
-        peerdb_inmemory_store, test_p2p_config, P2pBasicTestTimeGetter, RandomAddressMaker,
-        TestTcpAddressMaker,
+        peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
     },
 };
 

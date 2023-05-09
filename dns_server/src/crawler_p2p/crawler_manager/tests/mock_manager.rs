@@ -25,6 +25,8 @@ use std::{
 };
 
 use async_trait::async_trait;
+use tokio::{sync::mpsc, task::JoinHandle};
+
 use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
@@ -39,10 +41,9 @@ use p2p::{
         ConnectivityService, NetworkingService, SyncingEventReceiver,
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
-    testing_utils::P2pTokioTestTimeGetter,
     types::peer_id::PeerId,
 };
-use tokio::{sync::mpsc, task::JoinHandle};
+use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     crawler_p2p::crawler_manager::{
@@ -211,7 +212,7 @@ pub fn test_crawler(
     CrawlerManager<MockNetworkingService, DnsServerStorageImpl<storage::inmemory::InMemory>>,
     MockStateRef,
     mpsc::UnboundedReceiver<DnsServerCommand>,
-    P2pTokioTestTimeGetter,
+    P2pBasicTestTimeGetter,
 ) {
     let (conn_tx, conn_rx) = mpsc::unbounded_channel();
     let reserved_nodes = reserved_nodes.iter().map(ToString::to_string).collect();
@@ -240,7 +241,10 @@ pub fn test_crawler(
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
     let chain_config = Arc::new(common::chain::config::create_mainnet());
 
+    let time_getter = P2pBasicTestTimeGetter::new();
+
     let crawler = CrawlerManager::<MockNetworkingService, _>::new(
+        time_getter.get_time_getter(),
         crawler_config,
         chain_config,
         conn,
@@ -249,8 +253,6 @@ pub fn test_crawler(
         dns_server_cmd_tx,
     )
     .unwrap();
-
-    let time_getter = P2pTokioTestTimeGetter::new();
 
     (crawler, state, dns_server_cmd_rx, time_getter)
 }
@@ -262,17 +264,16 @@ pub async fn advance_time(
         MockNetworkingService,
         DnsServerStorageImpl<storage::inmemory::InMemory>,
     >,
-    time_getter: &P2pTokioTestTimeGetter,
+    time_getter: &P2pBasicTestTimeGetter,
     step: Duration,
     count: u32,
 ) {
     for _ in 0..count {
-        tokio::select! {
-            biased;
-            _ = crawler.run() => {
-                unreachable!("run should not return")
-            }
-            _ = time_getter.advance_time(step) => {}
-        }
+        time_getter.advance_time(step);
+        crawler.heartbeat();
     }
+
+    tokio::time::timeout(Duration::from_millis(10), crawler.run())
+        .await
+        .expect_err("run should not return");
 }

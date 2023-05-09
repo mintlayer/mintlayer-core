@@ -13,26 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[macro_export]
-macro_rules! cli_println {
-    ($context:expr, $($arg:tt)*) => {
-        {
-            ConsoleContext::begin_output($context);
-            println!($($arg)*);
-        }
-    };
-}
+use std::path::Path;
 
-/// Input/output devices used to interact with a user (stub for now)
-#[derive(Clone)]
-pub struct ConsoleContext {}
+pub const COOKIE_FILENAME: &str = ".cookie";
 
-// TODO: Use `external_printer` from reedline to print output in background if needed
-
-impl ConsoleContext {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn begin_output(&self) {}
+// TODO: Replace String with custom error
+pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), String> {
+    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;
+    let (username, password) = content.split_once(':').ok_or(format!(
+        "Invalid cookie file {:?}: ':' not found",
+        path.as_ref()
+    ))?;
+    Ok((username.to_owned(), password.to_owned()))
 }

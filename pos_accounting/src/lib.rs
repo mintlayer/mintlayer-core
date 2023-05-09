@@ -34,5 +34,8 @@ pub use crate::{
         storage::PoSAccountingDB,
         view::{FlushablePoSAccountingView, PoSAccountingView},
     },
-    storage::{PoSAccountingStorageRead, PoSAccountingStorageWrite, StorageTag},
+    storage::{
+        in_memory::InMemoryPoSAccounting, PoSAccountingStorageRead, PoSAccountingStorageWrite,
+        StorageTag,
+    },
 };

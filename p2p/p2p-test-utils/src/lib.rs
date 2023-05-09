@@ -15,7 +15,13 @@
 
 #![allow(clippy::unwrap_used)]
 
-use std::sync::Arc;
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
@@ -25,9 +31,11 @@ use chainstate_test_framework::TestFramework;
 use common::{
     chain::{config::ChainConfig, Block},
     primitives::Idable,
+    time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
+use test_utils::mock_time_getter::mocked_time_getter_milliseconds;
 
 pub fn start_subsystems(
     chain_config: Arc<ChainConfig>,
@@ -90,4 +98,29 @@ pub fn create_n_blocks(tf: &mut TestFramework, n: usize) -> Vec<Block> {
     }
 
     blocks
+}
+
+pub struct P2pBasicTestTimeGetter {
+    current_time_millis: Arc<AtomicU64>,
+}
+
+impl P2pBasicTestTimeGetter {
+    pub fn new() -> Self {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap();
+        let current_time_millis = Arc::new(AtomicU64::new(current_time.as_millis() as u64));
+        Self {
+            current_time_millis,
+        }
+    }
+
+    pub fn get_time_getter(&self) -> TimeGetter {
+        mocked_time_getter_milliseconds(Arc::clone(&self.current_time_millis))
+    }
+
+    pub fn advance_time(&self, duration: Duration) {
+        self.current_time_millis
+            .fetch_add(duration.as_millis() as u64, Ordering::SeqCst);
+    }
 }

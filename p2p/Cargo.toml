@@ -7,7 +7,6 @@ rust-version.workspace = true
 
 [features]
 default = []
-testing_utils = ["dep:rlimit", "dep:ctor", "dep:test-utils", "tokio/test-util"]
 
 [dependencies]
 chainstate = { path = "../chainstate/" }
@@ -19,19 +18,16 @@ rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 storage = { path = "../storage" }
 subsystem = { path = "../subsystem/" }
-test-utils = { path = "../test-utils", optional = true }
 utils = { path = "../utils/" }
 
 async-trait.workspace = true
 bytes = "1.1"
-ctor = { version = "0.2", optional = true}
 futures.workspace = true
 hex.workspace = true
 itertools.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 once_cell.workspace = true
 parity-scale-codec.workspace = true
-rlimit = { version = "0.9", optional = true}
 serde.workspace = true
 siphasher = "0.3"
 snowstorm = "0.4"

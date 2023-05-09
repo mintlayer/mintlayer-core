@@ -22,7 +22,7 @@ use std::{
 use chainstate_types::Locator;
 use chainstate_types::{BlockIndex, GenBlockIndex};
 use common::chain::{
-    block::{timestamp::BlockTimestamp, BlockReward},
+    block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
     OutPointSourceId, TxMainChainIndex,
@@ -30,7 +30,6 @@ use common::chain::{
 use common::chain::{OutPoint, Transaction};
 use common::{
     chain::{
-        block::BlockHeader,
         tokens::{RPCTokenInfo, TokenId},
         Block, GenBlock,
     },
@@ -69,7 +68,7 @@ where
         self.deref().preliminary_block_check(block)
     }
 
-    fn preliminary_header_check(&self, header: BlockHeader) -> Result<(), ChainstateError> {
+    fn preliminary_header_check(&self, header: SignedBlockHeader) -> Result<(), ChainstateError> {
         self.deref().preliminary_header_check(header)
     }
 
@@ -92,7 +91,7 @@ where
         self.deref().get_best_block_height()
     }
 
-    fn get_best_block_header(&self) -> Result<BlockHeader, ChainstateError> {
+    fn get_best_block_header(&self) -> Result<SignedBlockHeader, ChainstateError> {
         self.deref().get_best_block_header()
     }
 
@@ -119,14 +118,14 @@ where
         &self,
         locator: Locator,
         header_count_limit: usize,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.deref().get_headers(locator, header_count_limit)
     }
 
     fn filter_already_existing_blocks(
         &self,
-        headers: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, ChainstateError> {
+        headers: Vec<SignedBlockHeader>,
+    ) -> Result<Vec<SignedBlockHeader>, ChainstateError> {
         self.deref().filter_already_existing_blocks(headers)
     }
 
@@ -320,6 +319,13 @@ where
 
     fn info(&self) -> Result<ChainInfo, ChainstateError> {
         self.deref().info()
+    }
+
+    fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
+        self.deref().get_block_header(block_id)
     }
 }
 

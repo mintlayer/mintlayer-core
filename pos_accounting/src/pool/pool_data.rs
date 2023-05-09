@@ -15,7 +15,7 @@
 
 use common::{
     chain::{stakelock::StakePoolData, Destination},
-    primitives::Amount,
+    primitives::{per_thousand::PerThousand, Amount},
 };
 use crypto::vrf::VRFPublicKey;
 use serialization::{Decode, Encode};
@@ -25,9 +25,8 @@ pub struct PoolData {
     decommission_destination: Destination,
     pledge_amount: Amount,
     vrf_public_key: VRFPublicKey,
-    #[codec(compact)]
-    margin_ratio_per_thousand: u64,
-    cost_per_epoch: Amount,
+    margin_ratio_per_thousand: PerThousand,
+    cost_per_block: Amount,
 }
 
 impl PoolData {
@@ -35,15 +34,15 @@ impl PoolData {
         decommission_destination: Destination,
         pledge_amount: Amount,
         vrf_public_key: VRFPublicKey,
-        margin_ratio_per_thousand: u64,
-        cost_per_epoch: Amount,
+        margin_ratio_per_thousand: PerThousand,
+        cost_per_block: Amount,
     ) -> Self {
         Self {
             decommission_destination,
             pledge_amount,
             vrf_public_key,
             margin_ratio_per_thousand,
-            cost_per_epoch,
+            cost_per_block,
         }
     }
 
@@ -59,12 +58,12 @@ impl PoolData {
         &self.vrf_public_key
     }
 
-    pub fn margin_ratio_per_thousand(&self) -> u64 {
+    pub fn margin_ratio_per_thousand(&self) -> PerThousand {
         self.margin_ratio_per_thousand
     }
 
-    pub fn cost_per_epoch(&self) -> Amount {
-        self.cost_per_epoch
+    pub fn cost_per_block(&self) -> Amount {
+        self.cost_per_block
     }
 }
 
@@ -75,7 +74,7 @@ impl From<StakePoolData> for PoolData {
             pledge_amount: stake_data.value(),
             vrf_public_key: stake_data.vrf_public_key().clone(),
             margin_ratio_per_thousand: stake_data.margin_ratio_per_thousand(),
-            cost_per_epoch: stake_data.cost_per_epoch(),
+            cost_per_block: stake_data.cost_per_block(),
         }
     }
 }

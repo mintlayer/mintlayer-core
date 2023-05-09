@@ -75,6 +75,8 @@ pub struct P2pConfigFile {
     pub ping_check_period: Option<u64>,
     /// When a peer is detected as dead and disconnected.
     pub ping_timeout: Option<NonZeroU64>,
+    /// A timeout after which a peer is disconnected.
+    pub sync_stalling_timeout: Option<NonZeroU64>,
     /// A node type.
     pub node_type: Option<NodeTypeConfigFile>,
 }

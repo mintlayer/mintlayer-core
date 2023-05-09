@@ -243,7 +243,7 @@ mod tests {
             stakelock::StakePoolData,
             Block, Destination, PoolId, TxOutput,
         },
-        primitives::{Amount, Compact, H256},
+        primitives::{per_thousand::PerThousand, Amount, Compact, H256},
     };
     use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
     use mockall::predicate::eq;
@@ -263,7 +263,7 @@ mod tests {
             Destination::AnyoneCanSpend,
             vrf_pk,
             Destination::AnyoneCanSpend,
-            0,
+            PerThousand::new(0).unwrap(),
             Amount::ZERO,
         );
         let reward_output = TxOutput::StakePool(Box::new(stake_pool_data));

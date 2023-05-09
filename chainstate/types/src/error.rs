@@ -50,8 +50,8 @@ pub enum PropertyQueryError {
     GenesisHeaderRequested,
     #[error("Tried getting value of a token outpoint")]
     ExpectedCoinOutpointAndFoundToken,
-    #[error("Balance of pool {0} not found")]
-    PoolBalanceNotFound(PoolId),
+    #[error("Stake pool {0} data not found")]
+    StakePoolDataNotFound(PoolId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

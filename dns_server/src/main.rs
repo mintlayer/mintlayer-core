@@ -100,7 +100,10 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         default_p2p_port: chain_config.p2p_port(),
     };
 
+    let time_getter = Default::default();
+
     let mut crawler_manager = CrawlerManager::<p2p::P2pNetworkingService, _>::new(
+        time_getter,
         crawler_config,
         chain_config,
         conn,

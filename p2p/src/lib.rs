@@ -23,11 +23,9 @@ pub mod peer_manager;
 pub mod protocol;
 pub mod rpc;
 pub mod sync;
+pub mod testing_utils;
 pub mod types;
 pub mod utils;
-
-#[cfg(feature = "testing_utils")]
-pub mod testing_utils;
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -306,11 +304,6 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     time_getter: TimeGetter,
     peerdb_storage: S,
 ) -> Result<impl P2pSubsystemInterface> {
-    // Check that the `testing_utils` feature is not enabled when the node is built
-    // (`testing_utils` turns on time mocking in tokio and also calls `setrlimit` when loaded).
-    // TODO: FIXME:
-    //assert!(cfg!(not(feature = "testing_utils")));
-
     // Perform some early checks to prevent a failure in the run method.
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,

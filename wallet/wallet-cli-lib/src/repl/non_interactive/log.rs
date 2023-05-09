@@ -13,23 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use dialoguer::theme::ColorfulTheme;
-
-use crate::errors::WalletCliError;
-
-/// A type-safe wrapper for [dialoguer::Select]
-pub fn select_helper<T: Clone + Into<&'static str>>(
-    theme: &ColorfulTheme,
-    prompt: &str,
-    items: &[T],
-) -> Result<T, WalletCliError> {
-    let texts = items.iter().cloned().map(Into::into).collect::<Vec<&str>>();
-    let index = dialoguer::Select::with_theme(theme)
-        .with_prompt(prompt)
-        .default(0)
-        .items(&texts)
-        .interact_opt()
-        .map_err(WalletCliError::ConsoleIoError)?
-        .ok_or(WalletCliError::Cancelled)?;
-    Ok(items[index].clone())
+pub fn init() {
+    logging::init_logging::<&std::path::Path>(None);
 }

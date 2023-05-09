@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::block::block_header::BlockHeader;
+use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable, H256};
@@ -25,7 +25,7 @@ use crate::GenBlockIndex;
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct BlockIndex {
     block_id: Id<Block>,
-    block_header: BlockHeader,
+    block_header: SignedBlockHeader,
     some_ancestor: Id<GenBlock>,
     chain_trust: H256,
     height: BlockHeight,
@@ -56,11 +56,11 @@ impl BlockIndex {
     }
 
     pub fn prev_block_id(&self) -> &Id<GenBlock> {
-        self.block_header.prev_block_id()
+        self.block_header.header().prev_block_id()
     }
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
-        self.block_header.timestamp()
+        self.block_header.header().timestamp()
     }
 
     pub fn chain_timestamps_max(&self) -> BlockTimestamp {
@@ -75,7 +75,7 @@ impl BlockIndex {
         self.chain_trust.into()
     }
 
-    pub fn block_header(&self) -> &BlockHeader {
+    pub fn block_header(&self) -> &SignedBlockHeader {
         &self.block_header
     }
 
@@ -83,7 +83,7 @@ impl BlockIndex {
         &self.some_ancestor
     }
 
-    pub fn into_block_header(self) -> BlockHeader {
+    pub fn into_block_header(self) -> SignedBlockHeader {
         self.block_header
     }
 

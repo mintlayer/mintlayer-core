@@ -275,7 +275,7 @@ async fn randomized(#[case] seed: Seed) {
         let new_tip = {
             let mut tf = node.tf.lock().unwrap();
             let old_best_block = tf.best_block_id();
-            // Select a random block from the 5 lastest to build a new chain
+            // Select a random block from the 5 latest to build a new chain
             let parent =
                 *tf.block_indexes.iter().rev().take(5).choose(&mut rng).unwrap().block_id();
             tf.create_chain(&parent.into(), 1, &mut rng).unwrap();

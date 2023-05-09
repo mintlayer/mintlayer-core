@@ -27,10 +27,13 @@ use common::{
     primitives::{id::WithId, Amount, Idable},
 };
 use pos_accounting::PoSAccountingView;
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, error::ConnectTransactionError,
-    storage::TransactionVerifierStorageRef, BlockTransactableRef, BlockTransactableWithIndexRef,
-    Fee, Subsidy, TransactionVerifier,
+use tx_verifier::{
+    transaction_verifier::{
+        config::TransactionVerifierConfig, error::ConnectTransactionError,
+        storage::TransactionVerifierStorageRef, Fee, Subsidy, TransactionSourceForConnect,
+        TransactionVerifier,
+    },
+    TransactionSource,
 };
 use utils::tap_error_log::LogError;
 use utxo::UtxosView;
@@ -84,20 +87,18 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         let total_fees = block
             .transactions()
             .iter()
-            .enumerate()
-            .try_fold(Amount::from_atoms(0), |total, (tx_num, _)| {
+            .try_fold(Amount::from_atoms(0), |total, tx| {
                 let fee = tx_verifier
-                    .connect_transactable(
-                        block_index,
-                        BlockTransactableWithIndexRef::Transaction(
-                            block,
-                            tx_num,
-                            take_front_tx_index(&mut tx_indices),
-                        ),
+                    .connect_transaction(
+                        &TransactionSourceForConnect::Chain {
+                            new_block_index: block_index,
+                        },
+                        tx,
                         &median_time_past,
+                        take_front_tx_index(&mut tx_indices),
                     )
                     .log_err()?;
-                (total + fee.expect("connect tx should return fees").0).ok_or_else(|| {
+                (total + fee.0).ok_or_else(|| {
                     ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })
             })
@@ -111,14 +112,14 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
 
-        let reward_fees = tx_verifier
-            .connect_transactable(
+        tx_verifier
+            .connect_block_reward(
                 block_index,
-                BlockTransactableWithIndexRef::BlockReward(block, block_reward_tx_index),
-                &median_time_past,
+                block.block_reward_transactable(),
+                Fee(total_fees),
+                block_reward_tx_index,
             )
             .log_err()?;
-        debug_assert!(reward_fees.is_none());
 
         tx_verifier.set_best_block(block.get_id().into());
 
@@ -147,16 +148,12 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         block
             .transactions()
             .iter()
-            .enumerate()
             .rev()
-            .try_for_each(|(tx_num, _)| {
-                tx_verifier
-                    .disconnect_transactable(BlockTransactableRef::Transaction(block, tx_num))
+            .try_for_each(|tx| {
+                tx_verifier.disconnect_transaction(&TransactionSource::Chain(block.get_id()), tx)
             })
             .log_err()?;
-        tx_verifier
-            .disconnect_transactable(BlockTransactableRef::BlockReward(block))
-            .log_err()?;
+        tx_verifier.disconnect_block_reward(block).log_err()?;
 
         tx_verifier.set_best_block(block.prev_block_id());
 

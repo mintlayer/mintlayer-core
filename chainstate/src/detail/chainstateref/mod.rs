@@ -25,8 +25,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-            BlockHeader, BlockReward,
+            calculate_tx_merkle_root, calculate_witness_merkle_root,
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
         },
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
@@ -204,6 +204,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.db_tx.get_block(block_id).map_err(PropertyQueryError::from)
     }
 
+    pub fn get_block_header(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
+        Ok(self.db_tx.get_block_header(block_id).log_err()?)
+    }
+
     pub fn is_block_in_main_chain(
         &self,
         block_id: &Id<GenBlock>,
@@ -297,7 +304,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn get_header_from_height(
         &self,
         height: &BlockHeight,
-    ) -> Result<Option<BlockHeader>, PropertyQueryError> {
+    ) -> Result<Option<SignedBlockHeader>, PropertyQueryError> {
         let id = self
             .get_block_id_by_height(height)
             .log_err()?
@@ -366,15 +373,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    pub fn check_block_header(&self, header: &BlockHeader) -> Result<(), CheckBlockError> {
+    pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
+
+        self.check_block_signature(header)?;
 
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
-        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
+        consensus::validate_consensus(self.chain_config, header.header(), self, &utxos_db, &pos_db)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -462,7 +471,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         })
     }
 
-    fn check_header_size(&self, header: &BlockHeader) -> Result<(), BlockSizeError> {
+    fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {
         let size = header.header_size();
         ensure!(
             size <= self.chain_config.max_block_header_size(),
@@ -500,6 +509,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             )
         );
 
+        Ok(())
+    }
+
+    fn check_block_signature(&self, _header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        // TODO
         Ok(())
     }
 
@@ -978,7 +992,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         Ok(block_index)
     }
 
-    pub fn accept_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
+    pub fn persist_block(&mut self, block: &WithId<Block>) -> Result<BlockIndex, BlockError> {
         let block_index = self.add_to_block_index(block).log_err()?;
         if (self.db_tx.get_block(block.get_id()).map_err(BlockError::from).log_err()?).is_some() {
             return Err(BlockError::BlockAlreadyExists(block.get_id()));
