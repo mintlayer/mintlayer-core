@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-use super::BlockBody;
+use super::block_body::BlockBody;
 
 pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
     const TX_HASHER: fn(&SignedTransaction) -> H256 =

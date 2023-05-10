@@ -22,6 +22,7 @@ pub use crate::chain::{
     GenBlock,
 };
 
+pub mod block_body;
 pub mod block_header;
 pub mod block_merkle;
 pub mod block_size;
@@ -36,8 +37,6 @@ use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 use utils::ensure;
 
-pub use crate::chain::block::block_v1::BlockBody;
-
 use crate::{
     chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
     primitives::{id::WithId, Id, Idable, VersionTag, H256},
@@ -45,7 +44,7 @@ use crate::{
 
 use merkletree::MerkleTreeFormError;
 
-use self::signed_block_header::SignedBlockHeader;
+use self::{block_body::BlockBody, signed_block_header::SignedBlockHeader};
 
 use super::signed_transaction::SignedTransaction;
 

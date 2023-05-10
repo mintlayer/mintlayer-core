@@ -28,8 +28,8 @@ use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
         block::{
-            timestamp::BlockTimestamp, BlockBody, BlockCreationError, BlockHeader, BlockReward,
-            ConsensusData,
+            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
+            BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
