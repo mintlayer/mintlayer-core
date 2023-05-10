@@ -15,7 +15,10 @@
 
 use std::{
     fmt::Debug,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use tokio::sync::{mpsc, oneshot};
@@ -89,7 +92,7 @@ where
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
@@ -147,6 +150,7 @@ where
         e => panic!("invalid event received: {e:?}"),
     }
 
+    shutdown.store(true, Ordering::Release);
     shutdown_trigger.initiate();
     subsystem_manager_handle.join().await;
 }

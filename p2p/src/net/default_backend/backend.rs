@@ -17,7 +17,13 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{
@@ -114,6 +120,7 @@ pub struct Backend<T: TransportSocket> {
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
+    shutdown: Arc<AtomicBool>,
     shutdown_receiver: oneshot::Receiver<()>,
 }
 
@@ -130,6 +137,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
+        shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
     ) -> Self {
         Self {
@@ -144,6 +152,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
             command_queue: FuturesUnordered::new(),
+            shutdown,
             shutdown_receiver,
         }
     }
@@ -302,6 +311,7 @@ where
         let backend_tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
         let p2p_config = Arc::clone(&self.p2p_config);
+        let shutdown = Arc::clone(&self.shutdown);
 
         let handle = tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
@@ -314,9 +324,10 @@ where
                 backend_tx,
                 peer_rx,
             );
-            let run_res = peer.run().await;
-            if let Err(err) = run_res {
-                log::error!("peer {remote_peer_id} failed: {err}");
+            match peer.run().await {
+                Ok(()) => {}
+                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::Acquire) => {}
+                Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
             }
         });
 

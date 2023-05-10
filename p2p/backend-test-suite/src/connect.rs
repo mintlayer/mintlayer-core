@@ -17,7 +17,10 @@
 
 use std::{
     fmt::Debug,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use tokio::sync::oneshot;
@@ -48,11 +51,13 @@ where
         vec![T::make_address()],
         config,
         p2p_config,
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
     .unwrap();
+
+    shutdown.store(true, Ordering::Release);
 }
 
 // Check that connecting twice to the same address isn't possible.
@@ -87,7 +92,7 @@ where
         addresses,
         config,
         Arc::clone(&p2p_config),
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
@@ -98,6 +103,8 @@ where
             std::io::ErrorKind::AddrInUse | std::io::ErrorKind::AddrNotAvailable
         ))
     ));
+
+    shutdown.store(true, Ordering::Release);
 }
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
@@ -132,7 +139,7 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
@@ -141,4 +148,6 @@ where
     let conn_addr = service1.local_addresses().to_vec();
     service2.connect(conn_addr[0].clone()).unwrap();
     service1.poll_next().await.unwrap();
+
+    shutdown.store(true, Ordering::Release);
 }

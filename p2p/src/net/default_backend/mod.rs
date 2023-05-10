@@ -134,6 +134,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let p2p_config_ = Arc::clone(&p2p_config);
+        let shutdown_ = Arc::clone(&shutdown);
         let backend_task = tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
@@ -143,6 +144,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
+                shutdown_,
                 shutdown_receiver,
             );
 

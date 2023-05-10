@@ -15,7 +15,10 @@
 
 use std::{
     fmt::Debug,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use tokio::sync::oneshot;
@@ -67,7 +70,7 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
@@ -139,6 +142,8 @@ where
     };
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
     assert_eq!(&header, block.header());
+
+    shutdown.store(true, Ordering::Release);
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
@@ -193,7 +198,7 @@ where
         vec![T::make_address()],
         chain_config,
         p2p_config,
-        shutdown,
+        Arc::clone(&shutdown),
         shutdown_receiver,
     )
     .await
@@ -214,4 +219,6 @@ where
             .header()
             .clone()])))
         .unwrap();
+
+    shutdown.store(true, Ordering::Release);
 }
