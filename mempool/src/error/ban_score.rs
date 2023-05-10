@@ -32,7 +32,10 @@ impl MempoolBanScore for Error {
         match self {
             // Validation error, needs further inspection
             Error::Validity(err) => err.mempool_ban_score(),
+            // Mempool policy violation, needs further inspection
             Error::Policy(err) => err.mempool_ban_score(),
+            // Orphan errors may be race / out of sync errors, allowed
+            Error::Orphan(_) => 0,
         }
     }
 }

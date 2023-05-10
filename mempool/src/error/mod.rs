@@ -30,6 +30,8 @@ pub enum Error {
     Validity(#[from] TxValidationError),
     #[error(transparent)]
     Policy(#[from] MempoolPolicyError),
+    #[error("Orphan transaction error: {0}")]
+    Orphan(#[from] OrphanPoolError),
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -93,6 +95,18 @@ pub enum TxValidationError {
     CallError(#[from] CallError),
     #[error("Tip moved while trying to process transaction")]
     TipMoved,
+}
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum OrphanPoolError {
+    #[error("Transaction already present")]
+    Duplicate,
+    #[error("Transaction conflicts with another")]
+    Conflict,
+    #[error("Transaction {0} too large to be accepted into orphan pool (max {1})")]
+    TooLarge(usize, usize),
+    #[error("Orphan pool full")]
+    Full,
 }
 
 impl From<ConnectTransactionError> for Error {

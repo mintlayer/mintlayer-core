@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(unused_must_use)]
+
 use super::*;
 use crate::{
     get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
@@ -30,7 +32,7 @@ use common::{
         transaction::{Destination, TxInput, TxOutput},
         OutPointSourceId, Transaction, UtxoOutPoint,
     },
-    primitives::{Id, H256},
+    primitives::{Id, Idable, H256},
 };
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -38,6 +40,7 @@ use std::sync::{
 };
 
 mod expiry;
+mod orphans;
 mod reorg;
 mod replacement;
 mod utils;
@@ -363,10 +366,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     )
     .expect("invalid witness count");
 
-    assert!(matches!(
-        mempool.add_transaction(tx),
-        Err(Error::Validity(TxValidationError::TxValidation(_)))
-    ));
+    assert_eq!(mempool.add_transaction(tx), Ok(TxStatus::InOrphanPool));
     mempool.store.assert_valid();
 
     Ok(())
@@ -572,8 +572,13 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     .expect("invalid witness count");
 
     let result = mempool.add_transaction(replacing_tx);
-    assert_eq!(result.is_ok(), ENABLE_RBF);
-    assert_eq!(!mempool.contains_transaction(&replaced_tx_id), ENABLE_RBF);
+    if ENABLE_RBF {
+        assert_eq!(result, Ok(TxStatus::InMempool));
+        assert!(!mempool.contains_transaction(&replaced_tx_id));
+    } else {
+        assert_eq!(result, Ok(TxStatus::InOrphanPool));
+        assert!(mempool.contains_transaction(&replaced_tx_id));
+    };
 
     mempool.store.assert_valid();
 
@@ -620,7 +625,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
 
     // Generation 2
-    let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
+    let tx3_parents = vec![*entry1.tx_id(), *entry2.tx_id()].into_iter().collect();
     let tx3_ancestors = vec![entry1.clone(), entry2.clone()].into_iter().collect();
     let entry3 = TxMempoolEntry::new_from_data(
         txs.get(2).unwrap().clone(),
@@ -632,9 +637,9 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
 
     // Generation 3
-    let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
+    let tx4_parents = vec![*entry3.tx_id()].into_iter().collect();
     let tx4_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
-    let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
+    let tx5_parents = vec![*entry3.tx_id()].into_iter().collect();
     let tx5_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
     let entry4 = TxMempoolEntry::new_from_data(
         txs.get(3).unwrap().clone(),
@@ -654,7 +659,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
 
     // Generation 4
-    let tx6_parents = vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
+    let tx6_parents = vec![*entry3.tx_id(), *entry4.tx_id(), *entry5.tx_id()].into_iter().collect();
     let tx6_ancestors =
         vec![entry1.clone(), entry2.clone(), entry3.clone(), entry4.clone(), entry5.clone()]
             .into_iter()
@@ -669,7 +674,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
 
     let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
-    let ids = entries.iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
+    let ids = entries.iter().map(|entry| *entry.tx_id()).collect::<Vec<_>>();
 
     for entry in entries.into_iter() {
         mempool.store.add_tx(entry)?;
@@ -858,13 +863,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
 
     let res = mempool.add_transaction(incoming_tx);
-    assert!(
-        matches!(
-            res,
-            Err(Error::Validity(TxValidationError::TxValidation(_))),
-        ),
-        "Should error out on unconfirmed output, got {res:?}"
-    );
+    assert_eq!(res, Ok(TxStatus::InOrphanPool));
     mempool.store.assert_valid();
     Ok(())
 }
@@ -1309,6 +1308,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx_c)?;
 
     let entry_tx = mempool.store.txs_by_id.get(&tx_id).expect("tx");
+    let entry_tx_id = *entry_tx.tx_id();
     log::debug!(
         "at first, entry tx has score {:?}",
         entry_tx.ancestor_score()
@@ -1338,7 +1338,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     check_txs_sorted_by_ancestor_score(&mempool);
 
-    mempool.store.remove_tx(&entry_tx.tx_id(), MempoolRemovalReason::Block);
+    mempool.store.remove_tx(&entry_tx_id, MempoolRemovalReason::Block);
     log::debug!(
         "AFTER REMOVAL raw txs_by_ancestor_score {:?}",
         mempool.store.txs_by_ancestor_score
@@ -1476,7 +1476,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     check_txs_sorted_by_descendant_sore(&mempool);
 
-    mempool.store.remove_tx(&entry_c.tx_id(), MempoolRemovalReason::Block);
+    mempool.store.remove_tx(entry_c.tx_id(), MempoolRemovalReason::Block);
     assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     assert_eq!(entry_b.fees_with_descendants(), entry_b.fee());

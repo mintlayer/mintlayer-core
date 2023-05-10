@@ -14,7 +14,13 @@
 // limitations under the License.
 
 use parking_lot::RwLock;
-use std::{collections::BTreeSet, mem, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeSet, VecDeque},
+    mem,
+    num::NonZeroUsize,
+    sync::Arc,
+    time::Duration,
+};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -25,7 +31,7 @@ use common::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
         Transaction, TxInput,
     },
-    primitives::{amount::Amount, BlockHeight, Id, Idable},
+    primitives::{amount::Amount, BlockHeight, Id},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -38,15 +44,17 @@ use self::{
     entry::{TxEntry, TxEntryWithFee},
     fee::Fee,
     feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
+    orphans::TxOrphanPool,
     rolling_fee_rate::RollingFeeRate,
     spends_unconfirmed::SpendsUnconfirmed,
     store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
 };
 use crate::{
-    error::{Error, MempoolPolicyError, TxValidationError},
+    config,
+    error::{Error, MempoolPolicyError, OrphanPoolError, TxValidationError},
     get_memory_usage::GetMemoryUsage,
     tx_accumulator::TransactionAccumulator,
-    MempoolEvent,
+    MempoolEvent, TxStatus,
 };
 
 use crate::config::*;
@@ -54,6 +62,7 @@ use crate::config::*;
 mod entry;
 pub mod fee;
 mod feerate;
+mod orphans;
 mod reorg;
 mod rolling_fee_rate;
 mod spends_unconfirmed;
@@ -67,7 +76,6 @@ fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
 }
 
 pub struct Mempool<M> {
-    #[allow(unused)]
     chain_config: Arc<ChainConfig>,
     store: MempoolStore,
     rolling_fee_rate: RwLock<RollingFeeRate>,
@@ -78,6 +86,7 @@ pub struct Mempool<M> {
     memory_usage_estimator: M,
     events_controller: EventsController<MempoolEvent>,
     tx_verifier: tx_verifier::TransactionVerifier,
+    orphans: TxOrphanPool,
 }
 
 impl<M> std::fmt::Debug for Mempool<M> {
@@ -117,6 +126,7 @@ impl<M> Mempool<M> {
             memory_usage_estimator,
             events_controller: Default::default(),
             tx_verifier,
+            orphans: TxOrphanPool::new(),
         }
     }
 
@@ -139,7 +149,12 @@ impl<M> Mempool<M> {
         );
 
         // Clear the store, returning the list of transactions it contained previously
-        mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+        let pool_txs = mem::replace(&mut self.store, MempoolStore::new()).into_transactions();
+
+        // Clear the orphan pool, returning the list of previous transactions.
+        let orphan_txs = mem::replace(&mut self.orphans, TxOrphanPool::new()).into_transactions();
+
+        pool_txs.chain(orphan_txs)
     }
 
     pub fn best_block_id(&self) -> Id<GenBlock> {
@@ -238,14 +253,55 @@ impl<M> Mempool<M> {
 
         TxMempoolEntry::new(entry, parents, ancestors)
     }
+
+    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
+        self.store.contains(tx_id)
+    }
+
+    pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
+        self.store.txs_by_id.get(id).map(TxMempoolEntry::transaction)
+    }
+
+    pub fn contains_orphan_transaction(&self, id: &Id<Transaction>) -> bool {
+        self.orphans.contains(id)
+    }
+
+    pub fn orphan_transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
+        self.orphans.get(id).map(TxEntry::transaction)
+    }
+}
+
+/// Result of transaction validation
+enum ValidationOutcome {
+    /// Transaction is valid for acceptance to mempool
+    Valid {
+        transaction: TxEntryWithFee,
+        conflicts: Conflicts,
+        delta: TransactionVerifierDelta,
+    },
+
+    /// Transaction is valid of acceptance to orphan pool.
+    /// It may or may not end up being valid, depending on the validity of the missing inputs.
+    Orphan { transaction: TxEntry },
+}
+
+/// Result of transaction validation
+enum VerificationOutcome {
+    /// Transaction is valid for acceptance to mempool
+    Valid {
+        transaction: TxEntryWithFee,
+        delta: TransactionVerifierDelta,
+    },
+
+    /// Transaction is valid of acceptance to orphan pool.
+    /// It may or may not end up being valid, depending on the validity of the missing inputs.
+    Orphan { transaction: TxEntry },
 }
 
 // Transaction Validation
 impl<M: GetMemoryUsage> Mempool<M> {
-    fn validate_transaction(
-        &self,
-        tx: TxEntry,
-    ) -> Result<(Conflicts, TxEntryWithFee, TransactionVerifierDelta), Error> {
+    /// Verify transaction according to consensus rules and check mempool rules
+    fn validate_transaction(&self, transaction: TxEntry) -> Result<ValidationOutcome, Error> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -280,20 +336,31 @@ impl<M: GetMemoryUsage> Mempool<M> {
         // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
         // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
 
-        self.check_preliminary_mempool_policy(tx.transaction())?;
+        self.check_preliminary_mempool_policy(&transaction)?;
 
-        let (tx, delta) = self.verify_transaction(tx)?;
+        let outcome = match self.verify_transaction(transaction)? {
+            VerificationOutcome::Valid { transaction, delta } => {
+                let conflicts = self.check_mempool_policy(&transaction)?;
+                ValidationOutcome::Valid {
+                    transaction,
+                    conflicts,
+                    delta,
+                }
+            }
+            VerificationOutcome::Orphan { transaction } => {
+                self.check_orphan_pool_policy(&transaction)?;
+                ValidationOutcome::Orphan { transaction }
+            }
+        };
 
-        let conflicts = self.check_mempool_policy(&tx)?;
-
-        Ok((conflicts, tx, delta))
+        Ok(outcome)
     }
 
-    // Verify the transaction with respect to the consensus rules
+    /// Verify transaction according to consensus rules
     fn verify_transaction(
         &self,
-        tx: TxEntry,
-    ) -> Result<(TxEntryWithFee, TransactionVerifierDelta), TxValidationError> {
+        transaction: TxEntry,
+    ) -> Result<VerificationOutcome, TxValidationError> {
         let chainstate_handle = self.blocking_chainstate_handle();
 
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
@@ -306,31 +373,42 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
             let mut tx_verifier = self.tx_verifier.derive_child();
 
-            let fee = tx_verifier.connect_transaction(
+            let res = tx_verifier.connect_transaction(
                 &TransactionSourceForConnect::Mempool {
                     current_best: &current_best,
                 },
-                tx.transaction(),
+                transaction.transaction(),
                 &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
                 None,
-            )?;
+            );
 
-            let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
-            if tip == final_tip {
-                let tx = TxEntryWithFee::new(tx, fee.into());
-                let delta = tx_verifier.consume()?;
-                return Ok((tx, delta));
+            if tip != chainstate_handle.call(|c| c.get_best_block_id())?? {
+                continue;
             }
+
+            let result = match res {
+                Ok(fee) => {
+                    let transaction = TxEntryWithFee::new(transaction, fee.into());
+                    let delta = tx_verifier.consume()?;
+                    Ok(VerificationOutcome::Valid { transaction, delta })
+                }
+                Err(err) if orphans::is_orphan_error(&err) => {
+                    Ok(VerificationOutcome::Orphan { transaction })
+                }
+                Err(err) => Err(err.into()),
+            };
+
+            return result;
         }
 
         Err(TxValidationError::TipMoved)
     }
 
     // Cheap mempool policy checks that run before anything else
-    fn check_preliminary_mempool_policy(
-        &self,
-        tx: &SignedTransaction,
-    ) -> Result<(), MempoolPolicyError> {
+    fn check_preliminary_mempool_policy(&self, entry: &TxEntry) -> Result<(), MempoolPolicyError> {
+        let tx = entry.transaction();
+        let tx_id = entry.tx_id();
+
         ensure!(
             !tx.transaction().inputs().is_empty(),
             MempoolPolicyError::NoInputs,
@@ -344,14 +422,14 @@ impl<M: GetMemoryUsage> Mempool<M> {
         // TODO: see this issue:
         // https://github.com/mintlayer/mintlayer-core/issues/331
         ensure!(
-            tx.encoded_size() <= MAX_BLOCK_SIZE_BYTES,
+            entry.size() <= MAX_BLOCK_SIZE_BYTES,
             MempoolPolicyError::ExceedsMaxBlockSize,
         );
 
         // TODO: Taken from the previous implementation. Is this correct?
         ensure!(
-            !self.contains_transaction(&tx.transaction().get_id()),
-            MempoolPolicyError::TransactionAlreadyInMempool
+            !self.contains_transaction(tx_id),
+            MempoolPolicyError::TransactionAlreadyInMempool,
         );
 
         Ok(())
@@ -372,6 +450,17 @@ impl<M: GetMemoryUsage> Mempool<M> {
             );
             Ok(Conflicts::new(BTreeSet::new()))
         }
+    }
+
+    fn check_orphan_pool_policy(&self, transaction: &TxEntry) -> Result<(), OrphanPoolError> {
+        // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
+        // transactions but we don't want it to take up too much space due to large txns either.
+        ensure!(
+            transaction.size() <= config::MAX_ORPHAN_TX_SIZE,
+            OrphanPoolError::TooLarge(transaction.size(), config::MAX_ORPHAN_TX_SIZE),
+        );
+
+        Ok(())
     }
 
     fn pays_minimum_mempool_fee(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
@@ -413,11 +502,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
     fn conflicting_tx_ids<'a>(
         &'a self,
         tx: &'a SignedTransaction,
-    ) -> impl 'a + Iterator<Item = Id<Transaction>> {
-        tx.transaction()
-            .inputs()
-            .iter()
-            .filter_map(|input| self.store.find_conflicting_tx(input))
+    ) -> impl 'a + Iterator<Item = &'a Id<Transaction>> {
+        let ins = tx.transaction().inputs().iter();
+        ins.filter_map(|input| self.store.find_conflicting_tx(input))
     }
 }
 
@@ -426,7 +513,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
     fn rbf_checks(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
             .conflicting_tx_ids(tx.transaction())
-            .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
+            .map(|id_conflict| self.store.get_entry(id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
         if conflicts.is_empty() {
@@ -569,7 +656,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
         let replacements_with_descendants = conflicts
             .iter()
             .flat_map(|conflict| BTreeSet::from(conflict.unconfirmed_descendants(&self.store)))
-            .chain(conflicts.iter().map(|conflict| conflict.tx_id()))
+            .chain(conflicts.iter().map(|conflict| *conflict.tx_id()))
             .collect();
 
         Ok(replacements_with_descendants)
@@ -580,7 +667,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 impl<M: GetMemoryUsage> Mempool<M> {
     fn finalize_tx(&mut self, tx: TxEntryWithFee) -> Result<(), Error> {
         let entry = self.create_entry(tx)?;
-        let id = entry.tx_id();
+        let id = *entry.tx_id();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
         ensure!(
@@ -648,13 +735,14 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 .txs_by_descendant_score
                 .values()
                 .flatten()
+                .copied()
                 .next()
                 .expect("pool not empty");
-            let removed = self.store.txs_by_id.get(removed_id).expect("tx with id should exist");
+            let removed = self.store.txs_by_id.get(&removed_id).expect("tx with id should exist");
 
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
-                removed.tx_id(),
+                removed_id,
                 removed.descendant_score(),
                 removed.size()
             );
@@ -662,8 +750,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 removed.fee(),
                 NonZeroUsize::new(removed.size()).expect("transaction cannot have zero size"),
             )?);
-            self.store
-                .drop_tx_and_descendants(removed.tx_id(), MempoolRemovalReason::SizeLimit);
+            self.store.drop_tx_and_descendants(&removed_id, MempoolRemovalReason::SizeLimit);
         }
         Ok(removed_fees)
     }
@@ -671,26 +758,67 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
 // Mempool Interface and Event Reactions
 impl<M: GetMemoryUsage> Mempool<M> {
-    pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+    pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
-        let entry = TxEntry::new(tx, creation_time);
-        self.add_transaction_entry(entry)
+        self.add_transaction_and_descendants(TxEntry::new(tx, creation_time))
     }
 
-    pub fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<(), Error> {
+    /// Add given transaction entry and potentially its descendants sourced from the orphan pool
+    fn add_transaction_and_descendants(&mut self, entry: TxEntry) -> Result<TxStatus, Error> {
+        let tx_id = *entry.tx_id();
+        let status = self.add_transaction_entry(entry)?;
+
+        if status == TxStatus::InMempool {
+            let mut work_queue: VecDeque<Id<Transaction>> =
+                self.orphans.ready_children_of(tx_id).collect();
+
+            while let Some(orphan_tx_id) = work_queue.pop_front() {
+                let orphan = match self.orphans.remove(orphan_tx_id) {
+                    None => continue,
+                    Some(orphan) => orphan,
+                };
+
+                match self.add_transaction_entry(orphan) {
+                    Ok(TxStatus::InMempool) => {
+                        work_queue.extend(self.orphans.ready_children_of(orphan_tx_id));
+                        log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
+                    }
+                    Ok(TxStatus::InOrphanPool) => {
+                        log::debug!("Orphan tx {orphan_tx_id} stays in the orphan pool");
+                    }
+                    Err(err) => {
+                        log::info!("Orphan transaction {orphan_tx_id} no longer validates: {err}");
+                    }
+                }
+            }
+        }
+
+        Ok(status)
+    }
+
+    fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<TxStatus, Error> {
         log::debug!("Adding transaction {:?}", tx.tx_id());
         log::trace!("Adding transaction {tx:?}");
 
-        let (conflicts, tx, delta) =
-            self.validate_transaction(tx).log_err_pfx("Transaction rejected")?;
-        if ENABLE_RBF {
-            self.store.drop_conflicts(conflicts);
+        match self.validate_transaction(tx).log_err_pfx("Transaction rejected")? {
+            ValidationOutcome::Valid {
+                transaction,
+                conflicts,
+                delta,
+            } => {
+                if ENABLE_RBF {
+                    self.store.drop_conflicts(conflicts);
+                }
+                tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
+                self.finalize_tx(transaction)?;
+                self.store.assert_valid();
+                Ok(TxStatus::InMempool)
+            }
+            ValidationOutcome::Orphan { transaction } => {
+                self.orphans.insert_and_enforce_limits(transaction, self.clock.get_time())?;
+                Ok(TxStatus::InOrphanPool)
+            }
         }
-
-        tx_verifier::flush_to_storage(&mut self.tx_verifier, delta)?;
-        self.finalize_tx(tx)?;
-        self.store.assert_valid();
-        Ok(())
     }
 
     pub fn get_all(&self) -> Vec<SignedTransaction> {
@@ -730,14 +858,6 @@ impl<M: GetMemoryUsage> Mempool<M> {
             }
         }
         tx_accumulator
-    }
-
-    pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
-        self.store.txs_by_id.contains_key(tx_id)
-    }
-
-    pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
-        self.store.txs_by_id.get(id).map(|e| e.transaction())
     }
 
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {

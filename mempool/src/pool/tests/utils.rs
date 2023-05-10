@@ -25,7 +25,7 @@ pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{make_seedable_rng, Rng, Seed},
 };
 
 use super::*;
