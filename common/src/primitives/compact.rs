@@ -17,8 +17,14 @@ use crate::uint::Uint256;
 use serialization::{Decode, Encode};
 use std::ops::Shl;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug, Encode, Decode)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Encode, Decode)]
 pub struct Compact(pub u32);
+
+impl std::fmt::Debug for Compact {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Compact(0x{:08x})", self.0)
+    }
+}
 
 impl TryFrom<Compact> for Uint256 {
     type Error = Option<Uint256>;

@@ -93,8 +93,8 @@ pub enum CheckBlockError {
     PrevBlockNotFound(Id<GenBlock>, Id<Block>),
     #[error("Previous block with id {0} retrieval error starting from block {1}")]
     PrevBlockRetrievalError(PropertyQueryError, Id<GenBlock>, Id<Block>),
-    #[error("Block time must be equal or higher than the median of its ancestors")]
-    BlockTimeOrderInvalid,
+    #[error("Block time ({0:?}) must be equal or higher than the median of its ancestors ({1:?})")]
+    BlockTimeOrderInvalid(BlockTimestamp, BlockTimestamp),
     #[error("Block time must be a notch higher than the previous block")]
     BlockTimeStrictOrderInvalid,
     #[error("Block time too far into the future")]

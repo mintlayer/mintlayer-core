@@ -21,7 +21,7 @@ use std::sync::{
 };
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
 use mempool::{
@@ -108,6 +108,10 @@ impl MempoolInterface for MempoolInterfaceMock {
     }
 
     fn transaction(&self, _id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
+        unimplemented!()
+    }
+
+    fn best_block_id(&self) -> Id<GenBlock> {
         unimplemented!()
     }
 

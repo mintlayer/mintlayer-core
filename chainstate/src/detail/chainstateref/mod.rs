@@ -391,7 +391,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let median_time_past = calculate_median_time_past(self, prev_block_id);
         ensure!(
             header.timestamp() >= median_time_past,
-            CheckBlockError::BlockTimeOrderInvalid,
+            CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
         );
 
         let prev_block_timestamp = self

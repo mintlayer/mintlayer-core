@@ -129,7 +129,10 @@ where
             assert_eq!(
                 score,
                 P2pError::ChainstateError(ChainstateError::ProcessBlockError(
-                    BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+                    BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid(
+                        BlockTimestamp::from_int_seconds(4),
+                        BlockTimestamp::from_int_seconds(5),
+                    ))
                 ))
                 .ban_score()
             );

@@ -166,9 +166,58 @@ def init_mintlayer_types():
                 ]
             },
 
-            # TODO: Implement
             "BlockHeader": {
                 "type": "struct",
+                "type_mapping": [
+                    ["version", "u8"],
+                    ["prev_block_id", "H256"],
+                    ["tx_merkle_root", "H256"],
+                    ["witness_merkle_root", "H256"],
+                    ["timestamp", "Compact<u64>"],
+                    ["consensus_data", "ConsensusData"],
+                ]
+            },
+
+            "SignedBlockHeader": {
+                "type": "struct",
+                "type_mapping": [
+                    ["header", "BlockHeader"],
+                    ["signature", "BlockHeaderSignature"],
+                ]
+            },
+
+            "BlockHeaderSignature": {
+                "type": "enum",
+                "type_mapping": [
+                    ["None", "()"],
+                    # TODO remaining signature kinds
+                ]
+            },
+
+            "ConsensusData": {
+                "type": "enum",
+                "type_mapping": [
+                    ["None", "()"],
+                    ["PoW", "PoWData"],
+                    # TODO remaining consensus types
+                ]
+            },
+
+            "PoWData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["bits", "u32"],
+                    ["nonce", "u128"],
+                ]
+            },
+
+            "BlockV1": {
+                "type": "struct",
+                "type_mapping": [
+                    ["header", "SignedBlockHeader"],
+                    ["reward", "Vec<TxOutput>"],
+                    ["transactions", "Vec<SignedTransaction>"],
+                ]
             },
 
             "Announcement": {

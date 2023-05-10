@@ -15,12 +15,22 @@
 
 //! Mempool subsystem RPC handler
 
-use common::{chain::Transaction, primitives::Id};
+use common::{
+    chain::{GenBlock, SignedTransaction, Transaction},
+    primitives::Id,
+};
+use serialization::hex::HexDecode;
 
 #[rpc::rpc(server, namespace = "mempool")]
 trait MempoolRpc {
     #[method(name = "contains_tx")]
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool>;
+
+    #[method(name = "submit_transaction")]
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
+
+    #[method(name = "local_best_block_id")]
+    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>>;
 }
 
 #[async_trait::async_trait]
@@ -30,5 +40,17 @@ impl MempoolRpcServer for super::MempoolHandle {
             .await
             .map_err(rpc::Error::to_call_error)?
             .map_err(rpc::Error::to_call_error)
+    }
+
+    async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
+        let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
+        self.call_mut(|this| this.add_transaction(tx))
+            .await
+            .map_err(rpc::Error::to_call_error)?
+            .map_err(rpc::Error::to_call_error)
+    }
+
+    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
+        self.call(|this| this.best_block_id()).await.map_err(rpc::Error::to_call_error)
     }
 }

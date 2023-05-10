@@ -19,7 +19,7 @@ use crate::{
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
-    chain::{ChainConfig, SignedTransaction, Transaction},
+    chain::{ChainConfig, GenBlock, SignedTransaction, Transaction},
     primitives::Id,
     time_getter::TimeGetter,
 };
@@ -118,6 +118,10 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> 
 
     fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
         Ok(self.transaction(id).cloned())
+    }
+
+    fn best_block_id(&self) -> Id<GenBlock> {
+        self.best_block_id()
     }
 
     fn collect_txs(
