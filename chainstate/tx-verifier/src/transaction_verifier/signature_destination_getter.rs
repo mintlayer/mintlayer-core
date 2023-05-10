@@ -78,7 +78,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                     }
                     TxOutput::ProduceBlockFromStake(_, pool_id) => {
                         // The only way we can spend this output in a transaction
-                        // (as opposed to block reward), is if we're decommissioning a mempool
+                        // (as opposed to block reward), is if we're decommissioning a pool.
                         Ok(accounting_delta
                             .accounting_delta()
                             .get_pool_data(*pool_id)?
