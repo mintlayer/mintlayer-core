@@ -19,6 +19,7 @@ use common::{
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
+use variant_count::VariantCount;
 
 use crate::error::Error;
 
@@ -74,7 +75,7 @@ pub struct IncreasePledgeAmountUndo {
 }
 
 #[must_use]
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, VariantCount)]
 pub enum PoSAccountingUndo {
     CreatePool(CreatePoolUndo),
     DecommissionPool(DecommissionPoolUndo),

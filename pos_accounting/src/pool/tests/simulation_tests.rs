@@ -147,8 +147,13 @@ fn perform_random_operation(
     random_delegation: Option<(DelegationId, DelegationData)>,
     random_delegation_balance: Option<(DelegationId, Amount)>,
 ) {
+    // If it fires it means that number of actions in PoSAccountingOperations has changed
+    // and the following match needs to be updated
+    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 6);
+
     match rng.gen_range(0..11) {
-        0 | 1 => {
+        // create new pool
+        0..=1 => {
             let input0_outpoint = random_outpoint0(rng);
             let pledge_amount = Amount::from_atoms(rng.gen_range(1000..10_000));
             let pool_data = create_pool_data(rng, Destination::AnyoneCanSpend, pledge_amount);
@@ -156,13 +161,15 @@ fn perform_random_operation(
             let (_, undo) = op.create_pool(&input0_outpoint, pool_data).unwrap();
             undos.push(undo);
         }
+        // decommission pool
         2 => {
             if let Some(pool_id) = random_pool {
                 let undo = op.decommission_pool(pool_id).unwrap();
                 undos.push(undo);
             }
         }
-        3 | 4 => {
+        // create delegation
+        3..=4 => {
             if let Some(pool_id) = random_pool {
                 let input0_outpoint = random_outpoint0(rng);
 
@@ -172,7 +179,8 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        5 | 6 => {
+        // delegate staking
+        5..=6 => {
             if let Some((delegation_id, delegation_data)) = random_delegation {
                 // it's possible that after decommission pool the delegations are still there
                 if op.pool_exists(*delegation_data.source_pool()).unwrap() {
@@ -183,6 +191,7 @@ fn perform_random_operation(
                 }
             }
         }
+        // spend share from delegation
         7 => {
             if let Some((delegation_id, balance)) = random_delegation_balance {
                 let amount_to_spent = Amount::from_atoms(rng.gen_range(1..=balance.into_atoms()));
@@ -192,7 +201,8 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        8 | 9 => {
+        // increase pool pledge
+        8..=9 => {
             if let Some(pool_id) = random_pool {
                 let amount_to_add = Amount::from_atoms(rng.gen_range(1000..10_000));
 
@@ -200,6 +210,7 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
+        // undo
         10 => {
             if let Some(undo) = undos.pop() {
                 op.undo(undo).unwrap();
