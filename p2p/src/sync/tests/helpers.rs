@@ -14,13 +14,16 @@
 // limitations under the License.
 
 use std::{
+    collections::BTreeSet,
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     time::Duration,
 };
 
 use async_trait::async_trait;
+use crypto::random::Rng;
+use itertools::Itertools;
 use tokio::{
     sync::{
         mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -31,11 +34,19 @@ use tokio::{
 };
 
 use chainstate::{
-    chainstate_interface::ChainstateInterface, make_chainstate, ChainstateConfig,
-    DefaultTransactionVerificationStrategy,
+    chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
+    ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
 use common::{
-    chain::{config::create_mainnet, ChainConfig},
+    chain::{
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
+        config::create_mainnet,
+        signature::inputsig::InputWitness,
+        tokens::OutputValue,
+        Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
+        TxOutput,
+    },
+    primitives::{Amount, Id, Idable},
     time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
@@ -44,7 +55,7 @@ use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use crate::{
     message::SyncMessage,
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
-    sync::BlockSyncManager,
+    sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
@@ -60,6 +71,7 @@ const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 ///
 /// Provides methods for manipulating and observing the sync manager state.
 pub struct SyncManagerHandle {
+    pub peer_id: PeerId,
     peer_manager_receiver: UnboundedReceiver<PeerManagerEvent<NetworkingServiceStub>>,
     sync_event_sender: UnboundedSender<SyncingEvent>,
     sync_event_receiver: UnboundedReceiver<SyncingEvent>,
@@ -67,6 +79,9 @@ pub struct SyncManagerHandle {
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
     subsystem_manager_handle: ManagerJoinHandle,
+    chainstate_handle: ChainstateHandle,
+    _new_tip_receiver: UnboundedReceiver<Id<Block>>,
+    connected_peers: Arc<Mutex<BTreeSet<PeerId>>>,
 }
 
 impl SyncManagerHandle {
@@ -83,17 +98,20 @@ impl SyncManagerHandle {
     pub async fn start_with_params(
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        chainstate: subsystem::Handle<Box<dyn ChainstateInterface>>,
-        mempool: MempoolHandle,
+        chainstate_handle: ChainstateHandle,
+        mempool_handle: MempoolHandle,
         shutdown_trigger: ShutdownTrigger,
         subsystem_manager_handle: ManagerJoinHandle,
+        time_getter: TimeGetter,
     ) -> Self {
         let (peer_manager_sender, peer_manager_receiver) = mpsc::unbounded_channel();
+        let connected_peers = Default::default();
 
         let (messaging_sender, handle_receiver) = mpsc::unbounded_channel();
         let (handle_sender, messaging_receiver) = mpsc::unbounded_channel();
         let messaging_handle = MessagingHandleMock {
             events_sender: messaging_sender,
+            connected_peers: Arc::clone(&connected_peers),
         };
         let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
@@ -104,10 +122,10 @@ impl SyncManagerHandle {
             p2p_config,
             messaging_handle,
             sync_event_receiver,
-            chainstate,
-            mempool,
+            chainstate_handle.clone(),
+            mempool_handle,
             peer_manager_sender,
-            TimeGetter::default(),
+            time_getter,
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
@@ -116,7 +134,10 @@ impl SyncManagerHandle {
             let _ = error_sender.send(e);
         });
 
+        let new_tip_receiver = subscribe_to_new_tip(&chainstate_handle).await.unwrap();
+
         Self {
+            peer_id: PeerId::new(),
             peer_manager_receiver,
             sync_event_sender: handle_sender,
             sync_event_receiver: handle_receiver,
@@ -124,12 +145,20 @@ impl SyncManagerHandle {
             sync_manager_handle,
             shutdown_trigger,
             subsystem_manager_handle,
+            chainstate_handle,
+            _new_tip_receiver: new_tip_receiver,
+            connected_peers,
         }
+    }
+
+    pub fn chainstate(&self) -> &ChainstateHandle {
+        &self.chainstate_handle
     }
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
         self.sync_event_sender.send(SyncingEvent::Connected { peer_id: peer }).unwrap();
+        self.connected_peers.lock().unwrap().insert(peer);
     }
 
     /// Connects a peer and checks that the header list request is sent to that peer.
@@ -146,6 +175,7 @@ impl SyncManagerHandle {
         self.sync_event_sender
             .send(SyncingEvent::Disconnected { peer_id: peer })
             .unwrap();
+        self.connected_peers.lock().unwrap().remove(&peer);
     }
 
     pub fn send_message(&mut self, peer: PeerId, message: SyncMessage) {
@@ -243,10 +273,66 @@ impl SyncManagerHandle {
     }
 }
 
+pub async fn in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
+    let best_blocks = futures::future::join_all(managers.iter().map(|manager| async {
+        manager
+            .chainstate()
+            .call(|this| this.get_best_block_id().unwrap())
+            .await
+            .unwrap()
+    }))
+    .await;
+    best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
+}
+
+async fn sync_managers_helper(managers: &mut [&mut SyncManagerHandle]) {
+    while !in_sync(managers).await {
+        'outer: loop {
+            for manager in managers.iter_mut() {
+                let peer_id = manager.peer_id;
+                if let Ok(sync_event) = manager.sync_event_receiver.try_recv() {
+                    // Send sync messages between peers
+                    match &sync_event {
+                        SyncingEvent::Message { peer, message } => {
+                            let other_manager =
+                                managers.iter_mut().find(|m| m.peer_id == *peer).unwrap();
+                            other_manager
+                                .sync_event_sender
+                                .send(SyncingEvent::Message {
+                                    peer: peer_id,
+                                    message: message.clone(),
+                                })
+                                .unwrap();
+                            continue 'outer;
+                        }
+                        event => panic!("Unexpected message: {event:?}"),
+                    }
+                }
+
+                if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
+                    // There should be no peer scoring or disconnections
+                    panic!("Unexpected message: {peer_event:?}");
+                }
+            }
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+pub async fn sync_managers(managers: &mut [&mut SyncManagerHandle]) {
+    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper(managers))
+        .await
+        .unwrap();
+}
+
 pub struct SyncManagerHandleBuilder {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate: Option<Box<dyn ChainstateInterface>>,
+    time_getter: TimeGetter,
+    blocks: Vec<Block>,
 }
 
 impl SyncManagerHandleBuilder {
@@ -255,6 +341,8 @@ impl SyncManagerHandleBuilder {
             chain_config: Arc::new(create_mainnet()),
             p2p_config: Arc::new(test_p2p_config()),
             chainstate: None,
+            time_getter: TimeGetter::default(),
+            blocks: Vec::new(),
         }
     }
 
@@ -273,27 +361,48 @@ impl SyncManagerHandleBuilder {
         self
     }
 
+    pub fn with_time_getter(mut self, time_getter: TimeGetter) -> Self {
+        self.time_getter = time_getter;
+        self
+    }
+
+    pub fn with_blocks(mut self, blocks: Vec<Block>) -> Self {
+        self.blocks = blocks;
+        self
+    }
+
     pub async fn build(self) -> SyncManagerHandle {
+        let SyncManagerHandleBuilder {
+            chain_config,
+            p2p_config,
+            chainstate,
+            time_getter,
+            blocks,
+        } = self;
+
         let mut manager = subsystem::Manager::new("p2p-sync-test-manager");
         let shutdown_trigger = manager.make_shutdown_trigger();
 
-        let chainstate = self.chainstate.unwrap_or_else(|| {
+        let mut chainstate = chainstate.unwrap_or_else(|| {
             make_chainstate(
-                Arc::clone(&self.chain_config),
+                Arc::clone(&chain_config),
                 ChainstateConfig::new(),
                 chainstate_storage::inmemory::Store::new_empty().unwrap(),
                 DefaultTransactionVerificationStrategy::new(),
                 None,
-                Default::default(),
+                time_getter.clone(),
             )
             .unwrap()
         });
+        for block in blocks {
+            chainstate.process_block(block, BlockSource::Local).unwrap();
+        }
         let chainstate = manager.add_subsystem("p2p-sync-test-chainstate", chainstate);
 
         let mempool = mempool::make_mempool(
-            Arc::clone(&self.chain_config),
+            Arc::clone(&chain_config),
             chainstate.clone(),
-            Default::default(),
+            time_getter.clone(),
             mempool::SystemUsageEstimator {},
         );
         let mempool = manager.add_subsystem_with_custom_eventloop("p2p-sync-test-mempool", {
@@ -303,12 +412,13 @@ impl SyncManagerHandleBuilder {
         let manager_handle = manager.main_in_task();
 
         SyncManagerHandle::start_with_params(
-            self.chain_config,
-            self.p2p_config,
-            chainstate,
+            chain_config,
+            p2p_config,
+            chainstate.clone(),
             mempool,
             shutdown_trigger,
             manager_handle,
+            time_getter,
         )
         .await
     }
@@ -351,6 +461,7 @@ impl NetworkingService for NetworkingServiceStub {
 #[derive(Clone)]
 struct MessagingHandleMock {
     events_sender: UnboundedSender<SyncingEvent>,
+    connected_peers: Arc<Mutex<BTreeSet<PeerId>>>,
 }
 struct SyncingEventReceiverMock {
     events_receiver: UnboundedReceiver<SyncingEvent>,
@@ -363,12 +474,14 @@ impl MessagingService for MessagingHandleMock {
     }
 
     fn broadcast_message(&mut self, message: SyncMessage) -> Result<()> {
-        self.events_sender
-            .send(SyncingEvent::Message {
-                peer: "0".parse().unwrap(),
-                message,
-            })
-            .unwrap();
+        for peer in self.connected_peers.lock().unwrap().iter() {
+            self.events_sender
+                .send(SyncingEvent::Message {
+                    peer: *peer,
+                    message: message.clone(),
+                })
+                .unwrap();
+        }
         Ok(())
     }
 }
@@ -381,4 +494,75 @@ impl SyncingEventReceiver for SyncingEventReceiverMock {
             .expect("Failed to receive event in time")
             .ok_or(P2pError::ChannelClosed)
     }
+}
+
+pub fn new_block(
+    chain_config: &ChainConfig,
+    prev_block: Option<&Block>,
+    timestamp: BlockTimestamp,
+    random_bytes: Vec<u8>,
+) -> Block {
+    let input = match prev_block {
+        None => common::chain::OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+        Some(block) => {
+            let tx = block.transactions()[0].clone();
+            let tx_id = tx.transaction().get_id();
+            common::chain::OutPointSourceId::Transaction(tx_id)
+        }
+    };
+
+    let input = TxInput::new(input, 0);
+    let output = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(100000)),
+        Destination::AnyoneCanSpend,
+    );
+    let transaction = Transaction::new(0, vec![input], vec![output], 0).unwrap();
+    let witness = InputWitness::NoSignature(Some(random_bytes));
+    let signed_transaction = SignedTransaction::new(transaction, vec![witness]).unwrap();
+
+    let prev_block_id: Id<GenBlock> = prev_block.map_or(chain_config.genesis_block_id(), |block| {
+        block.header().block_id().into()
+    });
+
+    Block::new(
+        vec![signed_transaction],
+        prev_block_id,
+        timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![]),
+    )
+    .unwrap()
+}
+
+pub async fn new_top_block(
+    chainstate: &ChainstateHandle,
+    timestamp: BlockTimestamp,
+    random_bytes: Vec<u8>,
+) -> Id<Block> {
+    chainstate
+        .call_mut(move |this| {
+            let best_block_id = this.get_best_block_id().unwrap();
+            let prev_block = match best_block_id.classify(this.get_chain_config()) {
+                common::chain::GenBlockId::Genesis(_) => None,
+                common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
+            };
+
+            let block = new_block(
+                this.get_chain_config(),
+                prev_block.as_ref(),
+                timestamp,
+                random_bytes,
+            );
+
+            let block_index = this.process_block(block, BlockSource::Local).unwrap().unwrap();
+            block_index.block_header().block_id()
+        })
+        .await
+        .unwrap()
+}
+
+pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
+    let mut bytes: [u8; 32] = [0; 32];
+    rng.fill_bytes(&mut bytes);
+    bytes.to_vec()
 }

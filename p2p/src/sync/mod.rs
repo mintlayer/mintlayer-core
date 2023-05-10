@@ -29,7 +29,7 @@ use std::{
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use void::Void;
 
-use chainstate::chainstate_interface::ChainstateInterface;
+use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
     chain::{block::Block, config::ChainConfig},
     primitives::Id,
@@ -113,7 +113,7 @@ where
     pub async fn run(&mut self) -> Result<Void> {
         log::info!("Starting SyncManager");
 
-        let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
+        let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
         self.is_initial_block_download.store(
             self.chainstate_handle
                 .call(|c| c.is_initial_block_download())
@@ -137,27 +137,6 @@ where
                 },
             }
         }
-    }
-
-    /// Returns a receiver for the chainstate `NewTip` events.
-    async fn subscribe_to_new_tip(&mut self) -> Result<UnboundedReceiver<Id<Block>>> {
-        let (sender, receiver) = mpsc::unbounded_channel();
-
-        let subscribe_func =
-            Arc::new(
-                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
-                    chainstate::ChainstateEvent::NewTip(block_id, _) => {
-                        let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
-                    }
-                },
-            );
-
-        self.chainstate_handle
-            .call_mut(|this| this.subscribe_to_events(subscribe_func))
-            .await
-            .map_err(|_| P2pError::SubsystemFailure)?;
-
-        Ok(receiver)
     }
 
     /// Starts a task for the new peer.
@@ -250,6 +229,29 @@ where
 
         peer_channel.send(message).map_err(Into::into)
     }
+}
+
+/// Returns a receiver for the chainstate `NewTip` events.
+pub async fn subscribe_to_new_tip(
+    chainstate_handle: &ChainstateHandle,
+) -> Result<UnboundedReceiver<Id<Block>>> {
+    let (sender, receiver) = mpsc::unbounded_channel();
+
+    let subscribe_func =
+        Arc::new(
+            move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
+                chainstate::ChainstateEvent::NewTip(block_id, _) => {
+                    let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
+                }
+            },
+        );
+
+    chainstate_handle
+        .call_mut(|this| this.subscribe_to_events(subscribe_func))
+        .await
+        .map_err(|_| P2pError::SubsystemFailure)?;
+
+    Ok(receiver)
 }
 
 #[cfg(test)]
