@@ -20,6 +20,8 @@ use crate::utils::{create_multiple_utxo_data, create_new_outputs, outputs_from_b
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
+use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
+use common::chain::block::{BlockBody, BlockHeader};
 use common::chain::{OutPoint, OutPointSourceId};
 use common::{
     chain::{
@@ -30,8 +32,10 @@ use common::{
     },
     primitives::{Id, H256},
 };
+use crypto::key::PrivateKey;
 use crypto::random::{CryptoRng, Rng};
 use itertools::Itertools;
+use serialization::Encode;
 
 /// The block builder that allows construction and processing of a block.
 pub struct BlockBuilder<'f> {
@@ -43,6 +47,7 @@ pub struct BlockBuilder<'f> {
     reward: BlockReward,
     block_source: BlockSource,
     used_utxo: BTreeSet<OutPoint>,
+    block_signing_key: Option<PrivateKey>,
 }
 
 impl<'f> BlockBuilder<'f> {
@@ -65,6 +70,7 @@ impl<'f> BlockBuilder<'f> {
             reward,
             block_source,
             used_utxo,
+            block_signing_key: None,
         }
     }
 
@@ -208,29 +214,46 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Builds a block without processing it.
-    pub fn build(self) -> Block {
-        Block::new(
-            self.transactions,
+    pub fn with_block_signing_key(mut self, block_signing_key: PrivateKey) -> Self {
+        self.block_signing_key = Some(block_signing_key);
+        self
+    }
+
+    fn build_impl(self) -> (Block, &'f mut TestFramework) {
+        let block_body = BlockBody::new(self.reward, self.transactions);
+        let unsigned_header = BlockHeader::new(
             self.prev_block_hash,
+            block_body.tx_merkle_root().unwrap(),
+            block_body.witness_merkle_root().unwrap(),
             self.timestamp,
             self.consensus_data,
-            self.reward,
+        );
+
+        let signed_header = if let Some(key) = self.block_signing_key {
+            let signature = key.sign_message(&unsigned_header.encode()).unwrap();
+            let sig_data = BlockHeaderSignatureData::new(signature);
+            let done_signature = BlockHeaderSignature::HeaderSignature(sig_data);
+            unsigned_header.with_signature(done_signature)
+        } else {
+            unsigned_header.with_no_signature()
+        };
+
+        (
+            Block::new_from_header(signed_header, block_body).unwrap(),
+            self.framework,
         )
-        .unwrap()
+    }
+
+    /// Builds a block without processing it.
+    pub fn build(self) -> Block {
+        self.build_impl().0
     }
 
     /// Constructs a block and processes it by the chainstate.
     pub fn build_and_process(self) -> Result<Option<BlockIndex>, ChainstateError> {
-        let block = Block::new(
-            self.transactions,
-            self.prev_block_hash,
-            self.timestamp,
-            self.consensus_data,
-            self.reward,
-        )
-        .unwrap();
-        self.framework.process_block(block, self.block_source)
+        let block_source = self.block_source;
+        let (block, framework) = self.build_impl();
+        framework.process_block(block, block_source)
     }
 
     /// Produces a new set of inputs and outputs from the transactions of the specified block.

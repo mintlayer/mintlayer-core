@@ -16,7 +16,7 @@
 use chainstate_types::BlockIndexHandle;
 use common::{
     chain::{
-        block::{BlockHeader, ConsensusData},
+        block::{signed_block_header::SignedBlockHeader, BlockHeader, ConsensusData},
         config::ChainConfig,
         PoSStatus, PoWStatus, RequiredConsensus,
     },
@@ -32,7 +32,7 @@ use crate::{
 /// Checks if the given block identified by the header contains the correct consensus data.
 pub fn validate_consensus<H, U, P>(
     chain_config: &ChainConfig,
-    header: &BlockHeader,
+    header: &SignedBlockHeader,
     block_index_handle: &H,
     utxos_view: &U,
     pos_accounting_view: &P,
@@ -57,10 +57,13 @@ where
     let block_height = prev_block_height.next_height();
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
     match consensus_status {
-        RequiredConsensus::PoW(pow_status) => {
-            validate_pow_consensus(chain_config, header, &pow_status, block_index_handle)
-        }
-        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
+        RequiredConsensus::PoW(pow_status) => validate_pow_consensus(
+            chain_config,
+            header.header(),
+            &pow_status,
+            block_index_handle,
+        ),
+        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header.header()),
         RequiredConsensus::PoS(pos_status) => validate_pos_consensus(
             chain_config,
             &pos_status,
@@ -110,7 +113,7 @@ fn validate_pos_consensus<H, U, P>(
     block_index_handle: &H,
     utxos_view: &U,
     pos_accounting_view: &P,
-    header: &BlockHeader,
+    header: &SignedBlockHeader,
 ) -> Result<(), ConsensusVerificationError>
 where
     H: BlockIndexHandle,

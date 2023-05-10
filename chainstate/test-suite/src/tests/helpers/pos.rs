@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate_storage::Transactional;
-use chainstate_test_framework::{anyonecanspend_address, TestFramework};
+use chainstate_test_framework::TestFramework;
 use chainstate_types::{pos_randomness::PoSRandomness, vrf_tools::construct_transcript};
 use common::{
     chain::{
@@ -22,12 +22,13 @@ use common::{
         config::EpochIndex,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
-        OutPoint, PoolId, RequiredConsensus,
+        Destination, OutPoint, PoolId, RequiredConsensus,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact},
 };
 use consensus::ConsensusPoSError;
 use crypto::{
+    key::{KeyKind, PrivateKey},
     random::{CryptoRng, Rng},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
@@ -38,6 +39,7 @@ use super::block_index_handle_impl::TestBlockIndexHandle;
 pub fn pos_mine(
     initial_timestamp: BlockTimestamp,
     kernel_outpoint: OutPoint,
+    kernel_witness: InputWitness,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,
     pool_id: PoolId,
@@ -51,9 +53,10 @@ pub fn pos_mine(
         let transcript =
             construct_transcript(epoch_index, &sealed_epoch_randomness.value(), timestamp);
         let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+
         let pos_data = PoSData::new(
             vec![kernel_outpoint.clone().into()],
-            vec![InputWitness::NoSignature(None)],
+            vec![kernel_witness.clone()],
             pool_id,
             vrf_data,
             target,
@@ -102,18 +105,24 @@ pub fn calculate_new_target(
     )
 }
 
+// Alongside `StakePoolData` also returns `PrivateKey` that allows to sign a block that spends a kernel
+// with this pool data
 pub fn create_stake_pool_data_with_all_reward_to_owner(
     rng: &mut (impl Rng + CryptoRng),
     amount: Amount,
     vrf_pk: VRFPublicKey,
-) -> StakePoolData {
-    let destination = super::new_pub_key_destination(rng);
-    StakePoolData::new(
-        amount,
-        anyonecanspend_address(),
-        vrf_pk,
-        destination,
-        PerThousand::new(1000).unwrap(), // give all reward to the owner
-        Amount::ZERO,
+) -> (StakePoolData, PrivateKey) {
+    let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
+
+    (
+        StakePoolData::new(
+            amount,
+            Destination::PublicKey(pk),
+            vrf_pk,
+            Destination::AnyoneCanSpend,
+            PerThousand::new(1000).unwrap(), // give all reward to the owner
+            Amount::ZERO,
+        ),
+        sk,
     )
 }

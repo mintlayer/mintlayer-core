@@ -31,6 +31,7 @@ pub mod config;
 pub mod error;
 pub mod flush;
 pub mod hierarchy;
+pub mod signature_destination_getter;
 pub mod storage;
 
 mod tx_source;
@@ -48,6 +49,7 @@ use self::{
     config::TransactionVerifierConfig,
     error::{ConnectTransactionError, SpendStakeError, TokensError},
     optional_tx_index_cache::OptionalTxIndexCache,
+    signature_destination_getter::SignatureDestinationGetter,
     storage::TransactionVerifierStorageRef,
     token_issuance_cache::{ConsumedTokenIssuanceCache, TokenIssuanceCache},
     transferred_amount_check::{
@@ -209,7 +211,7 @@ where
                 TxOutput::Burn(v) => v.coin_amount(),
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::StakePool(_)
+                | TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _) => None,
             })
@@ -236,7 +238,7 @@ where
             TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
-            TxOutput::StakePool(d) => Ok(d.as_ref().clone().into()),
+            TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
             TxOutput::ProduceBlockFromStake(_, pool_id)
             | TxOutput::DecommissionPool(_, _, pool_id, _) => self
                 .accounting_delta_adapter
@@ -319,7 +321,7 @@ where
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::StakePool(data) => {
+                TxOutput::CreateStakePool(data) => {
                     let res = self
                         .accounting_delta_adapter
                         .operations(tx_source)
@@ -357,7 +359,7 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::StakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
+            TxOutput::CreateStakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
@@ -432,7 +434,12 @@ where
         )?;
 
         // verify input signatures
-        signature_check::verify_signatures(self.chain_config.as_ref(), &self.utxo_cache, tx)?;
+        signature_check::verify_signatures(
+            self.chain_config.as_ref(),
+            &self.utxo_cache,
+            tx,
+            SignatureDestinationGetter::new_for_transaction(&self.accounting_delta_adapter),
+        )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
 
@@ -497,6 +504,7 @@ where
                 self.chain_config.as_ref(),
                 &self.utxo_cache,
                 &reward_transactable,
+                SignatureDestinationGetter::new_for_block_reward(),
             )?;
         }
 

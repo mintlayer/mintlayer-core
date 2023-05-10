@@ -15,10 +15,7 @@
 
 use std::{num::NonZeroU64, time::Duration};
 
-use super::helpers::{
-    new_pub_key_destination,
-    pos::{calculate_new_target, pos_mine},
-};
+use super::helpers::pos::{calculate_new_target, pos_mine};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
@@ -30,22 +27,25 @@ use chainstate_test_framework::{
 use chainstate_types::vrf_tools::construct_transcript;
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, ConsensusData},
+        block::{
+            consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable,
+            ConsensusData,
+        },
         config::Builder as ConfigBuilder,
         create_unittest_pos_config,
-        signature::inputsig::InputWitness,
+        signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         stakelock::StakePoolData,
-        ConsensusUpgrade, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput, TxOutput,
-        UpgradeVersion,
+        ConsensusUpgrade, Destination, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput,
+        TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Idable},
     Uint256,
 };
 use consensus::{ConsensusPoSError, ConsensusVerificationError};
-use crypto::{random::CryptoRng, vrf::VRFPublicKey};
 use crypto::{
-    random::Rng,
-    vrf::{VRFKeyKind, VRFPrivateKey},
+    key::{KeyKind, PrivateKey, PublicKey},
+    random::{CryptoRng, Rng},
+    vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -58,7 +58,7 @@ const STAKED_BALANCE: Amount = Amount::from_atoms(1);
 fn setup_test_chain_with_staked_pool(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk: VRFPublicKey,
-) -> (TestFramework, PoolId) {
+) -> (TestFramework, PoolId, PrivateKey) {
     let difficulty = Uint256::MAX;
     let upgrades = vec![
         (
@@ -81,6 +81,7 @@ fn setup_test_chain_with_staked_pool(
         .build();
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
+    let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let genesis_id = tf.genesis().get_id();
     let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
@@ -89,10 +90,10 @@ fn setup_test_chain_with_staked_pool(
 
     let stake_pool_data = StakePoolData::new(
         STAKED_BALANCE,
-        anyonecanspend_address(),
+        Destination::PublicKey(pk),
         vrf_pk,
-        new_pub_key_destination(rng),
-        PerThousand::new(0).unwrap(),
+        Destination::AnyoneCanSpend,
+        PerThousand::new_from_rng(rng),
         Amount::ZERO,
     );
 
@@ -101,11 +102,11 @@ fn setup_test_chain_with_staked_pool(
             TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
-        .add_output(TxOutput::StakePool(Box::new(stake_pool_data)))
+        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
         .build();
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
-    (tf, pool_id)
+    (tf, pool_id, sk)
 }
 
 #[rstest]
@@ -114,7 +115,8 @@ fn setup_test_chain_with_staked_pool(
 fn stable_block_time(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let (mut tf, pool_id, staking_sk) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
 
     for _i in 0..50 {
         let initial_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
@@ -134,11 +136,34 @@ fn stable_block_time(#[case] seed: Seed) {
             .map_or(tf.chainstate.get_chain_config().initial_randomness(), |d| {
                 d.randomness().value()
             });
-        let best_block_outputs = tf.outputs_from_genblock(tf.best_block_id());
+
+        // produce kernel signature
+        let (best_block_source_id, best_block_utxos) =
+            tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
+
+        let reward_outputs =
+            vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+        let kernel_inputs = vec![OutPoint::new(best_block_source_id.clone(), 0).into()];
+
+        let block_reward_tx = BlockRewardTransactable::new(
+            Some(kernel_inputs.as_slice()),
+            Some(reward_outputs.as_slice()),
+            None,
+        );
+        let kernel_sig = StandardInputSignature::produce_uniparty_signature_for_input(
+            &staking_sk,
+            Default::default(),
+            staking_destination.clone(),
+            &block_reward_tx,
+            &best_block_utxos.iter().collect::<Vec<_>>(),
+            0,
+        )
+        .unwrap();
 
         let (pos_data, valid_block_timestamp) = pos_mine(
             initial_block_time,
-            OutPoint::new(best_block_outputs.keys().next().unwrap().clone(), 0),
+            OutPoint::new(best_block_source_id, 0),
+            InputWitness::Standard(kernel_sig),
             &vrf_sk,
             chainstate_types::pos_randomness::PoSRandomness::new(sealed_epoch_randomness),
             pool_id,
@@ -148,11 +173,11 @@ fn stable_block_time(#[case] seed: Seed) {
         )
         .expect("should be able to mine");
 
-        let reward_output = TxOutput::ProduceBlockFromStake(anyonecanspend_address(), pool_id);
         tf.make_block_builder()
+            .with_block_signing_key(staking_sk.clone())
             .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
             .with_timestamp(valid_block_timestamp)
-            .with_reward(vec![reward_output])
+            .with_reward(reward_outputs)
             .build_and_process()
             .unwrap();
 
@@ -166,7 +191,7 @@ fn stable_block_time(#[case] seed: Seed) {
 fn invalid_target(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let (mut tf, pool_id) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+    let (mut tf, pool_id, _) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
 
     let invalid_target = Compact(1);
 

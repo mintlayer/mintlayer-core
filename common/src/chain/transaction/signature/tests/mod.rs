@@ -738,7 +738,7 @@ fn check_mutate_output(
         TxOutput::Transfer(v, d) => TxOutput::Transfer(add_value(v), d),
         TxOutput::LockThenTransfer(v, d, l) => TxOutput::LockThenTransfer(add_value(v), d, l),
         TxOutput::Burn(v) => TxOutput::Burn(add_value(v)),
-        TxOutput::StakePool(_) => unreachable!(), // TODO: come back to this later
+        TxOutput::CreateStakePool(_) => unreachable!(), // TODO: come back to this later
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
     };

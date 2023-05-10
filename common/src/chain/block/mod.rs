@@ -23,6 +23,7 @@ pub use crate::chain::{
 };
 
 pub mod block_header;
+pub mod block_merkle;
 pub mod block_size;
 pub mod consensus_data;
 pub mod signed_block_header;
@@ -30,8 +31,6 @@ pub mod timestamp;
 
 mod block_reward;
 mod block_v1;
-
-use std::iter;
 
 use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
@@ -41,49 +40,14 @@ pub use crate::chain::block::block_v1::BlockBody;
 
 use crate::{
     chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
-    primitives::{
-        id::{self, WithId},
-        merkle_tools::MerkleHasher,
-        Id, Idable, VersionTag, H256,
-    },
+    primitives::{id::WithId, Id, Idable, VersionTag, H256},
 };
 
-use merkletree::{tree::MerkleTree, MerkleTreeFormError};
+use merkletree::MerkleTreeFormError;
 
 use self::signed_block_header::SignedBlockHeader;
 
 use super::signed_transaction::SignedTransaction;
-
-pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
-    const TX_HASHER: fn(&SignedTransaction) -> H256 =
-        |tx: &SignedTransaction| tx.transaction().get_id().get();
-    calculate_generic_merkle_root(&TX_HASHER, body)
-}
-
-pub fn calculate_witness_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
-    const TX_HASHER: fn(&SignedTransaction) -> H256 =
-        |tx: &SignedTransaction| tx.serialized_hash().get();
-    calculate_generic_merkle_root(&TX_HASHER, body)
-}
-
-fn calculate_generic_merkle_root(
-    tx_hasher: &fn(&SignedTransaction) -> H256,
-    body: &BlockBody,
-) -> Result<H256, MerkleTreeFormError> {
-    let rewards_hash = id::hash_encoded(&body.reward);
-
-    if body.transactions.is_empty() {
-        // using bitcoin's way, blocks that only have the coinbase (or a single tx in general)
-        // use their coinbase as the merkleroot
-        return Ok(rewards_hash);
-    }
-
-    let hashes: Vec<H256> = iter::once(rewards_hash)
-        .chain(body.transactions.iter().map(tx_hasher))
-        .collect();
-    let t = MerkleTree::<H256, MerkleHasher>::from_leaves(hashes)?;
-    Ok(t.root())
-}
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockCreationError {
@@ -121,8 +85,8 @@ impl Block {
             reward,
             transactions,
         };
-        let tx_merkle_root = calculate_tx_merkle_root(&body)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&body)?;
+        let tx_merkle_root = body.tx_merkle_root()?;
+        let witness_merkle_root = body.witness_merkle_root()?;
 
         let header = BlockHeader {
             version: VersionTag::default(),
@@ -144,8 +108,8 @@ impl Block {
         header: SignedBlockHeader,
         body: BlockBody,
     ) -> Result<Self, BlockCreationError> {
-        let tx_merkle_root = calculate_tx_merkle_root(&body)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&body)?;
+        let tx_merkle_root = body.tx_merkle_root()?;
+        let witness_merkle_root = body.witness_merkle_root()?;
 
         ensure!(
             header.header().tx_merkle_root == tx_merkle_root,
@@ -309,7 +273,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        calculate_tx_merkle_root(block.body()).unwrap();
+        block.body().tx_merkle_root().unwrap();
 
         check_block_tag(&block);
     }
@@ -335,7 +299,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = calculate_tx_merkle_root(block.body()).unwrap();
+        let res = block.body().tx_merkle_root().unwrap();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
 
         check_block_tag(&block);
@@ -366,7 +330,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = calculate_tx_merkle_root(block.body()).unwrap();
+        let res = block.body().tx_merkle_root().unwrap();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
 
         check_block_tag(&block);
@@ -398,7 +362,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        calculate_tx_merkle_root(block.body()).unwrap();
+        block.body().tx_merkle_root().unwrap();
 
         check_block_tag(&block);
     }
@@ -423,8 +387,8 @@ mod tests {
             transactions: vec![one_transaction],
         };
 
-        let merkle_root = calculate_tx_merkle_root(&body);
-        let witness_merkle_root = calculate_witness_merkle_root(&body);
+        let merkle_root = body.tx_merkle_root();
+        let witness_merkle_root = body.witness_merkle_root();
 
         assert_ne!(merkle_root, witness_merkle_root);
     }

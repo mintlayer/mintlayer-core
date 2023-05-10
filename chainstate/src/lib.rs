@@ -69,7 +69,7 @@ pub enum ChainstateError {
 
 impl HasTxIndexDisabledError for ChainstateError {
     fn tx_index_disabled_error() -> Self {
-        BlockError::tx_index_disabled_error().into()
+        ChainstateError::ProcessBlockError(BlockError::tx_index_disabled_error())
     }
 }
 

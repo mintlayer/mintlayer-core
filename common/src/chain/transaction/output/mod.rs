@@ -51,7 +51,7 @@ pub enum TxOutput {
     Burn(OutputValue),
     /// Output type that is used to create a stake pool
     #[codec(index = 3)]
-    StakePool(Box<StakePoolData>),
+    CreateStakePool(Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
@@ -61,23 +61,11 @@ pub enum TxOutput {
 }
 
 impl TxOutput {
-    // TODO: this has to go
-    pub fn destination(&self) -> Option<&Destination> {
-        match self {
-            TxOutput::Transfer(_, d) => Some(d),
-            TxOutput::LockThenTransfer(_, d, _) => Some(d),
-            TxOutput::Burn(_) => None,
-            TxOutput::StakePool(d) => Some(d.staker()),
-            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
-            TxOutput::DecommissionPool(_, d, _, _) => Some(d),
-        }
-    }
-
     pub fn is_burn(&self) -> bool {
         match self {
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::StakePool(_)
+            | TxOutput::CreateStakePool(_)
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::ProduceBlockFromStake(_, _) => false,
             TxOutput::Burn(_) => true,
@@ -88,7 +76,7 @@ impl TxOutput {
         match self {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
-            | TxOutput::StakePool(_)
+            | TxOutput::CreateStakePool(_)
             | TxOutput::ProduceBlockFromStake(_, _) => false,
             TxOutput::DecommissionPool(_, _, _, _) | TxOutput::LockThenTransfer(_, _, _) => true,
         }

@@ -24,10 +24,7 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root,
-            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
-        },
+        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -376,14 +373,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
 
-        self.check_block_signature(header)?;
-
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
-        consensus::validate_consensus(self.chain_config, header.header(), self, &utxos_db, &pos_db)
+        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;
 
@@ -462,7 +457,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     Ok(())
                 }
                 TxOutput::Transfer(_, _)
-                | TxOutput::StakePool(_)
+                | TxOutput::CreateStakePool(_)
                 | TxOutput::Burn(_)
                 | TxOutput::DecommissionPool(_, _, _, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
@@ -509,11 +504,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             )
         );
 
-        Ok(())
-    }
-
-    fn check_block_signature(&self, _header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
-        // TODO
         Ok(())
     }
 
@@ -578,7 +568,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
                     | TxOutput::Burn(v) => v.token_data(),
-                    TxOutput::StakePool(_)
+                    TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::DecommissionPool(_, _, _, _) => None,
                 })
@@ -606,7 +596,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 match output {
                     TxOutput::Transfer(_, _)
                     | TxOutput::Burn(_)
-                    | TxOutput::StakePool(_)
+                    | TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::LockThenTransfer(_, _, _) => {}
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
@@ -668,7 +658,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.body())
+        block
+            .body()
+            .tx_merkle_root()
             .map_or(Err(CheckBlockError::MerkleRootMismatch), |merkle_tree| {
                 ensure!(
                     merkle_tree_root == merkle_tree,
@@ -680,7 +672,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         // Witness merkle root
         let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.body())
+        block
+            .body()
+            .witness_merkle_root()
             .map_or(
                 Err(CheckBlockError::WitnessMerkleRootMismatch),
                 |witness_merkle| {

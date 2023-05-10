@@ -20,7 +20,8 @@ use serialization::{Decode, DecodeAll, Encode};
 use crate::{
     chain::{
         signature::{
-            sighash::sighashtype::SigHashType, sighash::signature_hash, TransactionSigError,
+            sighash::sighashtype::SigHashType, sighash::signature_hash, Signable,
+            TransactionSigError,
         },
         ChainConfig, Destination, Transaction, TxOutput,
     },
@@ -97,11 +98,11 @@ impl StandardInputSignature {
         Ok(())
     }
 
-    pub fn produce_uniparty_signature_for_input(
+    pub fn produce_uniparty_signature_for_input<T: Signable>(
         private_key: &crypto::key::PrivateKey,
         sighash_type: SigHashType,
         outpoint_destination: Destination,
-        tx: &Transaction,
+        tx: &T,
         inputs_utxos: &[&TxOutput],
         input_num: usize,
     ) -> Result<Self, TransactionSigError> {

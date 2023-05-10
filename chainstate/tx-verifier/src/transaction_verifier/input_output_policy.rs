@@ -52,7 +52,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DecommissionPool(_, _, _, _) => {
                         Err(ConnectTransactionError::InvalidInputTypeInReward)
                     }
-                    TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
+                    TxOutput::CreateStakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
                         let outputs =
                             reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::NoBlockRewardOutputs,
@@ -65,7 +65,7 @@ pub fn check_reward_inputs_outputs_purposes(
                                 TxOutput::Transfer(_, _)
                                 | TxOutput::LockThenTransfer(_, _, _)
                                 | TxOutput::Burn(_)
-                                | TxOutput::StakePool(_)
+                                | TxOutput::CreateStakePool(_)
                                 | TxOutput::DecommissionPool(_, _, _, _) => {
                                     Err(ConnectTransactionError::InvalidOutputTypeInReward)
                                 }
@@ -95,7 +95,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     TxOutput::LockThenTransfer(_, _, _) => true,
                     TxOutput::Transfer(_, _)
                     | TxOutput::Burn(_)
-                    | TxOutput::StakePool(_)
+                    | TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::DecommissionPool(_, _, _, _) => false,
                 });
@@ -162,32 +162,32 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _))
         | (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::Transfer(_, _), TxOutput::Burn(_))
-        | (TxOutput::Transfer(_, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::Transfer(_, _), TxOutput::CreateStakePool(_)) => true,
         | (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::CreateStakePool(_)) => true,
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
         | (TxOutput::Burn(_), _) => false,
-        | (TxOutput::StakePool(_), TxOutput::Transfer(_, _))
-        | (TxOutput::StakePool(_), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::StakePool(_), TxOutput::Burn(_))
-        | (TxOutput::StakePool(_), TxOutput::StakePool(_))
-        | (TxOutput::StakePool(_), TxOutput::ProduceBlockFromStake(_, _)) => false,
-        | (TxOutput::StakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
+        | (TxOutput::CreateStakePool(_), TxOutput::Transfer(_, _))
+        | (TxOutput::CreateStakePool(_), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::CreateStakePool(_), TxOutput::Burn(_))
+        | (TxOutput::CreateStakePool(_), TxOutput::CreateStakePool(_))
+        | (TxOutput::CreateStakePool(_), TxOutput::ProduceBlockFromStake(_, _)) => false,
+        | (TxOutput::CreateStakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Transfer(_, _))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Burn(_))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::StakePool(_))
+        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::CreateStakePool(_))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::ProduceBlockFromStake(_, _)) => false,
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::DecommissionPool(_, _, _, _)) => true,
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Transfer(_, _))
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Burn(_))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::StakePool(_)) => true,
+        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::CreateStakePool(_)) => true,
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
     }
@@ -212,7 +212,9 @@ fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _) => true,
-        TxOutput::Burn(_) | TxOutput::StakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => false,
+        TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_)
+        | TxOutput::ProduceBlockFromStake(_, _) => false,
     })
 }
 
@@ -221,7 +223,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
-        | TxOutput::StakePool(_) => true,
+        | TxOutput::CreateStakePool(_) => true,
         TxOutput::ProduceBlockFromStake(_, _) | TxOutput::DecommissionPool(_, _, _, _) => false,
     });
 
@@ -233,7 +235,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::Burn(_)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::DecommissionPool(_, _, _, _) => false,
-            TxOutput::StakePool(_) => true,
+            TxOutput::CreateStakePool(_) => true,
         })
         .count()
         < 2;
@@ -286,7 +288,7 @@ mod tests {
 
     fn stake_pool() -> TxOutput {
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-        TxOutput::StakePool(Box::new(StakePoolData::new(
+        TxOutput::CreateStakePool(Box::new(StakePoolData::new(
             Amount::ZERO,
             Destination::AnyoneCanSpend,
             vrf_pub_key,
@@ -404,7 +406,7 @@ mod tests {
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = UtxosDBInMemoryImpl::new(
-            Id::<GenBlock>::new(H256::zero()), 
+            Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
                 outpoint.clone(),
                 Utxo::new_for_mempool(input_utxo, false),
@@ -684,7 +686,7 @@ mod tests {
     ) {
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let utxo_db = UtxosDBInMemoryImpl::new(
-            Id::<GenBlock>::new(H256::zero()), 
+            Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
                 outpoint.clone(),
                 Utxo::new_for_mempool(input_utxo, false),

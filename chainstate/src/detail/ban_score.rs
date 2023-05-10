@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
-use consensus::{ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError};
+use consensus::{
+    BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
+};
+use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError;
 
 use super::{
     transaction_verifier::{
@@ -127,6 +130,18 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
+            ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for SignatureDestinationGetterError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
+            SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }
 }
@@ -313,6 +328,18 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::InvalidTargetBlockTime => 100,
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
             ConsensusPoSError::FailedToFetchUtxo => 0,
+            ConsensusPoSError::BlockSignatureError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for BlockSignatureError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            BlockSignatureError::BlockSignatureNotFound(_) => 100,
+            BlockSignatureError::WrongOutputType(_) => 100,
+            BlockSignatureError::WrongDestination(_) => 100,
+            BlockSignatureError::BadSignature(_) => 100,
         }
     }
 }

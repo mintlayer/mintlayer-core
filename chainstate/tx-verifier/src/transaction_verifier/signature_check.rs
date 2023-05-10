@@ -19,13 +19,20 @@ use common::chain::{
 };
 use utxo::UtxosView;
 
-use super::error::ConnectTransactionError;
+use super::{
+    error::ConnectTransactionError, signature_destination_getter::SignatureDestinationGetter,
+};
 
-pub fn verify_signatures<U: UtxosView, T: Transactable>(
+pub fn verify_signatures<U, T>(
     chain_config: &ChainConfig,
     utxo_view: &U,
     transactable: &T,
-) -> Result<(), ConnectTransactionError> {
+    destination_getter: SignatureDestinationGetter,
+) -> Result<(), ConnectTransactionError>
+where
+    U: UtxosView,
+    T: Transactable,
+{
     let inputs = match transactable.inputs() {
         Some(ins) => ins,
         None => return Ok(()),
@@ -44,13 +51,11 @@ pub fn verify_signatures<U: UtxosView, T: Transactable>(
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
 
     inputs_utxos.iter().enumerate().try_for_each(|(input_idx, utxo)| {
-        // TODO: see if a different treatment should be done for different output purposes
         // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-        let destination =
-            utxo.destination().ok_or(ConnectTransactionError::AttemptToSpendBurnedAmount)?;
+        let destination = destination_getter.call(utxo)?;
         verify_signature(
             chain_config,
-            destination,
+            &destination,
             transactable,
             &inputs_utxos.iter().collect::<Vec<_>>(),
             input_idx,
