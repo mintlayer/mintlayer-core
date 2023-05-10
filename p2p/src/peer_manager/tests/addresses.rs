@@ -50,7 +50,7 @@ where
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
-    let (mut pm, _tx) = make_peer_manager_custom::<T>(
+    let (mut pm, _tx, _shutdown_sender) = make_peer_manager_custom::<T>(
         A::make_transport(),
         addr,
         Arc::clone(&config),
