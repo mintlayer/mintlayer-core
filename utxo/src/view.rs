@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+
 use crate::{ConsumedUtxoCache, Utxo, UtxosCache};
 use common::{
     chain::{GenBlock, OutPoint},
@@ -52,4 +54,28 @@ pub fn flush_to_base<T: FlushableUtxoView, P: UtxosView>(
 ) -> Result<(), T::Error> {
     let consumed_cache = cache.consume();
     base.batch_write(consumed_cache)
+}
+
+impl<T> UtxosView for T
+where
+    T: Deref,
+    <T as Deref>::Target: UtxosView,
+{
+    type Error = <T::Target as UtxosView>::Error;
+
+    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+        self.deref().utxo(outpoint)
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+        self.deref().has_utxo(outpoint)
+    }
+
+    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
+        self.deref().best_block_hash()
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        self.deref().estimated_size()
+    }
 }
