@@ -231,9 +231,23 @@ mod tests {
         let block_reward_witness_inclusion_proof =
             witness_merkle_tree.block_reward_inclusion_proof().unwrap();
 
-        block_reward_inclusion_proof.verify(block_reward_witness_hash, witness_merkle_tree.root());
-        block_reward_witness_inclusion_proof
-            .verify(block_reward_witness_hash, witness_merkle_tree.root());
+        if transactions.is_empty() {
+            // If there are no transactions, the block reward is the root
+            assert!(block_reward_inclusion_proof
+                .verify(block_reward_witness_hash, merkle_tree.root())
+                .passed_trivially());
+            assert!(block_reward_witness_inclusion_proof
+                .verify(block_reward_witness_hash, witness_merkle_tree.root())
+                .passed_trivially());
+            assert_eq!(merkle_tree.root(), witness_merkle_tree.root());
+        } else {
+            assert!(block_reward_inclusion_proof
+                .verify(block_reward_witness_hash, merkle_tree.root())
+                .passed_decisively());
+            assert!(block_reward_witness_inclusion_proof
+                .verify(block_reward_witness_hash, witness_merkle_tree.root())
+                .passed_decisively());
+        }
 
         // Verify inclusion proofs for transactions
         for (i, tx) in transactions.iter().enumerate() {
@@ -241,8 +255,12 @@ mod tests {
             let witness_inclusion_proof =
                 witness_merkle_tree.transaction_witness_inclusion_proof(i as u32).unwrap();
 
-            inclusion_proof.verify(tx.transaction().get_id().get(), merkle_tree.root());
-            witness_inclusion_proof.verify(tx.serialized_hash(), witness_merkle_tree.root());
+            assert!(inclusion_proof
+                .verify(tx.transaction().get_id().get(), merkle_tree.root())
+                .passed_decisively());
+            assert!(witness_inclusion_proof
+                .verify(tx.serialized_hash(), witness_merkle_tree.root())
+                .passed_decisively());
         }
     }
 }
