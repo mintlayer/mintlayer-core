@@ -17,13 +17,10 @@ use merkletree::{tree::MerkleTree, MerkleTreeFormError};
 
 use crate::{
     chain::SignedTransaction,
-    primitives::{
-        id::{self, Idable, H256},
-        merkle_tools::MerkleHasher,
-    },
+    primitives::id::{self, Idable, H256},
 };
 
-use super::BlockBody;
+use super::{merkle_tools::MerkleHasher, BlockBody};
 
 fn tx_hasher(tx: &SignedTransaction) -> H256 {
     tx.transaction().get_id().get()

@@ -13,6 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_merkle;
+mod merkle_tools;
+
 use merkletree::{
     proof::single::{SingleProofHashes, SingleProofNodes},
     tree::MerkleTree,
@@ -20,15 +23,14 @@ use merkletree::{
 };
 use serialization::{Decode, Encode};
 
-use crate::{
-    chain::SignedTransaction,
-    primitives::{merkle_tools::MerkleHasher, H256},
+use crate::{chain::SignedTransaction, primitives::H256};
+
+use self::{
+    block_merkle::{calculate_tx_merkle_tree, calculate_witness_merkle_tree},
+    merkle_tools::MerkleHasher,
 };
 
-use super::{
-    block_merkle::{calculate_tx_merkle_tree, calculate_witness_merkle_tree},
-    BlockReward,
-};
+use super::BlockReward;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockMerkleTreeError {
@@ -255,10 +257,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         let expected_merkle_leaves = std::iter::once(block_reward_witness_hash)
-            .chain(transaction_ids.clone())
+            .chain(transaction_ids)
             .collect::<Vec<_>>();
         let expected_witness_merkle_leaves = std::iter::once(block_reward_witness_hash)
-            .chain(transaction_witness_hashes.clone())
+            .chain(transaction_witness_hashes)
             .collect::<Vec<_>>();
 
         let merkle_tree = block_body.tx_merkle_tree().unwrap();

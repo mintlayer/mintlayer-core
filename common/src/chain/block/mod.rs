@@ -24,7 +24,6 @@ pub use crate::chain::{
 
 pub mod block_body;
 pub mod block_header;
-pub mod block_merkle;
 pub mod block_size;
 pub mod consensus_data;
 pub mod signed_block_header;
