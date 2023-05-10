@@ -142,7 +142,7 @@ where
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
             match peer_manager.run().await {
-                Ok(_) => {}
+                Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
                 Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::Acquire) => {
                     log::info!("Peer manager is shut down");
