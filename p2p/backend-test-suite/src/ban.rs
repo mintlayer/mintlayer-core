@@ -81,7 +81,6 @@ where
         mempool,
         tx_peer_manager,
         TimeGetter::default(),
-        Arc::clone(&shutdown),
     );
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();

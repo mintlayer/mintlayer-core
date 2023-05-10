@@ -16,10 +16,7 @@
 use std::{
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
@@ -70,7 +67,6 @@ pub struct SyncManagerHandle {
     sync_manager_handle: JoinHandle<()>,
     shutdown_trigger: ShutdownTrigger,
     subsystem_manager_handle: ManagerJoinHandle,
-    shutdown: Arc<AtomicBool>,
 }
 
 impl SyncManagerHandle {
@@ -102,7 +98,6 @@ impl SyncManagerHandle {
         let sync_event_receiver = SyncingEventReceiverMock {
             events_receiver: messaging_receiver,
         };
-        let shutdown = Arc::new(AtomicBool::new(false));
 
         let mut sync = BlockSyncManager::new(
             chain_config,
@@ -113,7 +108,6 @@ impl SyncManagerHandle {
             mempool,
             peer_manager_sender,
             TimeGetter::default(),
-            Arc::clone(&shutdown),
         );
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
@@ -130,7 +124,6 @@ impl SyncManagerHandle {
             sync_manager_handle,
             shutdown_trigger,
             subsystem_manager_handle,
-            shutdown,
         }
     }
 
@@ -230,7 +223,6 @@ impl SyncManagerHandle {
 
     /// Awaits on the sync manager join handle and rethrows the panic.
     pub async fn resume_panic(self) {
-        self.shutdown.store(true, Ordering::Release);
         let err = self.sync_manager_handle.await.unwrap_err();
         self.shutdown_trigger.initiate();
         self.subsystem_manager_handle.join().await;
@@ -239,7 +231,6 @@ impl SyncManagerHandle {
 
     pub async fn join_subsystem_manager(self) {
         self.shutdown_trigger.initiate();
-        self.shutdown.store(true, Ordering::Release);
 
         drop(self.peer_manager_receiver);
         drop(self.sync_event_sender);

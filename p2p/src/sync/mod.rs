@@ -75,8 +75,6 @@ pub struct BlockSyncManager<T: NetworkingService> {
     peers: HashMap<PeerId, UnboundedSender<SyncMessage>>,
 
     time_getter: TimeGetter,
-
-    shutdown: Arc<AtomicBool>,
 }
 
 /// Syncing manager
@@ -97,7 +95,6 @@ where
         mempool_handle: MempoolHandle,
         peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
-        shutdown: Arc<AtomicBool>,
     ) -> Self {
         Self {
             _chain_config: chain_config,
@@ -110,7 +107,6 @@ where
             is_initial_block_download: Arc::new(true.into()),
             peers: Default::default(),
             time_getter,
-            shutdown,
         }
     }
 
@@ -182,7 +178,6 @@ where
         let p2p_config = Arc::clone(&self.p2p_config);
         let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
         let time_getter = self.time_getter.clone();
-        let shutdown = Arc::clone(&self.shutdown);
         tokio::spawn(async move {
             Peer::<T>::new(
                 peer,
@@ -194,7 +189,6 @@ where
                 receiver,
                 is_initial_block_download,
                 time_getter,
-                shutdown,
             )
             .run()
             .await;

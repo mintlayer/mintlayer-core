@@ -93,7 +93,6 @@ pub struct Peer<T: NetworkingService> {
     /// we aren't waiting for specific messages.
     last_activity: Option<Duration>,
     time_getter: TimeGetter,
-    shutdown: Arc<AtomicBool>,
 }
 
 impl<T> Peer<T>
@@ -112,7 +111,6 @@ where
         message_receiver: UnboundedReceiver<SyncMessage>,
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
-        shutdown: Arc<AtomicBool>,
     ) -> Self {
         let services = (*p2p_config.node_type).into();
 
@@ -134,7 +132,6 @@ where
             unconnected_headers: 0,
             last_activity: None,
             time_getter,
-            shutdown,
         }
     }
 
@@ -145,9 +142,8 @@ where
 
     pub async fn run(&mut self) {
         match self.main_loop().await {
-            Ok(()) => {}
-            // The channel can be closed during the shutdown process.
-            Err(P2pError::ChannelClosed) if self.shutdown.load(Ordering::Acquire) => {}
+            // The unexpect "channel closed" error will be handled by the sync manager.
+            Ok(()) | Err(P2pError::ChannelClosed) => {}
             Err(e) => panic!("{} peer task failed: {e:?}", self.id()),
         }
     }
@@ -162,11 +158,7 @@ where
         loop {
             tokio::select! {
                 message = self.message_receiver.recv() => {
-                    let message = match message {
-                        Some(m) => m,
-                        // The channel was closed by the sync manager because the peer is disconnected.
-                        None => return Ok(()),
-                    };
+                    let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
                 }
 

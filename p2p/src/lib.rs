@@ -172,7 +172,6 @@ where
                     mempool_handle_,
                     tx_peer_manager,
                     time_getter,
-                    Arc::clone(&shutdown_),
                 )
                 .run()
                 .await
