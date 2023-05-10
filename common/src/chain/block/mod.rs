@@ -42,28 +42,23 @@ use crate::{
     primitives::{id::WithId, Id, Idable, VersionTag, H256},
 };
 
-use merkletree::MerkleTreeFormError;
-
-use self::{block_body::BlockBody, signed_block_header::SignedBlockHeader};
+use self::{
+    block_body::{BlockBody, BlockMerkleTreeError},
+    signed_block_header::SignedBlockHeader,
+};
 
 use super::signed_transaction::SignedTransaction;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockCreationError {
     #[error("Merkle tree calculation error: {0}")]
-    MerkleTreeError(MerkleTreeFormError),
+    MerkleTreeError(#[from] BlockMerkleTreeError),
     #[error("Error finding current tip")]
     CurrentTipRetrievalError,
     #[error("Merkle tree mismatch: Provided {0} vs calculated {1}")]
     MerkleTreeMismatch(H256, H256),
     #[error("Witness merkle tree mismatch: Provided {0} vs calculated {1}")]
     WitnessMerkleTreeMismatch(H256, H256),
-}
-
-impl From<MerkleTreeFormError> for BlockCreationError {
-    fn from(e: MerkleTreeFormError) -> Self {
-        BlockCreationError::MerkleTreeError(e)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]

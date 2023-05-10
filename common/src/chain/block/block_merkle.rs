@@ -23,35 +23,38 @@ use crate::{
     },
 };
 
-use super::block_body::BlockBody;
+use super::BlockBody;
 
-pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
-    const TX_HASHER: fn(&SignedTransaction) -> H256 =
-        |tx: &SignedTransaction| tx.transaction().get_id().get();
-    calculate_generic_merkle_root(&TX_HASHER, body)
+fn tx_hasher(tx: &SignedTransaction) -> H256 {
+    tx.transaction().get_id().get()
 }
 
-pub fn calculate_witness_merkle_root(body: &BlockBody) -> Result<H256, MerkleTreeFormError> {
-    const TX_HASHER: fn(&SignedTransaction) -> H256 =
-        |tx: &SignedTransaction| tx.serialized_hash().get();
-    calculate_generic_merkle_root(&TX_HASHER, body)
+fn tx_witness_hasher(tx: &SignedTransaction) -> H256 {
+    tx.serialized_hash()
 }
 
-fn calculate_generic_merkle_root(
-    tx_hasher: &fn(&SignedTransaction) -> H256,
+pub fn calculate_tx_merkle_tree(
     body: &BlockBody,
-) -> Result<H256, MerkleTreeFormError> {
-    let rewards_hash = id::hash_encoded(&body.reward);
+) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
+    calcualte_generic_merkle_tree(tx_hasher, body)
+}
 
-    if body.transactions.is_empty() {
-        // using bitcoin's way, blocks that only have the coinbase (or a single tx in general)
-        // use their coinbase as the merkleroot
-        return Ok(rewards_hash);
-    }
+pub fn calculate_witness_merkle_tree(
+    body: &BlockBody,
+) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
+    calcualte_generic_merkle_tree(tx_witness_hasher, body)
+}
+
+/// Calculate the merkle tree for the given body of the block.
+fn calcualte_generic_merkle_tree(
+    tx_hasher: fn(&SignedTransaction) -> H256,
+    body: &BlockBody,
+) -> Result<MerkleTree<H256, MerkleHasher>, MerkleTreeFormError> {
+    let rewards_hash = id::hash_encoded(&body.reward);
 
     let hashes: Vec<H256> = std::iter::once(rewards_hash)
         .chain(body.transactions.iter().map(tx_hasher))
         .collect();
-    let t = MerkleTree::<H256, MerkleHasher>::from_leaves(hashes)?;
-    Ok(t.root())
+    let tree = MerkleTree::<H256, MerkleHasher>::from_leaves(hashes)?;
+    Ok(tree)
 }

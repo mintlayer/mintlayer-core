@@ -16,10 +16,7 @@
 use super::{signature::inputsig::InputWitness, Transaction, TransactionSize, TxOutput};
 use crate::{
     chain::{TransactionCreationError, TxInput},
-    primitives::{
-        id::{self},
-        Id,
-    },
+    primitives::id::{self, H256},
 };
 use serialization::{Decode, Encode};
 use utils::ensure;
@@ -90,8 +87,8 @@ impl SignedTransaction {
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn serialized_hash(&self) -> Id<Transaction> {
-        Id::new(id::hash_encoded(self))
+    pub fn serialized_hash(&self) -> H256 {
+        id::hash_encoded(self)
     }
 }
 
@@ -105,6 +102,7 @@ mod tests {
     use super::*;
 
     use crate::chain::TxInput;
+    use crate::primitives::id::Id;
     use crate::primitives::H256;
 
     #[test]
