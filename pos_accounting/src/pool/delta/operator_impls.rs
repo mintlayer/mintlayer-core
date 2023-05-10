@@ -66,7 +66,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
                 pool_id,
-                data_undo: PoolDataUndo::DataDelta(Box::new((pledge_amount, undo_data))),
+                pledge_amount,
+                data_undo: PoolDataUndo::DataDelta(Box::new(undo_data)),
             }),
         ))
     }
@@ -88,7 +89,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
-            data_undo: PoolDataUndo::DataDelta(Box::new((last_amount, data_undo))),
+            pool_balance: last_amount,
+            data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
         }))
     }
 
@@ -118,7 +120,8 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         Ok(PoSAccountingUndo::IncreasePledgeAmount(
             IncreasePledgeAmountUndo {
                 pool_id,
-                data_undo: PoolDataUndo::DataDelta(Box::new((amount_to_add, data_undo))),
+                amount_added: amount_to_add,
+                data_undo: PoolDataUndo::DataDelta(Box::new(data_undo)),
             },
         ))
     }
@@ -190,7 +193,10 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
 
-        self.sub_balance_from_pool(pool_id, amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.sub_balance_from_pool(pool_id, amount)?;
+        }
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
@@ -218,22 +224,21 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
 impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
-        let (pledge_amount, undo_data) = match undo.data_undo {
+        let undo_data = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
             PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
-        let amount = self.get_pool_balance(undo.pool_id)?;
 
-        match amount {
-            Some(amount) => {
-                if amount != pledge_amount {
+        match self.get_pool_balance(undo.pool_id)? {
+            Some(pool_balance) => {
+                if pool_balance != undo.pledge_amount {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
             None => return Err(Error::InvariantErrorPoolCreationReversalFailedBalanceNotFound),
         }
 
-        self.data.pool_balances.sub_unsigned(undo.pool_id, pledge_amount)?;
+        self.data.pool_balances.sub_unsigned(undo.pool_id, undo.pledge_amount)?;
 
         self.get_pool_data(undo.pool_id)?
             .ok_or(Error::InvariantErrorPoolCreationReversalFailedDataNotFound)?;
@@ -244,7 +249,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
     }
 
     fn undo_decommission_pool(&mut self, undo: DecommissionPoolUndo) -> Result<(), Error> {
-        let (last_amount, undo_data) = match undo.data_undo {
+        let undo_data = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
             PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
@@ -257,7 +262,7 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.data.pool_balances.add_unsigned(undo.pool_id, last_amount)?;
+        self.data.pool_balances.add_unsigned(undo.pool_id, undo.pool_balance)?;
         self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
 
         Ok(())
@@ -312,7 +317,10 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
 
         self.add_to_delegation_balance(undo_data.delegation_id, undo_data.amount)?;
 
-        self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        }
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
 
@@ -323,13 +331,13 @@ impl<P: PoSAccountingView> PoSAccountingDelta<P> {
         &mut self,
         undo: IncreasePledgeAmountUndo,
     ) -> Result<(), Error> {
-        let (amount_added, undo_data) = match undo.data_undo {
+        let undo_data = match undo.data_undo {
             PoolDataUndo::DataDelta(v) => *v,
             PoolDataUndo::Data(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
         self.data.pool_data.undo_merge_delta_data_element(undo.pool_id, undo_data)?;
-        self.sub_balance_from_pool(undo.pool_id, amount_added)?;
+        self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;
 
         Ok(())
     }

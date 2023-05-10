@@ -62,6 +62,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             pool_id,
             PoSAccountingUndo::CreatePool(CreatePoolUndo {
                 pool_id,
+                pledge_amount: pool_data.pledge_amount(),
                 data_undo: PoolDataUndo::Data(Box::new(pool_data)),
             }),
         ))
@@ -73,11 +74,17 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             .get_pool_data(pool_id)?
             .ok_or(Error::AttemptedDecommissionNonexistingPoolData)?;
 
+        let pool_balance = self
+            .store
+            .get_pool_balance(pool_id)?
+            .ok_or(Error::AttemptedDecommissionNonexistingPoolBalance)?;
+
         self.store.del_pool_balance(pool_id)?;
         self.store.del_pool_data(pool_id)?;
 
         Ok(PoSAccountingUndo::DecommissionPool(DecommissionPoolUndo {
             pool_id,
+            pool_balance,
             data_undo: PoolDataUndo::Data(Box::new(pool_data)),
         }))
     }
@@ -105,6 +112,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         Ok(PoSAccountingUndo::IncreasePledgeAmount(
             IncreasePledgeAmountUndo {
                 pool_id,
+                amount_added: amount_to_add,
                 data_undo: PoolDataUndo::Data(Box::new(pool_data)),
             },
         ))
@@ -174,7 +182,10 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
         self.sub_delegation_from_pool_share(pool_id, delegation_id, amount)?;
 
-        self.sub_balance_from_pool(pool_id, amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.sub_balance_from_pool(pool_id, amount)?;
+        }
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
@@ -200,16 +211,14 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 
 impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
     fn undo_create_pool(&mut self, undo: CreatePoolUndo) -> Result<(), Error> {
-        let amount = self.store.get_pool_balance(undo.pool_id)?;
-
-        let data_undo = match undo.data_undo {
+        match undo.data_undo {
             PoolDataUndo::Data(v) => v,
             PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
-        match amount {
-            Some(amount) => {
-                if amount != data_undo.pledge_amount() {
+        match self.store.get_pool_balance(undo.pool_id)? {
+            Some(pool_balance) => {
+                if pool_balance != undo.pledge_amount {
                     return Err(Error::InvariantErrorPoolCreationReversalFailedAmountChanged);
                 }
             }
@@ -240,7 +249,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             return Err(Error::InvariantErrorDecommissionUndoFailedPoolDataAlreadyExists);
         }
 
-        self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
+        self.store.set_pool_balance(undo.pool_id, undo.pool_balance)?;
         self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
@@ -301,7 +310,10 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
 
         self.add_to_delegation_balance(undo_data.delegation_id, undo_data.amount)?;
 
-        self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        // it's possible that the pool was decommissioned
+        if self.pool_exists(pool_id)? {
+            self.add_balance_to_pool(pool_id, undo_data.amount)?;
+        }
 
         self.add_delegation_to_pool_share(pool_id, undo_data.delegation_id, undo_data.amount)?;
 
@@ -314,15 +326,12 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
             PoolDataUndo::DataDelta(_) => panic!("incompatible PoolDataUndo supplied"),
         };
 
-        if self.store.get_pool_balance(undo.pool_id)?.is_some() {
+        if self.store.get_pool_balance(undo.pool_id)?.is_none() {
             return Err(Error::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound);
         }
 
-        if self.store.get_pool_data(undo.pool_id)?.is_some() {
-            return Err(Error::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound);
-        }
+        self.sub_balance_from_pool(undo.pool_id, undo.amount_added)?;
 
-        self.store.set_pool_balance(undo.pool_id, data_undo.pledge_amount())?;
         self.store.set_pool_data(undo.pool_id, &data_undo)?;
 
         Ok(())
