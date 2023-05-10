@@ -52,7 +52,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DecommissionPool(_, _, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _) => {
+                    | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                         Err(ConnectTransactionError::InvalidInputTypeInReward)
                     }
                     TxOutput::CreateStakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
@@ -72,7 +72,7 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::DecommissionPool(_, _, _, _)
                                 | TxOutput::CreateDelegationId(_, _)
                                 | TxOutput::DelegateStaking(_, _, _)
-                                | TxOutput::SpendShareFromDelegation(_, _, _) => {
+                                | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                                     Err(ConnectTransactionError::InvalidOutputTypeInReward)
                                 }
                                 TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
@@ -106,7 +106,7 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::DecommissionPool(_, _, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _) => false,
+                    | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -176,7 +176,7 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::Transfer(_, _), TxOutput::DelegateStaking(_, _, _)) => true,
         | (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _))
-        | (TxOutput::Transfer(_, _), TxOutput::SpendShareFromDelegation(_, _, _)) => false,
+        | (TxOutput::Transfer(_, _), TxOutput::SpendShareFromDelegation(_, _, _, _)) => false,
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_))
@@ -184,7 +184,7 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::CreateDelegationId(_, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DelegateStaking(_, _, _)) => true,
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _))
+        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _, _))
         | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
         | (TxOutput::Burn(_), _) => false,
         | (TxOutput::CreateStakePool(_), TxOutput::Transfer(_, _))
@@ -194,14 +194,17 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::CreateStakePool(_), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::CreateStakePool(_), TxOutput::CreateDelegationId(_, _))
         | (TxOutput::CreateStakePool(_), TxOutput::DelegateStaking(_, _, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::SpendShareFromDelegation(_, _, _)) => false,
+        | (TxOutput::CreateStakePool(_), TxOutput::SpendShareFromDelegation(_, _, _, _)) => false,
         | (TxOutput::CreateStakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Transfer(_, _))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::LockThenTransfer(_, _, _))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Burn(_))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::CreateStakePool(_))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::SpendShareFromDelegation(_, _, _))
+        | (
+            TxOutput::ProduceBlockFromStake(_, _),
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
+        )
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::CreateDelegationId(_, _))
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::DelegateStaking(_, _, _)) => false,
         | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::DecommissionPool(_, _, _, _)) => true,
@@ -212,7 +215,10 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::CreateDelegationId(_, _))
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DelegateStaking(_, _, _)) => true,
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::SpendShareFromDelegation(_, _, _))
+        | (
+            TxOutput::DecommissionPool(_, _, _, _),
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
+        )
         | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
         | (TxOutput::CreateDelegationId(_, _), _) => false,
         | (TxOutput::DelegateStaking(_, _, _), TxOutput::Transfer(_, _))
@@ -221,20 +227,30 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::DelegateStaking(_, _, _), TxOutput::CreateStakePool(_))
         | (TxOutput::DelegateStaking(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
         | (TxOutput::DelegateStaking(_, _, _), TxOutput::DecommissionPool(_, _, _, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::DelegateStaking(_, _, _)) => false,
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _)) => true,
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::Transfer(_, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::Burn(_))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::DelegateStaking(_, _, _)) => true,
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _), TxOutput::DecommissionPool(_, _, _, _))
+        | (TxOutput::DelegateStaking(_, _, _), TxOutput::CreateDelegationId(_, _)) => false,
+        | (TxOutput::DelegateStaking(_, _, _), TxOutput::DelegateStaking(_, _, _))
+        | (TxOutput::DelegateStaking(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _, _)) => {
+            true
+        }
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::Transfer(_, _))
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::LockThenTransfer(_, _, _))
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::Burn(_))
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::CreateStakePool(_))
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::CreateDelegationId(_, _))
+        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::DelegateStaking(_, _, _)) => {
+            true
+        }
         | (
-            TxOutput::SpendShareFromDelegation(_, _, _),
-            TxOutput::SpendShareFromDelegation(_, _, _),
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
+            TxOutput::ProduceBlockFromStake(_, _),
+        )
+        | (
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
+            TxOutput::DecommissionPool(_, _, _, _),
+        )
+        | (
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
+            TxOutput::SpendShareFromDelegation(_, _, _, _),
         ) => false,
     }
 }
@@ -258,7 +274,7 @@ fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _) => true,
+        | TxOutput::SpendShareFromDelegation(_, _, _, _) => true,
         TxOutput::Burn(_)
         | TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _)
@@ -277,7 +293,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
         | TxOutput::DelegateStaking(_, _, _) => true,
         TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _) => false,
+        | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
     });
 
     let is_stake_pool_unique = outputs
@@ -290,7 +306,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
+            | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
             TxOutput::CreateStakePool(_) => true,
         })
         .count()
@@ -306,7 +322,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
+            | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
             TxOutput::CreateDelegationId(_, _) => true,
         })
         .count()

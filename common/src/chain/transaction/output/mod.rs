@@ -63,7 +63,7 @@ pub enum TxOutput {
     #[codec(index = 7)]
     DelegateStaking(Amount, Destination, DelegationId),
     #[codec(index = 8)]
-    SpendShareFromDelegation(Amount, Destination, DelegationId),
+    SpendShareFromDelegation(Amount, Destination, DelegationId, OutputTimeLock),
 }
 
 impl TxOutput {
@@ -76,21 +76,22 @@ impl TxOutput {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
+            | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
             TxOutput::Burn(_) => true,
         }
     }
 
-    pub fn has_timelock(&self) -> bool {
+    pub fn timelock(&self) -> Option<&OutputTimeLock> {
         match self {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateStakePool(_)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => false,
-            TxOutput::DecommissionPool(_, _, _, _) | TxOutput::LockThenTransfer(_, _, _) => true,
+            | TxOutput::DelegateStaking(_, _, _) => None,
+            TxOutput::LockThenTransfer(_, _, tl)
+            | TxOutput::DecommissionPool(_, _, _, tl)
+            | TxOutput::SpendShareFromDelegation(_, _, _, tl) => Some(tl),
         }
     }
 }

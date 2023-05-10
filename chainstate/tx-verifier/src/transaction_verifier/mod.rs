@@ -217,7 +217,7 @@ where
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _, _)
-                | TxOutput::SpendShareFromDelegation(_, _, _) => None,
+                | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -244,7 +244,7 @@ where
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => {
+            | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
@@ -391,7 +391,7 @@ where
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
-                TxOutput::SpendShareFromDelegation(amount, destination, delegation_id) => {
+                TxOutput::SpendShareFromDelegation(amount, destination, delegation_id, _) => {
                     match self.check_delegation_spend_destination(*delegation_id, &destination) {
                         Ok(_) => {
                             let res = self
@@ -431,7 +431,7 @@ where
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _) => {
+            | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)

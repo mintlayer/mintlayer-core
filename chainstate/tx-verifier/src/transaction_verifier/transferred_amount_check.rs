@@ -114,10 +114,10 @@ fn get_output_value<P: PoSAccountingView>(
                 .pledge_amount();
             OutputValue::Coin(pledge_amount)
         }
-        TxOutput::CreateDelegationId(_, _) => todo!(),
+        TxOutput::CreateDelegationId(_, _) => OutputValue::Coin(Amount::ZERO), // FIXME is it correct?
         TxOutput::DecommissionPool(v, _, _, _)
         | TxOutput::DelegateStaking(v, _, _)
-        | TxOutput::SpendShareFromDelegation(v, _, _) => OutputValue::Coin(*v),
+        | TxOutput::SpendShareFromDelegation(v, _, _, _) => OutputValue::Coin(*v),
     };
     Ok(res)
 }

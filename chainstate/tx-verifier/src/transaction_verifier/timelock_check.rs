@@ -17,7 +17,7 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        ChainConfig, GenBlock, TxOutput,
+        ChainConfig, GenBlock,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -31,23 +31,12 @@ use super::{
 
 fn check_timelock(
     source_block_index: &GenBlockIndex,
-    output: &TxOutput,
+    timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError> {
     let source_block_height = source_block_index.block_height();
     let source_block_time = source_block_index.block_timestamp();
-
-    let timelock = match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
-    };
 
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
@@ -74,19 +63,20 @@ fn check_timelock(
     Ok(())
 }
 
-pub fn check_timelocks<
-    S: TransactionVerifierStorageRef,
-    C: AsRef<ChainConfig>,
-    T: Transactable,
-    U: UtxosView,
->(
+pub fn check_timelocks<S, C, T, U>(
     storage: &S,
     chain_config: &C,
     utxos_view: &U,
     tx_source: &TransactionSourceForConnect,
     tx: &T,
     spending_time: &BlockTimestamp,
-) -> Result<(), ConnectTransactionError> {
+) -> Result<(), ConnectTransactionError>
+where
+    S: TransactionVerifierStorageRef,
+    C: AsRef<ChainConfig>,
+    T: Transactable,
+    U: UtxosView,
+{
     let inputs = match tx.inputs() {
         Some(ins) => ins,
         None => return Ok(()),
@@ -106,7 +96,7 @@ pub fn check_timelocks<
             .map_err(|_| utxo::Error::ViewRead)?
             .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-        if utxo.output().has_timelock() {
+        if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
                 utxo::UtxoSource::Mempool => match tx_source {
@@ -136,7 +126,7 @@ pub fn check_timelocks<
 
             check_timelock(
                 &source_block_index,
-                utxo.output(),
+                timelock,
                 &tx_source.expected_block_height(),
                 spending_time,
             )?;
