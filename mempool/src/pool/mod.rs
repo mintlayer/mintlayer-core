@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use parking_lot::RwLock;
-use std::{collections::BTreeSet, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, mem, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface,
@@ -34,22 +34,24 @@ use utils::{
     ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
 };
 
+use self::{
+    entry::{TxEntry, TxEntryWithFee},
+    fee::Fee,
+    feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
+    rolling_fee_rate::RollingFeeRate,
+    spends_unconfirmed::SpendsUnconfirmed,
+    store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
+};
 use crate::{
     error::{Error, MempoolPolicyError, TxValidationError},
     get_memory_usage::GetMemoryUsage,
     tx_accumulator::TransactionAccumulator,
     MempoolEvent,
 };
-use feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD};
-use rolling_fee_rate::RollingFeeRate;
-use spends_unconfirmed::SpendsUnconfirmed;
-use store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry};
-use tx_with_fee::TxWithFee;
 
 use crate::config::*;
 
-use self::fee::Fee;
-
+mod entry;
 pub mod fee;
 mod feerate;
 mod reorg;
@@ -57,7 +59,6 @@ mod rolling_fee_rate;
 mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
-mod tx_with_fee;
 
 fn get_relay_fee(tx: &SignedTransaction) -> Fee {
     // TODO we should never reach the expect, but should this be an error anyway?
@@ -131,7 +132,7 @@ impl<M> Mempool<M> {
     }
 
     // Reset the mempool state, returning the list of transactions previously stored in mempool
-    fn reset(&mut self) -> impl Iterator<Item = SignedTransaction> {
+    fn reset(&mut self) -> impl Iterator<Item = TxEntry> {
         // Discard the old tx verifier and replace it with a fresh one
         self.tx_verifier = tx_verifier::create(
             self.chain_config.shallow_clone(),
@@ -139,7 +140,7 @@ impl<M> Mempool<M> {
         );
 
         // Clear the store, returning the list of transacitons it contained previously
-        std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+        mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
     }
 
     pub fn best_block_id(&self) -> Id<GenBlock> {
@@ -216,11 +217,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
 // Entry Creation
 impl<M> Mempool<M> {
-    fn create_entry(&self, tx: TxWithFee) -> Result<TxMempoolEntry, MempoolPolicyError> {
-        let (tx, fee) = tx.into_tx_and_fee();
-
+    fn create_entry(&self, entry: TxEntryWithFee) -> Result<TxMempoolEntry, MempoolPolicyError> {
         // Genesis transaction has no parent, hence the first filter_map
-        let parents = tx
+        let parents = entry
             .transaction()
             .inputs()
             .iter()
@@ -235,8 +234,7 @@ impl<M> Mempool<M> {
             .cloned()
             .collect();
 
-        let time = self.clock.get_time();
-        TxMempoolEntry::new(tx, fee, parents, ancestors, time)
+        TxMempoolEntry::new(entry, parents, ancestors)
     }
 }
 
@@ -244,8 +242,8 @@ impl<M> Mempool<M> {
 impl<M: GetMemoryUsage> Mempool<M> {
     fn validate_transaction(
         &self,
-        tx: SignedTransaction,
-    ) -> Result<(Conflicts, TxWithFee, TransactionVerifierDelta), Error> {
+        tx: TxEntry,
+    ) -> Result<(Conflicts, TxEntryWithFee, TransactionVerifierDelta), Error> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
         // However, as of this stage it does not cover everything covered in Bitcoin Core
         //
@@ -280,7 +278,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
         // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
         // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
 
-        self.check_preliminary_mempool_policy(&tx)?;
+        self.check_preliminary_mempool_policy(tx.transaction())?;
 
         let (tx, delta) = self.verify_transaction(tx)?;
 
@@ -292,8 +290,8 @@ impl<M: GetMemoryUsage> Mempool<M> {
     // Verify the transaction with respect to the consensus rules
     fn verify_transaction(
         &self,
-        tx: SignedTransaction,
-    ) -> Result<(TxWithFee, TransactionVerifierDelta), TxValidationError> {
+        tx: TxEntry,
+    ) -> Result<(TxEntryWithFee, TransactionVerifierDelta), TxValidationError> {
         let chainstate_handle = self.blocking_chainstate_handle();
 
         for _ in 0..MAX_TX_ADDITION_ATTEMPTS {
@@ -310,14 +308,14 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 &TransactionSourceForConnect::Mempool {
                     current_best: &current_best,
                 },
-                &tx,
+                tx.transaction(),
                 &BlockTimestamp::from_duration_since_epoch(self.clock.get_time()),
                 None,
             )?;
 
             let final_tip = chainstate_handle.call(|c| c.get_best_block_id())??;
             if tip == final_tip {
-                let tx = TxWithFee::new_with_fee(tx, fee.into());
+                let tx = TxEntryWithFee::new(tx, fee.into());
                 let delta = tx_verifier.consume()?;
                 return Ok((tx, delta));
             }
@@ -358,7 +356,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
     }
 
     // Check the transaction against the mempool inclusion policy
-    fn check_mempool_policy(&self, tx: &TxWithFee) -> Result<Conflicts, MempoolPolicyError> {
+    fn check_mempool_policy(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         self.pays_minimum_relay_fees(tx)?;
         self.pays_minimum_mempool_fee(tx)?;
 
@@ -367,16 +365,16 @@ impl<M: GetMemoryUsage> Mempool<M> {
         } else {
             // Without RBF enabled, any conflicting transaction results in an error
             ensure!(
-                self.conflicting_tx_ids(tx.tx()).next().is_none(),
+                self.conflicting_tx_ids(tx.transaction()).next().is_none(),
                 MempoolPolicyError::ConflictWithIrreplaceableTransaction
             );
             Ok(Conflicts::new(BTreeSet::new()))
         }
     }
 
-    fn pays_minimum_mempool_fee(&self, tx: &TxWithFee) -> Result<(), MempoolPolicyError> {
+    fn pays_minimum_mempool_fee(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
-        let minimum_fee = self.get_update_minimum_mempool_fee(tx.tx())?;
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx.transaction())?;
         log::debug!("pays_minimum_mempool_fee tx_fee = {tx_fee:?}, minimum_fee = {minimum_fee:?}");
         ensure!(
             tx_fee >= minimum_fee,
@@ -399,9 +397,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
         res
     }
 
-    fn pays_minimum_relay_fees(&self, tx: &TxWithFee) -> Result<(), MempoolPolicyError> {
+    fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
-        let relay_fee = get_relay_fee(tx.tx());
+        let relay_fee = get_relay_fee(tx.transaction());
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
@@ -423,9 +421,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
 // RBF checks
 impl<M: GetMemoryUsage> Mempool<M> {
-    fn rbf_checks(&self, tx: &TxWithFee) -> Result<Conflicts, MempoolPolicyError> {
+    fn rbf_checks(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
-            .conflicting_tx_ids(tx.tx())
+            .conflicting_tx_ids(tx.transaction())
             .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
@@ -438,7 +436,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn do_rbf_checks(
         &self,
-        tx: &TxWithFee,
+        tx: &TxEntryWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<Conflicts, MempoolPolicyError> {
         for entry in conflicts {
@@ -470,13 +468,13 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn pays_for_bandwidth(
         &self,
-        tx: &TxWithFee,
+        tx: &TxEntryWithFee,
         total_conflict_fees: Fee,
     ) -> Result<(), MempoolPolicyError> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
             (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx.tx());
+        let relay_fee = get_relay_fee(tx.transaction());
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
             total_conflict_fees,
@@ -492,7 +490,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn pays_more_than_conflicts_with_descendants(
         &self,
-        tx: &TxWithFee,
+        tx: &TxEntryWithFee,
         conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Fee, MempoolPolicyError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
@@ -514,18 +512,17 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn spends_no_new_unconfirmed_outputs(
         &self,
-        tx: &TxWithFee,
+        tx: &TxEntryWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), MempoolPolicyError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
             .flat_map(|conflict| {
-                conflict.tx().transaction().inputs().iter().map(|input| input.outpoint())
+                conflict.transaction().inputs().iter().map(|input| input.outpoint())
             })
             .collect::<BTreeSet<_>>();
 
-        tx.tx()
-            .transaction()
+        tx.transaction()
             .inputs()
             .iter()
             .find(|input| {
@@ -541,7 +538,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn pays_more_than_direct_conflicts(
         &self,
-        tx: &TxWithFee,
+        tx: &TxEntryWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), MempoolPolicyError> {
         let replacement_fee = tx.fee();
@@ -549,7 +546,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
             || Ok(()),
             |conflict| {
                 Err(MempoolPolicyError::ReplacementFeeLowerThanOriginal {
-                    replacement_tx: tx.tx().transaction().get_id().get(),
+                    replacement_tx: tx.tx_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee(),
                     original_tx: conflict.tx_id().get(),
@@ -581,7 +578,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
 // Transaction Finalization
 impl<M: GetMemoryUsage> Mempool<M> {
-    fn finalize_tx(&mut self, tx: TxWithFee) -> Result<(), Error> {
+    fn finalize_tx(&mut self, tx: TxEntryWithFee) -> Result<(), Error> {
         let entry = self.create_entry(tx)?;
         let id = entry.tx_id();
         self.store.add_tx(entry)?;
@@ -675,7 +672,13 @@ impl<M: GetMemoryUsage> Mempool<M> {
 // Mempool Interface and Event Reactions
 impl<M: GetMemoryUsage> Mempool<M> {
     pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
-        log::debug!("Adding transaction {:?}", tx.transaction().get_id());
+        let creation_time = self.clock.get_time();
+        let entry = TxEntry::new(tx, creation_time);
+        self.add_transaction_entry(entry)
+    }
+
+    pub fn add_transaction_entry(&mut self, tx: TxEntry) -> Result<(), Error> {
+        log::debug!("Adding transaction {:?}", tx.tx_id());
         log::trace!("Adding transaction {tx:?}");
 
         let (conflicts, tx, delta) =
@@ -695,7 +698,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| self.store.get_entry(id).expect("entry").tx())
+            .map(|id| self.store.get_entry(id).expect("entry").transaction())
             .cloned()
             .collect()
     }
@@ -714,11 +717,11 @@ impl<M: GetMemoryUsage> Mempool<M> {
                     next_tx.ancestor_score()
                 );
 
-                match tx_accumulator.add_tx(next_tx.tx().clone(), next_tx.fee()) {
+                match tx_accumulator.add_tx(next_tx.transaction().clone(), next_tx.fee()) {
                     Ok(_) => (),
                     Err(err) => log::error!(
                         "CRITICAL: Failed to add transaction {} from mempool. Error: {}",
-                        next_tx.tx().transaction().get_id(),
+                        next_tx.tx_id(),
                         err
                     ),
                 }
@@ -734,7 +737,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
     }
 
     pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
-        self.store.txs_by_id.get(id).map(|e| e.tx())
+        self.store.txs_by_id.get(id).map(|e| e.transaction())
     }
 
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(MempoolEvent) + Send + Sync>) {
