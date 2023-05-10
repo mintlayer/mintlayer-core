@@ -470,7 +470,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _, _)
-                | TxOutput::SpendShareFromDelegation(_, _, _) => Err(
+                | TxOutput::SpendShareFromDelegation(_, _, _, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                 ),
             }
@@ -584,7 +584,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::DecommissionPool(_, _, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _) => None,
+                    | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
                 })
                 .try_for_each(|token_data| {
                     check_tokens_data(
@@ -615,7 +615,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _) => {},
+                    | TxOutput::SpendShareFromDelegation(_, _, _,_) => {},
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {
                             let cs: i64 = (*c).try_into().map_err(|_| {

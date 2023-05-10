@@ -725,7 +725,7 @@ fn check_mutate_output(
         TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::DelegateStaking(_, _, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::SpendShareFromDelegation(_, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::SpendShareFromDelegation(_, _, _, _) => unreachable!(), // TODO: come back to this later
     };
 
     let tx = tx_updater.generate_tx().unwrap();

@@ -163,7 +163,7 @@ where
         | TxOutput::DecommissionPool(_, _, _, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _) => {
+        | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
