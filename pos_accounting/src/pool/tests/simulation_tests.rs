@@ -37,12 +37,8 @@ fn random_outpoint0(rng: &mut impl Rng) -> OutPoint {
 
 fn get_random_pool_id(rng: &mut impl Rng, storage: &InMemoryPoSAccounting) -> Option<PoolId> {
     let all_pool_data = storage.all_pool_data();
-    if !all_pool_data.is_empty() {
-        let (pool_id, _) = all_pool_data.iter().nth(rng.gen_range(0..all_pool_data.len())).unwrap();
-        Some(*pool_id)
-    } else {
-        None
-    }
+    (!all_pool_data.is_empty())
+        .then(|| *all_pool_data.iter().nth(rng.gen_range(0..all_pool_data.len())).unwrap().0)
 }
 
 fn get_random_delegation_data(
@@ -50,15 +46,13 @@ fn get_random_delegation_data(
     storage: &InMemoryPoSAccounting,
 ) -> Option<(DelegationId, DelegationData)> {
     let all_delegation_data = storage.all_delegation_data();
-    if !all_delegation_data.is_empty() {
-        let (delegation_id, data) = all_delegation_data
+    (!all_delegation_data.is_empty()).then(|| {
+        all_delegation_data
             .iter()
             .nth(rng.gen_range(0..all_delegation_data.len()))
-            .unwrap();
-        Some((*delegation_id, data.clone()))
-    } else {
-        None
-    }
+            .map(|(id, data)| (*id, data.clone()))
+            .unwrap()
+    })
 }
 
 fn get_random_delegation_balance(
@@ -66,15 +60,13 @@ fn get_random_delegation_balance(
     storage: &InMemoryPoSAccounting,
 ) -> Option<(DelegationId, Amount)> {
     let all_delegation_balances = storage.all_delegation_balances();
-    if !all_delegation_balances.is_empty() {
-        let (delegation_id, balance) = all_delegation_balances
+    (!all_delegation_balances.is_empty()).then(|| {
+        all_delegation_balances
             .iter()
             .nth(rng.gen_range(0..all_delegation_balances.len()))
-            .unwrap();
-        Some((*delegation_id, *balance))
-    } else {
-        None
-    }
+            .map(|(id, balance)| (*id, *balance))
+            .unwrap()
+    })
 }
 
 #[rstest]
