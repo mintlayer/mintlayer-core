@@ -46,16 +46,16 @@ pub fn check_reward_inputs_outputs_purposes(
                 )),
                 // single input
                 [intput_utxo] => match intput_utxo {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::DecommissionPool(_, _, _, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+                    TxOutput::Transfer(..)
+                    | TxOutput::LockThenTransfer(..)
+                    | TxOutput::Burn(..)
+                    | TxOutput::DecommissionPool(..)
+                    | TxOutput::CreateDelegationId(..)
+                    | TxOutput::DelegateStaking(..)
+                    | TxOutput::SpendShareFromDelegation(..) => {
                         Err(ConnectTransactionError::InvalidInputTypeInReward)
                     }
-                    TxOutput::CreateStakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
+                    TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => {
                         let outputs =
                             reward.outputs().ok_or(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::NoBlockRewardOutputs,
@@ -65,17 +65,17 @@ pub fn check_reward_inputs_outputs_purposes(
                                 SpendStakeError::NoBlockRewardOutputs,
                             )),
                             [output] => match output {
-                                TxOutput::Transfer(_, _)
-                                | TxOutput::LockThenTransfer(_, _, _)
-                                | TxOutput::Burn(_)
-                                | TxOutput::CreateStakePool(_)
-                                | TxOutput::DecommissionPool(_, _, _, _)
-                                | TxOutput::CreateDelegationId(_, _)
-                                | TxOutput::DelegateStaking(_, _, _)
-                                | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+                                TxOutput::Transfer(..)
+                                | TxOutput::LockThenTransfer(..)
+                                | TxOutput::Burn(..)
+                                | TxOutput::CreateStakePool(..)
+                                | TxOutput::DecommissionPool(..)
+                                | TxOutput::CreateDelegationId(..)
+                                | TxOutput::DelegateStaking(..)
+                                | TxOutput::SpendShareFromDelegation(..) => {
                                     Err(ConnectTransactionError::InvalidOutputTypeInReward)
                                 }
-                                TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
+                                TxOutput::ProduceBlockFromStake(..) => Ok(()),
                             },
                             _ => Err(ConnectTransactionError::SpendStakeError(
                                 SpendStakeError::MultipleBlockRewardOutputs,
@@ -98,15 +98,15 @@ pub fn check_reward_inputs_outputs_purposes(
                 ))?
                 .iter()
                 .all(|output| match output {
-                    TxOutput::LockThenTransfer(_, _, _) => true,
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateStakePool(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::DecommissionPool(_, _, _, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
+                    TxOutput::LockThenTransfer(..) => true,
+                    TxOutput::Transfer(..)
+                    | TxOutput::Burn(..)
+                    | TxOutput::CreateStakePool(..)
+                    | TxOutput::ProduceBlockFromStake(..)
+                    | TxOutput::DecommissionPool(..)
+                    | TxOutput::CreateDelegationId(..)
+                    | TxOutput::DelegateStaking(..)
+                    | TxOutput::SpendShareFromDelegation(..) => false,
                 });
             ensure!(
                 all_lock_then_transfer,
@@ -168,90 +168,71 @@ pub fn check_tx_inputs_outputs_purposes(
 #[allow(clippy::unnested_or_patterns)]
 fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> bool {
     match (input_utxo, output) {
-        | (TxOutput::Transfer(_, _), TxOutput::Transfer(_, _))
-        | (TxOutput::Transfer(_, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::Transfer(_, _), TxOutput::Burn(_))
-        | (TxOutput::Transfer(_, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::Transfer(_, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::Transfer(_, _), TxOutput::DelegateStaking(_, _, _)) => true,
-        | (TxOutput::Transfer(_, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::Transfer(_, _), TxOutput::DecommissionPool(_, _, _, _))
-        | (TxOutput::Transfer(_, _), TxOutput::SpendShareFromDelegation(_, _, _, _)) => false,
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Transfer(_, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::Burn(_))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DelegateStaking(_, _, _)) => true,
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _, _))
-        | (TxOutput::LockThenTransfer(_, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
-        | (TxOutput::Burn(_), _) => false,
-        | (TxOutput::CreateStakePool(_), TxOutput::Transfer(_, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::Burn(_))
-        | (TxOutput::CreateStakePool(_), TxOutput::CreateStakePool(_))
-        | (TxOutput::CreateStakePool(_), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::DelegateStaking(_, _, _))
-        | (TxOutput::CreateStakePool(_), TxOutput::SpendShareFromDelegation(_, _, _, _)) => false,
-        | (TxOutput::CreateStakePool(_), TxOutput::DecommissionPool(_, _, _, _)) => true,
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Transfer(_, _))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::Burn(_))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (
-            TxOutput::ProduceBlockFromStake(_, _),
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-        )
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::DelegateStaking(_, _, _)) => false,
-        | (TxOutput::ProduceBlockFromStake(_, _), TxOutput::DecommissionPool(_, _, _, _)) => true,
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Transfer(_, _))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::Burn(_))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DelegateStaking(_, _, _)) => true,
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (
-            TxOutput::DecommissionPool(_, _, _, _),
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-        )
-        | (TxOutput::DecommissionPool(_, _, _, _), TxOutput::DecommissionPool(_, _, _, _)) => false,
-        | (TxOutput::CreateDelegationId(_, _), _) => false,
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::Transfer(_, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::Burn(_))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::ProduceBlockFromStake(_, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::DecommissionPool(_, _, _, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::CreateDelegationId(_, _)) => false,
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::DelegateStaking(_, _, _))
-        | (TxOutput::DelegateStaking(_, _, _), TxOutput::SpendShareFromDelegation(_, _, _, _)) => {
-            true
-        }
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::Transfer(_, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::LockThenTransfer(_, _, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::Burn(_))
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::CreateStakePool(_))
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::CreateDelegationId(_, _))
-        | (TxOutput::SpendShareFromDelegation(_, _, _, _), TxOutput::DelegateStaking(_, _, _)) => {
-            true
-        }
-        | (
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-            TxOutput::ProduceBlockFromStake(_, _),
-        )
-        | (
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-            TxOutput::DecommissionPool(_, _, _, _),
-        )
-        | (
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-            TxOutput::SpendShareFromDelegation(_, _, _, _),
-        ) => false,
+        | (TxOutput::Transfer(..), TxOutput::Transfer(..))
+        | (TxOutput::Transfer(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::Transfer(..), TxOutput::Burn(..))
+        | (TxOutput::Transfer(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::Transfer(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::Transfer(..), TxOutput::DelegateStaking(..)) => true,
+        | (TxOutput::Transfer(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::Transfer(..), TxOutput::DecommissionPool(..))
+        | (TxOutput::Transfer(..), TxOutput::SpendShareFromDelegation(..)) => false,
+        | (TxOutput::LockThenTransfer(..), TxOutput::Transfer(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::Burn(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::DelegateStaking(..)) => true,
+        | (TxOutput::LockThenTransfer(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::SpendShareFromDelegation(..))
+        | (TxOutput::LockThenTransfer(..), TxOutput::DecommissionPool(..)) => false,
+        | (TxOutput::Burn(..), _) => false,
+        | (TxOutput::CreateStakePool(..), TxOutput::Transfer(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::Burn(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::DelegateStaking(..))
+        | (TxOutput::CreateStakePool(..), TxOutput::SpendShareFromDelegation(..)) => false,
+        | (TxOutput::CreateStakePool(..), TxOutput::DecommissionPool(..)) => true,
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::Transfer(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::Burn(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::SpendShareFromDelegation(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::DelegateStaking(..)) => false,
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::DecommissionPool(..)) => true,
+        | (TxOutput::DecommissionPool(..), TxOutput::Transfer(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::Burn(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::DelegateStaking(..)) => true,
+        | (TxOutput::DecommissionPool(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::SpendShareFromDelegation(..))
+        | (TxOutput::DecommissionPool(..), TxOutput::DecommissionPool(..)) => false,
+        | (TxOutput::CreateDelegationId(..), _) => false,
+        | (TxOutput::DelegateStaking(..), TxOutput::Transfer(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::Burn(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::DecommissionPool(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::CreateDelegationId(..)) => false,
+        | (TxOutput::DelegateStaking(..), TxOutput::DelegateStaking(..))
+        | (TxOutput::DelegateStaking(..), TxOutput::SpendShareFromDelegation(..)) => true,
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::Transfer(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::LockThenTransfer(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::Burn(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::CreateStakePool(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::CreateDelegationId(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::DelegateStaking(..)) => true,
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::ProduceBlockFromStake(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::DecommissionPool(..))
+        | (TxOutput::SpendShareFromDelegation(..), TxOutput::SpendShareFromDelegation(..)) => false,
     }
 }
 
@@ -271,43 +252,43 @@ fn is_valid_any_to_any_combination_for_tx(
 
 fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
     inputs_utxos.iter().all(|input_utxo| match input_utxo {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _, _) => true,
-        TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _) => false,
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::DecommissionPool(..)
+        | TxOutput::SpendShareFromDelegation(..) => true,
+        TxOutput::Burn(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..) => false,
     })
 }
 
 fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
     let valid_outputs_types = outputs.iter().all(|output| match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _) => true,
-        TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..) => true,
+        TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::DecommissionPool(..)
+        | TxOutput::SpendShareFromDelegation(..) => false,
     });
 
     let is_stake_pool_unique = outputs
         .iter()
         .filter(|output| match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
-            TxOutput::CreateStakePool(_) => true,
+            TxOutput::Transfer(..)
+            | TxOutput::LockThenTransfer(..)
+            | TxOutput::Burn(..)
+            | TxOutput::ProduceBlockFromStake(..)
+            | TxOutput::DecommissionPool(..)
+            | TxOutput::CreateDelegationId(..)
+            | TxOutput::DelegateStaking(..)
+            | TxOutput::SpendShareFromDelegation(..) => false,
+            TxOutput::CreateStakePool(..) => true,
         })
         .count()
         < 2;
@@ -315,15 +296,15 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
     let is_create_delegation_unique = outputs
         .iter()
         .filter(|output| match output {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _)
-            | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::DelegateStaking(_, _, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
-            TxOutput::CreateDelegationId(_, _) => true,
+            TxOutput::Transfer(..)
+            | TxOutput::LockThenTransfer(..)
+            | TxOutput::Burn(..)
+            | TxOutput::CreateStakePool(..)
+            | TxOutput::ProduceBlockFromStake(..)
+            | TxOutput::DecommissionPool(..)
+            | TxOutput::DelegateStaking(..)
+            | TxOutput::SpendShareFromDelegation(..) => false,
+            TxOutput::CreateDelegationId(..) => true,
         })
         .count()
         < 2;
