@@ -162,7 +162,11 @@ where
         loop {
             tokio::select! {
                 message = self.message_receiver.recv() => {
-                    let message = message.ok_or(P2pError::ChannelClosed)?;
+                    let message = match message {
+                        Some(m) => m,
+                        // The channel was closed by the sync manager because the peer is disconnected.
+                        None => return Ok(()),
+                    };
                     self.handle_message(message).await?;
                 }
 
