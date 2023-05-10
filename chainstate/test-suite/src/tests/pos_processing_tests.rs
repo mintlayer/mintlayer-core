@@ -324,20 +324,44 @@ fn pos_basic(#[case] seed: Seed) {
     .expect("should be able to mine");
     let consensus_data = ConsensusData::PoS(Box::new(pos_data));
 
+    // skip kernel inputs
+    {
+        let transcript = construct_transcript(1, &initial_randomness, block_timestamp);
+        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+        let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, current_difficulty);
+
+        let res = tf
+            .make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_timestamp(block_timestamp)
+            .build_and_process()
+            .unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                    ConsensusPoSError::NoKernel
+                ))
+            ))
+        );
+    }
+
     // skip block reward output
-    let res = tf
-        .make_block_builder()
-        .with_consensus_data(consensus_data.clone())
-        .with_block_signing_key(staking_sk.clone())
-        .with_timestamp(block_timestamp)
-        .build_and_process()
-        .unwrap_err();
-    assert_eq!(
-        res,
-        ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs)
-        ))
-    );
+    {
+        let res = tf
+            .make_block_builder()
+            .with_consensus_data(consensus_data.clone())
+            .with_block_signing_key(staking_sk.clone())
+            .with_timestamp(block_timestamp)
+            .build_and_process()
+            .unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::SpendStakeError(SpendStakeError::NoBlockRewardOutputs)
+            ))
+        );
+    }
 
     // valid case
     let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
