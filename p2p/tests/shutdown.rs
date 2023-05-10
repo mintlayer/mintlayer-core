@@ -35,7 +35,7 @@ async fn shutdown_timeout() {
     let timeout = Duration::from_secs(3);
     let mut manager = subsystem::Manager::new_with_config(subsystem::manager::ManagerConfig {
         name: "shutdown-test",
-        shutdown_timeout_per_subsystem: Some(timeout.clone()),
+        shutdown_timeout_per_subsystem: Some(timeout),
     });
     let shutdown_trigger = manager.make_shutdown_trigger();
 
