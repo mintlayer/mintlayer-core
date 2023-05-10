@@ -20,6 +20,8 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use tokio::sync::oneshot;
+
 use p2p::testing_utils::{test_p2p_config, TestTransportMaker};
 use p2p::{
     error::{DialError, P2pError},
@@ -40,12 +42,14 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     N::start(
         T::make_transport(),
         vec![T::make_address()],
         config,
         p2p_config,
         shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -64,23 +68,27 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (connectivity, _messaging_handle, _sync, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
     let addresses = connectivity.local_addresses().to_vec();
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let res = N::start(
         T::make_transport(),
         addresses,
         config,
         Arc::clone(&p2p_config),
         shutdown,
+        shutdown_receiver,
     )
     .await
     .expect_err("address is not in use");
@@ -106,21 +114,26 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (mut service1, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (mut service2, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();

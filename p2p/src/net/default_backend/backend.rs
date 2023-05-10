@@ -17,16 +17,13 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt};
-use tokio::{sync::mpsc, time::timeout};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::timeout,
+};
 use void::Void;
 
 use common::chain::ChainConfig;
@@ -117,7 +114,7 @@ pub struct Backend<T: TransportSocket> {
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
-    shutdown: Arc<AtomicBool>,
+    shutdown_receiver: oneshot::Receiver<()>,
 }
 
 impl<T> Backend<T>
@@ -133,7 +130,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
-        shutdown: Arc<AtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
     ) -> Self {
         Self {
             transport,
@@ -147,7 +144,7 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
             command_queue: FuturesUnordered::new(),
-            shutdown,
+            shutdown_receiver,
         }
     }
 
@@ -240,10 +237,6 @@ where
     /// Runs the backend events loop.
     pub async fn run(&mut self) -> crate::Result<Void> {
         loop {
-            if self.shutdown.load(Ordering::Acquire) {
-                return Err(P2pError::ChannelClosed);
-            }
-
             tokio::select! {
                 // Select from the channels in the specified order
                 biased;
@@ -277,6 +270,9 @@ where
                             log::error!("Accepting a new connection failed unexpectedly: {err}")
                         },
                     }
+                }
+                _ = &mut self.shutdown_receiver => {
+                    return Err(P2pError::ChannelClosed);
                 }
             }
         }

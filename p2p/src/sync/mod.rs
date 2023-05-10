@@ -129,10 +129,6 @@ where
         );
 
         loop {
-            if self.shutdown.load(Ordering::Acquire) {
-                return Err(P2pError::ChannelClosed);
-            }
-
             tokio::select! {
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.

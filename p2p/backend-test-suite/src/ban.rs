@@ -18,7 +18,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use common::{
@@ -59,6 +59,7 @@ where
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
     let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
@@ -66,6 +67,7 @@ where
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
         Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -82,12 +84,14 @@ where
         Arc::clone(&shutdown),
     );
 
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();

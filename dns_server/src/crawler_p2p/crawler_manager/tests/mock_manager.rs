@@ -25,7 +25,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use common::{
     chain::ChainConfig,
@@ -122,6 +125,7 @@ impl NetworkingService for MockNetworkingService {
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
         _shutdown: Arc<AtomicBool>,
+        _shutdown_receiver: oneshot::Receiver<()>,
     ) -> p2p::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

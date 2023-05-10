@@ -23,10 +23,7 @@ mod peers_eviction;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::Duration,
 };
 
@@ -141,8 +138,6 @@ where
     subscribed_to_peer_addresses: BTreeSet<PeerId>,
 
     peer_eviction_random_state: peers_eviction::RandomState,
-
-    shutdown: Arc<AtomicBool>,
 }
 
 impl<T, S> PeerManager<T, S>
@@ -158,7 +153,6 @@ where
         rx_peer_manager: mpsc::UnboundedReceiver<PeerManagerEvent<T>>,
         time_getter: TimeGetter,
         peerdb_storage: S,
-        shutdown: Arc<AtomicBool>,
     ) -> crate::Result<Self> {
         let mut rng = make_pseudo_rng();
         let peerdb =
@@ -177,7 +171,6 @@ where
             peerdb,
             subscribed_to_peer_addresses: BTreeSet::new(),
             peer_eviction_random_state: peers_eviction::RandomState::new(&mut rng),
-            shutdown,
         })
     }
 
@@ -1111,10 +1104,6 @@ where
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
         loop {
-            if self.shutdown.load(Ordering::Acquire) {
-                return Err(P2pError::ChannelClosed);
-            }
-
             tokio::select! {
                 event_res = self.rx_peer_manager.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);

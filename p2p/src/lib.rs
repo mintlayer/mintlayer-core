@@ -35,7 +35,10 @@ use std::{
     },
 };
 
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
@@ -58,7 +61,6 @@ use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
     interface::p2p_interface::P2pSubsystemInterface,
-    message::{BlockListRequest, SyncMessage},
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -66,7 +68,6 @@ use crate::{
         },
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
-    utils::oneshot_nofail,
 };
 
 /// Result type with P2P errors
@@ -78,6 +79,7 @@ struct P2p<T: NetworkingService> {
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
 
+    backend_shutdown_sender: oneshot::Sender<()>,
     shutdown: Arc<AtomicBool>,
 
     backend_task: JoinHandle<()>,
@@ -107,6 +109,7 @@ where
         peerdb_storage: S,
     ) -> Result<Self> {
         let shutdown = Arc::new(AtomicBool::new(false));
+        let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
         let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
@@ -114,6 +117,7 @@ where
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
             Arc::clone(&shutdown),
+            shutdown_receiver,
         )
         .await?;
 
@@ -134,7 +138,6 @@ where
             rx_peer_manager,
             time_getter.clone(),
             peerdb_storage,
-            Arc::clone(&shutdown),
         )?;
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
@@ -192,6 +195,7 @@ where
             mempool_handle,
             messaging_handle,
             shutdown,
+            backend_shutdown_sender,
             backend_task,
             peer_manager_task,
             sync_manager_task,
@@ -211,18 +215,9 @@ where
         }
     }
 
-    async fn shutdown(mut self) {
+    async fn shutdown(self) {
         self.shutdown.store(true, Ordering::Release);
-
-        // Send messages to trigger the shutdown processing. This is only needed in a rare case
-        // of no activity in the p2p parts which can happen in the tests.
-        let (sender, receiver) = oneshot_nofail::channel();
-        drop(receiver);
-        let _ = self.tx_peer_manager.send(PeerManagerEvent::GetPeerCount(sender));
-
-        let _ = self.messaging_handle.broadcast_message(SyncMessage::BlockListRequest(
-            BlockListRequest::new(Vec::new()),
-        ));
+        let _ = self.backend_shutdown_sender.send(());
 
         // Wait for the tasks to shut dow.
         futures::future::join_all(

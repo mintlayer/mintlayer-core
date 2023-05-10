@@ -23,6 +23,8 @@ use std::{
     time::Duration,
 };
 
+use tokio::sync::oneshot;
+
 use common::time_getter::TimeGetter;
 use crypto::random::Rng;
 use tokio::{
@@ -64,12 +66,14 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (conn, _, _, _) = T::start(
         transport,
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -82,7 +86,6 @@ where
         rx,
         time_getter,
         peerdb_inmemory_store(),
-        shutdown,
     )
     .unwrap();
 

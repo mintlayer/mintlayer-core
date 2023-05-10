@@ -18,6 +18,8 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use tokio::sync::oneshot;
+
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
     primitives::{Id, H256},
@@ -53,30 +55,40 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
+    let (_shutdown_sender, shutdown_receiver_1) = oneshot::channel();
+    let (_shutdown_sender, shutdown_receiver_2) = oneshot::channel();
+    let (_shutdown_sender, shutdown_receiver_3) = oneshot::channel();
+    let shutdown_receivers = [shutdown_receiver_1, shutdown_receiver_2, shutdown_receiver_3];
+
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all(
-            std::iter::repeat_with(|| Arc::clone(&shutdown)).take(3).map(|shutdown| async {
-                let res = S::start(
-                    A::make_transport(),
-                    vec![A::make_address()],
-                    Arc::clone(&config),
-                    Arc::clone(&p2p_config),
-                    shutdown,
-                )
-                .await
-                .unwrap();
-                (res.0, res.2)
-            }),
+            std::iter::repeat_with(|| Arc::clone(&shutdown))
+                .zip(shutdown_receivers.into_iter())
+                .map(|(shutdown, shutdown_receiver)| async {
+                    let res = S::start(
+                        A::make_transport(),
+                        vec![A::make_address()],
+                        Arc::clone(&config),
+                        Arc::clone(&p2p_config),
+                        shutdown,
+                        shutdown_receiver,
+                    )
+                    .await
+                    .unwrap();
+                    (res.0, res.2)
+                }),
         )
         .await;
 

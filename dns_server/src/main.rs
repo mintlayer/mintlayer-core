@@ -16,6 +16,8 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use clap::Parser;
+use tokio::sync::{mpsc, oneshot};
+
 use common::primitives::user_agent::UserAgent;
 use config::DnsServerConfig;
 use crawler_p2p::crawler_manager::{
@@ -25,7 +27,6 @@ use p2p::{
     config::{NodeType, P2pConfig},
     net::NetworkingService,
 };
-use tokio::sync::mpsc;
 use utils::default_data_dir::{default_data_dir_for_chain, prepare_data_dir};
 
 mod config;
@@ -72,6 +73,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
     let transport = p2p::make_p2p_transport();
     let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
 
     let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
         transport,
@@ -79,6 +81,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
         shutdown,
+        shutdown_receiver,
     )
     .await?;
 

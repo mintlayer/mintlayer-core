@@ -19,7 +19,6 @@ use tempfile::TempDir;
 
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::chain::config::create_mainnet;
-use logging::log;
 use mempool::MempoolSubsystemInterface;
 
 use p2p::{
@@ -30,9 +29,6 @@ use p2p::{
 // Check that the p2p shutdown isn't timed out.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn shutdown_timeout() {
-    // TODO: FIXME: Remove.
-    logging::init_logging(Some(""));
-
     let chain_config = Arc::new(create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
 
@@ -86,10 +82,6 @@ async fn shutdown_timeout() {
     });
 
     let task = manager.main_in_task();
-    // TODO: FIXME: Remove:
-    tokio::time::sleep(Duration::from_secs(1)).await;
-    log::info!("FIXME: INITIATE SHUTDOWN");
     shutdown_trigger.initiate();
     tokio::time::timeout(timeout, task.join()).await.unwrap();
-    log::info!("FIXME: EVERYTHING IS SHUT DOWN");
 }

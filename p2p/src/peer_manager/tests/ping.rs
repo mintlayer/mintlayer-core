@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
@@ -81,7 +78,6 @@ async fn ping_timeout() {
         cmd_tx,
         conn_rx,
     );
-    let shutdown = Arc::new(AtomicBool::new(false));
 
     let mut peer_manager = PeerManager::new(
         Arc::clone(&chain_config),
@@ -90,7 +86,6 @@ async fn ping_timeout() {
         peer_rx,
         time_getter.get_time_getter(),
         peerdb_inmemory_store(),
-        shutdown,
     )
     .unwrap();
 

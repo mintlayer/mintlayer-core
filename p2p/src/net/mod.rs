@@ -24,7 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::task::JoinHandle;
+use tokio::{sync::oneshot, task::JoinHandle};
 
 use crate::{
     config,
@@ -85,6 +85,7 @@ pub trait NetworkingService {
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
         shutdown: Arc<AtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

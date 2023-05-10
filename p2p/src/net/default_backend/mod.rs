@@ -27,7 +27,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use logging::log;
 
@@ -117,6 +120,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         shutdown: Arc<AtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
@@ -139,7 +143,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                Arc::clone(&shutdown),
+                shutdown_receiver,
             );
 
             match backend.run().await {
