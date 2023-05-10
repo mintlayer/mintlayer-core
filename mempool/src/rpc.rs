@@ -16,7 +16,7 @@
 //! Mempool subsystem RPC handler
 
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
 use serialization::hex::HexDecode;
@@ -28,6 +28,9 @@ trait MempoolRpc {
 
     #[method(name = "submit_transaction")]
     async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()>;
+
+    #[method(name = "local_best_block_id")]
+    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>>;
 }
 
 #[async_trait::async_trait]
@@ -41,9 +44,13 @@ impl MempoolRpcServer for super::MempoolHandle {
 
     async fn submit_transaction(&self, tx_hex: String) -> rpc::Result<()> {
         let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
-        self.call_mut(|s| s.add_transaction(tx))
+        self.call_mut(|this| this.add_transaction(tx))
             .await
             .map_err(rpc::Error::to_call_error)?
             .map_err(rpc::Error::to_call_error)
+    }
+
+    async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
+        self.call(|this| this.best_block_id()).await.map_err(rpc::Error::to_call_error)
     }
 }

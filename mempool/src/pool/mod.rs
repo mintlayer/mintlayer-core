@@ -21,7 +21,10 @@ use chainstate::{
     tx_verifier::transaction_verifier::{TransactionSourceForConnect, TransactionVerifierDelta},
 };
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, SignedTransaction, Transaction},
+    chain::{
+        block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
+        Transaction,
+    },
     primitives::{amount::Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
 };
@@ -137,6 +140,11 @@ impl<M> Mempool<M> {
 
         // Clear the store, returning the list of transacitons it contained previously
         std::mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
+    }
+
+    pub fn best_block_id(&self) -> Id<GenBlock> {
+        utxo::UtxosStorageRead::get_best_block_for_utxos(&self.tx_verifier)
+            .expect("best block to exist")
     }
 }
 

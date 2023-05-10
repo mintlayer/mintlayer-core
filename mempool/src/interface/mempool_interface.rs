@@ -15,7 +15,7 @@
 
 use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent};
 use common::{
-    chain::{SignedTransaction, Transaction},
+    chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
 };
 use std::sync::Arc;
@@ -33,6 +33,9 @@ pub trait MempoolInterface: Send + Sync {
 
     /// Check given transaction is contained in the mempool
     fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+
+    /// Best block ID according to mempool. May be temporarily out of sync with chainstate.
+    fn best_block_id(&self) -> Id<GenBlock>;
 
     /// Collect transactions by putting them in given accumulator
     fn collect_txs(
