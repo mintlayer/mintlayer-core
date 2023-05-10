@@ -16,19 +16,14 @@
 mod block_merkle;
 mod merkle_tools;
 
-use merkletree::{
-    proof::single::{SingleProofHashes, SingleProofNodes},
-    tree::MerkleTree,
-    MerkleTreeFormError, MerkleTreeProofExtractionError,
-};
+pub mod merkle_proxy;
+
+use merkletree::{MerkleTreeFormError, MerkleTreeProofExtractionError};
 use serialization::{Decode, Encode};
 
-use crate::{chain::SignedTransaction, primitives::H256};
+use crate::chain::SignedTransaction;
 
-use self::{
-    block_merkle::{calculate_tx_merkle_tree, calculate_witness_merkle_tree},
-    merkle_tools::MerkleHasher,
-};
+use self::merkle_proxy::BlockBodyMerkleProxy;
 
 use super::BlockReward;
 
@@ -55,7 +50,7 @@ impl BlockBody {
         }
     }
 
-    pub fn transactions(&self) -> &Vec<SignedTransaction> {
+    pub fn transactions(&self) -> &[SignedTransaction] {
         &self.transactions
     }
 
@@ -63,73 +58,8 @@ impl BlockBody {
         &self.reward
     }
 
-    pub fn tx_merkle_tree(&self) -> Result<MerkleTree<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_tx_merkle_tree(self)?;
-        Ok(tree)
-    }
-
-    pub fn tx_witness_merkle_tree(
-        &self,
-    ) -> Result<MerkleTree<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_witness_merkle_tree(self)?;
-        Ok(tree)
-    }
-
-    pub fn tx_merkle_root(&self) -> Result<H256, BlockMerkleTreeError> {
-        let tree = calculate_tx_merkle_tree(self)?;
-        Ok(tree.root())
-    }
-
-    pub fn witness_merkle_root(&self) -> Result<H256, BlockMerkleTreeError> {
-        let tree = calculate_witness_merkle_tree(self)?;
-        Ok(tree.root())
-    }
-
-    /// Create a proof that the block reward is included in the block (witness) merkle tree.
-    pub fn create_witness_block_reward_inclusion_proof(
-        &self,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_witness_merkle_tree(self)?;
-
-        // Block reward has index 0 in the block merkle tree
-        let proof = SingleProofNodes::from_tree_leaf(&tree, 0)?;
-
-        Ok(proof.into_values())
-    }
-
-    pub fn create_tx_block_reward_inclusion_proof(
-        &self,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_tx_merkle_tree(self)?;
-
-        // Block reward has index 0 in the block merkle tree
-        let proof = SingleProofNodes::from_tree_leaf(&tree, 0)?;
-
-        Ok(proof.into_values())
-    }
-
-    pub fn create_witness_inclusion_proof(
-        &self,
-        index_in_block: u32,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_witness_merkle_tree(self)?;
-
-        // We add 1 to the index_in_block because the block reward is the first element in the block merkle tree
-        let proof = SingleProofNodes::from_tree_leaf(&tree, index_in_block + 1)?;
-
-        Ok(proof.into_values())
-    }
-
-    pub fn create_tx_inclusion_proof(
-        &self,
-        index_in_block: u32,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        let tree = calculate_tx_merkle_tree(self)?;
-
-        // We add 1 to the index_in_block because the block reward is the first element in the block merkle tree
-        let proof = SingleProofNodes::from_tree_leaf(&tree, index_in_block + 1)?;
-
-        Ok(proof.into_values())
+    pub fn merkle_tree_proxy(&self) -> Result<BlockBodyMerkleProxy, BlockMerkleTreeError> {
+        BlockBodyMerkleProxy::new(self)
     }
 }
 
@@ -263,18 +193,23 @@ mod tests {
             .chain(transaction_witness_hashes)
             .collect::<Vec<_>>();
 
-        let merkle_tree = block_body.tx_merkle_tree().unwrap();
-        let witness_merkle_tree = block_body.tx_witness_merkle_tree().unwrap();
+        let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
+
+        let merkle_tree = merkle_proxy.merkle_tree();
+        let witness_merkle_tree = merkle_proxy.witness_merkle_tree();
 
         // Check leaf count
         let leaf_count = (transactions.len() + 1).next_power_of_two();
-        assert_eq!(merkle_tree.leaf_count().get(), leaf_count as u32);
-        assert_eq!(witness_merkle_tree.leaf_count().get(), leaf_count as u32);
+        assert_eq!(merkle_tree.raw_tree().leaf_count().get(), leaf_count as u32);
+        assert_eq!(
+            witness_merkle_tree.raw_tree().leaf_count().get(),
+            leaf_count as u32
+        );
 
         // Check leaves hashes
         let merkle_tree_leaves =
             (0..transactions.len() + 1) // +1 for block reward
-                .map(|i| merkle_tree.node_from_bottom(0, i as u32).unwrap())
+                .map(|i| merkle_tree.raw_tree().node_from_bottom(0, i as u32).unwrap())
                 .collect::<Vec<_>>();
         assert_eq!(
             merkle_tree_leaves.iter().map(|v| *v.hash()).collect::<Vec<_>>(),
@@ -284,7 +219,7 @@ mod tests {
         // Check witness leaves hashes
         let witness_merkle_tree_leaves =
             (0..transactions.len() + 1) // +1 for block reward
-                .map(|i| witness_merkle_tree.node_from_bottom(0, i as u32).unwrap())
+                .map(|i| witness_merkle_tree.raw_tree().node_from_bottom(0, i as u32).unwrap())
                 .collect::<Vec<_>>();
         assert_eq!(
             witness_merkle_tree_leaves.iter().map(|v| *v.hash()).collect::<Vec<_>>(),
@@ -292,34 +227,22 @@ mod tests {
         );
 
         // Verify inclusion proofs for block reward (both witness and non-witness are the same for block reward)
-        let block_reward_inclusion_proof =
-            block_body.create_tx_block_reward_inclusion_proof().unwrap();
+        let block_reward_inclusion_proof = merkle_tree.block_reward_inclusion_proof().unwrap();
         let block_reward_witness_inclusion_proof =
-            block_body.create_tx_block_reward_inclusion_proof().unwrap();
+            witness_merkle_tree.block_reward_inclusion_proof().unwrap();
 
-        block_reward_inclusion_proof.verify(
-            block_reward_witness_hash,
-            block_body.witness_merkle_root().unwrap(),
-        );
-        block_reward_witness_inclusion_proof.verify(
-            block_reward_witness_hash,
-            block_body.witness_merkle_root().unwrap(),
-        );
+        block_reward_inclusion_proof.verify(block_reward_witness_hash, witness_merkle_tree.root());
+        block_reward_witness_inclusion_proof
+            .verify(block_reward_witness_hash, witness_merkle_tree.root());
 
         // Verify inclusion proofs for transactions
         for (i, tx) in transactions.iter().enumerate() {
-            let inclusion_proof = block_body.create_tx_inclusion_proof(i as u32).unwrap();
+            let inclusion_proof = merkle_tree.transaction_inclusion_proof(i as u32).unwrap();
             let witness_inclusion_proof =
-                block_body.create_witness_inclusion_proof(i as u32).unwrap();
+                witness_merkle_tree.transaction_witness_inclusion_proof(i as u32).unwrap();
 
-            inclusion_proof.verify(
-                tx.transaction().get_id().get(),
-                block_body.tx_merkle_root().unwrap(),
-            );
-            witness_inclusion_proof.verify(
-                tx.serialized_hash(),
-                block_body.witness_merkle_root().unwrap(),
-            );
+            inclusion_proof.verify(tx.transaction().get_id().get(), merkle_tree.root());
+            witness_inclusion_proof.verify(tx.serialized_hash(), witness_merkle_tree.root());
         }
     }
 }

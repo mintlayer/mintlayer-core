@@ -656,36 +656,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         self.check_block_reward_maturity_settings(block).log_err()?;
 
-        // MerkleTree root
-        let merkle_tree_root = block.merkle_root();
-        block
+        let merkle_proxy = block
             .body()
-            .tx_merkle_root()
-            .map_or(Err(CheckBlockError::MerkleRootMismatch), |merkle_tree| {
-                ensure!(
-                    merkle_tree_root == merkle_tree,
-                    CheckBlockError::MerkleRootMismatch
-                );
-                Ok(())
-            })
+            .merkle_tree_proxy()
+            .map_err(|e| CheckBlockError::MerkleRootCalculationFailed(block.get_id(), e))
             .log_err()?;
 
+        {
+            // Merkle root
+            let merkle_tree_root = block.merkle_root();
+            ensure!(
+                merkle_tree_root == merkle_proxy.merkle_tree().root(),
+                CheckBlockError::MerkleRootMismatch
+            );
+        }
         // Witness merkle root
-        let witness_merkle_root = block.witness_merkle_root();
-        block
-            .body()
-            .witness_merkle_root()
-            .map_or(
-                Err(CheckBlockError::WitnessMerkleRootMismatch),
-                |witness_merkle| {
-                    ensure!(
-                        witness_merkle_root == witness_merkle,
-                        CheckBlockError::WitnessMerkleRootMismatch,
-                    );
-                    Ok(())
-                },
-            )
-            .log_err()?;
+        {
+            let witness_merkle_root = block.witness_merkle_root();
+            ensure!(
+                witness_merkle_root == merkle_proxy.witness_merkle_tree().root(),
+                CheckBlockError::MerkleRootMismatch
+            );
+        }
 
         self.check_transactions(block, block_height)
             .map_err(CheckBlockError::CheckTransactionFailed)

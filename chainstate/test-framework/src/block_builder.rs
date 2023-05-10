@@ -222,10 +222,11 @@ impl<'f> BlockBuilder<'f> {
 
     fn build_impl(self) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
+        let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
             self.prev_block_hash,
-            block_body.tx_merkle_root().unwrap(),
-            block_body.witness_merkle_root().unwrap(),
+            merkle_proxy.merkle_tree().root(),
+            merkle_proxy.witness_merkle_tree().root(),
             self.timestamp,
             self.consensus_data,
         );

@@ -78,8 +78,10 @@ impl Block {
             reward,
             transactions,
         };
-        let tx_merkle_root = body.tx_merkle_root()?;
-        let witness_merkle_root = body.witness_merkle_root()?;
+
+        let merkle_proxy = body.merkle_tree_proxy()?;
+        let tx_merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
 
         let header = BlockHeader {
             version: VersionTag::default(),
@@ -101,8 +103,9 @@ impl Block {
         header: SignedBlockHeader,
         body: BlockBody,
     ) -> Result<Self, BlockCreationError> {
-        let tx_merkle_root = body.tx_merkle_root()?;
-        let witness_merkle_root = body.witness_merkle_root()?;
+        let merkle_proxy = body.merkle_tree_proxy()?;
+        let tx_merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
 
         ensure!(
             header.header().tx_merkle_root == tx_merkle_root,
@@ -266,7 +269,13 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        // Given that there's only a reward, the merkle root should be the same as the witness merkle root
+        assert_eq!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -292,8 +301,17 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+
+        let res = merkle_proxy.merkle_tree().root();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
+
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        // Given that there's only a reward, the merkle root should be the same as the witness merkle root
+        assert_eq!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -323,7 +341,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = block.body().tx_merkle_root().unwrap();
+        let res = block.body().merkle_tree_proxy().unwrap().merkle_tree().root();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
 
         check_block_tag(&block);
@@ -355,7 +373,12 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        assert_ne!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -380,8 +403,8 @@ mod tests {
             transactions: vec![one_transaction],
         };
 
-        let merkle_root = body.tx_merkle_root();
-        let witness_merkle_root = body.witness_merkle_root();
+        let merkle_root = body.merkle_tree_proxy().unwrap().merkle_tree().root();
+        let witness_merkle_root = body.merkle_tree_proxy().unwrap().witness_merkle_tree().root();
 
         assert_ne!(merkle_root, witness_merkle_root);
     }
