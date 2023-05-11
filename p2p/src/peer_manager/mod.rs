@@ -27,8 +27,8 @@ use std::{
     time::Duration,
 };
 
-use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use tokio::sync::mpsc;
+use void::Void;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -36,6 +36,7 @@ use common::{
     primitives::time::duration_to_int,
     time_getter::TimeGetter,
 };
+use crypto::random::{make_pseudo_rng, seq::IteratorRandom, Rng};
 use logging::log;
 use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set_flag::SetFlag};
 
@@ -1088,7 +1089,7 @@ where
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<void::Void> {
+    pub async fn run(&mut self) -> crate::Result<Void> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
@@ -1107,7 +1108,7 @@ where
                 event_res = self.rx_peer_manager.recv() => {
                     self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
                     heartbeat_call_needed = true;
-                },
+                }
 
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);

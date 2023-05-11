@@ -15,9 +15,7 @@
 
 use common::chain::SignedTransaction;
 
-use crate::types::peer_id::PeerId;
-
-use super::types::ConnectedPeer;
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {

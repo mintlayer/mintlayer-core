@@ -36,21 +36,28 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
-    let (conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -96,21 +103,28 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
-    let (mut conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -154,20 +168,28 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
-    let (mut conn2, _, _) = DefaultNetworkingService::<T>::start(
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         config,
         p2p_config,
+        shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -209,21 +231,28 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
 
-    let (mut conn1, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
-    let (conn2, _, _) = DefaultNetworkingService::<T>::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -290,11 +319,15 @@ where
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn, _, _) = DefaultNetworkingService::<T>::start(
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        shutdown,
+        shutdown_receiver,
     )
     .await
     .unwrap();

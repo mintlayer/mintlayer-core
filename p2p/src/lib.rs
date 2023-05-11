@@ -29,7 +29,15 @@ pub mod utils;
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
 };
 
 use interface::p2p_interface::P2pInterface;
@@ -37,8 +45,7 @@ use net::default_backend::transport::{
     NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
 };
 use peer_manager::peerdb::storage::PeerDbStorage;
-use tap::TapFallible;
-use tokio::sync::mpsc;
+use subsystem::{CallRequest, ShutdownRequest};
 
 use ::utils::ensure;
 use chainstate::chainstate_interface;
@@ -70,6 +77,16 @@ struct P2p<T: NetworkingService> {
     pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
     mempool_handle: MempoolHandle,
     messaging_handle: T::MessagingHandle,
+
+    backend_shutdown_sender: oneshot::Sender<()>,
+
+    // TODO: This flag is a workaround for graceful p2p termination.
+    // See https://github.com/mintlayer/mintlayer-core/issues/888 for more details.
+    shutdown: Arc<AtomicBool>,
+
+    backend_task: JoinHandle<()>,
+    peer_manager_task: JoinHandle<()>,
+    sync_manager_task: JoinHandle<()>,
 }
 
 impl<T> P2p<T>
@@ -93,11 +110,16 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
-        let (conn, messaging_handle, sync_event_receiver) = T::start(
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
+            Arc::clone(&shutdown),
+            shutdown_receiver,
         )
         .await?;
 
@@ -119,21 +141,31 @@ where
             time_getter.clone(),
             peerdb_storage,
         )?;
-        tokio::spawn(async move {
-            // TODO: Shutdown p2p if PeerManager unexpectedly quits
-            peer_manager.run().await.tap_err(|err| log::error!("PeerManager failed: {err}"))
+        let shutdown_ = Arc::clone(&shutdown);
+        let peer_manager_task = tokio::spawn(async move {
+            match peer_manager.run().await {
+                Ok(_) => unreachable!(),
+                // The channel can be closed during the shutdown process.
+                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
+                    log::info!("Peer manager is shut down");
+                }
+                Err(e) => {
+                    shutdown_.store(true, Ordering::SeqCst);
+                    log::error!("Peer manager failed: {e:?}");
+                }
+            }
         });
 
-        {
+        let sync_manager_task = {
             let chainstate_handle = chainstate_handle.clone();
             let tx_peer_manager = tx_peer_manager.clone();
             let chain_config = Arc::clone(&chain_config);
             let mempool_handle_ = mempool_handle.clone();
             let messaging_handle_ = messaging_handle.clone();
+            let shutdown_ = Arc::clone(&shutdown);
 
             tokio::spawn(async move {
-                // TODO: Shutdown p2p if BlockSyncManager unexpectedly quits
-                sync::BlockSyncManager::<T>::new(
+                match sync::BlockSyncManager::<T>::new(
                     chain_config,
                     p2p_config,
                     messaging_handle_,
@@ -145,21 +177,60 @@ where
                 )
                 .run()
                 .await
-                .tap_err(|err| log::error!("SyncManager failed: {err}"))
-            });
-        }
+                {
+                    Ok(_) => unreachable!(),
+                    // The channel can be closed during the shutdown process.
+                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
+                        log::info!("Sync manager is shut down");
+                    }
+                    Err(e) => {
+                        shutdown_.store(true, Ordering::SeqCst);
+                        log::error!("Sync manager failed: {e:?}");
+                    }
+                }
+            })
+        };
 
         Ok(Self {
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
+            shutdown,
+            backend_shutdown_sender,
+            backend_task,
+            peer_manager_task,
+            sync_manager_task,
         })
+    }
+
+    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
+        log::trace!("Entering p2p main loop");
+        loop {
+            tokio::select! {
+                () = shutdown.recv() => {
+                    self.shutdown().await;
+                    break;
+                },
+                call = call.recv() => call(&mut self).await,
+            }
+        }
+    }
+
+    async fn shutdown(self) {
+        self.shutdown.store(true, Ordering::SeqCst);
+        let _ = self.backend_shutdown_sender.send(());
+
+        // Wait for the tasks to shut dow.
+        futures::future::join_all(
+            [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),
+        )
+        .await;
     }
 }
 
 impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
-pub type P2pHandle = subsystem::Handle<Box<dyn P2pInterface>>;
+pub type P2pHandle = subsystem::Handle<dyn P2pInterface>;
 
 pub type P2pNetworkingService = DefaultNetworkingService<NoiseTcpTransport>;
 pub type P2pNetworkingServiceSocks5Proxy = DefaultNetworkingService<NoiseSocks5Transport>;
@@ -211,14 +282,47 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
     }
 }
 
-pub async fn make_p2p<S: PeerDbStorage + 'static>(
+// TODO: Remove this structure.
+// See https://github.com/mintlayer/mintlayer-core/issues/889 for more details.
+pub struct P2pInit<S: PeerDbStorage + 'static> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
-) -> Result<Box<dyn P2pInterface>> {
+    bind_addresses: Vec<SocketAddr>,
+}
+
+impl<S: PeerDbStorage + 'static> P2pInit<S> {
+    pub async fn run(self, call: CallRequest<dyn P2pInterface>, shutdown: ShutdownRequest) {
+        if let Err(e) = run_p2p(
+            self.chain_config,
+            self.p2p_config,
+            self.chainstate_handle,
+            self.mempool_handle,
+            self.time_getter,
+            self.peerdb_storage,
+            self.bind_addresses,
+            call,
+            shutdown,
+        )
+        .await
+        {
+            log::error!("Failed to run p2p: {e:?}");
+        }
+    }
+}
+
+pub fn make_p2p<S: PeerDbStorage + 'static>(
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
+    time_getter: TimeGetter,
+    peerdb_storage: S,
+) -> Result<P2pInit<S>> {
+    // Perform some early checks to prevent a failure in the run method.
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,
         chain_config.p2p_port(),
@@ -238,10 +342,38 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
                 "SOCKS5 proxy support is not implemented for unencrypted".to_owned()
             )
         );
+    }
+
+    Ok(P2pInit {
+        chain_config,
+        p2p_config,
+        chainstate_handle,
+        mempool_handle,
+        time_getter,
+        peerdb_storage,
+        bind_addresses,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_p2p<S: PeerDbStorage + 'static>(
+    chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    mempool_handle: MempoolHandle,
+    time_getter: TimeGetter,
+    peerdb_storage: S,
+    bind_addresses: Vec<SocketAddr>,
+    call: CallRequest<dyn P2pInterface>,
+    shutdown: ShutdownRequest,
+) -> Result<()> {
+    if let Some(true) = p2p_config.disable_noise {
+        assert_eq!(*chain_config.chain_type(), ChainType::Regtest);
+        assert!(p2p_config.socks5_proxy.is_none());
 
         let transport = make_p2p_transport_unencrypted();
 
-        let p2p = P2p::<P2pNetworkingServiceUnencrypted>::new(
+        P2p::<P2pNetworkingServiceUnencrypted>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -251,13 +383,13 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
         let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
-        let p2p = P2p::<P2pNetworkingServiceSocks5Proxy>::new(
+        P2p::<P2pNetworkingServiceSocks5Proxy>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -267,13 +399,13 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     } else {
         let transport = make_p2p_transport();
 
-        let p2p = P2p::<P2pNetworkingService>::new(
+        P2p::<P2pNetworkingService>::new(
             transport,
             bind_addresses,
             chain_config,
@@ -283,8 +415,10 @@ pub async fn make_p2p<S: PeerDbStorage + 'static>(
             time_getter,
             peerdb_storage,
         )
-        .await?;
-
-        Ok(Box::new(p2p))
+        .await?
+        .run(call, shutdown)
+        .await;
     }
+
+    Ok(())
 }

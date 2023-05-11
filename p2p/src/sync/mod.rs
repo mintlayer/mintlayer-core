@@ -116,7 +116,12 @@ where
 
         let mut new_tip_receiver = self.subscribe_to_new_tip().await?;
         self.is_initial_block_download.store(
-            self.chainstate_handle.call(|c| c.is_initial_block_download()).await??,
+            self.chainstate_handle
+                .call(|c| c.is_initial_block_download())
+                .await
+                // This shouldn't fail unless the chainstate subsystem is down which shouldn't
+                // happen since subsystems are shutdown in reverse order.
+                .expect("Chainstate call failed")?,
             Ordering::Release,
         );
 
@@ -124,7 +129,7 @@ where
             tokio::select! {
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
-                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+                    let block_id = block_id.expect("New tip sender was closed");
                     self.handle_new_tip(block_id).await?;
                 },
 
@@ -175,7 +180,7 @@ where
         let is_initial_block_download = Arc::clone(&self.is_initial_block_download);
         let time_getter = self.time_getter.clone();
         tokio::spawn(async move {
-            let mut peer = Peer::<T>::new(
+            Peer::<T>::new(
                 peer,
                 p2p_config,
                 chainstate_handle,
@@ -185,10 +190,9 @@ where
                 receiver,
                 is_initial_block_download,
                 time_getter,
-            );
-            if let Err(e) = peer.run().await {
-                log::error!("Sync manager peer ({}) error: {e:?}", peer.id());
-            }
+            )
+            .run()
+            .await;
         });
 
         Ok(())
@@ -245,11 +249,7 @@ where
             panic!("Received a message from unknown peer ({peer}): {message:?}")
         });
 
-        if let Err(e) = peer_channel.send(message) {
-            log::warn!("The {peer} peer event loop is stopped unexpectedly: {e:?}");
-            self.unregister_peer(peer);
-        }
-        Ok(())
+        peer_channel.send(message).map_err(Into::into)
     }
 }
 

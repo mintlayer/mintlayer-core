@@ -18,10 +18,19 @@ pub mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
 use async_trait::async_trait;
-use tokio::sync::mpsc;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use logging::log;
 
@@ -110,10 +119,13 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
+        shutdown: Arc<AtomicBool>,
+        shutdown_receiver: oneshot::Receiver<()>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
@@ -122,7 +134,8 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let p2p_config_ = Arc::clone(&p2p_config);
-        tokio::spawn(async move {
+        let shutdown_ = Arc::clone(&shutdown);
+        let backend_task = tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 socket,
@@ -131,11 +144,19 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
+                shutdown_,
+                shutdown_receiver,
             );
 
-            // TODO: Shutdown p2p if the backend unexpectedly quits
-            if let Err(err) = backend.run().await {
-                log::error!("failed to run backend: {err}");
+            match backend.run().await {
+                Ok(_) => unreachable!(),
+                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
+                    log::info!("Backend is shut down");
+                }
+                Err(e) => {
+                    shutdown.store(true, Ordering::SeqCst);
+                    log::error!("Failed to run backend: {e}");
+                }
             }
         });
 
@@ -143,6 +164,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
             MessagingHandle::new(cmd_tx),
             Self::SyncingEventReceiver { sync_rx },
+            backend_task,
         ))
     }
 }

@@ -16,13 +16,16 @@
 use std::{
     net::{IpAddr, SocketAddr},
     panic,
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
 use async_trait::async_trait;
 use tokio::{
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
+    sync::{
+        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
     task::JoinHandle,
     time,
 };
@@ -331,10 +334,13 @@ impl NetworkingService for NetworkingServiceStub {
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
+        _: Arc<AtomicBool>,
+        _: oneshot::Receiver<()>,
     ) -> Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         panic!("Stub service shouldn't be used directly");
     }

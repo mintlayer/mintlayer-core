@@ -36,7 +36,7 @@ pub struct NodeController {
     pub chainstate: Handle<Box<dyn ChainstateInterface>>,
     pub mempool: Handle<dyn MempoolInterface>,
     pub block_prod: Handle<Box<dyn BlockProductionInterface>>,
-    pub p2p: Handle<Box<dyn P2pInterface>>,
+    pub p2p: Handle<dyn P2pInterface>,
     pub runtime_info: RuntimeInfo,
 }
 

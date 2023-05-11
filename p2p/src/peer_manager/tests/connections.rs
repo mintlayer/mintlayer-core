@@ -15,12 +15,12 @@
 
 use std::{
     net::SocketAddr,
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
     time::{Duration, Instant},
 };
 
 use p2p_test_utils::P2pBasicTestTimeGetter;
-use tokio::time::timeout;
+use tokio::{sync::oneshot, time::timeout};
 
 use crate::{
     config::{MaxInboundConnections, P2pConfig},
@@ -62,7 +62,8 @@ async fn test_peer_manager_connect<T: NetworkingService>(
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let mut peer_manager = make_peer_manager::<T>(transport, bind_addr, config).await;
+    let (mut peer_manager, _shutdown_sender) =
+        make_peer_manager::<T>(transport, bind_addr, config).await;
 
     peer_manager.try_connect(remote_addr).unwrap();
 
@@ -115,8 +116,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let addr = pm2.peer_connectivity_handle.local_addresses()[0].clone();
 
@@ -163,8 +166,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -202,8 +207,9 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
@@ -255,8 +261,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -296,13 +304,13 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut pm1 = make_peer_manager::<T>(
+    let (mut pm1, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
         Arc::new(config::create_mainnet()),
     )
     .await;
-    let mut pm2 = make_peer_manager::<T>(
+    let (mut pm2, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
@@ -360,13 +368,13 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut pm1 = make_peer_manager::<T>(
+    let (mut pm1, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
         Arc::new(config::create_mainnet()),
     )
     .await;
-    let mut pm2 = make_peer_manager::<T>(
+    let (mut pm2, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::create_mainnet()),
@@ -416,8 +424,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, Arc::clone(&config)).await;
 
     for peer in peers.into_iter() {
         pm1.try_accept_connection(peer.0, Role::Inbound, peer.1, None).unwrap();
@@ -527,8 +537,18 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut conn, _, _) =
-        T::start(transport, vec![addr1], Arc::clone(&config), p2p_config).await.unwrap();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn, _, _, _) = T::start(
+        transport,
+        vec![addr1],
+        Arc::clone(&config),
+        p2p_config,
+        shutdown,
+        shutdown_receiver,
+    )
+    .await
+    .unwrap();
 
     // This will fail immediately because it is trying to connect to the closed port
     conn.connect(addr2).expect("dial to succeed");
@@ -586,11 +606,15 @@ async fn connection_timeout_rpc_notified<T>(
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (conn, _, _) = T::start(
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (conn, _, _, _) = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -686,7 +710,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let tx1 = run_peer_manager::<T>(
+    let (tx1, _shutdown_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -725,7 +749,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let tx1 = run_peer_manager::<T>(
+    let (tx1, _shutdown_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -807,7 +831,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let tx1 = run_peer_manager::<T>(
+    let (tx1, _shutdown_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -847,7 +871,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let tx2 = run_peer_manager::<T>(
+    let (tx2, _shutdown_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),
@@ -880,7 +904,7 @@ where
         max_unconnected_headers: Default::default(),
         sync_stalling_timeout: Default::default(),
     });
-    let tx3 = run_peer_manager::<T>(
+    let (tx3, _shutdown_sender) = run_peer_manager::<T>(
         A::make_transport(),
         A::make_address(),
         Arc::clone(&chain_config),

@@ -55,8 +55,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -102,8 +104,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info, _) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -157,8 +161,10 @@ where
     let addr2 = A::make_address();
 
     let config = Arc::new(config::create_mainnet());
-    let mut pm1 = make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
-    let mut pm2 = make_peer_manager::<T>(A::make_transport(), addr2, config).await;
+    let (mut pm1, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr1, Arc::clone(&config)).await;
+    let (mut pm2, _shutdown_sender) =
+        make_peer_manager::<T>(A::make_transport(), addr2, config).await;
 
     let (address, peer_info1, _peer_info2) = connect_services::<T>(
         &mut pm1.peer_connectivity_handle,
@@ -220,7 +226,7 @@ where
 {
     for role in [Role::Outbound, Role::Inbound] {
         let config = Arc::new(config::create_mainnet());
-        let mut peer_manager =
+        let (mut peer_manager, _shutdown_sender) =
             make_peer_manager::<S>(A::make_transport(), A::make_address(), Arc::clone(&config))
                 .await;
 
@@ -324,13 +330,13 @@ where
     let addr1 = A::make_address();
     let addr2 = A::make_address();
 
-    let mut pm1 = make_peer_manager::<T>(
+    let (mut pm1, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr1,
         Arc::new(config::create_mainnet()),
     )
     .await;
-    let mut pm2 = make_peer_manager::<T>(
+    let (mut pm2, _shutdown_sender) = make_peer_manager::<T>(
         A::make_transport(),
         addr2,
         Arc::new(config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),

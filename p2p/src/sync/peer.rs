@@ -28,7 +28,6 @@ use tokio::{
     sync::mpsc::{UnboundedReceiver, UnboundedSender},
     time::MissedTickBehavior,
 };
-use void::Void;
 
 use chainstate::chainstate_interface::ChainstateInterface;
 use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
@@ -141,7 +140,15 @@ where
         *self.id
     }
 
-    pub async fn run(&mut self) -> Result<Void> {
+    pub async fn run(&mut self) {
+        match self.main_loop().await {
+            // The unexpected "channel closed" error will be handled by the sync manager.
+            Ok(()) | Err(P2pError::ChannelClosed) => {}
+            Err(e) => panic!("{} peer task failed: {e:?}", self.id()),
+        }
+    }
+
+    async fn main_loop(&mut self) -> Result<()> {
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -153,7 +160,7 @@ where
                 message = self.message_receiver.recv() => {
                     let message = message.ok_or(P2pError::ChannelClosed)?;
                     self.handle_message(message).await?;
-                },
+                }
 
                 block_to_send_to_peer = async { self.blocks_queue.pop_front().expect("The block queue is empty") }, if !self.blocks_queue.is_empty() => {
                     self.send_block(block_to_send_to_peer).await?;

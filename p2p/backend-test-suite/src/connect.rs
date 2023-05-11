@@ -15,7 +15,15 @@
 
 //! Connection tests.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
+
+use tokio::sync::oneshot;
 
 use p2p::testing_utils::{test_p2p_config, TestTransportMaker};
 use p2p::{
@@ -36,14 +44,20 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     N::start(
         T::make_transport(),
         vec![T::make_address()],
         config,
         p2p_config,
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
+
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 // Check that connecting twice to the same address isn't possible.
@@ -58,21 +72,28 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (connectivity, _messaging_handle, _sync) = N::start(
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (connectivity, _messaging_handle, _sync, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
 
     let addresses = connectivity.local_addresses().to_vec();
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let res = N::start(
         T::make_transport(),
         addresses,
         config,
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .expect_err("address is not in use");
@@ -82,6 +103,8 @@ where
             std::io::ErrorKind::AddrInUse | std::io::ErrorKind::AddrNotAvailable
         ))
     ));
+
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
@@ -97,19 +120,27 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let (mut service1, _, _) = N::start(
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut service1, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
-    let (mut service2, _, _) = N::start(
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut service2, _, _, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -117,4 +148,6 @@ where
     let conn_addr = service1.local_addresses().to_vec();
     service2.connect(conn_addr[0].clone()).unwrap();
     service1.poll_next().await.unwrap();
+
+    shutdown.store(true, Ordering::SeqCst);
 }

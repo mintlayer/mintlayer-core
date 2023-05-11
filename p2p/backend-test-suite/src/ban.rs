@@ -13,9 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 use chainstate::{ban_score::BanScore, BlockError, ChainstateError, CheckBlockError};
 use common::{
@@ -55,12 +61,16 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
 
-    let (mut conn1, messaging_handle, sync_event_receiver) = N::start(
+    let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -76,11 +86,14 @@ where
         TimeGetter::default(),
     );
 
-    let (mut conn2, mut messaging_handle_2, mut sync2) = N::start(
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -140,6 +153,8 @@ where
         e => panic!("invalid event received: {e:?}"),
     }
 
+    shutdown.store(true, Ordering::SeqCst);
+    let _ = shutdown_sender.send(());
     shutdown_trigger.initiate();
     subsystem_manager_handle.join().await;
 }

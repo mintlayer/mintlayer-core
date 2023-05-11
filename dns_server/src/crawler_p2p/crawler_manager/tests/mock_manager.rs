@@ -20,11 +20,16 @@
 use std::{
     collections::BTreeMap,
     net::{IpAddr, SocketAddr},
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     time::Duration,
 };
 
 use async_trait::async_trait;
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
+
 use common::{
     chain::ChainConfig,
     primitives::{semver::SemVer, user_agent::mintlayer_core_user_agent},
@@ -42,7 +47,6 @@ use p2p::{
     types::peer_id::PeerId,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
-use tokio::sync::mpsc;
 
 use crate::{
     crawler_p2p::crawler_manager::{
@@ -120,10 +124,13 @@ impl NetworkingService for MockNetworkingService {
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
+        _shutdown: Arc<AtomicBool>,
+        _shutdown_receiver: oneshot::Receiver<()>,
     ) -> p2p::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
+        JoinHandle<()>,
     )> {
         unreachable!()
     }

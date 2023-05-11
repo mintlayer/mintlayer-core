@@ -3921,6 +3921,7 @@ dependencies = [
  "socket2 0.5.2",
  "sscanf",
  "storage",
+ "storage-inmemory",
  "subsystem",
  "tap",
  "test-utils",

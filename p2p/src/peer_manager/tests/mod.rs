@@ -18,7 +18,12 @@ mod ban;
 mod connections;
 mod ping;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
+
+use tokio::sync::oneshot;
 
 use common::time_getter::TimeGetter;
 use crypto::random::Rng;
@@ -55,16 +60,21 @@ async fn make_peer_manager_custom<T>(
 ) -> (
     PeerManager<T, impl PeerDbStorage>,
     UnboundedSender<PeerManagerEvent<T>>,
+    oneshot::Sender<()>,
 )
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (conn, _, _) = T::start(
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (conn, _, _, _) = T::start(
         transport,
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
+        Arc::clone(&shutdown),
+        shutdown_receiver,
     )
     .await
     .unwrap();
@@ -80,20 +90,20 @@ where
     )
     .unwrap();
 
-    (peer_manager, tx)
+    (peer_manager, tx, shutdown_sender)
 }
 
 async fn make_peer_manager<T>(
     transport: T::Transport,
     addr: T::Address,
     chain_config: Arc<common::chain::ChainConfig>,
-) -> PeerManager<T, impl PeerDbStorage>
+) -> (PeerManager<T, impl PeerDbStorage>, oneshot::Sender<()>)
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let p2p_config = Arc::new(test_p2p_config());
-    let (peer_manager, _tx) = make_peer_manager_custom::<T>(
+    let (peer_manager, _tx, shutdown_sender) = make_peer_manager_custom::<T>(
         transport,
         addr,
         chain_config,
@@ -101,7 +111,7 @@ where
         Default::default(),
     )
     .await;
-    peer_manager
+    (peer_manager, shutdown_sender)
 }
 
 async fn run_peer_manager<T>(
@@ -110,17 +120,17 @@ async fn run_peer_manager<T>(
     chain_config: Arc<common::chain::ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     time_getter: TimeGetter,
-) -> UnboundedSender<PeerManagerEvent<T>>
+) -> (UnboundedSender<PeerManagerEvent<T>>, oneshot::Sender<()>)
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (mut peer_manager, tx) =
+    let (mut peer_manager, tx, shutdown_sender) =
         make_peer_manager_custom::<T>(transport, addr, chain_config, p2p_config, time_getter).await;
     tokio::spawn(async move {
         peer_manager.run().await.unwrap();
     });
-    tx
+    (tx, shutdown_sender)
 }
 
 async fn get_connected_peers<T: NetworkingService + std::fmt::Debug>(

@@ -18,14 +18,13 @@ use common::{chain::SignedTransaction, primitives::Idable};
 use crate::{
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
+    interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
     message::SyncMessage,
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
     MessagingService, P2p,
 };
-
-use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
 #[async_trait::async_trait]
 impl<T> P2pInterface for P2p<T>
