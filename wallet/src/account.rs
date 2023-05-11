@@ -192,21 +192,21 @@ impl Account {
 
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
-    #[allow(dead_code)] // TODO remove
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        let destination = match txo {
-            TxOutput::Transfer(_, d) => Some(d),
-            TxOutput::LockThenTransfer(_, d, _) => Some(d),
-            TxOutput::Burn(_) => None,
-            TxOutput::StakePool(_) => None,
-            TxOutput::ProduceBlockFromStake(_, _) => None,
-            TxOutput::DecommissionPool(_, _, _, _) => None,
-        };
-
-        match destination {
-            Some(Destination::Address(pkh)) => self.key_chain.is_public_key_hash_mine(pkh),
-            Some(Destination::PublicKey(pk)) => self.key_chain.is_public_key_mine(pk),
-            _ => false,
+        // TODO: Should we also report `AnyoneCanSpend` as own?
+        match txo {
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::DecommissionPool(_, d, _, _) => match d {
+                Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+                Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+                Destination::AnyoneCanSpend
+                | Destination::ScriptHash(_)
+                | Destination::ClassicMultisig(_) => false,
+            },
+            TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _) => false,
         }
     }
 
