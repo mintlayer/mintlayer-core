@@ -118,7 +118,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx3_id)
 
         # create a new block, taking transactions from mempool
-        block1 = node.blockprod_generate_block("00", [tx1])
+        block1 = node.blockprod_generate_block(None, "00", [tx1])
         node.chainstate_submit_block(block1)
         block1_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block1_id, timeout = 5)
@@ -134,7 +134,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert node.mempool_contains_tx(tx3_id)
 
         # Submit a block with the other two transactions
-        block2 = node.blockprod_generate_block("00", [tx2, tx3])
+        block2 = node.blockprod_generate_block(None, "00", [tx2, tx3])
         node.chainstate_submit_block(block2)
         block2_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block2_id, timeout = 5)

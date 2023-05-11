@@ -30,8 +30,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            block_body::BlockBody, consensus_data::GenerateBlockInputData,
-            timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
+            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
+            BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
