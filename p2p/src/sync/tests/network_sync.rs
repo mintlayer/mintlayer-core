@@ -101,6 +101,8 @@ async fn basic(#[case] seed: Seed) {
         manager1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
+        0,
+        1,
     )
     .await;
 
@@ -111,6 +113,8 @@ async fn basic(#[case] seed: Seed) {
             manager1.chainstate(),
             BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
             get_random_bytes(&mut rng),
+            0,
+            1,
         )
         .await;
     }
@@ -197,6 +201,104 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+
+    manager1.join_subsystem_manager().await;
+    manager2.join_subsystem_manager().await;
+}
+
+#[rstest::rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn reorg(#[case] seed: Seed) {
+    logging::init_logging::<&std::path::Path>(None);
+
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let time_getter = P2pBasicTestTimeGetter::new();
+
+    let p2p_config = Arc::new(P2pConfig {
+        bind_addresses: Default::default(),
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    });
+
+    let mut blocks = Vec::new();
+    for _ in 0..10 {
+        let block = new_block(
+            &chain_config,
+            blocks.last(),
+            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
+            get_random_bytes(&mut rng),
+        );
+        time_getter.advance_time(Duration::from_secs(60));
+        blocks.push(block.clone());
+    }
+
+    // Start `manager1` with up-to-date blockchain
+    let mut manager1 = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_time_getter(time_getter.get_time_getter())
+        .with_blocks(blocks.clone())
+        .build()
+        .await;
+
+    // Start `manager2` with up-to-date blockchain
+    let mut manager2 = SyncManagerHandle::builder()
+        .with_chain_config(Arc::clone(&chain_config))
+        .with_p2p_config(Arc::clone(&p2p_config))
+        .with_time_getter(time_getter.get_time_getter())
+        .with_blocks(blocks)
+        .build()
+        .await;
+
+    manager1.try_connect_peer(manager2.peer_id);
+    manager2.try_connect_peer(manager1.peer_id);
+
+    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+
+    // First blockchain reorg
+    new_top_block(
+        manager1.chainstate(),
+        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
+        get_random_bytes(&mut rng),
+        1,
+        2,
+    )
+    .await;
+
+    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+
+    // Second blockchain reorg
+    new_top_block(
+        manager1.chainstate(),
+        BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
+        get_random_bytes(&mut rng),
+        1,
+        2,
+    )
+    .await;
+
+    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     manager1.join_subsystem_manager().await;
     manager2.join_subsystem_manager().await;

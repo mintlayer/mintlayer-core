@@ -540,23 +540,35 @@ pub async fn new_top_block(
     chainstate: &ChainstateHandle,
     timestamp: BlockTimestamp,
     random_bytes: Vec<u8>,
+    start_distance_from_top: u64,
+    count: u32,
 ) {
     chainstate
         .call_mut(move |this| {
-            let best_block_id = this.get_best_block_id().unwrap();
-            let prev_block = match best_block_id.classify(this.get_chain_config()) {
+            let start_height = this
+                .get_best_block_height()
+                .unwrap()
+                .into_int()
+                .saturating_sub(start_distance_from_top);
+            let start_block_id =
+                this.get_block_id_from_height(&start_height.into()).unwrap().unwrap();
+            let mut start_block = match start_block_id.classify(this.get_chain_config()) {
                 common::chain::GenBlockId::Genesis(_) => None,
                 common::chain::GenBlockId::Block(id) => this.get_block(id).unwrap(),
             };
 
-            let block = new_block(
-                this.get_chain_config(),
-                prev_block.as_ref(),
-                timestamp,
-                random_bytes,
-            );
+            for _ in 0..count {
+                let new_block = new_block(
+                    this.get_chain_config(),
+                    start_block.as_ref(),
+                    timestamp,
+                    random_bytes.clone(),
+                );
 
-            this.process_block(block, BlockSource::Local).unwrap().unwrap();
+                this.process_block(new_block.clone(), BlockSource::Local).unwrap();
+
+                start_block = Some(new_block);
+            }
         })
         .await
         .unwrap();
