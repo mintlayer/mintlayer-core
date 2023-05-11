@@ -149,8 +149,8 @@ where
     }
 
     async fn main_loop(&mut self) -> Result<()> {
-        let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
-        stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        let mut periodic_check = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
+        periodic_check.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         self.request_headers().await?;
         self.last_activity = Some(self.time_getter.get_time());
@@ -166,9 +166,12 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                _ = stalling_interval.tick(), if self.last_activity.is_some() => {
-                    self.handle_stalling_interval().await?;
-                }
+                _ = periodic_check.tick(), if self.last_activity.is_some() => {}
+            }
+
+            // Run on each loop iteration, so it's easier to test
+            if self.last_activity.is_some() {
+                self.handle_stalling_interval().await?;
             }
         }
     }

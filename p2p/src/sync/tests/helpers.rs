@@ -273,7 +273,7 @@ impl SyncManagerHandle {
     }
 }
 
-pub async fn in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
+pub async fn sync_managers_in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
     let best_blocks = futures::future::join_all(managers.iter().map(|manager| async {
         manager
             .chainstate()
@@ -285,44 +285,46 @@ pub async fn in_sync(managers: &[&mut SyncManagerHandle]) -> bool {
     best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
 }
 
-async fn sync_managers_helper(managers: &mut [&mut SyncManagerHandle]) {
-    while !in_sync(managers).await {
-        'outer: loop {
-            for manager in managers.iter_mut() {
-                let peer_id = manager.peer_id;
-                if let Ok(sync_event) = manager.sync_event_receiver.try_recv() {
-                    // Send sync messages between peers
-                    match &sync_event {
-                        SyncingEvent::Message { peer, message } => {
-                            let other_manager =
-                                managers.iter_mut().find(|m| m.peer_id == *peer).unwrap();
-                            other_manager
-                                .sync_event_sender
-                                .send(SyncingEvent::Message {
-                                    peer: peer_id,
-                                    message: message.clone(),
-                                })
-                                .unwrap();
-                            continue 'outer;
-                        }
-                        event => panic!("Unexpected message: {event:?}"),
-                    }
-                }
+pub fn try_sync_managers_once(managers: &mut [&mut SyncManagerHandle]) -> bool {
+    for manager in managers.iter_mut() {
+        let sender_peer_id = manager.peer_id;
 
-                if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
-                    // There should be no peer scoring or disconnections
-                    panic!("Unexpected message: {peer_event:?}");
-                }
-            }
-            break;
+        if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
+            // There should be no peer scoring or disconnections
+            panic!("Unexpected message: {peer_event:?}");
         }
 
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        if let Ok(sync_event) = manager.sync_event_receiver.try_recv() {
+            // Send sync messages between peers
+            match &sync_event {
+                SyncingEvent::Message { peer, message } => {
+                    let other_manager = managers.iter_mut().find(|m| m.peer_id == *peer).unwrap();
+                    other_manager
+                        .sync_event_sender
+                        .send(SyncingEvent::Message {
+                            peer: sender_peer_id,
+                            message: message.clone(),
+                        })
+                        .unwrap();
+                    return true;
+                }
+                event => panic!("Unexpected message: {event:?}"),
+            }
+        }
     }
+
+    false
 }
 
 pub async fn sync_managers(managers: &mut [&mut SyncManagerHandle]) {
-    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper(managers))
+    let sync_managers_helper = async move {
+        while !sync_managers_in_sync(managers).await {
+            while try_sync_managers_once(managers) {}
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    };
+
+    tokio::time::timeout(Duration::from_secs(60), sync_managers_helper)
         .await
         .unwrap();
 }
@@ -538,7 +540,7 @@ pub async fn new_top_block(
     chainstate: &ChainstateHandle,
     timestamp: BlockTimestamp,
     random_bytes: Vec<u8>,
-) -> Id<Block> {
+) {
     chainstate
         .call_mut(move |this| {
             let best_block_id = this.get_best_block_id().unwrap();
@@ -554,11 +556,10 @@ pub async fn new_top_block(
                 random_bytes,
             );
 
-            let block_index = this.process_block(block, BlockSource::Local).unwrap().unwrap();
-            block_index.block_header().block_id()
+            this.process_block(block, BlockSource::Local).unwrap().unwrap();
         })
         .await
-        .unwrap()
+        .unwrap();
 }
 
 pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
