@@ -151,3 +151,5 @@ impl MasterKeyChain {
         &self.root_key
     }
 }
+
+// TODO: tests
