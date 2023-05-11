@@ -23,26 +23,30 @@ mod validator;
 use std::sync::{atomic::AtomicBool, Arc};
 
 use chainstate_types::{
-    vrf_tools::construct_transcript, BlockIndex, EpochData, GenBlockIndex, PropertyQueryError,
+    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, EpochData,
+    GenBlockIndex, PropertyQueryError,
 };
 use common::{
     chain::block::{
-        consensus_data::{GenerateBlockInputData, PoSData, PoWData},
-        ConsensusData,
+        consensus_data::{PoSData, PoWData},
+        timestamp::BlockTimestamp,
+        BlockHeader, ConsensusData,
     },
     chain::{
-        block::{timestamp::BlockTimestamp, BlockHeader},
-        ChainConfig, RequiredConsensus,
+        config::EpochIndex, signature::inputsig::InputWitness, ChainConfig, PoolId,
+        RequiredConsensus, TxInput,
     },
-    primitives::BlockHeight,
+    primitives::{Amount, BlockHeight},
 };
+use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use serialization::{Decode, Encode};
 
 pub use crate::{
     error::ConsensusVerificationError,
     pos::{
         block_sig::BlockSignatureError, check_pos_hash, error::ConsensusPoSError,
-        kernel::get_kernel_output, target::calculate_target_required,
-        target::calculate_target_required_from_block_index,
+        kernel::get_kernel_output, stake, target::calculate_target_required,
+        target::calculate_target_required_from_block_index, StakeResult,
     },
     pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError, MiningResult},
     validator::validate_consensus,
@@ -58,6 +62,92 @@ pub enum ConsensusCreationError {
     MiningFailed,
     #[error("Staking error")]
     StakingError(#[from] ConsensusPoSError),
+    #[error("Staking failed")]
+    StakingFailed,
+    #[error("Staking stopped")]
+    StakingStopped,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub enum GenerateBlockInputData {
+    PoW,
+    PoS(PoSGenerateBlockInputData),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct PoSGenerateBlockInputData {
+    vrf_private_key: VRFPrivateKey,
+    pool_id: PoolId,
+    kernel_input: TxInput,
+    kernel_witness: InputWitness,
+}
+
+impl PoSGenerateBlockInputData {
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
+    }
+
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id
+    }
+
+    pub fn kernel_input(&self) -> &TxInput {
+        &self.kernel_input
+    }
+
+    pub fn kernel_witness(&self) -> &InputWitness {
+        &self.kernel_witness
+    }
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub enum FinalizeBlockInputData {
+    PoW,
+    PoS(PoSFinalizeBlockInputData),
+}
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct PoSFinalizeBlockInputData {
+    vrf_private_key: VRFPrivateKey,
+    epoch_index: EpochIndex,
+    sealed_epoch_randomness: PoSRandomness,
+    pool_balance: Amount,
+}
+
+impl PoSFinalizeBlockInputData {
+    pub fn new(
+        vrf_private_key: VRFPrivateKey,
+        epoch_index: EpochIndex,
+        sealed_epoch_randomness: PoSRandomness,
+        pool_balance: Amount,
+    ) -> Self {
+        Self {
+            vrf_private_key,
+            epoch_index,
+            sealed_epoch_randomness,
+            pool_balance,
+        }
+    }
+
+    pub fn epoch_index(&self) -> EpochIndex {
+        self.epoch_index
+    }
+
+    pub fn sealed_epoch_randomness(&self) -> PoSRandomness {
+        self.sealed_epoch_randomness
+    }
+
+    pub fn pool_balance(&self) -> Amount {
+        self.pool_balance
+    }
+
+    pub fn vrf_private_key(&self) -> VRFPrivateKey {
+        self.vrf_private_key.clone()
+    }
+
+    pub fn vrf_public_key(&self) -> VRFPublicKey {
+        VRFPublicKey::from_private_key(&self.vrf_private_key)
+    }
 }
 
 pub fn generate_consensus_data<G>(
@@ -78,7 +168,7 @@ where
             let pos_input_data = match input_data {
                 Some(GenerateBlockInputData::PoS(pos_input_data)) => pos_input_data,
                 Some(GenerateBlockInputData::PoW) => Err(ConsensusPoSError::PoWInputDataProvided)?,
-                None => Err(ConsensusPoSError::NoInputDataProvided)?
+                None => Err(ConsensusPoSError::NoInputDataProvided)?,
             };
 
             let vrf_data = {
