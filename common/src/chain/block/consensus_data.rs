@@ -15,8 +15,12 @@
 
 use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::{chaintrust, ChainConfig, PoolId};
-use crate::{chain::TxInput, primitives::BlockDistance, primitives::Compact, Uint256};
-use crypto::vrf::{VRFPrivateKey, VRFReturn};
+use crate::{
+    chain::TxInput,
+    primitives::{BlockDistance, Compact},
+    Uint256,
+};
+use crypto::vrf::VRFReturn;
 
 use serialization::{Decode, Encode};
 
@@ -108,6 +112,10 @@ impl PoSData {
 
     pub fn vrf_data(&self) -> &VRFReturn {
         &self.vrf_data
+    }
+
+    pub fn update_vrf_data(&mut self, vrf_data: VRFReturn) {
+        self.vrf_data = vrf_data;
     }
 }
 

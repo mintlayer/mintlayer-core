@@ -218,13 +218,45 @@ pub fn finalize_consensus_data(
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
     stop_flag: Arc<AtomicBool>,
+    finalize_data: Option<FinalizeBlockInputData>,
 ) -> Result<(), ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(()),
-        RequiredConsensus::PoS(_) => todo!(),
+        RequiredConsensus::PoS(_) => match block_header.consensus_data() {
+            ConsensusData::None => Err(ConsensusCreationError::StakingError(
+                ConsensusPoSError::NoInputDataProvided,
+            )),
+            ConsensusData::PoW(_) => Err(ConsensusCreationError::StakingError(
+                ConsensusPoSError::PoWInputDataProvided,
+            )),
+            ConsensusData::PoS(pos_data) => match finalize_data {
+                None => Err(ConsensusCreationError::StakingError(
+                    ConsensusPoSError::NoInputDataProvided,
+                )),
+                Some(FinalizeBlockInputData::PoW) => Err(ConsensusCreationError::StakingError(
+                    ConsensusPoSError::PoWInputDataProvided,
+                )),
+                Some(FinalizeBlockInputData::PoS(finalize_pos_data)) => {
+                    let mut pos_data = pos_data.clone();
+
+                    let stake_result =
+                        stake(&mut pos_data, block_header, finalize_pos_data, stop_flag)?;
+
+                    match stake_result {
+                        StakeResult::Success => Ok(()),
+                        StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
+                        StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
+                    }
+                }
+            },
+        },
         RequiredConsensus::PoW(_) => match block_header.consensus_data() {
-            ConsensusData::None => Ok(()),
-            ConsensusData::PoS(_) => todo!(),
+            ConsensusData::None => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::NoInputDataProvided,
+            )),
+            ConsensusData::PoS(_) => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::PoSInputDataProvided,
+            )),
             ConsensusData::PoW(pow_data) => {
                 let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
 

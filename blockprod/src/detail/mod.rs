@@ -224,6 +224,7 @@ impl BlockProduction {
         chain_config: Arc<ChainConfig>,
         mut block_header: BlockHeader,
         current_tip_height: BlockHeight,
+        finalize_data: Option<FinalizeBlockInputData>,
         stop_flag: Arc<AtomicBool>,
     ) -> Result<BlockHeader, BlockProductionError> {
         consensus::finalize_consensus_data(
@@ -231,6 +232,7 @@ impl BlockProduction {
             &mut block_header,
             current_tip_height,
             stop_flag,
+            finalize_data,
         )?;
 
         Ok(block_header)
@@ -339,6 +341,7 @@ impl BlockProduction {
                         chain_config,
                         block_header,
                         current_tip_height,
+                        finalize_block_data,
                         stop_flag,
                     );
 

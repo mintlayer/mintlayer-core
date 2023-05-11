@@ -1023,6 +1023,7 @@ dependencies = [
  "crypto",
  "itertools",
  "num",
+ "parity-scale-codec",
  "pos_accounting",
  "rstest",
  "serialization",

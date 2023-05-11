@@ -16,11 +16,10 @@
 //! Block production subsystem RPC handler
 
 use common::{
-    chain::block::consensus_data::GenerateBlockInputData,
     chain::Block,
     chain::{Destination, SignedTransaction},
 };
-
+use consensus::GenerateBlockInputData;
 use serialization::{hex::HexDecode, hex::HexEncode};
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
@@ -78,7 +77,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String> {
         let input_data = input_data_hex
-            .map(|input_data| GenerateBlockInputData::hex_decode_all(input_data))
+            .map(GenerateBlockInputData::hex_decode_all)
             .transpose()
             .map_err(rpc::Error::to_call_error)?;
 

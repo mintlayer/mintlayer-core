@@ -40,4 +40,8 @@ pub enum ConsensusPoWError {
     PreviousBitsDecodingFailed(Compact),
     #[error("Invalid target value: `{0:?}`, should be `{1:?}`")]
     InvalidTargetBits(Compact, Compact),
+    #[error("PoS input data was provided for PoW block generation")]
+    PoSInputDataProvided,
+    #[error("No input data was provided for PoW block generation")]
+    NoInputDataProvided,
 }
