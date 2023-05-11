@@ -37,7 +37,8 @@ fn gen_password(rng: &mut (impl Rng + CryptoRng), len: usize) -> String {
     crypto::random::distributions::Alphanumeric.sample_string(rng, len)
 }
 
-fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
+fn write_file_atomically(path: &Path, data: &str) -> Result<(), std::io::Error> {
+    let path_tmp = path.with_extension("tmp");
     let mut options = std::fs::OpenOptions::new();
 
     #[cfg(unix)]
@@ -47,7 +48,9 @@ fn write_file(path: &Path, data: &str) -> Result<(), std::io::Error> {
         options.mode(0o600);
     }
 
-    options.create(true).write(true).open(path)?.write_all(data.as_bytes())
+    options.create(true).write(true).open(&path_tmp)?.write_all(data.as_bytes())?;
+
+    std::fs::rename(path_tmp, path)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -87,7 +90,7 @@ impl RpcCreds {
                 };
                 let cookie = format!("{username}:{password}");
 
-                write_file(&cookie_file, &cookie)
+                write_file_atomically(&cookie_file, &cookie)
                     .map_err(|e| RpcCredsError::CookieFileIoError(cookie_file.clone(), e))?;
 
                 Ok(Self {
