@@ -33,7 +33,7 @@ fn get_timelock(output: &TxOutput) -> Option<&OutputTimeLock> {
     match output {
         TxOutput::Transfer(_, _)
         | TxOutput::Burn(_)
-        | TxOutput::StakePool(_)
+        | TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _, _) => None,

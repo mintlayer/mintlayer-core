@@ -392,7 +392,7 @@ where
                     Some(res)
                 }
                 TxOutput::SpendShareFromDelegation(amount, destination, delegation_id, _) => {
-                    match self.check_delegation_spend_destination(*delegation_id, &destination) {
+                    match self.check_delegation_spend_destination(*delegation_id, destination) {
                         Ok(_) => {
                             let res = self
                                 .accounting_delta_adapter
