@@ -166,6 +166,7 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
+                // TODO: FIXME: Should this be removed?
                 _ = periodic_check.tick(), if self.last_activity.is_some() => {}
             }
 
@@ -180,6 +181,7 @@ where
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
+        log::trace!("Sending header list request to {} peer", self.id());
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
@@ -610,6 +612,11 @@ where
         let height = height?;
         self.best_known_block = height;
 
+        // A peer can ignore the headers request if it is in the initial block download state.
+        // Assume this is the case if it asks us for blocks.
+        self.last_activity = None;
+
+        log::debug!("Sending {} block to {} peer", block.get_id(), self.id());
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::BlockResponse(BlockResponse::new(block)),
