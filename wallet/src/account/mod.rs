@@ -103,8 +103,14 @@ impl Account {
             return Err(WalletError::SendRequestComplete);
         }
 
-        // TODO Calculate the amount we need to send
-        // TODO call coin selector
+        let (_coin_amount, tokens_amounts) = Self::calculate_output_amounts(req)?;
+
+        if !tokens_amounts.is_empty() {
+            return Err(WalletError::NotImplemented("Token sending"));
+        }
+
+        // TODO: Collect UTXOs
+        // TODO: Call coin selector
 
         if req.sign_transaction() {
             self.sign_transaction(req)?;
@@ -130,7 +136,9 @@ impl Account {
                 TxOutput::Transfer(v, _)
                 | TxOutput::LockThenTransfer(v, _, _)
                 | TxOutput::Burn(v) => v,
-                _ => {
+                TxOutput::CreateStakePool(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::DecommissionPool(_, _, _, _) => {
                     return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                         output.clone(),
                     )))
@@ -146,16 +154,14 @@ impl Account {
                     let token_data = token_data.as_ref();
                     match token_data {
                         TokenData::TokenTransfer(token_transfer) => {
-                            let new_amount = match tokens_amounts.get(&token_transfer.token_id) {
-                                Some(amount) => amount
-                                    .add(token_transfer.amount)
-                                    .ok_or(WalletError::OutputAmountOverflow)?,
-                                None => token_transfer.amount,
-                            };
-
-                            tokens_amounts.insert(token_transfer.token_id, new_amount);
+                            let total_token_amount = tokens_amounts
+                                .entry(token_transfer.token_id)
+                                .or_insert(Amount::ZERO);
+                            *total_token_amount = total_token_amount
+                                .add(token_transfer.amount)
+                                .ok_or(WalletError::OutputAmountOverflow)?;
                         }
-                        _ => {
+                        TokenData::TokenIssuance(_) | TokenData::NftIssuance(_) => {
                             return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                                 output.clone(),
                             )))

@@ -48,8 +48,8 @@ pub enum WalletError {
     KeyChainError(#[from] KeyChainError),
     #[error("No account found")] // TODO implement display for AccountId
     NoAccountFound(AccountId),
-    #[error("Not implemented")]
-    NotImplemented,
+    #[error("Not implemented: {0}")]
+    NotImplemented(&'static str),
     #[error("The send request is complete")]
     SendRequestComplete,
     #[error("Unsupported transaction output type")] // TODO implement display for TxOutput
@@ -134,7 +134,7 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        Err(WalletError::NotImplemented)
+        Err(WalletError::NotImplemented("get_best_block"))
     }
 
     /// Scan new blocks and update best block hash/height.
@@ -144,12 +144,12 @@ impl<B: storage::Backend> Wallet<B> {
         _block_height: BlockHeight,
         _blocks: Vec<Block>,
     ) -> WalletResult<()> {
-        Err(WalletError::NotImplemented)
+        Err(WalletError::NotImplemented("scan_new_blocks"))
     }
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
     pub fn scan_mempool(&mut self, _transactions: Vec<SignedTransaction>) -> WalletResult<()> {
-        Err(WalletError::NotImplemented)
+        Err(WalletError::NotImplemented("scan_mempool"))
     }
 }
 
