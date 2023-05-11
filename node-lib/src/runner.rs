@@ -36,10 +36,7 @@ use common::{
 use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
-use p2p::{
-    interface::p2p_interface::P2pSubsystemInterface,
-    peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer,
-};
+use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
 use tokio::sync::oneshot;
 use utils::default_data_dir::prepare_data_dir;

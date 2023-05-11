@@ -21,8 +21,7 @@ use mempool::MempoolSubsystemInterface;
 use storage_inmemory::InMemory;
 
 use p2p::{
-    interface::p2p_interface::P2pSubsystemInterface, make_p2p,
-    peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
+    make_p2p, peer_manager::peerdb::storage_impl::PeerDbStorageImpl, testing_utils::test_p2p_config,
 };
 
 // Check that the p2p shutdown isn't timed out.

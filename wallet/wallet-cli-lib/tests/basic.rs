@@ -24,7 +24,7 @@ use chainstate::{
     DefaultTransactionVerificationStrategy,
 };
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
-use p2p::{interface::p2p_interface::P2pSubsystemInterface, rpc::P2pRpcServer};
+use p2p::rpc::P2pRpcServer;
 use rpc::{rpc_creds::RpcCreds, RpcConfig};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 use test_utils::test_dir::TestRoot;

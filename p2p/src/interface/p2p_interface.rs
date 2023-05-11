@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use common::chain::SignedTransaction;
-use subsystem::{CallRequest, ShutdownRequest};
 
 use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
@@ -31,9 +30,4 @@ pub trait P2pInterface: Send + Sync {
     async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()>;
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()>;
-}
-
-#[async_trait::async_trait]
-pub trait P2pSubsystemInterface: 'static {
-    async fn run(self, call: CallRequest<dyn P2pInterface>, shutdown: ShutdownRequest);
 }

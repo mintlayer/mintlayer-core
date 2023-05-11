@@ -60,7 +60,6 @@ use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
     event::PeerManagerEvent,
-    interface::p2p_interface::P2pSubsystemInterface,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -80,6 +79,9 @@ struct P2p<T: NetworkingService> {
     messaging_handle: T::MessagingHandle,
 
     backend_shutdown_sender: oneshot::Sender<()>,
+
+    // TODO: This flag is a workaround for graceful p2p termination.
+    // See https://github.com/mintlayer/mintlayer-core/issues/888 for more details.
     shutdown: Arc<AtomicBool>,
 
     backend_task: JoinHandle<()>,
@@ -280,7 +282,9 @@ fn get_p2p_bind_addresses<S: AsRef<str>>(
     }
 }
 
-struct P2pInit<S: PeerDbStorage + 'static> {
+// TODO: Remove this structure.
+// See https://github.com/mintlayer/mintlayer-core/issues/889 for more details.
+pub struct P2pInit<S: PeerDbStorage + 'static> {
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
@@ -290,6 +294,26 @@ struct P2pInit<S: PeerDbStorage + 'static> {
     bind_addresses: Vec<SocketAddr>,
 }
 
+impl<S: PeerDbStorage + 'static> P2pInit<S> {
+    pub async fn run(self, call: CallRequest<dyn P2pInterface>, shutdown: ShutdownRequest) {
+        if let Err(e) = run_p2p(
+            self.chain_config,
+            self.p2p_config,
+            self.chainstate_handle,
+            self.mempool_handle,
+            self.time_getter,
+            self.peerdb_storage,
+            self.bind_addresses,
+            call,
+            shutdown,
+        )
+        .await
+        {
+            log::error!("Failed to run p2p: {e:?}");
+        }
+    }
+}
+
 pub fn make_p2p<S: PeerDbStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     p2p_config: Arc<P2pConfig>,
@@ -297,7 +321,7 @@ pub fn make_p2p<S: PeerDbStorage + 'static>(
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
     peerdb_storage: S,
-) -> Result<impl P2pSubsystemInterface> {
+) -> Result<P2pInit<S>> {
     // Perform some early checks to prevent a failure in the run method.
     let bind_addresses = get_p2p_bind_addresses(
         &p2p_config.bind_addresses,
