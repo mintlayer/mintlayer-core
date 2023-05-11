@@ -196,7 +196,7 @@ impl<P: UtxosView> UtxosCache<P> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
-                if can_be_spent(output) {
+                if !can_be_spent(output) {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
