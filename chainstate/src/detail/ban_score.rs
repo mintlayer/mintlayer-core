@@ -335,6 +335,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::BlockSignatureError(err) => err.ban_score(),
             ConsensusPoSError::NoInputDataProvided => 100,
             ConsensusPoSError::PoWInputDataProvided => 100,
+            ConsensusPoSError::FailedToSignBlockHeader => 0,
         }
     }
 }

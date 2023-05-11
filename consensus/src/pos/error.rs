@@ -75,4 +75,6 @@ pub enum ConsensusPoSError {
     FailedToFetchUtxo,
     #[error("Block signature error: `{0}`")]
     BlockSignatureError(#[from] BlockSignatureError),
+    #[error("Failed to sign block header")]
+    FailedToSignBlockHeader,
 }

@@ -29,16 +29,22 @@ use chainstate_types::{
 use common::{
     chain::block::{
         consensus_data::{PoSData, PoWData},
+        signed_block_header::SignedBlockHeader,
         timestamp::BlockTimestamp,
         BlockHeader, ConsensusData,
     },
     chain::{
-        config::EpochIndex, signature::inputsig::InputWitness, ChainConfig, PoolId,
-        RequiredConsensus, TxInput,
+        block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData},
+        config::EpochIndex,
+        signature::inputsig::InputWitness,
+        ChainConfig, PoolId, RequiredConsensus, TxInput,
     },
     primitives::{Amount, BlockHeight},
 };
-use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use crypto::{
+    key::PrivateKey,
+    vrf::{VRFPrivateKey, VRFPublicKey},
+};
 use serialization::{Decode, Encode};
 
 pub use crate::{
@@ -71,11 +77,12 @@ pub enum ConsensusCreationError {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum GenerateBlockInputData {
     PoW,
-    PoS(PoSGenerateBlockInputData),
+    PoS(Box<PoSGenerateBlockInputData>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSGenerateBlockInputData {
+    stake_private_key: PrivateKey,
     vrf_private_key: VRFPrivateKey,
     pool_id: PoolId,
     kernel_input: TxInput,
@@ -83,20 +90,24 @@ pub struct PoSGenerateBlockInputData {
 }
 
 impl PoSGenerateBlockInputData {
-    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
-        &self.vrf_private_key
-    }
-
-    pub fn pool_id(&self) -> PoolId {
-        self.pool_id
-    }
-
     pub fn kernel_input(&self) -> &TxInput {
         &self.kernel_input
     }
 
     pub fn kernel_witness(&self) -> &InputWitness {
         &self.kernel_witness
+    }
+
+    pub fn pool_id(&self) -> PoolId {
+        self.pool_id
+    }
+
+    pub fn stake_private_key(&self) -> &PrivateKey {
+        &self.stake_private_key
+    }
+
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
     }
 }
 
@@ -108,6 +119,7 @@ pub enum FinalizeBlockInputData {
 
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct PoSFinalizeBlockInputData {
+    stake_private_key: PrivateKey,
     vrf_private_key: VRFPrivateKey,
     epoch_index: EpochIndex,
     sealed_epoch_randomness: PoSRandomness,
@@ -116,12 +128,14 @@ pub struct PoSFinalizeBlockInputData {
 
 impl PoSFinalizeBlockInputData {
     pub fn new(
+        stake_private_key: PrivateKey,
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
         pool_balance: Amount,
     ) -> Self {
         Self {
+            stake_private_key,
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
@@ -133,16 +147,20 @@ impl PoSFinalizeBlockInputData {
         self.epoch_index
     }
 
-    pub fn sealed_epoch_randomness(&self) -> PoSRandomness {
-        self.sealed_epoch_randomness
-    }
-
     pub fn pool_balance(&self) -> Amount {
         self.pool_balance
     }
 
-    pub fn vrf_private_key(&self) -> VRFPrivateKey {
-        self.vrf_private_key.clone()
+    pub fn sealed_epoch_randomness(&self) -> &PoSRandomness {
+        &self.sealed_epoch_randomness
+    }
+
+    pub fn stake_private_key(&self) -> &PrivateKey {
+        &self.stake_private_key
+    }
+
+    pub fn vrf_private_key(&self) -> &VRFPrivateKey {
+        &self.vrf_private_key
     }
 
     pub fn vrf_public_key(&self) -> VRFPublicKey {
@@ -219,9 +237,9 @@ pub fn finalize_consensus_data(
     block_height: BlockHeight,
     stop_flag: Arc<AtomicBool>,
     finalize_data: Option<FinalizeBlockInputData>,
-) -> Result<(), ConsensusCreationError> {
+) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
-        RequiredConsensus::IgnoreConsensus => Ok(()),
+        RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
         RequiredConsensus::PoS(_) => match block_header.consensus_data() {
             ConsensusData::None => Err(ConsensusCreationError::StakingError(
                 ConsensusPoSError::NoInputDataProvided,
@@ -237,13 +255,28 @@ pub fn finalize_consensus_data(
                     ConsensusPoSError::PoWInputDataProvided,
                 )),
                 Some(FinalizeBlockInputData::PoS(finalize_pos_data)) => {
-                    let mut pos_data = pos_data.clone();
+                    let stake_private_key = finalize_pos_data.stake_private_key().clone();
 
-                    let stake_result =
-                        stake(&mut pos_data, block_header, finalize_pos_data, stop_flag)?;
+                    let stake_result = stake(
+                        &mut pos_data.clone(),
+                        block_header,
+                        finalize_pos_data,
+                        stop_flag,
+                    )?;
+
+                    let signed_block_header = stake_private_key
+                        .sign_message(&block_header.encode())
+                        .map_err(|_| {
+                            ConsensusCreationError::StakingError(
+                                ConsensusPoSError::FailedToSignBlockHeader,
+                            )
+                        })
+                        .map(BlockHeaderSignatureData::new)
+                        .map(BlockHeaderSignature::HeaderSignature)
+                        .map(|signed_data| block_header.clone().with_signature(signed_data))?;
 
                     match stake_result {
-                        StakeResult::Success => Ok(()),
+                        StakeResult::Success => Ok(signed_block_header),
                         StakeResult::Failed => Err(ConsensusCreationError::StakingFailed),
                         StakeResult::Stopped => Err(ConsensusCreationError::StakingStopped),
                     }
@@ -261,7 +294,7 @@ pub fn finalize_consensus_data(
                 let mine_result = mine(block_header, u128::MAX, pow_data.bits(), stop_flag)?;
 
                 match mine_result {
-                    MiningResult::Success => Ok(()),
+                    MiningResult::Success => Ok(block_header.clone().with_no_signature()),
                     MiningResult::Failed => Err(ConsensusCreationError::MiningFailed),
                     MiningResult::Stopped => Err(ConsensusCreationError::MiningStopped),
                 }

@@ -30,8 +30,8 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{
-            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
-            BlockReward, ConsensusData,
+            block_body::BlockBody, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
@@ -200,6 +200,7 @@ impl BlockProduction {
                                 ))?;
 
                             Some(FinalizeBlockInputData::PoS(PoSFinalizeBlockInputData::new(
+                                pos_input_data.stake_private_key().clone(),
                                 pos_input_data.vrf_private_key().clone(),
                                 sealed_epoch_index,
                                 *sealed_epoch_randomness.randomness(),
@@ -226,8 +227,8 @@ impl BlockProduction {
         current_tip_height: BlockHeight,
         finalize_data: Option<FinalizeBlockInputData>,
         stop_flag: Arc<AtomicBool>,
-    ) -> Result<BlockHeader, BlockProductionError> {
-        consensus::finalize_consensus_data(
+    ) -> Result<SignedBlockHeader, BlockProductionError> {
+        let signed_block_header = consensus::finalize_consensus_data(
             &chain_config,
             &mut block_header,
             current_tip_height,
@@ -235,7 +236,7 @@ impl BlockProduction {
             finalize_data,
         )?;
 
-        Ok(block_header)
+        Ok(signed_block_header)
     }
 
     /// The function the creates a new block.
@@ -379,7 +380,7 @@ impl BlockProduction {
                         }
                     };
 
-                    let block_header = match mining_result {
+                    let signed_block_header = match mining_result {
                         Ok(header) => header,
                         Err(e) => {
                             log::error!(
@@ -392,7 +393,7 @@ impl BlockProduction {
                         }
                     };
 
-                    let block = Block::new_from_header(block_header.with_no_signature(), block_body.clone())?;
+                    let block = Block::new_from_header(signed_block_header, block_body.clone())?;
                     return Ok((block, end_confirm_receiver));
                 }
             }

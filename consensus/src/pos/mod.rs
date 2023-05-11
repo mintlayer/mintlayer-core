@@ -227,7 +227,7 @@ pub fn stake(
 
         if check_pos_hash(
             finalize_pos_data.epoch_index(),
-            &sealed_epoch_randomness,
+            sealed_epoch_randomness,
             pos_data,
             &vrf_pk,
             current_timestamp,
