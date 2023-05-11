@@ -57,7 +57,7 @@ where
     .await
     .unwrap();
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 // Check that connecting twice to the same address isn't possible.
@@ -104,7 +104,7 @@ where
         ))
     ));
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 // Try to connect two nodes by having `service1` listen for network events and having `service2`
@@ -149,5 +149,5 @@ where
     service2.connect(conn_addr[0].clone()).unwrap();
     service1.poll_next().await.unwrap();
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
 }

@@ -150,7 +150,7 @@ where
         e => panic!("invalid event received: {e:?}"),
     }
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender.send(());
     shutdown_trigger.initiate();
     subsystem_manager_handle.join().await;

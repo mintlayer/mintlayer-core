@@ -144,11 +144,11 @@ where
             match peer_manager.run().await {
                 Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::Acquire) => {
+                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
                     log::info!("Peer manager is shut down");
                 }
                 Err(e) => {
-                    shutdown_.store(true, Ordering::Release);
+                    shutdown_.store(true, Ordering::SeqCst);
                     log::error!("Peer manager failed: {e:?}");
                 }
             }
@@ -178,11 +178,11 @@ where
                 {
                     Ok(_) => unreachable!(),
                     // The channel can be closed during the shutdown process.
-                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::Acquire) => {
+                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
                         log::info!("Sync manager is shut down");
                     }
                     Err(e) => {
-                        shutdown_.store(true, Ordering::Release);
+                        shutdown_.store(true, Ordering::SeqCst);
                         log::error!("Sync manager failed: {e:?}");
                     }
                 }
@@ -215,7 +215,7 @@ where
     }
 
     async fn shutdown(self) {
-        self.shutdown.store(true, Ordering::Release);
+        self.shutdown.store(true, Ordering::SeqCst);
         let _ = self.backend_shutdown_sender.send(());
 
         // Wait for the tasks to shut dow.

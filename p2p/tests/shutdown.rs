@@ -15,11 +15,10 @@
 
 use std::{sync::Arc, time::Duration};
 
-use tempfile::TempDir;
-
 use chainstate::{make_chainstate, ChainstateConfig, DefaultTransactionVerificationStrategy};
 use common::chain::config::create_mainnet;
 use mempool::MempoolSubsystemInterface;
+use storage_inmemory::InMemory;
 
 use p2p::{
     interface::p2p_interface::P2pSubsystemInterface, make_p2p,
@@ -33,10 +32,10 @@ async fn shutdown_timeout() {
     let p2p_config = Arc::new(test_p2p_config());
 
     let timeout = Duration::from_secs(3);
-    let mut manager = subsystem::Manager::new_with_config(subsystem::manager::ManagerConfig {
-        name: "shutdown-test",
-        shutdown_timeout_per_subsystem: Some(timeout),
-    });
+    let mut manager = subsystem::Manager::new_with_config(subsystem::manager::ManagerConfig::new(
+        "shutdown-test",
+        Some(timeout),
+    ));
     let shutdown_trigger = manager.make_shutdown_trigger();
 
     let chainstate = make_chainstate(
@@ -60,14 +59,7 @@ async fn shutdown_timeout() {
         move |call, shutdown| mempool.run(call, shutdown)
     });
 
-    let lmdb_dir = TempDir::new().unwrap();
-    let peerdb_storage = PeerDbStorageImpl::new(storage_lmdb::Lmdb::new(
-        lmdb_dir.as_ref().to_owned(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    ))
-    .unwrap();
+    let peerdb_storage = PeerDbStorageImpl::new(InMemory::new()).unwrap();
     let p2p = make_p2p(
         Arc::clone(&chain_config),
         p2p_config,

@@ -150,11 +150,11 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
             match backend.run().await {
                 Ok(_) => unreachable!(),
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::Acquire) => {
+                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
                     log::info!("Backend is shut down");
                 }
                 Err(e) => {
-                    shutdown.store(true, Ordering::Release);
+                    shutdown.store(true, Ordering::SeqCst);
                     log::error!("Failed to run backend: {e}");
                 }
             }

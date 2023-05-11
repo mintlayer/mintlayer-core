@@ -143,7 +143,7 @@ where
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
     assert_eq!(&header, block.header());
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
@@ -220,5 +220,5 @@ where
             .clone()])))
         .unwrap();
 
-    shutdown.store(true, Ordering::Release);
+    shutdown.store(true, Ordering::SeqCst);
 }

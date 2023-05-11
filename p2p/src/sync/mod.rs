@@ -119,7 +119,8 @@ where
             self.chainstate_handle
                 .call(|c| c.is_initial_block_download())
                 .await
-                // This shouldn't fail unless the chainstate subsystem is down.
+                // This shouldn't fail unless the chainstate subsystem is down which shouldn't
+                // happen since subsystems are shutdown in reverse order.
                 .expect("Chainstate call failed")?,
             Ordering::Release,
         );

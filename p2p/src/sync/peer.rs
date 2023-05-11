@@ -142,7 +142,7 @@ where
 
     pub async fn run(&mut self) {
         match self.main_loop().await {
-            // The unexpect "channel closed" error will be handled by the sync manager.
+            // The unexpected "channel closed" error will be handled by the sync manager.
             Ok(()) | Err(P2pError::ChannelClosed) => {}
             Err(e) => panic!("{} peer task failed: {e:?}", self.id()),
         }

@@ -30,9 +30,9 @@ use crate::subsystem::{CallRequest, Handle, ShutdownRequest, Subsystem, Subsyste
 /// Manager configuration options.
 pub struct ManagerConfig {
     /// Subsystem manager name
-    pub name: &'static str,
+    name: &'static str,
     /// Shutdown timeout. Set to `None` for no (i.e. unlimited) timeout.
-    pub shutdown_timeout_per_subsystem: Option<Duration>,
+    shutdown_timeout_per_subsystem: Option<Duration>,
 }
 
 impl ManagerConfig {
@@ -44,10 +44,14 @@ impl ManagerConfig {
     };
 
     /// New config using given subsystem name. Other options are default.
-    fn named(name: &'static str) -> Self {
+    pub fn named(name: &'static str) -> Self {
+        Self::new(name, Self::DEFAULT_SHUTDOWN_TIMEOUT)
+    }
+
+    pub fn new(name: &'static str, shutdown_timeout_per_subsystem: Option<Duration>) -> Self {
         Self {
             name,
-            shutdown_timeout_per_subsystem: Self::DEFAULT_SHUTDOWN_TIMEOUT,
+            shutdown_timeout_per_subsystem,
         }
     }
 }

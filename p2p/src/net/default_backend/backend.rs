@@ -330,7 +330,7 @@ where
             );
             match peer.run().await {
                 Ok(()) => {}
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::Acquire) => {}
+                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {}
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
             }
         });
@@ -691,7 +691,7 @@ where
         // NOTE: `sync_tx` is not connected in some PeerManager tests.
         match sync_tx.send(event) {
             Ok(()) => {}
-            Err(_) if shutdown.load(Ordering::Acquire) => {}
+            Err(_) if shutdown.load(Ordering::SeqCst) => {}
             Err(_) => log::error!("sending sync event from the backend failed unexpectedly"),
         }
     }
