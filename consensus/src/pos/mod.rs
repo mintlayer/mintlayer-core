@@ -20,13 +20,14 @@ pub mod target;
 
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
+    vrf_tools::construct_transcript,
     BlockIndex, BlockIndexHandle,
 };
 use common::{
     chain::{
         block::{
             consensus_data::PoSData, signed_block_header::SignedBlockHeader,
-            timestamp::BlockTimestamp,
+            timestamp::BlockTimestamp, BlockHeader, ConsensusData,
         },
         config::EpochIndex,
         ChainConfig, PoSStatus, TxOutput,
@@ -36,12 +37,25 @@ use common::{
 };
 use crypto::vrf::VRFPublicKey;
 use pos_accounting::PoSAccountingView;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use utils::ensure;
 use utxo::UtxosView;
 
-use crate::pos::{
-    block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output,
+use crate::{
+    pos::{block_sig::check_block_signature, error::ConsensusPoSError, kernel::get_kernel_output},
+    PoSFinalizeBlockInputData,
 };
+
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StakeResult {
+    Success,
+    Failed,
+    Stopped,
+}
 
 pub fn check_pos_hash(
     epoch_index: EpochIndex,
@@ -179,4 +193,61 @@ where
         pool_balance,
     )?;
     Ok(())
+}
+
+pub fn stake(
+    pos_data: &mut Box<PoSData>,
+    block_header: &mut BlockHeader,
+    finalize_pos_data: PoSFinalizeBlockInputData,
+    stop_flag: Arc<AtomicBool>,
+) -> Result<StakeResult, ConsensusPoSError> {
+    let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
+    let vrf_sk = finalize_pos_data.vrf_private_key();
+    let vrf_pk = finalize_pos_data.vrf_public_key();
+
+    let mut current_timestamp = block_header.timestamp();
+
+    let end_timestamp = match current_timestamp.add_int_seconds(60) {
+        Some(t) => t,
+        None => return Ok(StakeResult::Failed),
+    };
+
+    while current_timestamp <= end_timestamp {
+        let vrf_data = {
+            let transcript = construct_transcript(
+                finalize_pos_data.epoch_index(),
+                &sealed_epoch_randomness.value(),
+                current_timestamp,
+            );
+
+            vrf_sk.produce_vrf_data(transcript.into())
+        };
+
+        pos_data.update_vrf_data(vrf_data);
+
+        if check_pos_hash(
+            finalize_pos_data.epoch_index(),
+            &sealed_epoch_randomness,
+            pos_data,
+            &vrf_pk,
+            current_timestamp,
+            finalize_pos_data.pool_balance(),
+        )
+        .is_ok()
+        {
+            block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
+            return Ok(StakeResult::Success);
+        }
+
+        if stop_flag.load(Ordering::SeqCst) {
+            return Ok(StakeResult::Stopped);
+        }
+
+        current_timestamp = match current_timestamp.add_int_seconds(1) {
+            Some(t) => t,
+            None => return Ok(StakeResult::Failed),
+        }
+    }
+
+    Ok(StakeResult::Failed)
 }
