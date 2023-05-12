@@ -110,7 +110,7 @@ impl SendRequest {
         self.utxos = utxos;
     }
 
-    pub fn get_connected_tx_outputs(&self) -> &Vec<TxOutput> {
+    pub fn connected_tx_outputs(&self) -> &Vec<TxOutput> {
         &self.utxos
     }
 

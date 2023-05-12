@@ -188,7 +188,7 @@ impl Account {
     fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<()> {
         let tx = req.transaction();
         let inputs = tx.inputs();
-        let utxos = req.get_connected_tx_outputs();
+        let utxos = req.connected_tx_outputs();
         if utxos.len() != inputs.len() {
             return Err(
                 TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
@@ -240,7 +240,7 @@ impl Account {
     }
 
     /// Get the id of this account
-    pub fn get_account_id(&self) -> AccountId {
+    pub fn account_id(&self) -> AccountId {
         self.key_chain.get_account_id()
     }
 
@@ -266,7 +266,7 @@ impl Account {
             return Err(WalletError::DuplicateTransaction(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.account_id(), tx_id);
         let wallet_tx = WalletTx::new(tx, state);
 
         self.add_to_utxos(db_tx, &wallet_tx)?;
@@ -287,7 +287,7 @@ impl Account {
             return Err(WalletError::NoTransactionFound(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.account_id(), tx_id);
         db_tx.del_transaction(&account_tx_id)?;
 
         if let Some(wallet_tx) = self.txs.remove(&tx_id) {
@@ -304,12 +304,12 @@ impl Account {
         wallet_tx: &WalletTx,
     ) -> WalletResult<()> {
         // Only Confirmed can be added to the UTXO set
-        match wallet_tx.get_state() {
+        match wallet_tx.state() {
             TxState::Confirmed(_) => {}
             TxState::InMempool | TxState::Conflicted(_) | TxState::Inactive => return Ok(()),
         }
 
-        let tx = wallet_tx.get_tx();
+        let tx = wallet_tx.tx();
 
         for (i, output) in tx.outputs().iter().enumerate() {
             // Check if this output belongs to this wallet or it is watched
@@ -317,7 +317,7 @@ impl Account {
                 let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
                 let utxo = Utxo::new(output.clone(), false, utxo::UtxoSource::Mempool);
                 self.utxo.insert(outpoint.clone(), utxo.clone());
-                let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
+                let account_utxo_id = AccountOutPointId::new(self.account_id(), outpoint);
                 db_tx.set_utxo(&account_utxo_id, utxo)?;
             }
         }
@@ -330,11 +330,11 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         wallet_tx: &WalletTx,
     ) -> WalletResult<()> {
-        let tx = wallet_tx.get_tx();
+        let tx = wallet_tx.tx();
         for (i, _) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
             self.utxo.remove(&outpoint);
-            db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
+            db_tx.del_utxo(&AccountOutPointId::new(self.account_id(), outpoint))?;
         }
         Ok(())
     }
@@ -374,7 +374,7 @@ impl Account {
 
     #[allow(dead_code)] // TODO remove
     fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
-        self.key_chain.get_leaf_key_chain(purpose).get_last_issued()
+        self.key_chain.get_leaf_key_chain(purpose).last_issued()
     }
 
     #[allow(dead_code)] // TODO remove

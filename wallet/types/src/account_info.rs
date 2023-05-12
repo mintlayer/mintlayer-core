@@ -45,15 +45,15 @@ impl DeterministicAccountInfo {
         }
     }
 
-    pub fn get_root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
+    pub fn root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
         &self.root_hierarchy_key
     }
 
-    pub fn get_account_key(&self) -> &ExtendedPublicKey {
+    pub fn account_key(&self) -> &ExtendedPublicKey {
         &self.account_key
     }
 
-    pub fn get_lookahead_size(&self) -> u32 {
+    pub fn lookahead_size(&self) -> u32 {
         self.lookahead_size
     }
 }

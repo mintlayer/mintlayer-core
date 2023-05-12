@@ -129,7 +129,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn get_database(&self) -> &Store<B> {
+    pub fn database(&self) -> &Store<B> {
         &self.db
     }
 

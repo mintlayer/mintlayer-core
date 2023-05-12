@@ -58,7 +58,7 @@ fn account_transactions() {
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain).unwrap();
     db_tx.commit().unwrap();
 
-    let id = account.get_account_id();
+    let id = account.account_id();
 
     let txo1 = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(1)),
@@ -95,12 +95,12 @@ fn account_transactions() {
     account.add_transaction(&mut db_tx, tx4.clone(), TxState::Inactive).unwrap();
     db_tx.commit().unwrap();
 
-    assert_eq!(id, account.get_account_id());
+    assert_eq!(id, account.account_id());
     assert_eq!(4, account.txs.len());
-    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().get_tx());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
-    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().get_tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().tx());
+    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
+    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().tx());
+    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
 
     assert_eq!(4, account.utxo.len());
 
@@ -110,12 +110,12 @@ fn account_transactions() {
     let mut account = Account::load_from_database(config.clone(), &db_tx, id.clone()).unwrap();
     db_tx.close();
 
-    assert_eq!(id, account.get_account_id());
+    assert_eq!(id, account.account_id());
     assert_eq!(4, account.txs.len());
-    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().get_tx());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
-    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().get_tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().tx());
+    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
+    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().tx());
+    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
     assert_eq!(4, account.utxo.len());
 
     let mut db_tx = db.transaction_rw(None).unwrap();
@@ -123,10 +123,10 @@ fn account_transactions() {
     account.delete_transaction(&mut db_tx, tx3.get_id()).unwrap();
     db_tx.commit().unwrap();
 
-    assert_eq!(id, account.get_account_id());
+    assert_eq!(id, account.account_id());
     assert_eq!(2, account.txs.len());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
+    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
     assert_eq!(0, account.utxo.len());
 
     drop(account);
@@ -135,10 +135,10 @@ fn account_transactions() {
     let account = Account::load_from_database(config, &db_tx, id.clone()).unwrap();
     db_tx.close();
 
-    assert_eq!(id, account.get_account_id());
+    assert_eq!(id, account.account_id());
     assert_eq!(2, account.txs.len());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
+    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
     assert_eq!(0, account.utxo.len());
 }
 
@@ -183,7 +183,7 @@ fn account_addresses_lookahead() {
 
     assert_eq!(account.get_last_issued(ReceiveFunds), None);
     let expected_last_derived =
-        ChildNumber::from_index_with_hardened_bit(account.key_chain.get_lookahead_size() - 1);
+        ChildNumber::from_index_with_hardened_bit(account.key_chain.lookahead_size() - 1);
     assert_eq!(
         account.get_last_derived_index(ReceiveFunds),
         Some(expected_last_derived)

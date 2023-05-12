@@ -49,11 +49,11 @@ impl WalletTx {
         WalletTx { tx, state }
     }
 
-    pub fn get_tx(&self) -> &WithId<Transaction> {
+    pub fn tx(&self) -> &WithId<Transaction> {
         &self.tx
     }
 
-    pub fn get_state(&self) -> &TxState {
+    pub fn state(&self) -> &TxState {
         &self.state
     }
 }

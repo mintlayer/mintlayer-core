@@ -151,7 +151,7 @@ impl LeafKeyChain {
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();
 
-        let account_pubkey = account_info.get_account_key();
+        let account_pubkey = account_info.account_key();
 
         Ok(WithPurpose::new(
             LeafKeyChain::new_from_parts(
@@ -249,7 +249,7 @@ impl LeafKeyChain {
     fn get_new_issued_index(&self, lookahead_size: u32) -> KeyChainResult<ChildNumber> {
         // TODO consider last used index as well
         let new_issued_index = {
-            match self.get_last_issued() {
+            match self.last_issued() {
                 None => ChildNumber::ZERO,
                 Some(last_issued) => last_issued.increment()?,
             }
@@ -269,7 +269,7 @@ impl LeafKeyChain {
         let new_issued_index = new_index_to_issue.get_index();
 
         // Check if the issued addresses are less or equal to lookahead size
-        let lookahead_exceeded = match self.get_last_used() {
+        let lookahead_exceeded = match self.last_used() {
             None => new_issued_index >= lookahead_size,
             Some(last_used_index) => {
                 new_issued_index > last_used_index.get_index() + lookahead_size
@@ -355,7 +355,7 @@ impl LeafKeyChain {
             Some(last_derived_index) => last_derived_index.increment()?.get_index(),
         };
 
-        let up_to_index = match self.get_last_used() {
+        let up_to_index = match self.last_used() {
             None => lookahead_size,
             Some(last_used) => last_used.increment()?.get_index() + lookahead_size,
         };
@@ -505,12 +505,12 @@ impl LeafKeyChain {
     }
 
     /// Get the index of the last used key or None if no key is used
-    pub fn get_last_used(&self) -> Option<ChildNumber> {
+    pub fn last_used(&self) -> Option<ChildNumber> {
         self.usage_state.last_used()
     }
 
     /// Get the index of the last issued key or None if no key is issued
-    pub fn get_last_issued(&self) -> Option<ChildNumber> {
+    pub fn last_issued(&self) -> Option<ChildNumber> {
         self.usage_state.last_issued()
     }
 

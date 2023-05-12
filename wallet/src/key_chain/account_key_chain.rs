@@ -120,7 +120,7 @@ impl AccountKeyChain {
 
         let AccountInfo::Deterministic(account_info) = account_info;
 
-        let pubkey_id = account_info.get_account_key().clone().into();
+        let pubkey_id = account_info.account_key().clone().into();
 
         let account_private_key = db_tx.get_root_key(&pubkey_id)?.into();
 
@@ -131,9 +131,9 @@ impl AccountKeyChain {
             chain_config,
             account_private_key,
             account_public_key: pubkey_id.into_key().into(),
-            root_hierarchy_key: account_info.get_root_hierarchy_key().clone().into(),
+            root_hierarchy_key: account_info.root_hierarchy_key().clone().into(),
             sub_chains,
-            lookahead_size: account_info.get_lookahead_size().into(),
+            lookahead_size: account_info.lookahead_size().into(),
         })
     }
 
@@ -151,7 +151,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<Address> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         self.get_leaf_key_chain_mut(purpose).issue_address(db_tx, lookahead_size)
     }
 
@@ -161,7 +161,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         self.get_leaf_key_chain_mut(purpose).issue_key(db_tx, lookahead_size)
     }
 
@@ -231,7 +231,7 @@ impl AccountKeyChain {
 
     /// Derive addresses until there are lookahead unused ones
     pub fn top_up_all<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         KeyPurpose::ALL.iter().try_for_each(|purpose| {
             self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
         })
@@ -241,11 +241,11 @@ impl AccountKeyChain {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
             self.root_hierarchy_key.clone().take(),
             self.account_public_key.clone().take(),
-            self.get_lookahead_size(),
+            self.lookahead_size(),
         ))
     }
 
-    pub fn get_lookahead_size(&self) -> u32 {
+    pub fn lookahead_size(&self) -> u32 {
         *self.lookahead_size
     }
 
@@ -255,7 +255,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         xpub: &ExtendedPublicKey,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_extended_pubkey_as_used(db_tx, xpub, lookahead_size)? {
@@ -271,7 +271,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         public_key: &PublicKey,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_pubkey_as_used(db_tx, public_key, lookahead_size)? {
@@ -286,7 +286,7 @@ impl AccountKeyChain {
         db_tx: &mut StoreTxRw<B>,
         pub_key_hash: &PublicKeyHash,
     ) -> KeyChainResult<bool> {
-        let lookahead_size = self.get_lookahead_size();
+        let lookahead_size = self.lookahead_size();
         for purpose in KeyPurpose::ALL {
             let leaf_keys = self.get_leaf_key_chain_mut(purpose);
             if leaf_keys.mark_pub_key_hash_as_used(db_tx, pub_key_hash, lookahead_size)? {

@@ -132,11 +132,11 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let id = key_chain.get_account_id();
 
     let mut db_tx = db.transaction_rw(None).unwrap();
-    assert_eq!(key_chain.get_lookahead_size(), LOOKAHEAD_SIZE);
+    assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
 
     // Issue new addresses until the lookahead size is reached
     let mut last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
-    for _ in 1..key_chain.get_lookahead_size() {
+    for _ in 1..key_chain.lookahead_size() {
         last_address = key_chain.issue_address(&mut db_tx, purpose).unwrap();
     }
     assert_eq!(
@@ -149,10 +149,10 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let mut key_chain = master_key_chain
         .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
         .unwrap();
-    assert_eq!(key_chain.get_lookahead_size(), LOOKAHEAD_SIZE);
-    assert_eq!(key_chain.get_leaf_key_chain(purpose).get_last_used(), None);
+    assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
+    assert_eq!(key_chain.get_leaf_key_chain(purpose).last_used(), None);
     assert_eq!(
-        key_chain.get_leaf_key_chain(purpose).get_last_issued(),
+        key_chain.get_leaf_key_chain(purpose).last_issued(),
         Some(ChildNumber::from_normal(
             U31::from_u32_with_msb(LOOKAHEAD_SIZE - 1).0
         ))
@@ -173,7 +173,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         .unwrap();
 
     // Should be able to issue more addresses
-    for _ in 0..key_chain.get_lookahead_size() {
+    for _ in 0..key_chain.lookahead_size() {
         key_chain.issue_address(&mut db_tx, purpose).unwrap();
     }
     assert_eq!(
