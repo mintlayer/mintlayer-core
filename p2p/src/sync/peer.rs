@@ -619,7 +619,7 @@ where
         let (block, index) = self
             .chainstate_handle
             .call(move |c| {
-                let index = c.get_block_index(&id.into());
+                let index = c.get_block_index(&id);
                 let block = c.get_block(id);
                 (block, index)
             })
