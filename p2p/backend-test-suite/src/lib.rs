@@ -22,6 +22,7 @@ mod utils;
 mod ban;
 mod block_announcement;
 mod connect;
+mod events;
 
 use std::fmt::Debug;
 
@@ -62,5 +63,6 @@ where
         .chain(connect::tests::<T, N, A>())
         .chain(block_announcement::tests::<T, N, A>())
         .chain(ban::tests::<T, N, A>())
+        .chain(events::tests::<T, N, A>())
         .collect()
 }

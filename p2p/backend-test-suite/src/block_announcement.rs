@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
@@ -53,6 +53,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -60,11 +61,13 @@ where
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -72,6 +75,7 @@ where
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();
@@ -181,6 +185,7 @@ where
     });
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -188,11 +193,13 @@ where
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -200,6 +207,7 @@ where
         p2p_config,
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();

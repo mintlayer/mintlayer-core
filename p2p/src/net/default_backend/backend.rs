@@ -35,7 +35,7 @@ use void::Void;
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
 use logging::log;
-use utils::set_flag::SetFlag;
+use utils::{eventhandler::EventsController, set_flag::SetFlag};
 
 use crate::{
     config::P2pConfig,
@@ -53,6 +53,7 @@ use crate::{
         },
     },
     types::{peer_address::PeerAddress, peer_id::PeerId},
+    P2pEvent, P2pEventHandler,
 };
 
 use super::{peer::PeerRole, transport::TransportAddress, types::HandshakeNonce};
@@ -122,6 +123,9 @@ pub struct Backend<T: TransportSocket> {
 
     shutdown: Arc<AtomicBool>,
     shutdown_receiver: oneshot::Receiver<()>,
+
+    events_controller: EventsController<P2pEvent>,
+    subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
 }
 
 impl<T> Backend<T>
@@ -139,6 +143,7 @@ where
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
         shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
+        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Self {
         Self {
             transport,
@@ -154,6 +159,8 @@ where
             command_queue: FuturesUnordered::new(),
             shutdown,
             shutdown_receiver,
+            events_controller: EventsController::new(),
+            subscribers_receiver,
         }
     }
 
@@ -204,6 +211,10 @@ where
             SyncingEvent::Connected { peer_id },
             &self.shutdown,
         );
+        self.events_controller.broadcast(P2pEvent::PeerConnected {
+            id: peer_id,
+            services: peer.services,
+        });
 
         Ok(())
     }
@@ -283,6 +294,9 @@ where
                             log::error!("Accepting a new connection failed unexpectedly: {err}")
                         },
                     }
+                }
+                handler = self.subscribers_receiver.recv() => {
+                    self.events_controller.subscribe_to_events(handler.ok_or(P2pError::ChannelClosed)?);
                 }
                 _ = &mut self.shutdown_receiver => {
                     return Err(P2pError::ChannelClosed);
@@ -425,6 +439,7 @@ where
                 SyncingEvent::Disconnected { peer_id },
                 &self.shutdown,
             );
+            self.events_controller.broadcast(P2pEvent::PeerDisconnected(peer_id));
         }
 
         // Terminate the peer's event loop as soon as possible.

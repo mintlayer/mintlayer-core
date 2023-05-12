@@ -74,6 +74,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     let transport = p2p::make_p2p_transport();
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
     let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
         transport,
@@ -82,6 +83,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         Arc::clone(&p2p_config),
         shutdown,
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await?;
 

@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common::chain::SignedTransaction;
 
-use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId, P2pEvent};
 
 #[async_trait::async_trait]
 pub trait P2pInterface: Send + Sync {
@@ -30,4 +32,9 @@ pub trait P2pInterface: Send + Sync {
     async fn remove_reserved_node(&mut self, addr: String) -> crate::Result<()>;
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()>;
+
+    fn subscribe_to_events(
+        &mut self,
+        handler: Arc<dyn Fn(P2pEvent) + Send + Sync>,
+    ) -> crate::Result<()>;
 }

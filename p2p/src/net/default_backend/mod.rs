@@ -44,7 +44,7 @@ use crate::{
         ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
     },
     types::peer_id::PeerId,
-    P2pConfig,
+    P2pConfig, P2pEventHandler,
 };
 
 use super::types::services::Service;
@@ -121,6 +121,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         p2p_config: Arc<P2pConfig>,
         shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
+        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
@@ -146,6 +147,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 sync_tx,
                 shutdown_,
                 shutdown_receiver,
+                subscribers_receiver,
             );
 
             match backend.run().await {

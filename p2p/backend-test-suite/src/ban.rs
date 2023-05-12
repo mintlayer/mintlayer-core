@@ -32,7 +32,6 @@ use common::{
 
 use p2p::{
     error::P2pError,
-    event::PeerManagerEvent,
     message::{HeaderList, SyncMessage},
     net::{
         types::SyncingEvent, ConnectivityService, MessagingService, NetworkingService,
@@ -40,6 +39,7 @@ use p2p::{
     },
     sync::BlockSyncManager,
     testing_utils::{connect_and_accept_services, test_p2p_config, TestTransportMaker},
+    PeerManagerEvent,
 };
 
 tests![invalid_pubsub_block,];
@@ -63,6 +63,7 @@ where
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
     let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
         T::make_transport(),
@@ -71,6 +72,7 @@ where
         Arc::new(test_p2p_config()),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();
@@ -87,6 +89,7 @@ where
     );
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
         T::make_transport(),
         vec![T::make_address()],
@@ -94,6 +97,7 @@ where
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();

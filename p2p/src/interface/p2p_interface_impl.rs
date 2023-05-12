@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common::{chain::SignedTransaction, primitives::Idable};
 
 use crate::{
     error::{ConversionError, P2pError},
-    event::PeerManagerEvent,
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
     message::SyncMessage,
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
-    MessagingService, P2p,
+    MessagingService, P2p, P2pEvent, PeerManagerEvent,
 };
 
 #[async_trait::async_trait]
@@ -100,5 +101,12 @@ where
         let id = tx.transaction().get_id();
         self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
         self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))
+    }
+
+    fn subscribe_to_events(
+        &mut self,
+        handler: Arc<dyn Fn(P2pEvent) + Send + Sync>,
+    ) -> crate::Result<()> {
+        self.subscribers_sender.send(handler).map_err(Into::into)
     }
 }

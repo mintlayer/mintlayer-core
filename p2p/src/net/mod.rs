@@ -24,12 +24,16 @@ use std::{
 };
 
 use async_trait::async_trait;
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{
+    sync::{mpsc, oneshot},
+    task::JoinHandle,
+};
 
 use crate::{
     config,
     message::{PeerManagerMessage, SyncMessage},
     types::peer_id::PeerId,
+    P2pEventHandler,
 };
 
 use self::default_backend::transport::TransportAddress;
@@ -86,6 +90,7 @@ pub trait NetworkingService {
         p2p_config: Arc<config::P2pConfig>,
         shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
+        subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
