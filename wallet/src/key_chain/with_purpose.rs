@@ -13,14 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod account_id;
-pub mod account_info;
-pub mod keys;
-pub mod wallet_tx;
+use wallet_types::KeyPurpose;
 
-pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountOutPointId, AccountTxId,
-};
-pub use account_info::{AccountInfo, DeterministicAccountInfo};
-pub use keys::{KeyPurpose, KeychainUsageState, RootKeyContent, RootKeyId};
-pub use wallet_tx::{TxState, WalletTx};
+pub struct WithPurpose<T> {
+    pub receive: T,
+    pub change: T,
+}
+
+impl<T> WithPurpose<T> {
+    pub fn new(receive: T, change: T) -> Self {
+        Self { receive, change }
+    }
+
+    pub fn get_for(&self, purpose: KeyPurpose) -> &T {
+        match purpose {
+            KeyPurpose::ReceiveFunds => &self.receive,
+            KeyPurpose::Change => &self.change,
+        }
+    }
+
+    pub fn mut_for(&mut self, purpose: KeyPurpose) -> &mut T {
+        match purpose {
+            KeyPurpose::ReceiveFunds => &mut self.receive,
+            KeyPurpose::Change => &mut self.change,
+        }
+    }
+}

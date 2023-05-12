@@ -13,6 +13,7 @@ crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 serialization = { path = "../serialization" }
 storage = { path = '../storage', features = ['inmemory'] }
+utils = { path = '../utils' }
 utxo = { path = '../utxo' }
 wallet-storage = {path = './storage'}
 wallet-types = {path = './types'}
@@ -25,5 +26,6 @@ zeroize = "1.5"
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
+hex.workspace = true
 rstest = "0.17"
 tempfile = "3.3"

@@ -39,8 +39,8 @@ impl DerivationPath {
         self.0
     }
 
-    pub fn as_vec(&self) -> &Vec<ChildNumber> {
-        &self.0
+    pub fn as_slice(&self) -> &[ChildNumber] {
+        self.0.as_slice()
     }
 
     pub fn len(&self) -> usize {
@@ -53,6 +53,16 @@ impl DerivationPath {
 
     pub fn is_root(&self) -> bool {
         self.is_empty()
+    }
+
+    /// Get the difference of this path and a sub path.
+    pub fn get_super_path_diff(&self, sub_path: &DerivationPath) -> Option<&[ChildNumber]> {
+        if let Some(diff_path) = self.as_slice().strip_prefix(sub_path.as_slice()) {
+            if !diff_path.is_empty() {
+                return Some(diff_path);
+            }
+        }
+        None
     }
 }
 
@@ -132,7 +142,65 @@ impl fmt::Display for DerivationPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::RngCore;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
     use test_utils::{assert_encoded_eq, decode_from_hex};
+
+    #[rstest]
+    #[case("m/1/2/3", "m/1/2/3/4/5'", Some("m/4/5'"))]
+    #[case("m/1", "m/1/2", Some("m/2"))]
+    #[case("m", "m/1/2'/3", Some("m/1/2'/3"))]
+    #[case("m", "m/1", Some("m/1"))]
+    #[case("m", "m", None)]
+    #[case("m/1", "m", None)]
+    #[case("m/1/2/3", "m/1/2/3", None)]
+    #[case("m/1/2/3", "m/1/2'/3", None)]
+    #[case("m/1/2/3/4/5'", "m/1/2/3", None)]
+    fn path_diff(#[case] sub_path: &str, #[case] super_path: &str, #[case] result: Option<&str>) {
+        let sub_path = DerivationPath::from_str(sub_path).unwrap();
+        let super_path = DerivationPath::from_str(super_path).unwrap();
+        let result = result.map(|s| DerivationPath::from_str(s).unwrap().as_slice().to_vec());
+
+        assert_eq!(
+            super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()),
+            result
+        );
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn path_diff_random(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut make_random_path_vec = || {
+            (0..rng.next_u32() % MAX_PATH_SIZE as u32)
+                .map(|_| ChildNumber::from_index_with_hardened_bit(rng.next_u32()))
+                .collect::<Vec<ChildNumber>>()
+        };
+
+        let sub_path_vec = make_random_path_vec();
+        let super_path_vec = make_random_path_vec();
+
+        let result = if sub_path_vec.len() < super_path_vec.len() {
+            let (common, diff) = super_path_vec.split_at(sub_path_vec.len());
+            if common == sub_path_vec.as_slice() {
+                Some(diff.to_vec())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let sub_path = DerivationPath::try_from(sub_path_vec).unwrap();
+        let super_path = DerivationPath::try_from(super_path_vec).unwrap();
+
+        assert_eq!(
+            super_path.get_super_path_diff(&sub_path).map(|a| a.to_vec()),
+            result
+        );
+    }
 
     #[test]
     fn parse_derivation_path() {

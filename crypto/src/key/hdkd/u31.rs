@@ -30,6 +30,10 @@ impl U31 {
         (result, msb)
     }
 
+    pub const fn into_u32(self) -> u32 {
+        self.0
+    }
+
     pub const fn into_encoded_with_msb(self, msb: bool) -> u32 {
         self.0 | (MSB_BIT * msb as u32)
     }
@@ -41,7 +45,7 @@ impl U31 {
 
 impl From<U31> for u32 {
     fn from(v: U31) -> Self {
-        v.0
+        v.into_u32()
     }
 }
 

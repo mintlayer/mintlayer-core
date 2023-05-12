@@ -13,17 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::{AccountKeyChain, KeyPurpose};
+use crate::key_chain::AccountKeyChain;
 use crate::{WalletError, WalletResult};
 use common::address::Address;
-use common::chain::{ChainConfig, OutPoint, Transaction, TxOutput};
+use common::chain::{ChainConfig, Destination, OutPoint, Transaction, TxOutput};
+use common::primitives::id::WithId;
 use common::primitives::{Id, Idable};
+use crypto::key::hdkd::child_number::ChildNumber;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use storage::Backend;
 use utxo::Utxo;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::{AccountId, AccountOutPointId, AccountTxId, TxState, WalletTx};
+use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, TxState, WalletTx};
 
 pub struct Account {
     #[allow(dead_code)] // TODO remove
@@ -34,7 +36,7 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn load_from_database<B: storage::Backend>(
+    pub fn load_from_database<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: AccountId,
@@ -62,7 +64,7 @@ impl Account {
     }
 
     /// Create a new account by providing a key chain
-    pub fn new<B: storage::Backend>(
+    pub fn new<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         key_chain: AccountKeyChain,
@@ -81,7 +83,7 @@ impl Account {
     }
 
     /// Get the id of this account
-    pub fn get_acount_id(&self) -> AccountId {
+    pub fn get_account_id(&self) -> AccountId {
         self.key_chain.get_account_id()
     }
 
@@ -91,14 +93,14 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
     ) -> WalletResult<Address> {
-        Ok(self.key_chain.issue_new_address(db_tx, purpose)?)
+        Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
     #[allow(dead_code)] // TODO remove
-    fn add_transaction<B: storage::Backend>(
+    fn add_transaction<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        tx: Transaction,
+        tx: WithId<Transaction>,
         state: TxState,
     ) -> WalletResult<()> {
         let tx_id = tx.get_id();
@@ -107,20 +109,19 @@ impl Account {
             return Err(WalletError::DuplicateTransaction(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.get_acount_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
         let wallet_tx = WalletTx::new(tx, state);
 
+        self.add_to_utxos(db_tx, &wallet_tx)?;
+
         db_tx.set_transaction(&account_tx_id, &wallet_tx)?;
-
         self.txs.insert(tx_id, wallet_tx);
-
-        // TODO add UTXO?
 
         Ok(())
     }
 
     #[allow(dead_code)] // TODO remove
-    fn delete_transaction<B: storage::Backend>(
+    fn delete_transaction<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         tx_id: Id<Transaction>,
@@ -129,32 +130,56 @@ impl Account {
             return Err(WalletError::NoTransactionFound(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.get_acount_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
         db_tx.del_transaction(&account_tx_id)?;
 
-        self.txs.remove(&tx_id);
-
-        // TODO remove UTXO?
+        if let Some(wallet_tx) = self.txs.remove(&tx_id) {
+            self.remove_from_utxos(db_tx, &wallet_tx)?;
+        }
 
         Ok(())
     }
 
-    // TODO fix incompatibility between borrowing mut self and the database transaction
-    #[allow(dead_code)] // TODO remove
-    fn add_to_utxos<B: storage::Backend>(
+    /// Add the transaction outputs to the UTXO set of the account
+    fn add_to_utxos<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        tx: &Transaction,
+        wallet_tx: &WalletTx,
     ) -> WalletResult<()> {
+        // Only Confirmed can be added to the UTXO set
+        if match wallet_tx.get_state() {
+            TxState::Confirmed(_) => false,
+            TxState::InMempool | TxState::Conflicted(_) | TxState::Inactive => true,
+        } {
+            return Ok(());
+        }
+
+        let tx = wallet_tx.get_tx();
+
         for (i, output) in tx.outputs().iter().enumerate() {
             // Check if this output belongs to this wallet or it is watched
             if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
                 let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
                 let utxo = Utxo::new(output.clone(), false, utxo::UtxoSource::Mempool);
                 self.utxo.insert(outpoint.clone(), utxo.clone());
-                let account_utxo_id = AccountOutPointId::new(self.get_acount_id(), outpoint);
+                let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
                 db_tx.set_utxo(&account_utxo_id, utxo)?;
             }
+        }
+        Ok(())
+    }
+
+    /// Remove transaction outputs from the UTXO set of the account
+    fn remove_from_utxos<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        wallet_tx: &WalletTx,
+    ) -> WalletResult<()> {
+        let tx = wallet_tx.get_tx();
+        for (i, _) in tx.outputs().iter().enumerate() {
+            let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
+            self.utxo.remove(&outpoint);
+            db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
         }
         Ok(())
     }
@@ -165,10 +190,34 @@ impl Account {
         true
     }
 
+    /// Return true if this transaction output is can be spent by this account or if it is being
+    /// watched.
+    fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
+        // TODO: Should we also report `AnyoneCanSpend` as own?
+        match txo {
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::DecommissionPool(_, d, _, _) => match d {
+                Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+                Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+                Destination::AnyoneCanSpend
+                | Destination::ScriptHash(_)
+                | Destination::ClassicMultisig(_) => false,
+            },
+            TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _) => false,
+        }
+    }
+
     #[allow(dead_code)] // TODO remove
-    fn is_mine_or_watched(&self, _txo: &TxOutput) -> bool {
-        // TODO implement
-        true
+    pub fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+        self.key_chain.get_leaf_key_chain(purpose).get_last_issued()
+    }
+
+    #[allow(dead_code)] // TODO remove
+    pub fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
+        self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
     }
 }
 
@@ -176,12 +225,16 @@ impl Account {
 mod tests {
     use super::*;
     use crate::key_chain::MasterKeyChain;
+    use common::address::pubkeyhash::PublicKeyHash;
     use common::chain::config::create_regtest;
+    use common::chain::tokens::OutputValue;
     use common::chain::{GenBlock, Transaction};
-    use common::primitives::{Idable, H256};
+    use common::primitives::id::WithId;
+    use common::primitives::{Amount, Idable, H256};
     use crypto::key::hdkd::child_number::ChildNumber;
     use crypto::key::hdkd::u31::U31;
     use wallet_storage::{DefaultBackend, Store, TransactionRo, TransactionRw, Transactional};
+    use wallet_types::KeyPurpose::{Change, ReceiveFunds};
     use wallet_types::TxState;
 
     const ZERO_H: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(0).0);
@@ -196,17 +249,40 @@ mod tests {
         let master_key_chain =
             MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-        let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+
+        let address1 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
+        let address2 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
+        let pk3 = key_chain.issue_key(&mut db_tx, ReceiveFunds).unwrap();
+        let pk4 = key_chain.issue_key(&mut db_tx, ReceiveFunds).unwrap();
 
         let mut account = Account::new(config.clone(), &mut db_tx, key_chain).unwrap();
         db_tx.commit().unwrap();
 
-        let id = account.get_acount_id();
+        let id = account.get_account_id();
 
-        let tx1 = Transaction::new(1, vec![], vec![], 0).unwrap();
-        let tx2 = Transaction::new(2, vec![], vec![], 0).unwrap();
-        let tx3 = Transaction::new(3, vec![], vec![], 0).unwrap();
-        let tx4 = Transaction::new(4, vec![], vec![], 0).unwrap();
+        let txo1 = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            Destination::Address(PublicKeyHash::try_from(address1.data(&config).unwrap()).unwrap()),
+        );
+        let txo2 = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(2)),
+            Destination::Address(PublicKeyHash::try_from(address2.data(&config).unwrap()).unwrap()),
+        );
+        let txo3 = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(3)),
+            Destination::PublicKey(pk3.into_public_key()),
+        );
+        let txo4 = TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(4)),
+            Destination::PublicKey(pk4.into_public_key()),
+        );
+
+        let tx1 =
+            WithId::new(Transaction::new(1, vec![], vec![txo1, txo2, txo3, txo4], 0).unwrap());
+        let tx2 = WithId::new(Transaction::new(2, vec![], vec![], 0).unwrap());
+        let tx3 = WithId::new(Transaction::new(3, vec![], vec![], 0).unwrap());
+        let tx4 = WithId::new(Transaction::new(4, vec![], vec![], 0).unwrap());
 
         let block_id: Id<GenBlock> = H256::from_low_u64_le(123).into();
 
@@ -221,12 +297,14 @@ mod tests {
         account.add_transaction(&mut db_tx, tx4.clone(), TxState::Inactive).unwrap();
         db_tx.commit().unwrap();
 
-        assert_eq!(id, account.get_acount_id());
+        assert_eq!(id, account.get_account_id());
         assert_eq!(4, account.txs.len());
         assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().get_tx());
         assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
         assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().get_tx());
         assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+
+        assert_eq!(4, account.utxo.len());
 
         drop(account);
 
@@ -234,22 +312,24 @@ mod tests {
         let mut account = Account::load_from_database(config.clone(), &db_tx, id.clone()).unwrap();
         db_tx.close();
 
-        assert_eq!(id, account.get_acount_id());
+        assert_eq!(id, account.get_account_id());
         assert_eq!(4, account.txs.len());
         assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().get_tx());
         assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
         assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().get_tx());
         assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+        assert_eq!(4, account.utxo.len());
 
         let mut db_tx = db.transaction_rw(None).unwrap();
         account.delete_transaction(&mut db_tx, tx1.get_id()).unwrap();
         account.delete_transaction(&mut db_tx, tx3.get_id()).unwrap();
         db_tx.commit().unwrap();
 
-        assert_eq!(id, account.get_acount_id());
+        assert_eq!(id, account.get_account_id());
         assert_eq!(2, account.txs.len());
         assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
         assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+        assert_eq!(0, account.utxo.len());
 
         drop(account);
 
@@ -257,10 +337,11 @@ mod tests {
         let account = Account::load_from_database(config, &db_tx, id.clone()).unwrap();
         db_tx.close();
 
-        assert_eq!(id, account.get_acount_id());
+        assert_eq!(id, account.get_account_id());
         assert_eq!(2, account.txs.len());
         assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().get_tx());
         assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().get_tx());
+        assert_eq!(0, account.utxo.len());
     }
 
     #[test]
@@ -278,18 +359,9 @@ mod tests {
         db_tx.commit().unwrap();
 
         let test_vec = vec![
-            (
-                KeyPurpose::ReceiveFunds,
-                "rmt14qdg6kvlkpfwcw6zjc3dlxpj0g6ddknf54evpv",
-            ),
-            (
-                KeyPurpose::Change,
-                "rmt1867l3cva9qprxny6yanula7k6scuj9xy9rv7m2",
-            ),
-            (
-                KeyPurpose::ReceiveFunds,
-                "rmt1vnqqfgfccs2sg7c0feptrw03qm8ejq5vqqvpql",
-            ),
+            (ReceiveFunds, "rmt14qdg6kvlkpfwcw6zjc3dlxpj0g6ddknf54evpv"),
+            (Change, "rmt1867l3cva9qprxny6yanula7k6scuj9xy9rv7m2"),
+            (ReceiveFunds, "rmt1vnqqfgfccs2sg7c0feptrw03qm8ejq5vqqvpql"),
         ];
 
         let mut db_tx = db.transaction_rw(None).unwrap();
@@ -297,5 +369,37 @@ mod tests {
             let address = account.get_new_address(&mut db_tx, purpose).unwrap();
             assert_eq!(address.get(), address_str);
         }
+    }
+
+    #[test]
+    fn account_addresses_lookahead() {
+        let config = Arc::new(create_regtest());
+        let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
+        let mut db_tx = db.transaction_rw(None).unwrap();
+
+        let master_key_chain =
+            MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
+
+        let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        let mut account = Account::new(config, &mut db_tx, key_chain).unwrap();
+
+        assert_eq!(account.get_last_issued(ReceiveFunds), None);
+        let expected_last_derived =
+            ChildNumber::from_index_with_hardened_bit(account.key_chain.get_lookahead_size() - 1);
+        assert_eq!(
+            account.get_last_derived_index(ReceiveFunds),
+            Some(expected_last_derived)
+        );
+
+        // Issue a new address
+        account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
+        assert_eq!(
+            account.get_last_issued(ReceiveFunds),
+            Some(ChildNumber::from_index_with_hardened_bit(0))
+        );
+        assert_eq!(
+            account.get_last_derived_index(ReceiveFunds),
+            Some(expected_last_derived)
+        );
     }
 }
