@@ -107,7 +107,7 @@ impl Account {
         // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
-            Self::calculate_output_amounts(&req.utxos())?;
+            Self::calculate_output_amounts(req.utxos())?;
 
         let (output_coin_amount, output_tokens_amounts) =
             Self::calculate_output_amounts(req.transaction().outputs())?;

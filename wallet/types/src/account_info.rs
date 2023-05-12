@@ -32,6 +32,7 @@ pub enum AccountInfo {
 // TODO tbd what metadata we need to store
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct DeterministicAccountInfo {
+    account_index: U31,
     root_hierarchy_key: Option<ExtendedPublicKey>,
     account_key: ExtendedPublicKey,
     lookahead_size: u32,
@@ -39,15 +40,21 @@ pub struct DeterministicAccountInfo {
 
 impl DeterministicAccountInfo {
     pub fn new(
+        account_index: U31,
         root_hierarchy_key: Option<ExtendedPublicKey>,
         account_key: ExtendedPublicKey,
         lookahead_size: u32,
     ) -> Self {
         Self {
+            account_index,
             root_hierarchy_key,
             account_key,
             lookahead_size,
         }
+    }
+
+    pub fn account_index(&self) -> U31 {
+        self.account_index
     }
 
     pub fn root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
@@ -58,7 +65,7 @@ impl DeterministicAccountInfo {
         &self.account_key
     }
 
-    pub fn get_lookahead_size(&self) -> u32 {
+    pub fn lookahead_size(&self) -> u32 {
         self.lookahead_size
     }
 }

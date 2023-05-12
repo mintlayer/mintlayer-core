@@ -15,11 +15,13 @@
 
 use std::{fmt::Display, str::FromStr};
 
+use serialization::{Decode, Encode};
+
 use super::derivable::DerivationError;
 
 pub const MSB_BIT: u32 = 0x80000000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode)]
 pub struct U31(u32);
 
 impl U31 {
@@ -61,7 +63,7 @@ impl TryFrom<u32> for U31 {
     type Error = DerivationError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        U31::from_u32(value).ok_or_else(|| DerivationError::InvalidChildNumber(value))
+        U31::from_u32(value).ok_or(DerivationError::InvalidChildNumber(value))
     }
 }
 
@@ -77,5 +79,13 @@ impl FromStr for U31 {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = s.parse::<u32>().map_err(|_| DerivationError::InvalidChildNumberFormat)?;
         Self::try_from(value)
+    }
+}
+
+impl Decode for U31 {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        u32::decode(input).and_then(|v| {
+            U31::from_u32(v).ok_or_else(|| serialization::Error::from("Invalid U31 value"))
+        })
     }
 }

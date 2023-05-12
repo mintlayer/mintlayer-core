@@ -37,6 +37,8 @@ pub struct AccountKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
 
+    account_index: U31,
+
     /// The account private key from which the account public key is derived
     account_private_key: ConstValue<Option<RootKeyContent>>,
 
@@ -58,10 +60,11 @@ impl AccountKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         root_key: &ExtendedPrivateKey,
-        index: U31,
+        account_index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
-        let account_path = make_account_path(&chain_config, ChildNumber::from_hardened(index));
+        let account_path =
+            make_account_path(&chain_config, ChildNumber::from_hardened(account_index));
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
@@ -93,6 +96,7 @@ impl AccountKeyChain {
 
         let mut new_account = AccountKeyChain {
             chain_config,
+            account_index,
             account_private_key: Some(account_privkey.into()).into(),
             account_public_key: account_pubkey.into(),
             root_hierarchy_key: Some(root_key.to_public_key()).into(),
@@ -130,11 +134,12 @@ impl AccountKeyChain {
 
         Ok(AccountKeyChain {
             chain_config,
+            account_index: account_info.account_index(),
             account_private_key,
             account_public_key: pubkey_id.into_key().into(),
             root_hierarchy_key: account_info.root_hierarchy_key().clone().into(),
             sub_chains,
-            lookahead_size: account_info.get_lookahead_size().into(),
+            lookahead_size: account_info.lookahead_size().into(),
         })
     }
 
@@ -240,6 +245,7 @@ impl AccountKeyChain {
 
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
+            self.account_index,
             self.root_hierarchy_key.clone().take(),
             self.account_public_key.clone().take(),
             self.lookahead_size(),
