@@ -20,16 +20,18 @@ use common::chain::signature::inputsig::standard_signature::StandardInputSignatu
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
-use common::chain::{ChainConfig, Destination, OutPoint, Transaction, TxOutput};
+use common::chain::{
+    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, Transaction, TxOutput,
+};
 use common::primitives::id::WithId;
-use common::primitives::{Amount, Id, Idable};
+use common::primitives::{Amount, BlockHeight, Id, Idable};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use storage::Backend;
-use utxo::Utxo;
+use utxo::{Utxo, UtxoSource};
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, TxState, WalletTx};
 
@@ -38,7 +40,6 @@ pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txs: BTreeMap<Id<Transaction>, WalletTx>,
-    utxo: BTreeMap<OutPoint, Utxo>,
 }
 
 impl Account {
@@ -48,12 +49,6 @@ impl Account {
         id: &AccountId,
     ) -> WalletResult<Account> {
         let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id)?;
-
-        let utxo: BTreeMap<OutPoint, Utxo> = db_tx
-            .get_utxo_set(id)?
-            .into_iter()
-            .map(|(k, v)| (k.into_item_id(), v))
-            .collect();
 
         let txs: BTreeMap<Id<Transaction>, WalletTx> = db_tx
             .get_transactions(id)?
@@ -65,7 +60,6 @@ impl Account {
             chain_config,
             key_chain,
             txs,
-            utxo,
         })
     }
 
@@ -80,11 +74,12 @@ impl Account {
 
         db_tx.set_account(&account_id, &account_info)?;
 
+        // TODO: Scan genesis block UTXOs
+
         Ok(Account {
             chain_config,
             key_chain,
             txs: BTreeMap::new(),
-            utxo: BTreeMap::new(),
         })
     }
 
@@ -302,13 +297,29 @@ impl Account {
         Ok(())
     }
 
+    fn add_utxo_if_own<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        output: &TxOutput,
+        outpoint: OutPoint,
+        utxo_source: utxo::UtxoSource,
+    ) -> WalletResult<()> {
+        if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
+            let is_block_reward = outpoint.tx_id().get_tx_id().is_none();
+            let utxo = Utxo::new(output.clone(), is_block_reward, utxo_source);
+            let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
+            db_tx.set_utxo(&account_utxo_id, utxo)?;
+        }
+        Ok(())
+    }
+
     /// Add the transaction outputs to the UTXO set of the account
     fn add_to_utxos<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         wallet_tx: &WalletTx,
     ) -> WalletResult<()> {
-        // Only Confirmed can be added to the UTXO set
+        // For now only confirmed can be added to the UTXO set
         match wallet_tx.state() {
             TxState::Confirmed(_) => {}
             TxState::InMempool | TxState::Conflicted(_) | TxState::Inactive => return Ok(()),
@@ -321,7 +332,6 @@ impl Account {
             if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
                 let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
                 let utxo = Utxo::new(output.clone(), false, utxo::UtxoSource::Mempool);
-                self.utxo.insert(outpoint.clone(), utxo.clone());
                 let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
                 db_tx.set_utxo(&account_utxo_id, utxo)?;
             }
@@ -338,7 +348,6 @@ impl Account {
         let tx = wallet_tx.tx();
         for (i, _) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
-            self.utxo.remove(&outpoint);
             db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
         }
         Ok(())
@@ -382,6 +391,60 @@ impl Account {
     #[allow(dead_code)] // TODO remove
     fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
+    }
+
+    pub fn reset_to_height<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        block_height: BlockHeight,
+    ) -> WalletResult<()> {
+        let revoked_utxos: Vec<AccountOutPointId> = db_tx
+            .get_utxo_set(&self.get_account_id())?
+            .into_iter()
+            .filter_map(|(utxo_id, utxo)| match utxo.source() {
+                UtxoSource::Blockchain(utxo_height) if *utxo_height >= block_height => {
+                    Some(utxo_id)
+                }
+                UtxoSource::Mempool | UtxoSource::Blockchain(_) => None,
+            })
+            .collect();
+
+        for utxo_id in revoked_utxos {
+            db_tx.del_utxo(&utxo_id)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn scan_new_blocks<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        mut block_height: BlockHeight,
+        blocks: &[Block],
+    ) -> WalletResult<()> {
+        for block in blocks {
+            let utxo_source = UtxoSource::Blockchain(block_height);
+            let block_id = block.header().block_id().into();
+
+            for (output_index, output) in block.block_reward().outputs().iter().enumerate() {
+                let outpoint =
+                    OutPoint::new(OutPointSourceId::BlockReward(block_id), output_index as u32);
+                self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
+            }
+
+            for signed_tx in block.transactions() {
+                let tx_id = signed_tx.transaction().get_id();
+                for (output_index, output) in signed_tx.outputs().iter().enumerate() {
+                    let outpoint =
+                        OutPoint::new(OutPointSourceId::Transaction(tx_id), output_index as u32);
+                    self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
+                }
+            }
+
+            block_height = block_height.next_height();
+        }
+
+        Ok(())
     }
 }
 

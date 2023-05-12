@@ -82,6 +82,8 @@ pub struct Wallet<B: storage::Backend> {
     // key_chain: MasterKeyChain<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
+    best_block_height: BlockHeight,
+    best_block_id: Id<GenBlock>,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(
@@ -123,11 +125,16 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
+        let best_block_id = chain_config.genesis_block_id();
+        let best_block_height = BlockHeight::zero();
+
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
+            best_block_id,
+            best_block_height,
         })
     }
 
@@ -155,11 +162,16 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
+        let best_block_id = chain_config.genesis_block_id();
+        let best_block_height = BlockHeight::zero();
+
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
+            best_block_id,
+            best_block_height,
         })
     }
 
@@ -191,17 +203,32 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        Err(WalletError::NotImplemented("get_best_block"))
+        Ok((self.best_block_id, self.best_block_height))
     }
 
     /// Scan new blocks and update best block hash/height.
     /// New block may reset the chain of previously scanned blocks.
     pub fn scan_new_blocks(
         &mut self,
-        _block_height: BlockHeight,
-        _blocks: Vec<Block>,
+        block_height: BlockHeight,
+        blocks: Vec<Block>,
     ) -> WalletResult<()> {
-        Err(WalletError::NotImplemented("scan_new_blocks"))
+        if blocks.is_empty() {
+            return Ok(());
+        }
+        let mut db_tx = self.db.transaction_rw(None)?;
+        for account in self.accounts.values_mut() {
+            if self.best_block_height >= block_height {
+                account.reset_to_height(&mut db_tx, block_height)?;
+            }
+            account.scan_new_blocks(&mut db_tx, block_height, &blocks)?;
+        }
+        db_tx.commit()?;
+
+        self.best_block_height = (self.best_block_height.into_int() + blocks.len() as u64).into();
+        self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
+
+        Ok(())
     }
 
     /// Rescan mempool for unconfirmed transactions and UTXOs
