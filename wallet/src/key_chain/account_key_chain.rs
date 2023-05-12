@@ -22,6 +22,7 @@ use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
+use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
 use storage::Backend;
@@ -57,10 +58,10 @@ impl AccountKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         root_key: &ExtendedPrivateKey,
-        index: ChildNumber,
+        index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
-        let account_path = make_account_path(&chain_config, index);
+        let account_path = make_account_path(&chain_config, ChildNumber::from_hardened(index));
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
@@ -133,7 +134,7 @@ impl AccountKeyChain {
             account_public_key: pubkey_id.into_key().into(),
             root_hierarchy_key: account_info.root_hierarchy_key().clone().into(),
             sub_chains,
-            lookahead_size: account_info.lookahead_size().into(),
+            lookahead_size: account_info.get_lookahead_size().into(),
         })
     }
 
@@ -304,12 +305,11 @@ mod tests {
     use super::*;
     use crate::key_chain::MasterKeyChain;
     use common::chain::config::create_unit_test_config;
-    use crypto::key::hdkd::u31::U31;
     use crypto::key::secp256k1::Secp256k1PublicKey;
     use rstest::rstest;
     use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
+    use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
-    const ZERO_H: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(0).0);
     const MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     #[rstest]
@@ -323,7 +323,9 @@ mod tests {
 
         let master_key_chain =
             MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
-        let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+        let mut key_chain = master_key_chain
+            .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+            .unwrap();
         key_chain.top_up_all(&mut db_tx).unwrap();
         db_tx.commit().unwrap();
 

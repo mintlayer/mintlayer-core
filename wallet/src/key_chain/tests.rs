@@ -26,8 +26,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use test_utils::assert_encoded_eq;
 use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
-const ZERO_H: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(0).0);
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
@@ -70,7 +70,9 @@ fn key_chain_creation(
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
 
-    let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let mut key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
     key_chain.top_up_all(&mut db_tx).unwrap();
     db_tx.commit().unwrap();
 
@@ -125,7 +127,9 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None)
             .unwrap();
-    let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let mut key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
     db_tx.commit().unwrap();
 
     let id = key_chain.get_account_id();
@@ -190,7 +194,9 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let mut db_tx = db.transaction_rw(None).unwrap();
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
-    let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
     let id = key_chain.get_account_id();
     db_tx.commit().unwrap();
     drop(key_chain);

@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::extended::ExtendedPublicKey;
+use crypto::key::{extended::ExtendedPublicKey, hdkd::u31::U31};
 use serialization::{Decode, Encode};
+
+pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
+    Some(v) => v,
+    None => unreachable!(),
+};
 
 /// Account metadata that contains information like from which master key it was derived from
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -53,7 +58,7 @@ impl DeterministicAccountInfo {
         &self.account_key
     }
 
-    pub fn lookahead_size(&self) -> u32 {
+    pub fn get_lookahead_size(&self) -> u32 {
         self.lookahead_size
     }
 }

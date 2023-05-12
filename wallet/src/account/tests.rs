@@ -25,17 +25,16 @@ use common::primitives::amount::UnsignedIntType;
 use common::primitives::id::WithId;
 use common::primitives::{Amount, Idable, H256};
 use crypto::key::hdkd::child_number::ChildNumber;
-use crypto::key::hdkd::u31::U31;
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{Rng, RngCore};
 use rstest::rstest;
 use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};
 use wallet_storage::{DefaultBackend, Store, TransactionRo, TransactionRw, Transactional};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 use wallet_types::TxState;
 
-const ZERO_H: ChildNumber = ChildNumber::from_hardened(U31::from_u32_with_msb(0).0);
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
@@ -48,7 +47,9 @@ fn account_transactions() {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let mut key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let mut key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
 
     let address1 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
     let address2 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
@@ -151,7 +152,9 @@ fn account_addresses() {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
 
     let mut account = Account::new(config, &mut db_tx, key_chain).unwrap();
     db_tx.commit().unwrap();
@@ -178,7 +181,9 @@ fn account_addresses_lookahead() {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
     let mut account = Account::new(config, &mut db_tx, key_chain).unwrap();
 
     assert_eq!(account.get_last_issued(ReceiveFunds), None);
@@ -214,7 +219,9 @@ fn sign_transaction(#[case] seed: Seed) {
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
 
-    let key_chain = master_key_chain.create_account_key_chain(&mut db_tx, ZERO_H).unwrap();
+    let key_chain = master_key_chain
+        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
+        .unwrap();
     let mut account = Account::new(config.clone(), &mut db_tx, key_chain).unwrap();
 
     let amounts: Vec<Amount> = (0..(2 + rng.next_u32() % 5))

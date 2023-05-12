@@ -17,8 +17,8 @@ use crate::key_chain::account_key_chain::AccountKeyChain;
 use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND, LOOKAHEAD_SIZE};
 use common::chain::ChainConfig;
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
-use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
+use crypto::key::hdkd::u31::U31;
 use itertools::Itertools;
 use std::sync::Arc;
 use storage::Backend;
@@ -108,7 +108,7 @@ impl MasterKeyChain {
     pub fn create_account_key_chain<B: Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,
-        account_index: ChildNumber,
+        account_index: U31,
     ) -> KeyChainResult<AccountKeyChain> {
         AccountKeyChain::new_from_root_key(
             self.chain_config.clone(),

@@ -34,6 +34,14 @@ impl U31 {
         self.0
     }
 
+    pub const fn from_u32(value: u32) -> Option<Self> {
+        if value & MSB_BIT == 0 {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
     pub const fn into_encoded_with_msb(self, msb: bool) -> u32 {
         self.0 | (MSB_BIT * msb as u32)
     }
@@ -53,11 +61,7 @@ impl TryFrom<u32> for U31 {
     type Error = DerivationError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        if value & MSB_BIT == 0 {
-            Ok(Self(value))
-        } else {
-            Err(DerivationError::InvalidChildNumber(value))
-        }
+        U31::from_u32(value).ok_or_else(|| DerivationError::InvalidChildNumber(value))
     }
 }
 
