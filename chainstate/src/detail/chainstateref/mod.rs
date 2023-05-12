@@ -614,8 +614,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _)
-                    | TxOutput::SpendShareFromDelegation(_, _, _,_) => {},
+                    | TxOutput::DelegateStaking(_, _, _) => { /* do nothing */ }
+                     TxOutput::SpendShareFromDelegation(_, _, _,_) => {
+                        //FIXME impl
+                    },
                     TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
                         OutputTimeLock::ForBlockCount(c) => {
                             let cs: i64 = (*c).try_into().map_err(|_| {

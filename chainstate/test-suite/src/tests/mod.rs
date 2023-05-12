@@ -29,6 +29,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 mod bootstrap;
 mod chainstate_accounting_storage_tests;
 mod chainstate_storage_tests;
+mod delegation_tests;
 mod double_spend_tests;
 mod events_tests;
 mod fungible_tokens;
