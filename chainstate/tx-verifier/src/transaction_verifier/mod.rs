@@ -349,6 +349,35 @@ where
     ) -> Result<(), ConnectTransactionError> {
         let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
+        //let tx_undo = tx
+        //    .inputs()
+        //    .iter()
+        //    .filter_map(|input| {
+        //        let utxo = self
+        //            .utxo_cache
+        //            .utxo(input.outpoint())?
+        //            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        //        match utxo.output() {
+        //            TxOutput::DelegateStaking(amount, _, delegation_id) => {
+        //                let res = self
+        //                    .accounting_delta_adapter
+        //                    .operations(tx_source)
+        //                    .delegate_staking(*delegation_id, *amount)
+        //                    .map_err(ConnectTransactionError::PoSAccountingError);
+        //                Some(res)
+        //            }
+        //            TxOutput::CreateStakePool(_)
+        //            | TxOutput::DecommissionPool(_, _, _, _)
+        //            | TxOutput::CreateDelegationId(_, _)
+        //            | TxOutput::SpendShareFromDelegation(_, _, _, _)
+        //            | TxOutput::Transfer(_, _)
+        //            | TxOutput::LockThenTransfer(_, _, _)
+        //            | TxOutput::Burn(_)
+        //            | TxOutput::ProduceBlockFromStake(_, _) => None,
+        //        }
+        //    })
+        //    .collect::<Result<Vec<_>, _>>()?;
+
         let tx_undo = tx
             .outputs()
             .iter()
