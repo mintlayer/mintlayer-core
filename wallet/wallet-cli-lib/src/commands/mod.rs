@@ -68,6 +68,15 @@ pub enum WalletCommand {
         hash: String,
     },
 
+    /// Generate a block with the given transactions to the specified
+    /// reward destination. If transactions are None, the block will be
+    /// generated with available transactions in the mempool
+    GenerateBlock {
+        reward_destination: String,
+
+        transactions: Option<Vec<String>>,
+    },
+
     /// Submit a block to be included in the chain
     ///
     /// More information about block submits.
@@ -250,6 +259,18 @@ pub async fn handle_wallet_command(
                 Some(block) => Ok(ConsoleCommand::Print(block.hex_encode())),
                 None => Ok(ConsoleCommand::Print("Not found".to_owned())),
             }
+        }
+
+        WalletCommand::GenerateBlock {
+            reward_destination,
+            transactions,
+        } => {
+            let block = rpc_client
+                .generate_block(reward_destination, transactions)
+                .await
+                .map_err(WalletCliError::RpcError)?;
+            rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
         WalletCommand::SubmitBlock { block } => {

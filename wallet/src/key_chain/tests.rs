@@ -98,8 +98,7 @@ fn key_chain_creation(
         key_chain.issue_key(&mut db_tx, purpose).unwrap()
     };
     assert_eq!(pk.get_derivation_path().to_string(), path_str.to_string());
-    let sk =
-        AccountKeyChain::get_private_key(master_key_chain.get_root_private_key(), &pk).unwrap();
+    let sk = AccountKeyChain::get_private_key(master_key_chain.root_private_key(), &pk).unwrap();
     let pk2 = ExtendedPublicKey::from_private_key(&sk);
     assert_eq!(pk2.get_derivation_path().to_string(), path_str.to_string());
     assert_eq!(pk, pk2);

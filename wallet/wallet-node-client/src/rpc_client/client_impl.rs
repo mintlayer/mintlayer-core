@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
     chain::{Block, GenBlock},
@@ -78,6 +79,20 @@ impl NodeInterface for NodeRpcClient {
             &self.http_client,
             first_block,
             second_block,
+        )
+        .await
+        .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn generate_block(
+        &self,
+        reward_destination_hex: String,
+        transactions_hex: Option<Vec<String>>,
+    ) -> Result<String, Self::Error> {
+        BlockProductionRpcClient::generate_block(
+            &self.http_client,
+            reward_destination_hex,
+            transactions_hex,
         )
         .await
         .map_err(NodeRpcError::ResponseError)

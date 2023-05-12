@@ -38,6 +38,11 @@ pub trait NodeInterface {
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
+    async fn generate_block(
+        &self,
+        reward_destination_hex: String,
+        transactions_hex: Option<Vec<String>>,
+    ) -> Result<String, Self::Error>;
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
     async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
 

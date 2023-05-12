@@ -104,6 +104,14 @@ impl NodeInterface for WalletHandlesClient {
         Ok(result)
     }
 
+    async fn generate_block(
+        &self,
+        _reward_destination_hex: String,
+        _transactions_hex: Option<Vec<String>>,
+    ) -> Result<String, Self::Error> {
+        unimplemented!()
+    }
+
     async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
         let block = Block::hex_decode_all(&block_hex)?;
         self.chainstate_handle

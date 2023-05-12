@@ -3543,6 +3543,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.21.0",
+ "blockprod",
  "chainstate",
  "chainstate-storage",
  "common",

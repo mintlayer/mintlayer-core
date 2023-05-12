@@ -130,6 +130,13 @@ impl NodeInterface for MockNode {
             .unwrap())
     }
 
+    async fn generate_block(
+        &self,
+        _reward_destination_hex: String,
+        _transactions_hex: Option<Vec<String>>,
+    ) -> Result<String, Self::Error> {
+        unreachable!()
+    }
     async fn submit_block(&self, _block_hex: String) -> Result<(), Self::Error> {
         unreachable!()
     }

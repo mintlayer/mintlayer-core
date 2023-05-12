@@ -20,22 +20,23 @@ use common::{
     chain::{Destination, SignedTransaction},
 };
 
+use rpc::Result as RpcResult;
 use serialization::{hex::HexDecode, hex::HexEncode};
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 use subsystem::subsystem::CallError;
 
-#[rpc::rpc(server, namespace = "blockprod")]
+#[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
     /// When called, the job manager will be notified to send a signal
     /// to all currently running jobs to stop running
     #[method(name = "stop_all")]
-    async fn stop_all(&self) -> rpc::Result<usize>;
+    async fn stop_all(&self) -> RpcResult<usize>;
 
     /// When called, the job manager will be notified to send a signal
     /// to the specified job to stop running
     #[method(name = "stop_job")]
-    async fn stop_job(&self, job_id: String) -> rpc::Result<bool>;
+    async fn stop_job(&self, job_id: String) -> RpcResult<bool>;
 
     /// Generate a block with the given transactions to the specified
     /// reward destination. If transactions are None, the block will be
@@ -45,7 +46,7 @@ trait BlockProductionRpc {
         &self,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
-    ) -> rpc::Result<String>;
+    ) -> RpcResult<String>;
 }
 
 #[async_trait::async_trait]
