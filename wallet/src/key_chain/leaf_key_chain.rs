@@ -26,6 +26,7 @@ use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::sync::Arc;
 use storage::Backend;
+use utils::ensure;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
 use wallet_types::{
@@ -275,11 +276,9 @@ impl LeafKeyChain {
             }
         };
 
-        if lookahead_exceeded {
-            Err(KeyChainError::LookAheadExceeded)
-        } else {
-            Ok(())
-        }
+        ensure!(!lookahead_exceeded, KeyChainError::LookAheadExceeded);
+
+        Ok(())
     }
 
     /// Derives a key or gets it from the precomputed key pool.
@@ -507,12 +506,12 @@ impl LeafKeyChain {
 
     /// Get the index of the last used key or None if no key is used
     pub fn get_last_used(&self) -> Option<ChildNumber> {
-        self.usage_state.get_last_used()
+        self.usage_state.last_used()
     }
 
     /// Get the index of the last issued key or None if no key is issued
     pub fn get_last_issued(&self) -> Option<ChildNumber> {
-        self.usage_state.get_last_issued()
+        self.usage_state.last_issued()
     }
 
     pub fn usage_state(&self) -> &KeychainUsageState {

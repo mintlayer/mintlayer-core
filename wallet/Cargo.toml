@@ -8,17 +8,18 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = {path = '../common'}
+common = {path = "../common" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
 serialization = { path = "../serialization" }
-storage = { path = '../storage', features = ['inmemory'] }
-utils = { path = '../utils' }
-utxo = { path = '../utxo' }
-wallet-storage = {path = './storage'}
-wallet-types = {path = './types'}
+storage = { path = "../storage", features = ["inmemory"] }
+utils = { path = "../utils" }
+utxo = { path = "../utxo" }
+wallet-storage = { path = "./storage" }
+wallet-types = { path = "./types" }
 
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
+itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
 zeroize = "1.5"

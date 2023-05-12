@@ -204,8 +204,8 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);
         let last_derived_idx = ChildNumber::from_index_with_hardened_bit(19);
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
-        assert_eq!(leaf_keys.usage_state().get_last_issued(), None);
-        assert_eq!(leaf_keys.usage_state().get_last_used(), None);
+        assert_eq!(leaf_keys.usage_state().last_issued(), None);
+        assert_eq!(leaf_keys.usage_state().last_used(), None);
     }
 
     let mut db_tx = db.transaction_rw(None).unwrap();
@@ -222,11 +222,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         let last_derived_idx = ChildNumber::from_index_with_hardened_bit(20);
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
         assert_eq!(
-            leaf_keys.usage_state().get_last_issued(),
+            leaf_keys.usage_state().last_issued(),
             Some(ChildNumber::from_index_with_hardened_bit(0))
         );
         assert_eq!(
-            leaf_keys.usage_state().get_last_used(),
+            leaf_keys.usage_state().last_used(),
             Some(ChildNumber::from_index_with_hardened_bit(0))
         );
     }
@@ -246,11 +246,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         let last_derived_idx = ChildNumber::from_index_with_hardened_bit(40);
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
         assert_eq!(
-            leaf_keys.usage_state().get_last_issued(),
+            leaf_keys.usage_state().last_issued(),
             Some(ChildNumber::from_index_with_hardened_bit(20))
         );
         assert_eq!(
-            leaf_keys.usage_state().get_last_used(),
+            leaf_keys.usage_state().last_used(),
             Some(ChildNumber::from_index_with_hardened_bit(20))
         );
     }

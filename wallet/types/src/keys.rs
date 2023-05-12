@@ -90,27 +90,27 @@ impl KeychainUsageState {
     }
 
     /// Get the last index used in the blockchain
-    pub fn get_last_used(&self) -> Option<ChildNumber> {
+    pub fn last_used(&self) -> Option<ChildNumber> {
         self.last_used
     }
 
     /// Increments the last index used in the blockchain until up_to_last_used. This has no effect
     /// if the up_to_last_used is smaller than the self value
     pub fn increment_up_to_last_used(&mut self, up_to_last_used: ChildNumber) {
-        if self.last_used.is_none() || self.last_used.unwrap() < up_to_last_used {
+        if self.last_used.map_or(true, |old_value| old_value < up_to_last_used) {
             self.last_used = Some(up_to_last_used);
         }
     }
 
     /// Get the last index issued to the user
-    pub fn get_last_issued(&self) -> Option<ChildNumber> {
+    pub fn last_issued(&self) -> Option<ChildNumber> {
         self.last_issued
     }
 
     /// Increments the last index issued in the blockchain until up_to_last_issued.
     /// This has no effect if the up_to_last_issued is smaller than the self value
     pub fn increment_up_to_last_issued(&mut self, up_to_last_issued: ChildNumber) {
-        if self.last_issued.is_none() || self.last_issued.unwrap() < up_to_last_issued {
+        if self.last_issued.map_or(true, |old_value| old_value < up_to_last_issued) {
             self.last_issued = Some(up_to_last_issued);
         }
     }
@@ -159,24 +159,24 @@ mod tests {
     #[test]
     fn keychain_usage_state() {
         let mut state = KeychainUsageState::default();
-        assert_eq!(state.get_last_issued(), None);
-        assert_eq!(state.get_last_used(), None);
+        assert_eq!(state.last_issued(), None);
+        assert_eq!(state.last_used(), None);
 
         let index_0 = ChildNumber::ZERO;
         state.increment_up_to_last_used(index_0);
         state.increment_up_to_last_issued(index_0);
-        assert_eq!(state.get_last_issued(), Some(index_0));
-        assert_eq!(state.get_last_used(), Some(index_0));
+        assert_eq!(state.last_issued(), Some(index_0));
+        assert_eq!(state.last_used(), Some(index_0));
 
         let index_1 = ChildNumber::ONE;
         state.increment_up_to_last_used(index_1);
         state.increment_up_to_last_issued(index_1);
-        assert_eq!(state.get_last_issued(), Some(index_1));
-        assert_eq!(state.get_last_used(), Some(index_1));
+        assert_eq!(state.last_issued(), Some(index_1));
+        assert_eq!(state.last_used(), Some(index_1));
 
         state.increment_up_to_last_used(index_0);
         state.increment_up_to_last_issued(index_0);
-        assert_eq!(state.get_last_issued(), Some(index_1));
-        assert_eq!(state.get_last_used(), Some(index_1));
+        assert_eq!(state.last_issued(), Some(index_1));
+        assert_eq!(state.last_used(), Some(index_1));
     }
 }

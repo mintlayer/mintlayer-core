@@ -19,6 +19,7 @@ use common::chain::ChainConfig;
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
+use itertools::Itertools;
 use std::sync::Arc;
 use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
@@ -89,17 +90,13 @@ impl MasterKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
     ) -> KeyChainResult<Self> {
-        let mut root_keys = db_tx.get_all_root_keys()?;
-
         // The current format supports a single root key
-        if root_keys.len() != 1 {
-            return Err(KeyChainError::OnlyOneRootKeyIsSupported);
-        }
-
-        let (_, key_content) =
-            root_keys.pop_first().expect("Should not fail because it contains 1 key/value");
-
-        let root_key = key_content.into_key();
+        let root_key = db_tx
+            .get_all_root_keys()?
+            .into_values()
+            .exactly_one()
+            .map_err(|_| KeyChainError::OnlyOneRootKeyIsSupported)?
+            .into_key();
 
         Ok(MasterKeyChain {
             chain_config,
