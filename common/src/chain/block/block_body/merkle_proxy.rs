@@ -26,10 +26,25 @@ use super::{
     BlockBody, BlockMerkleTreeError,
 };
 
+mod private {
+    pub trait PrivateMerkleTreeTag {}
+}
+
+pub mod tag {
+    pub trait MerkleTreeTag: super::private::PrivateMerkleTreeTag {}
+    pub struct WitnessMerkleTree;
+    pub struct TxMerkleTree;
+
+    impl MerkleTreeTag for WitnessMerkleTree {}
+    impl MerkleTreeTag for TxMerkleTree {}
+    impl super::private::PrivateMerkleTreeTag for WitnessMerkleTree {}
+    impl super::private::PrivateMerkleTreeTag for TxMerkleTree {}
+}
+
 #[must_use]
 pub struct BlockBodyMerkleProxy {
-    witness_tree: WrappedWitnessMerkleTree,
-    tree: WrappedMerkleTree,
+    witness_tree: WrappedMerkleTree<tag::WitnessMerkleTree>,
+    tree: WrappedMerkleTree<tag::TxMerkleTree>,
 }
 
 impl BlockBodyMerkleProxy {
@@ -40,92 +55,34 @@ impl BlockBodyMerkleProxy {
         })
     }
 
-    pub fn witness_merkle_tree(&self) -> &WrappedWitnessMerkleTree {
+    pub fn witness_merkle_tree(&self) -> &WrappedMerkleTree<tag::WitnessMerkleTree> {
         &self.witness_tree
     }
 
-    pub fn merkle_tree(&self) -> &WrappedMerkleTree {
+    pub fn merkle_tree(&self) -> &WrappedMerkleTree<tag::TxMerkleTree> {
         &self.tree
     }
 }
 
-/// This struct wrapper, and the other one, are an attempt to create minimal
+/// This struct wrapper is an attempt to create minimal
 /// type safety to avoid confusing the two merkle trees, with and without
 /// the witness.
 #[must_use]
-pub struct WrappedWitnessMerkleTree {
-    witness_merkle_tree: MerkleTree<H256, MerkleHasher>,
+pub struct WrappedMerkleTree<MerkleTreeTag> {
+    merkle_tree: MerkleTree<H256, MerkleHasher>,
+    _tag: std::marker::PhantomData<MerkleTreeTag>,
 }
 
-impl From<MerkleTree<H256, MerkleHasher>> for WrappedWitnessMerkleTree {
-    fn from(witness_merkle_tree: MerkleTree<H256, MerkleHasher>) -> Self {
+impl<T: tag::MerkleTreeTag> From<MerkleTree<H256, MerkleHasher>> for WrappedMerkleTree<T> {
+    fn from(merkle_tree: MerkleTree<H256, MerkleHasher>) -> Self {
         Self {
-            witness_merkle_tree,
+            merkle_tree,
+            _tag: std::marker::PhantomData,
         }
     }
 }
 
-impl WrappedWitnessMerkleTree {
-    pub fn root(&self) -> H256 {
-        self.witness_merkle_tree.root()
-    }
-
-    pub fn raw_tree(&self) -> &MerkleTree<H256, MerkleHasher> {
-        &self.witness_merkle_tree
-    }
-
-    pub fn block_reward_witness_leaf(&self) -> H256 {
-        *self
-            .witness_merkle_tree
-            .node_from_bottom(0, 0)
-            .expect("Block reward leaf must exist")
-            .hash()
-    }
-
-    pub fn transaction_witness_leaf(&self, index: usize) -> H256 {
-        *self
-            .witness_merkle_tree
-            .node_from_bottom(0, index as u32 + 1) // +1 because of block reward leaf
-            .expect("Transaction witness leaf must exist")
-            .hash()
-    }
-
-    pub fn block_reward_inclusion_proof(
-        &self,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        // Block reward has index 0 in the block merkle tree
-        let proof = SingleProofNodes::from_tree_leaf(&self.witness_merkle_tree, 0)?;
-
-        Ok(proof.into_values())
-    }
-
-    pub fn transaction_witness_inclusion_proof(
-        &self,
-        index_in_block: u32,
-    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
-        // We add 1 to the index_in_block because the block reward is the first element in the block merkle tree
-        let proof =
-            SingleProofNodes::from_tree_leaf(&self.witness_merkle_tree, index_in_block + 1)?;
-
-        Ok(proof.into_values())
-    }
-}
-
-/// This struct wrapper, and the other one, are an attempt to create minimal
-/// type safety to avoid confusing the two merkle trees, with and without
-/// the witness.
-#[must_use]
-pub struct WrappedMerkleTree {
-    merkle_tree: MerkleTree<H256, MerkleHasher>,
-}
-
-impl From<MerkleTree<H256, MerkleHasher>> for WrappedMerkleTree {
-    fn from(merkle_tree: MerkleTree<H256, MerkleHasher>) -> Self {
-        Self { merkle_tree }
-    }
-}
-
-impl WrappedMerkleTree {
+impl<T: tag::MerkleTreeTag> WrappedMerkleTree<T> {
     pub fn root(&self) -> H256 {
         self.merkle_tree.root()
     }
@@ -134,7 +91,7 @@ impl WrappedMerkleTree {
         &self.merkle_tree
     }
 
-    pub fn block_reward_leaf(&self) -> H256 {
+    fn internal_block_reward_leaf(&self) -> H256 {
         *self
             .merkle_tree
             .node_from_bottom(0, 0)
@@ -142,14 +99,14 @@ impl WrappedMerkleTree {
             .hash()
     }
 
-    pub fn transaction_leaf(&self, index: usize) -> H256 {
-        *self
-            .merkle_tree
+    fn internal_transaction_leaf(&self, index: usize) -> Option<H256> {
+        self.merkle_tree
             .node_from_bottom(0, index as u32 + 1) // +1 because of block reward leaf
-            .expect("Transaction witness leaf must exist")
-            .hash()
+            .map(|n| *n.hash())
     }
 
+    /// The block reward is just an output, hence, no witness exists. Hence,
+    /// same method is public for both with and without witness
     pub fn block_reward_inclusion_proof(
         &self,
     ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
@@ -159,7 +116,7 @@ impl WrappedMerkleTree {
         Ok(proof.into_values())
     }
 
-    pub fn transaction_inclusion_proof(
+    fn internal_transaction_inclusion_proof(
         &self,
         index_in_block: u32,
     ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
@@ -167,5 +124,39 @@ impl WrappedMerkleTree {
         let proof = SingleProofNodes::from_tree_leaf(&self.merkle_tree, index_in_block + 1)?;
 
         Ok(proof.into_values())
+    }
+}
+
+impl WrappedMerkleTree<tag::TxMerkleTree> {
+    pub fn block_reward_leaf(&self) -> H256 {
+        self.internal_block_reward_leaf()
+    }
+
+    pub fn transaction_leaf(&self, index: usize) -> Option<H256> {
+        self.internal_transaction_leaf(index)
+    }
+
+    pub fn transaction_inclusion_proof(
+        &self,
+        index_in_block: u32,
+    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
+        self.internal_transaction_inclusion_proof(index_in_block)
+    }
+}
+
+impl WrappedMerkleTree<tag::WitnessMerkleTree> {
+    pub fn block_reward_witness_leaf(&self) -> H256 {
+        self.internal_block_reward_leaf()
+    }
+
+    pub fn transaction_witness_leaf(&self, index: usize) -> Option<H256> {
+        self.internal_transaction_leaf(index)
+    }
+
+    pub fn transaction_witness_inclusion_proof(
+        &self,
+        index_in_block: u32,
+    ) -> Result<SingleProofHashes<H256, MerkleHasher>, BlockMerkleTreeError> {
+        self.internal_transaction_inclusion_proof(index_in_block)
     }
 }
