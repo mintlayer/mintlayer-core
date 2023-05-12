@@ -263,15 +263,16 @@ where
 
         // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
-        if let Some(best_known_block) = self.best_known_block.clone() {
-            self.chainstate_handle
-                .call(move |c| {
-                    // Check that all blocks are known. Skip the first block as it has already checked.
-                    for id in ids.into_iter().skip(1) {
-                        let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
-                            ProtocolError::UnknownBlockRequested(id),
-                        ))?;
+        let best_known_block = self.best_known_block.clone();
+        self.chainstate_handle
+            .call(move |c| {
+                // Check that all blocks are known. Skip the first block as it has already checked.
+                for id in ids {
+                    let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
+                        ProtocolError::UnknownBlockRequested(id),
+                    ))?;
 
+                    if let Some(ref best_known_block) = best_known_block {
                         if index.block_height() <= best_known_block.block_height() {
                             // This can be normal in case of reorg, check if the block id is the same.
                             let known_block_id = c
@@ -285,11 +286,11 @@ where
                             }
                         }
                     }
+                }
 
-                    Result::<_>::Ok(())
-                })
-                .await??;
-        }
+                Result::<_>::Ok(())
+            })
+            .await??;
 
         // A peer can ignore the headers request if it is in the initial block download state.
         // Assume this is the case if it asks us for blocks.
