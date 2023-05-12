@@ -24,7 +24,7 @@ use test_utils::random::Seed;
 use crate::{config::P2pConfig, sync::tests::helpers::SyncManagerHandle};
 
 use super::helpers::{
-    get_random_bytes, new_block, new_top_block, sync_managers, sync_managers_in_sync,
+    get_random_bytes, new_block, new_top_blocks, sync_managers, sync_managers_in_sync,
     try_sync_managers_once,
 };
 
@@ -97,7 +97,7 @@ async fn basic(#[case] seed: Seed) {
 
     sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
-    new_top_block(
+    new_top_blocks(
         manager1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
@@ -109,7 +109,7 @@ async fn basic(#[case] seed: Seed) {
     sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     for _ in 0..13 {
-        new_top_block(
+        new_top_blocks(
             manager1.chainstate(),
             BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
             get_random_bytes(&mut rng),
@@ -277,7 +277,7 @@ async fn reorg(#[case] seed: Seed) {
     sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     // First blockchain reorg
-    new_top_block(
+    new_top_blocks(
         manager1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),
@@ -289,7 +289,7 @@ async fn reorg(#[case] seed: Seed) {
     sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     // Second blockchain reorg
-    new_top_block(
+    new_top_blocks(
         manager1.chainstate(),
         BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
         get_random_bytes(&mut rng),

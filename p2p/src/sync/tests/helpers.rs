@@ -536,7 +536,7 @@ pub fn new_block(
     .unwrap()
 }
 
-pub async fn new_top_block(
+pub async fn new_top_blocks(
     chainstate: &ChainstateHandle,
     timestamp: BlockTimestamp,
     random_bytes: Vec<u8>,

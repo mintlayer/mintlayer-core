@@ -29,11 +29,13 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-use chainstate::chainstate_interface::ChainstateInterface;
-use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
+use chainstate::{
+    ban_score::BanScore, chainstate_interface::ChainstateInterface, BlockError, BlockIndex,
+    BlockSource, ChainstateError, Locator,
+};
 use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block, Transaction},
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -80,8 +82,8 @@ pub struct Peer<T: NetworkingService> {
     requested_blocks: BTreeSet<Id<Block>>,
     /// A queue of the blocks requested this peer.
     blocks_queue: VecDeque<Id<Block>>,
-    /// The height of the best known block of a peer.
-    best_known_block: Option<BlockHeight>,
+    /// The index of the best known block of a peer.
+    best_known_block: Option<BlockIndex>,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
@@ -261,23 +263,37 @@ where
 
         // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
-        let best_known_block = self.best_known_block.unwrap_or(0.into());
-        self.chainstate_handle
-            .call(move |c| {
-                for id in ids {
-                    let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
-                        ProtocolError::UnknownBlockRequested(id),
-                    ))?;
+        if let Some(best_known_block) = self.best_known_block.clone() {
+            self.chainstate_handle
+                .call(move |c| {
+                    // Check that all blocks are known. Skip the first block as it has already checked.
+                    for id in ids.into_iter().skip(1) {
+                        let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
+                            ProtocolError::UnknownBlockRequested(id),
+                        ))?;
 
-                    if index.block_height() <= best_known_block {
-                        return Err(P2pError::ProtocolError(
-                            ProtocolError::DuplicatedBlockRequest(id),
-                        ));
+                        if index.block_height() <= best_known_block.block_height() {
+                            // This can be normal in case of reorg, check if the block id is the same.
+                            let known_block_id = c
+                                .get_block_id_from_height(&best_known_block.block_height())?
+                                // This should never fail because we have a block for this height.
+                                .expect("Unable to get block id from height");
+                            if &known_block_id == best_known_block.block_id() {
+                                return Err(P2pError::ProtocolError(
+                                    ProtocolError::DuplicatedBlockRequest(id),
+                                ));
+                            }
+                        }
                     }
-                }
-                Result::<_>::Ok(())
-            })
-            .await??;
+
+                    Result::<_>::Ok(())
+                })
+                .await??;
+        }
+
+        // A peer can ignore the headers request if it is in the initial block download state.
+        // Assume this is the case if it asks us for blocks.
+        self.last_activity = None;
 
         self.blocks_queue.extend(block_ids.into_iter());
 
@@ -599,22 +615,17 @@ where
     }
 
     async fn send_block(&mut self, id: Id<Block>) -> Result<()> {
-        let (block, height) = self
+        let (block, index) = self
             .chainstate_handle
             .call(move |c| {
-                let height = c.get_block_height_in_main_chain(&id.into());
+                let index = c.get_block_index(&id.into());
                 let block = c.get_block(id);
-                (block, height)
+                (block, index)
             })
             .await?;
         // All requested blocks are already checked while processing `BlockListRequest`.
         let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
-        let height = height?;
-        self.best_known_block = height;
-
-        // A peer can ignore the headers request if it is in the initial block download state.
-        // Assume this is the case if it asks us for blocks.
-        self.last_activity = None;
+        self.best_known_block = index?;
 
         log::debug!("Sending {} block to {} peer", block.get_id(), self.id());
         self.messaging_handle.send_message(
