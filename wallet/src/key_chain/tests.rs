@@ -150,7 +150,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     drop(key_chain);
 
     let mut key_chain = master_key_chain
-        .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
+        .load_account_key_chain(&db.transaction_ro().unwrap(), &id)
         .unwrap();
     assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
     assert_eq!(key_chain.get_leaf_key_chain(purpose).last_used(), None);
@@ -202,7 +202,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     drop(key_chain);
 
     let mut key_chain = master_key_chain
-        .load_keychain_from_database(&db.transaction_ro().unwrap(), &id)
+        .load_account_key_chain(&db.transaction_ro().unwrap(), &id)
         .unwrap();
 
     {

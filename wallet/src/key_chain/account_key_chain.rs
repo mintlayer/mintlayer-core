@@ -120,8 +120,9 @@ impl AccountKeyChain {
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
     ) -> KeyChainResult<Self> {
+        let account_infos = db_tx.get_account_infos()?;
         let account_info =
-            db_tx.get_account(id)?.ok_or(KeyChainError::NoAccountFound(id.clone()))?;
+            account_infos.get(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
 
         let AccountInfo::Deterministic(account_info) = account_info;
 
@@ -130,7 +131,7 @@ impl AccountKeyChain {
         let account_private_key = db_tx.get_root_key(&pubkey_id)?.into();
 
         let sub_chains =
-            LeafKeyChain::load_leaf_keys(chain_config.clone(), &account_info, db_tx, id)?;
+            LeafKeyChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
             chain_config,
@@ -141,6 +142,10 @@ impl AccountKeyChain {
             sub_chains,
             lookahead_size: account_info.lookahead_size().into(),
         })
+    }
+
+    pub fn account_index(&self) -> U31 {
+        self.account_index
     }
 
     pub fn get_account_id(&self) -> AccountId {

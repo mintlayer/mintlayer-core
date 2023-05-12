@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+use crate::Account;
 pub use bip39::{Language, Mnemonic};
 use common::chain::signature::TransactionSigError;
 use common::chain::{
@@ -24,9 +26,12 @@ use common::chain::{
     TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
+use crypto::key::hdkd::u31::U31;
 use wallet_storage::{
-    DefaultBackend, Store, TransactionRw, Transactional, WalletStorageRead, WalletStorageWrite,
+    DefaultBackend, Store, TransactionRo, TransactionRw, Transactional, WalletStorageRead,
+    WalletStorageWrite,
 };
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::AccountId;
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -73,6 +78,7 @@ pub struct Wallet<B: storage::Backend> {
     db: Arc<Store<B>>,
     // key_chain: MasterKeyChain<B>,
     key_chain: MasterKeyChain,
+    accounts: BTreeMap<U31, Account>,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(
@@ -103,29 +109,54 @@ impl<B: storage::Backend> Wallet<B> {
             passphrase,
         )?;
 
+        let account_key_chain =
+            key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)?;
+
+        let account = Account::new(Arc::clone(&chain_config), &mut db_tx, account_key_chain)?;
+
+        let accounts = std::iter::once((account.account_index(), account)).collect();
+
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
+
         db_tx.commit()?;
 
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
+            accounts,
         })
     }
 
     pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
-        let version = db.get_storage_version()?;
+        let db_tx = db.transaction_ro()?;
+
+        let version = db_tx.get_storage_version()?;
         if version == WALLET_VERSION_UNINITIALIZED {
             return Err(WalletError::WalletNotInitialized);
         }
 
-        let key_chain =
-            MasterKeyChain::load_from_database(chain_config.clone(), &db.transaction_ro()?)?;
+        let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
+
+        let account_infos = db_tx.get_account_infos()?;
+
+        let accounts = account_infos
+            .keys()
+            .map(|account_id| {
+                Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|account| (account.account_index(), account))
+            .collect();
+
+        db_tx.close();
 
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
+            accounts,
         })
     }
 

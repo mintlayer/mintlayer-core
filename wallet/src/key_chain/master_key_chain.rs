@@ -120,7 +120,7 @@ impl MasterKeyChain {
     }
 
     #[allow(dead_code)] // TODO remove
-    pub fn load_keychain_from_database<B: Backend>(
+    pub fn load_account_key_chain<B: Backend>(
         &self,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,

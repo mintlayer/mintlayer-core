@@ -87,8 +87,8 @@ macro_rules! impl_read_ops {
                 self.read::<db::DBTxs, _, _>(id)
             }
 
-            fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>> {
-                self.read::<db::DBAccounts, _, _>(id)
+            fn get_account_infos(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>> {
+                Ok(self.0.get::<db::DBAccounts, _>().prefix_iter_decoded(&())?.collect())
             }
 
             fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>> {

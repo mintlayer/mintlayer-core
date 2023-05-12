@@ -24,6 +24,7 @@ use common::chain::{ChainConfig, Destination, OutPoint, Transaction, TxOutput};
 use common::primitives::id::WithId;
 use common::primitives::{Amount, Id, Idable};
 use crypto::key::hdkd::child_number::ChildNumber;
+use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
@@ -44,18 +45,18 @@ impl Account {
     pub fn load_from_database<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
-        id: AccountId,
+        id: &AccountId,
     ) -> WalletResult<Account> {
-        let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, &id)?;
+        let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id)?;
 
         let utxo: BTreeMap<OutPoint, Utxo> = db_tx
-            .get_utxo_set(&id)?
+            .get_utxo_set(id)?
             .into_iter()
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();
 
         let txs: BTreeMap<Id<Transaction>, WalletTx> = db_tx
-            .get_transactions(&id)?
+            .get_transactions(id)?
             .into_iter()
             .map(|(k, v)| (k.into_item_id(), v))
             .collect();
@@ -239,8 +240,12 @@ impl Account {
         Ok(())
     }
 
+    pub fn account_index(&self) -> U31 {
+        self.key_chain.account_index()
+    }
+
     /// Get the id of this account
-    pub fn account_id(&self) -> AccountId {
+    pub fn get_account_id(&self) -> AccountId {
         self.key_chain.get_account_id()
     }
 
@@ -266,7 +271,7 @@ impl Account {
             return Err(WalletError::DuplicateTransaction(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.account_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
         let wallet_tx = WalletTx::new(tx, state);
 
         self.add_to_utxos(db_tx, &wallet_tx)?;
@@ -287,7 +292,7 @@ impl Account {
             return Err(WalletError::NoTransactionFound(tx_id));
         }
 
-        let account_tx_id = AccountTxId::new(self.account_id(), tx_id);
+        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
         db_tx.del_transaction(&account_tx_id)?;
 
         if let Some(wallet_tx) = self.txs.remove(&tx_id) {
@@ -317,7 +322,7 @@ impl Account {
                 let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
                 let utxo = Utxo::new(output.clone(), false, utxo::UtxoSource::Mempool);
                 self.utxo.insert(outpoint.clone(), utxo.clone());
-                let account_utxo_id = AccountOutPointId::new(self.account_id(), outpoint);
+                let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
                 db_tx.set_utxo(&account_utxo_id, utxo)?;
             }
         }
@@ -334,7 +339,7 @@ impl Account {
         for (i, _) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
             self.utxo.remove(&outpoint);
-            db_tx.del_utxo(&AccountOutPointId::new(self.account_id(), outpoint))?;
+            db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
         }
         Ok(())
     }
