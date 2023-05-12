@@ -71,7 +71,7 @@ where
     let handler = Arc::new(move |event| {
         events_sender.send(event).unwrap();
     });
-    assert!(!subscribers_sender.send(handler).is_err());
+    assert!(subscribers_sender.send(handler).is_ok());
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
