@@ -53,7 +53,7 @@ where
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
-    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut service1, _, _sync, _) = N::start(
         T::make_transport(),
@@ -73,7 +73,7 @@ where
     });
     assert!(subscribers_sender.send(handler).is_ok());
 
-    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut service2, _, _sync, _) = N::start(
         T::make_transport(),
@@ -107,4 +107,6 @@ where
     );
 
     shutdown.store(true, Ordering::SeqCst);
+    let _ = shutdown_sender_2.send(());
+    let _ = shutdown_sender_1.send(());
 }
