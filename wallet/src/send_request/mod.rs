@@ -82,8 +82,12 @@ impl SendRequest {
         }
     }
 
-    pub fn get_transaction(&self) -> &Transaction {
+    pub fn transaction(&self) -> &Transaction {
         &self.transaction
+    }
+
+    pub fn utxos(&self) -> &[TxOutput] {
+        &self.utxos
     }
 
     pub fn into_transaction(self) -> Transaction {

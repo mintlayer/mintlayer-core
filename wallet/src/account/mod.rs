@@ -103,14 +103,27 @@ impl Account {
             return Err(WalletError::SendRequestComplete);
         }
 
-        let (_coin_amount, tokens_amounts) = Self::calculate_output_amounts(req)?;
-
-        if !tokens_amounts.is_empty() {
-            return Err(WalletError::NotImplemented("Token sending"));
-        }
-
         // TODO: Collect UTXOs
         // TODO: Call coin selector
+
+        let (input_coin_amount, input_tokens_amounts) =
+            Self::calculate_output_amounts(&req.utxos())?;
+
+        let (output_coin_amount, output_tokens_amounts) =
+            Self::calculate_output_amounts(req.transaction().outputs())?;
+
+        // TODO: Fix tokens sending
+        utils::ensure!(
+            input_tokens_amounts.is_empty() && output_tokens_amounts.is_empty(),
+            WalletError::NotImplemented("Token sending")
+        );
+
+        // TODO: Add change output(s) and make sure the network fee is reasonable
+
+        utils::ensure!(
+            input_coin_amount > output_coin_amount,
+            WalletError::NotEnoughUtxo(input_coin_amount, output_coin_amount)
+        );
 
         if req.sign_transaction() {
             self.sign_transaction(req)?;
@@ -122,15 +135,14 @@ impl Account {
     }
 
     /// Calculate the output amount for coins and tokens
-    #[allow(dead_code)] // TODO remove
     fn calculate_output_amounts(
-        req: &SendRequest,
+        outputs: &[TxOutput],
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
         let mut coin_amount = Amount::ZERO;
         let mut tokens_amounts: BTreeMap<TokenId, Amount> = BTreeMap::new();
 
         // Iterate over all outputs and calculate the coin and tokens amounts
-        for output in req.get_transaction().outputs() {
+        for output in outputs {
             // Get the supported output value
             let output_value = match output {
                 TxOutput::Transfer(v, _)
@@ -174,7 +186,7 @@ impl Account {
     }
 
     fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<()> {
-        let tx = req.get_transaction();
+        let tx = req.transaction();
         let inputs = tx.inputs();
         let utxos = req.get_connected_tx_outputs();
         if utxos.len() != inputs.len() {

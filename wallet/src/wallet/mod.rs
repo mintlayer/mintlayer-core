@@ -23,7 +23,7 @@ use common::chain::{
     Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
     TxOutput,
 };
-use common::primitives::{BlockHeight, Id};
+use common::primitives::{Amount, BlockHeight, Id};
 use wallet_storage::{
     DefaultBackend, Store, TransactionRw, Transactional, WalletStorageRead, WalletStorageWrite,
 };
@@ -60,6 +60,8 @@ pub enum WalletError {
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
     TransactionSig(#[from] TransactionSigError),
+    #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
+    NotEnoughUtxo(Amount, Amount),
 }
 
 /// Result type used for the wallet
