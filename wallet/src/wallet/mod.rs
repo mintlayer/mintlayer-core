@@ -20,6 +20,7 @@ use std::sync::Arc;
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::Account;
 pub use bip39::{Language, Mnemonic};
+use common::address::Address;
 use common::chain::signature::TransactionSigError;
 use common::chain::{
     Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
@@ -28,11 +29,11 @@ use common::chain::{
 use common::primitives::{Amount, BlockHeight, Id};
 use crypto::key::hdkd::u31::U31;
 use wallet_storage::{
-    DefaultBackend, Store, TransactionRo, TransactionRw, Transactional, WalletStorageRead,
-    WalletStorageWrite,
+    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
+    WalletStorageRead, WalletStorageWrite,
 };
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-use wallet_types::AccountId;
+use wallet_types::{AccountId, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
 pub const WALLET_VERSION_V1: u32 = 1;
@@ -53,6 +54,8 @@ pub enum WalletError {
     KeyChainError(#[from] KeyChainError),
     #[error("No account found")] // TODO implement display for AccountId
     NoAccountFound(AccountId),
+    #[error("No account found with index {0}")]
+    NoAccountFoundWithIndex(U31),
     #[error("Not implemented: {0}")]
     NotImplemented(&'static str),
     #[error("The send request is complete")]
@@ -162,6 +165,27 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn database(&self) -> &Store<B> {
         &self.db
+    }
+
+    fn for_account_rw<T>(
+        &mut self,
+        account_index: U31,
+        f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
+    ) -> WalletResult<T> {
+        let mut db_tx = self.db.transaction_rw(None)?;
+        let account = self
+            .accounts
+            .get_mut(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let value = f(account, &mut db_tx)?;
+        db_tx.commit()?;
+        Ok(value)
+    }
+
+    pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
+        })
     }
 
     /// Returns the last scanned block hash and height.

@@ -352,8 +352,12 @@ impl Account {
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         match txo {
-            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
-            _ => None,
+            TxOutput::Transfer(_, d)
+            | TxOutput::LockThenTransfer(_, d, _)
+            | TxOutput::DecommissionPool(_, d, _, _) => Some(d),
+            TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _) => None,
         }
     }
 
@@ -361,20 +365,13 @@ impl Account {
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
         // TODO: Should we also report `AnyoneCanSpend` as own?
-        match txo {
-            TxOutput::Transfer(_, d)
-            | TxOutput::LockThenTransfer(_, d, _)
-            | TxOutput::DecommissionPool(_, d, _, _) => match d {
-                Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
-                Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
-                Destination::AnyoneCanSpend
-                | Destination::ScriptHash(_)
-                | Destination::ClassicMultisig(_) => false,
-            },
-            TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
-        }
+        Self::get_tx_output_destination(txo).map_or(false, |d| match d {
+            Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
+            Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
+            Destination::AnyoneCanSpend
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => false,
+        })
     }
 
     #[allow(dead_code)] // TODO remove

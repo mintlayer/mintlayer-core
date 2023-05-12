@@ -100,6 +100,9 @@ pub enum WalletCommand {
     /// Rescan
     Rescan,
 
+    /// Generate new unused address
+    NewAddress,
+
     /// Node version
     NodeVersion,
 
@@ -291,6 +294,15 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
+
+        WalletCommand::NewAddress => {
+            let address = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .new_address()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(address.get().to_owned()))
+        }
 
         WalletCommand::NodeVersion => {
             let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;

@@ -23,12 +23,13 @@ use std::{
     sync::Arc,
 };
 
-use common::chain::ChainConfig;
+use common::{address::Address, chain::ChainConfig};
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::DefaultWallet;
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 // Disabled until wallet implements required API
 const BLOCK_SYNC_ENABLED: bool = false;
@@ -108,6 +109,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
+    }
+
+    pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
+        self.wallet
+            .get_new_address(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
     }
 
     /// Sync the wallet block chain from the node.

@@ -14,6 +14,7 @@ node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
+wallet-types = { path = "../types" }
 wallet-storage = { path = "../storage" }
 
 async-trait.workspace = true
