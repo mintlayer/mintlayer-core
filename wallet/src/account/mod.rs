@@ -391,9 +391,8 @@ impl Account {
         Self::get_tx_output_destination(txo).map_or(false, |d| match d {
             Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
-            Destination::AnyoneCanSpend
-            | Destination::ScriptHash(_)
-            | Destination::ClassicMultisig(_) => false,
+            Destination::AnyoneCanSpend => true,
+            Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
         })
     }
 

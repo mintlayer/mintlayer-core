@@ -136,7 +136,7 @@ impl SendRequest {
     }
 
     pub fn get_sighash_types(&self) -> Vec<SigHashType> {
-        // TODO use customised sig hashes
+        // TODO use customized sig hashes
         let sighash_all = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
         (0..self.transaction.inputs().len()).map(|_| sighash_all).collect()
     }
