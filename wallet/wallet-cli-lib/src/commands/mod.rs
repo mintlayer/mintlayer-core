@@ -350,6 +350,7 @@ pub async fn handle_wallet_command(
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
                 .send_to_address(address, amount)
+                .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }

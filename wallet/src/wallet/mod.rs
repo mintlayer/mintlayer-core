@@ -239,7 +239,7 @@ impl<B: storage::Backend> Wallet<B> {
         let request = SendRequest::transfer_to_destination(
             OutputValue::Coin(amount),
             Destination::Address(pub_key_hash),
-        )?;
+        );
         let tx = self.for_account_rw(account_index, |account, db_tx| {
             account.complete_and_add_send_request(db_tx, request)
         })?;

@@ -91,18 +91,18 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
-        let utxos: Vec<TxOutput> = db_tx
+        let utxos: BTreeMap<OutPoint, Utxo> = db_tx
             .get_utxo_set(&self.get_account_id())?
             .into_iter()
-            .map(|(_, utxo)| utxo.output().clone())
+            .map(|(outpoint, utxo)| (outpoint.into_item_id(), utxo))
             .collect();
 
         if request.utxos().is_empty() {
-            request.set_utxos(utxos);
+            request.select_utxos(utxos)?;
         }
 
         self.complete_send_request(&mut request)?;
-        let tx = request.signed_transaction().unwrap();
+        let tx = request.get_signed_transaction().unwrap();
         // let tx = WithId::new(request.into_transaction());
         // self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
         Ok(tx)
@@ -117,10 +117,10 @@ impl Account {
         // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
-            Self::calculate_output_amounts(request.utxos().iter())?;
+            Self::calculate_output_amounts(request.utxos().iter().map(|utxo| utxo.output()))?;
 
         let (output_coin_amount, output_tokens_amounts) =
-            Self::calculate_output_amounts(request.transaction().outputs().iter())?;
+            Self::calculate_output_amounts(request.outputs().iter())?;
 
         // TODO: Fix tokens sending
         utils::ensure!(
@@ -196,9 +196,9 @@ impl Account {
     }
 
     fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<()> {
-        let tx = req.transaction();
+        let tx = req.get_transaction()?;
         let inputs = tx.inputs();
-        let utxos = req.connected_tx_outputs();
+        let utxos = req.utxos();
         if utxos.len() != inputs.len() {
             return Err(
                 TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
@@ -214,35 +214,43 @@ impl Account {
             .into());
         }
 
-        let sigs: WalletResult<Vec<StandardInputSignature>> = tx
+        let witnesses = tx
             .inputs()
             .iter()
             .enumerate()
             .map(|(i, _)| {
                 // Get the destination from this utxo. This should not fail as we checked that
                 // inputs and utxos have the same length
-                let destination = Self::get_tx_output_destination(&utxos[i]).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(utxos[i].clone()))
-                })?;
+                let destination =
+                    Self::get_tx_output_destination(&utxos[i].output()).ok_or_else(|| {
+                        WalletError::UnsupportedTransactionOutput(Box::new(
+                            utxos[i].output().clone(),
+                        ))
+                    })?;
 
-                let private_key =
-                    self.key_chain.get_private_key_for_destination(destination)?.private_key();
+                if *destination == Destination::AnyoneCanSpend {
+                    Ok(InputWitness::NoSignature(None))
+                } else {
+                    let private_key =
+                        self.key_chain.get_private_key_for_destination(destination)?.private_key();
 
-                let sighash_type = sighash_types[i];
+                    let sighash_type = sighash_types[i];
 
-                StandardInputSignature::produce_uniparty_signature_for_input(
-                    &private_key,
-                    sighash_type,
-                    destination.clone(),
-                    tx,
-                    &utxos.iter().collect::<Vec<_>>(),
-                    i,
-                )
-                .map_err(WalletError::TransactionSig)
+                    let input_utxos = utxos.iter().map(|utxo| utxo.output()).collect::<Vec<_>>();
+
+                    StandardInputSignature::produce_uniparty_signature_for_input(
+                        &private_key,
+                        sighash_type,
+                        destination.clone(),
+                        &tx,
+                        &input_utxos,
+                        i,
+                    )
+                    .map(InputWitness::Standard)
+                    .map_err(WalletError::TransactionSig)
+                }
             })
-            .collect();
-
-        let witnesses = sigs?.into_iter().map(InputWitness::Standard).collect();
+            .collect::<Result<Vec<InputWitness>, _>>()?;
 
         req.set_witnesses(witnesses)?;
 

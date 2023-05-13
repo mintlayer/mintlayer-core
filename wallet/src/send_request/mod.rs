@@ -13,25 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::OutputValue;
 use common::chain::{
-    Destination, SignedTransaction, Transaction, TransactionCreationError, TxOutput,
+    Destination, OutPoint, SignedTransaction, Transaction, TransactionCreationError, TxInput,
+    TxOutput,
 };
+use utxo::Utxo;
 
 /// The `SendRequest` struct provides the necessary information to the wallet on the precise method
 /// of sending funds to a designated destination. In order to facilitate the creation of
 #[derive(Debug, Clone)]
 pub struct SendRequest {
-    /// A transaction outline that is typically incomplete and includes outputs to intended
-    /// destinations but no inputs, change address or fees. The wallet will calculate these
-    /// missing elements and update the transaction later.
-    transaction: Transaction,
+    flags: u32,
+
+    inputs: Vec<TxInput>,
+
+    outputs: Vec<TxOutput>,
+
+    lock_time: u32,
 
     /// The UTXOs for each input, this can be empty
-    utxos: Vec<TxOutput>,
+    utxos: Vec<Utxo>,
 
     /// An optional witness for each transaction. If present the number should be the same as the
     /// transaction's inputs
@@ -46,16 +53,8 @@ pub struct SendRequest {
 
 impl SendRequest {
     /// Make a `SendRequest` to send to a `Destination` a specific amount
-    pub fn transfer_to_destination(
-        amount: OutputValue,
-        destination: Destination,
-    ) -> Result<Self, TransactionCreationError> {
-        Ok(Self::from_transaction(Transaction::new(
-            0,
-            vec![],
-            vec![TxOutput::Transfer(amount, destination)],
-            0,
-        )?))
+    pub fn transfer_to_destination(amount: OutputValue, destination: Destination) -> Self {
+        Self::from_outputs(vec![TxOutput::Transfer(amount, destination)])
     }
 
     /// Make a `SendRequest` to send to a `Destination` a specific amount that is locked
@@ -63,18 +62,20 @@ impl SendRequest {
         amount: OutputValue,
         destination: Destination,
         lock_time: OutputTimeLock,
-    ) -> Result<Self, TransactionCreationError> {
-        Ok(Self::from_transaction(Transaction::new(
-            0,
-            vec![],
-            vec![TxOutput::LockThenTransfer(amount, destination, lock_time)],
-            0,
-        )?))
+    ) -> Self {
+        Self::from_outputs(vec![TxOutput::LockThenTransfer(
+            amount,
+            destination,
+            lock_time,
+        )])
     }
 
-    pub fn from_transaction(transaction: Transaction) -> Self {
+    pub fn from_outputs(outputs: Vec<TxOutput>) -> Self {
         Self {
-            transaction,
+            flags: 0,
+            inputs: Vec::new(),
+            outputs,
+            lock_time: 0,
             utxos: Vec::new(),
             witnesses: None,
             sign_transaction: true,
@@ -82,20 +83,38 @@ impl SendRequest {
         }
     }
 
-    pub fn transaction(&self) -> &Transaction {
-        &self.transaction
+    pub fn from_transaction(transaction: Transaction) -> Self {
+        Self {
+            flags: transaction.flags(),
+            inputs: transaction.inputs().to_vec(),
+            outputs: transaction.outputs().to_vec(),
+            lock_time: transaction.lock_time(),
+            utxos: Vec::new(),
+            witnesses: None,
+            sign_transaction: true,
+            is_complete: false,
+        }
     }
 
-    pub fn set_utxos(&mut self, utxos: Vec<TxOutput>) {
-        self.utxos = utxos
+    pub fn get_transaction(&self) -> Result<Transaction, TransactionCreationError> {
+        Transaction::new(
+            self.flags,
+            self.inputs.clone(),
+            self.outputs.clone(),
+            self.lock_time,
+        )
     }
 
-    pub fn utxos(&self) -> &[TxOutput] {
+    pub fn get_signed_transaction(&self) -> Result<SignedTransaction, TransactionCreationError> {
+        if let Some(w) = &self.witnesses {
+            SignedTransaction::new(self.get_transaction()?, w.clone())
+        } else {
+            Err(TransactionCreationError::InvalidWitnessCount)
+        }
+    }
+
+    pub fn utxos(&self) -> &Vec<Utxo> {
         &self.utxos
-    }
-
-    pub fn into_transaction(self) -> Transaction {
-        self.transaction
     }
 
     pub fn sign_transaction(&self) -> bool {
@@ -110,34 +129,41 @@ impl SendRequest {
         self.is_complete = true;
     }
 
-    pub fn set_connected_tx_outputs(&mut self, utxos: Vec<TxOutput>) {
-        self.utxos = utxos;
-    }
+    // pub fn set_connected_tx_outputs(&mut self, utxos: Vec<TxOutput>) {
+    //     self.utxos = utxos;
+    // }
 
-    pub fn connected_tx_outputs(&self) -> &Vec<TxOutput> {
-        &self.utxos
-    }
-
-    pub fn signed_transaction(&self) -> Option<SignedTransaction> {
-        if let Some(w) = &self.witnesses {
-            SignedTransaction::new(self.transaction.clone(), w.clone()).ok()
-        } else {
-            None
-        }
-    }
+    // pub fn connected_tx_outputs(&self) -> &Vec<TxOutput> {
+    //     &self.utxos
+    // }
 
     pub fn set_witnesses(
         &mut self,
         witnesses: Vec<InputWitness>,
     ) -> Result<(), TransactionCreationError> {
-        SignedTransaction::check_tx_sigs(&self.transaction, &witnesses)?;
+        // SignedTransaction::check_tx_sigs(&self.transaction, &witnesses)?;
         self.witnesses = Some(witnesses);
+        Ok(())
+    }
+
+    pub fn select_utxos(
+        &mut self,
+        utxos: BTreeMap<OutPoint, Utxo>,
+    ) -> Result<(), TransactionCreationError> {
+        for (outpoint, utxo) in utxos.into_iter() {
+            self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
+            self.utxos.push(utxo);
+        }
         Ok(())
     }
 
     pub fn get_sighash_types(&self) -> Vec<SigHashType> {
         // TODO use customized sig hashes
         let sighash_all = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-        (0..self.transaction.inputs().len()).map(|_| sighash_all).collect()
+        (0..self.inputs.len()).map(|_| sighash_all).collect()
+    }
+
+    pub fn outputs(&self) -> &[TxOutput] {
+        &self.outputs
     }
 }

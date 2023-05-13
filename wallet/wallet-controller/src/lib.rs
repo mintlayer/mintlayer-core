@@ -26,13 +26,14 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, ChainConfig, SignedTransaction},
+    chain::{tokens::TokenId, ChainConfig},
     primitives::Amount,
 };
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
+use serialization::hex::HexEncode;
 use wallet::DefaultWallet;
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
@@ -47,6 +48,8 @@ pub enum ControllerError<T: NodeInterface> {
 }
 
 pub struct Controller<T: NodeInterface> {
+    rpc_client: T,
+
     wallet: DefaultWallet,
 
     block_sync: sync::BlockSyncing<T>,
@@ -60,10 +63,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let block_sync = sync::BlockSyncing::new(
             sync::BlockSyncingConfig::default(),
             Arc::clone(&chain_config),
-            rpc_client,
+            rpc_client.clone(),
         );
 
-        Self { wallet, block_sync }
+        Self {
+            rpc_client,
+            wallet,
+            block_sync,
+        }
     }
 
     pub fn create_wallet(
@@ -125,14 +132,19 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn send_to_address(
+    pub async fn send_to_address(
         &mut self,
         address: Address,
         amount: Amount,
-    ) -> Result<SignedTransaction, ControllerError<T>> {
-        self.wallet
+    ) -> Result<(), ControllerError<T>> {
+        let tx = self
+            .wallet
             .send_to_address(DEFAULT_ACCOUNT_INDEX, address, amount)
-            .map_err(ControllerError::WalletError)
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx.hex_encode())
+            .await
+            .map_err(ControllerError::NodeCallError)
     }
 
     /// Sync the wallet block chain from the node.

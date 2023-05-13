@@ -295,11 +295,11 @@ fn sign_transaction(#[case] seed: Seed) {
     let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
 
     let mut req = SendRequest::from_transaction(tx);
-    req.set_connected_tx_outputs(utxos.clone());
+    // req.set_connected_tx_outputs(utxos.clone());
 
     account.complete_send_request(&mut req).unwrap();
 
-    let sig_tx = req.signed_transaction().unwrap();
+    let sig_tx = req.get_signed_transaction().unwrap();
 
     let utxos_ref = utxos.iter().collect::<Vec<_>>();
 
