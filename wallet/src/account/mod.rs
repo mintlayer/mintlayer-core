@@ -75,13 +75,15 @@ impl Account {
 
         db_tx.set_account(&account_id, &account_info)?;
 
-        // TODO: Scan genesis block UTXOs
-
-        Ok(Account {
+        let mut account = Account {
             chain_config,
             key_chain,
             txs: BTreeMap::new(),
-        })
+        };
+
+        account.scan_genesis_block(db_tx)?;
+
+        Ok(account)
     }
 
     pub fn complete_and_add_send_request<B: Backend>(
@@ -434,6 +436,21 @@ impl Account {
             db_tx.del_utxo(&utxo_id)?;
         }
 
+        Ok(())
+    }
+
+    fn scan_genesis_block<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
+        let chain_config = Arc::clone(&self.chain_config);
+        for (output_index, output) in
+            chain_config.genesis_block().utxos().clone().iter().enumerate()
+        {
+            let utxo_source = UtxoSource::Blockchain(BlockHeight::zero());
+            let outpoint = OutPoint::new(
+                OutPointSourceId::BlockReward(self.chain_config.genesis_block_id()),
+                output_index as u32,
+            );
+            self.add_utxo_if_own(db_tx, output, outpoint, utxo_source)?
+        }
         Ok(())
     }
 
