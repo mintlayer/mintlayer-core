@@ -220,6 +220,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
             CheckBlockError::PrevBlockRetrievalError(_, _, _) => 100,
             CheckBlockError::BlockTimeStrictOrderInvalid => 100,
+            CheckBlockError::MerkleRootCalculationFailed(_, _) => 100,
         }
     }
 }

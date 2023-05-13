@@ -28,8 +28,8 @@ use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
 use common::{
     chain::{
         block::{
-            timestamp::BlockTimestamp, BlockBody, BlockCreationError, BlockHeader, BlockReward,
-            ConsensusData,
+            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
+            BlockReward, ConsensusData,
         },
         Block, ChainConfig, Destination, SignedTransaction,
     },
@@ -243,10 +243,11 @@ impl BlockProduction {
 
             let block_body = BlockBody::new(block_reward, transactions);
 
-            let tx_merkle_root =
-                block_body.tx_merkle_root().map_err(BlockCreationError::MerkleTreeError)?;
-            let witness_merkle_root =
-                block_body.witness_merkle_root().map_err(BlockCreationError::MerkleTreeError)?;
+            let merkle_proxy =
+                block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
+
+            let tx_merkle_root = merkle_proxy.merkle_tree().root();
+            let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
 
             let block_header = BlockHeader::new(
                 current_tip_index.block_id(),

@@ -22,8 +22,8 @@ pub use crate::chain::{
     GenBlock,
 };
 
+pub mod block_body;
 pub mod block_header;
-pub mod block_merkle;
 pub mod block_size;
 pub mod consensus_data;
 pub mod signed_block_header;
@@ -36,35 +36,28 @@ use serialization::{DirectDecode, DirectEncode};
 use typename::TypeName;
 use utils::ensure;
 
-pub use crate::chain::block::block_v1::BlockBody;
-
 use crate::{
     chain::block::{block_size::BlockSize, block_v1::BlockV1, timestamp::BlockTimestamp},
     primitives::{id::WithId, Id, Idable, VersionTag, H256},
 };
 
-use merkletree::MerkleTreeFormError;
-
-use self::signed_block_header::SignedBlockHeader;
+use self::{
+    block_body::{BlockBody, BlockMerkleTreeError},
+    signed_block_header::SignedBlockHeader,
+};
 
 use super::signed_transaction::SignedTransaction;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum BlockCreationError {
     #[error("Merkle tree calculation error: {0}")]
-    MerkleTreeError(MerkleTreeFormError),
+    MerkleTreeError(#[from] BlockMerkleTreeError),
     #[error("Error finding current tip")]
     CurrentTipRetrievalError,
     #[error("Merkle tree mismatch: Provided {0} vs calculated {1}")]
     MerkleTreeMismatch(H256, H256),
     #[error("Witness merkle tree mismatch: Provided {0} vs calculated {1}")]
     WitnessMerkleTreeMismatch(H256, H256),
-}
-
-impl From<MerkleTreeFormError> for BlockCreationError {
-    fn from(e: MerkleTreeFormError) -> Self {
-        BlockCreationError::MerkleTreeError(e)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode, TypeName)]
@@ -85,8 +78,10 @@ impl Block {
             reward,
             transactions,
         };
-        let tx_merkle_root = body.tx_merkle_root()?;
-        let witness_merkle_root = body.witness_merkle_root()?;
+
+        let merkle_proxy = body.merkle_tree_proxy()?;
+        let tx_merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
 
         let header = BlockHeader {
             version: VersionTag::default(),
@@ -108,8 +103,9 @@ impl Block {
         header: SignedBlockHeader,
         body: BlockBody,
     ) -> Result<Self, BlockCreationError> {
-        let tx_merkle_root = body.tx_merkle_root()?;
-        let witness_merkle_root = body.witness_merkle_root()?;
+        let merkle_proxy = body.merkle_tree_proxy()?;
+        let tx_merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
 
         ensure!(
             header.header().tx_merkle_root == tx_merkle_root,
@@ -273,7 +269,13 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        // Given that there's only a reward, the merkle root should be the same as the witness merkle root
+        assert_eq!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -299,8 +301,17 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+
+        let res = merkle_proxy.merkle_tree().root();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
+
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        // Given that there's only a reward, the merkle root should be the same as the witness merkle root
+        assert_eq!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -330,7 +341,7 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        let res = block.body().tx_merkle_root().unwrap();
+        let res = block.body().merkle_tree_proxy().unwrap().merkle_tree().root();
         assert_eq!(res, id::hash_encoded(block.block_reward()));
 
         check_block_tag(&block);
@@ -362,7 +373,12 @@ mod tests {
         let header = header.with_no_signature();
 
         let block = Block::V1(BlockV1 { header, body });
-        block.body().tx_merkle_root().unwrap();
+
+        let merkle_proxy = block.body().merkle_tree_proxy().unwrap();
+        let merkle_root = merkle_proxy.merkle_tree().root();
+        let witness_merkle_root = merkle_proxy.witness_merkle_tree().root();
+
+        assert_ne!(merkle_root, witness_merkle_root);
 
         check_block_tag(&block);
     }
@@ -387,8 +403,8 @@ mod tests {
             transactions: vec![one_transaction],
         };
 
-        let merkle_root = body.tx_merkle_root();
-        let witness_merkle_root = body.witness_merkle_root();
+        let merkle_root = body.merkle_tree_proxy().unwrap().merkle_tree().root();
+        let witness_merkle_root = body.merkle_tree_proxy().unwrap().witness_merkle_tree().root();
 
         assert_ne!(merkle_root, witness_merkle_root);
     }

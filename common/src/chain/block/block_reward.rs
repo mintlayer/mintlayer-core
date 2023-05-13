@@ -15,9 +15,12 @@
 
 use serialization::{Decode, Encode};
 
-use crate::chain::{
-    signature::{inputsig::InputWitness, Signable, Transactable},
-    TxInput, TxOutput,
+use crate::{
+    chain::{
+        signature::{inputsig::InputWitness, Signable, Transactable},
+        TxInput, TxOutput,
+    },
+    primitives::id::{self, H256},
 };
 
 /// Represents a block reward.
@@ -35,6 +38,10 @@ impl BlockReward {
     /// Returns reward outputs.
     pub fn outputs(&self) -> &[TxOutput] {
         &self.reward_outputs
+    }
+
+    pub fn serialized_hash(&self) -> H256 {
+        id::hash_encoded(self)
     }
 }
 

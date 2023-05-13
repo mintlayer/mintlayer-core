@@ -20,8 +20,9 @@ use crate::utils::{create_multiple_utxo_data, create_new_outputs, outputs_from_b
 use crate::TestFramework;
 use chainstate::{BlockSource, ChainstateError};
 use chainstate_types::BlockIndex;
+use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
-use common::chain::block::{BlockBody, BlockHeader};
+use common::chain::block::BlockHeader;
 use common::chain::{OutPoint, OutPointSourceId};
 use common::{
     chain::{
@@ -221,10 +222,11 @@ impl<'f> BlockBuilder<'f> {
 
     fn build_impl(self) -> (Block, &'f mut TestFramework) {
         let block_body = BlockBody::new(self.reward, self.transactions);
+        let merkle_proxy = block_body.merkle_tree_proxy().unwrap();
         let unsigned_header = BlockHeader::new(
             self.prev_block_hash,
-            block_body.tx_merkle_root().unwrap(),
-            block_body.witness_merkle_root().unwrap(),
+            merkle_proxy.merkle_tree().root(),
+            merkle_proxy.witness_merkle_tree().root(),
             self.timestamp,
             self.consensus_data,
         );

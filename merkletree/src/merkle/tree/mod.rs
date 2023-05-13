@@ -146,22 +146,24 @@ impl<T: Clone, H: PairHasher<Type = T>> MerkleTree<T, H> {
         Ok(res)
     }
 
+    /// See MerkleTreeNodeParentIterator for more details.
     pub fn iter_from_leaf_to_root(
         &self,
-        leaf_index: u32,
+        start_leaf_index: u32,
     ) -> Result<MerkleTreeNodeParentIterator<T, H>, MerkleTreeAccessError> {
         let leaf_count = self.leaf_count().get();
 
-        if leaf_index >= leaf_count {
+        if start_leaf_index >= leaf_count {
             return Err(MerkleTreeAccessError::IterStartIndexOutOfRange(
-                leaf_index, leaf_count,
+                start_leaf_index,
+                leaf_count,
             ));
         }
 
         let res = MerkleTreeNodeParentIterator {
             node: Some(Node {
                 tree_ref: self,
-                absolute_index: leaf_index,
+                absolute_index: start_leaf_index,
             }),
         };
 
@@ -252,7 +254,7 @@ impl<'a, T: Clone, H: PairHasher<Type = T>> Node<'a, T, H> {
     }
 }
 
-/// An iterator that iterates from a leaf node to the root node.
+/// An iterator that iterates from a leaf node to the root node, vertically.
 #[must_use]
 pub struct MerkleTreeNodeParentIterator<'a, T, H> {
     node: Option<Node<'a, T, H>>,

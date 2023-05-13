@@ -16,7 +16,7 @@
 use crypto::hash::StreamHasher;
 use merkletree::hasher::PairHasher;
 
-use super::{id::DefaultHashAlgoStream, H256};
+use crate::primitives::{id::DefaultHashAlgoStream, H256};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MerkleHasher {}

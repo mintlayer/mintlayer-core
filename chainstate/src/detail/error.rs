@@ -22,7 +22,10 @@ use super::{
 };
 use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
-    chain::{block::timestamp::BlockTimestamp, Block, GenBlock, PoolId, Transaction},
+    chain::{
+        block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
+        Block, GenBlock, PoolId, Transaction,
+    },
     primitives::{BlockDistance, BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
@@ -85,6 +88,8 @@ pub enum BlockError {
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
+    #[error("Block merkle root calculation failed for block {0} with error: {1}")]
+    MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
