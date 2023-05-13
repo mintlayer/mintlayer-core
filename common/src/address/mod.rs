@@ -98,6 +98,15 @@ impl Address {
         Self::from_public_key_hash(cfg, &public_key_hash)
     }
 
+    // TODO(PR): Update and test
+    pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
+        let address = Self {
+            address: address.to_owned(),
+        };
+        address.data(cfg)?;
+        Ok(address)
+    }
+
     pub fn get(&self) -> &str {
         &self.address
     }

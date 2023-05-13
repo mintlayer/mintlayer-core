@@ -18,18 +18,20 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
-use crate::Account;
+use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
+use common::address::pubkeyhash::{PublicKeyHash, PublicKeyHashError};
 use common::address::Address;
 use common::chain::signature::TransactionSigError;
+use common::chain::tokens::{OutputValue, TokenId};
 use common::chain::{
-    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
-    TxOutput,
+    Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction,
+    TransactionCreationError, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use crypto::key::hdkd::u31::U31;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
+    DefaultBackend, Store, StoreTxRo, StoreTxRw, TransactionRo, TransactionRw, Transactional,
     WalletStorageRead, WalletStorageWrite,
 };
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
@@ -70,6 +72,8 @@ pub enum WalletError {
     TransactionSig(#[from] TransactionSigError),
     #[error("Not enough UTXOs amount: {0:?}, required: {1:?}")]
     NotEnoughUtxo(Amount, Amount),
+    #[error("Invalid address {0}: {1}")]
+    InvalidAddress(String, PublicKeyHashError),
 }
 
 /// Result type used for the wallet
@@ -125,6 +129,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
+        // TODO: Scan genesis outputs
         let best_block_id = chain_config.genesis_block_id();
         let best_block_height = BlockHeight::zero();
 
@@ -162,6 +167,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
+        // TODO: Load best_block_id and best_block_height from DB
         let best_block_id = chain_config.genesis_block_id();
         let best_block_height = BlockHeight::zero();
 
@@ -179,6 +185,21 @@ impl<B: storage::Backend> Wallet<B> {
         &self.db
     }
 
+    fn for_account_ro<T>(
+        &self,
+        account_index: U31,
+        f: impl FnOnce(&Account, &StoreTxRo<B>) -> WalletResult<T>,
+    ) -> WalletResult<T> {
+        let mut db_tx = self.db.transaction_ro()?;
+        let account = self
+            .accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let value = f(account, &mut db_tx)?;
+        db_tx.close();
+        Ok(value)
+    }
+
     fn for_account_rw<T>(
         &mut self,
         account_index: U31,
@@ -194,10 +215,35 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(value)
     }
 
+    pub fn get_balance(
+        &self,
+        account_index: U31,
+    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+        self.for_account_ro(account_index, |account, db_tx| account.get_balance(db_tx))
+    }
+
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
+    }
+
+    pub fn send_to_address(
+        &mut self,
+        account_index: U31,
+        address: Address,
+        amount: Amount,
+    ) -> WalletResult<SignedTransaction> {
+        let pub_key_hash = PublicKeyHash::try_from(&address)
+            .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
+        let request = SendRequest::transfer_to_destination(
+            OutputValue::Coin(amount),
+            Destination::Address(pub_key_hash),
+        )?;
+        let tx = self.for_account_rw(account_index, |account, db_tx| {
+            account.complete_and_add_send_request(db_tx, request)
+        })?;
+        Ok(tx)
     }
 
     /// Returns the last scanned block hash and height.
@@ -216,15 +262,19 @@ impl<B: storage::Backend> Wallet<B> {
         if blocks.is_empty() {
             return Ok(());
         }
+
         let mut db_tx = self.db.transaction_rw(None)?;
+
         for account in self.accounts.values_mut() {
             if self.best_block_height >= block_height {
                 account.reset_to_height(&mut db_tx, block_height)?;
             }
             account.scan_new_blocks(&mut db_tx, block_height, &blocks)?;
         }
+
         db_tx.commit()?;
 
+        // Update best_block_height and best_block_id only after successful commit call!
         self.best_block_height = (self.best_block_height.into_int() + blocks.len() as u64).into();
         self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
 

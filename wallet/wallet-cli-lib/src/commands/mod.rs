@@ -17,8 +17,9 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::{
-    chain::ChainConfig,
-    primitives::{BlockHeight, H256},
+    address::Address,
+    chain::{ChainConfig, Mlt},
+    primitives::{Amount, BlockHeight, H256},
 };
 use serialization::hex::HexEncode;
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
@@ -100,8 +101,15 @@ pub enum WalletCommand {
     /// Rescan
     Rescan,
 
-    /// Generate new unused address
+    GetBalance,
+
+    /// Generate a new unused address
     NewAddress,
+
+    SendToAddress {
+        address: String,
+        amount: String,
+    },
 
     /// Node version
     NodeVersion,
@@ -110,10 +118,14 @@ pub enum WalletCommand {
     NodeShutdown,
 
     /// Connect to the remote peer
-    Connect { address: String },
+    Connect {
+        address: String,
+    },
 
     /// Disconnected the remote peer
-    Disconnect { peer_id: PeerId },
+    Disconnect {
+        peer_id: PeerId,
+    },
 
     /// Get connected peer count
     PeerCount,
@@ -122,10 +134,14 @@ pub enum WalletCommand {
     ConnectedPeers,
 
     /// Add reserved peer
-    AddReservedPeer { address: String },
+    AddReservedPeer {
+        address: String,
+    },
 
     /// Remove reserved peer
-    RemoveReservedPeer { address: String },
+    RemoveReservedPeer {
+        address: String,
+    },
 
     /// Quit the REPL
     Exit,
@@ -148,6 +164,20 @@ pub enum ConsoleCommand {
     PrintHistory,
     ClearHistory,
     Exit,
+}
+
+fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
+    Address::from_str(chain_config, &address)
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
+}
+
+fn parse_amount(value: &str) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(&value, Mlt::DECIMALS)
+        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+}
+
+fn print_amount(value: Amount) -> String {
+    value.into_fixedpoint_str(Mlt::DECIMALS)
 }
 
 pub async fn handle_wallet_command(
@@ -295,6 +325,15 @@ pub async fn handle_wallet_command(
 
         WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
 
+        WalletCommand::GetBalance => {
+            let (coin_balance, _tokens_balance) = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .get_balance()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(print_amount(coin_balance)))
+        }
+
         WalletCommand::NewAddress => {
             let address = controller_opt
                 .as_mut()
@@ -302,6 +341,17 @@ pub async fn handle_wallet_command(
                 .new_address()
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(address.get().to_owned()))
+        }
+
+        WalletCommand::SendToAddress { address, amount } => {
+            let amount = parse_amount(&amount)?;
+            let address = parse_address(&chain_config, &address)?;
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .send_to_address(address, amount)
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
         WalletCommand::NodeVersion => {

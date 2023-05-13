@@ -19,11 +19,16 @@ pub mod mnemonic;
 mod sync;
 
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use common::{address::Address, chain::ChainConfig};
+use common::{
+    address::Address,
+    chain::{tokens::TokenId, ChainConfig, SignedTransaction},
+    primitives::Amount,
+};
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -108,9 +113,25 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(wallet)
     }
 
+    pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
+        self.wallet
+            .get_balance(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
     pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
         self.wallet
             .get_new_address(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn send_to_address(
+        &mut self,
+        address: Address,
+        amount: Amount,
+    ) -> Result<SignedTransaction, ControllerError<T>> {
+        self.wallet
+            .send_to_address(DEFAULT_ACCOUNT_INDEX, address, amount)
             .map_err(ControllerError::WalletError)
     }
 

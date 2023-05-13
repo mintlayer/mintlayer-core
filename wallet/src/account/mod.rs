@@ -21,7 +21,8 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, Transaction, TxOutput,
+    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, Transaction,
+    TxOutput,
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id, Idable};
@@ -87,15 +88,26 @@ impl Account {
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         mut request: SendRequest,
-    ) -> WalletResult<WithId<Transaction>> {
+    ) -> WalletResult<SignedTransaction> {
+        let utxos: Vec<TxOutput> = db_tx
+            .get_utxo_set(&self.get_account_id())?
+            .into_iter()
+            .map(|(_, utxo)| utxo.output().clone())
+            .collect();
+
+        if request.utxos().is_empty() {
+            request.set_utxos(utxos);
+        }
+
         self.complete_send_request(&mut request)?;
-        let tx = WithId::new(request.into_transaction());
-        self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
+        let tx = request.signed_transaction().unwrap();
+        // let tx = WithId::new(request.into_transaction());
+        // self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
         Ok(tx)
     }
 
-    fn complete_send_request(&mut self, req: &mut SendRequest) -> WalletResult<()> {
-        if req.is_complete() {
+    fn complete_send_request(&mut self, request: &mut SendRequest) -> WalletResult<()> {
+        if request.is_complete() {
             return Err(WalletError::SendRequestComplete);
         }
 
@@ -103,10 +115,10 @@ impl Account {
         // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
-            Self::calculate_output_amounts(req.utxos())?;
+            Self::calculate_output_amounts(request.utxos().iter())?;
 
         let (output_coin_amount, output_tokens_amounts) =
-            Self::calculate_output_amounts(req.transaction().outputs())?;
+            Self::calculate_output_amounts(request.transaction().outputs().iter())?;
 
         // TODO: Fix tokens sending
         utils::ensure!(
@@ -121,18 +133,18 @@ impl Account {
             WalletError::NotEnoughUtxo(input_coin_amount, output_coin_amount)
         );
 
-        if req.sign_transaction() {
-            self.sign_transaction(req)?;
+        if request.sign_transaction() {
+            self.sign_transaction(request)?;
         }
 
-        req.complete();
+        request.complete();
 
         Ok(())
     }
 
     /// Calculate the output amount for coins and tokens
-    fn calculate_output_amounts(
-        outputs: &[TxOutput],
+    fn calculate_output_amounts<'a>(
+        outputs: impl Iterator<Item = &'a TxOutput>,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
         let mut coin_amount = Amount::ZERO;
         let mut tokens_amounts: BTreeMap<TokenId, Amount> = BTreeMap::new();
@@ -391,6 +403,15 @@ impl Account {
     #[allow(dead_code)] // TODO remove
     fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
         self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
+    }
+
+    pub fn get_balance<B: Backend>(
+        &self,
+        db_tx: &StoreTxRo<B>,
+    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+        let utxos = db_tx.get_utxo_set(&self.get_account_id())?;
+        let balances = Self::calculate_output_amounts(utxos.values().map(|utxo| utxo.output()))?;
+        Ok(balances)
     }
 
     pub fn reset_to_height<B: Backend>(

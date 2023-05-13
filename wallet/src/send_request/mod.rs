@@ -86,6 +86,10 @@ impl SendRequest {
         &self.transaction
     }
 
+    pub fn set_utxos(&mut self, utxos: Vec<TxOutput>) {
+        self.utxos = utxos
+    }
+
     pub fn utxos(&self) -> &[TxOutput] {
         &self.utxos
     }
