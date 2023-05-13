@@ -15,7 +15,6 @@
 
 pub mod config;
 pub mod error;
-pub mod event;
 pub mod interface;
 pub mod message;
 pub mod net;
@@ -26,6 +25,14 @@ pub mod sync;
 pub mod testing_utils;
 pub mod types;
 pub mod utils;
+
+mod p2p_event;
+mod peer_manager_event;
+
+pub use crate::{
+    p2p_event::{P2pEvent, P2pEventHandler},
+    peer_manager_event::PeerManagerEvent,
+};
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -59,7 +66,6 @@ use mempool::MempoolHandle;
 use crate::{
     config::P2pConfig,
     error::{ConversionError, P2pError},
-    event::PeerManagerEvent,
     net::{
         default_backend::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
@@ -87,6 +93,8 @@ struct P2p<T: NetworkingService> {
     backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<()>,
     sync_manager_task: JoinHandle<()>,
+
+    subscribers_sender: mpsc::UnboundedSender<P2pEventHandler>,
 }
 
 impl<T> P2p<T>
@@ -112,6 +120,7 @@ where
     ) -> Result<Self> {
         let shutdown = Arc::new(AtomicBool::new(false));
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
+        let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
         let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
             transport,
@@ -120,6 +129,7 @@ where
             Arc::clone(&p2p_config),
             Arc::clone(&shutdown),
             shutdown_receiver,
+            subscribers_receiver,
         )
         .await?;
 
@@ -200,6 +210,7 @@ where
             backend_task,
             peer_manager_task,
             sync_manager_task,
+            subscribers_sender,
         })
     }
 

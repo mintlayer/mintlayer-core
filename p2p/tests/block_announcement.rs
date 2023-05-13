@@ -18,7 +18,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 use common::{
     chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
@@ -56,6 +56,7 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
         A::make_transport(),
         vec![A::make_address()],
@@ -63,6 +64,7 @@ where
         Arc::clone(&p2p_config),
         Arc::clone(&shutdown),
         shutdown_receiver,
+        subscribers_receiver,
     )
     .await
     .unwrap();
@@ -72,23 +74,33 @@ where
     let (_shutdown_sender, shutdown_receiver_3) = oneshot::channel();
     let shutdown_receivers = [shutdown_receiver_1, shutdown_receiver_2, shutdown_receiver_3];
 
+    let (_subscribers_sender, subscribers_receiver_1) = mpsc::unbounded_channel();
+    let (_subscribers_sender, subscribers_receiver_2) = mpsc::unbounded_channel();
+    let (_subscribers_sender, subscribers_receiver_3) = mpsc::unbounded_channel();
+    let subscribers_receivers =
+        [subscribers_receiver_1, subscribers_receiver_2, subscribers_receiver_3];
+
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all(
             std::iter::repeat_with(|| Arc::clone(&shutdown))
                 .zip(shutdown_receivers.into_iter())
-                .map(|(shutdown, shutdown_receiver)| async {
-                    let res = S::start(
-                        A::make_transport(),
-                        vec![A::make_address()],
-                        Arc::clone(&config),
-                        Arc::clone(&p2p_config),
-                        shutdown,
-                        shutdown_receiver,
-                    )
-                    .await
-                    .unwrap();
-                    (res.0, res.2)
-                }),
+                .zip(subscribers_receivers.into_iter())
+                .map(
+                    |((shutdown, shutdown_receiver), subscribers_receiver)| async {
+                        let res = S::start(
+                            A::make_transport(),
+                            vec![A::make_address()],
+                            Arc::clone(&config),
+                            Arc::clone(&p2p_config),
+                            shutdown,
+                            shutdown_receiver,
+                            subscribers_receiver,
+                        )
+                        .await
+                        .unwrap();
+                        (res.0, res.2)
+                    },
+                ),
         )
         .await;
 

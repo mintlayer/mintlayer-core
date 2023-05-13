@@ -42,12 +42,11 @@ use utils::tap_error_log::LogError;
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
-    event::PeerManagerEvent,
     message::{HeaderList, SyncMessage},
     net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
     sync::peer::Peer,
     types::peer_id::PeerId,
-    Result,
+    PeerManagerEvent, Result,
 };
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust

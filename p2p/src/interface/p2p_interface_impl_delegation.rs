@@ -13,11 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use common::chain::SignedTransaction;
 
-use crate::types::peer_id::PeerId;
+use crate::{types::peer_id::PeerId, P2pEvent};
 
 use super::{p2p_interface::P2pInterface, types::ConnectedPeer};
 
@@ -55,5 +58,12 @@ impl<T: Deref<Target = dyn P2pInterface> + DerefMut<Target = dyn P2pInterface> +
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
         self.deref_mut().submit_transaction(tx).await
+    }
+
+    fn subscribe_to_events(
+        &mut self,
+        handler: Arc<dyn Fn(P2pEvent) + Send + Sync>,
+    ) -> crate::Result<()> {
+        self.deref_mut().subscribe_to_events(handler)
     }
 }

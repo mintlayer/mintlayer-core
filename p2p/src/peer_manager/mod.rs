@@ -43,7 +43,6 @@ use utils::{bloom_filters::rolling_bloom_filter::RollingBloomFilter, ensure, set
 use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError, ProtocolError},
-    event::PeerManagerEvent,
     interface::types::ConnectedPeer,
     message::{
         AddrListRequest, AddrListResponse, AnnounceAddrRequest, PeerManagerMessage, PingRequest,
@@ -61,6 +60,7 @@ use crate::{
         peer_id::PeerId,
     },
     utils::{oneshot_nofail, rate_limiter::RateLimiter},
+    PeerManagerEvent,
 };
 
 use self::{

@@ -47,8 +47,8 @@ use crate::{
     sync::BlockSyncManager,
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
-    MessagingService, NetworkingService, P2pConfig, P2pError, PeerManagerEvent, Result,
-    SyncingEventReceiver,
+    MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
+    Result, SyncingEventReceiver,
 };
 
 /// A timeout for blocking calls.
@@ -337,6 +337,7 @@ impl NetworkingService for NetworkingServiceStub {
         _: Arc<P2pConfig>,
         _: Arc<AtomicBool>,
         _: oneshot::Receiver<()>,
+        _: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,

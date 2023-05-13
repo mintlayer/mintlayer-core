@@ -20,7 +20,6 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::NodeType,
-    event::PeerManagerEvent,
     net::{
         default_backend::{
             transport::{MpscChannelTransport, TcpTransportSocket, TransportAddress},
@@ -37,6 +36,7 @@ use crate::{
         TestTransportChannel, TestTransportMaker,
     },
     types::peer_id::PeerId,
+    PeerManagerEvent,
 };
 
 async fn test_address_rate_limiter<A, T, B>()
@@ -50,7 +50,7 @@ where
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
     let time_getter = P2pBasicTestTimeGetter::new();
-    let (mut pm, _tx, _shutdown_sender) = make_peer_manager_custom::<T>(
+    let (mut pm, _tx, _shutdown_sender, _subscribers_sender) = make_peer_manager_custom::<T>(
         A::make_transport(),
         addr,
         Arc::clone(&config),

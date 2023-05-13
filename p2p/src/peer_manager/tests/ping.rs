@@ -20,7 +20,6 @@ use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::{NodeType, P2pConfig},
-    event::PeerManagerEvent,
     expect_recv,
     message::{PeerManagerMessage, PingRequest, PingResponse},
     net::{
@@ -35,6 +34,7 @@ use crate::{
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::peerdb_inmemory_store,
     types::peer_id::PeerId,
+    PeerManagerEvent,
 };
 
 #[tokio::test]

@@ -45,6 +45,7 @@ use p2p::{
     },
     protocol::NETWORK_PROTOCOL_CURRENT,
     types::peer_id::PeerId,
+    P2pEventHandler,
 };
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
@@ -126,6 +127,7 @@ impl NetworkingService for MockNetworkingService {
         _p2p_config: Arc<P2pConfig>,
         _shutdown: Arc<AtomicBool>,
         _shutdown_receiver: oneshot::Receiver<()>,
+        _subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> p2p::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
