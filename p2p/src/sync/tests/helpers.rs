@@ -230,14 +230,15 @@ impl SyncManagerHandle {
     }
 
     pub async fn join_subsystem_manager(self) {
-        self.shutdown_trigger.initiate();
-
+        // Shutdown sync manager first
         drop(self.peer_manager_receiver);
         drop(self.sync_event_sender);
         drop(self.sync_event_receiver);
         drop(self.error_receiver);
         let _ = self.sync_manager_handle.await;
 
+        // Shutdown remaining subsystems
+        self.shutdown_trigger.initiate();
         self.subsystem_manager_handle.join().await;
     }
 }
