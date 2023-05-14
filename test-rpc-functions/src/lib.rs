@@ -18,6 +18,7 @@ use crypto::key::SignatureError;
 use interface::rpc_test_interface::RpcTestFunctionsInterface;
 use subsystem::subsystem::CallError;
 
+pub mod empty;
 mod interface;
 pub mod rpc;
 
