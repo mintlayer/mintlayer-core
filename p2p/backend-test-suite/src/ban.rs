@@ -115,7 +115,7 @@ where
     )
     .unwrap();
 
-    tokio::spawn(async move { sync1.run().await });
+    let sync1_handle = tokio::spawn(async move { sync1.run().await });
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {
@@ -159,6 +159,7 @@ where
 
     shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender.send(());
+    let _ = sync1_handle.await.unwrap();
     shutdown_trigger.initiate();
     subsystem_manager_handle.join().await;
 }
