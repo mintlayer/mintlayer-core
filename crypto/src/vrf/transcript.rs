@@ -28,6 +28,7 @@ pub struct TranscriptAssembler {
 }
 
 // A wrapper that makes it unnecessary to directly use the merlin dependency
+#[must_use]
 #[derive(Clone)]
 pub struct WrappedTranscript(Transcript);
 

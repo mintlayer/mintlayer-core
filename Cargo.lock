@@ -3610,6 +3610,7 @@ dependencies = [
  "storage-lmdb",
  "subsystem",
  "tempfile",
+ "test-rpc-functions",
  "tokio",
  "toml 0.7.3",
  "utils",
@@ -5703,6 +5704,26 @@ name = "termtree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
+
+[[package]]
+name = "test-rpc-functions"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chainstate-types",
+ "common",
+ "crypto",
+ "futures",
+ "hex",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "rpc",
+ "serde",
+ "serialization",
+ "subsystem",
+ "thiserror",
+ "tokio",
+]
 
 [[package]]
 name = "test-utils"

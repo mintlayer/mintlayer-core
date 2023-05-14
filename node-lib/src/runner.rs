@@ -36,8 +36,12 @@ use common::{
 use logging::log;
 
 use mempool::{rpc::MempoolRpcServer, MempoolSubsystemInterface};
+
+use test_rpc_functions::rpc::RpcTestFunctionsRpcServer;
+
 use p2p::{peer_manager::peerdb::storage_impl::PeerDbStorageImpl, rpc::P2pRpcServer};
 use rpc::rpc_creds::RpcCreds;
+use test_rpc_functions::make_rpc_test_functions;
 use tokio::sync::oneshot;
 use utils::default_data_dir::prepare_data_dir;
 
@@ -115,6 +119,9 @@ pub async fn initialize(
 
     let rpc_config = node_config.rpc.unwrap_or_default();
 
+    // Functions for tests
+    let rpc_test_functions = manager.add_subsystem("blockprod", make_rpc_test_functions());
+
     // RPC subsystem
     let rpc_http_address;
     let rpc_websocket_address;
@@ -135,6 +142,7 @@ pub async fn initialize(
             .register(chainstate.clone().into_rpc())
             .register(mempool.clone().into_rpc())
             .register(p2p.clone().into_rpc())
+            .register(rpc_test_functions.into_rpc())
             .build();
         let rpc = rpc.await?;
         rpc_http_address = rpc.http_address().cloned();
