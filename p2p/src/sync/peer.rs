@@ -364,6 +364,11 @@ where
                 // In order to prevent spam from malicious peers we have the `unconnected_headers`
                 // counter.
                 self.unconnected_headers += 1;
+                log::debug!(
+                    "Peer {} sent {} unconnected headers",
+                    self.id(),
+                    self.unconnected_headers
+                );
                 if self.unconnected_headers <= *self.p2p_config.max_unconnected_headers {
                     self.request_headers().await?;
                     return Ok(());

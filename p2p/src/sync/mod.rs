@@ -205,6 +205,7 @@ where
             // This should never happen because this block has just been produced by chainstate.
             .expect("A new tip block unavailable");
 
+        log::debug!("Broadcasting a new tip header {}", header.block_id());
         self.messaging_handle
             .broadcast_message(SyncMessage::HeaderList(HeaderList::new(vec![header])))
     }
