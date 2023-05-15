@@ -79,22 +79,25 @@ fn account_addresses_lookahead() {
         .unwrap();
     let mut account = Account::new(config, &mut db_tx, key_chain).unwrap();
 
-    assert_eq!(account.get_last_issued(ReceiveFunds), None);
+    assert_eq!(
+        account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
+        None
+    );
     let expected_last_derived =
         ChildNumber::from_index_with_hardened_bit(account.key_chain.lookahead_size() - 1);
     assert_eq!(
-        account.get_last_derived_index(ReceiveFunds),
+        account.key_chain.get_leaf_key_chain(ReceiveFunds).get_last_derived_index(),
         Some(expected_last_derived)
     );
 
     // Issue a new address
     account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
     assert_eq!(
-        account.get_last_issued(ReceiveFunds),
+        account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
         Some(ChildNumber::from_index_with_hardened_bit(0))
     );
     assert_eq!(
-        account.get_last_derived_index(ReceiveFunds),
+        account.key_chain.get_leaf_key_chain(ReceiveFunds).get_last_derived_index(),
         Some(expected_last_derived)
     );
 }

@@ -32,10 +32,6 @@ use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo, RootKeyCont
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
-    #[allow(dead_code)] // TODO remove
-    /// The specific chain this KeyChain is based on, this will affect the address format
-    chain_config: Arc<ChainConfig>,
-
     account_index: U31,
 
     /// The account private key from which the account public key is derived
@@ -81,7 +77,7 @@ impl AccountKeyChain {
         receiving_key_chain.save_usage_state(db_tx)?;
 
         let change_key_chain = LeafKeyChain::new_empty(
-            chain_config.clone(),
+            chain_config,
             account_id,
             KeyPurpose::Change,
             account_pubkey
@@ -93,7 +89,6 @@ impl AccountKeyChain {
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
 
         let mut new_account = AccountKeyChain {
-            chain_config,
             account_index,
             account_private_key: Some(account_privkey.into()).into(),
             account_public_key: account_pubkey.into(),
@@ -131,11 +126,9 @@ impl AccountKeyChain {
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
-        let sub_chains =
-            LeafKeyChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
+        let sub_chains = LeafKeyChain::load_leaf_keys(chain_config, account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
-            chain_config,
             account_index: account_info.account_index(),
             account_private_key: Some(account_privkey.into()).into(),
             account_public_key: pubkey_id,

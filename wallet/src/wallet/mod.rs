@@ -82,7 +82,6 @@ pub enum WalletError {
 /// Result type used for the wallet
 pub type WalletResult<T> = Result<T, WalletError>;
 
-#[allow(dead_code)] // TODO remove
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
     db: Arc<Store<B>>,

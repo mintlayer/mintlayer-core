@@ -149,9 +149,13 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     db_tx.commit().unwrap();
     drop(key_chain);
 
-    let mut key_chain = master_key_chain
-        .load_account_key_chain(&db.transaction_ro().unwrap(), &id)
-        .unwrap();
+    let mut key_chain = AccountKeyChain::load_from_database(
+        Arc::clone(&chain_config),
+        &db.transaction_ro().unwrap(),
+        &id,
+        master_key_chain.root_private_key(),
+    )
+    .unwrap();
     assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
     assert_eq!(key_chain.get_leaf_key_chain(purpose).last_used(), None);
     assert_eq!(
@@ -193,7 +197,8 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
     let mut db_tx = db.transaction_rw(None).unwrap();
     let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
+        MasterKeyChain::new_from_mnemonic(Arc::clone(&chain_config), &mut db_tx, MNEMONIC, None)
+            .unwrap();
     let key_chain = master_key_chain
         .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
         .unwrap();
@@ -201,9 +206,13 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     db_tx.commit().unwrap();
     drop(key_chain);
 
-    let mut key_chain = master_key_chain
-        .load_account_key_chain(&db.transaction_ro().unwrap(), &id)
-        .unwrap();
+    let mut key_chain = AccountKeyChain::load_from_database(
+        chain_config,
+        &db.transaction_ro().unwrap(),
+        &id,
+        master_key_chain.root_private_key(),
+    )
+    .unwrap();
 
     {
         let leaf_keys = key_chain.get_leaf_key_chain(purpose);

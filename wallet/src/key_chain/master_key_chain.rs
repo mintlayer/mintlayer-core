@@ -16,17 +16,16 @@
 use crate::key_chain::account_key_chain::AccountKeyChain;
 use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND, LOOKAHEAD_SIZE};
 use common::chain::ChainConfig;
-use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
+use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use itertools::Itertools;
 use std::sync::Arc;
 use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::{AccountId, RootKeyContent, RootKeyId};
+use wallet_types::{RootKeyContent, RootKeyId};
 use zeroize::Zeroize;
 
-#[allow(dead_code)] // TODO remove
 pub struct MasterKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
@@ -36,7 +35,6 @@ pub struct MasterKeyChain {
 }
 
 impl MasterKeyChain {
-    #[allow(dead_code)] // TODO remove
     pub fn mnemonic_to_root_key(
         mnemonic_str: &str,
         passphrase: Option<&str>,
@@ -50,7 +48,6 @@ impl MasterKeyChain {
         Ok(root_key)
     }
 
-    #[allow(dead_code)] // TODO remove
     pub fn new_from_mnemonic<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
@@ -61,7 +58,6 @@ impl MasterKeyChain {
         Self::new_from_root_key(chain_config, db_tx, root_key)
     }
 
-    #[allow(dead_code)] // TODO remove
     pub fn new_from_root_key<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
@@ -117,22 +113,6 @@ impl MasterKeyChain {
         )
     }
 
-    #[allow(dead_code)] // TODO remove
-    pub fn load_account_key_chain<B: Backend>(
-        &self,
-        db_tx: &StoreTxRo<B>,
-        id: &AccountId,
-    ) -> KeyChainResult<AccountKeyChain> {
-        AccountKeyChain::load_from_database(self.chain_config.clone(), db_tx, id, &self.root_key)
-    }
-
-    #[allow(dead_code)] // TODO remove
-                        // TODO make it return a reference
-    pub fn root_public_key(&self) -> ExtendedPublicKey {
-        self.root_key.to_public_key()
-    }
-
-    #[allow(dead_code)] // TODO remove
     pub fn root_private_key(&self) -> &ExtendedPrivateKey {
         &self.root_key
     }

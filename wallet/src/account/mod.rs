@@ -27,7 +27,6 @@ use common::chain::{
 };
 use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
-use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
@@ -121,6 +120,8 @@ impl Account {
             let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
             request.add_output(address_output(change_address, change_amount)?);
         }
+
+        // TODO: Randomize inputs and outputs
 
         let tx = self.sign_transaction(&request)?;
 
@@ -297,16 +298,6 @@ impl Account {
             Destination::AnyoneCanSpend => true,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
         })
-    }
-
-    #[allow(dead_code)] // TODO remove
-    fn get_last_issued(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
-        self.key_chain.get_leaf_key_chain(purpose).last_issued()
-    }
-
-    #[allow(dead_code)] // TODO remove
-    fn get_last_derived_index(&self, purpose: KeyPurpose) -> Option<ChildNumber> {
-        self.key_chain.get_leaf_key_chain(purpose).get_last_derived_index()
     }
 
     pub fn get_balance<B: Backend>(
