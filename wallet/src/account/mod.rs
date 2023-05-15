@@ -335,6 +335,16 @@ impl Account {
         Ok(())
     }
 
+    fn del_utxo_if_own<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        outpoint: &OutPoint,
+    ) -> WalletResult<()> {
+        let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint.clone());
+        db_tx.del_utxo(&account_utxo_id)?;
+        Ok(())
+    }
+
     /// Add the transaction outputs to the UTXO set of the account
     fn add_to_utxos<B: Backend>(
         &mut self,
@@ -479,6 +489,9 @@ impl Account {
 
             for signed_tx in block.transactions() {
                 let tx_id = signed_tx.transaction().get_id();
+                for input in signed_tx.inputs().iter() {
+                    self.del_utxo_if_own(db_tx, input.outpoint())?
+                }
                 for (output_index, output) in signed_tx.outputs().iter().enumerate() {
                     let outpoint =
                         OutPoint::new(OutPointSourceId::Transaction(tx_id), output_index as u32);
