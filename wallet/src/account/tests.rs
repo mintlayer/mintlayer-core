@@ -108,7 +108,13 @@ fn account_transactions() {
     drop(account);
 
     let db_tx = db.transaction_ro().unwrap();
-    let mut account = Account::load_from_database(config.clone(), &db_tx, &id).unwrap();
+    let mut account = Account::load_from_database(
+        config.clone(),
+        &db_tx,
+        &id,
+        master_key_chain.root_private_key(),
+    )
+    .unwrap();
     db_tx.close();
 
     assert_eq!(id, account.get_account_id());
@@ -133,7 +139,9 @@ fn account_transactions() {
     drop(account);
 
     let db_tx = db.transaction_ro().unwrap();
-    let account = Account::load_from_database(config, &db_tx, &id).unwrap();
+    let account =
+        Account::load_from_database(config, &db_tx, &id, master_key_chain.root_private_key())
+            .unwrap();
     db_tx.close();
 
     assert_eq!(id, account.get_account_id());

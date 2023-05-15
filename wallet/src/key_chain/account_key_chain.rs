@@ -20,7 +20,6 @@ use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
-use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
@@ -63,8 +62,7 @@ impl AccountKeyChain {
         account_index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
-        let account_path =
-            make_account_path(&chain_config, ChildNumber::from_hardened(account_index));
+        let account_path = make_account_path(&chain_config, account_index);
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
@@ -119,6 +117,7 @@ impl AccountKeyChain {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
+        root_key: &ExtendedPrivateKey,
     ) -> KeyChainResult<Self> {
         let account_infos = db_tx.get_account_infos()?;
         let account_info =
@@ -128,7 +127,9 @@ impl AccountKeyChain {
 
         let pubkey_id = account_info.account_key().clone().into();
 
-        let account_private_key = db_tx.get_root_key(&pubkey_id)?.into();
+        let account_path = make_account_path(&chain_config, account_info.account_index());
+
+        let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
         let sub_chains =
             LeafKeyChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
@@ -136,8 +137,8 @@ impl AccountKeyChain {
         Ok(AccountKeyChain {
             chain_config,
             account_index: account_info.account_index(),
-            account_private_key,
-            account_public_key: pubkey_id.into_key().into(),
+            account_private_key: Some(account_privkey.into()).into(),
+            account_public_key: pubkey_id,
             root_hierarchy_key: account_info.root_hierarchy_key().clone().into(),
             sub_chains,
             lookahead_size: account_info.lookahead_size().into(),

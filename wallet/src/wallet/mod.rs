@@ -158,7 +158,12 @@ impl<B: storage::Backend> Wallet<B> {
         let accounts = account_infos
             .keys()
             .map(|account_id| {
-                Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
+                Account::load_from_database(
+                    Arc::clone(&chain_config),
+                    &db_tx,
+                    account_id,
+                    key_chain.root_private_key(),
+                )
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()

@@ -125,7 +125,7 @@ impl MasterKeyChain {
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
     ) -> KeyChainResult<AccountKeyChain> {
-        AccountKeyChain::load_from_database(self.chain_config.clone(), db_tx, id)
+        AccountKeyChain::load_from_database(self.chain_config.clone(), db_tx, id, &self.root_key)
     }
 
     #[allow(dead_code)] // TODO remove

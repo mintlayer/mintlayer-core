@@ -26,6 +26,7 @@ use common::chain::{
 };
 use common::primitives::id::WithId;
 use common::primitives::{Amount, BlockHeight, Id, Idable};
+use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
@@ -48,8 +49,10 @@ impl Account {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
+        root_key: &ExtendedPrivateKey,
     ) -> WalletResult<Account> {
-        let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id)?;
+        let key_chain =
+            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, root_key)?;
 
         let txs: BTreeMap<Id<Transaction>, WalletTx> = db_tx
             .get_transactions(id)?
