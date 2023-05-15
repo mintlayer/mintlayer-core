@@ -101,7 +101,7 @@ impl Account {
             .collect();
 
         if request.utxos().is_empty() {
-            request.select_utxos(utxos)?;
+            request.fill_inputs(utxos)?;
         }
 
         self.complete_send_request(&mut request)?;
@@ -120,7 +120,7 @@ impl Account {
         // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
-            Self::calculate_output_amounts(request.utxos().iter().map(|utxo| utxo.output()))?;
+            Self::calculate_output_amounts(request.utxos().iter())?;
 
         let (output_coin_amount, output_tokens_amounts) =
             Self::calculate_output_amounts(request.outputs().iter())?;
@@ -224,12 +224,9 @@ impl Account {
             .map(|(i, _)| {
                 // Get the destination from this utxo. This should not fail as we checked that
                 // inputs and utxos have the same length
-                let destination =
-                    Self::get_tx_output_destination(utxos[i].output()).ok_or_else(|| {
-                        WalletError::UnsupportedTransactionOutput(Box::new(
-                            utxos[i].output().clone(),
-                        ))
-                    })?;
+                let destination = Self::get_tx_output_destination(&utxos[i]).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxos[i].clone()))
+                })?;
 
                 if *destination == Destination::AnyoneCanSpend {
                     Ok(InputWitness::NoSignature(None))
@@ -239,7 +236,7 @@ impl Account {
 
                     let sighash_type = sighash_types[i];
 
-                    let input_utxos = utxos.iter().map(|utxo| utxo.output()).collect::<Vec<_>>();
+                    let input_utxos = utxos.iter().collect::<Vec<_>>();
 
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &private_key,

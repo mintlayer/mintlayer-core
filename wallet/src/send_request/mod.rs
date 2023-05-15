@@ -38,7 +38,7 @@ pub struct SendRequest {
     lock_time: u32,
 
     /// The UTXOs for each input, this can be empty
-    utxos: Vec<Utxo>,
+    utxos: Vec<TxOutput>,
 
     /// An optional witness for each transaction. If present the number should be the same as the
     /// transaction's inputs
@@ -83,13 +83,13 @@ impl SendRequest {
         }
     }
 
-    pub fn from_transaction(transaction: Transaction) -> Self {
+    pub fn from_transaction(transaction: Transaction, utxos: Vec<TxOutput>) -> Self {
         Self {
             flags: transaction.flags(),
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
             lock_time: transaction.lock_time(),
-            utxos: Vec::new(),
+            utxos,
             witnesses: None,
             sign_transaction: true,
             is_complete: false,
@@ -113,7 +113,11 @@ impl SendRequest {
         }
     }
 
-    pub fn utxos(&self) -> &Vec<Utxo> {
+    pub fn outputs(&self) -> &[TxOutput] {
+        &self.outputs
+    }
+
+    pub fn utxos(&self) -> &[TxOutput] {
         &self.utxos
     }
 
@@ -129,14 +133,6 @@ impl SendRequest {
         self.is_complete = true;
     }
 
-    // pub fn set_connected_tx_outputs(&mut self, utxos: Vec<TxOutput>) {
-    //     self.utxos = utxos;
-    // }
-
-    // pub fn connected_tx_outputs(&self) -> &Vec<TxOutput> {
-    //     &self.utxos
-    // }
-
     pub fn set_witnesses(
         &mut self,
         witnesses: Vec<InputWitness>,
@@ -146,13 +142,13 @@ impl SendRequest {
         Ok(())
     }
 
-    pub fn select_utxos(
+    pub fn fill_inputs(
         &mut self,
         utxos: BTreeMap<OutPoint, Utxo>,
     ) -> Result<(), TransactionCreationError> {
         for (outpoint, utxo) in utxos.into_iter() {
             self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
-            self.utxos.push(utxo);
+            self.utxos.push(utxo.take_output());
         }
         Ok(())
     }
@@ -161,9 +157,5 @@ impl SendRequest {
         // TODO use customized sig hashes
         let sighash_all = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
         (0..self.inputs.len()).map(|_| sighash_all).collect()
-    }
-
-    pub fn outputs(&self) -> &[TxOutput] {
-        &self.outputs
     }
 }

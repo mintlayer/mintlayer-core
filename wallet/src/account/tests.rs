@@ -302,8 +302,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
 
-    let mut req = SendRequest::from_transaction(tx);
-    // req.set_connected_tx_outputs(utxos.clone());
+    let mut req = SendRequest::from_transaction(tx, utxos.clone());
 
     account.complete_send_request(&mut req).unwrap();
 
