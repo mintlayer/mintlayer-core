@@ -15,14 +15,18 @@
 
 use std::collections::BTreeMap;
 
+use common::address::pubkeyhash::PublicKeyHash;
+use common::address::Address;
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::OutputValue;
 use common::chain::{
     Destination, OutPoint, SignedTransaction, Transaction, TransactionCreationError, TxInput,
     TxOutput,
 };
+use common::primitives::Amount;
 use utxo::Utxo;
+
+use crate::{WalletError, WalletResult};
 
 /// The `SendRequest` struct provides the necessary information to the wallet on the precise method
 /// of sending funds to a designated destination. In order to facilitate the creation of
@@ -40,31 +44,22 @@ pub struct SendRequest {
     lock_time: u32,
 }
 
+pub fn address_output(address: Address, amount: Amount) -> WalletResult<TxOutput> {
+    let pub_key_hash = PublicKeyHash::try_from(&address)
+        .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
+
+    let destination = Destination::Address(pub_key_hash);
+
+    Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
+}
+
 impl SendRequest {
-    /// Make a `SendRequest` to send to a `Destination` a specific amount
-    pub fn transfer_to_destination(amount: OutputValue, destination: Destination) -> Self {
-        Self::from_outputs(vec![TxOutput::Transfer(amount, destination)])
-    }
-
-    /// Make a `SendRequest` to send to a `Destination` a specific amount that is locked
-    pub fn transfer_to_destination_locked(
-        amount: OutputValue,
-        destination: Destination,
-        lock_time: OutputTimeLock,
-    ) -> Self {
-        Self::from_outputs(vec![TxOutput::LockThenTransfer(
-            amount,
-            destination,
-            lock_time,
-        )])
-    }
-
-    pub fn from_outputs(outputs: Vec<TxOutput>) -> Self {
+    pub fn new() -> Self {
         Self {
             flags: 0,
             utxos: Vec::new(),
             inputs: Vec::new(),
-            outputs,
+            outputs: Vec::new(),
             lock_time: 0,
         }
     }
@@ -77,6 +72,10 @@ impl SendRequest {
             outputs: transaction.outputs().to_vec(),
             lock_time: transaction.lock_time(),
         }
+    }
+
+    pub fn add_output(&mut self, output: TxOutput) {
+        self.outputs.push(output);
     }
 
     pub fn inputs(&self) -> &[TxInput] {

@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use crate::key_chain::AccountKeyChain;
+use crate::send_request::address_output;
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -78,28 +79,22 @@ impl Account {
         Ok(account)
     }
 
-    pub fn complete_and_add_send_request<B: Backend>(
+    pub fn process_send_request<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
-        let utxos: BTreeMap<OutPoint, Utxo> = db_tx
-            .get_utxo_set(&self.get_account_id())?
-            .into_iter()
-            .map(|(outpoint, utxo)| (outpoint.into_item_id(), utxo))
-            .collect();
-
         if request.utxos().is_empty() {
+            let utxos: BTreeMap<OutPoint, Utxo> = db_tx
+                .get_utxo_set(&self.get_account_id())?
+                .into_iter()
+                .map(|(outpoint, utxo)| (outpoint.into_item_id(), utxo))
+                .collect();
+
+            // TODO: Call coin selector
+
             request.fill_inputs(utxos)?;
         }
-
-        let tx = self.complete_send_request(&mut request)?;
-
-        Ok(tx)
-    }
-
-    fn complete_send_request(&self, request: &SendRequest) -> WalletResult<SignedTransaction> {
-        // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
             Self::calculate_output_amounts(request.utxos().iter())?;
@@ -113,14 +108,21 @@ impl Account {
             WalletError::NotImplemented("Token sending")
         );
 
-        // TODO: Add change output(s) and make sure the network fee is reasonable
+        // TODO: Calculate network fee from fee rate and expected transaction size
+        let network_fee = Amount::from_atoms(10000);
 
-        utils::ensure!(
-            input_coin_amount > output_coin_amount,
-            WalletError::NotEnoughUtxo(input_coin_amount, output_coin_amount)
-        );
+        let output_with_fee =
+            (output_coin_amount + network_fee).ok_or(WalletError::OutputAmountOverflow)?;
 
-        let tx = self.sign_transaction(request)?;
+        let change_amount = (input_coin_amount - output_with_fee).ok_or(
+            WalletError::NotEnoughUtxo(input_coin_amount, output_with_fee),
+        )?;
+        if change_amount > Amount::ZERO {
+            let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
+            request.add_output(address_output(change_address, change_amount)?);
+        }
+
+        let tx = self.sign_transaction(&request)?;
 
         Ok(tx)
     }

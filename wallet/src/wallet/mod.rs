@@ -18,15 +18,16 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
+use crate::send_request::address_output;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
-use common::address::pubkeyhash::{PublicKeyHash, PublicKeyHashError};
+use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::Address;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::{OutputValue, TokenId};
+use common::chain::tokens::TokenId;
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction,
-    TransactionCreationError, TxOutput,
+    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
+    TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use crypto::key::hdkd::u31::U31;
@@ -259,14 +260,10 @@ impl<B: storage::Backend> Wallet<B> {
         address: Address,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
-        let pub_key_hash = PublicKeyHash::try_from(&address)
-            .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
-        let request = SendRequest::transfer_to_destination(
-            OutputValue::Coin(amount),
-            Destination::Address(pub_key_hash),
-        );
+        let mut request = SendRequest::new();
+        request.add_output(address_output(address, amount)?);
         let tx = self.for_account_rw(account_index, |account, db_tx| {
-            account.complete_and_add_send_request(db_tx, request)
+            account.process_send_request(db_tx, request)
         })?;
         Ok(tx)
     }
