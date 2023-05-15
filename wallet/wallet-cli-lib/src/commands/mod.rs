@@ -167,12 +167,12 @@ pub enum ConsoleCommand {
 }
 
 fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
-    Address::from_str(chain_config, &address)
+    Address::from_str(chain_config, address)
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
 }
 
 fn parse_amount(value: &str) -> Result<Amount, WalletCliError> {
-    Amount::from_fixedpoint_str(&value, Mlt::DECIMALS)
+    Amount::from_fixedpoint_str(value, Mlt::DECIMALS)
         .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
 }
 
@@ -345,7 +345,7 @@ pub async fn handle_wallet_command(
 
         WalletCommand::SendToAddress { address, amount } => {
             let amount = parse_amount(&amount)?;
-            let address = parse_address(&chain_config, &address)?;
+            let address = parse_address(chain_config, &address)?;
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?

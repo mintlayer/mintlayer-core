@@ -105,7 +105,7 @@ impl Account {
         }
 
         self.complete_send_request(&mut request)?;
-        let tx = request.get_signed_transaction().unwrap();
+        let tx = request.get_signed_transaction()?;
         // let tx = WithId::new(request.into_transaction());
         // self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
         Ok(tx)
@@ -225,7 +225,7 @@ impl Account {
                 // Get the destination from this utxo. This should not fail as we checked that
                 // inputs and utxos have the same length
                 let destination =
-                    Self::get_tx_output_destination(&utxos[i].output()).ok_or_else(|| {
+                    Self::get_tx_output_destination(utxos[i].output()).ok_or_else(|| {
                         WalletError::UnsupportedTransactionOutput(Box::new(
                             utxos[i].output().clone(),
                         ))
@@ -461,9 +461,7 @@ impl Account {
 
     fn scan_genesis_block<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
-        for (output_index, output) in
-            chain_config.genesis_block().utxos().clone().iter().enumerate()
-        {
+        for (output_index, output) in chain_config.genesis_block().utxos().iter().enumerate() {
             let utxo_source = UtxoSource::Blockchain(BlockHeight::zero());
             let outpoint = OutPoint::new(
                 OutPointSourceId::BlockReward(self.chain_config.genesis_block_id()),
