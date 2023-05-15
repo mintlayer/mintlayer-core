@@ -22,134 +22,19 @@ use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::OutputValue;
 use common::chain::{GenBlock, Transaction, TxInput};
 use common::primitives::amount::UnsignedIntType;
-use common::primitives::id::WithId;
-use common::primitives::{Amount, Idable, H256};
+use common::primitives::{Amount, Id, H256};
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{Rng, RngCore};
 use rstest::rstest;
 use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};
-use wallet_storage::{DefaultBackend, Store, TransactionRo, TransactionRw, Transactional};
+use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
-use wallet_types::TxState;
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-
-#[test]
-fn account_transactions() {
-    let config = Arc::new(create_regtest());
-    let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
-
-    let master_key_chain =
-        MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
-
-    let mut key_chain = master_key_chain
-        .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-        .unwrap();
-
-    let address1 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
-    let address2 = key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
-    let pk3 = key_chain.issue_key(&mut db_tx, ReceiveFunds).unwrap();
-    let pk4 = key_chain.issue_key(&mut db_tx, ReceiveFunds).unwrap();
-
-    let mut account = Account::new(config.clone(), &mut db_tx, key_chain).unwrap();
-    db_tx.commit().unwrap();
-
-    let id = account.get_account_id();
-
-    let txo1 = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(1)),
-        Destination::Address(PublicKeyHash::try_from(address1.data(&config).unwrap()).unwrap()),
-    );
-    let txo2 = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(2)),
-        Destination::Address(PublicKeyHash::try_from(address2.data(&config).unwrap()).unwrap()),
-    );
-    let txo3 = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(3)),
-        Destination::PublicKey(pk3.into_public_key()),
-    );
-    let txo4 = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(4)),
-        Destination::PublicKey(pk4.into_public_key()),
-    );
-
-    let tx1 = WithId::new(Transaction::new(1, vec![], vec![txo1, txo2, txo3, txo4], 0).unwrap());
-    let tx2 = WithId::new(Transaction::new(2, vec![], vec![], 0).unwrap());
-    let tx3 = WithId::new(Transaction::new(3, vec![], vec![], 0).unwrap());
-    let tx4 = WithId::new(Transaction::new(4, vec![], vec![], 0).unwrap());
-
-    let block_id: Id<GenBlock> = H256::from_low_u64_le(123).into();
-
-    let mut db_tx = db.transaction_rw(None).unwrap();
-    account
-        .add_transaction(&mut db_tx, tx1.clone(), TxState::Confirmed(block_id))
-        .unwrap();
-    account
-        .add_transaction(&mut db_tx, tx2.clone(), TxState::Conflicted(block_id))
-        .unwrap();
-    account.add_transaction(&mut db_tx, tx3.clone(), TxState::InMempool).unwrap();
-    account.add_transaction(&mut db_tx, tx4.clone(), TxState::Inactive).unwrap();
-    db_tx.commit().unwrap();
-
-    assert_eq!(id, account.get_account_id());
-    assert_eq!(4, account.txs.len());
-    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().tx());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
-    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
-
-    // assert_eq!(4, account.utxo.len());
-
-    drop(account);
-
-    let db_tx = db.transaction_ro().unwrap();
-    let mut account = Account::load_from_database(
-        config.clone(),
-        &db_tx,
-        &id,
-        master_key_chain.root_private_key(),
-    )
-    .unwrap();
-    db_tx.close();
-
-    assert_eq!(id, account.get_account_id());
-    assert_eq!(4, account.txs.len());
-    assert_eq!(&tx1, account.txs.get(&tx1.get_id()).unwrap().tx());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
-    assert_eq!(&tx3, account.txs.get(&tx3.get_id()).unwrap().tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
-    // assert_eq!(4, account.utxo.len());
-
-    let mut db_tx = db.transaction_rw(None).unwrap();
-    account.delete_transaction(&mut db_tx, tx1.get_id()).unwrap();
-    account.delete_transaction(&mut db_tx, tx3.get_id()).unwrap();
-    db_tx.commit().unwrap();
-
-    assert_eq!(id, account.get_account_id());
-    assert_eq!(2, account.txs.len());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
-    // assert_eq!(0, account.utxo.len());
-
-    drop(account);
-
-    let db_tx = db.transaction_ro().unwrap();
-    let account =
-        Account::load_from_database(config, &db_tx, &id, master_key_chain.root_private_key())
-            .unwrap();
-    db_tx.close();
-
-    assert_eq!(id, account.get_account_id());
-    assert_eq!(2, account.txs.len());
-    assert_eq!(&tx2, account.txs.get(&tx2.get_id()).unwrap().tx());
-    assert_eq!(&tx4, account.txs.get(&tx4.get_id()).unwrap().tx());
-    // assert_eq!(0, account.utxo.len());
-}
 
 #[test]
 fn account_addresses() {

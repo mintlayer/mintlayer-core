@@ -21,11 +21,9 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, Transaction,
-    TxOutput,
+    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, TxOutput,
 };
-use common::primitives::id::WithId;
-use common::primitives::{Amount, BlockHeight, Id, Idable};
+use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
@@ -35,12 +33,11 @@ use std::sync::Arc;
 use storage::Backend;
 use utxo::{Utxo, UtxoSource};
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, TxState, WalletTx};
+use wallet_types::{AccountId, AccountOutPointId, KeyPurpose};
 
 pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
-    txs: BTreeMap<Id<Transaction>, WalletTx>,
 }
 
 impl Account {
@@ -53,16 +50,9 @@ impl Account {
         let key_chain =
             AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, root_key)?;
 
-        let txs: BTreeMap<Id<Transaction>, WalletTx> = db_tx
-            .get_transactions(id)?
-            .into_iter()
-            .map(|(k, v)| (k.into_item_id(), v))
-            .collect();
-
         Ok(Account {
             chain_config,
             key_chain,
-            txs,
         })
     }
 
@@ -80,7 +70,6 @@ impl Account {
         let mut account = Account {
             chain_config,
             key_chain,
-            txs: BTreeMap::new(),
         };
 
         account.scan_genesis_block(db_tx)?;
@@ -105,13 +94,10 @@ impl Account {
 
         let tx = self.complete_send_request(&mut request)?;
 
-        // let tx = WithId::new(request.into_transaction());
-        // self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
-
         Ok(tx)
     }
 
-    fn complete_send_request(&self, request: &mut SendRequest) -> WalletResult<SignedTransaction> {
+    fn complete_send_request(&self, request: &SendRequest) -> WalletResult<SignedTransaction> {
         // TODO: Collect UTXOs
         // TODO: Call coin selector
 
@@ -190,7 +176,7 @@ impl Account {
         Ok((coin_amount, tokens_amounts))
     }
 
-    fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<SignedTransaction> {
+    fn sign_transaction(&self, req: &SendRequest) -> WalletResult<SignedTransaction> {
         let tx = req.get_transaction()?;
         let inputs = tx.inputs();
         let utxos = req.utxos();
@@ -267,52 +253,8 @@ impl Account {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
-    #[allow(dead_code)] // TODO remove
-    fn add_transaction<B: Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        tx: WithId<Transaction>,
-        state: TxState,
-    ) -> WalletResult<()> {
-        let tx_id = tx.get_id();
-
-        if self.txs.contains_key(&tx_id) {
-            return Err(WalletError::DuplicateTransaction(tx_id));
-        }
-
-        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
-        let wallet_tx = WalletTx::new(tx, state);
-
-        self.add_to_utxos(db_tx, &wallet_tx)?;
-
-        db_tx.set_transaction(&account_tx_id, &wallet_tx)?;
-        self.txs.insert(tx_id, wallet_tx);
-
-        Ok(())
-    }
-
-    #[allow(dead_code)] // TODO remove
-    fn delete_transaction<B: Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        tx_id: Id<Transaction>,
-    ) -> WalletResult<()> {
-        if !self.txs.contains_key(&tx_id) {
-            return Err(WalletError::NoTransactionFound(tx_id));
-        }
-
-        let account_tx_id = AccountTxId::new(self.get_account_id(), tx_id);
-        db_tx.del_transaction(&account_tx_id)?;
-
-        if let Some(wallet_tx) = self.txs.remove(&tx_id) {
-            self.remove_from_utxos(db_tx, &wallet_tx)?;
-        }
-
-        Ok(())
-    }
-
     fn add_utxo_if_own<B: Backend>(
-        &mut self,
+        &self,
         db_tx: &mut StoreTxRw<B>,
         output: &TxOutput,
         outpoint: OutPoint,
@@ -328,7 +270,7 @@ impl Account {
     }
 
     fn del_utxo_if_own<B: Backend>(
-        &mut self,
+        &self,
         db_tx: &mut StoreTxRw<B>,
         outpoint: &OutPoint,
     ) -> WalletResult<()> {
@@ -337,47 +279,6 @@ impl Account {
         Ok(())
     }
 
-    /// Add the transaction outputs to the UTXO set of the account
-    fn add_to_utxos<B: Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        wallet_tx: &WalletTx,
-    ) -> WalletResult<()> {
-        // For now only confirmed can be added to the UTXO set
-        match wallet_tx.state() {
-            TxState::Confirmed(_) => {}
-            TxState::InMempool | TxState::Conflicted(_) | TxState::Inactive => return Ok(()),
-        }
-
-        let tx = wallet_tx.tx();
-
-        for (i, output) in tx.outputs().iter().enumerate() {
-            // Check if this output belongs to this wallet or it is watched
-            if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
-                let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
-                let utxo = Utxo::new(output.clone(), false, utxo::UtxoSource::Mempool);
-                let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
-                db_tx.set_utxo(&account_utxo_id, utxo)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Remove transaction outputs from the UTXO set of the account
-    fn remove_from_utxos<B: Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        wallet_tx: &WalletTx,
-    ) -> WalletResult<()> {
-        let tx = wallet_tx.tx();
-        for (i, _) in tx.outputs().iter().enumerate() {
-            let outpoint = OutPoint::new(tx.get_id().into(), i as u32);
-            db_tx.del_utxo(&AccountOutPointId::new(self.get_account_id(), outpoint))?;
-        }
-        Ok(())
-    }
-
-    #[allow(dead_code)] // TODO remove
     fn is_available_for_spending(&self, _txo: &TxOutput) -> bool {
         // TODO implement
         true
