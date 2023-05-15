@@ -20,7 +20,7 @@ use serialization::{Decode, Encode};
 use crate::address::{Address, AddressError};
 use crate::{chain::classic_multisig::ClassicMultisigChallenge, primitives::id::DefaultHashAlgo};
 
-#[derive(thiserror::Error, Debug, Clone, Eq, PartialEq)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum PublicKeyHashError {
     #[error("Conversion from a data array to public key hash failed; probably invalid length")]
     ConversionFromDataFailed,
