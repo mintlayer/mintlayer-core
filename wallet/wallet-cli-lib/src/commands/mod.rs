@@ -18,7 +18,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::{ChainConfig, Mlt},
+    chain::ChainConfig,
     primitives::{Amount, BlockHeight, H256},
 };
 use serialization::hex::HexEncode;
@@ -171,13 +171,13 @@ fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, W
         .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
 }
 
-fn parse_amount(value: &str) -> Result<Amount, WalletCliError> {
-    Amount::from_fixedpoint_str(value, Mlt::DECIMALS)
+fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
         .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
 }
 
-fn print_amount(value: Amount) -> String {
-    value.into_fixedpoint_str(Mlt::DECIMALS)
+fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
+    value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
 pub async fn handle_wallet_command(
@@ -331,7 +331,10 @@ pub async fn handle_wallet_command(
                 .ok_or(WalletCliError::NoWallet)?
                 .get_balance()
                 .map_err(WalletCliError::Controller)?;
-            Ok(ConsoleCommand::Print(print_amount(coin_balance)))
+            Ok(ConsoleCommand::Print(print_coin_amount(
+                chain_config,
+                coin_balance,
+            )))
         }
 
         WalletCommand::NewAddress => {
@@ -344,7 +347,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::SendToAddress { address, amount } => {
-            let amount = parse_amount(&amount)?;
+            let amount = parse_coin_amount(chain_config, &amount)?;
             let address = parse_address(chain_config, &address)?;
             controller_opt
                 .as_mut()
