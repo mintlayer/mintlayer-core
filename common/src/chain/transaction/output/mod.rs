@@ -61,6 +61,7 @@ pub enum TxOutput {
     #[codec(index = 6)]
     CreateDelegationId(Destination, PoolId),
     #[codec(index = 7)]
+    // FIXME no destination is required
     DelegateStaking(Amount, Destination, DelegationId),
     #[codec(index = 8)]
     SpendShareFromDelegation(Amount, Destination, DelegationId, OutputTimeLock),
