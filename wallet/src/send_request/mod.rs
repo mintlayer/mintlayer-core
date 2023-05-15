@@ -16,7 +16,6 @@
 use std::collections::BTreeMap;
 
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::timelock::OutputTimeLock;
 use common::chain::tokens::OutputValue;
 use common::chain::{
@@ -117,11 +116,5 @@ impl SendRequest {
         witnesses: Vec<InputWitness>,
     ) -> Result<SignedTransaction, TransactionCreationError> {
         SignedTransaction::new(self.get_transaction()?, witnesses)
-    }
-
-    pub fn get_sighash_types(&self) -> Vec<SigHashType> {
-        // TODO: use customized sig hashes
-        let sighash_all = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
-        (0..self.inputs.len()).map(|_| sighash_all).collect()
     }
 }

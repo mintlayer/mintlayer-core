@@ -18,6 +18,7 @@ use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::inputsig::InputWitness;
+use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
@@ -98,7 +99,6 @@ impl Account {
     }
 
     fn complete_send_request(&self, request: &SendRequest) -> WalletResult<SignedTransaction> {
-        // TODO: Collect UTXOs
         // TODO: Call coin selector
 
         let (input_coin_amount, input_tokens_amounts) =
@@ -107,7 +107,7 @@ impl Account {
         let (output_coin_amount, output_tokens_amounts) =
             Self::calculate_output_amounts(request.outputs().iter())?;
 
-        // TODO: Fix tokens sending
+        // TODO: Implement tokens sending
         utils::ensure!(
             input_tokens_amounts.is_empty() && output_tokens_amounts.is_empty(),
             WalletError::NotImplemented("Token sending")
@@ -180,30 +180,21 @@ impl Account {
         let tx = req.get_transaction()?;
         let inputs = tx.inputs();
         let utxos = req.utxos();
+        let input_utxos = utxos.iter().collect::<Vec<_>>();
         if utxos.len() != inputs.len() {
             return Err(
                 TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
             );
         }
 
-        let sighash_types = req.get_sighash_types();
-        if sighash_types.len() != inputs.len() {
-            return Err(TransactionSigError::InvalidSigHashCountVsInputs(
-                sighash_types.len(),
-                inputs.len(),
-            )
-            .into());
-        }
-
-        let witnesses = tx
-            .inputs()
+        let witnesses = utxos
             .iter()
             .enumerate()
-            .map(|(i, _)| {
+            .map(|(i, utxo)| {
                 // Get the destination from this utxo. This should not fail as we checked that
                 // inputs and utxos have the same length
-                let destination = Self::get_tx_output_destination(&utxos[i]).ok_or_else(|| {
-                    WalletError::UnsupportedTransactionOutput(Box::new(utxos[i].clone()))
+                let destination = Self::get_tx_output_destination(utxo).ok_or_else(|| {
+                    WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
                 })?;
 
                 if *destination == Destination::AnyoneCanSpend {
@@ -212,9 +203,8 @@ impl Account {
                     let private_key =
                         self.key_chain.get_private_key_for_destination(destination)?.private_key();
 
-                    let sighash_type = sighash_types[i];
-
-                    let input_utxos = utxos.iter().collect::<Vec<_>>();
+                    let sighash_type =
+                        SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
 
                     StandardInputSignature::produce_uniparty_signature_for_input(
                         &private_key,
