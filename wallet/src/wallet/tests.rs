@@ -22,7 +22,7 @@ const MNEMONIC: &str =
 #[test]
 fn wallet_creation_in_memory() {
     let chain_config = Arc::new(create_regtest());
-    let db = open_or_create_wallet_in_memory().unwrap();
+    let db = create_wallet_in_memory().unwrap();
 
     match Wallet::load_wallet(chain_config.clone(), db.clone()) {
         Ok(_) => panic!("Wallet loading should fail"),

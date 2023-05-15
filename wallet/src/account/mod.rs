@@ -137,6 +137,7 @@ impl Account {
 
         // Iterate over all outputs and calculate the coin and tokens amounts
         for output in outputs {
+            // TODO: Include DecommissionPool output
             // Get the supported output value
             let output_value = match output {
                 TxOutput::Transfer(v, _)

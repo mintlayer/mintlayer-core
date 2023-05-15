@@ -146,8 +146,8 @@ impl AccountKeyChain {
         AccountId::new_from_xpub(&self.account_public_key)
     }
 
-    pub fn get_account_public_key(&self) -> ExtendedPublicKey {
-        self.account_public_key.clone().take()
+    pub fn account_public_key(&self) -> &ExtendedPublicKey {
+        self.account_public_key.as_ref()
     }
 
     /// Issue a new address that hasn't been used before
@@ -245,8 +245,8 @@ impl AccountKeyChain {
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
             self.account_index,
-            self.root_hierarchy_key.clone().take(),
-            self.account_public_key.clone().take(),
+            self.root_hierarchy_key.as_ref().clone(),
+            self.account_public_key.as_ref().clone(),
             self.lookahead_size(),
         ))
     }

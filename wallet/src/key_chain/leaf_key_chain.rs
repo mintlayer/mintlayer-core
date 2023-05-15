@@ -421,7 +421,9 @@ impl LeafKeyChain {
         match dest {
             Destination::Address(pkh) => self.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.is_public_key_mine(pk),
-            _ => false,
+            Destination::AnyoneCanSpend
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => false,
         }
     }
 
@@ -438,7 +440,9 @@ impl LeafKeyChain {
         match dest {
             Destination::Address(pkh) => self.get_xpub_from_public_key_hash(pkh),
             Destination::PublicKey(pk) => self.get_xpub_from_public_key(pk),
-            _ => None,
+            Destination::AnyoneCanSpend
+            | Destination::ScriptHash(_)
+            | Destination::ClassicMultisig(_) => None,
         }
     }
 

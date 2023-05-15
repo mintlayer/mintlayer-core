@@ -98,7 +98,7 @@ pub fn open_or_create_wallet_file<P: AsRef<Path>>(
     Ok(Arc::new(Store::new(DefaultBackend::new(path))?))
 }
 
-pub fn open_or_create_wallet_in_memory() -> WalletResult<Arc<Store<DefaultBackend>>> {
+pub fn create_wallet_in_memory() -> WalletResult<Arc<Store<DefaultBackend>>> {
     Ok(Arc::new(Store::new(DefaultBackend::new_in_memory())?))
 }
 
