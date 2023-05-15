@@ -31,24 +31,14 @@ use utxo::Utxo;
 pub struct SendRequest {
     flags: u32,
 
+    /// The UTXOs for each input, this can be empty
+    utxos: Vec<TxOutput>,
+
     inputs: Vec<TxInput>,
 
     outputs: Vec<TxOutput>,
 
     lock_time: u32,
-
-    /// The UTXOs for each input, this can be empty
-    utxos: Vec<TxOutput>,
-
-    /// An optional witness for each transaction. If present the number should be the same as the
-    /// transaction's inputs
-    witnesses: Option<Vec<InputWitness>>,
-
-    /// If true the wallet will attempt to sign the inputs of the transaction
-    sign_transaction: bool,
-
-    // This tracks whether this send request has been completed
-    is_complete: bool,
 }
 
 impl SendRequest {
@@ -73,44 +63,25 @@ impl SendRequest {
     pub fn from_outputs(outputs: Vec<TxOutput>) -> Self {
         Self {
             flags: 0,
+            utxos: Vec::new(),
             inputs: Vec::new(),
             outputs,
             lock_time: 0,
-            utxos: Vec::new(),
-            witnesses: None,
-            sign_transaction: true,
-            is_complete: false,
         }
     }
 
     pub fn from_transaction(transaction: Transaction, utxos: Vec<TxOutput>) -> Self {
         Self {
             flags: transaction.flags(),
+            utxos,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
             lock_time: transaction.lock_time(),
-            utxos,
-            witnesses: None,
-            sign_transaction: true,
-            is_complete: false,
         }
     }
 
-    pub fn get_transaction(&self) -> Result<Transaction, TransactionCreationError> {
-        Transaction::new(
-            self.flags,
-            self.inputs.clone(),
-            self.outputs.clone(),
-            self.lock_time,
-        )
-    }
-
-    pub fn get_signed_transaction(&self) -> Result<SignedTransaction, TransactionCreationError> {
-        if let Some(w) = &self.witnesses {
-            SignedTransaction::new(self.get_transaction()?, w.clone())
-        } else {
-            Err(TransactionCreationError::InvalidWitnessCount)
-        }
+    pub fn inputs(&self) -> &[TxInput] {
+        &self.inputs
     }
 
     pub fn outputs(&self) -> &[TxOutput] {
@@ -119,27 +90,6 @@ impl SendRequest {
 
     pub fn utxos(&self) -> &[TxOutput] {
         &self.utxos
-    }
-
-    pub fn sign_transaction(&self) -> bool {
-        self.sign_transaction
-    }
-
-    pub fn is_complete(&self) -> bool {
-        self.is_complete
-    }
-
-    pub fn complete(&mut self) {
-        self.is_complete = true;
-    }
-
-    pub fn set_witnesses(
-        &mut self,
-        witnesses: Vec<InputWitness>,
-    ) -> Result<(), TransactionCreationError> {
-        // SignedTransaction::check_tx_sigs(&self.transaction, &witnesses)?;
-        self.witnesses = Some(witnesses);
-        Ok(())
     }
 
     pub fn fill_inputs(
@@ -153,8 +103,24 @@ impl SendRequest {
         Ok(())
     }
 
+    pub fn get_transaction(&self) -> Result<Transaction, TransactionCreationError> {
+        Transaction::new(
+            self.flags,
+            self.inputs.clone(),
+            self.outputs.clone(),
+            self.lock_time,
+        )
+    }
+
+    pub fn get_signed_transaction(
+        &self,
+        witnesses: Vec<InputWitness>,
+    ) -> Result<SignedTransaction, TransactionCreationError> {
+        SignedTransaction::new(self.get_transaction()?, witnesses)
+    }
+
     pub fn get_sighash_types(&self) -> Vec<SigHashType> {
-        // TODO use customized sig hashes
+        // TODO: use customized sig hashes
         let sighash_all = SigHashType::try_from(SigHashType::ALL).expect("Should not fail");
         (0..self.inputs.len()).map(|_| sighash_all).collect()
     }

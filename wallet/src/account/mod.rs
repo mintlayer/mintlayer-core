@@ -103,18 +103,15 @@ impl Account {
             request.fill_inputs(utxos)?;
         }
 
-        self.complete_send_request(&mut request)?;
-        let tx = request.get_signed_transaction()?;
+        let tx = self.complete_send_request(&mut request)?;
+
         // let tx = WithId::new(request.into_transaction());
         // self.add_transaction(db_tx, tx.clone(), TxState::InMempool)?;
+
         Ok(tx)
     }
 
-    fn complete_send_request(&mut self, request: &mut SendRequest) -> WalletResult<()> {
-        if request.is_complete() {
-            return Err(WalletError::SendRequestComplete);
-        }
-
+    fn complete_send_request(&self, request: &mut SendRequest) -> WalletResult<SignedTransaction> {
         // TODO: Collect UTXOs
         // TODO: Call coin selector
 
@@ -137,13 +134,9 @@ impl Account {
             WalletError::NotEnoughUtxo(input_coin_amount, output_coin_amount)
         );
 
-        if request.sign_transaction() {
-            self.sign_transaction(request)?;
-        }
+        let tx = self.sign_transaction(request)?;
 
-        request.complete();
-
-        Ok(())
+        Ok(tx)
     }
 
     /// Calculate the output amount for coins and tokens
@@ -197,7 +190,7 @@ impl Account {
         Ok((coin_amount, tokens_amounts))
     }
 
-    fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<()> {
+    fn sign_transaction(&self, req: &mut SendRequest) -> WalletResult<SignedTransaction> {
         let tx = req.get_transaction()?;
         let inputs = tx.inputs();
         let utxos = req.utxos();
@@ -251,9 +244,9 @@ impl Account {
             })
             .collect::<Result<Vec<InputWitness>, _>>()?;
 
-        req.set_witnesses(witnesses)?;
+        let tx = req.get_signed_transaction(witnesses)?;
 
-        Ok(())
+        Ok(tx)
     }
 
     pub fn account_index(&self) -> U31 {
