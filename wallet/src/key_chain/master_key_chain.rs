@@ -85,7 +85,6 @@ impl MasterKeyChain {
     }
 
     /// Load the Master key chain from database and all the account key chains it derives
-    #[allow(dead_code)] // TODO remove
     pub fn load_from_database<B: Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
@@ -104,7 +103,6 @@ impl MasterKeyChain {
         })
     }
 
-    #[allow(dead_code)] // TODO remove
     pub fn create_account_key_chain<B: Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,

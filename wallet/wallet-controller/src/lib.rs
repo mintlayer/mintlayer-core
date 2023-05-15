@@ -89,13 +89,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::new_wallet(
+        let mut wallet = wallet::Wallet::new_wallet(
             Arc::clone(&chain_config),
             db,
             &mnemonic.to_string(),
             passphrase,
         )
         .map_err(ControllerError::WalletError)?;
+
+        wallet
+            .create_account(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
     }

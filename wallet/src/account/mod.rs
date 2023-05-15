@@ -38,7 +38,6 @@ use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite
 use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, TxState, WalletTx};
 
 pub struct Account {
-    #[allow(dead_code)] // TODO remove
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txs: BTreeMap<Id<Transaction>, WalletTx>,

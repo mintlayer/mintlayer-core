@@ -30,11 +30,11 @@ use common::chain::{
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use crypto::key::hdkd::u31::U31;
+use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, TransactionRo, TransactionRw, Transactional,
     WalletStorageRead, WalletStorageWrite,
 };
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::{AccountId, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -58,6 +58,8 @@ pub enum WalletError {
     NoAccountFound(AccountId),
     #[error("No account found with index {0}")]
     NoAccountFoundWithIndex(U31),
+    #[error("Account with index {0} already exists")]
+    AccountAlreadyExists(U31),
     #[error("Not implemented: {0}")]
     NotImplemented(&'static str),
     #[error("The send request is complete")]
@@ -118,18 +120,10 @@ impl<B: storage::Backend> Wallet<B> {
             passphrase,
         )?;
 
-        let account_key_chain =
-            key_chain.create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)?;
-
-        let account = Account::new(Arc::clone(&chain_config), &mut db_tx, account_key_chain)?;
-
-        let accounts = std::iter::once((account.account_index(), account)).collect();
-
         db_tx.set_storage_version(CURRENT_WALLET_VERSION)?;
 
         db_tx.commit()?;
 
-        // TODO: Scan genesis outputs
         let best_block_id = chain_config.genesis_block_id();
         let best_block_height = BlockHeight::zero();
 
@@ -137,7 +131,7 @@ impl<B: storage::Backend> Wallet<B> {
             chain_config,
             db,
             key_chain,
-            accounts,
+            accounts: BTreeMap::new(),
             best_block_id,
             best_block_height,
         })
@@ -184,6 +178,32 @@ impl<B: storage::Backend> Wallet<B> {
             best_block_id,
             best_block_height,
         })
+    }
+
+    pub fn create_account(&mut self, account_index: U31) -> WalletResult<()> {
+        ensure!(
+            !self.accounts.contains_key(&account_index),
+            WalletError::AccountAlreadyExists(account_index)
+        );
+
+        let mut db_tx = self.db.transaction_rw(None)?;
+
+        let account_key_chain =
+            self.key_chain.create_account_key_chain(&mut db_tx, account_index)?;
+
+        let account = Account::new(
+            Arc::clone(&self.chain_config),
+            &mut db_tx,
+            account_key_chain,
+        )?;
+
+        db_tx.commit()?;
+
+        // TODO: Rescan blockchain
+
+        self.accounts.insert(account.account_index(), account);
+
+        Ok(())
     }
 
     pub fn database(&self) -> &Store<B> {
