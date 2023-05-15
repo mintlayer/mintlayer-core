@@ -16,7 +16,7 @@
 use bech32::{self, Error};
 use core::fmt;
 
-#[derive(thiserror::Error, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(thiserror::Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Bech32Error {
     /// missing separator
     #[error("Missing separator`")]

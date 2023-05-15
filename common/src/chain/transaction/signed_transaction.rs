@@ -32,23 +32,14 @@ impl SignedTransaction {
         transaction: Transaction,
         signatures: Vec<InputWitness>,
     ) -> Result<Self, TransactionCreationError> {
-        Self::check_tx_sigs(&transaction, &signatures)?;
-        Ok(Self {
-            transaction,
-            signatures,
-        })
-    }
-
-    /// Tests if the transaction and signatures can create a `SignedTransaction`
-    pub fn check_tx_sigs(
-        transaction: &Transaction,
-        signatures: &Vec<InputWitness>,
-    ) -> Result<(), TransactionCreationError> {
         ensure!(
             signatures.len() == transaction.inputs().len(),
             TransactionCreationError::InvalidWitnessCount
         );
-        Ok(())
+        Ok(Self {
+            transaction,
+            signatures,
+        })
     }
 
     pub fn transaction(&self) -> &Transaction {
