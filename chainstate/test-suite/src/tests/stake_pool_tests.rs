@@ -565,3 +565,67 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
             .unwrap();
     });
 }
+
+// in a tx StakePool -> DecommissionPool usage of different PoolIds should be an error
+#[ignore]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn decommission_mismatch_stake_pool(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let amount_to_stake = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let (stake_pool_data_1, _) = create_stake_pool_data_with_all_reward_to_owner(
+            &mut rng,
+            amount_to_stake,
+            vrf_pk.clone(),
+        );
+
+        let genesis_outpoint = OutPoint::new(
+            OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+            0,
+        );
+
+        let amount_to_transfer = Amount::from_atoms(rng.gen_range(100_000..200_000));
+        let tx1 = TransactionBuilder::new()
+            .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data_1)))
+            .add_output(TxOutput::Transfer(
+                OutputValue::Coin(amount_to_transfer),
+                Destination::AnyoneCanSpend,
+            ))
+            .build();
+
+        let stake_pool_1_outpoint =
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0);
+        let transfer_outpoint =
+            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
+        let pool_id_2 = pos_accounting::make_pool_id(&transfer_outpoint);
+
+        tf.make_block_builder().add_transaction(tx1).build_and_process().unwrap();
+
+        let (stake_pool_data_2, _) =
+            create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_transfer, vrf_pk);
+        let tx2 = TransactionBuilder::new()
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data_2)))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx2).build_and_process().unwrap();
+
+        let tx3 = TransactionBuilder::new()
+            .add_input(stake_pool_1_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DecommissionPool(
+                amount_to_stake,
+                anyonecanspend_address(),
+                pool_id_2,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+
+        tf.make_block_builder().add_transaction(tx3).build_and_process().unwrap_err();
+    });
+}
