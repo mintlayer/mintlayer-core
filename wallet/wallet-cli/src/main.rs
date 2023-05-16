@@ -21,6 +21,10 @@ use wallet_cli_lib::{
 
 #[tokio::main]
 async fn main() {
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
+
     let args = WalletCliArgs::parse();
     let mut console = StdioConsole;
     wallet_cli_lib::run(console.clone(), args).await.unwrap_or_else(|err| {
