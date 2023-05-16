@@ -100,7 +100,7 @@ impl RpcAuth {
         );
         let password_valid = verify_password(
             password.as_bytes(),
-            self.password_hash.clone(),
+            &self.password_hash,
             SliceEqualityCheckMethod::TimingResistant,
         )
         .map_err(CheckError::KdfError)?;

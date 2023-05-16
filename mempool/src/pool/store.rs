@@ -405,7 +405,7 @@ impl MempoolStore {
         tx_id: Id<Transaction>,
         reason: MempoolRemovalReason,
     ) {
-        if let Some(entry) = self.txs_by_id.get(&tx_id).cloned() {
+        if let Some(entry) = self.txs_by_id.get(&tx_id) {
             let descendants = entry.unconfirmed_descendants(self);
             log::trace!(
                 "Dropping tx {} which has {} descendants",
@@ -415,7 +415,7 @@ impl MempoolStore {
             self.remove_tx(&entry.tx.transaction().get_id(), reason);
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
-                if let Some(descendant) = self.txs_by_id.get(&descendant_id).cloned() {
+                if let Some(descendant) = self.txs_by_id.get(&descendant_id) {
                     self.remove_tx(&descendant.tx.transaction().get_id(), reason)
                 }
             }
@@ -583,17 +583,15 @@ impl TxMempoolEntry {
     }
 
     pub fn unconfirmed_ancestors_from_parents(
-        parents: BTreeSet<Id<Transaction>>,
+        parents: &BTreeSet<Id<Transaction>>,
         store: &MempoolStore,
     ) -> Result<Ancestors, MempoolPolicyError> {
-        let mut ancestors = BTreeSet::new();
+        let mut ancestors = parents.clone().into();
         for parent in parents {
-            ancestors.insert(parent);
-            let parent = store.get_entry(&parent).ok_or(MempoolPolicyError::GetParentError)?;
-            let parent_ancestors = parent.unconfirmed_ancestors(store).0;
-            ancestors.extend(parent_ancestors);
+            let parent = store.get_entry(parent).ok_or(MempoolPolicyError::GetParentError)?;
+            parent.unconfirmed_ancestors_inner(&mut ancestors, store);
         }
-        Ok(ancestors.into())
+        Ok(ancestors)
     }
 
     fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {

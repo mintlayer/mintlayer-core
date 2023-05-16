@@ -225,10 +225,10 @@ impl<M> Mempool<M> {
             .inputs()
             .iter()
             .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
-            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then_some(id))
+            .filter(|id| self.store.txs_by_id.contains_key(id))
             .collect::<BTreeSet<_>>();
         let ancestor_ids =
-            TxMempoolEntry::unconfirmed_ancestors_from_parents(parents.clone(), &self.store)?;
+            TxMempoolEntry::unconfirmed_ancestors_from_parents(&parents, &self.store)?;
         let ancestors = BTreeSet::from(ancestor_ids)
             .into_iter()
             .map(|id| self.store.get_entry(&id).expect("ancestors to exist"))
@@ -653,8 +653,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 .flatten()
                 .next()
                 .expect("pool not empty");
-            let removed =
-                self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
+            let removed = self.store.txs_by_id.get(removed_id).expect("tx with id should exist");
 
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
