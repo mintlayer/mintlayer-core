@@ -59,24 +59,23 @@ pub fn check_pow_consensus<H: BlockIndexHandle>(
         block_index_handle.get_ancestor(block_index, ancestor_height)
     };
 
-    let work_required = match header.prev_block_id().classify(chain_config) {
-        GenBlockId::Genesis(_) => match pow_status {
-            PoWStatus::Ongoing => unreachable!(),
-            PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
+    let work_required = match pow_status {
+        PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
+        PoWStatus::Ongoing => match header.prev_block_id().classify(chain_config) {
+            GenBlockId::Genesis(_) => Err(ConsensusPoWError::GenesisCannotHaveOngoingDifficulty)?,
+            GenBlockId::Block(prev_id) => {
+                let prev_block_index = block_index_handle
+                    .get_block_index(&prev_id)
+                    .map_err(|e| ConsensusPoWError::PrevBlockLoadError(prev_id, e))?
+                    .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_id))?;
+
+                PoW::new(chain_config).get_work_required(
+                    &prev_block_index,
+                    header.timestamp(),
+                    get_ancestor,
+                )?
+            }
         },
-        GenBlockId::Block(prev_id) => {
-            let prev_block_index = block_index_handle
-                .get_block_index(&prev_id)
-                .map_err(|e| ConsensusPoWError::PrevBlockLoadError(prev_id, e))?
-                .ok_or(ConsensusPoWError::PrevBlockNotFound(prev_id))?;
-            calculate_work_required(
-                chain_config,
-                &prev_block_index.into(),
-                header.timestamp(),
-                pow_status,
-                get_ancestor,
-            )?
-        }
     };
 
     // TODO: add test for a block with invalid target
@@ -108,7 +107,7 @@ impl MiningResult {
 
 pub fn calculate_work_required<G>(
     chain_config: &ChainConfig,
-    prev_block_index: &GenBlockIndex,
+    prev_gen_block_index: &GenBlockIndex,
     block_timestamp: BlockTimestamp,
     pow_status: &PoWStatus,
     get_ancestor: G,
@@ -118,16 +117,15 @@ where
 {
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
-        PoWStatus::Ongoing => match prev_block_index {
+        PoWStatus::Ongoing => match prev_gen_block_index {
+            GenBlockIndex::Genesis(_) => {
+                Err(ConsensusPoWError::GenesisCannotHaveOngoingDifficulty)?
+            }
             GenBlockIndex::Block(prev_block_index) => PoW::new(chain_config).get_work_required(
                 prev_block_index,
                 block_timestamp,
                 get_ancestor,
             ),
-            GenBlockIndex::Genesis(_) => {
-                // If this is genesis, then the status can't be on-going
-                unreachable!()
-            }
         },
     }
 }
