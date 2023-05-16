@@ -49,6 +49,12 @@ pub struct CreateDelegationIdUndo {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub struct DeleteDelegationIdUndo {
+    pub(crate) delegation_id: DelegationId,
+    pub(crate) data_undo: DelegationDataUndo,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct DecommissionPoolUndo {
     pub(crate) pool_id: PoolId,
     pub(crate) pool_balance: Amount,
@@ -80,6 +86,7 @@ pub enum PoSAccountingUndo {
     CreatePool(CreatePoolUndo),
     DecommissionPool(DecommissionPoolUndo),
     CreateDelegationId(CreateDelegationIdUndo),
+    DeleteDelegationId(DeleteDelegationIdUndo),
     DelegateStaking(DelegateStakingUndo),
     SpendFromShare(SpendFromShareUndo),
     IncreasePledgeAmount(IncreasePledgeAmountUndo),
@@ -108,6 +115,11 @@ pub trait PoSAccountingOperations {
         spend_key: Destination,
         input0_outpoint: &OutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error>;
+
+    fn delete_delegation_id(
+        &mut self,
+        delegation_id: DelegationId,
+    ) -> Result<PoSAccountingUndo, Error>;
 
     fn delegate_staking(
         &mut self,

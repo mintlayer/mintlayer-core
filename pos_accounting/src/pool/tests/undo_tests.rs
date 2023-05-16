@@ -15,8 +15,8 @@
 
 use std::collections::BTreeMap;
 
-use common::primitives::Amount;
-use crypto::random::{CryptoRng, Rng};
+use common::{chain::Destination, primitives::Amount};
+use crypto::random::{CryptoRng, Rng, RngCore};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
@@ -688,4 +688,81 @@ fn spend_share_delta_undo_flush(#[case] seed: Seed) {
         BTreeMap::from([(delegation_id, DelegationData::new(pool_id, del_pub_key))]),
     );
     assert_eq!(storage, expected_storage);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delete_delegation_id_delta_check_undo_check(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let pool_id = super::new_pool_id(rng.next_u64());
+    let delegation_id = super::new_delegation_id(rng.next_u64());
+
+    let mut storage = InMemoryPoSAccounting::from_values(
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from([(
+            delegation_id,
+            DelegationData::new(pool_id, Destination::AnyoneCanSpend),
+        )]),
+    );
+    let original_storage = storage.clone();
+
+    let delta_undo = {
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut delta = PoSAccountingDelta::new(&db);
+        let delta_undo = delta.delete_delegation_id(delegation_id).unwrap();
+
+        db.batch_write_delta(delta.consume()).unwrap();
+
+        let expected_storage = InMemoryPoSAccounting::new();
+        assert_eq!(storage, expected_storage);
+        delta_undo
+    };
+
+    {
+        let mut db = PoSAccountingDB::new(&mut storage);
+        let mut new_delta = PoSAccountingDelta::new(&db);
+        new_delta.undo(delta_undo).unwrap();
+
+        db.batch_write_delta(new_delta.consume()).unwrap();
+
+        assert_eq!(storage, original_storage);
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delete_delegation_id_db_check_undo_check(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let pool_id = super::new_pool_id(rng.next_u64());
+    let delegation_id = super::new_delegation_id(rng.next_u64());
+
+    let mut storage = InMemoryPoSAccounting::from_values(
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeMap::from([(
+            delegation_id,
+            DelegationData::new(pool_id, Destination::AnyoneCanSpend),
+        )]),
+    );
+    let original_storage = storage.clone();
+
+    let mut db = PoSAccountingDB::new(&mut storage);
+    let undo = db.delete_delegation_id(delegation_id).unwrap();
+
+    let expected_storage = InMemoryPoSAccounting::new();
+    assert_eq!(storage, expected_storage);
+
+    {
+        let mut db = PoSAccountingDB::new(&mut storage);
+        db.undo(undo).unwrap();
+
+        assert_eq!(storage, original_storage);
+    }
 }

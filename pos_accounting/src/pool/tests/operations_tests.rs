@@ -340,3 +340,67 @@ fn spend_more_than_delegated(#[case] seed: Seed) {
         );
     }
 }
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delete_delegation_existing_balance(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let pledge_amount = Amount::from_atoms(100);
+    let delegated_amount = Amount::from_atoms(200);
+    let (pool_id, _, delegation_id, _, mut storage) =
+        create_storage_with_pool_and_delegation(&mut rng, pledge_amount, delegated_amount);
+
+    let _ = PoSAccountingDB::new(&mut storage).decommission_pool(pool_id).unwrap();
+
+    {
+        let mut db = PoSAccountingDB::new(&mut storage);
+        assert_eq!(
+            db.delete_delegation_id(delegation_id).unwrap_err(),
+            Error::DelegationDeletionFailedBalanceNonZero
+        );
+    }
+
+    {
+        let db = PoSAccountingDB::new(&mut storage);
+        let mut delta = PoSAccountingDelta::new(&db);
+
+        assert_eq!(
+            delta.delete_delegation_id(delegation_id).unwrap_err(),
+            Error::DelegationDeletionFailedBalanceNonZero
+        );
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn delete_delegation_existing_pool(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let pledge_amount = Amount::from_atoms(100);
+    let delegated_amount = Amount::from_atoms(200);
+    let (_, _, delegation_id, _, mut storage) =
+        create_storage_with_pool_and_delegation(&mut rng, pledge_amount, delegated_amount);
+
+    let _ = PoSAccountingDB::new(&mut storage)
+        .spend_share_from_delegation_id(delegation_id, delegated_amount)
+        .unwrap();
+
+    {
+        let mut db = PoSAccountingDB::new(&mut storage);
+        assert_eq!(
+            db.delete_delegation_id(delegation_id).unwrap_err(),
+            Error::DelegationDeletionFailedPoolStillExists
+        );
+    }
+
+    {
+        let db = PoSAccountingDB::new(&mut storage);
+        let mut delta = PoSAccountingDelta::new(&db);
+
+        assert_eq!(
+            delta.delete_delegation_id(delegation_id).unwrap_err(),
+            Error::DelegationDeletionFailedPoolStillExists
+        );
+    }
+}

@@ -111,6 +111,7 @@ pub mod test {
     #[case(None,    None,     Ok(None))]
     #[case(None,    Some(1),  Ok(Some(Amount::from_atoms(1))))]
     #[case(Some(1), None,     Ok(Some(Amount::from_atoms(1))))]
+    #[case(Some(1), Some(-1), Ok(Some(Amount::from_atoms(0))))]
     #[case(Some(2), Some(1),  Ok(Some(Amount::from_atoms(3))))]
     #[case(Some(3), Some(-1), Ok(Some(Amount::from_atoms(2))))]
     #[case(None,                       Some(-1),                 Err(Error::ArithmeticErrorToUnsignedFailed))]
