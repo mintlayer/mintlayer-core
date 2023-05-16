@@ -15,45 +15,37 @@
 
 use serialization::{Decode, Encode};
 
-use common::chain::{GenBlock, Transaction};
+use common::chain::{Block, Transaction};
 use common::primitives::id::WithId;
-use common::primitives::Id;
-
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
-pub enum TxState {
-    /// Confirmed transaction in a block
-    #[codec(index = 0)]
-    Confirmed(Id<GenBlock>),
-    /// Unconfirmed transaction in the mempool
-    #[codec(index = 1)]
-    InMempool,
-    /// Conflicted transaction with a confirmed block
-    #[codec(index = 2)]
-    Conflicted(Id<GenBlock>),
-    /// Transaction that is not confirmed or conflicted and is not in the mempool.
-    #[codec(index = 3)]
-    Inactive,
-}
+use common::primitives::{BlockHeight, Id};
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct WalletTx {
-    /// The wrapped transaction with cached transaction id
     tx: WithId<Transaction>,
-    /// The state of this transaction in relation to the inclusion or not on the blockchain. For
-    /// example it could be confirmed, pending in mempool, conflicted etc.
-    state: TxState,
+
+    block_id: Id<Block>,
+
+    block_height: BlockHeight,
 }
 
 impl WalletTx {
-    pub fn new(tx: WithId<Transaction>, state: TxState) -> Self {
-        WalletTx { tx, state }
+    pub fn new(tx: WithId<Transaction>, block_id: Id<Block>, block_height: BlockHeight) -> Self {
+        WalletTx {
+            tx,
+            block_id,
+            block_height,
+        }
     }
 
     pub fn tx(&self) -> &WithId<Transaction> {
         &self.tx
     }
 
-    pub fn state(&self) -> &TxState {
-        &self.state
+    pub fn block_id(&self) -> &Id<Block> {
+        &self.block_id
+    }
+
+    pub fn block_height(&self) -> BlockHeight {
+        self.block_height
     }
 }
