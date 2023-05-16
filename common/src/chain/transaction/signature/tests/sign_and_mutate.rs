@@ -1077,7 +1077,7 @@ fn mutate_output(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedT
         TxOutput::ProduceBlockFromStake(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::DecommissionPool(_, _, _, _) => unreachable!(), // TODO: come back to this later
         TxOutput::CreateDelegationId(_, _) => unreachable!(), // TODO: come back to this later
-        TxOutput::DelegateStaking(_, _, _) => unreachable!(), // TODO: come back to this later
+        TxOutput::DelegateStaking(_, _) => unreachable!(), // TODO: come back to this later
         TxOutput::SpendShareFromDelegation(_, _, _, _) => unreachable!(), // TODO: come back to this later
     };
     SignedTransactionWithUtxo {

@@ -252,15 +252,15 @@ fn is_valid_one_to_any_combination_for_tx(
 // single DelegateStaking input; zero or one DelegateStakingOutput + any number of SpendShareFromDelegation
 fn is_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
     let delegation_input = match input_utxo {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _)
-        | TxOutput::DecommissionPool(_, _, _, _)
-        | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::SpendShareFromDelegation(_, _, _, _) => false,
-        TxOutput::DelegateStaking(_, _, _) => true,
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::DecommissionPool(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::SpendShareFromDelegation(..) => false,
+        TxOutput::DelegateStaking(..) => true,
     };
 
     let delegation_outputs_count = outputs
@@ -448,11 +448,7 @@ mod tests {
     }
 
     fn delegate_staking() -> TxOutput {
-        TxOutput::DelegateStaking(
-            Amount::ZERO,
-            Destination::AnyoneCanSpend,
-            DelegationId::new(H256::zero()),
-        )
+        TxOutput::DelegateStaking(Amount::ZERO, DelegationId::new(H256::zero()))
     }
 
     fn spend_share() -> TxOutput {

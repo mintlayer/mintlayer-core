@@ -187,7 +187,8 @@ impl MempoolBanScore for SignatureDestinationGetterError {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
-            SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
+            SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }

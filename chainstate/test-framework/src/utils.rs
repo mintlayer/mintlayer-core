@@ -46,7 +46,7 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::DecommissionPool(_, _, _, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _)
+        | TxOutput::DelegateStaking(_, _)
         | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
     }
 }

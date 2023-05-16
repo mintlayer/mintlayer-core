@@ -36,7 +36,7 @@ fn get_timelock(output: &TxOutput) -> Option<&OutputTimeLock> {
         | TxOutput::CreateStakePool(_)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _, _) => None,
+        | TxOutput::DelegateStaking(_, _) => None,
         TxOutput::LockThenTransfer(_, _, tl)
         | TxOutput::DecommissionPool(_, _, _, tl)
         | TxOutput::SpendShareFromDelegation(_, _, _, tl) => Some(tl),

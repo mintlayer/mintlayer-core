@@ -300,11 +300,7 @@ fn delegate_staking(#[case] seed: Seed) {
         // Delegate staking
         let tx = TransactionBuilder::new()
             .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DelegateStaking(
-                amount_to_delegate,
-                Destination::AnyoneCanSpend,
-                delegation_id,
-            ))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
         let delegate_staking_outpoint =
@@ -324,11 +320,7 @@ fn delegate_staking(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DelegateStaking(
-                spend_change,
-                Destination::AnyoneCanSpend,
-                delegation_id,
-            ))
+            .add_output(TxOutput::DelegateStaking(spend_change, delegation_id))
             .add_output(TxOutput::SpendShareFromDelegation(
                 amount_to_spend,
                 Destination::AnyoneCanSpend,
@@ -410,11 +402,7 @@ fn delegation_cleanup(#[case] seed: Seed) {
         // Delegate staking
         let tx = TransactionBuilder::new()
             .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DelegateStaking(
-                amount_to_delegate,
-                Destination::AnyoneCanSpend,
-                delegation_id,
-            ))
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
         let delegate_staking_outpoint =
@@ -468,5 +456,3 @@ fn delegation_cleanup(#[case] seed: Seed) {
         assert!(delegation_data.is_none());
     });
 }
-
-// FIXME check timelock

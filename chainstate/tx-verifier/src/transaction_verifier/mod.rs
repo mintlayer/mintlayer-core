@@ -216,7 +216,7 @@ where
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _, _)
+                | TxOutput::DelegateStaking(_, _)
                 | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
             })
             .sum::<Option<Amount>>()
@@ -243,7 +243,7 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::DelegateStaking(_, _)
             | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
@@ -333,7 +333,7 @@ where
             .filter_map(|input| match self.utxo_cache.utxo(input.outpoint()) {
                 Ok(utxo) => match utxo {
                     Some(utxo) => match utxo.output() {
-                        TxOutput::DelegateStaking(amount, _, delegation_id) => {
+                        TxOutput::DelegateStaking(amount, delegation_id) => {
                             check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self
                                 .accounting_delta_adapter
@@ -393,7 +393,7 @@ where
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
-                TxOutput::DelegateStaking(amount, _, delegation_id) => {
+                TxOutput::DelegateStaking(amount, delegation_id) => {
                     let res = self
                         .accounting_delta_adapter
                         .operations(tx_source)
@@ -402,7 +402,7 @@ where
                     Some(res)
                 }
                 TxOutput::SpendShareFromDelegation(_, _, _, _) => {
-                    // TODO: delegation_id mismatch
+                    // TODO: check for delegation_id mismatch
                     None
                 }
                 TxOutput::Transfer(_, _)
@@ -466,7 +466,7 @@ where
             TxOutput::CreateStakePool(_)
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _, _)
+            | TxOutput::DelegateStaking(_, _)
             | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
