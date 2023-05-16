@@ -276,16 +276,14 @@ impl<B: storage::Backend> Wallet<B> {
     /// Scan new blocks and update best block hash/height.
     /// New block may reset the chain of previously scanned blocks.
     ///
-    /// `block_height` is the first block height in `blocks`
+    /// `block_height` is the first block height in `blocks`, which is needed to handle reorgs.
     pub fn scan_new_blocks(
         &mut self,
         block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
         assert!(block_height > BlockHeight::zero());
-        if blocks.is_empty() {
-            return Ok(());
-        }
+        assert!(!blocks.is_empty());
 
         let mut db_tx = self.db.transaction_rw(None)?;
 
