@@ -505,7 +505,7 @@ mod tests {
         .unwrap()
     }
 
-    fn setup(
+    fn prepare_utxos_and_tx(
         rng: &mut impl Rng,
         input_utxos: Vec<TxOutput>,
         outputs: Vec<TxOutput>,
@@ -532,7 +532,7 @@ mod tests {
         )
     }
 
-    fn setup_with_random_combinations(
+    fn prepare_utxos_and_tx_with_random_combinations(
         rng: &mut impl Rng,
         origin_input_utxos: &[TxOutput],
         number_of_inputs: usize,
@@ -550,7 +550,7 @@ mod tests {
             None => get_random_outputs_combination(rng, origin_outputs, number_of_outputs),
         };
 
-        setup(rng, input_utxos, outputs)
+        prepare_utxos_and_tx(rng, input_utxos, outputs)
     }
 
     #[rstest]
@@ -681,7 +681,7 @@ mod tests {
                 Some(create_delegation())
             };
 
-            let (utxo_db, tx) = setup_with_random_combinations(
+            let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
                 &mut rng,
                 inputs_utxos,
                 1,
@@ -730,7 +730,7 @@ mod tests {
             None
         };
 
-        let (utxo_db, tx) = setup_with_random_combinations(
+        let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
             &mut rng,
             &inputs,
             1,
@@ -767,7 +767,7 @@ mod tests {
         ))
         .collect();
 
-        let (utxo_db, tx) = setup(&mut rng, inputs, outputs);
+        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
         let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
         assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
     }
@@ -802,7 +802,7 @@ mod tests {
         )
         .collect();
 
-        let (utxo_db, tx) = setup(&mut rng, inputs, outputs);
+        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
         let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
         assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
@@ -838,7 +838,7 @@ mod tests {
         )
         .collect();
 
-        let (utxo_db, tx) = setup(&mut rng, inputs, outputs);
+        let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, inputs, outputs);
 
         let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
         assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
@@ -851,7 +851,7 @@ mod tests {
         let check = |inputs_utxos: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
             let mut rng = make_seedable_rng(seed);
             let number_of_inputs = rng.gen_range(2..10);
-            let (utxo_db, tx) = setup_with_random_combinations(
+            let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
                 &mut rng,
                 inputs_utxos,
                 number_of_inputs,
@@ -895,7 +895,7 @@ mod tests {
             let number_of_inputs = rng.gen_range(2..10);
             let number_of_outputs = rng.gen_range(2..10);
 
-            let (utxo_db, tx) = setup_with_random_combinations(
+            let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
                 &mut rng,
                 source_inputs,
                 number_of_inputs,

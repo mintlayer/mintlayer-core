@@ -65,3 +65,19 @@ pub enum TxOutput {
     #[codec(index = 8)]
     SpendShareFromDelegation(Amount, Destination, DelegationId, OutputTimeLock),
 }
+
+impl TxOutput {
+    pub fn timelock(&self) -> Option<&OutputTimeLock> {
+        match self {
+            TxOutput::Transfer(_, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateStakePool(_)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::LockThenTransfer(_, _, tl)
+            | TxOutput::DecommissionPool(_, _, _, tl)
+            | TxOutput::SpendShareFromDelegation(_, _, _, tl) => Some(tl),
+        }
+    }
+}
