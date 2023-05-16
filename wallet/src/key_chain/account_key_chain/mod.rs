@@ -306,44 +306,4 @@ impl AccountKeyChain {
 // TODO: tests
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::key_chain::MasterKeyChain;
-    use common::chain::config::create_unit_test_config;
-    use crypto::key::secp256k1::Secp256k1PublicKey;
-    use rstest::rstest;
-    use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
-    use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
-
-    const MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-
-    #[rstest]
-    #[case("03bf6f8d52dade77f95e9c6c9488fd8492a99c09ff23095caffb2e6409d1746ade")]
-    #[case("035df5d551bac1d61a5473615a70eb17b2f4ccbf7e354166639428941e4dbbcd81")]
-    #[case("030d1d07a8e45110d14f4e2c8623e8db556c11a90c0aac6be9a88f2464e446ee95")]
-    fn check_mine_methods(#[case] public: &str) {
-        let chain_config = Arc::new(create_unit_test_config());
-        let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-        let mut db_tx = db.transaction_rw(None).unwrap();
-
-        let master_key_chain =
-            MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
-        let mut key_chain = master_key_chain
-            .create_account_key_chain(&mut db_tx, DEFAULT_ACCOUNT_INDEX)
-            .unwrap();
-        key_chain.top_up_all(&mut db_tx).unwrap();
-        db_tx.commit().unwrap();
-
-        // This public key should belong to the key chain
-        let pk: PublicKey =
-            Secp256k1PublicKey::from_bytes(&hex::decode(public).unwrap()).unwrap().into();
-        let pkh = PublicKeyHash::from(&pk);
-        let pk_destination = Destination::PublicKey(pk.clone());
-        let addr_destination = Destination::Address(pkh);
-
-        assert!(key_chain.is_public_key_mine(&pk));
-        assert!(key_chain.is_public_key_hash_mine(&pkh));
-        assert!(key_chain.is_destination_mine(&addr_destination));
-        assert!(key_chain.is_destination_mine(&pk_destination));
-    }
-}
+mod tests;
