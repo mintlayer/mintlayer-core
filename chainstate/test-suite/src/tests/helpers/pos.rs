@@ -104,9 +104,6 @@ pub fn calculate_new_target(
         &pos_status,
         tf.best_block_id(),
         &block_index_handle,
-        |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
-        },
     )
 }
 

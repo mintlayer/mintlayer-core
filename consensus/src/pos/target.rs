@@ -119,16 +119,12 @@ where
     calculate_target_required_internal(chain_config, pos_config, prev_block_index, get_ancestor)
 }
 
-pub fn calculate_target_required<F>(
+pub fn calculate_target_required(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
     prev_block_id: Id<GenBlock>,
     block_index_handle: &impl BlockIndexHandle,
-    get_ancestor: F,
-) -> Result<Compact, ConsensusPoSError>
-where
-    F: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
-{
+) -> Result<Compact, ConsensusPoSError> {
     let pos_config = match pos_status {
         PoSStatus::Threshold {
             initial_difficulty,
@@ -145,6 +141,10 @@ where
     let prev_block_index = block_index_handle
         .get_block_index(&prev_block_id)?
         .ok_or(ConsensusPoSError::PrevBlockIndexNotFound(prev_block_id))?;
+
+    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
+        block_index_handle.get_ancestor(block_index, ancestor_height)
+    };
 
     calculate_target_required_internal(chain_config, pos_config, &prev_block_index, get_ancestor)
 }
@@ -564,10 +564,6 @@ mod tests {
             &[1, 2, 6, 8, 10, 12, 14],
         );
 
-        let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-            block_index_handle.get_ancestor(block_index, ancestor_height)
-        };
-
         {
             // check with prev genesis
             let pos_status = get_pos_status(&chain_config, BlockHeight::new(1));
@@ -580,7 +576,6 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
-                get_ancestor,
             )
             .unwrap();
             assert_eq!(target, Compact::from(target_limit_1));
@@ -598,7 +593,6 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
-                get_ancestor,
             )
             .unwrap();
             assert_ne!(target, Compact::from(target_limit_1));
@@ -616,7 +610,6 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
-                get_ancestor,
             )
             .unwrap();
             assert_eq!(target, Compact::from(target_limit_2));
@@ -634,7 +627,6 @@ mod tests {
                 &pos_status,
                 *block_header.prev_block_id(),
                 &block_index_handle,
-                get_ancestor,
             )
             .unwrap();
             assert_ne!(target, Compact::from(target_limit_2));
