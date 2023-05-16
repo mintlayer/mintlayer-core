@@ -33,7 +33,7 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, Destination, SignedTransaction,
+        Block, ChainConfig, Destination, GenBlockId, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -171,7 +171,7 @@ impl BlockProduction {
                         block_timestamp,
                         block_height,
                         get_ancestor,
-                    );
+                    )?;
 
                     let finalize_block_data = match input_data {
                         Some(GenerateBlockInputData::PoS(pos_input_data)) => {
@@ -241,8 +241,7 @@ impl BlockProduction {
                         None => None,
                     };
 
-                    consensus_data
-                        .map(|cons_data| (cons_data, best_block_index, finalize_block_data))
+                    Ok((consensus_data, best_block_index, finalize_block_data))
                 }
             })
             .await?

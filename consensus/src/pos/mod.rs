@@ -21,7 +21,7 @@ pub mod target;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
-    BlockIndex, BlockIndexHandle,
+    BlockIndexHandle,
 };
 use common::{
     chain::{
@@ -130,16 +130,11 @@ where
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
-    let get_ancestor = |block_index: &BlockIndex, ancestor_height: BlockHeight| {
-        block_index_handle.get_ancestor(block_index, ancestor_height)
-    };
-
     let target = target::calculate_target_required(
         chain_config,
         pos_status,
         *header.prev_block_id(),
         block_index_handle,
-        get_ancestor,
     )?;
 
     utils::ensure!(
@@ -202,7 +197,6 @@ pub fn stake(
     stop_flag: Arc<AtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
-    let vrf_sk = finalize_pos_data.vrf_private_key();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
     let mut current_timestamp = finalize_pos_data.previous_block_timestamp();
@@ -220,7 +214,7 @@ pub fn stake(
                 current_timestamp,
             );
 
-            vrf_sk.produce_vrf_data(transcript.into())
+            finalize_pos_data.vrf_private_key().produce_vrf_data(transcript.into())
         };
 
         pos_data.update_vrf_data(vrf_data);

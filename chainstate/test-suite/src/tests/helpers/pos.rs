@@ -15,9 +15,7 @@
 
 use chainstate_storage::Transactional;
 use chainstate_test_framework::TestFramework;
-use chainstate_types::{
-    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, BlockIndexHandle,
-};
+use chainstate_types::{pos_randomness::PoSRandomness, vrf_tools::construct_transcript};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp},
