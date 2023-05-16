@@ -131,7 +131,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
-            ConnectTransactionError::SpendDestinationForDelegationMismatch(_, _, _) => 100,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
         }
     }
