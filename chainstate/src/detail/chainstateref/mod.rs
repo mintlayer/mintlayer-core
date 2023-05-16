@@ -605,41 +605,54 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block: &Block,
         block_height: BlockHeight,
     ) -> Result<(), CheckBlockTransactionsError> {
+        let check = |timelock: &OutputTimeLock,
+                     required: BlockDistance,
+                     tx_id: Id<Transaction>|
+         -> Result<(), CheckBlockTransactionsError> {
+            match timelock {
+                OutputTimeLock::ForBlockCount(c) => {
+                    let cs: i64 = (*c).try_into().map_err(|_| {
+                        CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(
+                            tx_id, *c,
+                        )
+                    })?;
+                    let given = BlockDistance::new(cs);
+                    ensure!(
+                        given >= required,
+                        CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(
+                            tx_id, given, required
+                        )
+                    );
+                    Ok(())
+                }
+                OutputTimeLock::UntilHeight(_)
+                | OutputTimeLock::UntilTime(_)
+                | OutputTimeLock::ForSeconds(_) => {
+                    Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType(tx_id))
+                }
+            }
+        };
         for tx in block.transactions() {
-            tx.outputs().iter().try_for_each(|output| {
-                match output {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateStakePool(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _) => { /* do nothing */ }
-                     TxOutput::SpendShareFromDelegation(_, _, _,_) => {
-                        //FIXME impl
-                    },
-                    TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
-                        OutputTimeLock::ForBlockCount(c) => {
-                            let cs: i64 = (*c).try_into().map_err(|_| {
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(tx.transaction().get_id(), *c)
-                            })?;
-                            let given = BlockDistance::new(cs);
-                            let required = self.chain_config
-                                .as_ref()
-                                .decommission_pool_maturity_distance(block_height);
-                            ensure!(
-                                given >= required,
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(tx.transaction().get_id(), given, required)
-                            );
-                        }
-                        OutputTimeLock::UntilHeight(_)
-                        | OutputTimeLock::UntilTime(_)
-                        | OutputTimeLock::ForSeconds(_) => {
-                            return Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType(tx.transaction().get_id()));
-                        }
-                    },
-                };
-                Ok(())
+            tx.outputs().iter().try_for_each(|output| match output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateStakePool(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _, _) => Ok(()),
+                TxOutput::SpendShareFromDelegation(_, _, _, timelock) => {
+                    let required =
+                        self.chain_config.as_ref().spend_share_maturity_distance(block_height);
+                    check(timelock, required, tx.transaction().get_id())
+                }
+                TxOutput::DecommissionPool(_, _, _, timelock) => {
+                    let required = self
+                        .chain_config
+                        .as_ref()
+                        .decommission_pool_maturity_distance(block_height);
+                    check(timelock, required, tx.transaction().get_id())
+                }
             })?;
         }
         Ok(())

@@ -380,7 +380,8 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn calculate_new_target_too_easy(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config = PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 1.into(), 2).unwrap();
+        let config =
+            PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 1.into(), 1.into(), 2).unwrap();
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
             calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
@@ -390,7 +391,7 @@ mod tests {
 
     #[test]
     fn calculate_new_target_with_overflow() {
-        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 1.into(), 2).unwrap();
+        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 1.into(), 1.into(), 2).unwrap();
         let prev_target = Uint256::MAX;
         let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
 
@@ -530,8 +531,10 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config_1 = PoSChainConfig::new(target_limit_1, 10, 1.into(), 1.into(), 2).unwrap();
-        let pos_config_2 = PoSChainConfig::new(target_limit_2, 20, 1.into(), 1.into(), 5).unwrap();
+        let pos_config_1 =
+            PoSChainConfig::new(target_limit_1, 10, 1.into(), 1.into(), 1.into(), 2).unwrap();
+        let pos_config_2 =
+            PoSChainConfig::new(target_limit_2, 20, 1.into(), 1.into(), 1.into(), 5).unwrap();
         let upgrades = vec![
             (
                 BlockHeight::new(0),
