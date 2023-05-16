@@ -44,4 +44,6 @@ pub enum ConsensusPoWError {
     PoSInputDataProvided,
     #[error("No input data was provided for PoW block generation")]
     NoInputDataProvided,
+    #[error("Genesis block cannot have an ongoing difficulty")]
+    GenesisCannotHaveOngoingDifficulty,
 }

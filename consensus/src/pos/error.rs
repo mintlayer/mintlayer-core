@@ -62,12 +62,18 @@ pub enum ConsensusPoSError {
     NotEnoughTimestampsToAverage,
     #[error("CRITICAL: Target block time must be > 0")]
     InvalidTargetBlockTime,
+    #[error("Overflowed when calculating the maximum block timestamp")]
+    TimestampOverflow,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
     #[error("No input data was provided for PoS block generation")]
     NoInputDataProvided,
     #[error("PoW input data was provided for PoS block generation")]
     PoWInputDataProvided,
+    #[error("Failed to read block {0}")]
+    FailedReadingBlock(Id<Block>),
+    #[error("Maximum block timestamp is before the previous block timestamp")]
+    FutureTimestampInThePast,
 
     // TODO the following error should include the corresponding error from UtxosView
     //      https://github.com/mintlayer/mintlayer-core/issues/811

@@ -296,6 +296,7 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
+            ConsensusPoWError::GenesisCannotHaveOngoingDifficulty => 100,
         }
     }
 }
@@ -328,6 +329,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::InvalidTarget(_) => 100,
             ConsensusPoSError::DecodingBitsFailed(_) => 100,
             ConsensusPoSError::NotEnoughTimestampsToAverage => 100,
+            ConsensusPoSError::TimestampOverflow => 100,
             ConsensusPoSError::TargetConversionError(_) => 100,
             ConsensusPoSError::InvalidTargetBlockTime => 100,
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
@@ -336,6 +338,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::NoInputDataProvided => 100,
             ConsensusPoSError::PoWInputDataProvided => 100,
             ConsensusPoSError::FailedToSignBlockHeader => 0,
+            ConsensusPoSError::FailedReadingBlock(_) => 0,
+            ConsensusPoSError::FutureTimestampInThePast => 0,
         }
     }
 }
