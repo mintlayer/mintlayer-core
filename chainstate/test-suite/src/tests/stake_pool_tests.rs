@@ -566,6 +566,9 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
     });
 }
 
+// TODO: it should be impossible to misuse PoolId in input/output. Note that the same issue exist for
+// CreateStakePool -> ProduceBlockFromStake pair
+//
 // in a tx StakePool -> DecommissionPool usage of different PoolIds should be an error
 #[ignore]
 #[rstest]

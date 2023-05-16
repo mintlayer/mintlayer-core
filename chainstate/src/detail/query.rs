@@ -232,7 +232,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _, _)
+                | TxOutput::DelegateStaking(_, _)
                 | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
             })
             // Find issuance data and return RPCTokenInfo

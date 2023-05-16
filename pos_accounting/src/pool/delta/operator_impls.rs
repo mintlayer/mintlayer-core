@@ -237,8 +237,6 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
 
         self.sub_from_delegation_balance(delegation_id, amount)?;
 
-        // FIXME: delete delegation id if balance is 0 and the pool has been already decommissioned
-
         Ok(PoSAccountingUndo::SpendFromShare(SpendFromShareUndo {
             delegation_id,
             amount,

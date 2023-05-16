@@ -461,7 +461,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::Burn(_)
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _, _)
+                | TxOutput::DelegateStaking(_, _)
                 | TxOutput::SpendShareFromDelegation(_, _, _, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
                 ),
@@ -575,7 +575,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::DecommissionPool(_, _, _, _)
                     | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _, _)
+                    | TxOutput::DelegateStaking(_, _)
                     | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
                 })
                 .try_for_each(|token_data| {
@@ -632,7 +632,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _, _) => Ok(()),
+                | TxOutput::DelegateStaking(_, _) => Ok(()),
                 TxOutput::SpendShareFromDelegation(_, _, _, timelock) => {
                     let required =
                         self.chain_config.as_ref().spend_share_maturity_distance(block_height);
