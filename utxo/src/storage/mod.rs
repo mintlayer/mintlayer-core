@@ -67,7 +67,7 @@ impl<S: UtxosStorageWrite> UtxosDB<S> {
             utxos_cache
                 .add_utxo(
                     &OutPoint::new(genesis_id.into(), index as u32),
-                    Utxo::new_for_blockchain(output.clone(), false, BlockHeight::new(0)),
+                    Utxo::new_for_blockchain(output.clone(), BlockHeight::new(0)),
                     false,
                 )
                 .expect("Adding genesis utxo failed");

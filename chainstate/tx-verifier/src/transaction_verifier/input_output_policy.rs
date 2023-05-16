@@ -409,7 +409,7 @@ mod tests {
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
                 outpoint.clone(),
-                Utxo::new_for_mempool(input_utxo, false),
+                Utxo::new_for_mempool(input_utxo),
             )]),
         );
 
@@ -429,7 +429,7 @@ mod tests {
                 Id::<GenBlock>::new(H256::zero()),
                 BTreeMap::from_iter([(
                     outpoint.clone(),
-                    Utxo::new_for_mempool(inputs_utxos.first().unwrap().clone(), false),
+                    Utxo::new_for_mempool(inputs_utxos.first().unwrap().clone()),
                 )]),
             );
 
@@ -476,7 +476,7 @@ mod tests {
             best_block_id,
             BTreeMap::from_iter([(
                 outpoint.clone(),
-                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+                Utxo::new_for_mempool(inputs.first().unwrap().clone()),
             )]),
         );
 
@@ -515,7 +515,7 @@ mod tests {
             best_block_id,
             BTreeMap::from_iter([(
                 outpoint.clone(),
-                Utxo::new_for_mempool(inputs.first().unwrap().clone(), false),
+                Utxo::new_for_mempool(inputs.first().unwrap().clone()),
             )]),
         );
 
@@ -554,7 +554,7 @@ mod tests {
                             OutPointSourceId::Transaction(Id::new(H256::zero())),
                             i as u32,
                         ),
-                        Utxo::new_for_mempool(output, false),
+                        Utxo::new_for_mempool(output),
                     )
                 })
                 .collect::<BTreeMap<_, _>>();
@@ -599,7 +599,7 @@ mod tests {
                             OutPointSourceId::Transaction(Id::new(H256::zero())),
                             i as u32,
                         ),
-                        Utxo::new_for_mempool(output, false),
+                        Utxo::new_for_mempool(output),
                     )
                 })
                 .collect::<BTreeMap<_, _>>();
@@ -689,7 +689,7 @@ mod tests {
             Id::<GenBlock>::new(H256::zero()),
             BTreeMap::from_iter([(
                 outpoint.clone(),
-                Utxo::new_for_mempool(input_utxo, false),
+                Utxo::new_for_mempool(input_utxo),
             )]),
         );
 
@@ -715,7 +715,7 @@ mod tests {
         let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
         let utxo_db = UtxosDBInMemoryImpl::new(
             best_block_id,
-            BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input, false))]),
+            BTreeMap::from_iter([(outpoint.clone(), Utxo::new_for_mempool(input))]),
         );
 
         let block = make_block(vec![outpoint.into()], vec![]);
@@ -793,7 +793,7 @@ mod tests {
                             OutPointSourceId::BlockReward(Id::new(H256::zero())),
                             i as u32,
                         ),
-                        Utxo::new_for_mempool(output, false),
+                        Utxo::new_for_mempool(output),
                     )
                 })
                 .collect::<BTreeMap<_, _>>();

@@ -39,7 +39,7 @@ fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (Out
         OutputValue::Coin(Amount::from_atoms(value)),
         Destination::PublicKey(pub_key1),
     );
-    let utxo = Utxo::new_for_blockchain(output1, false, BlockHeight::new(1));
+    let utxo = Utxo::new_for_blockchain(output1, BlockHeight::new(1));
     (outpoint, utxo)
 }
 

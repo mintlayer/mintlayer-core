@@ -46,42 +46,27 @@ impl UtxoSource {
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Utxo {
     output: TxOutput,
-    is_block_reward: bool,
     /// identifies whether the utxo is for the blockchain or for mempool.
     source: UtxoSource,
 }
 
 impl Utxo {
-    pub fn new(output: TxOutput, is_block_reward: bool, source: UtxoSource) -> Self {
-        Self {
-            output,
-            is_block_reward,
-            source,
-        }
+    pub fn new(output: TxOutput, source: UtxoSource) -> Self {
+        Self { output, source }
     }
 
-    pub fn new_for_blockchain(
-        output: TxOutput,
-        is_block_reward: bool,
-        height: BlockHeight,
-    ) -> Self {
+    pub fn new_for_blockchain(output: TxOutput, height: BlockHeight) -> Self {
         Self {
             output,
-            is_block_reward,
             source: UtxoSource::Blockchain(height),
         }
     }
 
-    pub fn new_for_mempool(output: TxOutput, is_block_reward: bool) -> Self {
+    pub fn new_for_mempool(output: TxOutput) -> Self {
         Self {
             output,
-            is_block_reward,
             source: UtxoSource::Mempool,
         }
-    }
-
-    pub fn is_block_reward(&self) -> bool {
-        self.is_block_reward
     }
 
     pub fn source(&self) -> &UtxoSource {

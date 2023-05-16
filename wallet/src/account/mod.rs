@@ -256,8 +256,7 @@ impl Account {
         utxo_source: utxo::UtxoSource,
     ) -> WalletResult<()> {
         if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
-            let is_block_reward = outpoint.tx_id().get_tx_id().is_none();
-            let utxo = Utxo::new(output.clone(), is_block_reward, utxo_source);
+            let utxo = Utxo::new(output.clone(), utxo_source);
             let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
             db_tx.set_utxo(&account_utxo_id, utxo)?;
         }
@@ -293,7 +292,7 @@ impl Account {
     /// Return true if this transaction output is can be spent by this account or if it is being
     /// watched.
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
-        // TODO: Should we also report `AnyoneCanSpend` as own?
+        // TODO: Should we really report `AnyoneCanSpend` as own?
         Self::get_tx_output_destination(txo).map_or(false, |d| match d {
             Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
             Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),

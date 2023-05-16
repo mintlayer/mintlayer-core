@@ -126,7 +126,7 @@ impl<P: UtxosView> UtxosCache<P> {
             } else {
                 true
             };
-            let utxo = Utxo::new(output.clone(), true, source.clone());
+            let utxo = Utxo::new(output.clone(), source.clone());
 
             self.add_utxo(&outpoint, utxo, overwrite)?;
         }
@@ -152,7 +152,7 @@ impl<P: UtxosView> UtxosCache<P> {
                 // by default no overwrite allowed.
                 let has_utxo = self.has_utxo(&outpoint).map_err(|_| Error::ViewRead)?;
                 let overwrite = check_for_overwrite && has_utxo;
-                let utxo = Utxo::new(output.clone(), false, source.clone());
+                let utxo = Utxo::new(output.clone(), source.clone());
 
                 self.add_utxo(&outpoint, utxo, overwrite)
             })
@@ -225,7 +225,7 @@ impl<P: UtxosView> UtxosCache<P> {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
-                let utxo = Utxo::new(output.clone(), true, UtxoSource::Blockchain(height));
+                let utxo = Utxo::new(output.clone(), UtxoSource::Blockchain(height));
                 self.add_utxo(&outpoint, utxo, false)?;
             }
         }

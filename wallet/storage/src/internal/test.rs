@@ -55,7 +55,7 @@ fn read_write_utxo_in_db_transaction(#[case] seed: Seed) {
         OutputValue::Coin(Amount::from_atoms(rng.gen_range(0..(u128::MAX - 1)))),
         Destination::PublicKey(pub_key),
     );
-    let utxo = Utxo::new_for_mempool(output, false);
+    let utxo = Utxo::new_for_mempool(output);
     let outpoint = OutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
         0,
