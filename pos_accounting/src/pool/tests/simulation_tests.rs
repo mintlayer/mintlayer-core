@@ -141,7 +141,7 @@ fn perform_random_operation(
 ) {
     // If it fires it means that number of actions in PoSAccountingOperations has changed
     // and the following match needs to be updated
-    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 6);
+    assert_eq!(PoSAccountingUndo::VARIANT_COUNT, 7);
 
     match rng.gen_range(0..11) {
         // create new pool
@@ -202,8 +202,20 @@ fn perform_random_operation(
                 undos.push(undo);
             }
         }
-        // undo
+        // delete delegation
         10 => {
+            if let Some((delegation_id, delegation_data)) = random_delegation {
+                if !op.pool_exists(*delegation_data.source_pool()).unwrap()
+                    && op.get_delegation_balance(delegation_id).unwrap().unwrap_or(Amount::ZERO)
+                        == Amount::ZERO
+                {
+                    let undo = op.delete_delegation_id(delegation_id).unwrap();
+                    undos.push(undo);
+                }
+            }
+        }
+        // undo
+        11 => {
             if let Some(undo) = undos.pop() {
                 op.undo(undo).unwrap();
             }

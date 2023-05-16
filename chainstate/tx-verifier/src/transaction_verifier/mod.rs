@@ -66,7 +66,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, DelegationId, Destination, GenBlock, OutPointSourceId, Transaction,
+        Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, Transaction,
         TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
@@ -325,6 +325,7 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
         let inputs_undos = tx
             .inputs()
@@ -333,6 +334,7 @@ where
                 Ok(utxo) => match utxo {
                     Some(utxo) => match utxo.output() {
                         TxOutput::DelegateStaking(amount, _, delegation_id) => {
+                            check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self
                                 .accounting_delta_adapter
                                 .operations(tx_source)
@@ -399,10 +401,8 @@ where
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
-                TxOutput::SpendShareFromDelegation(_, _, delegation_id, _) => {
-                    // do nothing
-                    //let existing
-                    //ensure!
+                TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+                    // TODO: delegation_id mismatch
                     None
                 }
                 TxOutput::Transfer(_, _)
@@ -412,10 +412,42 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        // FIXME: cleanup delegation_id
+        // delete delegation if the balance is 0 and the pool has been decommissioned
+        let delete_delegation_undo = match check_for_delegation_cleanup {
+            Some(delegation_id) => {
+                let accounting_view = self.accounting_delta_adapter.accounting_delta();
+                let delegation_balance =
+                    accounting_view.get_delegation_balance(delegation_id)?.ok_or(
+                        ConnectTransactionError::DelegationDataNotFound(delegation_id),
+                    )?;
+                if delegation_balance == Amount::ZERO {
+                    let delegation_data =
+                        accounting_view.get_delegation_data(delegation_id)?.ok_or(
+                            ConnectTransactionError::DelegationDataNotFound(delegation_id),
+                        )?;
+                    if !accounting_view.pool_exists(*delegation_data.source_pool())? {
+                        Some(
+                            self.accounting_delta_adapter
+                                .operations(tx_source)
+                                .delete_delegation_id(delegation_id)?,
+                        )
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
 
-        if !inputs_undos.is_empty() || !outputs_undos.is_empty() {
-            let tx_undos = inputs_undos.into_iter().chain(outputs_undos.into_iter()).collect();
+        if !inputs_undos.is_empty() || !outputs_undos.is_empty() || delete_delegation_undo.is_some()
+        {
+            let tx_undos = inputs_undos
+                .into_iter()
+                .chain(outputs_undos.into_iter())
+                .chain(delete_delegation_undo.into_iter())
+                .collect();
             self.accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
                 .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
