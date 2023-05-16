@@ -33,21 +33,14 @@ pub enum AccountInfo {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct DeterministicAccountInfo {
     account_index: U31,
-    root_hierarchy_key: Option<ExtendedPublicKey>,
     account_key: ExtendedPublicKey,
     lookahead_size: u32,
 }
 
 impl DeterministicAccountInfo {
-    pub fn new(
-        account_index: U31,
-        root_hierarchy_key: Option<ExtendedPublicKey>,
-        account_key: ExtendedPublicKey,
-        lookahead_size: u32,
-    ) -> Self {
+    pub fn new(account_index: U31, account_key: ExtendedPublicKey, lookahead_size: u32) -> Self {
         Self {
             account_index,
-            root_hierarchy_key,
             account_key,
             lookahead_size,
         }
@@ -55,10 +48,6 @@ impl DeterministicAccountInfo {
 
     pub fn account_index(&self) -> U31 {
         self.account_index
-    }
-
-    pub fn root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
-        &self.root_hierarchy_key
     }
 
     pub fn account_key(&self) -> &ExtendedPublicKey {

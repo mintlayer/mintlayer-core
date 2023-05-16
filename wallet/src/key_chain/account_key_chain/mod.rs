@@ -40,9 +40,6 @@ pub struct AccountKeyChain {
     /// The account public key from which all the addresses are derived
     account_public_key: ConstValue<ExtendedPublicKey>,
 
-    /// The master/root key that this account key was derived from
-    root_hierarchy_key: ConstValue<Option<ExtendedPublicKey>>,
-
     /// Key chains for receiving and change funds
     sub_chains: WithPurpose<LeafKeyChain>,
 
@@ -92,7 +89,6 @@ impl AccountKeyChain {
             account_index,
             account_private_key: Some(account_privkey.into()).into(),
             account_public_key: account_pubkey.into(),
-            root_hierarchy_key: Some(root_key.to_public_key()).into(),
             sub_chains,
             lookahead_size: lookahead_size.into(),
         };
@@ -132,7 +128,6 @@ impl AccountKeyChain {
             account_index: account_info.account_index(),
             account_private_key: Some(account_privkey.into()).into(),
             account_public_key: pubkey_id,
-            root_hierarchy_key: account_info.root_hierarchy_key().clone().into(),
             sub_chains,
             lookahead_size: account_info.lookahead_size().into(),
         })
@@ -245,7 +240,6 @@ impl AccountKeyChain {
     pub fn get_account_info(&self) -> AccountInfo {
         AccountInfo::Deterministic(DeterministicAccountInfo::new(
             self.account_index,
-            self.root_hierarchy_key.as_ref().clone(),
             self.account_public_key.as_ref().clone(),
             self.lookahead_size(),
         ))
