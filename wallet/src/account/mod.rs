@@ -249,7 +249,7 @@ impl Account {
     }
 
     fn add_utxo_if_own<B: Backend>(
-        &self,
+        &mut self,
         db_tx: &mut StoreTxRw<B>,
         output: &TxOutput,
         outpoint: OutPoint,
@@ -259,6 +259,7 @@ impl Account {
             let utxo = Utxo::new(output.clone(), utxo_source);
             let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
             db_tx.set_utxo(&account_utxo_id, utxo)?;
+            self.mark_output_as_used(db_tx, output)?;
         }
         Ok(())
     }
@@ -299,6 +300,27 @@ impl Account {
             Destination::AnyoneCanSpend => true,
             Destination::ScriptHash(_) | Destination::ClassicMultisig(_) => false,
         })
+    }
+
+    fn mark_output_as_used<B: Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        txo: &TxOutput,
+    ) -> WalletResult<()> {
+        if let Some(d) = Self::get_tx_output_destination(txo) {
+            match d {
+                Destination::Address(pkh) => {
+                    self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                }
+                Destination::PublicKey(pk) => {
+                    self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                }
+                Destination::AnyoneCanSpend
+                | Destination::ClassicMultisig(_)
+                | Destination::ScriptHash(_) => {}
+            }
+        }
+        Ok(())
     }
 
     pub fn get_balance<B: Backend>(

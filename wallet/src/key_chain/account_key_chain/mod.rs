@@ -303,7 +303,5 @@ impl AccountKeyChain {
     }
 }
 
-// TODO: tests
-
 #[cfg(test)]
 mod tests;

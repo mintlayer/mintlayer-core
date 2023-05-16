@@ -21,6 +21,8 @@ use rstest::rstest;
 use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
+// TODO: More tests
+
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
