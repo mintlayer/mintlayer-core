@@ -76,7 +76,9 @@ pub enum ConsensusCreationError {
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum GenerateBlockInputData {
+    #[codec(index = 0)]
     PoW,
+    #[codec(index = 1)]
     PoS(Box<PoSGenerateBlockInputData>),
 }
 
