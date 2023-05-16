@@ -406,8 +406,7 @@ where
                 self.request_headers().await?;
             } else {
                 // Download remaining blocks.
-                let mut headers = Vec::new();
-                mem::swap(&mut headers, &mut self.known_headers);
+                let headers = mem::take(&mut self.known_headers);
                 self.request_blocks(headers)?;
             }
         }
