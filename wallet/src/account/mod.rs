@@ -118,7 +118,8 @@ impl Account {
         )?;
         if change_amount > Amount::ZERO {
             let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
-            request.add_output(address_output(change_address, change_amount)?);
+            let change_output = address_output(change_address, change_amount)?;
+            request = request.with_output(change_output);
         }
 
         // TODO: Randomize inputs and outputs

@@ -259,8 +259,8 @@ impl<B: storage::Backend> Wallet<B> {
         address: Address,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
-        let mut request = SendRequest::new();
-        request.add_output(address_output(address, amount)?);
+        let output = address_output(address, amount)?;
+        let request = SendRequest::new().with_output(output);
         let tx = self.for_account_rw(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
         })?;

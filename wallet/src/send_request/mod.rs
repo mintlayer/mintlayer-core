@@ -74,8 +74,9 @@ impl SendRequest {
         }
     }
 
-    pub fn add_output(&mut self, output: TxOutput) {
+    pub fn with_output(mut self, output: TxOutput) -> Self {
         self.outputs.push(output);
+        self
     }
 
     pub fn inputs(&self) -> &[TxInput] {
