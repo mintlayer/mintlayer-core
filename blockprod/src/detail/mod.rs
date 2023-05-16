@@ -157,7 +157,7 @@ impl BlockProduction {
                         .transpose()
                         .map_err(|_| {
                             ConsensusPoSError::PropertyQueryError(
-                                PropertyQueryError::EpochDataNotFound,
+                                PropertyQueryError::EpochDataNotFound(block_height),
                             )
                         })?
                         .flatten()
@@ -180,7 +180,7 @@ impl BlockProduction {
 
                             let sealed_epoch_randomness = sealed_epoch_randomness.ok_or(
                                 ConsensusPoSError::PropertyQueryError(
-                                    PropertyQueryError::EpochDataNotFound,
+                                    PropertyQueryError::EpochDataNotFound(block_height),
                                 ),
                             )?;
 
