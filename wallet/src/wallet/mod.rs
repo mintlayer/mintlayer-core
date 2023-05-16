@@ -280,6 +280,7 @@ impl<B: storage::Backend> Wallet<B> {
         block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
+        assert!(block_height > BlockHeight::zero());
         if blocks.is_empty() {
             return Ok(());
         }
@@ -296,7 +297,7 @@ impl<B: storage::Backend> Wallet<B> {
         db_tx.commit()?;
 
         // Update best_block_height and best_block_id only after successful commit call!
-        self.best_block_height = (self.best_block_height.into_int() + blocks.len() as u64).into();
+        self.best_block_height = (block_height.into_int() + blocks.len() as u64 - 1).into();
         self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
 
         Ok(())
