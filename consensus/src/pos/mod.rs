@@ -239,7 +239,7 @@ pub fn stake(
             return Ok(StakeResult::Success);
         }
 
-        if stop_flag.load(Ordering::SeqCst) {
+        if stop_flag.load(Ordering::Relaxed) {
             return Ok(StakeResult::Stopped);
         }
 

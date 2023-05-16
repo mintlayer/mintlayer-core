@@ -389,7 +389,7 @@ impl BlockProduction {
 
             tokio::select! {
                 _ = cancel_receiver.recv() => {
-                    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
 
                     // This can fail if the mining thread has already finished
                     let _ended = ended_receiver.recv();
