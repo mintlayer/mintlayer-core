@@ -40,6 +40,8 @@ pub struct PoSChainConfig {
     reward_maturity_distance: BlockDistance,
     /// The distance required to pass to allow spending the decommission pool
     decommission_maturity_distance: BlockDistance,
+    /// The distance required to pass to allow spending delegation share
+    spend_share_maturity_distance: BlockDistance,
     /// Max number of blocks required to calculate average block time. Min is 2
     block_count_to_average_for_blocktime: usize,
 }
@@ -50,6 +52,7 @@ impl PoSChainConfig {
         target_block_time: u64,
         reward_maturity_distance: BlockDistance,
         decommission_maturity_distance: BlockDistance,
+        spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
     ) -> Option<Self> {
         let target_block_time = NonZeroU64::new(target_block_time)?;
@@ -62,6 +65,7 @@ impl PoSChainConfig {
             target_block_time,
             reward_maturity_distance,
             decommission_maturity_distance,
+            spend_share_maturity_distance,
             block_count_to_average_for_blocktime,
         })
     }
@@ -82,6 +86,10 @@ impl PoSChainConfig {
         self.decommission_maturity_distance
     }
 
+    pub fn spend_share_maturity_distance(&self) -> BlockDistance {
+        self.spend_share_maturity_distance
+    }
+
     pub fn block_count_to_average_for_blocktime(&self) -> usize {
         self.block_count_to_average_for_blocktime
     }
@@ -93,6 +101,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         target_block_time: NonZeroU64::new(2 * 60).expect("cannot not be 0"),
         reward_maturity_distance: 2000.into(),
         decommission_maturity_distance: 2000.into(),
+        spend_share_maturity_distance: 2000.into(),
         block_count_to_average_for_blocktime: 5,
     }
 }

@@ -1416,6 +1416,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     target_block_time,
                     2000.into(),
                     50.into(),
+                    50.into(),
                     5,
                 )
                 .unwrap(),
@@ -1430,6 +1431,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     target_block_time,
                     2000.into(),
                     100.into(), // decommission maturity increased
+                    50.into(),
                     5,
                 )
                 .unwrap(),
