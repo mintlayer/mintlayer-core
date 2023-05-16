@@ -205,14 +205,14 @@ pub fn stake(
     let vrf_sk = finalize_pos_data.vrf_private_key();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
-    let mut current_timestamp = block_header.timestamp();
+    let mut current_timestamp = finalize_pos_data.previous_block_timestamp();
 
-    let end_timestamp = match current_timestamp.add_int_seconds(60) {
-        Some(t) => t,
-        None => return Ok(StakeResult::Failed),
-    };
+    ensure!(
+        current_timestamp < finalize_pos_data.max_block_timestamp(),
+        ConsensusPoSError::FutureTimestampInThePast
+    );
 
-    while current_timestamp <= end_timestamp {
+    while current_timestamp <= finalize_pos_data.max_block_timestamp() {
         let vrf_data = {
             let transcript = construct_transcript(
                 finalize_pos_data.epoch_index(),

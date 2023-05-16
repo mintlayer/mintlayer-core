@@ -123,6 +123,8 @@ pub struct PoSFinalizeBlockInputData {
     vrf_private_key: VRFPrivateKey,
     epoch_index: EpochIndex,
     sealed_epoch_randomness: PoSRandomness,
+    previous_block_timestamp: BlockTimestamp,
+    max_block_timestamp: BlockTimestamp,
     pool_balance: Amount,
 }
 
@@ -132,6 +134,8 @@ impl PoSFinalizeBlockInputData {
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
+        previous_block_timestamp: BlockTimestamp,
+        max_block_timestamp: BlockTimestamp,
         pool_balance: Amount,
     ) -> Self {
         Self {
@@ -139,6 +143,8 @@ impl PoSFinalizeBlockInputData {
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
+            previous_block_timestamp,
+            max_block_timestamp,
             pool_balance,
         }
     }
@@ -147,8 +153,16 @@ impl PoSFinalizeBlockInputData {
         self.epoch_index
     }
 
+    pub fn max_block_timestamp(&self) -> BlockTimestamp {
+        self.max_block_timestamp
+    }
+
     pub fn pool_balance(&self) -> Amount {
         self.pool_balance
+    }
+
+    pub fn previous_block_timestamp(&self) -> BlockTimestamp {
+        self.previous_block_timestamp
     }
 
     pub fn sealed_epoch_randomness(&self) -> &PoSRandomness {

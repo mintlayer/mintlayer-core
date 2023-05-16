@@ -184,6 +184,34 @@ impl BlockProduction {
                                 ),
                             )?;
 
+                            let previous_block_timestamp = match best_block_index.prev_block_id() {
+                                None => chain_config.genesis_block().timestamp(),
+                                Some(prev_gen_block_id) => {
+                                    match prev_gen_block_id.classify(&chain_config) {
+                                        GenBlockId::Genesis(_) => {
+                                            chain_config.genesis_block().timestamp()
+                                        }
+                                        GenBlockId::Block(block_id) => this
+                                            .get_block(block_id)
+                                            .map_err(|_| {
+                                                ConsensusPoSError::FailedReadingBlock(block_id)
+                                            })?
+                                            .ok_or({
+                                                ConsensusPoSError::PropertyQueryError(
+                                                    PropertyQueryError::BlockNotFound(block_id),
+                                                )
+                                            })?
+                                            .timestamp(),
+                                    }
+                                }
+                            };
+
+                            let max_block_timestamp = previous_block_timestamp
+                                .add_int_seconds(
+                                    chain_config.max_future_block_time_offset().as_secs(),
+                                )
+                                .ok_or(ConsensusPoSError::TimestampOverflow)?;
+
                             let pool_balance = this
                                 .get_stake_pool_balance(pos_input_data.pool_id())
                                 .map_err(|_| {
@@ -204,6 +232,8 @@ impl BlockProduction {
                                 pos_input_data.vrf_private_key().clone(),
                                 sealed_epoch_index,
                                 *sealed_epoch_randomness.randomness(),
+                                previous_block_timestamp,
+                                max_block_timestamp,
                                 pool_balance,
                             )))
                         }
