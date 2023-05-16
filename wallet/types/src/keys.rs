@@ -34,7 +34,6 @@ pub enum KeyPurposeError {
 /// The usage purpose of a key i.e. if it is for receiving funds or for change
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 #[repr(u32)]
-#[allow(clippy::unnecessary_cast)]
 pub enum KeyPurpose {
     /// This is for addresses created for receiving funds that are given to the user
     ReceiveFunds = BIP32_RECEIVING_INDEX.get_index(),

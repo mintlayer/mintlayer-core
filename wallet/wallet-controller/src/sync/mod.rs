@@ -160,6 +160,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         let chain_config = Arc::clone(&self.chain_config);
         let mut rpc_client = self.rpc_client.clone();
 
+        // TODO: Download blocks in batches (100-1000 blocks at a time) to reduce overhead and shorten sync time
+
         let error_delay = self.config.error_delay;
         self.block_fetch_task = Some(tokio::spawn(async move {
             let sync_res = fetch_new_block(

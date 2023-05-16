@@ -275,6 +275,8 @@ impl<B: storage::Backend> Wallet<B> {
 
     /// Scan new blocks and update best block hash/height.
     /// New block may reset the chain of previously scanned blocks.
+    ///
+    /// `block_height` is the first block height in `blocks`
     pub fn scan_new_blocks(
         &mut self,
         block_height: BlockHeight,
