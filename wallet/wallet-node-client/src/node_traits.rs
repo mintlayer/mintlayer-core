@@ -15,7 +15,7 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -40,11 +40,11 @@ pub trait NodeInterface {
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn generate_block(
         &self,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> Result<String, Self::Error>;
-    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
-    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
+        reward_destination: Destination,
+        transactions_hex: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error>;
+    async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;

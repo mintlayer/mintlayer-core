@@ -18,6 +18,7 @@
 pub mod encoded;
 pub mod extras;
 pub mod hex;
+pub mod hex_encoded;
 
 // Re-export all the constituent parts
 pub use serialization_core::*;

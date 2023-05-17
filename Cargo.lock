@@ -5158,6 +5158,7 @@ name = "serialization"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "serde",
  "serialization-core",
  "serialization-tagged",
  "thiserror",

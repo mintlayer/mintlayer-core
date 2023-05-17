@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::SignedTransaction;
-use serialization::hex::HexDecode;
+use serialization::hex_encoded::HexEncoded;
 
 use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
 use rpc::Result as RpcResult;
@@ -55,7 +55,7 @@ trait P2pRpc {
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network.
     #[method(name = "submit_transaction")]
-    async fn submit_transaction(&self, tx_hex: String) -> RpcResult<()>;
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()>;
 }
 
 #[async_trait::async_trait]
@@ -95,9 +95,8 @@ impl P2pRpcServer for super::P2pHandle {
         handle_error(res)
     }
 
-    async fn submit_transaction(&self, tx_hex: String) -> RpcResult<()> {
-        let tx = SignedTransaction::hex_decode_all(&tx_hex).map_err(rpc::Error::to_call_error)?;
-        handle_error(self.call_async_mut(|s| s.submit_transaction(tx)).await)
+    async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()> {
+        handle_error(self.call_async_mut(|s| s.submit_transaction(tx.into_inner())).await)
     }
 }
 

@@ -18,10 +18,10 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::ChainConfig,
+    chain::{Block, ChainConfig, Destination, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
-use serialization::hex::HexEncode;
+use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
 use crate::errors::WalletCliError;
@@ -73,9 +73,9 @@ pub enum WalletCommand {
     /// reward destination. If transactions are None, the block will be
     /// generated with available transactions in the mempool
     GenerateBlock {
-        reward_destination: String,
+        reward_destination: HexEncoded<Destination>,
 
-        transactions: Option<Vec<String>>,
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     },
 
     /// Submit a block to be included in the chain
@@ -89,13 +89,13 @@ pub enum WalletCommand {
     /// Even more information about block submits.
     SubmitBlock {
         /// Hex encoded block
-        block: String,
+        block: HexEncoded<Block>,
     },
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     SubmitTransaction {
         /// Hex encoded transaction
-        transaction: String,
+        transaction: HexEncoded<SignedTransaction>,
     },
 
     /// Rescan
@@ -298,8 +298,10 @@ pub async fn handle_wallet_command(
             reward_destination,
             transactions,
         } => {
+            let transactions =
+                transactions.map(|txs| txs.into_iter().map(HexEncoded::into_inner).collect());
             let block = rpc_client
-                .generate_block(reward_destination, transactions)
+                .generate_block(reward_destination.into_inner(), transactions)
                 .await
                 .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -307,7 +309,10 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::SubmitBlock { block } => {
-            rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+            rpc_client
+                .submit_block(block.into_inner())
+                .await
+                .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
                 "The block was submitted successfully".to_owned(),
             ))
@@ -315,7 +320,7 @@ pub async fn handle_wallet_command(
 
         WalletCommand::SubmitTransaction { transaction } => {
             rpc_client
-                .submit_transaction(transaction)
+                .submit_transaction(transaction.into_inner())
                 .await
                 .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(

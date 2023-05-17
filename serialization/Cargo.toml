@@ -10,4 +10,5 @@ serialization-core = { path = 'core' }
 serialization-tagged = { path = 'tagged' }
 
 hex.workspace = true
+serde = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
