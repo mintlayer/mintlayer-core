@@ -77,16 +77,14 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
     ) -> rpc::Result<String> {
         let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
-
-        let signed_transactions = match transactions_hex {
-            Some(txs) => Some(
+        let signed_transactions = transactions_hex
+            .map(|txs| {
                 txs.into_iter()
                     .map(SignedTransaction::hex_decode_all)
                     .collect::<Result<Vec<_>, _>>()
-                    .map_err(rpc::Error::to_call_error)?,
-            ),
-            None => None,
-        };
+            })
+            .transpose()
+            .map_err(rpc::Error::to_call_error)?;
 
         let block = handle_error(
             self.call_async_mut(move |this| {

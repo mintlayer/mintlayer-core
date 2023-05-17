@@ -15,6 +15,7 @@
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
+use blockprod::BlockProductionHandle;
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, rpc::ChainstateRpcServer,
     ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
@@ -39,6 +40,7 @@ pub async fn start_subsystems(
     ShutdownTrigger,
     ChainstateHandle,
     MempoolHandle,
+    BlockProductionHandle,
     P2pHandle,
     SocketAddr,
 ) {
@@ -87,9 +89,20 @@ pub async fn start_subsystems(
         Default::default(),
         mempool::SystemUsageEstimator {},
     );
-    let mempool_handle = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
+    let mempool_handle = manager.add_subsystem_with_custom_eventloop("test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)
     });
+
+    let block_prod_handle = manager.add_subsystem(
+        "test-blockprod",
+        blockprod::make_blockproduction(
+            Arc::clone(&chain_config),
+            chainstate_handle.clone(),
+            mempool_handle.clone(),
+            Default::default(),
+        )
+        .unwrap(),
+    );
 
     let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
     let p2p = p2p::make_p2p(
@@ -101,7 +114,7 @@ pub async fn start_subsystems(
         peerdb_storage,
     )
     .unwrap();
-    let p2p_handle = manager.add_subsystem_with_custom_eventloop("p2p", {
+    let p2p_handle = manager.add_subsystem_with_custom_eventloop("test-p2p", {
         move |call, shutdown| p2p.run(call, shutdown)
     });
 
@@ -132,6 +145,7 @@ pub async fn start_subsystems(
         shutdown_trigger,
         chainstate_handle,
         mempool_handle,
+        block_prod_handle,
         p2p_handle,
         rpc_bind_address,
     )
@@ -208,24 +222,23 @@ async fn test_wallet_node_communication(
 async fn node_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, _mempool_handle, _p2p_handle, rpc_bind_address) =
+    let (_shutdown_trigger, chainstate, _mempool, _block_prod, _p2p, rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     let rpc_client = make_rpc_client(rpc_bind_address, None).await.unwrap();
 
-    test_wallet_node_communication(chain_config, chainstate_handle, rpc_client).await;
+    test_wallet_node_communication(chain_config, chainstate, rpc_client).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_handle_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, mempool_handle, p2p_handle, _rpc_bind_address) =
+    let (_shutdown_trigger, chainstate, mempool, block_prod, p2p, _rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    let handles_client = make_handles_client(chainstate_handle.clone(), mempool_handle, p2p_handle)
-        .await
-        .unwrap();
+    let handles_client =
+        make_handles_client(chainstate.clone(), mempool, block_prod, p2p).await.unwrap();
 
-    test_wallet_node_communication(chain_config, chainstate_handle, handles_client).await;
+    test_wallet_node_communication(chain_config, chainstate, handles_client).await;
 }

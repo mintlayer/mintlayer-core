@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use blockprod::BlockProductionHandle;
 use chainstate::ChainstateHandle;
 use handles_client::WalletHandlesClientError;
 use mempool::MempoolHandle;
@@ -33,9 +34,10 @@ pub async fn make_rpc_client(
 }
 
 pub async fn make_handles_client(
-    chainstate_handle: ChainstateHandle,
-    mempool_handle: MempoolHandle,
-    p2p_handle: P2pHandle,
+    chainstate: ChainstateHandle,
+    mempool: MempoolHandle,
+    block_prod: BlockProductionHandle,
+    p2p: P2pHandle,
 ) -> Result<handles_client::WalletHandlesClient, WalletHandlesClientError> {
-    handles_client::WalletHandlesClient::new(chainstate_handle, mempool_handle, p2p_handle).await
+    handles_client::WalletHandlesClient::new(chainstate, mempool, block_prod, p2p).await
 }
