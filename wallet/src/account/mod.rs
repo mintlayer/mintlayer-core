@@ -253,7 +253,7 @@ impl Account {
         outpoint: OutPoint,
         utxo_source: utxo::UtxoSource,
     ) -> WalletResult<()> {
-        if self.is_available_for_spending(output) && self.is_mine_or_watched(output) {
+        if self.is_mine_or_watched(output) {
             let utxo = Utxo::new(output.clone(), utxo_source);
             let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
             db_tx.set_utxo(&account_utxo_id, utxo)?;
@@ -270,11 +270,6 @@ impl Account {
         let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint.clone());
         db_tx.del_utxo(&account_utxo_id)?;
         Ok(())
-    }
-
-    fn is_available_for_spending(&self, _txo: &TxOutput) -> bool {
-        // TODO implement
-        true
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
