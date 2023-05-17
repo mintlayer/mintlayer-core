@@ -53,7 +53,7 @@ impl<T: Clone, I: Iterator<Item = T> + FusedIterator, F: Fn(&T) -> T> Iterator
                     None
                 } else {
                     let res =
-                        (self.padding_function)(&self.last_value.clone().expect("Never at zero"));
+                        (self.padding_function)(self.last_value.as_ref().expect("Never at zero"));
                     self.current_index += 1;
                     self.last_value = Some(res.clone());
                     Some(res)

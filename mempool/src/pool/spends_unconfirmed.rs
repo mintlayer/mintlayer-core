@@ -28,9 +28,9 @@ where
 
 impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
-        let outpoint_id = self.outpoint().tx_id().get_tx_id().cloned();
-        outpoint_id.is_some()
-            && mempool
-                .contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+        self.outpoint()
+            .tx_id()
+            .get_tx_id()
+            .map_or(false, |tx_id| mempool.contains_transaction(tx_id))
     }
 }

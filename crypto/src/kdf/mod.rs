@@ -160,7 +160,7 @@ pub fn hash_password<R: Rng + CryptoRng>(
 /// Verify a password in a client/server setup by comparing its hash to the stored value
 pub fn verify_password(
     password: &[u8],
-    previously_password_hash: KdfResult,
+    previously_password_hash: &KdfResult,
     equality_checker: SliceEqualityCheckMethod,
 ) -> Result<bool, KdfError> {
     match previously_password_hash {
@@ -170,12 +170,12 @@ pub fn verify_password(
             hashed_password,
         } => {
             let new_hashed_password = argon2::argon2id_hash(
-                &config,
-                &salt,
+                config,
+                salt,
                 hashed_password.len().try_into().map_err(|_| KdfError::InvalidHashSize)?,
                 password,
             )?;
-            Ok(equality_checker.are_equal(&new_hashed_password, &hashed_password))
+            Ok(equality_checker.are_equal(&new_hashed_password, hashed_password))
         }
     }
 }
@@ -216,15 +216,12 @@ pub mod test {
 
         let mut rng = make_seedable_rng(seed);
         let password_hash = hash_password(&mut rng, kdf_kind, password).unwrap();
+        assert!(
+            verify_password(password, &password_hash, SliceEqualityCheckMethod::Normal).unwrap()
+        );
         assert!(verify_password(
             password,
-            password_hash.clone(),
-            SliceEqualityCheckMethod::Normal
-        )
-        .unwrap());
-        assert!(verify_password(
-            password,
-            password_hash.clone(),
+            &password_hash,
             SliceEqualityCheckMethod::TimingResistant
         )
         .unwrap());
@@ -232,13 +229,13 @@ pub mod test {
         let wrong_password = b"RandomWrong____password?";
         assert!(!verify_password(
             wrong_password,
-            password_hash.clone(),
+            &password_hash,
             SliceEqualityCheckMethod::Normal
         )
         .unwrap());
         assert!(!verify_password(
             wrong_password,
-            password_hash,
+            &password_hash,
             SliceEqualityCheckMethod::TimingResistant
         )
         .unwrap());
@@ -261,15 +258,12 @@ pub mod test {
 
         let mut rng = make_seedable_rng(seed);
         let password_hash = hash_password(&mut rng, kdf_kind, password).unwrap();
+        assert!(
+            verify_password(password, &password_hash, SliceEqualityCheckMethod::Normal).unwrap()
+        );
         assert!(verify_password(
             password,
-            password_hash.clone(),
-            SliceEqualityCheckMethod::Normal
-        )
-        .unwrap());
-        assert!(verify_password(
-            password,
-            password_hash.clone(),
+            &password_hash,
             SliceEqualityCheckMethod::TimingResistant
         )
         .unwrap());
