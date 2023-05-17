@@ -91,7 +91,7 @@ impl Account {
 
             // TODO: Call coin selector
 
-            request.fill_inputs(utxos)?;
+            request = request.with_inputs(utxos);
         }
 
         let (input_coin_amount, input_tokens_amounts) =
@@ -123,7 +123,7 @@ impl Account {
 
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(&request)?;
+        let tx = self.sign_transaction(request)?;
 
         Ok(tx)
     }
@@ -180,10 +180,9 @@ impl Account {
         Ok((coin_amount, tokens_amounts))
     }
 
-    fn sign_transaction(&self, req: &SendRequest) -> WalletResult<SignedTransaction> {
-        let tx = req.get_transaction()?;
+    fn sign_transaction(&self, req: SendRequest) -> WalletResult<SignedTransaction> {
+        let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
-        let utxos = req.utxos();
         let input_utxos = utxos.iter().collect::<Vec<_>>();
         if utxos.len() != inputs.len() {
             return Err(
@@ -223,7 +222,7 @@ impl Account {
             })
             .collect::<Result<Vec<InputWitness>, _>>()?;
 
-        let tx = req.get_signed_transaction(witnesses)?;
+        let tx = SignedTransaction::new(tx, witnesses)?;
 
         Ok(tx)
     }

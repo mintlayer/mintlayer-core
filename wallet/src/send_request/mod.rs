@@ -17,19 +17,17 @@ use std::collections::BTreeMap;
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
-use common::chain::signature::inputsig::InputWitness;
 use common::chain::tokens::OutputValue;
 use common::chain::{
-    Destination, OutPoint, SignedTransaction, Transaction, TransactionCreationError, TxInput,
-    TxOutput,
+    Destination, OutPoint, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::Amount;
 use utxo::Utxo;
 
 use crate::{WalletError, WalletResult};
 
-/// The `SendRequest` struct provides the necessary information to the wallet on the precise method
-/// of sending funds to a designated destination. In order to facilitate the creation of
+/// The `SendRequest` struct provides the necessary information to the wallet
+/// on the precise method of sending funds to a designated destination.
 #[derive(Debug, Clone)]
 pub struct SendRequest {
     flags: u32,
@@ -91,30 +89,18 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn fill_inputs(
-        &mut self,
-        utxos: BTreeMap<OutPoint, Utxo>,
-    ) -> Result<(), TransactionCreationError> {
+    pub fn with_inputs(mut self, utxos: BTreeMap<OutPoint, Utxo>) -> Self {
         for (outpoint, utxo) in utxos.into_iter() {
             self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
             self.utxos.push(utxo.take_output());
         }
-        Ok(())
+        self
     }
 
-    pub fn get_transaction(&self) -> Result<Transaction, TransactionCreationError> {
-        Transaction::new(
-            self.flags,
-            self.inputs.clone(),
-            self.outputs.clone(),
-            self.lock_time,
-        )
-    }
-
-    pub fn get_signed_transaction(
-        &self,
-        witnesses: Vec<InputWitness>,
-    ) -> Result<SignedTransaction, TransactionCreationError> {
-        SignedTransaction::new(self.get_transaction()?, witnesses)
+    pub fn into_transaction_and_utxos(
+        self,
+    ) -> Result<(Transaction, Vec<TxOutput>), TransactionCreationError> {
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time)?;
+        Ok((tx, self.utxos))
     }
 }
