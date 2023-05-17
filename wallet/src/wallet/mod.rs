@@ -276,20 +276,17 @@ impl<B: storage::Backend> Wallet<B> {
     /// Scan new blocks and update best block hash/height.
     /// New block may reset the chain of previously scanned blocks.
     ///
-    /// `block_height` is the height of the first block in `blocks` (required for reorgs).
+    /// `common_block_height` is the height of the shared blocks that are still in sync after reorgs.
+    /// If `common_block_height` is zero, only the genesis block is considered common.
     pub fn scan_new_blocks(
         &mut self,
-        block_height: BlockHeight,
+        common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
         assert!(
-            block_height > BlockHeight::zero(),
-            "New block height cannot be zero"
-        );
-        assert!(
-            block_height <= self.best_block_height.next_height(),
-            "Invalid new block height: {}, current block height: {}",
-            block_height,
+            common_block_height <= self.best_block_height,
+            "Invalid common block height: {}, current block height: {}",
+            common_block_height,
             self.best_block_height,
         );
         assert!(!blocks.is_empty());
@@ -297,16 +294,16 @@ impl<B: storage::Backend> Wallet<B> {
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            if self.best_block_height >= block_height {
-                account.reset_to_height(&mut db_tx, block_height)?;
+            if self.best_block_height > common_block_height {
+                account.reset_to_height(&mut db_tx, common_block_height)?;
             }
-            account.scan_new_blocks(&mut db_tx, block_height, &blocks)?;
+            account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
         }
 
         db_tx.commit()?;
 
         // Update best_block_height and best_block_id only after successful commit call!
-        self.best_block_height = (block_height.into_int() + blocks.len() as u64 - 1).into();
+        self.best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
         self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
 
         Ok(())

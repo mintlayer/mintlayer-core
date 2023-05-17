@@ -334,13 +334,13 @@ impl Account {
     pub fn reset_to_height<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        block_height: BlockHeight,
+        common_block_height: BlockHeight,
     ) -> WalletResult<()> {
         let revoked_utxos: Vec<AccountOutPointId> = db_tx
             .get_utxo_set(&self.get_account_id())?
             .into_iter()
             .filter_map(|(utxo_id, utxo)| match utxo.source() {
-                UtxoSource::Blockchain(utxo_height) if *utxo_height >= block_height => {
+                UtxoSource::Blockchain(utxo_height) if *utxo_height > common_block_height => {
                     Some(utxo_id)
                 }
                 UtxoSource::Mempool | UtxoSource::Blockchain(_) => None,
@@ -370,10 +370,11 @@ impl Account {
     pub fn scan_new_blocks<B: Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        mut block_height: BlockHeight,
+        common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
-        for block in blocks {
+        for (index, block) in blocks.into_iter().enumerate() {
+            let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let utxo_source = UtxoSource::Blockchain(block_height);
             let block_id = block.header().block_id().into();
 
@@ -394,8 +395,6 @@ impl Account {
                     self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
                 }
             }
-
-            block_height = block_height.next_height();
         }
 
         Ok(())

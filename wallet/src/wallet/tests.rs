@@ -199,7 +199,7 @@ fn wallet_balance_block_reward() {
     .unwrap();
     let block1_id = block1.header().block_id();
 
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
     // Verify that the first block reward has been received
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
@@ -225,7 +225,7 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_id = block2.header().block_id();
-    wallet.scan_new_blocks(BlockHeight::new(2), vec![block2]).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
 
     // Verify that the second block reward is also received
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
@@ -256,7 +256,7 @@ fn wallet_balance_block_reward() {
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
-    wallet.scan_new_blocks(BlockHeight::new(2), vec![block2_new]).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2_new]).unwrap();
 
     // Verify that the balance includes outputs from block1 and block2_new, but not block2
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
@@ -305,7 +305,7 @@ fn wallet_balance_block_transactions() {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
     verify_wallet_balance(&chain_config, &wallet, &db, tx_amount1);
 }
@@ -367,7 +367,7 @@ fn wallet_balance_parent_child_transactions() {
     )
     .unwrap();
 
-    wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
     verify_wallet_balance(&chain_config, &wallet, &db, tx_amount2);
 }
