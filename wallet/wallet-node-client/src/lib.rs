@@ -16,6 +16,7 @@
 use chainstate::ChainstateHandle;
 use handles_client::WalletHandlesClientError;
 use mempool::MempoolHandle;
+use p2p::P2pHandle;
 use std::net::SocketAddr;
 
 use rpc_client::NodeRpcError;
@@ -34,6 +35,7 @@ pub async fn make_rpc_client(
 pub async fn make_handles_client(
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
+    p2p_handle: P2pHandle,
 ) -> Result<handles_client::WalletHandlesClient, WalletHandlesClientError> {
-    handles_client::WalletHandlesClient::new(chainstate_handle, mempool_handle).await
+    handles_client::WalletHandlesClient::new(chainstate_handle, mempool_handle, p2p_handle).await
 }

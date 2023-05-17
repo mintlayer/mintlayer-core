@@ -70,7 +70,7 @@ fn verify_wallet_balance(
     assert_eq!(coin_balance, expected_balance);
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
-    let wallet = Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)).unwrap();
+    let wallet = Wallet::load_wallet(Arc::clone(chain_config), Arc::clone(db)).unwrap();
     let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
     // Check that the loaded wallet has the same balance
     assert_eq!(coin_balance, expected_balance);

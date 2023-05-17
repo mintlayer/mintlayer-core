@@ -15,11 +15,11 @@
 
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 use mempool::MempoolHandle;
-use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
+use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
 use serialization::hex::{HexDecode, HexError};
 
 use crate::node_traits::NodeInterface;
@@ -28,14 +28,17 @@ use crate::node_traits::NodeInterface;
 pub struct WalletHandlesClient {
     chainstate_handle: ChainstateHandle,
     _mempool_handle: MempoolHandle,
+    p2p_handle: P2pHandle,
 }
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq)]
+#[derive(thiserror::Error, Debug, PartialEq)]
 pub enum WalletHandlesClientError {
     #[error("Call error: {0}")]
     CallError(#[from] subsystem::subsystem::CallError),
     #[error("Chainstate error: {0}")]
     ChainstateError(#[from] ChainstateError),
+    #[error("P2p error: {0}")]
+    P2pError(#[from] P2pError),
     #[error("Decode error: {0}")]
     HexError(#[from] HexError),
 }
@@ -44,10 +47,12 @@ impl WalletHandlesClient {
     pub async fn new(
         chainstate_handle: ChainstateHandle,
         mempool_handle: MempoolHandle,
+        p2p_handle: P2pHandle,
     ) -> Result<Self, WalletHandlesClientError> {
         let result = Self {
             chainstate_handle,
             _mempool_handle: mempool_handle,
+            p2p_handle,
         };
         result.basic_start_test().await?;
         Ok(result)
@@ -126,8 +131,12 @@ impl NodeInterface for WalletHandlesClient {
         Ok(())
     }
 
-    async fn submit_transaction(&self, _transaction_hex: String) -> Result<(), Self::Error> {
-        unimplemented!()
+    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error> {
+        let tx = SignedTransaction::hex_decode_all(&transaction_hex)?;
+        self.p2p_handle
+            .call_async_mut(move |this| this.submit_transaction(tx))
+            .await??;
+        Ok(())
     }
 
     async fn node_shutdown(&self) -> Result<(), Self::Error> {
@@ -137,22 +146,33 @@ impl NodeInterface for WalletHandlesClient {
         unimplemented!()
     }
 
-    async fn p2p_connect(&self, _address: String) -> Result<(), Self::Error> {
-        unimplemented!()
+    async fn p2p_connect(&self, address: String) -> Result<(), Self::Error> {
+        self.p2p_handle.call_async_mut(move |this| this.connect(address)).await??;
+        Ok(())
     }
-    async fn p2p_disconnect(&self, _peer_id: PeerId) -> Result<(), Self::Error> {
-        unimplemented!()
+    async fn p2p_disconnect(&self, peer_id: PeerId) -> Result<(), Self::Error> {
+        self.p2p_handle.call_async_mut(move |this| this.disconnect(peer_id)).await??;
+        Ok(())
     }
     async fn p2p_get_peer_count(&self) -> Result<usize, Self::Error> {
-        unimplemented!()
+        let count = self.p2p_handle.call_async_mut(move |this| this.get_peer_count()).await??;
+        Ok(count)
     }
     async fn p2p_get_connected_peers(&self) -> Result<Vec<ConnectedPeer>, Self::Error> {
-        unimplemented!()
+        let peers =
+            self.p2p_handle.call_async_mut(move |this| this.get_connected_peers()).await??;
+        Ok(peers)
     }
-    async fn p2p_add_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
-        unimplemented!()
+    async fn p2p_add_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+        self.p2p_handle
+            .call_async_mut(move |this| this.add_reserved_node(address))
+            .await??;
+        Ok(())
     }
-    async fn p2p_remove_reserved_node(&self, _address: String) -> Result<(), Self::Error> {
-        unimplemented!()
+    async fn p2p_remove_reserved_node(&self, address: String) -> Result<(), Self::Error> {
+        self.p2p_handle
+            .call_async_mut(move |this| this.remove_reserved_node(address))
+            .await??;
+        Ok(())
     }
 }

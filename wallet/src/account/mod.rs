@@ -373,7 +373,7 @@ impl Account {
         common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
-        for (index, block) in blocks.into_iter().enumerate() {
+        for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let utxo_source = UtxoSource::Blockchain(block_height);
             let block_id = block.header().block_id().into();
