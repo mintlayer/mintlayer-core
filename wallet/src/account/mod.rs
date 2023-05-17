@@ -196,8 +196,7 @@ impl Account {
             .iter()
             .enumerate()
             .map(|(i, utxo)| {
-                // Get the destination from this utxo. This should not fail as we checked that
-                // inputs and utxos have the same length
+                // Get the destination from this utxo
                 let destination = Self::get_tx_output_destination(utxo).ok_or_else(|| {
                     WalletError::UnsupportedTransactionOutput(Box::new(utxo.clone()))
                 })?;

@@ -287,14 +287,14 @@ impl Sqlite {
 
         if disable_fsync {
             connection.pragma_update(None, "synchronous", "OFF")?;
+        } else {
+            // Enable fullfsync (only affects macOS)
+            connection.pragma_update(None, "fullfsync", "true")?;
         }
 
         // Begin a transaction to acquire the exclusive lock
         connection.execute("BEGIN EXCLUSIVE TRANSACTION", ())?;
         connection.execute("COMMIT", ())?;
-
-        // Enable fullfsync
-        connection.pragma_update(None, "fullfsync", "true")?;
 
         // Create a table check sql statement
         let mut exists_stmt = connection

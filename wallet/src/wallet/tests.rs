@@ -13,18 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::{make_account_path, LOOKAHEAD_SIZE};
+use crate::{
+    key_chain::{make_account_path, LOOKAHEAD_SIZE},
+    DefaultWallet,
+};
 
 use super::*;
 use common::{
-    address::pubkeyhash::PublicKeyHash,
     chain::{
-        block::{timestamp::BlockTimestamp, BlockReward},
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, Builder, ChainType},
+        signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        Destination, Genesis,
+        Destination, Genesis, OutPointSourceId, TxInput,
     },
+    primitives::Idable,
 };
 use crypto::key::hdkd::{
     child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath,
@@ -55,6 +59,24 @@ fn get_address(
     .unwrap()
 }
 
+#[track_caller]
+fn verify_wallet_balance(
+    chain_config: &Arc<ChainConfig>,
+    wallet: &DefaultWallet,
+    db: &Arc<Store<DefaultBackend>>,
+    expected_balance: Amount,
+) {
+    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
+    assert_eq!(coin_balance, expected_balance);
+
+    // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
+    let wallet = Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)).unwrap();
+    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
+    // Check that the loaded wallet has the same balance
+    assert_eq!(coin_balance, expected_balance);
+}
+
+#[track_caller]
 fn test_balance_from_genesis(
     chain_type: ChainType,
     utxos: Vec<TxOutput>,
@@ -73,13 +95,7 @@ fn test_balance_from_genesis(
         Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
-    assert_eq!(coin_balance, expected_balance);
-    drop(wallet);
-
-    let wallet = Wallet::load_wallet(chain_config, db).unwrap();
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
-    assert_eq!(coin_balance, expected_balance);
+    verify_wallet_balance(&chain_config, &wallet, &db, expected_balance);
 }
 
 #[test]
@@ -138,10 +154,7 @@ fn wallet_balance_genesis() {
             );
 
             let genesis_amount = Amount::from_atoms(23456);
-            let genesis_output = TxOutput::Transfer(
-                OutputValue::Coin(genesis_amount),
-                Destination::Address(PublicKeyHash::try_from(&address).unwrap()),
-            );
+            let genesis_output = address_output(address, genesis_amount).unwrap();
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
                 test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
@@ -157,7 +170,6 @@ fn wallet_balance_block_reward() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-
     let mut wallet =
         Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
@@ -181,22 +193,19 @@ fn wallet_balance_block_reward() {
         vec![],
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
-        common::chain::block::ConsensusData::None,
-        BlockReward::new(vec![TxOutput::Transfer(
-            OutputValue::Coin(block1_amount),
-            Destination::Address(PublicKeyHash::try_from(&address).unwrap()),
-        )]),
+        ConsensusData::None,
+        BlockReward::new(vec![address_output(address, block1_amount).unwrap()]),
     )
     .unwrap();
     let block1_id = block1.header().block_id();
+
     wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
 
     // Verify that the first block reward has been received
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
-    assert_eq!(coin_balance, block1_amount);
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block1_id);
     assert_eq!(best_block_height, BlockHeight::new(1));
+    verify_wallet_balance(&chain_config, &wallet, &db, block1_amount);
 
     // Create the second block that sends the reward to the wallet
     let block2_amount = Amount::from_atoms(20000);
@@ -211,22 +220,23 @@ fn wallet_balance_block_reward() {
         vec![],
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
-        common::chain::block::ConsensusData::None,
-        BlockReward::new(vec![TxOutput::Transfer(
-            OutputValue::Coin(block2_amount),
-            Destination::Address(PublicKeyHash::try_from(&address).unwrap()),
-        )]),
+        ConsensusData::None,
+        BlockReward::new(vec![address_output(address, block2_amount).unwrap()]),
     )
     .unwrap();
     let block2_id = block2.header().block_id();
     wallet.scan_new_blocks(BlockHeight::new(2), vec![block2]).unwrap();
 
     // Verify that the second block reward is also received
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
-    assert_eq!(coin_balance, (block1_amount + block2_amount).unwrap());
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block2_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
+    verify_wallet_balance(
+        &chain_config,
+        &wallet,
+        &db,
+        (block1_amount + block2_amount).unwrap(),
+    );
 
     // Create a new block to replace the second block
     let block2_amount_new = Amount::from_atoms(30000);
@@ -241,20 +251,123 @@ fn wallet_balance_block_reward() {
         vec![],
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
-        common::chain::block::ConsensusData::None,
-        BlockReward::new(vec![TxOutput::Transfer(
-            OutputValue::Coin(block2_amount_new),
-            Destination::Address(PublicKeyHash::try_from(&address).unwrap()),
-        )]),
+        ConsensusData::None,
+        BlockReward::new(vec![address_output(address, block2_amount_new).unwrap()]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
     wallet.scan_new_blocks(BlockHeight::new(2), vec![block2_new]).unwrap();
 
     // Verify that the balance includes outputs from block1 and block2_new, but not block2
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
-    assert_eq!(coin_balance, (block1_amount + block2_amount_new).unwrap());
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block2_new_id);
     assert_eq!(best_block_height, BlockHeight::new(2));
+    verify_wallet_balance(
+        &chain_config,
+        &wallet,
+        &db,
+        (block1_amount + block2_amount_new).unwrap(),
+    );
+}
+
+#[test]
+fn wallet_balance_block_transactions() {
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet =
+        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let tx_amount1 = Amount::from_atoms(10000);
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+
+    let transaction1 = Transaction::new(
+        0,
+        Vec::new(),
+        vec![address_output(address, tx_amount1).unwrap()],
+        0,
+    )
+    .unwrap();
+    let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
+    let block1 = Block::new(
+        vec![signed_transaction1],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
+
+    verify_wallet_balance(&chain_config, &wallet, &db, tx_amount1);
+}
+
+#[test]
+// Verify that outputs can be created and consumed in the same block
+fn wallet_balance_parent_child_transactions() {
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet =
+        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let tx_amount1 = Amount::from_atoms(20000);
+    let tx_amount2 = Amount::from_atoms(10000);
+
+    let address1 = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let address2 = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        1.try_into().unwrap(),
+    );
+
+    let transaction1 = Transaction::new(
+        0,
+        Vec::new(),
+        vec![address_output(address1, tx_amount1).unwrap()],
+        0,
+    )
+    .unwrap();
+    let transaction_id1 = transaction1.get_id();
+    let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
+
+    let transaction2 = Transaction::new(
+        0,
+        vec![TxInput::new(OutPointSourceId::Transaction(transaction_id1), 0)],
+        vec![address_output(address2, tx_amount2).unwrap()],
+        0,
+    )
+    .unwrap();
+    let signed_transaction2 =
+        SignedTransaction::new(transaction2, vec![InputWitness::NoSignature(None)]).unwrap();
+
+    let block1 = Block::new(
+        vec![signed_transaction1, signed_transaction2],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(Vec::new()),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block1]).unwrap();
+
+    verify_wallet_balance(&chain_config, &wallet, &db, tx_amount2);
 }
