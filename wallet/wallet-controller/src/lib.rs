@@ -34,7 +34,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use serialization::hex::HexEncode;
-use wallet::DefaultWallet;
+use wallet::{send_request::make_address_output, DefaultWallet};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 #[derive(thiserror::Error, Debug)]
@@ -141,9 +141,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         address: Address,
         amount: Amount,
     ) -> Result<(), ControllerError<T>> {
+        let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
-            .send_to_address(DEFAULT_ACCOUNT_INDEX, address, amount)
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![output])
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx.hex_encode())

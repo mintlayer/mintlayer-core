@@ -15,6 +15,7 @@
 
 use crate::{
     key_chain::{make_account_path, LOOKAHEAD_SIZE},
+    send_request::make_address_output,
     DefaultWallet,
 };
 
@@ -154,7 +155,7 @@ fn wallet_balance_genesis() {
             );
 
             let genesis_amount = Amount::from_atoms(23456);
-            let genesis_output = address_output(address, genesis_amount).unwrap();
+            let genesis_output = make_address_output(address, genesis_amount).unwrap();
 
             if address_index.into_u32() == LOOKAHEAD_SIZE {
                 test_balance_from_genesis(chain_type, vec![genesis_output], Amount::ZERO);
@@ -194,7 +195,7 @@ fn wallet_balance_block_reward() {
         chain_config.genesis_block_id(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![address_output(address, block1_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
     )
     .unwrap();
     let block1_id = block1.header().block_id();
@@ -221,7 +222,7 @@ fn wallet_balance_block_reward() {
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![address_output(address, block2_amount).unwrap()]),
+        BlockReward::new(vec![make_address_output(address, block2_amount).unwrap()]),
     )
     .unwrap();
     let block2_id = block2.header().block_id();
@@ -252,7 +253,9 @@ fn wallet_balance_block_reward() {
         block1_id.into(),
         chain_config.genesis_block().timestamp(),
         ConsensusData::None,
-        BlockReward::new(vec![address_output(address, block2_amount_new).unwrap()]),
+        BlockReward::new(vec![
+            make_address_output(address, block2_amount_new).unwrap()
+        ]),
     )
     .unwrap();
     let block2_new_id = block2_new.header().block_id();
@@ -291,7 +294,7 @@ fn wallet_balance_block_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![address_output(address, tx_amount1).unwrap()],
+        vec![make_address_output(address, tx_amount1).unwrap()],
         0,
     )
     .unwrap();
@@ -341,7 +344,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction1 = Transaction::new(
         0,
         Vec::new(),
-        vec![address_output(address1, tx_amount1).unwrap()],
+        vec![make_address_output(address1, tx_amount1).unwrap()],
         0,
     )
     .unwrap();
@@ -351,7 +354,7 @@ fn wallet_balance_parent_child_transactions() {
     let transaction2 = Transaction::new(
         0,
         vec![TxInput::new(OutPointSourceId::Transaction(transaction_id1), 0)],
-        vec![address_output(address2, tx_amount2).unwrap()],
+        vec![make_address_output(address2, tx_amount2).unwrap()],
         0,
     )
     .unwrap();

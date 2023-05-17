@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::key_chain::AccountKeyChain;
-use crate::send_request::address_output;
+use crate::send_request::make_address_output;
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -118,8 +118,8 @@ impl Account {
         )?;
         if change_amount > Amount::ZERO {
             let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
-            let change_output = address_output(change_address, change_amount)?;
-            request = request.with_output(change_output);
+            let change_output = make_address_output(change_address, change_amount)?;
+            request = request.with_outputs(vec![change_output]);
         }
 
         // TODO: Randomize inputs and outputs
@@ -376,11 +376,13 @@ impl Account {
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let utxo_source = UtxoSource::Blockchain(block_height);
-            let block_id = block.header().block_id().into();
+            let block_id = block.get_id();
 
             for (output_index, output) in block.block_reward().outputs().iter().enumerate() {
-                let outpoint =
-                    OutPoint::new(OutPointSourceId::BlockReward(block_id), output_index as u32);
+                let outpoint = OutPoint::new(
+                    OutPointSourceId::BlockReward(block_id.into()),
+                    output_index as u32,
+                );
                 self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
             }
 

@@ -15,7 +15,7 @@
 
 pub mod account;
 mod key_chain;
-mod send_request;
+pub mod send_request;
 pub mod wallet;
 
 pub use crate::account::Account;

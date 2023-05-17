@@ -18,7 +18,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::key_chain::{KeyChainError, MasterKeyChain};
-use crate::send_request::address_output;
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -253,14 +252,12 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn send_to_address(
+    pub fn create_transaction_to_addresses(
         &mut self,
         account_index: U31,
-        address: Address,
-        amount: Amount,
+        outputs: Vec<TxOutput>,
     ) -> WalletResult<SignedTransaction> {
-        let output = address_output(address, amount)?;
-        let request = SendRequest::new().with_output(output);
+        let request = SendRequest::new().with_outputs(outputs);
         let tx = self.for_account_rw(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
         })?;

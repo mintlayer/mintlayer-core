@@ -44,7 +44,7 @@ pub struct SendRequest {
     lock_time: u32,
 }
 
-pub fn address_output(address: Address, amount: Amount) -> WalletResult<TxOutput> {
+pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxOutput> {
     let pub_key_hash = PublicKeyHash::try_from(&address)
         .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
 
@@ -74,8 +74,8 @@ impl SendRequest {
         }
     }
 
-    pub fn with_output(mut self, output: TxOutput) -> Self {
-        self.outputs.push(output);
+    pub fn with_outputs(mut self, mut outputs: Vec<TxOutput>) -> Self {
+        self.outputs.append(&mut outputs);
         self
     }
 
