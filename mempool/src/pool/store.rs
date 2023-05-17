@@ -15,7 +15,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry::Occupied, BTreeMap, BTreeSet},
 };
 
 use common::{
@@ -287,6 +287,7 @@ impl MempoolStore {
         self.txs_by_descendant_score.retain(|_score, txs| !txs.is_empty());
     }
 
+    /// refresh descendants with new ancestor scores
     fn refresh_descendants(&mut self, entry: &TxMempoolEntry) {
         let descendants = entry.unconfirmed_descendants(self);
         for entries in self.txs_by_ancestor_score.values_mut() {
@@ -344,34 +345,30 @@ impl MempoolStore {
 
     fn remove_from_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_descendants(entry);
-        self.txs_by_ancestor_score.entry(entry.ancestor_score()).and_modify(|entries| {
-            entries.remove(&entry.tx_id());
-        });
-        if self
-            .txs_by_ancestor_score
-            .get(&entry.ancestor_score())
-            .expect("key must exist")
-            .is_empty()
-        {
-            self.txs_by_ancestor_score.remove(&entry.ancestor_score());
-        }
+        let map_entry =
+            self.txs_by_ancestor_score.entry(entry.ancestor_score()).and_modify(|entries| {
+                entries.remove(&entry.tx_id());
+            });
+
+        match map_entry {
+            Occupied(entries) if entries.get().is_empty() => drop(entries.remove_entry()),
+            _ => {}
+        };
     }
 
     fn remove_from_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
         self.refresh_ancestors(entry);
-        self.txs_by_descendant_score
-            .entry(entry.descendant_score())
-            .and_modify(|entries| {
-                entries.remove(&entry.tx_id());
-            });
-        if self
-            .txs_by_descendant_score
-            .get(&entry.descendant_score())
-            .expect("key must exist")
-            .is_empty()
-        {
-            self.txs_by_descendant_score.remove(&entry.descendant_score());
-        }
+        let map_entry =
+            self.txs_by_descendant_score
+                .entry(entry.descendant_score())
+                .and_modify(|entries| {
+                    entries.remove(&entry.tx_id());
+                });
+
+        match map_entry {
+            Occupied(entries) if entries.get().is_empty() => drop(entries.remove_entry()),
+            _ => {}
+        };
     }
 
     fn remove_from_creation_time_index(&mut self, entry: &TxMempoolEntry) {
