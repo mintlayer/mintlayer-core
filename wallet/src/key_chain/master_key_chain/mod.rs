@@ -21,7 +21,6 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use itertools::Itertools;
 use std::sync::Arc;
-use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{RootKeyContent, RootKeyId};
 use zeroize::Zeroize;
@@ -48,7 +47,7 @@ impl MasterKeyChain {
         Ok(root_key)
     }
 
-    pub fn new_from_mnemonic<B: Backend>(
+    pub fn new_from_mnemonic<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         mnemonic_str: &str,
@@ -58,7 +57,7 @@ impl MasterKeyChain {
         Self::new_from_root_key(chain_config, db_tx, root_key)
     }
 
-    pub fn new_from_root_key<B: Backend>(
+    pub fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         root_key: ExtendedPrivateKey,
@@ -81,7 +80,7 @@ impl MasterKeyChain {
     }
 
     /// Load the Master key chain from database and all the account key chains it derives
-    pub fn load_from_database<B: Backend>(
+    pub fn load_from_database<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
     ) -> KeyChainResult<Self> {
@@ -99,7 +98,7 @@ impl MasterKeyChain {
         })
     }
 
-    pub fn create_account_key_chain<B: Backend>(
+    pub fn create_account_key_chain<B: storage::Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,
         account_index: U31,

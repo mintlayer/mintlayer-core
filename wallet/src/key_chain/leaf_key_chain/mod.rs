@@ -25,7 +25,6 @@ use crypto::key::PublicKey;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::sync::Arc;
-use storage::Backend;
 use utils::ensure;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
@@ -120,7 +119,7 @@ impl LeafKeyChain {
         })
     }
 
-    pub fn load_leaf_keys<B: Backend>(
+    pub fn load_leaf_keys<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         account_info: &DeterministicAccountInfo,
         db_tx: &StoreTxRo<B>,
@@ -183,7 +182,7 @@ impl LeafKeyChain {
         ))
     }
 
-    pub fn issue_address<B: Backend>(
+    pub fn issue_address<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         lookahead_size: u32,
@@ -208,7 +207,7 @@ impl LeafKeyChain {
     }
 
     /// Issue a new key. This does not check if lookahead margins are observed
-    pub fn issue_key<B: Backend>(
+    pub fn issue_key<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         lookahead_size: u32,
@@ -227,7 +226,7 @@ impl LeafKeyChain {
     }
 
     /// Set a specific key index as used
-    fn set_key_index_as_issued<B: Backend>(
+    fn set_key_index_as_issued<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         new_issued_index: ChildNumber,
@@ -238,7 +237,10 @@ impl LeafKeyChain {
     }
 
     /// Persist the usage state to the database
-    pub fn save_usage_state<B: Backend>(&self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
+    pub fn save_usage_state<B: storage::Backend>(
+        &self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> KeyChainResult<()> {
         Ok(db_tx.set_keychain_usage_state(
             &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
             &self.usage_state,
@@ -300,7 +302,7 @@ impl LeafKeyChain {
     }
 
     /// Derives and adds a key to his key chain. This does not affect the last used and issued state
-    fn derive_and_add_key<B: Backend>(
+    fn derive_and_add_key<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         key_index: ChildNumber,
@@ -344,7 +346,7 @@ impl LeafKeyChain {
 
     /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
     /// used key to the last derived key is already `lookahead_size`, this method has no effect
-    pub fn top_up<B: Backend>(
+    pub fn top_up<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         lookahead_size: u32,
@@ -458,7 +460,7 @@ impl LeafKeyChain {
 
     /// Mark a specific key as used in the key pool. This will update the last used key index if
     /// necessary. Returns false if a key was found and set to used.
-    pub fn mark_extended_pubkey_as_used<B: Backend>(
+    pub fn mark_extended_pubkey_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         extended_public_key: &ExtendedPublicKey,
@@ -480,7 +482,7 @@ impl LeafKeyChain {
         Ok(false)
     }
 
-    pub fn mark_pubkey_as_used<B: Backend>(
+    pub fn mark_pubkey_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         public_key: &PublicKey,
@@ -494,7 +496,7 @@ impl LeafKeyChain {
         }
     }
 
-    pub fn mark_pub_key_hash_as_used<B: Backend>(
+    pub fn mark_pub_key_hash_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         public_key_hash: &PublicKeyHash,

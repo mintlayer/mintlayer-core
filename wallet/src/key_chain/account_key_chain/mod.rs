@@ -24,7 +24,6 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
-use storage::Backend;
 use utils::const_value::ConstValue;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::KeyPurpose;
@@ -48,7 +47,7 @@ pub struct AccountKeyChain {
 }
 
 impl AccountKeyChain {
-    pub fn new_from_root_key<B: Backend>(
+    pub fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         root_key: &ExtendedPrivateKey,
@@ -104,7 +103,7 @@ impl AccountKeyChain {
     }
 
     /// Load the key chain from the database
-    pub fn load_from_database<B: Backend>(
+    pub fn load_from_database<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
@@ -146,7 +145,7 @@ impl AccountKeyChain {
     }
 
     /// Issue a new address that hasn't been used before
-    pub fn issue_address<B: Backend>(
+    pub fn issue_address<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
@@ -156,7 +155,7 @@ impl AccountKeyChain {
     }
 
     /// Issue a new derived key that hasn't been used before
-    pub fn issue_key<B: Backend>(
+    pub fn issue_key<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
@@ -230,7 +229,10 @@ impl AccountKeyChain {
     }
 
     /// Derive addresses until there are lookahead unused ones
-    pub fn top_up_all<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> KeyChainResult<()> {
+    pub fn top_up_all<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> KeyChainResult<()> {
         let lookahead_size = self.lookahead_size();
         KeyPurpose::ALL.iter().try_for_each(|purpose| {
             self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
@@ -250,7 +252,7 @@ impl AccountKeyChain {
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
-    pub fn mark_as_used<B: Backend>(
+    pub fn mark_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         xpub: &ExtendedPublicKey,
@@ -266,7 +268,7 @@ impl AccountKeyChain {
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
-    pub fn mark_public_key_as_used<B: Backend>(
+    pub fn mark_public_key_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         public_key: &PublicKey,
@@ -281,7 +283,7 @@ impl AccountKeyChain {
         Ok(false)
     }
 
-    pub fn mark_public_key_hash_as_used<B: Backend>(
+    pub fn mark_public_key_hash_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         pub_key_hash: &PublicKeyHash,

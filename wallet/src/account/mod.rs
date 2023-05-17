@@ -31,7 +31,6 @@ use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
-use storage::Backend;
 use utxo::{Utxo, UtxoSource};
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{AccountId, AccountOutPointId, KeyPurpose};
@@ -42,7 +41,7 @@ pub struct Account {
 }
 
 impl Account {
-    pub fn load_from_database<B: Backend>(
+    pub fn load_from_database<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
@@ -58,7 +57,7 @@ impl Account {
     }
 
     /// Create a new account by providing a key chain
-    pub fn new<B: Backend>(
+    pub fn new<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         key_chain: AccountKeyChain,
@@ -78,7 +77,7 @@ impl Account {
         Ok(account)
     }
 
-    pub fn process_send_request<B: Backend>(
+    pub fn process_send_request<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         mut request: SendRequest,
@@ -239,7 +238,7 @@ impl Account {
     }
 
     /// Get a new address that hasn't been used before
-    pub fn get_new_address<B: Backend>(
+    pub fn get_new_address<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         purpose: KeyPurpose,
@@ -247,7 +246,7 @@ impl Account {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
-    fn add_utxo_if_own<B: Backend>(
+    fn add_utxo_if_own<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         output: &TxOutput,
@@ -263,7 +262,7 @@ impl Account {
         Ok(())
     }
 
-    fn del_utxo_if_own<B: Backend>(
+    fn del_utxo_if_own<B: storage::Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,
         outpoint: &OutPoint,
@@ -301,7 +300,7 @@ impl Account {
         })
     }
 
-    fn mark_output_as_used<B: Backend>(
+    fn mark_output_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         txo: &TxOutput,
@@ -322,7 +321,7 @@ impl Account {
         Ok(())
     }
 
-    pub fn get_balance<B: Backend>(
+    pub fn get_balance<B: storage::Backend>(
         &self,
         db_tx: &StoreTxRo<B>,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
@@ -331,7 +330,7 @@ impl Account {
         Ok(balances)
     }
 
-    pub fn reset_to_height<B: Backend>(
+    pub fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         common_block_height: BlockHeight,
@@ -354,7 +353,10 @@ impl Account {
         Ok(())
     }
 
-    fn scan_genesis_block<B: Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
+    fn scan_genesis_block<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+    ) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
         for (output_index, output) in chain_config.genesis_block().utxos().iter().enumerate() {
             let utxo_source = UtxoSource::Blockchain(BlockHeight::zero());
@@ -367,7 +369,7 @@ impl Account {
         Ok(())
     }
 
-    pub fn scan_new_blocks<B: Backend>(
+    pub fn scan_new_blocks<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         common_block_height: BlockHeight,
