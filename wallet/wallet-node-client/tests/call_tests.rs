@@ -17,7 +17,7 @@ use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, rpc::ChainstateRpcServer,
-    ChainstateConfig, DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
 use common::{
     chain::{
@@ -26,6 +26,7 @@ use common::{
     },
     primitives::{Idable, H256},
 };
+use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
 use rpc::RpcConfig;
 use subsystem::manager::ShutdownTrigger;
@@ -33,11 +34,7 @@ use subsystem::manager::ShutdownTrigger;
 pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
     rpc_bind_address: String,
-) -> (
-    ShutdownTrigger,
-    subsystem::Handle<Box<dyn ChainstateInterface>>,
-    SocketAddr,
-) {
+) -> (ShutdownTrigger, ChainstateHandle, MempoolHandle, SocketAddr) {
     let mut manager = subsystem::Manager::new("test-manager");
     let shutdown_trigger = manager.make_shutdown_trigger();
 
@@ -51,7 +48,17 @@ pub async fn start_subsystems(
     )
     .unwrap();
 
-    let chainstate_subsys = manager.add_subsystem("test-chainstate", chainstate);
+    let chainstate_handle = manager.add_subsystem("test-chainstate", chainstate);
+
+    let mempool = mempool::make_mempool(
+        Arc::clone(&chain_config),
+        chainstate_handle.clone(),
+        Default::default(),
+        mempool::SystemUsageEstimator {},
+    );
+    let mempool_handle = manager.add_subsystem_with_custom_eventloop("wallet-cli-test-mempool", {
+        move |call, shutdn| mempool.run(call, shutdn)
+    });
 
     let rpc_config = RpcConfig {
         http_bind_address: SocketAddr::from_str(&rpc_bind_address)
@@ -65,7 +72,7 @@ pub async fn start_subsystems(
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)
-        .register(chainstate_subsys.clone().into_rpc())
+        .register(chainstate_handle.clone().into_rpc())
         .build()
         .await
         .unwrap();
@@ -76,7 +83,12 @@ pub async fn start_subsystems(
 
     tokio::spawn(async move { manager.main().await });
 
-    (shutdown_trigger, chainstate_subsys, rpc_bind_address)
+    (
+        shutdown_trigger,
+        chainstate_handle,
+        mempool_handle,
+        rpc_bind_address,
+    )
 }
 
 async fn test_wallet_node_communication(
@@ -146,11 +158,11 @@ async fn test_wallet_node_communication(
     assert_eq!(block_2, None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, rpc_bind_address) =
+    let (_shutdown_trigger, chainstate_handle, _mempool_handle, rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     let rpc_client = make_rpc_client(rpc_bind_address, None).await.unwrap();
@@ -158,14 +170,15 @@ async fn node_rpc_communication() {
     test_wallet_node_communication(chain_config, chainstate_handle, rpc_client).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_handle_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, _rpc_bind_address) =
+    let (_shutdown_trigger, chainstate_handle, mempool_handle, _rpc_bind_address) =
         start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    let handles_client = make_handles_client(chainstate_handle.clone()).await.unwrap();
+    let handles_client =
+        make_handles_client(chainstate_handle.clone(), mempool_handle).await.unwrap();
 
     test_wallet_node_communication(chain_config, chainstate_handle, handles_client).await;
 }

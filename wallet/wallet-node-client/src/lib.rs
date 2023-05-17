@@ -13,7 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate::ChainstateHandle;
 use handles_client::WalletHandlesClientError;
+use mempool::MempoolHandle;
 use std::net::SocketAddr;
 
 use rpc_client::NodeRpcError;
@@ -30,7 +32,8 @@ pub async fn make_rpc_client(
 }
 
 pub async fn make_handles_client(
-    chainstate_handle: chainstate::ChainstateHandle,
+    chainstate_handle: ChainstateHandle,
+    mempool_handle: MempoolHandle,
 ) -> Result<handles_client::WalletHandlesClient, WalletHandlesClientError> {
-    handles_client::WalletHandlesClient::new(chainstate_handle).await
+    handles_client::WalletHandlesClient::new(chainstate_handle, mempool_handle).await
 }

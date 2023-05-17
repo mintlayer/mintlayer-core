@@ -18,6 +18,7 @@ use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
+use mempool::MempoolHandle;
 use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use serialization::hex::{HexDecode, HexError};
 
@@ -26,6 +27,7 @@ use crate::node_traits::NodeInterface;
 #[derive(Clone)]
 pub struct WalletHandlesClient {
     chainstate_handle: ChainstateHandle,
+    _mempool_handle: MempoolHandle,
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq)]
@@ -41,8 +43,12 @@ pub enum WalletHandlesClientError {
 impl WalletHandlesClient {
     pub async fn new(
         chainstate_handle: ChainstateHandle,
+        mempool_handle: MempoolHandle,
     ) -> Result<Self, WalletHandlesClientError> {
-        let result = Self { chainstate_handle };
+        let result = Self {
+            chainstate_handle,
+            _mempool_handle: mempool_handle,
+        };
         result.basic_start_test().await?;
         Ok(result)
     }

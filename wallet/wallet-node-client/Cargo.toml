@@ -9,6 +9,7 @@ edition = "2021"
 blockprod = { path = "../../blockprod" }
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
+mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
 rpc = { path = "../../rpc" }

@@ -3549,6 +3549,7 @@ dependencies = [
  "common",
  "http",
  "jsonrpsee",
+ "mempool",
  "node-lib",
  "p2p",
  "rpc",
