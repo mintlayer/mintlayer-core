@@ -203,7 +203,9 @@ fn is_valid_one_to_any_combination_for_tx(
     input_utxo: &TxOutput,
     outputs: &[TxOutput],
 ) -> Result<(), ConnectTransactionError> {
-    if !is_delegation_spending(input_utxo, outputs) {
+    if !is_valid_delegation_spending(input_utxo, outputs)
+        && !is_valid_pool_decommissioning(input_utxo, outputs)
+    {
         let valid_inputs = are_inputs_valid_for_tx(std::slice::from_ref(input_utxo));
         ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
         let valid_outputs = are_outputs_valid_for_tx(outputs);
@@ -215,8 +217,32 @@ fn is_valid_one_to_any_combination_for_tx(
     Ok(())
 }
 
-// single DelegateStaking input; zero or one DelegateStakingOutput + any number of SpendShareFromDelegation
-fn is_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
+// single CreateStakePool or ProduceBlockFromStake input; any number of LockThenTransfer outputs
+fn is_valid_pool_decommissioning(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
+    let stake_pool_input = match input_utxo {
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..) => false,
+        TxOutput::CreateStakePool(..) | TxOutput::ProduceBlockFromStake(..) => true,
+    };
+
+    let all_outputs_are_lock_then_transfer = outputs.iter().all(|output| match output {
+        TxOutput::Transfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..) => false,
+        TxOutput::LockThenTransfer(..) => true,
+    });
+
+    stake_pool_input && all_outputs_are_lock_then_transfer
+}
+
+// single DelegateStaking input; zero or one DelegateStaking output + any number of LockThenTransfer
+fn is_valid_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
     let delegation_input = match input_utxo {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
@@ -638,6 +664,27 @@ mod tests {
             &outputs,
             number_of_outputs,
             extra_output,
+        );
+        assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_pool_decommissioning(#[case] seed: Seed) {
+        let inputs = [stake_pool(), produce_block()];
+        let outputs = [lock_then_transfer()];
+
+        let mut rng = make_seedable_rng(seed);
+        let number_of_outputs = rng.gen_range(2..10);
+
+        let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
+            &mut rng,
+            &inputs,
+            1,
+            &outputs,
+            number_of_outputs,
+            None,
         );
         assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
     }
