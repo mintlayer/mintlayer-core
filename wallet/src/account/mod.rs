@@ -118,7 +118,7 @@ impl Account {
         if change_amount > Amount::ZERO {
             let change_address = self.get_new_address(db_tx, KeyPurpose::Change)?;
             let change_output = make_address_output(change_address, change_amount)?;
-            request = request.with_outputs(vec![change_output]);
+            request = request.with_outputs([change_output]);
         }
 
         // TODO: Randomize inputs and outputs
@@ -267,11 +267,13 @@ impl Account {
         outpoint: &OutPoint,
     ) -> WalletResult<()> {
         let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint.clone());
+        // TODO: Mark UTXO as consumed (or leave it as is, but consult the list of known transactions)
         db_tx.del_utxo(&account_utxo_id)?;
         Ok(())
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
+        // TODO: Reuse code from TxVerifier
         match txo {
             TxOutput::Transfer(_, d)
             | TxOutput::LockThenTransfer(_, d, _)
