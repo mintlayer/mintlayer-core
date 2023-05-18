@@ -66,7 +66,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, Transaction,
+        Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
         TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
@@ -253,6 +253,23 @@ where
         }
     }
 
+    fn get_pool_id_from_output(
+        &self,
+        output: &TxOutput,
+    ) -> Result<PoolId, ConnectTransactionError> {
+        match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => {
+                Err(ConnectTransactionError::InvalidOutputTypeInReward)
+            }
+            TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
+            TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
+        }
+    }
+
     fn check_stake_outputs_in_reward(
         &self,
         block: &WithId<Block>,
@@ -269,7 +286,6 @@ where
                     &self.utxo_cache,
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
-                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -279,6 +295,16 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
+
+                let kernel_pool_id = self.get_pool_id_from_output(&kernel_output)?;
+                let reward_pool_id = self.get_pool_id_from_output(reward_output)?;
+
+                ensure!(
+                    kernel_pool_id == reward_pool_id,
+                    SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
+                );
+
+                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
                 let reward_pool_data = self.get_pool_data_from_output(reward_output)?;
 
                 ensure!(
@@ -302,7 +328,6 @@ where
             &self.utxo_cache,
         )?;
 
-        // FIXME: check poolid in StakePool -> ProduceBlock
         self.check_stake_outputs_in_reward(block)?;
 
         check_transferred_amount_in_reward(
@@ -375,9 +400,8 @@ where
                 TxOutput::CreateStakePool(pool_id, data) => {
                     let expected_pool_id = pos_accounting::make_pool_id(input0.outpoint());
                     if expected_pool_id != *pool_id {
-                        Some(Err(ConnectTransactionError::PoolIdMismatch(
-                            expected_pool_id,
-                            *pool_id,
+                        Some(Err(ConnectTransactionError::SpendStakeError(
+                            SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
                         )))
                     } else {
                         let res = self

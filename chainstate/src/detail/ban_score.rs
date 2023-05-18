@@ -135,7 +135,6 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidDecommissionMaturityType => 100,
             ConnectTransactionError::InvalidDecommissionMaturityDistanceValue(_) => 100,
             ConnectTransactionError::InvalidDecommissionMaturityDistance(_, _) => 100,
-            ConnectTransactionError::PoolIdMismatch(_, _) => 100,
         }
     }
 }

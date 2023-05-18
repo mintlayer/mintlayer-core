@@ -1096,7 +1096,9 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     assert_eq!(
         res,
         ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-            ConnectTransactionError::SpendStakeError(SpendStakeError::StakePoolDataMismatch)
+            ConnectTransactionError::SpendStakeError(SpendStakeError::StakePoolIdMismatch(
+                pool_id1, pool_id2
+            ))
         ))
     );
 }
@@ -1520,5 +1522,3 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         res_pool_balance
     );
 }
-
-// FIXME: test pool_id mismatch
