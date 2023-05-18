@@ -592,6 +592,7 @@ impl TxMempoolEntry {
     }
 
     fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {
+        // TODO: change this from recursive to iterative
         for parent in self.parents.iter() {
             if visited.insert(*parent) {
                 store
