@@ -32,6 +32,7 @@ use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface
 use p2p::P2pHandle;
 use rpc::RpcConfig;
 use subsystem::manager::ShutdownTrigger;
+use tokio::task::JoinHandle;
 
 pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
@@ -43,6 +44,7 @@ pub async fn start_subsystems(
     BlockProductionHandle,
     P2pHandle,
     SocketAddr,
+    JoinHandle<()>,
 ) {
     let mut manager = subsystem::Manager::new("test-manager");
     let shutdown_trigger = manager.make_shutdown_trigger();
@@ -139,7 +141,7 @@ pub async fn start_subsystems(
 
     let _rpc = manager.add_subsystem("rpc-test", rpc_subsys);
 
-    tokio::spawn(async move { manager.main().await });
+    let manager_task_handle = tokio::spawn(async move { manager.main().await });
 
     (
         shutdown_trigger,
@@ -148,6 +150,7 @@ pub async fn start_subsystems(
         block_prod_handle,
         p2p_handle,
         rpc_bind_address,
+        manager_task_handle,
     )
 }
 
@@ -222,23 +225,43 @@ async fn test_wallet_node_communication(
 async fn node_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate, _mempool, _block_prod, _p2p, rpc_bind_address) =
-        start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
+    let (
+        shutdown_trigger,
+        chainstate,
+        _mempool,
+        _block_prod,
+        _p2p,
+        rpc_bind_address,
+        manager_task_handle,
+    ) = start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     let rpc_client = make_rpc_client(rpc_bind_address, None).await.unwrap();
 
     test_wallet_node_communication(chain_config, chainstate, rpc_client).await;
+
+    shutdown_trigger.initiate();
+    manager_task_handle.await.unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_handle_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate, mempool, block_prod, p2p, _rpc_bind_address) =
-        start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
+    let (
+        shutdown_trigger,
+        chainstate,
+        mempool,
+        block_prod,
+        p2p,
+        _rpc_bind_address,
+        manager_task_handle,
+    ) = start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     let handles_client =
         make_handles_client(chainstate.clone(), mempool, block_prod, p2p).await.unwrap();
 
     test_wallet_node_communication(chain_config, chainstate, handles_client).await;
+
+    shutdown_trigger.initiate();
+    manager_task_handle.await.unwrap();
 }

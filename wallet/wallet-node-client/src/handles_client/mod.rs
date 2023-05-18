@@ -16,12 +16,12 @@
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, GenBlock, SignedTransaction},
+    chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 use mempool::MempoolHandle;
 use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
-use serialization::hex::{HexDecode, HexEncode, HexError};
+use serialization::hex::HexError;
 
 use crate::node_traits::NodeInterface;
 
@@ -121,39 +121,25 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn generate_block(
         &self,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> Result<String, Self::Error> {
-        let reward_destination =
-            common::chain::Destination::hex_decode_all(reward_destination_hex)?;
-        let signed_transactions = transactions_hex
-            .map(|txs| {
-                txs.into_iter()
-                    .map(SignedTransaction::hex_decode_all)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?;
-
+        reward_destination: Destination,
+        transactions: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| {
-                this.generate_block(reward_destination, signed_transactions)
-            })
+            .call_async_mut(move |this| this.generate_block(reward_destination, transactions))
             .await??;
 
-        Ok(block.hex_encode())
+        Ok(block)
     }
 
-    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
-        let block = Block::hex_decode_all(&block_hex)?;
+    async fn submit_block(&self, block: Block) -> Result<(), Self::Error> {
         self.chainstate
             .call_mut(move |this| this.process_block(block, BlockSource::Local))
             .await??;
         Ok(())
     }
 
-    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error> {
-        let tx = SignedTransaction::hex_decode_all(&transaction_hex)?;
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
         self.p2p.call_async_mut(move |this| this.submit_transaction(tx)).await??;
         Ok(())
     }

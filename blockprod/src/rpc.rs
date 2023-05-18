@@ -21,7 +21,7 @@ use common::{
 };
 
 use rpc::Result as RpcResult;
-use serialization::{hex::HexDecode, hex::HexEncode};
+use serialization::hex_encoded::HexEncoded;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 use subsystem::subsystem::CallError;
@@ -36,7 +36,7 @@ trait BlockProductionRpc {
     /// When called, the job manager will be notified to send a signal
     /// to the specified job to stop running
     #[method(name = "stop_job")]
-    async fn stop_job(&self, job_id: String) -> RpcResult<bool>;
+    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> RpcResult<bool>;
 
     /// Generate a block with the given transactions to the specified
     /// reward destination. If transactions are None, the block will be
@@ -44,9 +44,9 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> RpcResult<String>;
+        reward_destination: HexEncoded<Destination>,
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    ) -> RpcResult<HexEncoded<Block>>;
 }
 
 #[async_trait::async_trait]
@@ -59,12 +59,12 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         Ok(stopped_jobs_count)
     }
 
-    async fn stop_job(&self, job_id_hex: String) -> rpc::Result<bool> {
-        let job_id = JobKey::hex_decode_all(job_id_hex).map_err(rpc::Error::to_call_error)?;
-
+    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::Result<bool> {
         let stopped = handle_error(
-            self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id).await }))
-                .await,
+            self.call_async_mut(move |this| {
+                Box::pin(async { this.stop_job(job_id.into_inner()).await })
+            })
+            .await,
         )?;
 
         Ok(stopped)
@@ -72,28 +72,20 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> rpc::Result<String> {
-        let reward_destination = Destination::hex_decode_all(reward_destination_hex)
-            .map_err(rpc::Error::to_call_error)?;
-        let signed_transactions = transactions_hex
-            .map(|txs| {
-                txs.into_iter()
-                    .map(SignedTransaction::hex_decode_all)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()
-            .map_err(rpc::Error::to_call_error)?;
+        reward_destination: HexEncoded<Destination>,
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    ) -> rpc::Result<HexEncoded<Block>> {
+        let transactions =
+            transactions.map(|txs| txs.into_iter().map(HexEncoded::into_inner).collect::<Vec<_>>());
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(reward_destination, signed_transactions)
+                this.generate_block(reward_destination.into_inner(), transactions)
             })
             .await,
         )?;
 
-        Ok(Block::hex_encode(&block))
+        Ok(block.into())
     }
 }
 

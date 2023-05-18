@@ -33,7 +33,6 @@ pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use serialization::hex::HexEncode;
 use wallet::{send_request::make_address_output, DefaultWallet};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
@@ -147,7 +146,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![output])
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
-            .submit_transaction(tx.hex_encode())
+            .submit_transaction(tx)
             .await
             .map_err(ControllerError::NodeCallError)
     }

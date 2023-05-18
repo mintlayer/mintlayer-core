@@ -17,6 +17,7 @@ use std::sync::Mutex;
 
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
+use common::chain::{Destination, SignedTransaction};
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
@@ -135,15 +136,15 @@ impl NodeInterface for MockNode {
 
     async fn generate_block(
         &self,
-        _reward_destination_hex: String,
-        _transactions_hex: Option<Vec<String>>,
-    ) -> Result<String, Self::Error> {
+        _reward_destination_hex: Destination,
+        _transactions_hex: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error> {
         unreachable!()
     }
-    async fn submit_block(&self, _block_hex: String) -> Result<(), Self::Error> {
+    async fn submit_block(&self, _block: Block) -> Result<(), Self::Error> {
         unreachable!()
     }
-    async fn submit_transaction(&self, _transaction_hex: String) -> Result<(), Self::Error> {
+    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<(), Self::Error> {
         unreachable!()
     }
 
