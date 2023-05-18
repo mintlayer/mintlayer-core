@@ -29,20 +29,22 @@ use chainstate_types::{
 use common::{
     chain::block::{
         consensus_data::{PoSData, PoWData},
-        signed_block_header::SignedBlockHeader,
+        signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader},
         timestamp::BlockTimestamp,
-        BlockHeader, ConsensusData,
+        BlockHeader, BlockRewardTransactable, ConsensusData,
     },
     chain::{
-        block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData},
         config::EpochIndex,
-        signature::inputsig::InputWitness,
-        ChainConfig, PoolId, RequiredConsensus, TxInput,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
+        ChainConfig, Destination, PoolId, RequiredConsensus, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight},
 };
 use crypto::{
-    key::PrivateKey,
+    key::{PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use serialization::{Decode, Encode};
@@ -87,17 +89,17 @@ pub struct PoSGenerateBlockInputData {
     stake_private_key: PrivateKey,
     vrf_private_key: VRFPrivateKey,
     pool_id: PoolId,
-    kernel_input: TxInput,
-    kernel_witness: InputWitness,
+    kernel_inputs: Vec<TxInput>,
+    kernel_input_utxos: Vec<TxOutput>,
 }
 
 impl PoSGenerateBlockInputData {
-    pub fn kernel_input(&self) -> &TxInput {
-        &self.kernel_input
+    pub fn kernel_inputs(&self) -> &Vec<TxInput> {
+        &self.kernel_inputs
     }
 
-    pub fn kernel_witness(&self) -> &InputWitness {
-        &self.kernel_witness
+    pub fn kernel_input_utxos(&self) -> &Vec<TxOutput> {
+        &self.kernel_input_utxos
     }
 
     pub fn pool_id(&self) -> PoolId {
@@ -106,6 +108,10 @@ impl PoSGenerateBlockInputData {
 
     pub fn stake_private_key(&self) -> &PrivateKey {
         &self.stake_private_key
+    }
+
+    pub fn stake_public_key(&self) -> PublicKey {
+        PublicKey::from_private_key(&self.stake_private_key)
     }
 
     pub fn vrf_private_key(&self) -> &VRFPrivateKey {
@@ -205,13 +211,45 @@ where
                 None => Err(ConsensusPoSError::NoInputDataProvided)?,
             };
 
+            let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
+
+            let kernel_output = vec![TxOutput::ProduceBlockFromStake(
+                reward_destination.clone(),
+                pos_input_data.pool_id(),
+            )];
+
+            let block_reward = BlockRewardTransactable::new(
+                Some(pos_input_data.kernel_inputs()),
+                Some(&kernel_output),
+                None,
+            );
+
+            let kernel_input_utxos = pos_input_data.kernel_input_utxos();
+
+            let signature = StandardInputSignature::produce_uniparty_signature_for_input(
+                pos_input_data.stake_private_key(),
+                SigHashType::default(),
+                reward_destination,
+                &block_reward,
+                &kernel_input_utxos.iter().collect::<Vec<_>>(),
+                0,
+            )
+            .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
+
+            let input_witness = InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::default(),
+                signature.encode(),
+            ));
+
             let vrf_data = {
-                let sealed_epoch_randomness =
-                    sealed_epoch_randomness.ok_or(ConsensusPoSError::NoEpochData)?;
+                let sealed_epoch_randomness = sealed_epoch_randomness
+                    .ok_or(ConsensusPoSError::NoEpochData)?
+                    .randomness()
+                    .value();
 
                 let transcript = construct_transcript(
                     chain_config.epoch_index_from_height(&block_height),
-                    &sealed_epoch_randomness.randomness().value(),
+                    &sealed_epoch_randomness,
                     block_timestamp,
                 );
 
@@ -226,8 +264,8 @@ where
             )?;
 
             Ok(ConsensusData::PoS(Box::new(PoSData::new(
-                vec![pos_input_data.kernel_input().clone()],
-                vec![pos_input_data.kernel_witness().clone()],
+                pos_input_data.kernel_inputs().clone(),
+                vec![input_witness],
                 pos_input_data.pool_id(),
                 vrf_data,
                 target_required,

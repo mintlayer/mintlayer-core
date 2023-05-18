@@ -83,4 +83,6 @@ pub enum ConsensusPoSError {
     BlockSignatureError(#[from] BlockSignatureError),
     #[error("Failed to sign block header")]
     FailedToSignBlockHeader,
+    #[error("Failed to sign kernel")]
+    FailedToSignKernel,
 }
