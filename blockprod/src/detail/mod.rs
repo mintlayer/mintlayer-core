@@ -161,6 +161,9 @@ impl BlockProduction {
                             )
                         })?
                         .flatten()
+                        // TODO: no epoch_data means either that no
+                        // epoch has been created yet, or that the
+                        // data is actually missing
                         .or_else(|| Some(EpochData::new(PoSRandomness::at_genesis(&chain_config))));
 
                     let consensus_data = consensus::generate_consensus_data(
