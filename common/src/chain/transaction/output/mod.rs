@@ -57,10 +57,8 @@ pub enum TxOutput {
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
     #[codec(index = 5)]
-    DecommissionPool(Amount, Destination, PoolId, OutputTimeLock),
-    #[codec(index = 6)]
     CreateDelegationId(Destination, PoolId),
-    #[codec(index = 7)]
+    #[codec(index = 6)]
     DelegateStaking(Amount, DelegationId),
 }
 
@@ -73,9 +71,7 @@ impl TxOutput {
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
-            TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => {
-                Some(tl)
-            }
+            TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
 }

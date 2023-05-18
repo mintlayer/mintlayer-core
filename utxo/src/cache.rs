@@ -456,7 +456,6 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::CreateStakePool(_)
-        | TxOutput::DecommissionPool(_, _, _, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::DelegateStaking(_, _) => true,
         TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => false,

@@ -145,7 +145,6 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
-        | TxOutput::DecommissionPool(_, _, _, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => {
             return Err(BlockError::SpendStakeError(

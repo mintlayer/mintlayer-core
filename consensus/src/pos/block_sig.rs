@@ -47,8 +47,7 @@ fn get_staking_kernel_destination(
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
-        | TxOutput::DelegateStaking(_, _)
-        | TxOutput::DecommissionPool(_, _, _, _) => {
+        | TxOutput::DelegateStaking(_, _) => {
             return Err(BlockSignatureError::WrongOutputType(header.get_id()))
         }
         TxOutput::CreateStakePool(stake_pool) => stake_pool.staker(),

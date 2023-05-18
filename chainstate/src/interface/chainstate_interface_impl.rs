@@ -594,7 +594,7 @@ fn get_output_coin_amount(
                 .pledge_amount();
             Some(pledge_amount)
         }
-        TxOutput::DecommissionPool(v, _, _, _) | TxOutput::DelegateStaking(v, _) => Some(*v),
+        TxOutput::DelegateStaking(v, _) => Some(*v),
         TxOutput::CreateDelegationId(_, _) => None,
     };
 

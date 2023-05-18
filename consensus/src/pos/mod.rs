@@ -160,7 +160,6 @@ where
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
-        | TxOutput::DecommissionPool(_, _, _, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => {
             // only pool outputs can be staked

@@ -49,7 +49,6 @@ pub fn check_reward_inputs_outputs_purposes(
                     TxOutput::Transfer(..)
                     | TxOutput::LockThenTransfer(..)
                     | TxOutput::Burn(..)
-                    | TxOutput::DecommissionPool(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..) => {
                         Err(ConnectTransactionError::InvalidInputTypeInReward)
@@ -68,7 +67,6 @@ pub fn check_reward_inputs_outputs_purposes(
                                 | TxOutput::LockThenTransfer(..)
                                 | TxOutput::Burn(..)
                                 | TxOutput::CreateStakePool(..)
-                                | TxOutput::DecommissionPool(..)
                                 | TxOutput::CreateDelegationId(..)
                                 | TxOutput::DelegateStaking(..) => {
                                     Err(ConnectTransactionError::InvalidOutputTypeInReward)
@@ -101,7 +99,6 @@ pub fn check_reward_inputs_outputs_purposes(
                     | TxOutput::Burn(..)
                     | TxOutput::CreateStakePool(..)
                     | TxOutput::ProduceBlockFromStake(..)
-                    | TxOutput::DecommissionPool(..)
                     | TxOutput::CreateDelegationId(..)
                     | TxOutput::DelegateStaking(..) => false,
                 });
@@ -168,49 +165,36 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::Transfer(..), TxOutput::CreateStakePool(..))
         | (TxOutput::Transfer(..), TxOutput::CreateDelegationId(..))
         | (TxOutput::Transfer(..), TxOutput::DelegateStaking(..)) => true,
-        | (TxOutput::Transfer(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::Transfer(..), TxOutput::DecommissionPool(..)) => false,
+        | (TxOutput::Transfer(..), TxOutput::ProduceBlockFromStake(..)) => false,
         | (TxOutput::LockThenTransfer(..), TxOutput::Transfer(..))
         | (TxOutput::LockThenTransfer(..), TxOutput::LockThenTransfer(..))
         | (TxOutput::LockThenTransfer(..), TxOutput::Burn(..))
         | (TxOutput::LockThenTransfer(..), TxOutput::CreateStakePool(..))
         | (TxOutput::LockThenTransfer(..), TxOutput::CreateDelegationId(..))
         | (TxOutput::LockThenTransfer(..), TxOutput::DelegateStaking(..)) => true,
-        | (TxOutput::LockThenTransfer(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::LockThenTransfer(..), TxOutput::DecommissionPool(..)) => false,
+        | (TxOutput::LockThenTransfer(..), TxOutput::ProduceBlockFromStake(..)) => false,
         | (TxOutput::Burn(..), _) => false,
         | (TxOutput::CreateStakePool(..), TxOutput::Transfer(..))
-        | (TxOutput::CreateStakePool(..), TxOutput::LockThenTransfer(..))
         | (TxOutput::CreateStakePool(..), TxOutput::Burn(..))
         | (TxOutput::CreateStakePool(..), TxOutput::CreateStakePool(..))
         | (TxOutput::CreateStakePool(..), TxOutput::ProduceBlockFromStake(..))
         | (TxOutput::CreateStakePool(..), TxOutput::CreateDelegationId(..))
         | (TxOutput::CreateStakePool(..), TxOutput::DelegateStaking(..)) => false,
-        | (TxOutput::CreateStakePool(..), TxOutput::DecommissionPool(..)) => true,
+        | (TxOutput::CreateStakePool(..), TxOutput::LockThenTransfer(..)) => true,
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::Transfer(..))
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::LockThenTransfer(..))
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::Burn(..))
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateStakePool(..))
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::ProduceBlockFromStake(..))
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::CreateDelegationId(..))
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::DelegateStaking(..)) => false,
-        | (TxOutput::ProduceBlockFromStake(..), TxOutput::DecommissionPool(..)) => true,
-        | (TxOutput::DecommissionPool(..), TxOutput::Transfer(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::LockThenTransfer(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::Burn(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::CreateDelegationId(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::DelegateStaking(..)) => true,
-        | (TxOutput::DecommissionPool(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::DecommissionPool(..), TxOutput::DecommissionPool(..)) => false,
+        | (TxOutput::ProduceBlockFromStake(..), TxOutput::LockThenTransfer(..)) => true,
         | (TxOutput::CreateDelegationId(..), _) => false,
         | (TxOutput::DelegateStaking(..), TxOutput::Transfer(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::LockThenTransfer(..))
         | (TxOutput::DelegateStaking(..), TxOutput::Burn(..))
         | (TxOutput::DelegateStaking(..), TxOutput::CreateStakePool(..))
         | (TxOutput::DelegateStaking(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::DecommissionPool(..))
         | (TxOutput::DelegateStaking(..), TxOutput::CreateDelegationId(..)) => false,
+        | (TxOutput::DelegateStaking(..), TxOutput::LockThenTransfer(..))
         | (TxOutput::DelegateStaking(..), TxOutput::DelegateStaking(..)) => true,
     }
 }
@@ -239,7 +223,6 @@ fn is_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
         | TxOutput::Burn(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::DecommissionPool(..)
         | TxOutput::CreateDelegationId(..) => false,
         TxOutput::DelegateStaking(..) => true,
     };
@@ -252,7 +235,6 @@ fn is_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
             | TxOutput::Burn(..)
             | TxOutput::CreateStakePool(..)
             | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::DecommissionPool(..)
             | TxOutput::CreateDelegationId(..) => false,
             TxOutput::DelegateStaking(..) => true,
         })
@@ -265,7 +247,6 @@ fn is_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
             | TxOutput::Burn(..)
             | TxOutput::CreateStakePool(..)
             | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::DecommissionPool(..)
             | TxOutput::CreateDelegationId(..)
             | TxOutput::DelegateStaking(..) => false,
             TxOutput::LockThenTransfer(..) => true,
@@ -293,9 +274,7 @@ fn is_valid_any_to_any_combination_for_tx(
 
 fn are_inputs_valid_for_tx(inputs_utxos: &[TxOutput]) -> bool {
     inputs_utxos.iter().all(|input_utxo| match input_utxo {
-        TxOutput::Transfer(..)
-        | TxOutput::LockThenTransfer(..)
-        | TxOutput::DecommissionPool(..) => true,
+        TxOutput::Transfer(..) | TxOutput::LockThenTransfer(..) => true,
         TxOutput::Burn(..)
         | TxOutput::CreateStakePool(..)
         | TxOutput::ProduceBlockFromStake(..)
@@ -312,7 +291,7 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
         | TxOutput::CreateStakePool(..)
         | TxOutput::CreateDelegationId(..)
         | TxOutput::DelegateStaking(..) => true,
-        TxOutput::ProduceBlockFromStake(..) | TxOutput::DecommissionPool(..) => false,
+        TxOutput::ProduceBlockFromStake(..) => false,
     });
 
     let is_stake_pool_unique = outputs
@@ -322,7 +301,6 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::LockThenTransfer(..)
             | TxOutput::Burn(..)
             | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::DecommissionPool(..)
             | TxOutput::CreateDelegationId(..)
             | TxOutput::DelegateStaking(..) => false,
             TxOutput::CreateStakePool(..) => true,
@@ -338,7 +316,6 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::Burn(..)
             | TxOutput::CreateStakePool(..)
             | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::DecommissionPool(..)
             | TxOutput::DelegateStaking(..) => false,
             TxOutput::CreateDelegationId(..) => true,
         })
@@ -406,15 +383,6 @@ mod tests {
 
     fn produce_block() -> TxOutput {
         TxOutput::ProduceBlockFromStake(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
-    }
-
-    fn decommission_pool() -> TxOutput {
-        TxOutput::DecommissionPool(
-            Amount::ZERO,
-            Destination::AnyoneCanSpend,
-            PoolId::new(H256::zero()),
-            OutputTimeLock::ForBlockCount(1),
-        )
     }
 
     fn create_delegation() -> TxOutput {
@@ -525,7 +493,6 @@ mod tests {
     #[case(transfer(), lock_then_transfer(), Ok(()))]
     #[case(transfer(), stake_pool(),         Ok(()))]
     #[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(transfer(), create_delegation(),  Ok(()))]
     #[case(transfer(), delegate_staking(),   Ok(()))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -534,7 +501,6 @@ mod tests {
     #[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -543,7 +509,6 @@ mod tests {
     #[case(lock_then_transfer(), lock_then_transfer(), Ok(()))]
     #[case(lock_then_transfer(), stake_pool(),         Ok(()))]
     #[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(lock_then_transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(lock_then_transfer(), create_delegation(),  Ok(()))]
     #[case(lock_then_transfer(), delegate_staking(),   Ok(()))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -552,7 +517,6 @@ mod tests {
     #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), decommission_pool(),  Ok(()))]
     #[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -561,25 +525,14 @@ mod tests {
     #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), decommission_pool(),  Ok(()))]
     #[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(decommission_pool(), transfer(),           Ok(()))]
-    #[case(decommission_pool(), burn(),               Ok(()))]
-    #[case(decommission_pool(), lock_then_transfer(), Ok(()))]
-    #[case(decommission_pool(), stake_pool(),         Ok(()))]
-    #[case(decommission_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(decommission_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(decommission_pool(), create_delegation(),  Ok(()))]
-    #[case(decommission_pool(), delegate_staking(),   Ok(()))]
     /*-----------------------------------------------------------------------------------------------*/
     #[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -588,7 +541,6 @@ mod tests {
     #[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), delegate_staking(),   Ok(()))]
     fn tx_one_to_one(
@@ -644,7 +596,7 @@ mod tests {
 
         // valid cases
         {
-            let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+            let valid_inputs = [lock_then_transfer(), transfer()];
             let valid_outputs = [lock_then_transfer(), transfer(), burn()];
             check(&valid_inputs, &valid_outputs, Ok(()));
         }
@@ -691,9 +643,9 @@ mod tests {
     #[trace]
     #[case(Seed::from_entropy())]
     fn tx_one_to_any_invalid_outputs(#[case] seed: Seed) {
-        let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let source_inputs = [lock_then_transfer(), transfer()];
         let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
-        let source_invalid_outputs = [produce_block(), decommission_pool()];
+        let source_invalid_outputs = [produce_block()];
 
         let mut rng = make_seedable_rng(seed);
         let inputs = get_random_outputs_combination(&mut rng, &source_inputs, 1);
@@ -724,7 +676,7 @@ mod tests {
     fn tx_one_to_any_stake_multiple_pools(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let source_inputs = [lock_then_transfer(), transfer()];
         let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
         let source_invalid_outputs = [stake_pool()];
 
@@ -760,7 +712,7 @@ mod tests {
     fn tx_one_to_any_create_multiple_delegations(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let source_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let source_inputs = [lock_then_transfer(), transfer()];
         let source_valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
         let source_invalid_outputs = [create_delegation()];
 
@@ -812,7 +764,7 @@ mod tests {
         };
 
         // valid cases
-        let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let valid_inputs = [lock_then_transfer(), transfer()];
         let valid_outputs = [
             lock_then_transfer(),
             transfer(),
@@ -824,7 +776,7 @@ mod tests {
         check(&valid_inputs, &valid_outputs, Ok(()));
 
         // invalid outputs
-        let invalid_outputs = [produce_block(), decommission_pool()];
+        let invalid_outputs = [produce_block()];
         check(
             &valid_inputs,
             &invalid_outputs,
@@ -856,14 +808,13 @@ mod tests {
         };
 
         // valid cases
-        let valid_inputs = [lock_then_transfer(), transfer(), decommission_pool()];
+        let valid_inputs = [lock_then_transfer(), transfer()];
         let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
         check(&valid_inputs, &valid_outputs, Ok(()));
 
         // invalid cases
         let invalid_inputs = [burn(), stake_pool(), produce_block(), create_delegation()];
-        let invalid_outputs =
-            [stake_pool(), produce_block(), decommission_pool(), create_delegation()];
+        let invalid_outputs = [stake_pool(), produce_block(), create_delegation()];
         check(
             &invalid_inputs,
             &valid_outputs,
@@ -883,7 +834,6 @@ mod tests {
     #[case(transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -892,7 +842,6 @@ mod tests {
     #[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -901,7 +850,6 @@ mod tests {
     #[case(lock_then_transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(lock_then_transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(lock_then_transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(lock_then_transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -910,7 +858,6 @@ mod tests {
     #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), produce_block(),      Ok(()))]
-    #[case(stake_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -919,25 +866,14 @@ mod tests {
     #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), produce_block(),      Ok(()))]
-    #[case(produce_block(), decommission_pool(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
     #[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(decommission_pool(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(decommission_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
     #[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     /*-----------------------------------------------------------------------------------------------*/
@@ -946,7 +882,6 @@ mod tests {
     #[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), decommission_pool(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
     #[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
     fn reward_one_to_one(
@@ -1027,7 +962,6 @@ mod tests {
                 burn(),
                 stake_pool(),
                 produce_block(),
-                decommission_pool(),
                 create_delegation(),
                 delegate_staking(),
             ];
@@ -1056,7 +990,6 @@ mod tests {
             burn(),
             stake_pool(),
             produce_block(),
-            decommission_pool(),
             create_delegation(),
             delegate_staking(),
         ];
