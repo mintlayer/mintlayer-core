@@ -197,7 +197,6 @@ impl Account {
         match txo {
             TxOutput::Transfer(_, d)
             | TxOutput::LockThenTransfer(_, d, _)
-            | TxOutput::SpendShareFromDelegation(_, d, _, _)
             | TxOutput::DecommissionPool(_, d, _, _) => match d {
                 Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
                 Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),

@@ -22,7 +22,7 @@ use common::{
         DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
         TxMainChainIndexError,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{Amount, BlockDistance, BlockHeight, Id},
 };
 use thiserror::Error;
 
@@ -139,6 +139,12 @@ pub enum ConnectTransactionError {
 
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
+    #[error("Maturity setting type for the decommission pool output is invalid")]
+    InvalidDecommissionMaturityType,
+    #[error("Maturity setting for the decommission pool output is too short: {0} < {1}")]
+    InvalidDecommissionMaturityDistance(BlockDistance, BlockDistance),
+    #[error("Maturity setting value for the decommission pool output is invalid: {0}")]
+    InvalidDecommissionMaturityDistanceValue(u64),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
