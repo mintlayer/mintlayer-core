@@ -255,7 +255,7 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn create_transaction_to_addresses(
         &mut self,
         account_index: U31,
-        outputs: Vec<TxOutput>,
+        outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
         let tx = self.for_account_rw(account_index, |account, db_tx| {

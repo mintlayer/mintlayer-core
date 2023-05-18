@@ -143,7 +143,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![output])
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, [output])
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)

@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::tokens::OutputValue;
@@ -72,11 +70,6 @@ impl SendRequest {
         }
     }
 
-    pub fn with_outputs(mut self, mut outputs: Vec<TxOutput>) -> Self {
-        self.outputs.append(&mut outputs);
-        self
-    }
-
     pub fn inputs(&self) -> &[TxInput] {
         &self.inputs
     }
@@ -89,11 +82,16 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(mut self, utxos: BTreeMap<OutPoint, Utxo>) -> Self {
-        for (outpoint, utxo) in utxos.into_iter() {
+    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, Utxo)>) -> Self {
+        for (outpoint, utxo) in utxos {
             self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
             self.utxos.push(utxo.take_output());
         }
+        self
+    }
+
+    pub fn with_outputs(mut self, outputs: impl IntoIterator<Item = TxOutput>) -> Self {
+        self.outputs.extend(outputs);
         self
     }
 
