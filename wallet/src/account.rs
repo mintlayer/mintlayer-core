@@ -195,9 +195,7 @@ impl Account {
     fn is_mine_or_watched(&self, txo: &TxOutput) -> bool {
         // TODO: Should we also report `AnyoneCanSpend` as own?
         match txo {
-            TxOutput::Transfer(_, d)
-            | TxOutput::LockThenTransfer(_, d, _)
-            | TxOutput::DecommissionPool(_, d, _, _) => match d {
+            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => match d {
                 Destination::Address(pkh) => self.key_chain.is_public_key_hash_mine(pkh),
                 Destination::PublicKey(pk) => self.key_chain.is_public_key_mine(pk),
                 Destination::AnyoneCanSpend

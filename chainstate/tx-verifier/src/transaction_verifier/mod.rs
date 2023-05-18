@@ -214,7 +214,6 @@ where
                 | TxOutput::LockThenTransfer(_, _, _)
                 | TxOutput::CreateStakePool(_)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => None,
             })
@@ -246,8 +245,7 @@ where
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
-            TxOutput::ProduceBlockFromStake(_, pool_id)
-            | TxOutput::DecommissionPool(_, _, pool_id, _) => self
+            TxOutput::ProduceBlockFromStake(_, pool_id) => self
                 .accounting_delta_adapter
                 .accounting_delta()
                 .get_pool_data(*pool_id)?
@@ -340,13 +338,27 @@ where
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        TxOutput::CreateStakePool(_)
-                        | TxOutput::DecommissionPool(_, _, _, _)
-                        | TxOutput::CreateDelegationId(_, _)
+                        TxOutput::CreateStakePool(_) => {
+                            todo!("impl");
+                            //let res = self
+                            //    .accounting_delta_adapter
+                            //    .operations(tx_source)
+                            //    .decommission_pool(*pool_id)
+                            //    .map_err(ConnectTransactionError::PoSAccountingError);
+                            //Some(res)
+                        }
+                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .decommission_pool(*pool_id)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
+                        }
+                        TxOutput::CreateDelegationId(_, _)
                         | TxOutput::Transfer(_, _)
                         | TxOutput::LockThenTransfer(_, _, _)
-                        | TxOutput::Burn(_)
-                        | TxOutput::ProduceBlockFromStake(_, _) => None,
+                        | TxOutput::Burn(_) => None,
                     },
                     None => Some(Err(ConnectTransactionError::MissingOutputOrSpent)),
                 },
@@ -366,14 +378,6 @@ where
                         .operations(tx_source)
                         .create_pool(input0.outpoint(), data.as_ref().clone().into())
                         .map(|(_, undo)| undo)
-                        .map_err(ConnectTransactionError::PoSAccountingError);
-                    Some(res)
-                }
-                TxOutput::DecommissionPool(_, _, pool_id, _) => {
-                    let res = self
-                        .accounting_delta_adapter
-                        .operations(tx_source)
-                        .decommission_pool(*pool_id)
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
@@ -457,7 +461,6 @@ where
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
             TxOutput::CreateStakePool(_)
-            | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {

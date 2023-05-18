@@ -62,9 +62,7 @@ impl<'a> SignatureDestinationGetter<'a> {
         let destination_getter =
             |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
                 match output {
-                    TxOutput::Transfer(_, d)
-                    | TxOutput::LockThenTransfer(_, d, _)
-                    | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
+                    TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Ok(d.clone()),
                     TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                         // This error is emitted in other places for attempting to make this spend,
                         // but this is just a double-check.
@@ -110,8 +108,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                 match output {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DelegateStaking(_, _)
-                    | TxOutput::DecommissionPool(_, _, _, _) => {
+                    | TxOutput::DelegateStaking(_, _) => {
                         Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                     }
                     TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {

@@ -107,7 +107,6 @@ where
             TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
-            | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _) => None,
             TxOutput::CreateStakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
                 Some(OutputTimelockCheckRequired::DecommissioningMaturity)
@@ -181,11 +180,6 @@ where
                         check_output_timelock(timelock, required)
                     }
                 },
-                TxOutput::DecommissionPool(_, _, _, timelock) => {
-                    let required =
-                        chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                    check_output_timelock(timelock, required)
-                }
             }?;
         }
     }

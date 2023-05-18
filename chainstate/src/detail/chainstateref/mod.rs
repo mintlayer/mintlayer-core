@@ -459,7 +459,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 TxOutput::Transfer(_, _)
                 | TxOutput::CreateStakePool(_)
                 | TxOutput::Burn(_)
-                | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => Err(
                     CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
@@ -572,7 +571,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     | TxOutput::Burn(v) => v.token_data(),
                     TxOutput::CreateStakePool(_)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::DecommissionPool(_, _, _, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _) => None,
                 })
