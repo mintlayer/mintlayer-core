@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::primitives::Amount;
 use fallible_iterator::{FallibleIterator, IntoFallibleIterator};
@@ -56,12 +56,13 @@ fn insert_or_increase(
     key: CoinOrTokenId,
     amount: Amount,
 ) -> Result<(), TokensError> {
-    match total_amounts.get_mut(&key) {
-        Some(value) => {
+    match total_amounts.entry(key) {
+        Entry::Occupied(mut entry) => {
+            let value = entry.get_mut();
             *value = (*value + amount).ok_or(TokensError::CoinOrTokenOverflow)?;
         }
-        None => {
-            total_amounts.insert(key, amount);
+        Entry::Vacant(ventry) => {
+            ventry.insert(amount);
         }
     }
     Ok(())
