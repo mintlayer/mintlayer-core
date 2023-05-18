@@ -136,6 +136,8 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
+        // Please continue to use read-only transaction here.
+        // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
 
         let version = db_tx.get_storage_version()?;
@@ -176,6 +178,10 @@ impl<B: storage::Backend> Wallet<B> {
             best_block_id,
             best_block_height,
         })
+    }
+
+    pub fn account_indexes(&self) -> impl Iterator<Item = &U31> {
+        self.accounts.keys()
     }
 
     pub fn create_account(&mut self, account_index: U31) -> WalletResult<()> {

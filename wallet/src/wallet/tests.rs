@@ -374,3 +374,49 @@ fn wallet_balance_parent_child_transactions() {
 
     verify_wallet_balance(&chain_config, &wallet, &db, tx_amount2);
 }
+
+#[track_caller]
+fn test_wallet_accounts(
+    chain_config: &Arc<ChainConfig>,
+    wallet: &DefaultWallet,
+    db: &Arc<Store<DefaultBackend>>,
+    expected_accounts: Vec<U31>,
+) {
+    let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
+    assert_eq!(accounts, expected_accounts);
+
+    let mut wallet = Wallet::load_wallet(Arc::clone(chain_config), Arc::clone(db)).unwrap();
+    let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
+    assert_eq!(accounts, expected_accounts);
+
+    for account_index in expected_accounts {
+        wallet.create_account(account_index).expect_err("Account should already exist");
+    }
+}
+
+#[test]
+fn wallet_accounts_creation() {
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet =
+        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    test_wallet_accounts(&chain_config, &wallet, &db, vec![]);
+
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+    test_wallet_accounts(&chain_config, &wallet, &db, vec![DEFAULT_ACCOUNT_INDEX]);
+
+    wallet.create_account(1.try_into().unwrap()).unwrap();
+    test_wallet_accounts(
+        &chain_config,
+        &wallet,
+        &db,
+        vec![DEFAULT_ACCOUNT_INDEX, 1.try_into().unwrap()],
+    );
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet =
+        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    wallet.create_account(123.try_into().unwrap()).unwrap();
+    test_wallet_accounts(&chain_config, &wallet, &db, vec![123.try_into().unwrap()]);
+}
