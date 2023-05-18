@@ -109,7 +109,7 @@ impl AccountKeyChain {
         id: &AccountId,
         root_key: &ExtendedPrivateKey,
     ) -> KeyChainResult<Self> {
-        let account_infos = db_tx.get_account_infos()?;
+        let account_infos = db_tx.get_accounts_info()?;
         let account_info =
             account_infos.get(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
 

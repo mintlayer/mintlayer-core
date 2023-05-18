@@ -33,7 +33,7 @@ storage::decl_schema! {
         /// Store keychain usage states
         pub DBKeychainUsageStates: Map<AccountKeyPurposeId, KeychainUsageState>,
         /// Store for all the private keys in this wallet
-        pub DBPrivateKeys: Map<RootKeyId, RootKeyContent>,
+        pub DBRootKeys: Map<RootKeyId, RootKeyContent>,
         /// Store for all the public keys in this wallet
         pub DBPubKeys: Map<AccountDerivationPathId, ExtendedPublicKey>,
         /// Store for all the addresses that belong to an account

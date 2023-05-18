@@ -425,7 +425,7 @@ impl LeafKeyChain {
             Destination::PublicKey(pk) => self.is_public_key_mine(pk),
             Destination::AnyoneCanSpend
             | Destination::ScriptHash(_)
-            | Destination::ClassicMultisig(_) => false,
+            | Destination::ClassicMultisig(_) => false, // TODO: This can also have another public key hash function
         }
     }
 

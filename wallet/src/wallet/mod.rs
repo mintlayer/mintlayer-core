@@ -84,7 +84,6 @@ pub type WalletResult<T> = Result<T, WalletError>;
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
     db: Arc<Store<B>>,
-    // key_chain: MasterKeyChain<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
     best_block_height: BlockHeight,
@@ -146,7 +145,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
 
-        let account_infos = db_tx.get_account_infos()?;
+        let account_infos = db_tx.get_accounts_info()?;
 
         let accounts = account_infos
             .keys()
