@@ -66,7 +66,7 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, Transaction,
+        Block, ChainConfig, DelegationId, GenBlock, OutPoint, OutPointSourceId, Transaction,
         TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
@@ -339,13 +339,14 @@ where
                             Some(res)
                         }
                         TxOutput::CreateStakePool(_) => {
-                            todo!("impl");
-                            //let res = self
-                            //    .accounting_delta_adapter
-                            //    .operations(tx_source)
-                            //    .decommission_pool(*pool_id)
-                            //    .map_err(ConnectTransactionError::PoSAccountingError);
-                            //Some(res)
+                            let utxo_input0 = OutPoint::new(input.outpoint().tx_id(), 0);
+                            let pool_id = pos_accounting::make_pool_id(&utxo_input0);
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .decommission_pool(pool_id)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
                         }
                         TxOutput::ProduceBlockFromStake(_, pool_id) => {
                             let res = self
