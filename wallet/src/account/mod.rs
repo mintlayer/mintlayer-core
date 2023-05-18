@@ -147,8 +147,7 @@ impl Account {
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+                | TxOutput::DelegateStaking(_, _) => {
                     return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                         output.clone(),
                     )))
@@ -284,7 +283,6 @@ impl Account {
         match txo {
             TxOutput::Transfer(_, d)
             | TxOutput::LockThenTransfer(_, d, _)
-            | TxOutput::SpendShareFromDelegation(_, d, _, _)
             | TxOutput::DecommissionPool(_, d, _, _) => Some(d),
             TxOutput::Burn(_)
             | TxOutput::CreateStakePool(_)

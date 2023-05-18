@@ -216,8 +216,7 @@ where
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::DecommissionPool(_, _, _, _)
                 | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _)
-                | TxOutput::SpendShareFromDelegation(_, _, _, _) => None,
+                | TxOutput::DelegateStaking(_, _) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -243,8 +242,7 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+            | TxOutput::DelegateStaking(_, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
             TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
@@ -345,7 +343,6 @@ where
                         TxOutput::CreateStakePool(_)
                         | TxOutput::DecommissionPool(_, _, _, _)
                         | TxOutput::CreateDelegationId(_, _)
-                        | TxOutput::SpendShareFromDelegation(_, _, _, _)
                         | TxOutput::Transfer(_, _)
                         | TxOutput::LockThenTransfer(_, _, _)
                         | TxOutput::Burn(_)
@@ -400,10 +397,6 @@ where
                         .delegate_staking(*delegation_id, *amount)
                         .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
-                }
-                TxOutput::SpendShareFromDelegation(_, _, _, _) => {
-                    // TODO: check for delegation_id mismatch
-                    None
                 }
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
@@ -466,8 +459,7 @@ where
             TxOutput::CreateStakePool(_)
             | TxOutput::DecommissionPool(_, _, _, _)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::DelegateStaking(_, _)
-            | TxOutput::SpendShareFromDelegation(_, _, _, _) => {
+            | TxOutput::DelegateStaking(_, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)

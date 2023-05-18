@@ -134,12 +134,6 @@ pub enum CheckBlockTransactionsError {
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
-    #[error("Maturity setting type for the decommission pool output in tx {0} is invalid")]
-    InvalidDecommissionMaturityType(Id<Transaction>),
-    #[error("Maturity setting for the decommission pool output in tx {0} too short: {1} < {2}")]
-    InvalidDecommissionMaturityDistance(Id<Transaction>, BlockDistance, BlockDistance),
-    #[error("Maturity setting value for the decommission pool output in tx {0} is invalid: {1}")]
-    InvalidDecommissionMaturityDistanceValue(Id<Transaction>, u64),
     #[error("No signature data size is too large: {0} > {1}")]
     NoSignatureDataSizeTooLarge(usize, usize),
 }

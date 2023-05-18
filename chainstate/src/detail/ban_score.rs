@@ -132,6 +132,9 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
+            ConnectTransactionError::InvalidDecommissionMaturityType => 100,
+            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue(_) => 100,
+            ConnectTransactionError::InvalidDecommissionMaturityDistance(_, _) => 100,
         }
     }
 }
@@ -265,9 +268,6 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityType(_) => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(_, _) => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(_, _, _) => 100,
             CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
         }
     }
