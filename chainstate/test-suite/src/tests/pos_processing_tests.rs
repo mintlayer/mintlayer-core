@@ -1363,10 +1363,9 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
 
     let tx = TransactionBuilder::new()
         .add_input(block_2_reward_outpoint.into(), empty_witness(&mut rng))
-        .add_output(TxOutput::DecommissionPool(
-            total_reward,
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(total_reward),
             anyonecanspend_address(),
-            pool_id1,
             OutputTimeLock::ForBlockCount(2000),
         ))
         .build();
@@ -1481,10 +1480,9 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
 
     let tx = TransactionBuilder::new()
         .add_input(stake_pool_outpoint2.into(), empty_witness(&mut rng))
-        .add_output(TxOutput::DecommissionPool(
-            total_reward,
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(total_reward),
             anyonecanspend_address(),
-            pool_id2,
             OutputTimeLock::ForBlockCount(50),
         ))
         .build();

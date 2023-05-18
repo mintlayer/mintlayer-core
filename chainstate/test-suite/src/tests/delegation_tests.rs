@@ -321,16 +321,14 @@ fn delegate_staking(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::DelegateStaking(spend_change, delegation_id))
-            .add_output(TxOutput::SpendShareFromDelegation(
-                amount_to_spend,
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_spend),
                 Destination::AnyoneCanSpend,
-                delegation_id,
                 OutputTimeLock::ForBlockCount(1),
             ))
-            .add_output(TxOutput::SpendShareFromDelegation(
-                amount_to_spend,
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_spend),
                 Destination::AnyoneCanSpend,
-                delegation_id,
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
@@ -349,10 +347,9 @@ fn delegate_staking(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::SpendShareFromDelegation(
-                spend_change,
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(spend_change),
                 Destination::AnyoneCanSpend,
-                delegation_id,
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
@@ -387,7 +384,7 @@ fn delegation_cleanup(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (pool_id, stake_outpoint, delegation_id, _, transfer_outpoint) =
+        let (_, stake_outpoint, delegation_id, _, transfer_outpoint) =
             prepare_delegation(&mut rng, &mut tf);
         let amount_to_delegate = get_output_value(
             utxo::UtxosStorageRead::get_utxo(&tf.storage, &transfer_outpoint)
@@ -419,10 +416,9 @@ fn delegation_cleanup(#[case] seed: Seed) {
         // decommission the pool
         let tx = TransactionBuilder::new()
             .add_input(stake_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DecommissionPool(
-                Amount::from_atoms(1),
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(Amount::from_atoms(1)),
                 Destination::AnyoneCanSpend,
-                pool_id,
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
@@ -431,10 +427,9 @@ fn delegation_cleanup(#[case] seed: Seed) {
         // Spend all delegation share
         let tx = TransactionBuilder::new()
             .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::SpendShareFromDelegation(
-                amount_to_delegate,
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_delegate),
                 Destination::AnyoneCanSpend,
-                delegation_id,
                 OutputTimeLock::ForBlockCount(1),
             ))
             .build();
