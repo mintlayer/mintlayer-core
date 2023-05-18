@@ -79,7 +79,8 @@ impl Decode for DerivationPath {
         let mut path = Vec::with_capacity(size as usize);
 
         for _ in 0..size {
-            path.push(<ChildNumber>::decode(input)?);
+            let bytes = <[u8; 4]>::decode(input)?;
+            path.push(<ChildNumber>::from_encoded_be_bytes(bytes));
         }
         Ok(DerivationPath(path))
     }

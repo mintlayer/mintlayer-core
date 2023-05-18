@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode, Error, Input, Output};
+use serialization::{Decode, Encode};
 use std::{
     fmt::{self, Formatter, Write},
     str::FromStr,
@@ -25,7 +25,7 @@ const HARDENED_APOS: char = '\'';
 const HARDENED_H: char = 'h';
 
 /// BIP32-like child numbers
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct ChildNumber(u32);
 
 impl ChildNumber {
@@ -66,29 +66,17 @@ impl ChildNumber {
     }
 
     pub fn into_encoded_be_bytes(self) -> [u8; 4] {
-        self.into_encoded_index().to_be_bytes()
+        self.0.to_be_bytes()
+    }
+
+    pub fn from_encoded_be_bytes(bytes: [u8; 4]) -> Self {
+        Self(u32::from_be_bytes(bytes))
     }
 
     pub fn increment(&self) -> Result<Self, DerivationError> {
         let (index_u31, msb) = U31::from_u32_with_msb(self.0);
         let new_index_u31 = index_u31.plus_one()?;
         Ok(Self(U31::into_encoded_with_msb(new_index_u31, msb)))
-    }
-}
-
-impl Encode for ChildNumber {
-    fn encode_to<T: Output + ?Sized>(&self, dest: &mut T) {
-        dest.write(&self.into_encoded_be_bytes());
-    }
-}
-
-impl Decode for ChildNumber {
-    fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        let mut num_be_bytes = [0u8; 4];
-        input.read(&mut num_be_bytes)?;
-        Ok(Self::from_index_with_hardened_bit(u32::from_be_bytes(
-            num_be_bytes,
-        )))
     }
 }
 
