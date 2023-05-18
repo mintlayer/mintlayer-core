@@ -79,23 +79,26 @@ fn make_tx_with_stake_pool(
     amount_to_transfer: Amount,
 ) -> (SignedTransaction, PoolId, PoolData) {
     let destination = new_pub_key_destination(rng);
+    let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
+    let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
-    let stake_output = TxOutput::CreateStakePool(Box::new(StakePoolData::new(
-        amount_to_stake,
-        anyonecanspend_address(),
-        pool_data.vrf_public_key().clone(),
-        pool_data.decommission_destination().clone(),
-        pool_data.margin_ratio_per_thousand(),
-        pool_data.cost_per_block(),
-    )));
+    let stake_output = TxOutput::CreateStakePool(
+        pool_id,
+        Box::new(StakePoolData::new(
+            amount_to_stake,
+            anyonecanspend_address(),
+            pool_data.vrf_public_key().clone(),
+            pool_data.decommission_destination().clone(),
+            pool_data.margin_ratio_per_thousand(),
+            pool_data.cost_per_block(),
+        )),
+    );
 
     let transfer_output = TxOutput::Transfer(
         OutputValue::Coin(amount_to_transfer),
         anyonecanspend_address(),
     );
 
-    let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
-    let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
     let tx = TransactionBuilder::new()
         .add_input(outpoint.into(), empty_witness(rng))
         .add_output(transfer_output)

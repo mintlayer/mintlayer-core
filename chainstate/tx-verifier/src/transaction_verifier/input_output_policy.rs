@@ -371,14 +371,17 @@ mod tests {
 
     fn stake_pool() -> TxOutput {
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
-        TxOutput::CreateStakePool(Box::new(StakePoolData::new(
-            Amount::ZERO,
-            Destination::AnyoneCanSpend,
-            vrf_pub_key,
-            Destination::AnyoneCanSpend,
-            PerThousand::new(0).unwrap(),
-            Amount::ZERO,
-        )))
+        TxOutput::CreateStakePool(
+            PoolId::new(H256::zero()),
+            Box::new(StakePoolData::new(
+                Amount::ZERO,
+                Destination::AnyoneCanSpend,
+                vrf_pub_key,
+                Destination::AnyoneCanSpend,
+                PerThousand::new(0).unwrap(),
+                Amount::ZERO,
+            )),
+        )
     }
 
     fn produce_block() -> TxOutput {
@@ -514,7 +517,7 @@ mod tests {
     /*-----------------------------------------------------------------------------------------------*/
     #[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+    #[case(stake_pool(), lock_then_transfer(), Ok(()))]
     #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
@@ -522,7 +525,7 @@ mod tests {
     /*-----------------------------------------------------------------------------------------------*/
     #[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+    #[case(produce_block(), lock_then_transfer(), Ok(()))]
     #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
@@ -538,7 +541,7 @@ mod tests {
     /*-----------------------------------------------------------------------------------------------*/
     #[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+    #[case(delegate_staking(), lock_then_transfer(), Ok(()))]
     #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
     #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]

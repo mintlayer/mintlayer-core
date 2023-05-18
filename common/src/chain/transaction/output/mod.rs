@@ -51,7 +51,7 @@ pub enum TxOutput {
     Burn(OutputValue),
     /// Output type that is used to create a stake pool
     #[codec(index = 3)]
-    CreateStakePool(Box<StakePoolData>),
+    CreateStakePool(PoolId, Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
@@ -67,7 +67,7 @@ impl TxOutput {
         match self {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_)
+            | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,

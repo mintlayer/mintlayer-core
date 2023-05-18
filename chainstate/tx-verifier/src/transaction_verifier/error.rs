@@ -145,6 +145,8 @@ pub enum ConnectTransactionError {
     InvalidDecommissionMaturityDistance(BlockDistance, BlockDistance),
     #[error("Maturity setting value for the decommission pool output is invalid: {0}")]
     InvalidDecommissionMaturityDistanceValue(u64),
+    #[error("Pool ids should be equal: {0}, {1}")]
+    PoolIdMismatch(PoolId, PoolId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

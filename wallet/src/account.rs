@@ -204,7 +204,7 @@ impl Account {
             },
             TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
-            | TxOutput::CreateStakePool(_)
+            | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _) => false,
             TxOutput::DelegateStaking(_, _) => unimplemented!("PoSAccountingView is required"),
         }

@@ -76,7 +76,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         ))?
                         .spend_destination()
                         .clone()),
-                    TxOutput::CreateStakePool(pool_data) => {
+                    TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation transaction is only allowed in a
                         // context of a transaction (as opposed to block reward) only if this pool
                         // is being decommissioned.
@@ -120,7 +120,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         // create another block, given that this is a block reward.
                         Ok(d.clone())
                     }
-                    TxOutput::CreateStakePool(pool_data) => {
+                    TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation output is only allowed when
                         // creating a block (given it's in a block reward; otherwise it should
                         // be a transaction for decommissioning the pool), hence the staker key

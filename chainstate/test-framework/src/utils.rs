@@ -42,7 +42,7 @@ pub fn get_output_value(output: &TxOutput) -> Option<OutputValue> {
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             Some(v.clone())
         }
-        TxOutput::CreateStakePool(_)
+        TxOutput::CreateStakePool(_, _)
         | TxOutput::ProduceBlockFromStake(_, _)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => None,

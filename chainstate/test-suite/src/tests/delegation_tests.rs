@@ -54,7 +54,10 @@ fn prepare_stake_pool(
 
     let tx = TransactionBuilder::new()
         .add_input(genesis_outpoint.into(), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(amount_to_stake),
             Destination::AnyoneCanSpend,
@@ -207,7 +210,10 @@ fn create_delegation_twice(#[case] seed: Seed) {
         // create pool and 2 transfer utxos
         let tx = TransactionBuilder::new()
             .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
+            .add_output(TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(stake_pool_data),
+            ))
             .add_output(TxOutput::Transfer(
                 OutputValue::Coin(amount_to_stake),
                 Destination::AnyoneCanSpend,

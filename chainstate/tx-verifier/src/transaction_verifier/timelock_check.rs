@@ -108,7 +108,7 @@ where
             | TxOutput::LockThenTransfer(_, _, _)
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _) => None,
-            TxOutput::CreateStakePool(_) | TxOutput::ProduceBlockFromStake(_, _) => {
+            TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
                 Some(OutputTimelockCheckRequired::DecommissioningMaturity)
             }
             TxOutput::DelegateStaking(_, _) => {
@@ -164,7 +164,7 @@ where
             match output {
                 TxOutput::Transfer(_, _)
                 | TxOutput::Burn(_)
-                | TxOutput::CreateStakePool(_)
+                | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => Ok(()),
