@@ -229,6 +229,12 @@ fn bootstrap_tests(#[case] seed: Seed) {
 
             tf3.chainstate.import_bootstrap_stream(reader).unwrap();
 
+            //Without the orphans the tf3 chain will only contain the mainchain
+            assert_eq!(
+                tf3.chainstate.get_block_id_tree_as_list().unwrap(),
+                tf1.chainstate.get_mainchain_blocks_list().unwrap(),
+            );
+
             assert_eq!(
                 tf3.chainstate.get_mainchain_blocks_list().unwrap(),
                 tf1.chainstate.get_mainchain_blocks_list().unwrap(),
