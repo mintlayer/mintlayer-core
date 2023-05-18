@@ -102,7 +102,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {
         let res = self
-            .call_mut(move |this| this.process_block(block.into_inner(), BlockSource::Local))
+            .call_mut(move |this| this.process_block(block.take(), BlockSource::Local))
             .await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));

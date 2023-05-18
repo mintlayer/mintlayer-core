@@ -26,7 +26,7 @@ impl<T> HexEncoded<T> {
         Self(value)
     }
 
-    pub fn into_inner(self) -> T {
+    pub fn take(self) -> T {
         self.0
     }
 }

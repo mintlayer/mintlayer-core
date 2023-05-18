@@ -40,7 +40,7 @@ impl NodeInterface for NodeRpcClient {
         ChainstateRpcClient::get_block(&self.http_client, block_id)
             .await
             .map_err(NodeRpcError::ResponseError)
-            .map(|block_opt| block_opt.map(HexEncoded::into_inner))
+            .map(|block_opt| block_opt.map(HexEncoded::take))
     }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
@@ -90,7 +90,7 @@ impl NodeInterface for NodeRpcClient {
             transactions,
         )
         .await
-        .map(HexEncoded::into_inner)
+        .map(HexEncoded::take)
         .map_err(NodeRpcError::ResponseError)
     }
 

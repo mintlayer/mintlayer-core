@@ -43,7 +43,7 @@ impl MempoolRpcServer for super::MempoolHandle {
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<()> {
-        self.call_mut(|this| this.add_transaction(tx.into_inner()))
+        self.call_mut(|this| this.add_transaction(tx.take()))
             .await
             .map_err(rpc::Error::to_call_error)?
             .map_err(rpc::Error::to_call_error)

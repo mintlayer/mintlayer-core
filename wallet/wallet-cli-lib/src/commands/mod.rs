@@ -299,9 +299,9 @@ pub async fn handle_wallet_command(
             transactions,
         } => {
             let transactions =
-                transactions.map(|txs| txs.into_iter().map(HexEncoded::into_inner).collect());
+                transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
             let block = rpc_client
-                .generate_block(reward_destination.into_inner(), transactions)
+                .generate_block(reward_destination.take(), transactions)
                 .await
                 .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -309,10 +309,7 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::SubmitBlock { block } => {
-            rpc_client
-                .submit_block(block.into_inner())
-                .await
-                .map_err(WalletCliError::RpcError)?;
+            rpc_client.submit_block(block.take()).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
                 "The block was submitted successfully".to_owned(),
             ))
@@ -320,7 +317,7 @@ pub async fn handle_wallet_command(
 
         WalletCommand::SubmitTransaction { transaction } => {
             rpc_client
-                .submit_transaction(transaction.into_inner())
+                .submit_transaction(transaction.take())
                 .await
                 .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(

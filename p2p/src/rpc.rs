@@ -96,7 +96,7 @@ impl P2pRpcServer for super::P2pHandle {
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()> {
-        handle_error(self.call_async_mut(|s| s.submit_transaction(tx.into_inner())).await)
+        handle_error(self.call_async_mut(|s| s.submit_transaction(tx.take())).await)
     }
 }
 

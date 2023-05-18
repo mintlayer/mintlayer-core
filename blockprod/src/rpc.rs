@@ -61,10 +61,8 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::Result<bool> {
         let stopped = handle_error(
-            self.call_async_mut(move |this| {
-                Box::pin(async { this.stop_job(job_id.into_inner()).await })
-            })
-            .await,
+            self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id.take()).await }))
+                .await,
         )?;
 
         Ok(stopped)
@@ -76,11 +74,11 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> rpc::Result<HexEncoded<Block>> {
         let transactions =
-            transactions.map(|txs| txs.into_iter().map(HexEncoded::into_inner).collect::<Vec<_>>());
+            transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect::<Vec<_>>());
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(reward_destination.into_inner(), transactions)
+                this.generate_block(reward_destination.take(), transactions)
             })
             .await,
         )?;
