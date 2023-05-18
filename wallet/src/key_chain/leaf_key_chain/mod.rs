@@ -438,40 +438,42 @@ impl LeafKeyChain {
     }
 
     /// Get the extended public key provided a destination or None if no key found
-    pub fn get_xpub_from_destination(&self, dest: &Destination) -> Option<&ExtendedPublicKey> {
+    pub fn get_child_num_from_destination(&self, dest: &Destination) -> Option<ChildNumber> {
         match dest {
-            Destination::Address(pkh) => self.get_xpub_from_public_key_hash(pkh),
-            Destination::PublicKey(pk) => self.get_xpub_from_public_key(pk),
+            Destination::Address(pkh) => self.get_child_num_from_public_key_hash(pkh),
+            Destination::PublicKey(pk) => self.get_child_num_from_public_key(pk),
             Destination::AnyoneCanSpend
             | Destination::ScriptHash(_)
             | Destination::ClassicMultisig(_) => None,
         }
     }
 
+    pub fn get_derived_xpub(&self, child_num: ChildNumber) -> Option<&ExtendedPublicKey> {
+        self.derived_public_keys.get(&child_num)
+    }
+
     /// Get the extended public key provided a public key or None if no key found
-    pub fn get_xpub_from_public_key(&self, pub_key: &PublicKey) -> Option<&ExtendedPublicKey> {
-        self.derived_public_keys.get(self.public_key_to_index.get(pub_key)?)
+    pub fn get_child_num_from_public_key(&self, pub_key: &PublicKey) -> Option<ChildNumber> {
+        self.public_key_to_index.get(pub_key).cloned()
     }
 
     /// Get the extended public key provided a public key hash or None if no key found
-    pub fn get_xpub_from_public_key_hash(&self, pkh: &PublicKeyHash) -> Option<&ExtendedPublicKey> {
-        self.derived_public_keys.get(self.public_key_hash_to_index.get(pkh)?)
+    pub fn get_child_num_from_public_key_hash(&self, pkh: &PublicKeyHash) -> Option<ChildNumber> {
+        self.public_key_hash_to_index.get(pkh).cloned()
     }
 
     /// Mark a specific key as used in the key pool. This will update the last used key index if
     /// necessary. Returns false if a key was found and set to used.
-    pub fn mark_extended_pubkey_as_used<B: storage::Backend>(
+    fn mark_child_key_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        extended_public_key: &ExtendedPublicKey,
+        child_num: ChildNumber,
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         // Check if public key is in the key pool
-        if self.is_pubkey_mine_in_key_pool(extended_public_key) {
+        if self.derived_public_keys.contains_key(&child_num) {
             // Get the key index of the public key, this should always be Some
-            let key_index = extended_public_key.get_derivation_path().as_slice().last()
-                .expect("The provided public key belongs to this key chain, hence it should always have a key index");
-            self.usage_state.increment_up_to_last_used(*key_index);
+            self.usage_state.increment_up_to_last_used(child_num);
             db_tx.set_keychain_usage_state(
                 &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
                 &self.usage_state,
@@ -488,9 +490,8 @@ impl LeafKeyChain {
         public_key: &PublicKey,
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
-        if let Some(xpub) = self.get_xpub_from_public_key(public_key) {
-            // TODO maybe refactor code to remove this clone()
-            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone(), lookahead_size)
+        if let Some(child_num) = self.get_child_num_from_public_key(public_key) {
+            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)
         } else {
             Ok(false)
         }
@@ -502,9 +503,8 @@ impl LeafKeyChain {
         public_key_hash: &PublicKeyHash,
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
-        if let Some(xpub) = self.get_xpub_from_public_key_hash(public_key_hash) {
-            // TODO maybe refactor code to remove this clone()
-            self.mark_extended_pubkey_as_used(db_tx, &xpub.clone(), lookahead_size)
+        if let Some(child_num) = self.get_child_num_from_public_key_hash(public_key_hash) {
+            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)
         } else {
             Ok(false)
         }

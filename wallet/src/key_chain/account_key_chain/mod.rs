@@ -185,8 +185,10 @@ impl AccountKeyChain {
         if let Some(account_private_key) = self.account_private_key.as_ref() {
             let xpriv = account_private_key.as_key();
             for purpose in KeyPurpose::ALL {
-                if let Some(xpub) =
-                    self.get_leaf_key_chain(purpose).get_xpub_from_destination(destination)
+                let leaf_key = self.get_leaf_key_chain(purpose);
+                if let Some(xpub) = leaf_key
+                    .get_child_num_from_destination(destination)
+                    .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
                 {
                     return Self::get_private_key(xpriv, xpub);
                 }
@@ -249,22 +251,6 @@ impl AccountKeyChain {
 
     pub fn lookahead_size(&self) -> u32 {
         *self.lookahead_size
-    }
-
-    /// Marks a public key as being used. Returns true if a key was found and set to used.
-    pub fn mark_as_used<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        xpub: &ExtendedPublicKey,
-    ) -> KeyChainResult<bool> {
-        let lookahead_size = self.lookahead_size();
-        for purpose in KeyPurpose::ALL {
-            let leaf_keys = self.get_leaf_key_chain_mut(purpose);
-            if leaf_keys.mark_extended_pubkey_as_used(db_tx, xpub, lookahead_size)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
