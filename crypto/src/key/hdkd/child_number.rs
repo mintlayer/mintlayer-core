@@ -24,75 +24,55 @@ use super::{derivable::DerivationError, u31::U31};
 const HARDENED_APOS: char = '\'';
 const HARDENED_H: char = 'h';
 
-/// BIP32-like child numbers. Currently we only support hardened derivations
+/// BIP32-like child numbers
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct ChildNumber(DerivationType);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-enum DerivationType {
-    Normal(U31),
-    Hardened(U31),
-}
+pub struct ChildNumber(u32);
 
 impl ChildNumber {
-    pub const ZERO: Self = ChildNumber(DerivationType::Normal(U31::from_u32_with_msb(0).0));
-    pub const ONE: Self = ChildNumber(DerivationType::Normal(U31::from_u32_with_msb(1).0));
+    pub const ZERO: Self = ChildNumber(0);
+    pub const ONE: Self = ChildNumber(1);
 
     /// Return a hardened child number
     pub const fn from_hardened(index: U31) -> Self {
-        ChildNumber(DerivationType::Hardened(index))
+        ChildNumber(index.into_encoded_with_msb(true))
     }
 
     /// Return a normal child number
     pub const fn from_normal(index: U31) -> Self {
-        ChildNumber(DerivationType::Normal(index))
+        ChildNumber(index.into_encoded_with_msb(false))
     }
 
     /// Return a child based on the hardened bit (MSB bit)
     pub fn from_index_with_hardened_bit(index: u32) -> Self {
-        let (index_u31, msb) = U31::from_u32_with_msb(index);
-        if msb {
-            Self::from_hardened(index_u31)
-        } else {
-            Self::from_normal(index_u31)
-        }
+        Self(index)
     }
 
     /// Get the index without the hardened bit set
     pub const fn get_index(&self) -> u32 {
-        match self.0 {
-            DerivationType::Normal(i) | DerivationType::Hardened(i) => i.into_u32(),
-        }
+        U31::from_u32_with_msb(self.0).0.into_u32()
     }
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
     pub fn into_encoded_index(self) -> u32 {
-        match self.0 {
-            DerivationType::Normal(i) => i.into_encoded_with_msb(false),
-            DerivationType::Hardened(i) => i.into_encoded_with_msb(true),
-        }
-    }
-
-    pub fn into_encoded_be_bytes(self) -> [u8; 4] {
-        self.into_encoded_index().to_be_bytes()
+        self.0
     }
 
     pub fn is_hardened(&self) -> bool {
-        match self.0 {
-            DerivationType::Normal(_) => false,
-            DerivationType::Hardened(_) => true,
-        }
+        U31::from_u32_with_msb(self.0).1
     }
 
     pub fn is_normal(&self) -> bool {
         !self.is_hardened()
     }
 
+    pub fn into_encoded_be_bytes(self) -> [u8; 4] {
+        self.into_encoded_index().to_be_bytes()
+    }
+
     pub fn increment(&self) -> Result<Self, DerivationError> {
-        match self.0 {
-            DerivationType::Normal(i) => Ok(ChildNumber(DerivationType::Normal(i.plus_one()?))),
-            DerivationType::Hardened(i) => Ok(ChildNumber(DerivationType::Hardened(i.plus_one()?))),
-        }
+        let (index_u31, msb) = U31::from_u32_with_msb(self.0);
+        let new_index_u31 = index_u31.plus_one()?;
+        Ok(Self(U31::into_encoded_with_msb(new_index_u31, msb)))
     }
 }
 
@@ -144,13 +124,13 @@ impl FromStr for ChildNumber {
 
 impl fmt::Display for ChildNumber {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self.0 {
-            DerivationType::Hardened(index) => {
-                fmt::Display::fmt(&index, f)?;
-                let alt = f.alternate();
-                f.write_char(if alt { HARDENED_H } else { HARDENED_APOS })
-            }
-            DerivationType::Normal(index) => fmt::Display::fmt(&index, f),
+        let (index_u31, msb) = U31::from_u32_with_msb(self.0);
+        if msb {
+            fmt::Display::fmt(&index_u31, f)?;
+            let alt = f.alternate();
+            f.write_char(if alt { HARDENED_H } else { HARDENED_APOS })
+        } else {
+            fmt::Display::fmt(&index_u31, f)
         }
     }
 }
