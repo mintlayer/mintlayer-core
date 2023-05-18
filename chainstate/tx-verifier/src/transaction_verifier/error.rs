@@ -145,8 +145,6 @@ pub enum ConnectTransactionError {
     InvalidDecommissionMaturityDistance(BlockDistance, BlockDistance),
     #[error("Maturity setting value for the decommission pool output is invalid: {0}")]
     InvalidDecommissionMaturityDistanceValue(u64),
-    #[error("Pool ids should be equal: {0}, {1}")]
-    PoolIdMismatch(PoolId, PoolId),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -268,6 +266,8 @@ pub enum SpendStakeError {
     InvalidBlockRewardOutputType,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
+    #[error("Pool id in kernel {0} doesn't match id in block reward output {1}")]
+    StakePoolIdMismatch(PoolId, PoolId),
     #[error("Consensus PoS error")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }
