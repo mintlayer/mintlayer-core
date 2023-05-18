@@ -143,7 +143,7 @@ impl Account {
                 TxOutput::Transfer(v, _)
                 | TxOutput::LockThenTransfer(v, _, _)
                 | TxOutput::Burn(v) => v,
-                TxOutput::CreateStakePool(_)
+                TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => {
@@ -282,7 +282,7 @@ impl Account {
         match txo {
             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
             TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_)
+            | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,

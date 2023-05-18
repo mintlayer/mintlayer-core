@@ -465,7 +465,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     Ok(())
                 }
                 TxOutput::Transfer(_, _)
-                | TxOutput::CreateStakePool(_)
+                | TxOutput::CreateStakePool(_, _)
                 | TxOutput::Burn(_)
                 | TxOutput::CreateDelegationId(_, _)
                 | TxOutput::DelegateStaking(_, _) => Err(
@@ -577,7 +577,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
                     | TxOutput::Burn(v) => v.token_data(),
-                    TxOutput::CreateStakePool(_)
+                    TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
                     | TxOutput::CreateDelegationId(_, _)
                     | TxOutput::DelegateStaking(_, _) => None,

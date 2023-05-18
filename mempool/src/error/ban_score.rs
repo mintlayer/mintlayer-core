@@ -147,6 +147,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::InvalidDecommissionMaturityDistance(_, _) => 100,
             ConnectTransactionError::InvalidDecommissionMaturityDistanceValue(_) => 100,
             ConnectTransactionError::InvalidDecommissionMaturityType => 100,
+            ConnectTransactionError::PoolIdMismatch(_, _) => 100,
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,

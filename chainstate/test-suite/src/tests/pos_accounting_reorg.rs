@@ -75,24 +75,25 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_a
             let destination_a = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let tx_a = TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
-                    empty_witness(&mut rng),
-                )
-                .add_output(TxOutput::CreateStakePool(Box::new(StakePoolData::new(
-                    Amount::from_atoms(rng.gen_range(100_000..200_000)),
-                    anyonecanspend_address(),
-                    vrf_pub_key_a,
-                    destination_a,
-                    PerThousand::new(0).unwrap(),
-                    Amount::ZERO,
-                ))))
-                .build();
-            let pool_id_a = pos_accounting::make_pool_id(&OutPoint::new(
+            let genesis_outpoint = OutPoint::new(
                 OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                 0,
-            ));
+            );
+            let pool_id_a = pos_accounting::make_pool_id(&genesis_outpoint);
+            let tx_a = TransactionBuilder::new()
+                .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+                .add_output(TxOutput::CreateStakePool(
+                    pool_id_a,
+                    Box::new(StakePoolData::new(
+                        Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                        anyonecanspend_address(),
+                        vrf_pub_key_a,
+                        destination_a,
+                        PerThousand::new(0).unwrap(),
+                        Amount::ZERO,
+                    )),
+                ))
+                .build();
 
             // prepare tx_b
             let tx_b = TransactionBuilder::new()
@@ -109,22 +110,24 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_c
             let destination_c = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+            let tx_b_outpoint0 = OutPoint::new(
+                OutPointSourceId::Transaction(tx_b.transaction().get_id()),
+                0,
+            );
+            let pool_id_c = pos_accounting::make_pool_id(&tx_b_outpoint0);
             let tx_c = TransactionBuilder::new()
-                .add_input(
-                    TxInput::new(
-                        OutPointSourceId::Transaction(tx_b.transaction().get_id()),
-                        0,
-                    ),
-                    empty_witness(&mut rng),
-                )
-                .add_output(TxOutput::CreateStakePool(Box::new(StakePoolData::new(
-                    Amount::from_atoms(rng.gen_range(1000..100_000)),
-                    anyonecanspend_address(),
-                    vrf_pub_key_c,
-                    destination_c,
-                    PerThousand::new(0).unwrap(),
-                    Amount::ZERO,
-                ))))
+                .add_input(tx_b_outpoint0.into(), empty_witness(&mut rng))
+                .add_output(TxOutput::CreateStakePool(
+                    pool_id_c,
+                    Box::new(StakePoolData::new(
+                        Amount::from_atoms(rng.gen_range(1000..100_000)),
+                        anyonecanspend_address(),
+                        vrf_pub_key_c,
+                        destination_c,
+                        PerThousand::new(0).unwrap(),
+                        Amount::ZERO,
+                    )),
+                ))
                 .build();
 
             // create block a

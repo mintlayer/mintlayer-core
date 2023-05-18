@@ -151,7 +151,7 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
                 SpendStakeError::InvalidBlockRewardOutputType,
             ));
         }
-        TxOutput::CreateStakePool(d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pos_view = PoSAccountingDB::<_, TipStorageTag>::new(db_tx);
             let pool_data = pos_view
@@ -267,7 +267,7 @@ mod tests {
             PerThousand::new(0).unwrap(),
             Amount::ZERO,
         );
-        let reward_output = TxOutput::CreateStakePool(Box::new(stake_pool_data));
+        let reward_output = TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data));
         let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, Compact(1));
         Block::new(
             vec![],

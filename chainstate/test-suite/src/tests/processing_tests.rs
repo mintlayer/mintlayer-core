@@ -40,9 +40,9 @@ use common::{
         timelock::OutputTimeLock,
         tokens::OutputValue,
         Block, ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPointSourceId,
-        OutputSpentState, TxInput, TxOutput, UpgradeVersion,
+        OutputSpentState, PoolId, TxInput, TxOutput, UpgradeVersion,
     },
-    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable},
+    primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Id, Idable, H256},
     Uint256,
 };
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
@@ -194,18 +194,20 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
         // Case 7: reward is a stake lock
         let decommission_destination = new_pub_key_destination(&mut rng);
         let (_, vrf_pub_key) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+        let pool_id = PoolId::new(H256::random_using(&mut rng));
         let block = tf
             .make_block_builder()
-            .with_reward(vec![TxOutput::CreateStakePool(Box::new(
-                StakePoolData::new(
+            .with_reward(vec![TxOutput::CreateStakePool(
+                pool_id,
+                Box::new(StakePoolData::new(
                     Amount::from_atoms(10),
                     anyonecanspend_address(),
                     vrf_pub_key,
                     decommission_destination,
                     PerThousand::new(0).unwrap(),
                     Amount::ZERO,
-                ),
-            ))])
+                )),
+            )])
             .add_test_transaction_from_best_block(&mut rng)
             .build();
 

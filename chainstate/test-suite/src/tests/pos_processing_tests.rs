@@ -47,7 +47,7 @@ use common::{
         timelock::OutputTimeLock,
         tokens::OutputValue,
         ConsensusUpgrade, Destination, GenBlock, NetUpgrades, OutPoint, OutPointSourceId,
-        PoSChainConfig, PoolId, TxInput, TxOutput, UpgradeVersion,
+        PoSChainConfig, PoolId, TxOutput, UpgradeVersion,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -77,19 +77,19 @@ fn add_block_with_stake_pool(
     tf: &mut TestFramework,
     stake_pool_data: StakePoolData,
 ) -> (OutPoint, PoolId) {
-    let genesis_id = tf.genesis().get_id();
+    let genesis_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
     let tx = TransactionBuilder::new()
-        .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
-            empty_witness(rng),
-        )
-        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
+        .add_input(genesis_outpoint.into(), empty_witness(rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
         .build();
     let tx_id = tx.transaction().get_id();
-    let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
-        OutPointSourceId::BlockReward(genesis_id.into()),
-        0,
-    ));
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
@@ -109,9 +109,13 @@ fn add_block_with_2_stake_pools(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
+    let pool_id1 = pos_accounting::make_pool_id(&outpoint_genesis);
     let tx1 = TransactionBuilder::new()
-        .add_input(TxInput::from(outpoint_genesis.clone()), empty_witness(rng))
-        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data1)))
+        .add_input(outpoint_genesis.into(), empty_witness(rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id1,
+            Box::new(stake_pool_data1),
+        ))
         .add_output(TxOutput::Transfer(
             OutputValue::Coin(Amount::from_atoms(1)),
             anyonecanspend_address(),
@@ -122,12 +126,13 @@ fn add_block_with_2_stake_pools(
     let transfer_outpoint1 =
         OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
 
+    let pool_id2 = pos_accounting::make_pool_id(&transfer_outpoint1);
     let tx2 = TransactionBuilder::new()
-        .add_input(
-            TxInput::from(transfer_outpoint1.clone()),
-            empty_witness(rng),
-        )
-        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data2)))
+        .add_input(transfer_outpoint1.into(), empty_witness(rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id2,
+            Box::new(stake_pool_data2),
+        ))
         .build();
     let outpoint2 = OutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
@@ -135,9 +140,6 @@ fn add_block_with_2_stake_pools(
         .with_transactions(vec![tx1, tx2])
         .build_and_process()
         .unwrap();
-
-    let pool_id1 = pos_accounting::make_pool_id(&outpoint_genesis);
-    let pool_id2 = pos_accounting::make_pool_id(&transfer_outpoint1);
 
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
 }
@@ -1111,10 +1113,16 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
+    let genesis_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (stake_pool_data, staking_sk) =
         create_stake_pool_data_with_all_reward_to_owner(&mut rng, Amount::from_atoms(1), vrf_pk);
-    let reward_output = TxOutput::CreateStakePool(Box::new(stake_pool_data));
+    let reward_output = TxOutput::CreateStakePool(pool_id, Box::new(stake_pool_data));
     let block = tf
         .make_block_builder()
         .with_reward(vec![reward_output])
@@ -1512,3 +1520,5 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
         res_pool_balance
     );
 }
+
+// FIXME: test pool_id mismatch

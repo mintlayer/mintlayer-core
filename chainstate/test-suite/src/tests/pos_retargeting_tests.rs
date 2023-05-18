@@ -102,7 +102,10 @@ fn setup_test_chain_with_staked_pool(
             TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
-        .add_output(TxOutput::CreateStakePool(Box::new(stake_pool_data)))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
         .build();
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
