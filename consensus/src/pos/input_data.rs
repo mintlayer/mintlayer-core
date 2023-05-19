@@ -36,12 +36,18 @@ pub use crate::{
     validator::validate_consensus,
 };
 
+/// Input needed (i.e provided by a wallet) to generate PoS consensus data
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSGenerateBlockInputData {
+    /// The private key of the staker
     stake_private_key: PrivateKey,
+    /// The VRF private key (i.e used for sealed epoch data)
     vrf_private_key: VRFPrivateKey,
+    /// The pool Id of stake pool
     pool_id: PoolId,
+    /// The transaction input for the block reward
     kernel_inputs: Vec<TxInput>,
+    /// The transaction input UTXOs
     kernel_input_utxos: Vec<TxOutput>,
 }
 
@@ -72,13 +78,21 @@ impl PoSGenerateBlockInputData {
 }
 
 #[derive(Debug, Clone, Encode, Decode)]
+/// Input needed to finalize PoS consensus data
 pub struct PoSFinalizeBlockInputData {
+    /// The private key of the staker
     stake_private_key: PrivateKey,
+    /// The VRF private key (i.e used for sealed epoch data)
     vrf_private_key: VRFPrivateKey,
+    /// The epoch index of the height of the new block
     epoch_index: EpochIndex,
+    /// The sealed epoch randomness (i.e used in producing VRF data)
     sealed_epoch_randomness: PoSRandomness,
+    /// The block timestamp of the previous block
     previous_block_timestamp: BlockTimestamp,
+    /// The maximum timestamp to try and staking with
     max_block_timestamp: BlockTimestamp,
+    /// The current pool balance of the stake pool
     pool_balance: Amount,
 }
 
