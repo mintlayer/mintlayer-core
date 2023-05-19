@@ -22,7 +22,9 @@ mod validator;
 
 use std::sync::{atomic::AtomicBool, Arc};
 
-use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, PropertyQueryError,
+};
 use common::{
     chain::block::{
         consensus_data::PoWData,
@@ -87,7 +89,7 @@ pub enum FinalizeBlockInputData {
 pub fn generate_consensus_data<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
-    sealed_epoch_randomness: Option<EpochData>,
+    sealed_epoch_randomness: Option<PoSRandomness>,
     input_data: Option<GenerateBlockInputData>,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,

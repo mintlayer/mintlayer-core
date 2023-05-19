@@ -25,7 +25,7 @@ use std::sync::{atomic::AtomicBool, mpsc, Arc};
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
 
 use chainstate_types::{
-    pos_randomness::PoSRandomness, BlockIndex, EpochData, GenBlockIndex, GetAncestorError,
+    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
 };
 use common::{
     chain::{
@@ -162,15 +162,16 @@ impl BlockProduction {
                             )
                         })?
                         .flatten()
+                        .map(|epoch_data| *epoch_data.randomness())
                         // TODO: no epoch_data means either that no
                         // epoch has been created yet, or that the
                         // data is actually missing
-                        .or_else(|| Some(EpochData::new(PoSRandomness::at_genesis(&chain_config))));
+                        .or_else(|| Some(PoSRandomness::at_genesis(&chain_config)));
 
                     let consensus_data = consensus::generate_consensus_data(
                         &chain_config,
                         &best_block_index,
-                        sealed_epoch_randomness.clone(),
+                        sealed_epoch_randomness,
                         input_data.clone(),
                         block_timestamp,
                         block_height,
@@ -202,7 +203,7 @@ impl BlockProduction {
         best_block_index: &GenBlockIndex,
         block_height: BlockHeight,
         sealed_epoch_index: Option<EpochIndex>,
-        sealed_epoch_randomness: Option<EpochData>,
+        sealed_epoch_randomness: Option<PoSRandomness>,
         input_data: Option<GenerateBlockInputData>,
     ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
         match input_data {
@@ -251,7 +252,7 @@ impl BlockProduction {
                         pos_input_data.stake_private_key().clone(),
                         pos_input_data.vrf_private_key().clone(),
                         sealed_epoch_index,
-                        *sealed_epoch_randomness.randomness(),
+                        sealed_epoch_randomness,
                         previous_block_timestamp,
                         max_block_timestamp,
                         pool_balance,
