@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use common::chain::{Block, Destination, SignedTransaction};
+use consensus::GenerateBlockInputData;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 
@@ -31,6 +32,7 @@ pub trait BlockProductionInterface: Send {
     /// generated with available transactions in the mempool
     async fn generate_block(
         &mut self,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError>;

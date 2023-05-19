@@ -19,7 +19,7 @@ use common::{
     chain::Block,
     chain::{Destination, SignedTransaction},
 };
-
+use consensus::GenerateBlockInputData;
 use serialization::{hex::HexDecode, hex::HexEncode};
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
@@ -43,6 +43,7 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
+        input_data_hex: Option<String>,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String>;
@@ -71,9 +72,15 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
+        input_data_hex: Option<String>,
         reward_destination_hex: String,
         transactions_hex: Option<Vec<String>>,
     ) -> rpc::Result<String> {
+        let input_data = input_data_hex
+            .map(GenerateBlockInputData::hex_decode_all)
+            .transpose()
+            .map_err(rpc::Error::to_call_error)?;
+
         let reward_destination = Destination::hex_decode_all(reward_destination_hex)
             .map_err(rpc::Error::to_call_error)?;
 
@@ -89,7 +96,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(reward_destination, signed_transactions)
+                this.generate_block(input_data, reward_destination, signed_transactions)
             })
             .await,
         )?;

@@ -97,7 +97,7 @@ impl KeychainUsageState {
     /// Increments the last index used in the blockchain until up_to_last_used. This has no effect
     /// if the up_to_last_used is smaller than the self value
     pub fn increment_up_to_last_used(&mut self, up_to_last_used: ChildNumber) {
-        if self.last_used.is_none() || self.last_used.unwrap() < up_to_last_used {
+        if self.last_used.map_or(true, |v| v < up_to_last_used) {
             self.last_used = Some(up_to_last_used);
         }
     }
@@ -110,7 +110,7 @@ impl KeychainUsageState {
     /// Increments the last index issued in the blockchain until up_to_last_issued.
     /// This has no effect if the up_to_last_issued is smaller than the self value
     pub fn increment_up_to_last_issued(&mut self, up_to_last_issued: ChildNumber) {
-        if self.last_issued.is_none() || self.last_issued.unwrap() < up_to_last_issued {
+        if self.last_issued.map_or(true, |v| v < up_to_last_issued) {
             self.last_issued = Some(up_to_last_issued);
         }
     }
