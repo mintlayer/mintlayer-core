@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use super::*;
 use chainstate_storage::{inmemory::Store, BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
@@ -23,11 +25,11 @@ use common::{
         tokens::{
             token_id, OutputValue, TokenAuxiliaryData, TokenData, TokenIssuance, TokenTransfer,
         },
-        Destination, OutPoint, OutPointSourceId, SpendablePosition, TxInput, TxOutput,
+        Destination, OutPoint, OutPointSourceId, SpendablePosition, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, Idable},
 };
-use utxo::UtxosStorageRead;
+use utxo::{Utxo, UtxosStorageRead, UtxosTxUndo};
 
 // Process a tx with a coin. Check that new utxo and tx index are stored, best block is updated.
 #[rstest]
@@ -95,9 +97,19 @@ fn store_coin(#[case] seed: Seed) {
             db_tx.get_utxo(&tx_utxo_outpoint).expect("ok").expect("some").output(),
             &tx_output
         );
+
+        let expected_undo_utxo_data: BTreeMap<Id<Transaction>, UtxosTxUndo> = [(
+            tx_id,
+            UtxosTxUndo::new(vec![Utxo::new_for_blockchain(
+                tf.genesis().utxos().first().unwrap().clone(),
+                BlockHeight::zero(),
+            )]),
+        )]
+        .into();
+
         assert_eq!(
-            db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos().len(),
-            1
+            *db_tx.get_undo_data(block_id).expect("ok").expect("some").tx_undos(),
+            expected_undo_utxo_data
         );
     });
 }

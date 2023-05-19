@@ -29,7 +29,7 @@ use common::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
         Destination, OutPoint, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
     },
-    primitives::{per_thousand::PerThousand, signed_amount::SignedAmount, Amount, Idable},
+    primitives::{per_thousand::PerThousand, Amount, Idable},
 };
 use crypto::{
     random::{CryptoRng, Rng},
@@ -62,7 +62,7 @@ fn make_tx_with_stake_pool_from_genesis(
     tf: &mut TestFramework,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
-) -> (SignedTransaction, PoolId, PoolData) {
+) -> (SignedTransaction, PoolId, PoolData, OutPoint) {
     let outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
     make_tx_with_stake_pool(
         rng,
@@ -74,10 +74,10 @@ fn make_tx_with_stake_pool_from_genesis(
 
 fn make_tx_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
-    outpoint: OutPoint,
+    input0_outpoint: OutPoint,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
-) -> (SignedTransaction, PoolId, PoolData) {
+) -> (SignedTransaction, PoolId, PoolData, OutPoint) {
     let destination = new_pub_key_destination(rng);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
     let stake_output = TxOutput::CreateStakePool(Box::new(StakePoolData::new(
@@ -94,14 +94,29 @@ fn make_tx_with_stake_pool(
         anyonecanspend_address(),
     );
 
-    let input0_outpoint = OutPoint::new(outpoint.tx_id(), 0);
     let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
-    let tx = TransactionBuilder::new()
-        .add_input(outpoint.into(), empty_witness(rng))
-        .add_output(transfer_output)
-        .add_output(stake_output)
-        .build();
-    (tx, pool_id, pool_data)
+    let tx_builder =
+        TransactionBuilder::new().add_input(input0_outpoint.into(), empty_witness(rng));
+
+    // random order of transfer and stake outputs so that tests can use different outpoint 0 or 1
+    // to make the next pool
+    let (tx, transfer_output_idx) = if rng.gen::<bool>() {
+        (
+            tx_builder.add_output(transfer_output).add_output(stake_output).build(),
+            0,
+        )
+    } else {
+        (
+            tx_builder.add_output(stake_output).add_output(transfer_output).build(),
+            1,
+        )
+    };
+    let transfer_outpoint = OutPoint::new(
+        OutPointSourceId::Transaction(tx.transaction().get_id()),
+        transfer_output_idx,
+    );
+
+    (tx, pool_id, pool_data, transfer_outpoint)
 }
 
 // Process a tx with a stake pool. Check that new pool balance and data are stored
@@ -115,14 +130,12 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
         let amount_to_stake = Amount::from_atoms(100);
 
-        let (tx, pool_id, pool_data) = make_tx_with_stake_pool_from_genesis(
+        let (tx, pool_id, pool_data, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,
             Amount::from_atoms(1),
         );
-        let tx_utxo_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
 
         let block = tf.make_block_builder().add_transaction(tx).build();
         let block_id = block.get_id();
@@ -179,16 +192,16 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
         let amount_to_stake = Amount::from_atoms(100);
         let expected_epoch_index = 0;
 
-        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
+        let (tx1, pool_id1, pool_data1, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,
             Amount::from_atoms(300),
         );
 
-        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+        let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
-            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            tx_utxo_outpoint,
             amount_to_stake,
             Amount::from_atoms(200),
         );
@@ -296,16 +309,16 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
+        let (tx1, pool_id1, pool_data1, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,
             Amount::from_atoms(300),
         );
 
-        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+        let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
-            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            tx_utxo_outpoint,
             amount_to_stake,
             Amount::from_atoms(200),
         );
@@ -364,7 +377,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
                 [(pool_id1, DataDelta::new(None, Some(pool_data1)))].into_iter(),
             ),
             pool_balances: DeltaAmountCollection::from_iter(
-                [(pool_id1, SignedAmount::from_atoms(100))].into_iter(),
+                [(pool_id1, amount_to_stake.into_signed().unwrap())].into_iter(),
             ),
             pool_delegation_shares: DeltaAmountCollection::new(),
             delegation_balances: DeltaAmountCollection::new(),
@@ -396,6 +409,8 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
         assert_eq!(epoch2_delta, expected_epoch2_delta);
 
         assert!(storage.get_accounting_epoch_undo_delta(0).unwrap().is_none());
+        assert!(storage.get_accounting_epoch_undo_delta(block1_epoch_index).unwrap().is_none());
+        assert!(storage.get_accounting_epoch_undo_delta(block2_epoch_index).unwrap().is_none());
     });
 }
 
@@ -426,16 +441,16 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
 
-        let (tx1, pool_id1, pool_data1) = make_tx_with_stake_pool_from_genesis(
+        let (tx1, pool_id1, pool_data1, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,
             Amount::from_atoms(300),
         );
 
-        let (tx2, pool_id2, pool_data2) = make_tx_with_stake_pool(
+        let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
-            OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+            tx_utxo_outpoint,
             amount_to_stake,
             Amount::from_atoms(200),
         );
@@ -564,7 +579,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
 
-        let (tx1, pool_id, pool_data) = make_tx_with_stake_pool_from_genesis(
+        let (tx1, pool_id, pool_data, _tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,

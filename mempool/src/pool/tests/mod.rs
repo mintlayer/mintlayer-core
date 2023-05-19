@@ -611,7 +611,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
             .expect("invalid witness count")
         })
         .collect::<Vec<_>>();
-    let fee = Amount::from_atoms(0).into();
+    let fee = Amount::from_atoms(1).into();
 
     // Generation 1
     let tx1_parents = BTreeSet::default();
@@ -685,7 +685,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
 
     let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
-    let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
+    let ids = entries.iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
 
     for entry in entries.into_iter() {
         mempool.store.add_tx(entry)?;
@@ -704,12 +704,26 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
     assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
 
+    assert_eq!(entry1.fees_with_ancestors(), Amount::from_atoms(1).into());
+    assert_eq!(entry2.fees_with_ancestors(), Amount::from_atoms(1).into());
+    assert_eq!(entry3.fees_with_ancestors(), Amount::from_atoms(3).into());
+    assert_eq!(entry4.fees_with_ancestors(), Amount::from_atoms(4).into());
+    assert_eq!(entry5.fees_with_ancestors(), Amount::from_atoms(4).into());
+    assert_eq!(entry6.fees_with_ancestors(), Amount::from_atoms(6).into());
+
     assert_eq!(entry1.count_with_descendants(), 5);
     assert_eq!(entry2.count_with_descendants(), 5);
     assert_eq!(entry3.count_with_descendants(), 4);
     assert_eq!(entry4.count_with_descendants(), 2);
     assert_eq!(entry5.count_with_descendants(), 2);
     assert_eq!(entry6.count_with_descendants(), 1);
+
+    assert_eq!(entry1.fees_with_descendants(), Amount::from_atoms(5).into());
+    assert_eq!(entry2.fees_with_descendants(), Amount::from_atoms(5).into());
+    assert_eq!(entry3.fees_with_descendants(), Amount::from_atoms(4).into());
+    assert_eq!(entry4.fees_with_descendants(), Amount::from_atoms(2).into());
+    assert_eq!(entry5.fees_with_descendants(), Amount::from_atoms(2).into());
+    assert_eq!(entry6.fees_with_descendants(), Amount::from_atoms(1).into());
 
     Ok(())
 }
