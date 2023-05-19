@@ -61,7 +61,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
@@ -72,9 +72,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
@@ -102,7 +102,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             logging::log::info!("Submitting block of height: {}", height);
 
             // Create another block, and spend the first input from the previous block.
-            assert_eq!(
+            assert!(matches!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
@@ -113,9 +113,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::TimeLockViolation(_)
                 ))
-            );
+            ));
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height - 1)
@@ -186,15 +186,15 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
             .add_anyone_can_spend_output(5000)
             .build();
 
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -219,7 +219,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
@@ -230,9 +230,9 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
@@ -260,7 +260,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             logging::log::info!("Submitting block of height: {}", height);
 
             // create another block, and spend the first input from the previous block
-            assert_eq!(
+            assert!(matches!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
@@ -271,9 +271,9 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::TimeLockViolation(_)
                 ))
-            );
+            ));
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height - 1)
@@ -337,15 +337,15 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
             )
             .add_anyone_can_spend_output(50000)
             .build();
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -432,7 +432,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            assert_eq!(
+            assert!(matches!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
@@ -444,9 +444,9 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::TimeLockViolation(_)
                 ))
-            );
+            ));
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height as u64),
@@ -520,15 +520,15 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
             .add_anyone_can_spend_output(50000)
             .build();
 
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -579,7 +579,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            assert_eq!(
+            assert!(matches!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
@@ -591,9 +591,9 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation
+                    ConnectTransactionError::TimeLockViolation(_)
                 ))
-            );
+            ));
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height as u64),
@@ -665,15 +665,15 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
             .add_anyone_can_spend_output(50000)
             .build();
 
-        assert_eq!(
+        assert!(matches!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation
+                ConnectTransactionError::TimeLockViolation(_)
             ))
-        );
+        ));
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }

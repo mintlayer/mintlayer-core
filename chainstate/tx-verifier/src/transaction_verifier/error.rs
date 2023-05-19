@@ -19,12 +19,14 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
         TxMainChainIndexError,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id},
+    primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
+
+use crate::timelock_check;
 
 use super::{
     signature_destination_getter::SignatureDestinationGetterError,
@@ -77,8 +79,8 @@ pub enum ConnectTransactionError {
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
-    #[error("Timelock rules violated")]
-    TimeLockViolation,
+    #[error("Timelock rules violated in output {0:?}")]
+    TimeLockViolation(OutPoint),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -139,12 +141,8 @@ pub enum ConnectTransactionError {
 
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
-    #[error("Maturity setting type for the decommission pool output is invalid")]
-    InvalidDecommissionMaturityType,
-    #[error("Maturity setting for the decommission pool output is too short: {0} < {1}")]
-    InvalidDecommissionMaturityDistance(BlockDistance, BlockDistance),
-    #[error("Maturity setting value for the decommission pool output is invalid: {0}")]
-    InvalidDecommissionMaturityDistanceValue(u64),
+    #[error("Output timelock error: {0}")]
+    OutputTimelockError(#[from] timelock_check::OutputTimeLockError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

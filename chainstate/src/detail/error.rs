@@ -26,7 +26,7 @@ use common::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
         Block, GenBlock, PoolId, Transaction,
     },
-    primitives::{BlockDistance, BlockHeight, Id},
+    primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
@@ -110,14 +110,10 @@ pub enum CheckBlockError {
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
     ConsensusVerificationFailed(ConsensusVerificationError),
-    #[error("Block reward maturity distance too short in block {0}: {1} < {2}")]
-    InvalidBlockRewardMaturityDistance(Id<Block>, BlockDistance, BlockDistance),
-    #[error("Block reward maturity distance invalid in block {0}: {1}")]
-    InvalidBlockRewardMaturityDistanceValue(Id<Block>, u64),
-    #[error("Invalid block reward output timelock type for block {0}")]
-    InvalidBlockRewardMaturityTimelockType(Id<Block>),
     #[error("Invalid block reward output type for block {0}")]
     InvalidBlockRewardOutputType(Id<Block>),
+    #[error("Block reward maturity error: {0}")]
+    BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputTimeLockError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

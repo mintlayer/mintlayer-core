@@ -54,6 +54,7 @@ use crypto::{
 use rstest::rstest;
 use test_utils::mock_time_getter::mocked_time_getter_seconds;
 use test_utils::random::{make_seedable_rng, Seed};
+use tx_verifier::timelock_check::OutputTimeLockError;
 use utxo::UtxoSource;
 
 #[rstest]
@@ -98,10 +99,13 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
+        let outpoint = OutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+                CheckBlockError::BlockRewardMaturityError(
+                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                )
             ))
         );
 
@@ -117,10 +121,13 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
+        let outpoint = OutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+                CheckBlockError::BlockRewardMaturityError(
+                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                )
             ))
         );
 
@@ -136,10 +143,13 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
+        let outpoint = OutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block_id)
+                CheckBlockError::BlockRewardMaturityError(
+                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                )
             ))
         );
 
@@ -155,10 +165,13 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
+        let outpoint = OutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardMaturityDistanceValue(block_id, u64::MAX)
+                CheckBlockError::BlockRewardMaturityError(
+                    OutputTimeLockError::InvalidOutputMaturityDistanceValue(outpoint, u64::MAX)
+                )
             ))
         );
 
@@ -180,14 +193,17 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
+        let outpoint = OutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
-                CheckBlockError::InvalidBlockRewardMaturityDistance(
-                    block_id,
-                    BlockDistance::new(reward_lock_distance - 1),
-                    BlockDistance::new(reward_lock_distance)
-                ),
+                CheckBlockError::BlockRewardMaturityError(
+                    OutputTimeLockError::InvalidOutputMaturityDistance(
+                        outpoint,
+                        BlockDistance::new(reward_lock_distance - 1),
+                        BlockDistance::new(reward_lock_distance)
+                    )
+                )
             ))
         );
 

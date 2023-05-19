@@ -73,7 +73,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         for height in 2..block_height_that_unlocks {
             // attempt to spend the locked output
             let best_block_index = tf.best_block_index();
-            assert_eq!(
+            assert!(matches!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
                         current_best: &best_block_index,
@@ -82,8 +82,8 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None
                 ),
-                Err(ConnectTransactionError::TimeLockViolation)
-            );
+                Err(ConnectTransactionError::TimeLockViolation(_))
+            ));
 
             tf.make_block_builder().build_and_process().unwrap();
             assert_eq!(
@@ -140,7 +140,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         for height in 2..block_count_that_unlocks + block_height_with_locked_output {
             // attempt to spend the locked output
             let best_block_index = tf.best_block_index();
-            assert_eq!(
+            assert!(matches!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
                         current_best: &best_block_index,
@@ -149,8 +149,8 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     &BlockTimestamp::from_duration_since_epoch(tf.current_time()),
                     None,
                 ),
-                Err(ConnectTransactionError::TimeLockViolation)
-            );
+                Err(ConnectTransactionError::TimeLockViolation(_))
+            ));
 
             // create another block, with no transactions, and get the blockchain to progress
             tf.make_block_builder().build_and_process().unwrap();
@@ -231,7 +231,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
 
             // Check that the output still cannot be spent.
             let best_block_index = tf.best_block_index();
-            assert_eq!(
+            assert!(matches!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
                         current_best: &best_block_index,
@@ -240,8 +240,8 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     &mtp,
                     None,
                 ),
-                Err(ConnectTransactionError::TimeLockViolation)
-            );
+                Err(ConnectTransactionError::TimeLockViolation(_))
+            ));
 
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.make_block_builder()
@@ -324,7 +324,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
 
             // Check that the output still cannot be spent.
             let best_block_index = tf.best_block_index();
-            assert_eq!(
+            assert!(matches!(
                 verifier.connect_transaction(
                     &TransactionSourceForConnect::Mempool {
                         current_best: &best_block_index,
@@ -333,8 +333,8 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     &mtp,
                     None
                 ),
-                Err(ConnectTransactionError::TimeLockViolation)
-            );
+                Err(ConnectTransactionError::TimeLockViolation(_))
+            ));
 
             assert_eq!(
                 tf.best_block_index().block_height(),
