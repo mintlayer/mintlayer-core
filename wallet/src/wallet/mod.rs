@@ -147,9 +147,9 @@ impl<B: storage::Backend> Wallet<B> {
 
         let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
 
-        let account_infos = db_tx.get_accounts_info()?;
+        let accounts_info = db_tx.get_accounts_info()?;
 
-        let accounts = account_infos
+        let accounts = accounts_info
             .keys()
             .map(|account_id| {
                 Account::load_from_database(

@@ -231,7 +231,6 @@ impl LeafKeyChain {
         db_tx: &mut StoreTxRw<B>,
         new_issued_index: ChildNumber,
     ) -> KeyChainResult<()> {
-        // Save usage state
         self.usage_state.increment_up_to_last_issued(new_issued_index);
         self.save_usage_state(db_tx)
     }
@@ -241,15 +240,16 @@ impl LeafKeyChain {
         &self,
         db_tx: &mut StoreTxRw<B>,
     ) -> KeyChainResult<()> {
-        Ok(db_tx.set_keychain_usage_state(
-            &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
-            &self.usage_state,
-        )?)
+        db_tx
+            .set_keychain_usage_state(
+                &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
+                &self.usage_state,
+            )
+            .map_err(KeyChainError::DatabaseError)
     }
 
     /// Get a new issued index and check that it is a valid one i.e. not exceeding the lookahead
     fn get_new_issued_index(&self, lookahead_size: u32) -> KeyChainResult<ChildNumber> {
-        // TODO consider last used index as well
         let new_issued_index = {
             match self.last_issued() {
                 None => ChildNumber::ZERO,
@@ -469,19 +469,10 @@ impl LeafKeyChain {
         db_tx: &mut StoreTxRw<B>,
         child_num: ChildNumber,
         lookahead_size: u32,
-    ) -> KeyChainResult<bool> {
-        // Check if public key is in the key pool
-        if self.derived_public_keys.contains_key(&child_num) {
-            // Get the key index of the public key, this should always be Some
-            self.usage_state.increment_up_to_last_used(child_num);
-            db_tx.set_keychain_usage_state(
-                &AccountKeyPurposeId::new(self.account_id.clone(), self.purpose),
-                &self.usage_state,
-            )?;
-            self.top_up(db_tx, lookahead_size)?;
-            return Ok(true);
-        }
-        Ok(false)
+    ) -> KeyChainResult<()> {
+        self.usage_state.increment_up_to_last_used(child_num);
+        self.save_usage_state(db_tx)?;
+        self.top_up(db_tx, lookahead_size)
     }
 
     pub fn mark_pubkey_as_used<B: storage::Backend>(
@@ -491,7 +482,8 @@ impl LeafKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         if let Some(child_num) = self.get_child_num_from_public_key(public_key) {
-            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)
+            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)?;
+            Ok(true)
         } else {
             Ok(false)
         }
@@ -504,7 +496,8 @@ impl LeafKeyChain {
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
         if let Some(child_num) = self.get_child_num_from_public_key_hash(public_key_hash) {
-            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)
+            self.mark_child_key_as_used(db_tx, child_num, lookahead_size)?;
+            Ok(true)
         } else {
             Ok(false)
         }
