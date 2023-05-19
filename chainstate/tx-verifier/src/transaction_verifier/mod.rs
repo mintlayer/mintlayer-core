@@ -349,6 +349,8 @@ where
         let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
+        // Spending `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos should result in either
+        // decommissioning a pool of spending share in accounting
         let inputs_undos = tx
             .inputs()
             .iter()
@@ -373,6 +375,8 @@ where
                             Some(res)
                         }
                         TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            // spending `ProduceBlockFromStake` results in decommissioning in case `CreateStakePool`
+                            // has already been spend while staking blocks
                             let res = self
                                 .accounting_delta_adapter
                                 .operations(tx_source)
