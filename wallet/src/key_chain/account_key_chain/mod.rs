@@ -151,7 +151,9 @@ impl AccountKeyChain {
         purpose: KeyPurpose,
     ) -> KeyChainResult<Address> {
         let lookahead_size = self.lookahead_size();
-        self.get_leaf_key_chain_mut(purpose).issue_address(db_tx, lookahead_size)
+        let (_key, address) =
+            self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
+        Ok(address)
     }
 
     /// Issue a new derived key that hasn't been used before
@@ -161,7 +163,9 @@ impl AccountKeyChain {
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
         let lookahead_size = self.lookahead_size();
-        self.get_leaf_key_chain_mut(purpose).issue_key(db_tx, lookahead_size)
+        let (key, _address) =
+            self.get_leaf_key_chain_mut(purpose).issue_new(db_tx, lookahead_size)?;
+        Ok(key)
     }
 
     /// Get the private key that corresponds to the provided public key

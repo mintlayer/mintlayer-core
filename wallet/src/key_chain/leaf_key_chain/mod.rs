@@ -182,57 +182,33 @@ impl LeafKeyChain {
         ))
     }
 
-    pub fn issue_address<B: storage::Backend>(
+    /// Issue a new key
+    pub fn issue_new<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         lookahead_size: u32,
-    ) -> KeyChainResult<Address> {
+    ) -> KeyChainResult<(ExtendedPublicKey, Address)> {
         let new_issued_index = self.get_new_issued_index(lookahead_size)?;
 
-        // Get address or derive one if necessary
-        let issued_address = match self.addresses.get(&new_issued_index) {
-            Some(address) => address.clone(),
-            None => {
-                self.derive_and_add_key(db_tx, new_issued_index)?;
-                self.addresses
-                    .get(&new_issued_index)
-                    .expect("The address should be derived")
-                    .clone()
-            }
-        };
+        let key = self.derive_and_add_key(db_tx, new_issued_index)?;
 
-        self.set_key_index_as_issued(db_tx, new_issued_index)?;
+        let address = self
+            .addresses
+            .get(&new_issued_index)
+            .expect("The address should be derived")
+            .clone();
 
-        Ok(issued_address)
-    }
+        logging::log::debug!(
+            "new address: {}, index: {}, purpose {:?}",
+            address.get(),
+            new_issued_index,
+            self.purpose
+        );
 
-    /// Issue a new key. This does not check if lookahead margins are observed
-    pub fn issue_key<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        lookahead_size: u32,
-    ) -> KeyChainResult<ExtendedPublicKey> {
-        let new_issued_index = self.get_new_issued_index(lookahead_size)?;
-
-        // Get key or derive one if necessary
-        let issued_key = match self.derived_public_keys.get(&new_issued_index) {
-            Some(key) => key.clone(),
-            None => self.derive_and_add_key(db_tx, new_issued_index)?,
-        };
-
-        self.set_key_index_as_issued(db_tx, new_issued_index)?;
-
-        Ok(issued_key)
-    }
-
-    /// Set a specific key index as used
-    fn set_key_index_as_issued<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        new_issued_index: ChildNumber,
-    ) -> KeyChainResult<()> {
         self.usage_state.increment_up_to_last_issued(new_issued_index);
-        self.save_usage_state(db_tx)
+        self.save_usage_state(db_tx)?;
+
+        Ok((key, address))
     }
 
     /// Persist the usage state to the database
