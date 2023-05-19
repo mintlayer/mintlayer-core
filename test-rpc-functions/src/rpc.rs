@@ -198,10 +198,6 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     }
 }
 
-// fn handle_call_error<T>(e: Result<Result<T, RpcTestFunctionsError>, CallError>) -> rpc::Result<T> {
-//     e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
-// }
-
 fn handle_error<T>(e: Result<T, RpcTestFunctionsError>) -> rpc::Result<T> {
     e.map_err(rpc::Error::to_call_error)
 }
