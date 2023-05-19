@@ -131,7 +131,7 @@ pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTra
 pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &OutPoint) -> Amount {
     let tx_id = *outpoint.tx_id().get_tx_id().expect("Not a transaction");
     let entry = store.txs_by_id.get(&tx_id).expect("Entry not found");
-    let tx = entry.tx().transaction();
+    let tx = entry.transaction().transaction();
     let output = tx.outputs().get(outpoint.output_index() as usize).expect("output not found");
     output_coin_amount(output)
 }

@@ -20,13 +20,12 @@ use std::{
 
 use common::{
     chain::{OutPoint, SignedTransaction, Transaction},
-    primitives::{Id, Idable},
+    primitives::Id,
 };
 use logging::log;
-use serialization::Encode;
 use utils::newtype;
 
-use super::{fee::Fee, Time};
+use super::{entry::TxEntry, fee::Fee, Time, TxEntryWithFee};
 use crate::error::MempoolPolicyError;
 
 newtype! {
@@ -220,7 +219,7 @@ impl MempoolStore {
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         let id = entry.tx_id();
-        for outpoint in entry.tx.transaction().inputs().iter().map(|input| input.outpoint()) {
+        for outpoint in entry.entry.transaction().inputs().iter().map(|input| input.outpoint()) {
             self.spender_txs.insert(outpoint.clone(), id);
         }
     }
@@ -234,7 +233,6 @@ impl MempoolStore {
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
 
-        let creation_time = entry.creation_time;
         let tx_id = entry.tx_id();
         let seq_no = self.next_seq_no;
         self.next_seq_no += 1;
@@ -243,7 +241,10 @@ impl MempoolStore {
 
         self.add_to_descendant_score_index(&entry);
         self.add_to_ancestor_score_index(&entry);
-        self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
+        self.txs_by_creation_time
+            .entry(entry.creation_time())
+            .or_default()
+            .insert(tx_id);
         self.txs_by_seq_no.insert(seq_no, tx_id);
         self.seq_nos_by_tx.insert(tx_id, seq_no);
         Ok(())
@@ -372,7 +373,7 @@ impl MempoolStore {
     }
 
     fn remove_from_creation_time_index(&mut self, entry: &TxMempoolEntry) {
-        self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
+        self.txs_by_creation_time.entry(entry.creation_time()).and_modify(|entries| {
             entries.remove(&entry.tx_id());
         });
         if self
@@ -409,11 +410,11 @@ impl MempoolStore {
                 tx_id.get(),
                 descendants.len()
             );
-            self.remove_tx(&entry.tx.transaction().get_id(), reason);
+            self.remove_tx(&entry.tx_id(), reason);
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
                 if let Some(descendant) = self.txs_by_id.get(&descendant_id) {
-                    self.remove_tx(&descendant.tx.transaction().get_id(), reason)
+                    self.remove_tx(&descendant.tx_id(), reason)
                 }
             }
         }
@@ -424,7 +425,7 @@ impl MempoolStore {
     }
 
     /// Take all the transactions from the store in the original order of insertion
-    pub fn into_transactions(self) -> impl Iterator<Item = SignedTransaction> {
+    pub fn into_transactions(self) -> impl Iterator<Item = TxEntry> {
         let Self {
             mut txs_by_id,
             txs_by_seq_no,
@@ -433,13 +434,13 @@ impl MempoolStore {
 
         txs_by_seq_no
             .into_values()
-            .map(move |id| txs_by_id.remove(&id).expect("transaction must be present").tx)
+            .map(move |id| txs_by_id.remove(&id).expect("transaction must be present").entry)
     }
 }
 
 #[derive(Debug, Eq, Clone)]
 pub struct TxMempoolEntry {
-    tx: SignedTransaction,
+    entry: TxEntry,
     fee: Fee,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
@@ -449,20 +450,18 @@ pub struct TxMempoolEntry {
     fees_with_ancestors: Fee,
     size_with_descendants: usize,
     size_with_ancestors: usize,
-    creation_time: Time,
 }
 
 impl TxMempoolEntry {
     pub fn new(
-        tx: SignedTransaction,
-        fee: Fee,
+        entry: TxEntryWithFee,
         parents: BTreeSet<Id<Transaction>>,
         ancestors: BTreeSet<TxMempoolEntry>,
-        creation_time: Time,
     ) -> Result<TxMempoolEntry, MempoolPolicyError> {
+        let (entry, fee) = entry.into_entry_and_fee();
+        let size = entry.size();
         let size_with_ancestors: usize =
-            ancestors.iter().map(|ancestor| ancestor.tx().encoded_size()).sum::<usize>()
-                + tx.encoded_size();
+            ancestors.iter().map(|ancestor| ancestor.size()).sum::<usize>() + size;
         let ancestor_fees = ancestors
             .iter()
             .map(|ancestor| ancestor.fee())
@@ -473,20 +472,31 @@ impl TxMempoolEntry {
         Ok(Self {
             size_with_ancestors,
             count_with_ancestors: 1 + ancestors.len(),
-            size_with_descendants: tx.encoded_size(),
-            tx,
+            size_with_descendants: size,
+            entry,
             fee,
             parents,
             children: BTreeSet::default(),
             count_with_descendants: 1,
-            creation_time,
             fees_with_descendants: fee,
             fees_with_ancestors,
         })
     }
 
-    pub fn tx(&self) -> &SignedTransaction {
-        &self.tx
+    #[cfg(test)]
+    pub fn new_from_data(
+        tx: SignedTransaction,
+        fee: Fee,
+        parents: BTreeSet<Id<Transaction>>,
+        ancestors: BTreeSet<TxMempoolEntry>,
+        creation_time: Time,
+    ) -> Result<TxMempoolEntry, MempoolPolicyError> {
+        let entry = TxEntry::new(tx, creation_time);
+        Self::new(TxEntryWithFee::new(entry, fee), parents, ancestors)
+    }
+
+    pub fn transaction(&self) -> &SignedTransaction {
+        self.entry.transaction()
     }
 
     pub fn fee(&self) -> Fee {
@@ -512,7 +522,7 @@ impl TxMempoolEntry {
             / u128::try_from(self.size_with_descendants).expect("conversion"))
         .expect("nonzero tx_size")
         .into();
-        let b: Fee = (*self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+        let b: Fee = (*self.fee / u128::try_from(self.size()).expect("conversion"))
             .expect("nonzero tx size")
             .into();
         std::cmp::max(a, b).into()
@@ -525,29 +535,29 @@ impl TxMempoolEntry {
             self.fees_with_ancestors,
             self.size_with_ancestors,
             self.fee,
-            self.tx.encoded_size()
+            self.size(),
         );
         let a: Fee = (*self.fees_with_ancestors
             / u128::try_from(self.size_with_ancestors).expect("conversion"))
         .expect("nonzero tx_size")
         .into();
-        let b: Fee = (*self.fee / u128::try_from(self.tx.encoded_size()).expect("conversion"))
+        let b: Fee = (*self.fee / u128::try_from(self.size()).expect("conversion"))
             .expect("nonzero tx size")
             .into();
         std::cmp::min(a, b).into()
     }
 
     pub fn tx_id(&self) -> Id<Transaction> {
-        self.tx.transaction().get_id()
+        *self.entry.tx_id()
     }
 
     pub fn size(&self) -> usize {
         // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
-        self.tx.encoded_size()
+        self.entry.size()
     }
 
     pub fn creation_time(&self) -> Time {
-        self.creation_time
+        self.entry.creation_time()
     }
 
     fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
@@ -567,9 +577,9 @@ impl TxMempoolEntry {
     }
 
     pub fn is_replaceable(&self, store: &MempoolStore) -> bool {
-        self.tx.transaction().is_replaceable()
+        self.entry.transaction().is_replaceable()
             || self.unconfirmed_ancestors(store).0.iter().any(|ancestor| {
-                store.get_entry(ancestor).expect("entry").tx.transaction().is_replaceable()
+                store.get_entry(ancestor).expect("entry").entry.transaction().is_replaceable()
             })
     }
 
