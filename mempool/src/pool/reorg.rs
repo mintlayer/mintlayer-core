@@ -146,8 +146,8 @@ pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<B
 
     // Re-populate the verifier with transactions from mempool
     for tx in old_transactions {
-        let tx_id = tx.transaction().get_id();
-        if let Err(e) = mempool.add_transaction(tx) {
+        let tx_id = *tx.tx_id();
+        if let Err(e) = mempool.add_transaction_entry(tx) {
             log::debug!("Evicting {tx_id:?} from mempool: {e:?}")
         }
     }

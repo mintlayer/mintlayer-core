@@ -616,7 +616,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     // Generation 1
     let tx1_parents = BTreeSet::default();
     let entry_1_ancestors = BTreeSet::default();
-    let entry1 = TxMempoolEntry::new(
+    let entry1 = TxMempoolEntry::new_from_data(
         txs.get(0).unwrap().clone(),
         fee,
         tx1_parents,
@@ -626,7 +626,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     .unwrap();
     let tx2_parents = BTreeSet::default();
     let entry_2_ancestors = BTreeSet::default();
-    let entry2 = TxMempoolEntry::new(
+    let entry2 = TxMempoolEntry::new_from_data(
         txs.get(1).unwrap().clone(),
         fee,
         tx2_parents,
@@ -638,7 +638,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     // Generation 2
     let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
     let tx3_ancestors = vec![entry1.clone(), entry2.clone()].into_iter().collect();
-    let entry3 = TxMempoolEntry::new(
+    let entry3 = TxMempoolEntry::new_from_data(
         txs.get(2).unwrap().clone(),
         fee,
         tx3_parents,
@@ -652,7 +652,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let tx4_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
     let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
     let tx5_ancestors = vec![entry1.clone(), entry2.clone(), entry3.clone()].into_iter().collect();
-    let entry4 = TxMempoolEntry::new(
+    let entry4 = TxMempoolEntry::new_from_data(
         txs.get(3).unwrap().clone(),
         fee,
         tx4_parents,
@@ -660,7 +660,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         time::get_time(),
     )
     .unwrap();
-    let entry5 = TxMempoolEntry::new(
+    let entry5 = TxMempoolEntry::new_from_data(
         txs.get(4).unwrap().clone(),
         fee,
         tx5_parents,
@@ -675,7 +675,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
         vec![entry1.clone(), entry2.clone(), entry3.clone(), entry4.clone(), entry5.clone()]
             .into_iter()
             .collect();
-    let entry6 = TxMempoolEntry::new(
+    let entry6 = TxMempoolEntry::new_from_data(
         txs.get(5).unwrap().clone(),
         fee,
         tx6_parents,

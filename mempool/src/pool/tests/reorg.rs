@@ -65,6 +65,11 @@ async fn basic_reorg(#[case] seed: Seed) {
     assert!(mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
 
+    // Make sure adding a block does not reset mempool entry timestamp.
+    let tx2_time = mempool.store.get_entry(&tx2_id).unwrap().creation_time();
+    // TODO: Use proper time mocking here instead of sleep.
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+
     // Submit a block with tx1 and check the corresponding tx has been removed from mempool
     let block1 = make_test_block(vec![tx1], genesis.get_id());
     let block1_id = block1.get_id();
@@ -76,6 +81,9 @@ async fn basic_reorg(#[case] seed: Seed) {
     mempool.new_tip_set(block1_id, BlockHeight::new(1));
     assert!(!mempool.contains_transaction(&tx1_id));
     assert!(mempool.contains_transaction(&tx2_id));
+
+    let tx2_time_after_block = mempool.store.get_entry(&tx2_id).unwrap().creation_time();
+    assert_eq!(tx2_time, tx2_time_after_block);
 
     // Submit a block wit tx2 and check transactions are no longer in mempool
     let block2 = make_test_block(vec![tx2], block1_id);
