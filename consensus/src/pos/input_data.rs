@@ -13,28 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::pos_randomness::PoSRandomness;
+use crate::{
+    pos::{
+        error::ConsensusPoSError,
+        target::calculate_target_required_from_block_index,
+    },
+    ConsensusCreationError,
+};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, vrf_tools::construct_transcript, BlockIndex, EpochData,
+    GenBlockIndex, PropertyQueryError,
+};
 use common::{
-    chain::block::timestamp::BlockTimestamp,
-    chain::{config::EpochIndex, PoolId, TxInput, TxOutput},
-    primitives::Amount,
+    chain::block::{
+        consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData,
+    },
+    chain::{
+        config::EpochIndex,
+        signature::{
+            inputsig::{standard_signature::StandardInputSignature, InputWitness},
+            sighash::sighashtype::SigHashType,
+        },
+        ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
+    },
+    primitives::{Amount, BlockHeight},
 };
 use crypto::{
     key::{PrivateKey, PublicKey},
     vrf::{VRFPrivateKey, VRFPublicKey},
 };
 use serialization::{Decode, Encode};
-
-pub use crate::{
-    error::ConsensusVerificationError,
-    pos::{
-        block_sig::BlockSignatureError, check_pos_hash, error::ConsensusPoSError,
-        kernel::get_kernel_output, stake, target::calculate_target_required,
-        target::calculate_target_required_from_block_index, StakeResult,
-    },
-    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError, MiningResult},
-    validator::validate_consensus,
-};
 
 /// Input needed to generate PoS consensus data
 ///
@@ -169,4 +177,79 @@ impl PoSFinalizeBlockInputData {
     pub fn vrf_public_key(&self) -> VRFPublicKey {
         VRFPublicKey::from_private_key(&self.vrf_private_key)
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn generate_pos_consensus_data<G>(
+    chain_config: &ChainConfig,
+    prev_block_index: &GenBlockIndex,
+    pos_input_data: PoSGenerateBlockInputData,
+    pos_status: PoSStatus,
+    sealed_epoch_randomness: Option<EpochData>,
+    block_timestamp: BlockTimestamp,
+    block_height: BlockHeight,
+    get_ancestor: G,
+) -> Result<ConsensusData, ConsensusCreationError>
+where
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
+    let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
+
+    let kernel_output = vec![TxOutput::ProduceBlockFromStake(
+        reward_destination.clone(),
+        pos_input_data.pool_id(),
+    )];
+
+    let block_reward = BlockRewardTransactable::new(
+        Some(pos_input_data.kernel_inputs()),
+        Some(&kernel_output),
+        None,
+    );
+
+    let kernel_input_utxos = pos_input_data.kernel_input_utxos();
+
+    let signature = StandardInputSignature::produce_uniparty_signature_for_input(
+        pos_input_data.stake_private_key(),
+        SigHashType::default(),
+        reward_destination,
+        &block_reward,
+        &kernel_input_utxos.iter().collect::<Vec<_>>(),
+        0,
+    )
+    .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
+
+    let input_witness = InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::default(),
+        signature.encode(),
+    ));
+
+    let vrf_data = {
+        let sealed_epoch_randomness = sealed_epoch_randomness
+            .ok_or(ConsensusPoSError::NoEpochData)?
+            .randomness()
+            .value();
+
+        let transcript = construct_transcript(
+            chain_config.epoch_index_from_height(&block_height),
+            &sealed_epoch_randomness,
+            block_timestamp,
+        );
+
+        pos_input_data.vrf_private_key().produce_vrf_data(transcript.into())
+    };
+
+    let target_required = calculate_target_required_from_block_index(
+        chain_config,
+        &pos_status,
+        prev_block_index,
+        get_ancestor,
+    )?;
+
+    Ok(ConsensusData::PoS(Box::new(PoSData::new(
+        pos_input_data.kernel_inputs().clone(),
+        vec![input_witness],
+        pos_input_data.pool_id(),
+        vrf_data,
+        target_required,
+    ))))
 }
