@@ -37,17 +37,20 @@ pub enum SignatureError {
     SignatureConstructionError,
 }
 
+#[must_use]
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum KeyKind {
     #[codec(index = 0)]
     Secp256k1Schnorr,
 }
 
+#[must_use]
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PrivateKey {
     key: PrivateKeyHolder,
 }
 
+#[must_use]
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
@@ -111,6 +114,7 @@ impl PublicKey {
         }
     }
 
+    #[must_use]
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
         match &self.pub_key {
             PublicKeyHolder::Secp256k1Schnorr(ref k) => match signature {

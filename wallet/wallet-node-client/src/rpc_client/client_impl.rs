@@ -19,6 +19,7 @@ use common::{
     chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
+use consensus::GenerateBlockInputData;
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
 use serialization::hex_encoded::HexEncoded;
 
@@ -80,12 +81,14 @@ impl NodeInterface for NodeRpcClient {
 
     async fn generate_block(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         let transactions = transactions.map(|txs| txs.into_iter().map(HexEncoded::new).collect());
         BlockProductionRpcClient::generate_block(
             &self.http_client,
+            input_data.map(Into::into),
             reward_destination.into(),
             transactions,
         )

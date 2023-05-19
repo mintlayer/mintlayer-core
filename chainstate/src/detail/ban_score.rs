@@ -287,6 +287,8 @@ impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusPoWError::InvalidPoW(_) => 100,
+            ConsensusPoWError::NoInputDataProvided => 100,
+            ConsensusPoWError::PoSInputDataProvided => 100,
             ConsensusPoWError::PrevBlockLoadError(_, _) => 0,
             ConsensusPoWError::PrevBlockNotFound(_) => 100,
             ConsensusPoWError::AncestorAtHeightNotFound(_, _, _) => 0,
@@ -294,6 +296,7 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
             ConsensusPoWError::InvalidTargetBits(_, _) => 100,
+            ConsensusPoWError::GenesisCannotHaveOngoingDifficulty => 100,
         }
     }
 }
@@ -315,6 +318,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::StakeKernelHashTooHigh => 100,
             ConsensusPoSError::TimestampViolation(_, _) => 100,
             ConsensusPoSError::NoKernel => 100,
+            ConsensusPoSError::NoEpochData => 0,
             ConsensusPoSError::MultipleKernels => 100,
             ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
             ConsensusPoSError::PrevBlockIndexNotFound(_) => 0,
@@ -325,11 +329,18 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::InvalidTarget(_) => 100,
             ConsensusPoSError::DecodingBitsFailed(_) => 100,
             ConsensusPoSError::NotEnoughTimestampsToAverage => 100,
+            ConsensusPoSError::TimestampOverflow => 100,
             ConsensusPoSError::TargetConversionError(_) => 100,
             ConsensusPoSError::InvalidTargetBlockTime => 100,
             ConsensusPoSError::InvariantBrokenNotMonotonicBlockTime => 100,
             ConsensusPoSError::FailedToFetchUtxo => 0,
             ConsensusPoSError::BlockSignatureError(err) => err.ban_score(),
+            ConsensusPoSError::NoInputDataProvided => 100,
+            ConsensusPoSError::PoWInputDataProvided => 100,
+            ConsensusPoSError::FailedToSignBlockHeader => 0,
+            ConsensusPoSError::FailedReadingBlock(_) => 0,
+            ConsensusPoSError::FutureTimestampInThePast => 0,
+            ConsensusPoSError::FailedToSignKernel => 0,
         }
     }
 }

@@ -19,6 +19,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
+use consensus::GenerateBlockInputData;
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
@@ -40,6 +41,7 @@ pub trait NodeInterface {
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn generate_block(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions_hex: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error>;

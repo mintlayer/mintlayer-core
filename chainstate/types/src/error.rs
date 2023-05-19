@@ -30,6 +30,8 @@ pub enum PropertyQueryError {
     BestBlockIndexNotFound,
     #[error("Block not found {0}")]
     BlockNotFound(Id<Block>),
+    #[error("Epoch data not found for block height {0}")]
+    EpochDataNotFound(BlockHeight),
     #[error("Previous block index not found {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
     #[error("Block index at height {0} not found")]
@@ -52,6 +54,10 @@ pub enum PropertyQueryError {
     ExpectedCoinOutpointAndFoundToken,
     #[error("Stake pool {0} data not found")]
     StakePoolDataNotFound(PoolId),
+    #[error("Balance of pool {0} not found")]
+    PoolBalanceNotFound(PoolId),
+    #[error("Failed to read balance of pool {0}")]
+    PoolBalanceReadError(PoolId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

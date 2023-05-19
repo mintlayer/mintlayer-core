@@ -25,6 +25,7 @@ zeroize = "1.5"
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
+consensus = { path = "../../consensus" }
 test-utils = { path = "../../test-utils" }
 
 anyhow = "1.0"

@@ -22,20 +22,27 @@ use crate::{
 
 use std::sync::{atomic::AtomicBool, mpsc, Arc};
 
-use chainstate::{ChainstateHandle, PropertyQueryError};
+use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
 
-use chainstate_types::{BlockIndex, GenBlockIndex, GetAncestorError};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
+};
 use common::{
     chain::{
         block::{
-            block_body::BlockBody, timestamp::BlockTimestamp, BlockCreationError, BlockHeader,
-            BlockReward, ConsensusData,
+            block_body::BlockBody, signed_block_header::SignedBlockHeader,
+            timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, Destination, SignedTransaction,
+        config::EpochIndex,
+        Block, ChainConfig, Destination, GenBlockId, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
 };
+use consensus::{
+    ConsensusPoSError, FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
+};
+
 use logging::log;
 use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
@@ -114,8 +121,10 @@ impl BlockProduction {
 
     async fn pull_consensus_data(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         block_timestamp: BlockTimestamp,
-    ) -> Result<(ConsensusData, GenBlockIndex), BlockProductionError> {
+    ) -> Result<(ConsensusData, GenBlockIndex, Option<FinalizeBlockInputData>), BlockProductionError>
+    {
         let consensus_data = self
             .chainstate_handle
             .call({
@@ -141,14 +150,45 @@ impl BlockProduction {
                         })
                     };
 
+                    let block_height = best_block_index.block_height().next_height();
+                    let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
+
+                    let sealed_epoch_randomness = sealed_epoch_index
+                        .map(|index| this.get_epoch_data(index))
+                        .transpose()
+                        .map_err(|_| {
+                            ConsensusPoSError::PropertyQueryError(
+                                PropertyQueryError::EpochDataNotFound(block_height),
+                            )
+                        })?
+                        .flatten()
+                        .map(|epoch_data| *epoch_data.randomness())
+                        // TODO: no epoch_data means either that no
+                        // epoch has been created yet, or that the
+                        // data is actually missing
+                        .or_else(|| Some(PoSRandomness::at_genesis(&chain_config)));
+
                     let consensus_data = consensus::generate_consensus_data(
                         &chain_config,
                         &best_block_index,
+                        sealed_epoch_randomness,
+                        input_data.clone(),
                         block_timestamp,
-                        best_block_index.block_height().next_height(),
+                        block_height,
                         get_ancestor,
-                    );
-                    consensus_data.map(|cons_data| (cons_data, best_block_index))
+                    )?;
+
+                    let finalize_block_data = Self::generate_finalize_block_data(
+                        &chain_config,
+                        this,
+                        &best_block_index,
+                        block_height,
+                        sealed_epoch_index,
+                        sealed_epoch_randomness,
+                        input_data,
+                    )?;
+
+                    Ok((consensus_data, best_block_index, finalize_block_data))
                 }
             })
             .await?
@@ -157,20 +197,89 @@ impl BlockProduction {
         Ok(consensus_data)
     }
 
+    fn generate_finalize_block_data(
+        chain_config: &ChainConfig,
+        chainstate_handle: &(dyn ChainstateInterface),
+        best_block_index: &GenBlockIndex,
+        block_height: BlockHeight,
+        sealed_epoch_index: Option<EpochIndex>,
+        sealed_epoch_randomness: Option<PoSRandomness>,
+        input_data: Option<GenerateBlockInputData>,
+    ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
+        match input_data {
+            Some(GenerateBlockInputData::PoS(pos_input_data)) => {
+                let sealed_epoch_index =
+                    sealed_epoch_index.ok_or(ConsensusPoSError::NoEpochData)?;
+
+                let sealed_epoch_randomness =
+                    sealed_epoch_randomness.ok_or(ConsensusPoSError::PropertyQueryError(
+                        PropertyQueryError::EpochDataNotFound(block_height),
+                    ))?;
+
+                let previous_block_timestamp = match best_block_index.prev_block_id() {
+                    None => chain_config.genesis_block().timestamp(),
+                    Some(prev_gen_block_id) => match prev_gen_block_id.classify(chain_config) {
+                        GenBlockId::Genesis(_) => chain_config.genesis_block().timestamp(),
+                        GenBlockId::Block(block_id) => chainstate_handle
+                            .get_block(block_id)
+                            .map_err(|_| ConsensusPoSError::FailedReadingBlock(block_id))?
+                            .ok_or({
+                                ConsensusPoSError::PropertyQueryError(
+                                    PropertyQueryError::BlockNotFound(block_id),
+                                )
+                            })?
+                            .timestamp(),
+                    },
+                };
+
+                let max_block_timestamp = previous_block_timestamp
+                    .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
+                    .ok_or(ConsensusPoSError::TimestampOverflow)?;
+
+                let pool_balance = chainstate_handle
+                    .get_stake_pool_balance(pos_input_data.pool_id())
+                    .map_err(|_| {
+                        ConsensusPoSError::PropertyQueryError(
+                            PropertyQueryError::PoolBalanceReadError(pos_input_data.pool_id()),
+                        )
+                    })?
+                    .ok_or(ConsensusPoSError::PropertyQueryError(
+                        PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
+                    ))?;
+
+                Ok(Some(FinalizeBlockInputData::PoS(
+                    PoSFinalizeBlockInputData::new(
+                        pos_input_data.stake_private_key().clone(),
+                        pos_input_data.vrf_private_key().clone(),
+                        sealed_epoch_index,
+                        sealed_epoch_randomness,
+                        previous_block_timestamp,
+                        max_block_timestamp,
+                        pool_balance,
+                    ),
+                )))
+            }
+            Some(GenerateBlockInputData::PoW) => Ok(Some(FinalizeBlockInputData::PoW)),
+            None => Ok(None),
+        }
+    }
+
     fn solve_block(
         chain_config: Arc<ChainConfig>,
         mut block_header: BlockHeader,
         current_tip_height: BlockHeight,
+        finalize_data: Option<FinalizeBlockInputData>,
         stop_flag: Arc<AtomicBool>,
-    ) -> Result<BlockHeader, BlockProductionError> {
-        consensus::finalize_consensus_data(
+    ) -> Result<SignedBlockHeader, BlockProductionError> {
+        let signed_block_header = consensus::finalize_consensus_data(
             &chain_config,
             &mut block_header,
             current_tip_height,
             stop_flag,
+            finalize_data,
         )?;
 
-        Ok(block_header)
+        Ok(signed_block_header)
     }
 
     /// The function the creates a new block.
@@ -180,15 +289,17 @@ impl BlockProduction {
     /// remnants in the job manager.
     pub async fn produce_block(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(reward_destination, transactions_source, None)
+        self.produce_block_with_custom_id(input_data, reward_destination, transactions_source, None)
             .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         _reward_destination: Destination,
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
@@ -197,7 +308,7 @@ impl BlockProduction {
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let (_, tip_at_start) = self.pull_consensus_data(timestamp).await?;
+        let (_, tip_at_start, _) = self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -210,7 +321,8 @@ impl BlockProduction {
             let timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-            let (consensus_data, current_tip_index) = self.pull_consensus_data(timestamp).await?;
+            let (consensus_data, current_tip_index, finalize_block_data) =
+                self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
@@ -273,6 +385,7 @@ impl BlockProduction {
                         chain_config,
                         block_header,
                         current_tip_height,
+                        finalize_block_data,
                         stop_flag,
                     );
 
@@ -289,7 +402,7 @@ impl BlockProduction {
 
             tokio::select! {
                 _ = cancel_receiver.recv() => {
-                    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
+                    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
 
                     // This can fail if the mining thread has already finished
                     let _ended = ended_receiver.recv();
@@ -310,7 +423,7 @@ impl BlockProduction {
                         }
                     };
 
-                    let block_header = match mining_result {
+                    let signed_block_header = match mining_result {
                         Ok(header) => header,
                         Err(e) => {
                             log::error!(
@@ -323,7 +436,7 @@ impl BlockProduction {
                         }
                     };
 
-                    let block = Block::new_from_header(block_header.with_no_signature(), block_body.clone())?;
+                    let block = Block::new_from_header(signed_block_header, block_body.clone())?;
                     return Ok((block, end_confirm_receiver));
                 }
             }
@@ -642,6 +755,7 @@ mod tests {
                     let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
 
                     block_production.produce_block_with_custom_id(
+                        None,
                         Destination::AnyoneCanSpend,
                         TransactionsSource::Provided(vec![]),
                         Some(id),

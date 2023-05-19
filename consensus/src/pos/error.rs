@@ -30,6 +30,8 @@ pub enum ConsensusPoSError {
     PropertyQueryError(#[from] chainstate_types::PropertyQueryError),
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
+    #[error("Epoch data not provided")]
+    NoEpochData,
     #[error(
         "Stake block timestamp cannot be smaller than the kernel's (kernel: {0} < stake: {1})"
     )]
@@ -60,8 +62,18 @@ pub enum ConsensusPoSError {
     NotEnoughTimestampsToAverage,
     #[error("CRITICAL: Target block time must be > 0")]
     InvalidTargetBlockTime,
+    #[error("Overflowed when calculating the maximum block timestamp")]
+    TimestampOverflow,
     #[error("CRITICAL: Block time must be monotonic")]
     InvariantBrokenNotMonotonicBlockTime,
+    #[error("No input data was provided for PoS block generation")]
+    NoInputDataProvided,
+    #[error("PoW input data was provided for PoS block generation")]
+    PoWInputDataProvided,
+    #[error("Failed to read block {0}")]
+    FailedReadingBlock(Id<Block>),
+    #[error("Maximum block timestamp is before the previous block timestamp")]
+    FutureTimestampInThePast,
 
     // TODO the following error should include the corresponding error from UtxosView
     //      https://github.com/mintlayer/mintlayer-core/issues/811
@@ -69,4 +81,8 @@ pub enum ConsensusPoSError {
     FailedToFetchUtxo,
     #[error("Block signature error: `{0}`")]
     BlockSignatureError(#[from] BlockSignatureError),
+    #[error("Failed to sign block header")]
+    FailedToSignBlockHeader,
+    #[error("Failed to sign kernel")]
+    FailedToSignKernel,
 }

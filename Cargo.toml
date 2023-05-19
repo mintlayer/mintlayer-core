@@ -43,6 +43,7 @@ members = [
   "storage/sqlite",               # SQLite-based persistent storage backend implementation.
   "subsystem",                    # Utilities for working with concurrent subsystems.
   "test",                         # Integration tests.
+  "test-rpc-functions",           # RPC functions specifically for tests.
   "test-utils",                   # Various utilities for tests.
   "utils",                        # Various utilities.
   "utxo",                         # Utxo and related utilities (cache, undo, etc.).

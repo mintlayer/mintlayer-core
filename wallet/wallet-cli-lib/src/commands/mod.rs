@@ -301,7 +301,7 @@ pub async fn handle_wallet_command(
             let transactions =
                 transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
             let block = rpc_client
-                .generate_block(reward_destination.take(), transactions)
+                .generate_block(None, reward_destination.take(), transactions)
                 .await
                 .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;

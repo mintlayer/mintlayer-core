@@ -25,6 +25,7 @@ use chainstate_types::{
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
+        config::EpochIndex,
         timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -323,6 +324,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, PropertyQueryError> {
         Ok(self.db_tx.get_block_reward(block_index).log_err()?)
+    }
+
+    pub fn get_epoch_data(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_height_in_main_chain(

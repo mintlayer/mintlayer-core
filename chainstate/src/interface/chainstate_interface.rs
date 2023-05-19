@@ -19,7 +19,8 @@ use std::sync::Arc;
 use crate::detail::BlockSource;
 use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 
-use chainstate_types::{BlockIndex, GenBlockIndex, Locator};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
+
 use common::chain::block::signed_block_header::SignedBlockHeader;
 use common::{
     chain::{
@@ -131,6 +132,11 @@ pub trait ChainstateInterface: Send {
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError>;
+
+    /// Returns epoch data for the given epoch index.
+    /// Returns None if no epoch data was found.
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
+
     /// Returns token info by token_id
     fn get_token_info_for_rpc(
         &self,

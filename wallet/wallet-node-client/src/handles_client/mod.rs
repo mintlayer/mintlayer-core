@@ -19,6 +19,7 @@ use common::{
     chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
+use consensus::GenerateBlockInputData;
 use mempool::MempoolHandle;
 use p2p::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId, P2pHandle};
 use serialization::hex::HexError;
@@ -121,12 +122,15 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn generate_block(
         &self,
+        input_data: Option<GenerateBlockInputData>,
         reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| this.generate_block(reward_destination, transactions))
+            .call_async_mut(move |this| {
+                this.generate_block(input_data, reward_destination, transactions)
+            })
             .await??;
 
         Ok(block)

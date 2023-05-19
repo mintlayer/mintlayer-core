@@ -18,7 +18,7 @@ use std::sync::Arc;
 use chainstate::{
     BlockSource, ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent, Locator,
 };
-use chainstate_types::{BlockIndex, GenBlockIndex};
+use chainstate_types::{BlockIndex, EpochData, GenBlockIndex};
 use common::{
     chain::{
         block::{
@@ -109,6 +109,7 @@ mockall::mock! {
             &self,
             block_index: &BlockIndex,
         ) -> Result<Option<BlockReward>, ChainstateError>;
+        fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
         fn get_token_info_for_rpc(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
         fn get_token_aux_data(
             &self,

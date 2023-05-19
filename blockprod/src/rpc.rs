@@ -19,7 +19,7 @@ use common::{
     chain::Block,
     chain::{Destination, SignedTransaction},
 };
-
+use consensus::GenerateBlockInputData;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
 
@@ -44,6 +44,7 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
+        input_data: Option<HexEncoded<GenerateBlockInputData>>,
         reward_destination: HexEncoded<Destination>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> RpcResult<HexEncoded<Block>>;
@@ -70,6 +71,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
+        input_data: Option<HexEncoded<GenerateBlockInputData>>,
         reward_destination: HexEncoded<Destination>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> rpc::Result<HexEncoded<Block>> {
@@ -78,7 +80,11 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(reward_destination.take(), transactions)
+                this.generate_block(
+                    input_data.map(HexEncoded::take),
+                    reward_destination.take(),
+                    transactions,
+                )
             })
             .await,
         )?;

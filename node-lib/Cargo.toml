@@ -16,6 +16,7 @@ logging = { path = "../logging" }
 mempool = { path = "../mempool" }
 p2p = { path = "../p2p" }
 rpc = { path = "../rpc" }
+test-rpc-functions = { path = "../test-rpc-functions" }
 storage-lmdb = { path = "../storage/lmdb" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils" }
