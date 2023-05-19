@@ -23,7 +23,6 @@ use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::PublicKey;
 use std::collections::BTreeMap;
-use std::convert::TryInto;
 use std::sync::Arc;
 use utils::ensure;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
@@ -266,15 +265,8 @@ impl LeafKeyChain {
             return Ok(pub_key.clone());
         }
 
-        // Create the new key path
-        let key_path = {
-            let mut path = self.parent_pubkey.get_derivation_path().clone().into_vec();
-            path.push(key_index);
-            path.try_into()?
-        };
-
         // Derive the key
-        Ok(self.parent_pubkey.clone().derive_absolute_path(&key_path)?)
+        Ok(self.parent_pubkey.clone().derive_child(key_index)?)
     }
 
     /// Derives and adds a key to his key chain. This does not affect the last used and issued state
@@ -351,6 +343,7 @@ impl LeafKeyChain {
         Ok(())
     }
 
+    // TODO: Remove because unused
     /// Return true if `public_key` belongs to this key chain's derived pool. If the key can be
     /// derived from the `parent_pubkey` but is not in the key pool, then this will return false,
     /// use the `LeafKeyChain::is_pubkey_mine` instead to check membership.
@@ -358,6 +351,7 @@ impl LeafKeyChain {
         self.is_pubkey_mine(public_key, false)
     }
 
+    // TODO: Remove because unused
     /// Return true if `public_key` belongs to this key chain. Set `derive_if_necessary` to true
     /// for checking membership by deriving the key if necessary.
     pub fn is_pubkey_mine(
