@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::leaf_key_chain::LeafKeyChain;
+use crate::key_chain::leaf_key_chain::LeafKeySoftChain;
 use crate::key_chain::with_purpose::WithPurpose;
 use crate::key_chain::{make_account_path, KeyChainError, KeyChainResult};
 use common::address::pubkeyhash::PublicKeyHash;
@@ -34,13 +34,14 @@ pub struct AccountKeyChain {
     account_index: U31,
 
     /// The account private key from which the account public key is derived
+    // TODO: Do not store the private key here
     account_private_key: ConstValue<Option<RootKeyContent>>,
 
     /// The account public key from which all the addresses are derived
     account_public_key: ConstValue<ExtendedPublicKey>,
 
     /// Key chains for receiving and change funds
-    sub_chains: WithPurpose<LeafKeyChain>,
+    sub_chains: WithPurpose<LeafKeySoftChain>,
 
     /// The number of unused addresses that need to be checked after the last used address
     lookahead_size: ConstValue<u32>,
@@ -62,7 +63,7 @@ impl AccountKeyChain {
 
         let account_id = AccountId::new_from_xpub(&account_pubkey);
 
-        let receiving_key_chain = LeafKeyChain::new_empty(
+        let receiving_key_chain = LeafKeySoftChain::new_empty(
             chain_config.clone(),
             account_id.clone(),
             KeyPurpose::ReceiveFunds,
@@ -72,7 +73,7 @@ impl AccountKeyChain {
         );
         receiving_key_chain.save_usage_state(db_tx)?;
 
-        let change_key_chain = LeafKeyChain::new_empty(
+        let change_key_chain = LeafKeySoftChain::new_empty(
             chain_config,
             account_id,
             KeyPurpose::Change,
@@ -121,7 +122,7 @@ impl AccountKeyChain {
 
         let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
 
-        let sub_chains = LeafKeyChain::load_leaf_keys(chain_config, account_info, db_tx, id)?;
+        let sub_chains = LeafKeySoftChain::load_leaf_keys(chain_config, account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
             account_index: account_info.account_index(),
@@ -203,13 +204,13 @@ impl AccountKeyChain {
     }
 
     /// Get the leaf key chain for a particular key purpose
-    pub fn get_leaf_key_chain(&self, purpose: KeyPurpose) -> &LeafKeyChain {
+    pub fn get_leaf_key_chain(&self, purpose: KeyPurpose) -> &LeafKeySoftChain {
         self.sub_chains.get_for(purpose)
     }
 
     /// Get the mutable leaf key chain for a particular key purpose. This is used internally with
     /// database persistence done externally.
-    fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeyChain {
+    fn get_leaf_key_chain_mut(&mut self, purpose: KeyPurpose) -> &mut LeafKeySoftChain {
         self.sub_chains.mut_for(purpose)
     }
 

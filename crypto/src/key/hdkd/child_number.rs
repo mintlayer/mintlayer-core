@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::{Decode, Encode};
 use std::{
     fmt::{self, Formatter, Write},
     str::FromStr,
@@ -25,7 +24,7 @@ const HARDENED_APOS: char = '\'';
 const HARDENED_H: char = 'h';
 
 /// BIP32-like child numbers
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ChildNumber(u32);
 
 impl ChildNumber {
@@ -48,8 +47,8 @@ impl ChildNumber {
     }
 
     /// Get the index without the hardened bit set
-    pub const fn get_index(&self) -> u32 {
-        U31::from_u32_with_msb(self.0).0.into_u32()
+    pub const fn get_index(&self) -> U31 {
+        U31::from_u32_with_msb(self.0).0
     }
 
     /// Return a BIP32-like child number index that has the hardened bit set if needed
@@ -130,7 +129,6 @@ mod test {
     use crate::key::hdkd::u31::U31;
     use rand::RngCore;
     use rstest::rstest;
-    use serialization::{DecodeAll, Encode};
     use std::str::FromStr;
     use test_utils::random::make_seedable_rng;
     use test_utils::random::Seed;
@@ -140,10 +138,6 @@ mod test {
         assert_eq!(num.is_hardened(), is_hardened);
         assert_eq!(num.into_encoded_index(), encoded_num);
         assert_eq!(num.into_encoded_be_bytes(), encoded_num.to_be_bytes());
-        assert_eq!(
-            num,
-            ChildNumber::decode_all(&mut num.encode().as_slice()).unwrap()
-        );
     }
 
     #[rstest]

@@ -53,6 +53,9 @@ impl MasterKeyChain {
         mnemonic_str: &str,
         passphrase: Option<&str>,
     ) -> KeyChainResult<Self> {
+        // TODO: Do not store the master key here, store only the key relevant to the mintlayer
+        // (see make_account_path)
+
         let root_key = Self::mnemonic_to_root_key(mnemonic_str, passphrase)?;
         Self::new_from_root_key(chain_config, db_tx, root_key)
     }

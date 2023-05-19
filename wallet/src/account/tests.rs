@@ -94,7 +94,7 @@ fn account_addresses_lookahead() {
     account.key_chain.issue_address(&mut db_tx, ReceiveFunds).unwrap();
     assert_eq!(
         account.key_chain.get_leaf_key_chain(ReceiveFunds).last_issued(),
-        Some(ChildNumber::from_index_with_hardened_bit(0))
+        Some(U31::from_u32(0).unwrap())
     );
     assert_eq!(
         account.key_chain.get_leaf_key_chain(ReceiveFunds).get_last_derived_index(),

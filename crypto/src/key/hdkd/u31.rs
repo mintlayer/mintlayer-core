@@ -25,6 +25,8 @@ pub const MSB_BIT: u32 = 0x80000000;
 pub struct U31(u32);
 
 impl U31 {
+    pub const ZERO: U31 = U31(0);
+
     pub const fn from_u32_with_msb(val: u32) -> (Self, bool) {
         let msb = val & MSB_BIT != 0; // If the msb is set
         let val = val & !MSB_BIT; // Get the value without the msb
@@ -48,7 +50,7 @@ impl U31 {
         self.0 | (MSB_BIT * msb as u32)
     }
 
-    pub(crate) fn plus_one(&self) -> Result<Self, DerivationError> {
+    pub fn plus_one(&self) -> Result<Self, DerivationError> {
         (self.0 + 1).try_into()
     }
 }

@@ -92,8 +92,8 @@ fn key_chain_creation(
     let pk = {
         let key_index = path.as_slice().last().unwrap().get_index();
         // Derive previous key if necessary
-        if key_index > 0 {
-            for _ in 0..key_index {
+        if key_index.into_u32() > 0 {
+            for _ in 0..key_index.into_u32() {
                 let _ = key_chain.issue_key(&mut db_tx, purpose).unwrap();
             }
         }
@@ -160,9 +160,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     assert_eq!(key_chain.get_leaf_key_chain(purpose).last_used(), None);
     assert_eq!(
         key_chain.get_leaf_key_chain(purpose).last_issued(),
-        Some(ChildNumber::from_normal(
-            U31::from_u32_with_msb(LOOKAHEAD_SIZE - 1).0
-        ))
+        Some(U31::from_u32_with_msb(LOOKAHEAD_SIZE - 1).0)
     );
 
     let mut db_tx = db.transaction_rw(None).unwrap();
@@ -237,11 +235,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
         assert_eq!(
             leaf_keys.usage_state().last_issued(),
-            Some(ChildNumber::from_index_with_hardened_bit(0))
+            Some(U31::from_u32(0).unwrap())
         );
         assert_eq!(
             leaf_keys.usage_state().last_used(),
-            Some(ChildNumber::from_index_with_hardened_bit(0))
+            Some(U31::from_u32(0).unwrap())
         );
     }
 
@@ -261,11 +259,11 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         assert_eq!(leaf_keys.get_last_derived_index(), Some(last_derived_idx));
         assert_eq!(
             leaf_keys.usage_state().last_issued(),
-            Some(ChildNumber::from_index_with_hardened_bit(20))
+            Some(U31::from_u32(20).unwrap())
         );
         assert_eq!(
             leaf_keys.usage_state().last_used(),
-            Some(ChildNumber::from_index_with_hardened_bit(20))
+            Some(U31::from_u32(20).unwrap())
         );
     }
 }

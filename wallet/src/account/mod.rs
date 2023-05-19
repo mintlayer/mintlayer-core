@@ -180,6 +180,7 @@ impl Account {
         Ok((coin_amount, tokens_amounts))
     }
 
+    // TODO: Use a different type to support partially signed transactions
     fn sign_transaction(&self, req: SendRequest) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
