@@ -133,8 +133,8 @@ pub trait ChainstateInterface: Send {
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, ChainstateError>;
 
-    // Returns epoch data for the given epoch index.
-    // Returns None if no epoch data was found.
+    /// Returns epoch data for the given epoch index.
+    /// Returns None if no epoch data was found.
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
 
     /// Returns token info by token_id
