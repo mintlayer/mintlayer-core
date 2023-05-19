@@ -23,5 +23,5 @@ pub use transaction_verifier::{
         TransactionVerifierStorageError, TransactionVerifierStorageMut,
         TransactionVerifierStorageRef,
     },
-    Fee, TransactionSource, TransactionVerifier,
+    timelock_check, Fee, TransactionSource, TransactionVerifier,
 };

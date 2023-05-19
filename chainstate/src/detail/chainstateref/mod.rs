@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, convert::TryInto};
+use std::collections::BTreeSet;
 
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
@@ -26,12 +26,12 @@ use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
         config::EpochIndex,
-        timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxOutput,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, Transaction,
+        TxOutput,
     },
-    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -423,56 +423,36 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_block_reward_timelock(
-        &self,
-        block: &Block,
-        timelock: &OutputTimeLock,
-    ) -> Result<(), CheckBlockError> {
-        match timelock {
-            OutputTimeLock::ForBlockCount(c) => {
-                let cs: i64 = (*c)
-                    .try_into()
-                    .map_err(|_| {
-                        CheckBlockError::InvalidBlockRewardMaturityDistanceValue(block.get_id(), *c)
-                    })
-                    .log_err()?;
-                let given = BlockDistance::new(cs);
-                let required = block.consensus_data().reward_maturity_distance(self.chain_config);
-                ensure!(
-                    given >= required,
-                    CheckBlockError::InvalidBlockRewardMaturityDistance(
-                        block.get_id(),
-                        given,
-                        required
-                    )
-                );
-                Ok(())
-            }
-            OutputTimeLock::UntilHeight(_)
-            | OutputTimeLock::UntilTime(_)
-            | OutputTimeLock::ForSeconds(_) => Err(
-                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
-            ),
-        }
-    }
-
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block.block_reward().outputs().iter().try_for_each(|output| {
-            match output {
-                TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
-                TxOutput::ProduceBlockFromStake(_, _) => {
-                    // The output can be reused in block reward right away
-                    Ok(())
+        block
+            .block_reward()
+            .outputs()
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, output)| {
+                match output {
+                    TxOutput::LockThenTransfer(_, _, tl) => {
+                        let outpoint = OutPoint::new(block.get_id().into(), index as u32);
+                        let required =
+                            block.consensus_data().reward_maturity_distance(self.chain_config);
+                        tx_verifier::timelock_check::check_output_block_distance(
+                            tl, required, outpoint,
+                        )
+                        .map_err(CheckBlockError::BlockRewardMaturityError)
+                    }
+                    TxOutput::ProduceBlockFromStake(_, _) => {
+                        // The output can be reused in block reward right away
+                        Ok(())
+                    }
+                    TxOutput::Transfer(_, _)
+                    | TxOutput::CreateStakePool(_, _)
+                    | TxOutput::Burn(_)
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => Err(
+                        CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                    ),
                 }
-                TxOutput::Transfer(_, _)
-                | TxOutput::CreateStakePool(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => Err(
-                    CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
-                ),
-            }
-        })
+            })
     }
 
     fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {

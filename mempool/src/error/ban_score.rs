@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate::{
+    ban_score::BanScore,
     tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
     ChainstateError, ConnectTransactionError, TokensError, TransactionVerifierStorageError,
     TxIndexError,
@@ -120,7 +121,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
-            ConnectTransactionError::TimeLockViolation => 0,
+            ConnectTransactionError::TimeLockViolation(_) => 0,
 
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),
@@ -144,9 +145,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
-            ConnectTransactionError::InvalidDecommissionMaturityDistance(_, _) => 100,
-            ConnectTransactionError::InvalidDecommissionMaturityDistanceValue(_) => 100,
-            ConnectTransactionError::InvalidDecommissionMaturityType => 100,
+            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,

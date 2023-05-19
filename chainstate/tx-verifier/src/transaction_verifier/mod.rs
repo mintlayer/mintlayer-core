@@ -21,7 +21,6 @@ mod input_output_policy;
 mod optional_tx_index_cache;
 mod reward_distribution;
 mod signature_check;
-mod timelock_check;
 mod token_issuance_cache;
 mod transferred_amount_check;
 mod tx_index_cache;
@@ -33,6 +32,7 @@ pub mod flush;
 pub mod hierarchy;
 pub mod signature_destination_getter;
 pub mod storage;
+pub mod timelock_check;
 
 mod tx_source;
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
@@ -567,8 +567,9 @@ where
             &self.storage,
             &self.chain_config,
             &self.utxo_cache,
-            tx_source,
             tx,
+            tx_source,
+            tx.transaction().get_id().into(),
             median_time_past,
         )?;
 
