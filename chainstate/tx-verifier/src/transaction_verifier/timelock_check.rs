@@ -87,6 +87,31 @@ where
         None => return Ok(()),
     };
 
+    let input_utxos = inputs
+        .iter()
+        .map(|input| {
+            utxos_view
+                .utxo(input.outpoint())
+                .map_err(|_| utxo::Error::ViewRead)?
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
+    // produced outputs must be timelocked as per chain config
+    let output_check_required = input_utxos.iter().find_map(|utxo| match utxo.output() {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _) => None,
+        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
+        }
+        TxOutput::DelegateStaking(_, _) => {
+            Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+        }
+    });
+
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
             (*new_block_index).clone().into_gen_block_index()
@@ -94,28 +119,8 @@ where
         TransactionSourceForConnect::Mempool { current_best } => (*current_best).clone(),
     };
 
-    let mut output_check_required: Option<OutputTimelockCheckRequired> = None;
-
-    for input in inputs {
-        let outpoint = input.outpoint();
-        let utxo = utxos_view
-            .utxo(outpoint)
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-        output_check_required = match utxo.output() {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::Burn(_)
-            | TxOutput::CreateDelegationId(_, _) => None,
-            TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
-                Some(OutputTimelockCheckRequired::DecommissioningMaturity)
-            }
-            TxOutput::DelegateStaking(_, _) => {
-                Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
-            }
-        };
-
+    // check if utxos can already be spent
+    input_utxos.iter().try_for_each(|utxo| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
@@ -151,43 +156,53 @@ where
                 spending_time,
             )?;
         }
-    }
+        Ok(())
+    })?;
 
-    let outputs = match tx.outputs() {
-        Some(outputs) => outputs,
-        None => return Ok(()),
-    };
-
-    if let Some(output_check_required) = output_check_required {
-        let block_height = tx_source.expected_block_height();
-        for output in outputs {
-            match output {
-                TxOutput::Transfer(_, _)
-                | TxOutput::Burn(_)
-                | TxOutput::CreateStakePool(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => Ok(()),
-                TxOutput::LockThenTransfer(_, _, timelock) => match output_check_required {
-                    OutputTimelockCheckRequired::DelegationSpendMaturity => {
-                        let required =
-                            chain_config.as_ref().spend_share_maturity_distance(block_height);
-                        check_output_timelock(timelock, required)
-                    }
-                    OutputTimelockCheckRequired::DecommissioningMaturity => {
-                        let required =
-                            chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                        check_output_timelock(timelock, required)
-                    }
-                },
-            }?;
+    // check if output timelocks follow the rules
+    if let Some(outputs) = tx.outputs() {
+        if let Some(output_check_required) = output_check_required {
+            check_outputs_timelock(
+                chain_config.as_ref(),
+                outputs,
+                tx_source.expected_block_height(),
+                output_check_required,
+            )?;
         }
     }
 
     Ok(())
 }
 
-fn check_output_timelock(
+/// Outputs that decommission a stake pool or spend delegation share must be timelocked
+fn check_outputs_timelock(
+    chain_config: &ChainConfig,
+    outputs: &[TxOutput],
+    block_height: BlockHeight,
+    output_check_required: OutputTimelockCheckRequired,
+) -> Result<(), ConnectTransactionError> {
+    outputs.iter().try_for_each(|output| match output {
+        TxOutput::Transfer(_, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateStakePool(_, _)
+        | TxOutput::ProduceBlockFromStake(_, _)
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _) => Ok(()),
+        TxOutput::LockThenTransfer(_, _, timelock) => match output_check_required {
+            OutputTimelockCheckRequired::DelegationSpendMaturity => {
+                let required = chain_config.as_ref().spend_share_maturity_distance(block_height);
+                check_block_distance(timelock, required)
+            }
+            OutputTimelockCheckRequired::DecommissioningMaturity => {
+                let required =
+                    chain_config.as_ref().decommission_pool_maturity_distance(block_height);
+                check_block_distance(timelock, required)
+            }
+        },
+    })
+}
+
+fn check_block_distance(
     timelock: &OutputTimeLock,
     required: BlockDistance,
 ) -> Result<(), ConnectTransactionError> {
