@@ -36,7 +36,24 @@ pub use crate::{
     validator::validate_consensus,
 };
 
-/// Input needed (i.e provided by a wallet) to generate PoS consensus data
+/// Input needed to generate PoS consensus data
+///
+/// This struct will be provided by a wallet via `blockprod` RPC calls
+/// in order to generate Proof-of-Stake consensus data (see
+/// ConsensusData::PoS for more info) when creating PoS blocks.
+///
+/// The `stake_private_key` is used to know who will receive the block
+/// reward and to sign block headers.
+///
+/// The `vrf_private_key` and `pool_id` will be used to calculate the
+/// target threshold for staking (i.e the stake pool's balance will be
+/// used as an input into the calculations).
+///
+/// And the `kernel_inputs` are the wallet-provided `TxInput(s)` that
+/// the staker will spend in order to stake a new block, whilst
+/// `kernel_input_utxos` are the UTXOs that the `kernel_inputs` point
+/// to, which will be used to sign the PoS consensus data
+/// `kernel_witness`.
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSGenerateBlockInputData {
     /// The private key of the staker
@@ -77,8 +94,12 @@ impl PoSGenerateBlockInputData {
     }
 }
 
-#[derive(Debug, Clone, Encode, Decode)]
 /// Input needed to finalize PoS consensus data
+///
+/// This struct is an internal data structure that will be created by
+/// `blockprod`, and will be used when finalizing Proof-of-Stake consensus
+/// data (see ConsensusData::PoS for more info) during PoS block creation.
+#[derive(Debug, Clone, Encode, Decode)]
 pub struct PoSFinalizeBlockInputData {
     /// The private key of the staker
     stake_private_key: PrivateKey,
