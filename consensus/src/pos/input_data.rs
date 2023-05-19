@@ -14,10 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    pos::{
-        error::ConsensusPoSError,
-        target::calculate_target_required_from_block_index,
-    },
+    pos::{error::ConsensusPoSError, target::calculate_target_required_from_block_index},
     ConsensusCreationError,
 };
 use chainstate_types::{
