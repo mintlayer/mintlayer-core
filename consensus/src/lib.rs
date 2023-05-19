@@ -37,7 +37,7 @@ use common::{
             inputsig::{standard_signature::StandardInputSignature, InputWitness},
             sighash::sighashtype::SigHashType,
         },
-        ChainConfig, Destination, RequiredConsensus, TxOutput,
+        ChainConfig, Destination, PoSStatus, RequiredConsensus, TxOutput,
     },
     primitives::BlockHeight,
 };
@@ -104,73 +104,20 @@ where
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
         RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
-        RequiredConsensus::PoS(pos_status) => {
-            let pos_input_data = match input_data {
-                Some(GenerateBlockInputData::PoS(pos_input_data)) => pos_input_data,
-                Some(GenerateBlockInputData::PoW) => Err(ConsensusPoSError::PoWInputDataProvided)?,
-                None => Err(ConsensusPoSError::NoInputDataProvided)?,
-            };
-
-            let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
-
-            let kernel_output = vec![TxOutput::ProduceBlockFromStake(
-                reward_destination.clone(),
-                pos_input_data.pool_id(),
-            )];
-
-            let block_reward = BlockRewardTransactable::new(
-                Some(pos_input_data.kernel_inputs()),
-                Some(&kernel_output),
-                None,
-            );
-
-            let kernel_input_utxos = pos_input_data.kernel_input_utxos();
-
-            let signature = StandardInputSignature::produce_uniparty_signature_for_input(
-                pos_input_data.stake_private_key(),
-                SigHashType::default(),
-                reward_destination,
-                &block_reward,
-                &kernel_input_utxos.iter().collect::<Vec<_>>(),
-                0,
-            )
-            .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
-
-            let input_witness = InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::default(),
-                signature.encode(),
-            ));
-
-            let vrf_data = {
-                let sealed_epoch_randomness = sealed_epoch_randomness
-                    .ok_or(ConsensusPoSError::NoEpochData)?
-                    .randomness()
-                    .value();
-
-                let transcript = construct_transcript(
-                    chain_config.epoch_index_from_height(&block_height),
-                    &sealed_epoch_randomness,
-                    block_timestamp,
-                );
-
-                pos_input_data.vrf_private_key().produce_vrf_data(transcript.into())
-            };
-
-            let target_required = calculate_target_required_from_block_index(
+        RequiredConsensus::PoS(pos_status) => match input_data {
+            Some(GenerateBlockInputData::PoS(pos_input_data)) => generate_pos_consensus_data(
                 chain_config,
-                &pos_status,
                 prev_block_index,
+                *pos_input_data,
+                pos_status,
+                sealed_epoch_randomness,
+                block_timestamp,
+                block_height,
                 get_ancestor,
-            )?;
-
-            Ok(ConsensusData::PoS(Box::new(PoSData::new(
-                pos_input_data.kernel_inputs().clone(),
-                vec![input_witness],
-                pos_input_data.pool_id(),
-                vrf_data,
-                target_required,
-            ))))
-        }
+            ),
+            Some(GenerateBlockInputData::PoW) => Err(ConsensusPoSError::PoWInputDataProvided)?,
+            None => Err(ConsensusPoSError::NoInputDataProvided)?,
+        },
         RequiredConsensus::PoW(pow_status) => {
             let work_required = calculate_work_required(
                 chain_config,
@@ -183,6 +130,81 @@ where
             Ok(ConsensusData::PoW(PoWData::new(work_required, 0)))
         }
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn generate_pos_consensus_data<G>(
+    chain_config: &ChainConfig,
+    prev_block_index: &GenBlockIndex,
+    pos_input_data: PoSGenerateBlockInputData,
+    pos_status: PoSStatus,
+    sealed_epoch_randomness: Option<EpochData>,
+    block_timestamp: BlockTimestamp,
+    block_height: BlockHeight,
+    get_ancestor: G,
+) -> Result<ConsensusData, ConsensusCreationError>
+where
+    G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
+{
+    let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
+
+    let kernel_output = vec![TxOutput::ProduceBlockFromStake(
+        reward_destination.clone(),
+        pos_input_data.pool_id(),
+    )];
+
+    let block_reward = BlockRewardTransactable::new(
+        Some(pos_input_data.kernel_inputs()),
+        Some(&kernel_output),
+        None,
+    );
+
+    let kernel_input_utxos = pos_input_data.kernel_input_utxos();
+
+    let signature = StandardInputSignature::produce_uniparty_signature_for_input(
+        pos_input_data.stake_private_key(),
+        SigHashType::default(),
+        reward_destination,
+        &block_reward,
+        &kernel_input_utxos.iter().collect::<Vec<_>>(),
+        0,
+    )
+    .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
+
+    let input_witness = InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::default(),
+        signature.encode(),
+    ));
+
+    let vrf_data = {
+        let sealed_epoch_randomness = sealed_epoch_randomness
+            .ok_or(ConsensusPoSError::NoEpochData)?
+            .randomness()
+            .value();
+
+        let transcript = construct_transcript(
+            chain_config.epoch_index_from_height(&block_height),
+            &sealed_epoch_randomness,
+            block_timestamp,
+        );
+
+        pos_input_data.vrf_private_key().produce_vrf_data(transcript.into())
+    };
+
+    let target_required = calculate_target_required_from_block_index(
+        chain_config,
+        &pos_status,
+        prev_block_index,
+        get_ancestor,
+    )?;
+
+    Ok(ConsensusData::PoS(Box::new(PoSData::new(
+        pos_input_data.kernel_inputs().clone(),
+        vec![input_witness],
+        pos_input_data.pool_id(),
+        vrf_data,
+        target_required,
+    ))))
 }
 
 pub fn finalize_consensus_data(
