@@ -36,6 +36,8 @@ use crypto::key::hdkd::{
 };
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
+// TODO: Many of these tests require randomization...
+
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::key_chain::AccountKeyChain;
+use crate::key_chain::{AccountKeyChain, KeyChainError};
 use crate::send_request::make_address_output;
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
@@ -203,8 +203,11 @@ impl Account {
                 if *destination == Destination::AnyoneCanSpend {
                     Ok(InputWitness::NoSignature(None))
                 } else {
-                    let private_key =
-                        self.key_chain.get_private_key_for_destination(destination)?.private_key();
+                    let private_key = self
+                        .key_chain
+                        .get_private_key_for_destination(destination)?
+                        .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+                        .private_key();
 
                     let sighash_type =
                         SigHashType::try_from(SigHashType::ALL).expect("Should not fail");

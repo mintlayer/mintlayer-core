@@ -51,7 +51,7 @@ impl WalletTx {
         &self.tx
     }
 
-    pub fn get_state(&self) -> &TxState {
+    pub fn state(&self) -> &TxState {
         &self.state
     }
 }

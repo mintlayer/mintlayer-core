@@ -186,21 +186,23 @@ impl AccountKeyChain {
     pub fn get_private_key_for_destination(
         &self,
         destination: &Destination,
-    ) -> KeyChainResult<ExtendedPrivateKey> {
-        if let Some(account_private_key) = self.account_private_key.as_ref() {
-            let xpriv = account_private_key.as_key();
-            for purpose in KeyPurpose::ALL {
-                let leaf_key = self.get_leaf_key_chain(purpose);
-                if let Some(xpub) = leaf_key
-                    .get_child_num_from_destination(destination)
-                    .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
-                {
-                    return Self::get_private_key(xpriv, xpub);
-                }
+    ) -> KeyChainResult<Option<ExtendedPrivateKey>> {
+        let account_private_key = self
+            .account_private_key
+            .as_ref()
+            .as_ref()
+            .ok_or(KeyChainError::NoPrivateKeyFound)?;
+        let xpriv = account_private_key.as_key();
+        for purpose in KeyPurpose::ALL {
+            let leaf_key = self.get_leaf_key_chain(purpose);
+            if let Some(xpub) = leaf_key
+                .get_child_num_from_destination(destination)
+                .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
+            {
+                return Self::get_private_key(xpriv, xpub).map(Option::Some);
             }
         }
-
-        Err(KeyChainError::NoPrivateKeyFound)
+        Ok(None)
     }
 
     /// Get the leaf key chain for a particular key purpose

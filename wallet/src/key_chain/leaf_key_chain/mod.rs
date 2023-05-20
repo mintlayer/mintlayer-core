@@ -25,6 +25,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
@@ -35,7 +36,7 @@ use wallet_types::{
 // TODO: Switch to the hard derivation because it's more secure
 
 /// A child key hierarchy for an AccountKeyChain. This normally implements the receiving and change
-/// addresses key chains
+/// addresses key chains. It uses soft derivation to generate addresses (xpub).
 pub struct LeafKeySoftChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
@@ -47,7 +48,7 @@ pub struct LeafKeySoftChain {
     purpose: KeyPurpose,
 
     /// The parent key of this key chain
-    parent_pubkey: ExtendedPublicKey,
+    parent_pubkey: ConstValue<ExtendedPublicKey>,
 
     // TODO: many of these members (the BTreeMaps) are highly coupled and are used in certain ways in tandem.
     //       See if we can move them into submodules that are individually testable
@@ -79,7 +80,7 @@ impl LeafKeySoftChain {
             chain_config,
             account_id,
             purpose,
-            parent_pubkey,
+            parent_pubkey: parent_pubkey.into(),
             addresses: BTreeMap::new(),
             derived_public_keys: BTreeMap::new(),
             public_key_to_index: BTreeMap::new(),
@@ -113,7 +114,7 @@ impl LeafKeySoftChain {
             chain_config,
             account_id,
             purpose,
-            parent_pubkey,
+            parent_pubkey: parent_pubkey.into(),
             addresses,
             derived_public_keys,
             public_key_to_index: public_keys_to_index,
@@ -268,7 +269,11 @@ impl LeafKeySoftChain {
         }
 
         // Derive the key
-        Ok(self.parent_pubkey.clone().derive_child(ChildNumber::from_normal(key_index))?)
+        Ok(self
+            .parent_pubkey
+            .clone()
+            .take()
+            .derive_child(ChildNumber::from_normal(key_index))?)
     }
 
     /// Derives and adds a key to his key chain. This does not affect the last used and issued state
