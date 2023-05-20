@@ -100,16 +100,6 @@ pub fn qrcode_from_str<S: AsRef<str>>(s: S) -> Result<impl QrCode, QrCodeError> 
     Ok(QrCodeImpl(qr))
 }
 
-/// Constructs QR Code from binary data
-pub fn qrcode_from_data<D: AsRef<[u8]>>(data: D) -> Result<impl QrCode, QrCodeError> {
-    let errcorlvl = qrcodegen::QrCodeEcc::Medium; // Error correction level
-
-    let qr = qrcodegen::QrCode::encode_binary(data.as_ref(), errcorlvl)
-        .map_err(|_| QrCodeError::DataTooLong(data.as_ref().len()))?;
-
-    Ok(QrCodeImpl(qr))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
