@@ -25,6 +25,7 @@ pub mod eventhandler;
 pub mod exp_rand;
 pub mod newtype;
 pub mod once_destructor;
+pub mod qrcode;
 pub mod set_flag;
 pub mod shallow_clone;
 pub mod tap_error_log;
