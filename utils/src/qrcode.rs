@@ -37,10 +37,17 @@ pub trait QrCode: Sized {
 
     /// Returns a string representation of the QR code, using the given characters as placeholders
     /// for empty and filled pixels, and the new line character
+    /// border_size is the number of pixels to add around the QR code
     #[must_use]
-    fn print_as_string(&self, empty_char: char, filled_char: char, new_line: char) -> String {
+    fn print_as_string(
+        &self,
+        border_size: u8,
+        empty_char: char,
+        filled_char: char,
+        new_line: char,
+    ) -> String {
         let mut result = String::new();
-        let border: i32 = 0;
+        let border: i32 = border_size as i32;
         for y in -border..self.side_length() as i32 + border {
             for x in -border..self.side_length() as i32 + border {
                 let c: char = if self.pixel_or_false(x as usize, y as usize) {
@@ -60,8 +67,8 @@ pub trait QrCode: Sized {
     /// Returns a string representation of the QR code, using the default characters as placeholders
     /// for empty and filled pixels, and the new line character
     #[must_use]
-    fn print_as_string_with_defaults(&self) -> String {
-        self.print_as_string(EMPTY_CHAR, FILLED_CHAR, NEW_LINE)
+    fn print_as_string_with_defaults(&self, border_size: u8) -> String {
+        self.print_as_string(border_size, EMPTY_CHAR, FILLED_CHAR, NEW_LINE)
     }
 }
 
