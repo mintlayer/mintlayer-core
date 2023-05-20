@@ -23,7 +23,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
-use serialization::hex::{HexDecode, HexEncode};
+use serialization::hex_encoded::HexEncoded;
 use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
@@ -38,11 +38,11 @@ trait ChainstateRpc {
 
     /// Returns a hex-encoded serialized block with the given id.
     #[method(name = "get_block")]
-    async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<String>>;
+    async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
-    async fn submit_block(&self, block_hex: String) -> RpcResult<()>;
+    async fn submit_block(&self, block_hex: HexEncoded<Block>) -> RpcResult<()>;
 
     /// Get block height in main chain
     #[method(name = "block_height_in_main_chain")]
@@ -95,14 +95,15 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
     }
 
-    async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<String>> {
+    async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>> {
         let block = handle_error(self.call(move |this| this.get_block(id)).await)?;
-        Ok(block.map(|b| b.hex_encode()))
+        Ok(block.map(HexEncoded::new))
     }
 
-    async fn submit_block(&self, block_hex: String) -> RpcResult<()> {
-        let block = Block::hex_decode_all(&block_hex).map_err(rpc::Error::to_call_error)?;
-        let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
+    async fn submit_block(&self, block: HexEncoded<Block>) -> RpcResult<()> {
+        let res = self
+            .call_mut(move |this| this.process_block(block.take(), BlockSource::Local))
+            .await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
         handle_error(res)

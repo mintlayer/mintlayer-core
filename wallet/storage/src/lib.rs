@@ -42,7 +42,7 @@ pub trait WalletStorageRead {
     fn get_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
-    fn get_account(&self, id: &AccountId) -> Result<Option<AccountInfo>>;
+    fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
     fn get_addresses(
         &self,

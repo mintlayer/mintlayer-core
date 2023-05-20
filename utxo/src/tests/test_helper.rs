@@ -117,7 +117,7 @@ pub fn convert_to_utxo(
     let utxo_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let id = OutPointSourceId::BlockReward(utxo_id);
     let outpoint = OutPoint::new(id, output_idx as u32);
-    let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(height));
+    let utxo = Utxo::new_for_blockchain(output, BlockHeight::new(height));
 
     (outpoint, utxo)
 }
@@ -157,8 +157,8 @@ fn inner_create_utxo(
 
     // generate utxo
     let utxo = match block_height {
-        None => Utxo::new_for_mempool(output, is_block_reward),
-        Some(height) => Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(height)),
+        None => Utxo::new_for_mempool(output),
+        Some(height) => Utxo::new_for_blockchain(output, BlockHeight::new(height)),
     };
 
     // create the id based on the `is_block_reward` value.

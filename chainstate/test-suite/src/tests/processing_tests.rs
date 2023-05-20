@@ -309,7 +309,6 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         for (idx, txo) in tf.genesis().utxos().iter().enumerate() {
             let idx = idx as u32;
             let utxo = tf.chainstate.utxo(&OutPoint::new(genesis_id.into(), idx)).unwrap().unwrap();
-            assert!(!utxo.is_block_reward());
             assert_eq!(utxo.output(), txo);
             assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(0)));
         }
@@ -358,7 +357,6 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                     );
                     let utxo =
                         tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
-                    assert!(!utxo.is_block_reward());
                     assert_eq!(utxo.output(), txo);
                     assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
                 }

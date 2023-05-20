@@ -37,10 +37,8 @@ pub enum TxState {
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct WalletTx {
-    /// The wrapped transaction with cached transaction id
     tx: WithId<Transaction>,
-    /// The state of this transaction in relation to the inclusion or not on the blockchain. For
-    /// example it could be confirmed, pending in mempool, conflicted etc.
+
     state: TxState,
 }
 
@@ -49,11 +47,11 @@ impl WalletTx {
         WalletTx { tx, state }
     }
 
-    pub fn get_tx(&self) -> &WithId<Transaction> {
+    pub fn tx(&self) -> &WithId<Transaction> {
         &self.tx
     }
 
-    pub fn get_state(&self) -> &TxState {
+    pub fn state(&self) -> &TxState {
         &self.state
     }
 }

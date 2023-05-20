@@ -28,7 +28,11 @@ use wallet::{DefaultWallet, WalletResult};
 pub trait SyncingWallet {
     fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)>;
 
-    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()>;
+    fn scan_blocks(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+    ) -> WalletResult<()>;
 }
 
 impl SyncingWallet for DefaultWallet {
@@ -36,15 +40,19 @@ impl SyncingWallet for DefaultWallet {
         self.get_best_block()
     }
 
-    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()> {
-        self.scan_new_blocks(block_height, blocks)
+    fn scan_blocks(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+    ) -> WalletResult<()> {
+        self.scan_new_blocks(common_block_height, blocks)
     }
 }
 
 struct NextBlockInfo {
     common_block_id: Id<GenBlock>,
+    common_block_height: BlockHeight,
     block_id: Id<Block>,
-    block_height: BlockHeight,
 }
 
 struct NodeState {
@@ -54,7 +62,7 @@ struct NodeState {
 
 struct FetchedBlock {
     block: Block,
-    block_height: BlockHeight,
+    common_block_height: BlockHeight,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -160,6 +168,8 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         let chain_config = Arc::clone(&self.chain_config);
         let mut rpc_client = self.rpc_client.clone();
 
+        // TODO: Download blocks in batches (100-1000 blocks at a time) to reduce overhead and shorten sync time
+
         let error_delay = self.config.error_delay;
         self.block_fetch_task = Some(tokio::spawn(async move {
             let sync_res = fetch_new_block(
@@ -189,10 +199,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
     ) {
         if let Ok(FetchedBlock {
             block,
-            block_height,
+            common_block_height,
         }) = res
         {
-            let scan_res = wallet.scan_blocks(block_height, vec![block]);
+            let scan_res = wallet.scan_blocks(common_block_height, vec![block]);
             if let Err(e) = scan_res {
                 log::error!("Block scan failed: {e}");
             }
@@ -315,8 +325,8 @@ async fn get_next_block_info<T: NodeInterface>(
 
     Ok(NextBlockInfo {
         common_block_id,
+        common_block_height,
         block_id,
-        block_height,
     })
 }
 
@@ -330,8 +340,8 @@ async fn fetch_new_block<T: NodeInterface>(
 ) -> Result<FetchedBlock, FetchBlockError<T>> {
     let NextBlockInfo {
         common_block_id,
+        common_block_height,
         block_id,
-        block_height,
     } = get_next_block_info(
         chain_config,
         rpc_client,
@@ -354,7 +364,7 @@ async fn fetch_new_block<T: NodeInterface>(
 
     Ok(FetchedBlock {
         block,
-        block_height,
+        common_block_height,
     })
 }
 

@@ -20,22 +20,23 @@ use common::{
     chain::{Destination, SignedTransaction},
 };
 use consensus::GenerateBlockInputData;
-use serialization::{hex::HexDecode, hex::HexEncode};
+use rpc::Result as RpcResult;
+use serialization::hex_encoded::HexEncoded;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
 use subsystem::subsystem::CallError;
 
-#[rpc::rpc(server, namespace = "blockprod")]
+#[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
     /// When called, the job manager will be notified to send a signal
     /// to all currently running jobs to stop running
     #[method(name = "stop_all")]
-    async fn stop_all(&self) -> rpc::Result<usize>;
+    async fn stop_all(&self) -> RpcResult<usize>;
 
     /// When called, the job manager will be notified to send a signal
     /// to the specified job to stop running
     #[method(name = "stop_job")]
-    async fn stop_job(&self, job_id: String) -> rpc::Result<bool>;
+    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> RpcResult<bool>;
 
     /// Generate a block with the given transactions to the specified
     /// reward destination. If transactions are None, the block will be
@@ -43,10 +44,10 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
-        input_data_hex: Option<String>,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> rpc::Result<String>;
+        input_data: Option<HexEncoded<GenerateBlockInputData>>,
+        reward_destination: HexEncoded<Destination>,
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    ) -> RpcResult<HexEncoded<Block>>;
 }
 
 #[async_trait::async_trait]
@@ -59,11 +60,9 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         Ok(stopped_jobs_count)
     }
 
-    async fn stop_job(&self, job_id_hex: String) -> rpc::Result<bool> {
-        let job_id = JobKey::hex_decode_all(job_id_hex).map_err(rpc::Error::to_call_error)?;
-
+    async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::Result<bool> {
         let stopped = handle_error(
-            self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id).await }))
+            self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id.take()).await }))
                 .await,
         )?;
 
@@ -72,36 +71,25 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
-        input_data_hex: Option<String>,
-        reward_destination_hex: String,
-        transactions_hex: Option<Vec<String>>,
-    ) -> rpc::Result<String> {
-        let input_data = input_data_hex
-            .map(GenerateBlockInputData::hex_decode_all)
-            .transpose()
-            .map_err(rpc::Error::to_call_error)?;
-
-        let reward_destination = Destination::hex_decode_all(reward_destination_hex)
-            .map_err(rpc::Error::to_call_error)?;
-
-        let signed_transactions = match transactions_hex {
-            Some(txs) => Some(
-                txs.into_iter()
-                    .map(SignedTransaction::hex_decode_all)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(rpc::Error::to_call_error)?,
-            ),
-            None => None,
-        };
+        input_data: Option<HexEncoded<GenerateBlockInputData>>,
+        reward_destination: HexEncoded<Destination>,
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    ) -> rpc::Result<HexEncoded<Block>> {
+        let transactions =
+            transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect::<Vec<_>>());
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(input_data, reward_destination, signed_transactions)
+                this.generate_block(
+                    input_data.map(HexEncoded::take),
+                    reward_destination.take(),
+                    transactions,
+                )
             })
             .await,
         )?;
 
-        Ok(Block::hex_encode(&block))
+        Ok(block.into())
     }
 }
 

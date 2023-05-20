@@ -107,7 +107,10 @@ impl From<P2pConfigFile> for P2pConfig {
             max_message_size: Default::default(),
             max_peer_tx_announcements: Default::default(),
             max_unconnected_headers: Default::default(),
-            sync_stalling_timeout: Default::default(),
+            sync_stalling_timeout: c
+                .sync_stalling_timeout
+                .map(|t| Duration::from_secs(t.into()))
+                .into(),
         }
     }
 }

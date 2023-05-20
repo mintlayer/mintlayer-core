@@ -15,10 +15,11 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 
+use consensus::GenerateBlockInputData;
 pub use p2p::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 
 #[async_trait::async_trait]
@@ -38,8 +39,14 @@ pub trait NodeInterface {
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
-    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error>;
-    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error>;
+    async fn generate_block(
+        &self,
+        input_data: Option<GenerateBlockInputData>,
+        reward_destination: Destination,
+        transactions_hex: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error>;
+    async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error>;
 
     async fn node_shutdown(&self) -> Result<(), Self::Error>;
     async fn node_version(&self) -> Result<String, Self::Error>;

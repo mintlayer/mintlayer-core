@@ -60,7 +60,6 @@ impl Address {
         Self::new_with_hrp(cfg.address_prefix(), data)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn new_with_hrp<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<Self, AddressError> {
         let d = encoding::encode(hrp, data)?;
         Ok(Self { address: d })
@@ -76,7 +75,6 @@ impl Address {
         Ok(result)
     }
 
-    #[allow(dead_code)]
     fn data_internal(&self) -> Result<Vec<u8>, AddressError> {
         let data = encoding::decode(&self.address)?;
         Ok(data.data().to_owned())
@@ -96,6 +94,14 @@ impl Address {
     ) -> Result<Self, AddressError> {
         let public_key_hash = PublicKeyHash::from(public_key);
         Self::from_public_key_hash(cfg, &public_key_hash)
+    }
+
+    pub fn from_str(cfg: &ChainConfig, address: &str) -> Result<Self, AddressError> {
+        let address = Self {
+            address: address.to_owned(),
+        };
+        address.data(cfg)?;
+        Ok(address)
     }
 
     pub fn get(&self) -> &str {
@@ -126,6 +132,7 @@ mod tests {
         let public_key_hash_restored = PublicKeyHash::try_from(public_key_hash_restored_vec)
             .expect("Restoring public key hash from vec failed");
         assert_eq!(public_key_hash_restored, public_key_hash);
+        assert_eq!(address, Address::from_str(&cfg, address.get()).unwrap());
     }
 
     #[rstest]
@@ -137,9 +144,11 @@ mod tests {
         let (_priv_key, pub_key) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
         let hrp = cfg.address_prefix();
-        let address1 = Address::new(&cfg, public_key_hash.encode());
-        let address2 = Address::new_with_hrp(cfg.address_prefix(), public_key_hash.encode());
+        let address1 = Address::new(&cfg, public_key_hash.encode()).unwrap();
+        let address2 =
+            Address::new_with_hrp(cfg.address_prefix(), public_key_hash.encode()).unwrap();
         assert_eq!(address1, address2);
-        assert_eq!(&address1.unwrap().address[0..hrp.len()], hrp);
+        assert_eq!(&address1.address[0..hrp.len()], hrp);
+        assert_eq!(address1, Address::from_str(&cfg, address2.get()).unwrap());
     }
 }

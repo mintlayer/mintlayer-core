@@ -70,8 +70,6 @@ impl Eq for WithId<Transaction> {}
 pub enum TransactionCreationError {
     #[error("The number of signatures does not match the number of inputs")]
     InvalidWitnessCount,
-    #[error("An unknown error has occurred")]
-    Unknown,
 }
 
 impl Transaction {

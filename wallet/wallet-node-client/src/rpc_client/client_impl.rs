@@ -13,13 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
-    chain::{Block, GenBlock},
+    chain::{Block, Destination, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
+use consensus::GenerateBlockInputData;
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
-use serialization::hex::HexDecode;
+use serialization::hex_encoded::HexEncoded;
 
 use crate::node_traits::NodeInterface;
 
@@ -36,16 +38,10 @@ impl NodeInterface for NodeRpcClient {
     }
 
     async fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, Self::Error> {
-        let response = ChainstateRpcClient::get_block(&self.http_client, block_id)
+        ChainstateRpcClient::get_block(&self.http_client, block_id)
             .await
-            .map_err(NodeRpcError::ResponseError)?;
-        match response {
-            Some(block_hex) => {
-                let block = Block::hex_decode_all(block_hex)?;
-                Ok(Some(block))
-            }
-            None => Ok(None),
-        }
+            .map_err(NodeRpcError::ResponseError)
+            .map(|block_opt| block_opt.map(HexEncoded::take))
     }
 
     async fn get_best_block_id(&self) -> Result<Id<GenBlock>, Self::Error> {
@@ -83,13 +79,31 @@ impl NodeInterface for NodeRpcClient {
         .map_err(NodeRpcError::ResponseError)
     }
 
-    async fn submit_block(&self, block_hex: String) -> Result<(), Self::Error> {
-        ChainstateRpcClient::submit_block(&self.http_client, block_hex)
+    async fn generate_block(
+        &self,
+        input_data: Option<GenerateBlockInputData>,
+        reward_destination: Destination,
+        transactions: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error> {
+        let transactions = transactions.map(|txs| txs.into_iter().map(HexEncoded::new).collect());
+        BlockProductionRpcClient::generate_block(
+            &self.http_client,
+            input_data.map(Into::into),
+            reward_destination.into(),
+            transactions,
+        )
+        .await
+        .map(HexEncoded::take)
+        .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn submit_block(&self, block: Block) -> Result<(), Self::Error> {
+        ChainstateRpcClient::submit_block(&self.http_client, block.into())
             .await
             .map_err(NodeRpcError::ResponseError)
     }
-    async fn submit_transaction(&self, transaction_hex: String) -> Result<(), Self::Error> {
-        P2pRpcClient::submit_transaction(&self.http_client, transaction_hex)
+    async fn submit_transaction(&self, tx: SignedTransaction) -> Result<(), Self::Error> {
+        P2pRpcClient::submit_transaction(&self.http_client, tx.into())
             .await
             .map_err(NodeRpcError::ResponseError)
     }

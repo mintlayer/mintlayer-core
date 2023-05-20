@@ -57,12 +57,7 @@ impl DerivationPath {
 
     /// Get the difference of this path and a sub path.
     pub fn get_super_path_diff(&self, sub_path: &DerivationPath) -> Option<&[ChildNumber]> {
-        if let Some(diff_path) = self.as_slice().strip_prefix(sub_path.as_slice()) {
-            if !diff_path.is_empty() {
-                return Some(diff_path);
-            }
-        }
-        None
+        self.as_slice().strip_prefix(sub_path.as_slice()).filter(|p| !p.is_empty())
     }
 }
 
@@ -84,7 +79,8 @@ impl Decode for DerivationPath {
         let mut path = Vec::with_capacity(size as usize);
 
         for _ in 0..size {
-            path.push(<ChildNumber>::decode(input)?);
+            let bytes = <[u8; 4]>::decode(input)?;
+            path.push(<ChildNumber>::from_encoded_be_bytes(bytes));
         }
         Ok(DerivationPath(path))
     }

@@ -16,16 +16,15 @@
 use crate::key_chain::account_key_chain::AccountKeyChain;
 use crate::key_chain::{KeyChainError, KeyChainResult, DEFAULT_KEY_KIND, LOOKAHEAD_SIZE};
 use common::chain::ChainConfig;
-use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
-use crypto::key::hdkd::child_number::ChildNumber;
+use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::derivable::Derivable;
+use crypto::key::hdkd::u31::U31;
+use itertools::Itertools;
 use std::sync::Arc;
-use storage::Backend;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::{AccountId, RootKeyContent, RootKeyId};
+use wallet_types::{RootKeyContent, RootKeyId};
 use zeroize::Zeroize;
 
-#[allow(dead_code)] // TODO remove
 pub struct MasterKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
@@ -35,7 +34,6 @@ pub struct MasterKeyChain {
 }
 
 impl MasterKeyChain {
-    #[allow(dead_code)] // TODO remove
     pub fn mnemonic_to_root_key(
         mnemonic_str: &str,
         passphrase: Option<&str>,
@@ -49,19 +47,20 @@ impl MasterKeyChain {
         Ok(root_key)
     }
 
-    #[allow(dead_code)] // TODO remove
-    pub fn new_from_mnemonic<B: Backend>(
+    pub fn new_from_mnemonic<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
     ) -> KeyChainResult<Self> {
+        // TODO: Do not store the master key here, store only the key relevant to the mintlayer
+        // (see make_account_path)
+
         let root_key = Self::mnemonic_to_root_key(mnemonic_str, passphrase)?;
         Self::new_from_root_key(chain_config, db_tx, root_key)
     }
 
-    #[allow(dead_code)] // TODO remove
-    pub fn new_from_root_key<B: Backend>(
+    pub fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
         root_key: ExtendedPrivateKey,
@@ -84,22 +83,17 @@ impl MasterKeyChain {
     }
 
     /// Load the Master key chain from database and all the account key chains it derives
-    #[allow(dead_code)] // TODO remove
-    pub fn load_from_database<B: Backend>(
+    pub fn load_from_database<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
     ) -> KeyChainResult<Self> {
-        let mut root_keys = db_tx.get_all_root_keys()?;
-
         // The current format supports a single root key
-        if root_keys.len() != 1 {
-            return Err(KeyChainError::OnlyOneRootKeyIsSupported);
-        }
-
-        let (_, key_content) =
-            root_keys.pop_first().expect("Should not fail because it contains 1 key/value");
-
-        let root_key = key_content.into_key();
+        let root_key = db_tx
+            .get_all_root_keys()?
+            .into_values()
+            .exactly_one()
+            .map_err(|_| KeyChainError::OnlyOneRootKeyIsSupported)?
+            .into_key();
 
         Ok(MasterKeyChain {
             chain_config,
@@ -107,47 +101,21 @@ impl MasterKeyChain {
         })
     }
 
-    #[allow(dead_code)] // TODO remove
-    pub fn create_account_key_chain<B: Backend>(
+    pub fn create_account_key_chain<B: storage::Backend>(
         &self,
         db_tx: &mut StoreTxRw<B>,
-        account_index: ChildNumber,
-    ) -> KeyChainResult<AccountKeyChain> {
-        self.create_account_key_chain_with_lookahead(db_tx, account_index, LOOKAHEAD_SIZE)
-    }
-
-    pub fn create_account_key_chain_with_lookahead<B: Backend>(
-        &self,
-        db_tx: &mut StoreTxRw<B>,
-        account_index: ChildNumber,
-        lookahead_size: u32,
+        account_index: U31,
     ) -> KeyChainResult<AccountKeyChain> {
         AccountKeyChain::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
             &self.root_key,
             account_index,
-            lookahead_size,
+            LOOKAHEAD_SIZE,
         )
     }
 
-    #[allow(dead_code)] // TODO remove
-    pub fn load_keychain_from_database<B: Backend>(
-        &self,
-        db_tx: &StoreTxRo<B>,
-        id: &AccountId,
-    ) -> KeyChainResult<AccountKeyChain> {
-        AccountKeyChain::load_from_database(self.chain_config.clone(), db_tx, id)
-    }
-
-    #[allow(dead_code)] // TODO remove
-                        // TODO make it return a reference
-    pub fn get_root_public_key(&self) -> ExtendedPublicKey {
-        self.root_key.to_public_key()
-    }
-
-    #[allow(dead_code)] // TODO remove
-    pub fn get_root_private_key(&self) -> &ExtendedPrivateKey {
+    pub fn root_private_key(&self) -> &ExtendedPrivateKey {
         &self.root_key
     }
 }

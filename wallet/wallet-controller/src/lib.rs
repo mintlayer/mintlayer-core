@@ -19,19 +19,22 @@ pub mod mnemonic;
 mod sync;
 
 use std::{
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use common::chain::ChainConfig;
+use common::{
+    address::Address,
+    chain::{tokens::TokenId, ChainConfig},
+    primitives::Amount,
+};
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use wallet::DefaultWallet;
-
-// Disabled until wallet implements required API
-const BLOCK_SYNC_ENABLED: bool = false;
+use wallet::{send_request::make_address_output, DefaultWallet};
+use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -44,6 +47,8 @@ pub enum ControllerError<T: NodeInterface> {
 }
 
 pub struct Controller<T: NodeInterface> {
+    rpc_client: T,
+
     wallet: DefaultWallet,
 
     block_sync: sync::BlockSyncing<T>,
@@ -57,10 +62,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         let block_sync = sync::BlockSyncing::new(
             sync::BlockSyncingConfig::default(),
             Arc::clone(&chain_config),
-            rpc_client,
+            rpc_client.clone(),
         );
 
-        Self { wallet, block_sync }
+        Self {
+            rpc_client,
+            wallet,
+            block_sync,
+        }
     }
 
     pub fn create_wallet(
@@ -79,13 +88,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
         let db = wallet::wallet::open_or_create_wallet_file(file_path)
             .map_err(ControllerError::WalletError)?;
-        let wallet = wallet::Wallet::new_wallet(
+        let mut wallet = wallet::Wallet::new_wallet(
             Arc::clone(&chain_config),
             db,
             &mnemonic.to_string(),
             passphrase,
         )
         .map_err(ControllerError::WalletError)?;
+
+        wallet
+            .create_account(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
     }
@@ -110,13 +123,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(wallet)
     }
 
+    pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
+        self.wallet
+            .get_balance(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
+        self.wallet
+            .get_new_address(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub async fn send_to_address(
+        &mut self,
+        address: Address,
+        amount: Amount,
+    ) -> Result<(), ControllerError<T>> {
+        let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
+        let tx = self
+            .wallet
+            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, [output])
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx)
+            .await
+            .map_err(ControllerError::NodeCallError)
+    }
+
     /// Sync the wallet block chain from the node.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
-        if BLOCK_SYNC_ENABLED {
-            self.block_sync.run(&mut self.wallet).await;
-        } else {
-            std::future::pending::<()>().await;
-        }
+        self.block_sync.run(&mut self.wallet).await;
     }
 }

@@ -13,8 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::key::extended::ExtendedPublicKey;
+use crypto::key::{extended::ExtendedPublicKey, hdkd::u31::U31};
 use serialization::{Decode, Encode};
+
+pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
+    Some(v) => v,
+    None => unreachable!(),
+};
 
 /// Account metadata that contains information like from which master key it was derived from
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -27,33 +32,29 @@ pub enum AccountInfo {
 // TODO tbd what metadata we need to store
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct DeterministicAccountInfo {
-    root_hierarchy_key: Option<ExtendedPublicKey>,
+    account_index: U31,
     account_key: ExtendedPublicKey,
     lookahead_size: u32,
 }
 
 impl DeterministicAccountInfo {
-    pub fn new(
-        root_hierarchy_key: Option<ExtendedPublicKey>,
-        account_key: ExtendedPublicKey,
-        lookahead_size: u32,
-    ) -> Self {
+    pub fn new(account_index: U31, account_key: ExtendedPublicKey, lookahead_size: u32) -> Self {
         Self {
-            root_hierarchy_key,
+            account_index,
             account_key,
             lookahead_size,
         }
     }
 
-    pub fn get_root_hierarchy_key(&self) -> &Option<ExtendedPublicKey> {
-        &self.root_hierarchy_key
+    pub fn account_index(&self) -> U31 {
+        self.account_index
     }
 
-    pub fn get_account_key(&self) -> &ExtendedPublicKey {
+    pub fn account_key(&self) -> &ExtendedPublicKey {
         &self.account_key
     }
 
-    pub fn get_lookahead_size(&self) -> u32 {
+    pub fn lookahead_size(&self) -> u32 {
         self.lookahead_size
     }
 }

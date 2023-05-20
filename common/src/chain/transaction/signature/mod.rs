@@ -38,11 +38,11 @@ use super::{Destination, Transaction, TxOutput};
 pub enum TransactionSigError {
     #[error("Invalid sighash value provided")]
     InvalidSigHashValue(u8),
-    #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`")]
+    #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidInputIndex(usize, usize),
-    #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`")]
+    #[error("Utxos count does not match inputs count (Utxo count: `{0}` vs inputs: `{1}`)")]
     InvalidUtxoCountVsInputs(usize, usize),
-    #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`")]
+    #[error("Invalid signature index was provided (provided: `{0}` vs available: `{1}`)")]
     InvalidSignatureIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
     SigHashRequestWithoutInputs,

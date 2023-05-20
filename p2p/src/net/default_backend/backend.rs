@@ -245,7 +245,7 @@ where
         let mut peers: Vec<_> = self
             .peers
             .iter()
-            .filter(|(_peer_id, peer)| peer.services.has_service(topic))
+            .filter(|(_peer_id, peer)| peer.was_accepted.test() && peer.services.has_service(topic))
             .collect();
         peers.shuffle(&mut make_pseudo_rng());
 

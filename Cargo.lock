@@ -3544,11 +3544,14 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.21.0",
+ "blockprod",
  "chainstate",
  "chainstate-storage",
  "common",
+ "consensus",
  "http",
  "jsonrpsee",
+ "mempool",
  "node-lib",
  "p2p",
  "rpc",
@@ -5158,6 +5161,7 @@ name = "serialization"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "serde",
  "serialization-core",
  "serialization-tagged",
  "thiserror",
@@ -6451,6 +6455,7 @@ dependencies = [
  "common",
  "crypto",
  "hex",
+ "itertools",
  "logging",
  "parity-scale-codec",
  "rstest",
@@ -6514,6 +6519,7 @@ dependencies = [
  "chainstate",
  "chainstate-test-framework",
  "common",
+ "consensus",
  "crypto",
  "logging",
  "node-comm",
@@ -6525,6 +6531,7 @@ dependencies = [
  "utils",
  "wallet",
  "wallet-storage",
+ "wallet-types",
  "zeroize",
 ]
 

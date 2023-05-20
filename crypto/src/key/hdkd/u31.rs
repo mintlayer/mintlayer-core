@@ -15,14 +15,18 @@
 
 use std::{fmt::Display, str::FromStr};
 
+use serialization::{Decode, Encode};
+
 use super::derivable::DerivationError;
 
 pub const MSB_BIT: u32 = 0x80000000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode)]
 pub struct U31(u32);
 
 impl U31 {
+    pub const ZERO: U31 = U31(0);
+
     pub const fn from_u32_with_msb(val: u32) -> (Self, bool) {
         let msb = val & MSB_BIT != 0; // If the msb is set
         let val = val & !MSB_BIT; // Get the value without the msb
@@ -34,11 +38,19 @@ impl U31 {
         self.0
     }
 
+    pub const fn from_u32(value: u32) -> Option<Self> {
+        if value & MSB_BIT == 0 {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
     pub const fn into_encoded_with_msb(self, msb: bool) -> u32 {
         self.0 | (MSB_BIT * msb as u32)
     }
 
-    pub(crate) fn plus_one(&self) -> Result<Self, DerivationError> {
+    pub fn plus_one(&self) -> Result<Self, DerivationError> {
         (self.0 + 1).try_into()
     }
 }
@@ -53,11 +65,7 @@ impl TryFrom<u32> for U31 {
     type Error = DerivationError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        if value & MSB_BIT == 0 {
-            Ok(Self(value))
-        } else {
-            Err(DerivationError::InvalidChildNumber(value))
-        }
+        U31::from_u32(value).ok_or(DerivationError::InvalidChildNumber(value))
     }
 }
 
@@ -73,5 +81,13 @@ impl FromStr for U31 {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let value = s.parse::<u32>().map_err(|_| DerivationError::InvalidChildNumberFormat)?;
         Self::try_from(value)
+    }
+}
+
+impl Decode for U31 {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        u32::decode(input).and_then(|v| {
+            U31::from_u32(v).ok_or_else(|| serialization::Error::from("Invalid U31 value"))
+        })
     }
 }

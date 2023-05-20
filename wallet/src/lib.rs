@@ -15,9 +15,11 @@
 
 pub mod account;
 mod key_chain;
+pub mod send_request;
 pub mod wallet;
 
 pub use crate::account::Account;
+pub use crate::send_request::SendRequest;
 pub use crate::wallet::{Wallet, WalletError, WalletResult};
 
 pub type DefaultWallet = Wallet<wallet_storage::DefaultBackend>;

@@ -103,7 +103,7 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
         fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
-        fn get_account(&self, id: &AccountId) -> crate::Result<Option<AccountInfo>>;
+        fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
         fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;

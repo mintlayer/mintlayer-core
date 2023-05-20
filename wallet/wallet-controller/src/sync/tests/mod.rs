@@ -17,6 +17,8 @@ use std::sync::Mutex;
 
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
+use common::chain::{Destination, SignedTransaction};
+use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
@@ -56,16 +58,19 @@ impl SyncingWallet for MockWallet {
         Ok((self.get_best_block_id(), self.get_block_height()))
     }
 
-    fn scan_blocks(&mut self, block_height: BlockHeight, blocks: Vec<Block>) -> WalletResult<()> {
+    fn scan_blocks(
+        &mut self,
+        common_block_height: BlockHeight,
+        blocks: Vec<Block>,
+    ) -> WalletResult<()> {
         assert!(!blocks.is_empty());
         assert!(
-            block_height > BlockHeight::zero()
-                && block_height <= self.get_block_height().next_height(),
-            "Invalid block height: {block_height}, max: {}",
+            common_block_height <= self.get_block_height(),
+            "Invalid common block height: {common_block_height}, max: {}",
             self.get_block_height()
         );
 
-        self.blocks.truncate((block_height.into_int() - 1) as usize);
+        self.blocks.truncate(common_block_height.into_int() as usize);
         for block in blocks {
             assert_eq!(*block.header().prev_block_id(), self.get_best_block_id());
             self.blocks.push(block.header().block_id());
@@ -130,10 +135,18 @@ impl NodeInterface for MockNode {
             .unwrap())
     }
 
-    async fn submit_block(&self, _block_hex: String) -> Result<(), Self::Error> {
+    async fn generate_block(
+        &self,
+        _input_data: Option<GenerateBlockInputData>,
+        _reward_destination_hex: Destination,
+        _transactions_hex: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, Self::Error> {
         unreachable!()
     }
-    async fn submit_transaction(&self, _transaction_hex: String) -> Result<(), Self::Error> {
+    async fn submit_block(&self, _block: Block) -> Result<(), Self::Error> {
+        unreachable!()
+    }
+    async fn submit_transaction(&self, _tx: SignedTransaction) -> Result<(), Self::Error> {
         unreachable!()
     }
 

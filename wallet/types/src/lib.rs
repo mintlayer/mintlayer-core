@@ -23,4 +23,4 @@ pub use account_id::{
 };
 pub use account_info::{AccountInfo, DeterministicAccountInfo};
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeyContent, RootKeyId};
-pub use wallet_tx::{TxState, WalletTx};
+pub use wallet_tx::WalletTx;

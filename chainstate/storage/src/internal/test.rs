@@ -256,10 +256,9 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utx
         OutputValue::Coin(Amount::from_atoms(random_value)),
         Destination::PublicKey(pub_key),
     );
-    let is_block_reward = random_value % 3 == 0;
 
     // generate utxo
-    let utxo = Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(block_height));
+    let utxo = Utxo::new_for_blockchain(output, BlockHeight::new(block_height));
     let outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,

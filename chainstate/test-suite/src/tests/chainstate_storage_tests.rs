@@ -102,7 +102,6 @@ fn store_coin(#[case] seed: Seed) {
             tx_id,
             UtxosTxUndo::new(vec![Utxo::new_for_blockchain(
                 tf.genesis().utxos().first().unwrap().clone(),
-                false,
                 BlockHeight::zero(),
             )]),
         )]

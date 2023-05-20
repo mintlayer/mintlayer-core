@@ -17,10 +17,11 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
 use common::{
-    chain::ChainConfig,
-    primitives::{BlockHeight, H256},
+    address::Address,
+    chain::{Block, ChainConfig, Destination, SignedTransaction},
+    primitives::{Amount, BlockHeight, H256},
 };
-use serialization::hex::HexEncode;
+use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
 use crate::errors::WalletCliError;
@@ -68,6 +69,15 @@ pub enum WalletCommand {
         hash: String,
     },
 
+    /// Generate a block with the given transactions to the specified
+    /// reward destination. If transactions are None, the block will be
+    /// generated with available transactions in the mempool
+    GenerateBlock {
+        reward_destination: HexEncoded<Destination>,
+
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    },
+
     /// Submit a block to be included in the chain
     ///
     /// More information about block submits.
@@ -79,17 +89,27 @@ pub enum WalletCommand {
     /// Even more information about block submits.
     SubmitBlock {
         /// Hex encoded block
-        block: String,
+        block: HexEncoded<Block>,
     },
 
     /// Submits a transaction to mempool, and if it is valid, broadcasts it to the network
     SubmitTransaction {
         /// Hex encoded transaction
-        transaction: String,
+        transaction: HexEncoded<SignedTransaction>,
     },
 
     /// Rescan
     Rescan,
+
+    GetBalance,
+
+    /// Generate a new unused address
+    NewAddress,
+
+    SendToAddress {
+        address: String,
+        amount: String,
+    },
 
     /// Node version
     NodeVersion,
@@ -98,10 +118,14 @@ pub enum WalletCommand {
     NodeShutdown,
 
     /// Connect to the remote peer
-    Connect { address: String },
+    Connect {
+        address: String,
+    },
 
     /// Disconnected the remote peer
-    Disconnect { peer_id: PeerId },
+    Disconnect {
+        peer_id: PeerId,
+    },
 
     /// Get connected peer count
     PeerCount,
@@ -110,10 +134,14 @@ pub enum WalletCommand {
     ConnectedPeers,
 
     /// Add reserved peer
-    AddReservedPeer { address: String },
+    AddReservedPeer {
+        address: String,
+    },
 
     /// Remove reserved peer
-    RemoveReservedPeer { address: String },
+    RemoveReservedPeer {
+        address: String,
+    },
 
     /// Quit the REPL
     Exit,
@@ -136,6 +164,20 @@ pub enum ConsoleCommand {
     PrintHistory,
     ClearHistory,
     Exit,
+}
+
+fn parse_address(chain_config: &ChainConfig, address: &str) -> Result<Address, WalletCliError> {
+    Address::from_str(chain_config, address)
+        .map_err(|e| WalletCliError::InvalidInput(format!("Invalid address '{address}': {e}")))
+}
+
+fn parse_coin_amount(chain_config: &ChainConfig, value: &str) -> Result<Amount, WalletCliError> {
+    Amount::from_fixedpoint_str(value, chain_config.coin_decimals())
+        .ok_or_else(|| WalletCliError::InvalidInput(value.to_owned()))
+}
+
+fn print_coin_amount(chain_config: &ChainConfig, value: Amount) -> String {
+    value.into_fixedpoint_str(chain_config.coin_decimals())
 }
 
 pub async fn handle_wallet_command(
@@ -252,8 +294,22 @@ pub async fn handle_wallet_command(
             }
         }
 
-        WalletCommand::SubmitBlock { block } => {
+        WalletCommand::GenerateBlock {
+            reward_destination,
+            transactions,
+        } => {
+            let transactions =
+                transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
+            let block = rpc_client
+                .generate_block(None, reward_destination.take(), transactions)
+                .await
+                .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::SubmitBlock { block } => {
+            rpc_client.submit_block(block.take()).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
                 "The block was submitted successfully".to_owned(),
             ))
@@ -261,7 +317,7 @@ pub async fn handle_wallet_command(
 
         WalletCommand::SubmitTransaction { transaction } => {
             rpc_client
-                .submit_transaction(transaction)
+                .submit_transaction(transaction.take())
                 .await
                 .map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
@@ -270,6 +326,39 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
+
+        WalletCommand::GetBalance => {
+            let (coin_balance, _tokens_balance) = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .get_balance()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(print_coin_amount(
+                chain_config,
+                coin_balance,
+            )))
+        }
+
+        WalletCommand::NewAddress => {
+            let address = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .new_address()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(address.get().to_owned()))
+        }
+
+        WalletCommand::SendToAddress { address, amount } => {
+            let amount = parse_coin_amount(chain_config, &amount)?;
+            let address = parse_address(chain_config, &address)?;
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .send_to_address(address, amount)
+                .await
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
 
         WalletCommand::NodeVersion => {
             let version = rpc_client.node_version().await.map_err(WalletCliError::RpcError)?;

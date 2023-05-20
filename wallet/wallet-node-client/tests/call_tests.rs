@@ -15,9 +15,10 @@
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
+use blockprod::BlockProductionHandle;
 use chainstate::{
     chainstate_interface::ChainstateInterface, make_chainstate, rpc::ChainstateRpcServer,
-    ChainstateConfig, DefaultTransactionVerificationStrategy,
+    ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
 };
 use common::{
     chain::{
@@ -26,20 +27,51 @@ use common::{
     },
     primitives::{Idable, H256},
 };
+use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use node_comm::{make_handles_client, make_rpc_client, node_traits::NodeInterface};
+use p2p::P2pHandle;
 use rpc::RpcConfig;
 use subsystem::manager::ShutdownTrigger;
+use tokio::task::JoinHandle;
 
 pub async fn start_subsystems(
     chain_config: Arc<ChainConfig>,
     rpc_bind_address: String,
 ) -> (
     ShutdownTrigger,
-    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    ChainstateHandle,
+    MempoolHandle,
+    BlockProductionHandle,
+    P2pHandle,
     SocketAddr,
+    JoinHandle<()>,
 ) {
     let mut manager = subsystem::Manager::new("test-manager");
     let shutdown_trigger = manager.make_shutdown_trigger();
+
+    let p2p_config = p2p::config::P2pConfig {
+        bind_addresses: vec!["127.0.0.1:0".to_owned()],
+        socks5_proxy: Default::default(),
+        disable_noise: Default::default(),
+        boot_nodes: Default::default(),
+        reserved_nodes: Default::default(),
+        max_inbound_connections: Default::default(),
+        ban_threshold: Default::default(),
+        ban_duration: Default::default(),
+        outbound_connection_timeout: Default::default(),
+        ping_check_period: Default::default(),
+        ping_timeout: Default::default(),
+        node_type: Default::default(),
+        allow_discover_private_ips: Default::default(),
+        msg_header_count_limit: Default::default(),
+        msg_max_locator_count: Default::default(),
+        max_request_blocks_count: Default::default(),
+        user_agent: common::primitives::user_agent::mintlayer_core_user_agent(),
+        max_message_size: Default::default(),
+        max_peer_tx_announcements: Default::default(),
+        max_unconnected_headers: Default::default(),
+        sync_stalling_timeout: Default::default(),
+    };
 
     let chainstate = make_chainstate(
         Arc::clone(&chain_config),
@@ -51,7 +83,42 @@ pub async fn start_subsystems(
     )
     .unwrap();
 
-    let chainstate_subsys = manager.add_subsystem("test-chainstate", chainstate);
+    let chainstate_handle = manager.add_subsystem("test-chainstate", chainstate);
+
+    let mempool = mempool::make_mempool(
+        Arc::clone(&chain_config),
+        chainstate_handle.clone(),
+        Default::default(),
+        mempool::SystemUsageEstimator {},
+    );
+    let mempool_handle = manager.add_subsystem_with_custom_eventloop("test-mempool", {
+        move |call, shutdn| mempool.run(call, shutdn)
+    });
+
+    let block_prod_handle = manager.add_subsystem(
+        "test-blockprod",
+        blockprod::make_blockproduction(
+            Arc::clone(&chain_config),
+            chainstate_handle.clone(),
+            mempool_handle.clone(),
+            Default::default(),
+        )
+        .unwrap(),
+    );
+
+    let peerdb_storage = p2p::testing_utils::peerdb_inmemory_store();
+    let p2p = p2p::make_p2p(
+        Arc::clone(&chain_config),
+        Arc::new(p2p_config),
+        chainstate_handle.clone(),
+        mempool_handle.clone(),
+        Default::default(),
+        peerdb_storage,
+    )
+    .unwrap();
+    let p2p_handle = manager.add_subsystem_with_custom_eventloop("test-p2p", {
+        move |call, shutdown| p2p.run(call, shutdown)
+    });
 
     let rpc_config = RpcConfig {
         http_bind_address: SocketAddr::from_str(&rpc_bind_address)
@@ -65,7 +132,7 @@ pub async fn start_subsystems(
     };
 
     let rpc_subsys = rpc::Builder::new(rpc_config, None)
-        .register(chainstate_subsys.clone().into_rpc())
+        .register(chainstate_handle.clone().into_rpc())
         .build()
         .await
         .unwrap();
@@ -74,9 +141,17 @@ pub async fn start_subsystems(
 
     let _rpc = manager.add_subsystem("rpc-test", rpc_subsys);
 
-    tokio::spawn(async move { manager.main().await });
+    let manager_task_handle = tokio::spawn(async move { manager.main().await });
 
-    (shutdown_trigger, chainstate_subsys, rpc_bind_address)
+    (
+        shutdown_trigger,
+        chainstate_handle,
+        mempool_handle,
+        block_prod_handle,
+        p2p_handle,
+        rpc_bind_address,
+        manager_task_handle,
+    )
 }
 
 async fn test_wallet_node_communication(
@@ -146,26 +221,47 @@ async fn test_wallet_node_communication(
     assert_eq!(block_2, None);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_rpc_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, rpc_bind_address) =
-        start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
+    let (
+        shutdown_trigger,
+        chainstate,
+        _mempool,
+        _block_prod,
+        _p2p,
+        rpc_bind_address,
+        manager_task_handle,
+    ) = start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
     let rpc_client = make_rpc_client(rpc_bind_address, None).await.unwrap();
 
-    test_wallet_node_communication(chain_config, chainstate_handle, rpc_client).await;
+    test_wallet_node_communication(chain_config, chainstate, rpc_client).await;
+
+    shutdown_trigger.initiate();
+    manager_task_handle.await.unwrap();
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn node_handle_communication() {
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
 
-    let (_shutdown_trigger, chainstate_handle, _rpc_bind_address) =
-        start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
+    let (
+        shutdown_trigger,
+        chainstate,
+        mempool,
+        block_prod,
+        p2p,
+        _rpc_bind_address,
+        manager_task_handle,
+    ) = start_subsystems(chain_config.clone(), "127.0.0.1:0".to_string()).await;
 
-    let handles_client = make_handles_client(chainstate_handle.clone()).await.unwrap();
+    let handles_client =
+        make_handles_client(chainstate.clone(), mempool, block_prod, p2p).await.unwrap();
 
-    test_wallet_node_communication(chain_config, chainstate_handle, handles_client).await;
+    test_wallet_node_communication(chain_config, chainstate, handles_client).await;
+
+    shutdown_trigger.initiate();
+    manager_task_handle.await.unwrap();
 }

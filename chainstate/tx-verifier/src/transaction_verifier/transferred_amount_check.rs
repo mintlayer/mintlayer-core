@@ -340,10 +340,7 @@ mod tests {
             TxOutput::Transfer(OutputValue::Coin(input_amount), Destination::AnyoneCanSpend);
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
-            BTreeMap::from_iter([(
-                outpoint.clone(),
-                utxo::Utxo::new_for_mempool(input_utxo, false),
-            )]),
+            BTreeMap::from_iter([(outpoint.clone(), utxo::Utxo::new_for_mempool(input_utxo))]),
         );
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::new();
         let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
@@ -435,10 +432,7 @@ mod tests {
         let input_utxo = TxOutput::CreateStakePool(Box::new(stake_pool_data.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
-            BTreeMap::from_iter([(
-                outpoint.clone(),
-                utxo::Utxo::new_for_mempool(input_utxo, false),
-            )]),
+            BTreeMap::from_iter([(outpoint.clone(), utxo::Utxo::new_for_mempool(input_utxo))]),
         );
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
             BTreeMap::from([(pool_id, stake_pool_data.into())]),
@@ -506,10 +500,7 @@ mod tests {
         let input_utxo = TxOutput::CreateStakePool(Box::new(stake_pool_data_1.clone()));
         let utxo_db = utxo::UtxosDBInMemoryImpl::new(
             Id::<GenBlock>::new(H256::zero()),
-            BTreeMap::from_iter([(
-                outpoint.clone(),
-                utxo::Utxo::new_for_mempool(input_utxo, false),
-            )]),
+            BTreeMap::from_iter([(outpoint.clone(), utxo::Utxo::new_for_mempool(input_utxo))]),
         );
         let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
             BTreeMap::from([

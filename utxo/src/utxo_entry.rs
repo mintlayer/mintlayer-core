@@ -149,7 +149,6 @@ mod unit_test {
                 OutputValue::Coin(Amount::from_atoms(1)),
                 Destination::AnyoneCanSpend,
             ),
-            false,
             UtxoSource::Mempool,
         ))
     }
