@@ -64,7 +64,7 @@ pub trait QrCode: Sized {
         filled_char: char,
         new_line: char,
     ) -> String {
-        let mut result = String::new();
+        let mut result = String::with_capacity(2 * self.side_length() * self.side_length());
         let border: i32 = border_size as i32;
         for y in -border..self.side_length() as i32 + border {
             for x in -border..self.side_length() as i32 + border {
@@ -73,6 +73,9 @@ pub trait QrCode: Sized {
                 } else {
                     empty_char
                 };
+                // We push twice because in a standard terminal, chars are rectangular,
+                // not square, with the height being twice the width (9x18 pixels).
+                // This makes the QR code pixels become squares.
                 result.push(c);
                 result.push(c);
             }
