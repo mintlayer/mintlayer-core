@@ -87,18 +87,16 @@ pub trait QrCode: Sized {
     }
 }
 
-struct QrCodeImpl(qrcodegen::QrCode);
-
-impl QrCode for QrCodeImpl {
+impl QrCode for qrcodegen::QrCode {
     type Error = QrCodeError;
 
     fn side_length(&self) -> usize {
-        self.0.size() as usize
+        self.size() as usize
     }
 
     fn pixel(&self, x: usize, y: usize) -> Option<bool> {
         if (0..self.side_length()).contains(&x) && (0..self.side_length()).contains(&y) {
-            Some(self.0.get_module(x as i32, y as i32))
+            Some(self.get_module(x as i32, y as i32))
         } else {
             None
         }
@@ -112,7 +110,7 @@ pub fn qrcode_from_str<S: AsRef<str>>(s: S) -> Result<impl QrCode, QrCodeError> 
     let qr = qrcodegen::QrCode::encode_text(s.as_ref(), errcorlvl)
         .map_err(|_| QrCodeError::DataTooLong(s.as_ref().len()))?;
 
-    Ok(QrCodeImpl(qr))
+    Ok(qr)
 }
 
 #[cfg(test)]
