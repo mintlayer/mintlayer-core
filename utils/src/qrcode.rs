@@ -40,6 +40,7 @@ pub trait QrCode: Sized {
     }
 
     /// Returns the QR code as a vector of booleans, where true represents a filled pixel and false
+    /// represents an empty pixel.
     /// This contains the all the information required to reconstruct the QR code. The side-length
     /// can be calculated by taking the square root of the length of the vector
     fn as_vec(&self) -> Vec<bool> {
