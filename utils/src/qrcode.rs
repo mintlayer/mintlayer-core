@@ -25,7 +25,7 @@ pub enum QrCodeError {
     BorderScalingFailed(u32),
 }
 
-pub trait QrCode: Sized {
+pub trait QrCode {
     type Error;
 
     /// QR Codes are strictly squares, so this returns the side length
