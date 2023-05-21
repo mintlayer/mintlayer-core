@@ -156,6 +156,23 @@ pub fn qrcode_from_str<S: AsRef<str>>(s: S) -> Result<impl QrCode, QrCodeError> 
 mod tests {
     use super::*;
 
+    fn test_string_qrcode(qr: &impl QrCode) {
+        let qr_str = qr
+            .encode_to_string(0, '0', '1', '\n')
+            .chars()
+            // Remove new lines to compare with vectors next
+            .filter(|c| *c != '\n')
+            .collect::<String>();
+        let expected_str = qr
+            .as_vec()
+            .into_iter()
+            // duplicate each bool twice, then flatten the vec, because QR code
+            // strings are twice as wide in the interest of making squares
+            .flat_map(|v| if v { vec!['1', '1'] } else { vec!['0', '0'] })
+            .collect::<String>();
+        assert_eq!(qr_str, expected_str);
+    }
+
     #[test]
     fn hello_world_str() {
         let text: &'static str = "Hello, world!";
@@ -182,6 +199,8 @@ mod tests {
             qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(),
             expected
         );
+
+        test_string_qrcode(&qr);
     }
 
     #[test]
@@ -216,6 +235,8 @@ mod tests {
             qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(),
             expected
         );
+
+        test_string_qrcode(&qr);
     }
 
     #[test]
