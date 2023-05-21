@@ -26,8 +26,6 @@ pub enum QrCodeError {
 }
 
 pub trait QrCode {
-    type Error;
-
     /// QR Codes are strictly squares, so this returns the side length
     fn side_length(&self) -> usize;
 
@@ -127,8 +125,6 @@ pub trait QrCode {
 }
 
 impl QrCode for qrcodegen::QrCode {
-    type Error = QrCodeError;
-
     fn side_length(&self) -> usize {
         self.size() as usize
     }
