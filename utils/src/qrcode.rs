@@ -21,6 +21,8 @@ pub const NEW_LINE: char = '\n';
 pub enum QrCodeError {
     #[error("Given data is too long to fit in a QR code: {0}")]
     DataTooLong(usize),
+    #[error("Border scaling failed. Possible very large border size: {0}")]
+    BorderScalingFailed(u32),
 }
 
 pub trait QrCode: Sized {
@@ -84,6 +86,39 @@ pub trait QrCode: Sized {
     #[must_use]
     fn encode_to_string_with_defaults(&self, border_size: u8) -> String {
         self.encode_to_string(border_size, EMPTY_CHAR, FILLED_CHAR, NEW_LINE)
+    }
+
+    /// Create an SVG string representation of the QR code, using the given border size
+    /// To use this output, you can write it to a file with extension svg, or you can embed it in
+    /// an HTML document
+    #[must_use]
+    fn encode_to_svg_string(&self, border_size: usize) -> String {
+        let mut result = String::new();
+        result += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
+        result += "<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n";
+
+        let dimension = self
+            .side_length()
+            .checked_add(border_size.checked_mul(2).expect("QR code SVG border size mul overflow"))
+            .expect("QR code SVG addition overflow");
+
+        result += &format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" viewBox=\"0 0 {0} {0}\" stroke=\"none\">\n", dimension);
+        result += "\t<rect width=\"100%\" height=\"100%\" fill=\"#FFFFFF\"/>\n";
+        result += "\t<path d=\"";
+        for y in 0..self.side_length() {
+            for x in 0..self.side_length() {
+                if self.pixel_or_false(x, y) {
+                    if x != 0 || y != 0 {
+                        result += " ";
+                    }
+                    result += &format!("M{},{}h1v1h-1z", x + border_size, y + border_size);
+                }
+            }
+        }
+        result += "\" fill=\"#000000\"/>\n";
+        result += "</svg>\n";
+        result
     }
 }
 
@@ -177,5 +212,12 @@ mod tests {
             qr.as_vec().into_iter().map(|v| v as u32).collect::<Vec<_>>(),
             expected
         );
+    }
+
+    #[test]
+    fn svg_attempt_str() {
+        let text: &'static str = "Hello, world!";
+        let qr = super::qrcode_from_str(text).unwrap();
+        let _svg = qr.encode_to_svg_string(20);
     }
 }
