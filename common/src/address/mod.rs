@@ -111,8 +111,7 @@ impl Address {
         &self.address
     }
 
-    #[allow(clippy::needless_lifetimes)] // This seems to be a bug in clippy
-    pub fn to_qr_code<'a>(&'a self) -> Result<impl QrCode + 'a, AddressError> {
+    pub fn to_qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
         let x = qrcode_from_str(&self.address)?;
         Ok(x)
     }
