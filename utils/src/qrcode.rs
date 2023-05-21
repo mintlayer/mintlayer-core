@@ -27,12 +27,15 @@ pub enum QrCodeError {
 
 pub trait QrCode {
     /// QR Codes are strictly squares, so this returns the side length
+    #[must_use]
     fn side_length(&self) -> usize;
 
     /// Returns the pixel at coordinate (x, y) if it exists, otherwise None
+    #[must_use]
     fn pixel(&self, x: usize, y: usize) -> Option<bool>;
 
     /// If the pixel is out of bounds, return false
+    #[must_use]
     fn pixel_or_false(&self, x: usize, y: usize) -> bool {
         self.pixel(x, y).unwrap_or(false)
     }
@@ -41,6 +44,7 @@ pub trait QrCode {
     /// represents an empty pixel.
     /// This contains all the information required to reconstruct the QR code. The side-length
     /// can be calculated by taking the square root of the length of the vector
+    #[must_use]
     fn as_vec(&self) -> Vec<bool> {
         let mut result = Vec::with_capacity(self.side_length() * self.side_length());
         for y in 0..self.side_length() {
