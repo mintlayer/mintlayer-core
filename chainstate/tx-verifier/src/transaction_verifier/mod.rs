@@ -351,14 +351,16 @@ where
 
         // Process tx inputs in terms of pos accounting.
         // Spending `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos should result in either
-        // decommissioning a pool of spending share in accounting
+        // decommissioning a pool or spending share in accounting
         let inputs_undos = tx
             .inputs()
             .iter()
             .filter_map(|input| match self.utxo_cache.utxo(input.outpoint()) {
-                Ok(utxo) => match utxo {
+                Ok(input_utxo) => match input_utxo {
                     Some(utxo) => match utxo.output() {
                         TxOutput::DelegateStaking(amount, delegation_id) => {
+                            // If the input spends a `DelegateStaking` utxo, this means the user is
+                            // spending part of their share in the pool.
                             check_for_delegation_cleanup = Some(*delegation_id);
                             let res = self
                                 .accounting_delta_adapter
@@ -368,6 +370,8 @@ where
                             Some(res)
                         }
                         TxOutput::CreateStakePool(pool_id, _) => {
+                            // If the input spends a `CreateStakePool` utxo, this means the user is
+                            // is decommissioning the pool.
                             let res = self
                                 .accounting_delta_adapter
                                 .operations(tx_source)
@@ -376,8 +380,8 @@ where
                             Some(res)
                         }
                         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            // spending `ProduceBlockFromStake` results in decommissioning in case `CreateStakePool`
-                            // has already been spend while staking blocks
+                            // If the input spends a `ProduceBlockFromStake` utxo, this means the user is
+                            // is decommissioning the pool.
                             let res = self
                                 .accounting_delta_adapter
                                 .operations(tx_source)
