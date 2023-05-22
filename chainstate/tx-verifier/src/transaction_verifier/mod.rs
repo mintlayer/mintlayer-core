@@ -346,7 +346,7 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingTxInputs)?;
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
         // Process tx inputs in terms of pos accounting.
