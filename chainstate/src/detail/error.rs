@@ -140,6 +140,8 @@ pub enum CheckBlockTransactionsError {
     InvalidDecommissionMaturityDistance(Id<Transaction>, BlockDistance, BlockDistance),
     #[error("Maturity setting value for the decommission pool output in tx {0} is invalid: {1}")]
     InvalidDecommissionMaturityDistanceValue(Id<Transaction>, u64),
+    #[error("No signature data size is too large: {0} > {1}")]
+    NoSignatureDataSizeTooLarge(usize, usize),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
