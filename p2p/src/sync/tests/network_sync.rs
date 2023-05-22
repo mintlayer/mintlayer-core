@@ -96,7 +96,7 @@ async fn basic(#[case] seed: Seed) {
     manager1.try_connect_peer(manager2.peer_id);
     manager2.try_connect_peer(manager1.peer_id);
 
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     new_top_blocks(
         manager1.chainstate(),
@@ -106,7 +106,7 @@ async fn basic(#[case] seed: Seed) {
         1,
     )
     .await;
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     for _ in 0..15 {
         for _ in 0..rng.gen_range(1..2) {
@@ -119,7 +119,7 @@ async fn basic(#[case] seed: Seed) {
             )
             .await;
         }
-        sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+        sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
     }
 
     manager1.join_subsystem_manager().await;
@@ -197,11 +197,8 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     // There should be no unexpected disconnects.
     let mut managers = vec![&mut manager1, &mut manager2];
     while !sync_managers_in_sync(&managers).await {
-        for _ in 0..100 {
-            try_sync_managers_once(&mut managers);
-            time_getter.advance_time(Duration::from_millis(10));
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        try_sync_managers_once(&mut rng, &mut managers, 50).await;
+        time_getter.advance_time(Duration::from_millis(100));
     }
 
     manager1.join_subsystem_manager().await;
@@ -276,7 +273,7 @@ async fn reorg(#[case] seed: Seed) {
     manager1.try_connect_peer(manager2.peer_id);
     manager2.try_connect_peer(manager1.peer_id);
 
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     // First blockchain reorg
     new_top_blocks(
@@ -288,7 +285,7 @@ async fn reorg(#[case] seed: Seed) {
     )
     .await;
 
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     // Second blockchain reorg
     new_top_blocks(
@@ -300,7 +297,7 @@ async fn reorg(#[case] seed: Seed) {
     )
     .await;
 
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
+    sync_managers(&mut rng, vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     manager1.join_subsystem_manager().await;
     manager2.join_subsystem_manager().await;

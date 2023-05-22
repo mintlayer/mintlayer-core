@@ -46,14 +46,14 @@ use common::{
         Block, ChainConfig, Destination, GenBlock, SignedTransaction, Transaction, TxInput,
         TxOutput,
     },
-    primitives::{Amount, Id, Idable},
+    primitives::{Amount, Id, Idable, H256},
     time_getter::TimeGetter,
 };
 use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
 use crate::{
-    message::SyncMessage,
+    message::{SyncMessage, TransactionResponse},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
@@ -63,7 +63,7 @@ use crate::{
 };
 
 /// A timeout for blocking calls.
-const LONG_TIMEOUT: Duration = Duration::from_secs(5);
+const LONG_TIMEOUT: Duration = Duration::from_secs(60);
 /// A short timeout for events that shouldn't occur.
 const SHORT_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -285,18 +285,39 @@ pub async fn sync_managers_in_sync(managers: &[&mut SyncManagerHandle]) -> bool 
     best_blocks.iter().tuple_windows().all(|(l, r)| l == r)
 }
 
-pub fn try_sync_managers_once(managers: &mut [&mut SyncManagerHandle]) -> bool {
+pub async fn try_sync_managers_once(
+    rng: &mut impl Rng,
+    managers: &mut [&mut SyncManagerHandle],
+    message_limit: usize,
+) -> bool {
+    let peer_ids = managers.iter().map(|mng| mng.peer_id).collect::<Vec<_>>();
     for manager in managers.iter_mut() {
         let sender_peer_id = manager.peer_id;
+
+        // Request a non-existent transaction to ensure that the event loop has a chance to process all pending requests
+        let tx_peer_id = *peer_ids.iter().find(|peer_id| **peer_id != sender_peer_id).unwrap();
+        let requested_txid = get_random_hash(rng).into();
+        manager.send_message(tx_peer_id, SyncMessage::TransactionRequest(requested_txid));
 
         if let Ok(peer_event) = manager.peer_manager_receiver.try_recv() {
             // There should be no peer scoring or disconnections
             panic!("Unexpected message: {peer_event:?}");
         }
 
-        if let Ok(sync_event) = manager.sync_event_receiver.try_recv() {
+        for _ in 0..message_limit {
+            let sync_event = manager.sync_event_receiver.recv().await.unwrap();
+
             // Send sync messages between peers
             match &sync_event {
+                SyncingEvent::Message {
+                    peer: _,
+                    message: SyncMessage::TransactionResponse(tx_resp),
+                } => match tx_resp {
+                    TransactionResponse::NotFound(txid) if *txid == requested_txid => {
+                        break;
+                    }
+                    _ => {}
+                },
                 SyncingEvent::Message { peer, message } => {
                     let other_manager = managers.iter_mut().find(|m| m.peer_id == *peer).unwrap();
                     other_manager
@@ -316,11 +337,10 @@ pub fn try_sync_managers_once(managers: &mut [&mut SyncManagerHandle]) -> bool {
     false
 }
 
-pub async fn sync_managers(managers: &mut [&mut SyncManagerHandle]) {
+pub async fn sync_managers(rng: &mut impl Rng, managers: &mut [&mut SyncManagerHandle]) {
     let sync_managers_helper = async move {
         while !sync_managers_in_sync(managers).await {
-            while try_sync_managers_once(managers) {}
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            while try_sync_managers_once(rng, managers, usize::MAX).await {}
         }
     };
 
@@ -574,8 +594,12 @@ pub async fn new_top_blocks(
         .unwrap();
 }
 
-pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
+pub fn get_random_hash(rng: &mut impl Rng) -> H256 {
     let mut bytes: [u8; 32] = [0; 32];
     rng.fill_bytes(&mut bytes);
-    bytes.to_vec()
+    bytes.into()
+}
+
+pub fn get_random_bytes(rng: &mut impl Rng) -> Vec<u8> {
+    get_random_hash(rng).as_bytes().to_vec()
 }
