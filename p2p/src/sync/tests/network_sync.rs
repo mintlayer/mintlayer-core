@@ -18,6 +18,7 @@ use std::{sync::Arc, time::Duration};
 use common::{
     chain::block::timestamp::BlockTimestamp, primitives::user_agent::mintlayer_core_user_agent,
 };
+use crypto::random::Rng;
 use p2p_test_utils::P2pBasicTestTimeGetter;
 use test_utils::random::Seed;
 
@@ -105,20 +106,21 @@ async fn basic(#[case] seed: Seed) {
         1,
     )
     .await;
-
     sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
-    for _ in 0..13 {
-        new_top_blocks(
-            manager1.chainstate(),
-            BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
-            get_random_bytes(&mut rng),
-            0,
-            1,
-        )
-        .await;
+    for _ in 0..15 {
+        for _ in 0..rng.gen_range(1..2) {
+            new_top_blocks(
+                manager1.chainstate(),
+                BlockTimestamp::from_duration_since_epoch(time_getter.get_time_getter().get_time()),
+                get_random_bytes(&mut rng),
+                0,
+                1,
+            )
+            .await;
+        }
+        sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
     }
-    sync_managers(vec![&mut manager1, &mut manager2].as_mut_slice()).await;
 
     manager1.join_subsystem_manager().await;
     manager2.join_subsystem_manager().await;

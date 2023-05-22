@@ -168,7 +168,6 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                // TODO: FIXME: Should this be removed?
                 _ = periodic_check.tick(), if self.last_activity.is_some() => {}
             }
 
