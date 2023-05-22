@@ -91,8 +91,10 @@ pub struct Peer<T: NetworkingService> {
     /// A number of consecutive unconnected headers received from a peer. This counter is reset
     /// after receiving a valid header.
     unconnected_headers: usize,
-    /// A time when the last message from the peer is received. This field is equal to `None` if
-    /// we aren't waiting for specific messages.
+    /// A time when the last message from the peer is received.
+    /// This field is equal to `None` if we aren't waiting for specific messages
+    /// (when the peer downloads blocks from us, or when we receive an empty header list response)
+    /// TODO: Use enum to make it clearer what's it about
     last_activity: Option<Duration>,
     time_getter: TimeGetter,
 }
@@ -151,8 +153,8 @@ where
     }
 
     async fn main_loop(&mut self) -> Result<()> {
-        let mut periodic_check = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
-        periodic_check.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
+        stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
         self.request_headers().await?;
         self.last_activity = Some(self.time_getter.get_time());
@@ -168,12 +170,12 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                _ = periodic_check.tick(), if self.last_activity.is_some() => {}
+                _ = stalling_interval.tick(), if self.last_activity.is_some() => {}
             }
 
             // Run on each loop iteration, so it's easier to test
-            if self.last_activity.is_some() {
-                self.handle_stalling_interval().await?;
+            if let Some(last_activity) = self.last_activity {
+                self.handle_stalling_interval(last_activity).await?;
             }
         }
     }
@@ -639,13 +641,8 @@ where
         )
     }
 
-    async fn handle_stalling_interval(&mut self) -> Result<()> {
-        // Expect is OK here, because this function should only be called when the `last_activity`
-        // is set to something.
-        if self.time_getter.get_time()
-            < self.last_activity.expect("Last activity time is missing")
-                + *self.p2p_config.sync_stalling_timeout
-        {
+    async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
+        if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
             return Ok(());
         }
 
