@@ -113,7 +113,7 @@ pub enum CheckBlockError {
     #[error("Invalid block reward output type for block {0}")]
     InvalidBlockRewardOutputType(Id<Block>),
     #[error("Block reward maturity error: {0}")]
-    BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputTimeLockError),
+    BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputMaturityError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

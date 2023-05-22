@@ -54,7 +54,7 @@ use crypto::{
 use rstest::rstest;
 use test_utils::mock_time_getter::mocked_time_getter_seconds;
 use test_utils::random::{make_seedable_rng, Seed};
-use tx_verifier::timelock_check::OutputTimeLockError;
+use tx_verifier::timelock_check::OutputMaturityError;
 use utxo::UtxoSource;
 
 #[rstest]
@@ -104,7 +104,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::BlockRewardMaturityError(
-                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
                 )
             ))
         );
@@ -126,7 +126,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::BlockRewardMaturityError(
-                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
                 )
             ))
         );
@@ -148,7 +148,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::BlockRewardMaturityError(
-                    OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint)
+                    OutputMaturityError::InvalidOutputMaturitySettingType(outpoint)
                 )
             ))
         );
@@ -170,7 +170,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::BlockRewardMaturityError(
-                    OutputTimeLockError::InvalidOutputMaturityDistanceValue(outpoint, u64::MAX)
+                    OutputMaturityError::InvalidOutputMaturityDistanceValue(outpoint, u64::MAX)
                 )
             ))
         );
@@ -198,7 +198,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
                 CheckBlockError::BlockRewardMaturityError(
-                    OutputTimeLockError::InvalidOutputMaturityDistance(
+                    OutputMaturityError::InvalidOutputMaturityDistance(
                         outpoint,
                         BlockDistance::new(reward_lock_distance - 1),
                         BlockDistance::new(reward_lock_distance)

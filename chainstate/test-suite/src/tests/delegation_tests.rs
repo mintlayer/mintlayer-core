@@ -116,6 +116,7 @@ fn prepare_delegation(
     )
 }
 
+// Create delegation and check that the data appears in the db but the balance is still none.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -158,6 +159,7 @@ fn create_delegation(#[case] seed: Seed) {
     });
 }
 
+// Try to create delegation for unknown pool and get an error
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -188,6 +190,7 @@ fn create_delegation_unknown_pool(#[case] seed: Seed) {
     });
 }
 
+// Try creating 2 delegations in 1 tx and get an error
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -223,17 +226,14 @@ fn create_delegation_twice(#[case] seed: Seed) {
                 Destination::AnyoneCanSpend,
             ))
             .build();
-        let transfer_outpoint1 =
+        let transfer_outpoint =
             OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
-        let transfer_outpoint2 =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 2);
 
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         // Try to create 2 delegations in 1 transaction
         let tx = TransactionBuilder::new()
-            .add_input(transfer_outpoint1.into(), empty_witness(&mut rng))
-            .add_input(transfer_outpoint2.into(), empty_witness(&mut rng))
+            .add_input(transfer_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::CreateDelegationId(
                 Destination::AnyoneCanSpend,
                 pool_id,
@@ -254,6 +254,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
     });
 }
 
+// Try spending CreateDelegationId output and get an error
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -282,6 +283,10 @@ fn spend_create_delegation_output(#[case] seed: Seed) {
     });
 }
 
+// Prepare a pool with a delegation.
+// Delegate some coins. Check the balance.
+// Spend a part of delegated coins. Check the balance.
+// Spend the rest of delegation coins. Check that the balance is none but the data still exists.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -382,6 +387,11 @@ fn delegate_staking(#[case] seed: Seed) {
     });
 }
 
+// Prepare a pool with a delegation.
+// Delegate some coins. Check the balance.
+// Decommission the pool. Check that delegation balance and data exist.
+// Spend a part of delegated coins. Check the balance.
+// Spend the rest of delegation coins. Check that the delegation is removed entirely.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -390,7 +400,7 @@ fn delegation_cleanup(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
 
-        let (_, stake_outpoint, delegation_id, _, transfer_outpoint) =
+        let (pool_id, stake_outpoint, delegation_id, _, transfer_outpoint) =
             prepare_delegation(&mut rng, &mut tf);
         let amount_to_delegate = get_output_value(
             utxo::UtxosStorageRead::get_utxo(&tf.storage, &transfer_outpoint)
@@ -430,11 +440,58 @@ fn delegation_cleanup(#[case] seed: Seed) {
             .build();
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
-        // Spend all delegation share
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(Some(amount_to_delegate), delegation_balance);
+
+        let delegation_data = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_data(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(
+            Some(DelegationData::new(pool_id, Destination::AnyoneCanSpend)),
+            delegation_data
+        );
+
+        // Spend delegation share and keep the change
+        let amount_to_spend = (amount_to_delegate / 3).unwrap();
+        let spend_change = (amount_to_delegate - (amount_to_spend * 2).unwrap()).unwrap();
+
+        let tx = TransactionBuilder::new()
+            .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
+            .add_output(TxOutput::DelegateStaking(spend_change, delegation_id))
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_spend),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(amount_to_spend),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(1),
+            ))
+            .build();
+
+        let delegate_staking_outpoint =
+            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
+        tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
+
+        let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+            &tf.storage,
+            delegation_id,
+        )
+        .unwrap();
+        assert_eq!(Some(spend_change), delegation_balance);
+
+        // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
             .add_output(TxOutput::LockThenTransfer(
-                OutputValue::Coin(amount_to_delegate),
+                OutputValue::Coin(spend_change),
                 Destination::AnyoneCanSpend,
                 OutputTimeLock::ForBlockCount(1),
             ))

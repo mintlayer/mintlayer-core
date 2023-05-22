@@ -142,7 +142,7 @@ pub enum ConnectTransactionError {
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
     #[error("Output timelock error: {0}")]
-    OutputTimelockError(#[from] timelock_check::OutputTimeLockError),
+    OutputTimelockError(#[from] timelock_check::OutputMaturityError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

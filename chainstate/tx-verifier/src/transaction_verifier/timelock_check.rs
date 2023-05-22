@@ -31,7 +31,7 @@ use super::{
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum OutputTimeLockError {
+pub enum OutputMaturityError {
     #[error("Maturity setting type for the output {0:?} is invalid")]
     InvalidOutputMaturitySettingType(OutPoint),
     #[error("Maturity setting for the output {0:?} is too short: {1} < {2}")]
@@ -217,12 +217,12 @@ fn check_outputs_timelock(
                     OutputTimelockCheckRequired::DelegationSpendMaturity => {
                         let required =
                             chain_config.as_ref().spend_share_maturity_distance(block_height);
-                        check_output_block_distance(timelock, required, outpoint)
+                        check_output_maturity_setting(timelock, required, outpoint)
                     }
                     OutputTimelockCheckRequired::DecommissioningMaturity => {
                         let required =
                             chain_config.as_ref().decommission_pool_maturity_distance(block_height);
-                        check_output_block_distance(timelock, required, outpoint)
+                        check_output_maturity_setting(timelock, required, outpoint)
                     }
                 },
             }
@@ -230,27 +230,27 @@ fn check_outputs_timelock(
         .map_err(ConnectTransactionError::OutputTimelockError)
 }
 
-pub fn check_output_block_distance(
+pub fn check_output_maturity_setting(
     timelock: &OutputTimeLock,
     required: BlockDistance,
     outpoint: OutPoint,
-) -> Result<(), OutputTimeLockError> {
+) -> Result<(), OutputMaturityError> {
     match timelock {
         OutputTimeLock::ForBlockCount(c) => {
             let cs: i64 = (*c).try_into().map_err(|_| {
-                OutputTimeLockError::InvalidOutputMaturityDistanceValue(outpoint.clone(), *c)
+                OutputMaturityError::InvalidOutputMaturityDistanceValue(outpoint.clone(), *c)
             })?;
             let given = BlockDistance::new(cs);
             ensure!(
                 given >= required,
-                OutputTimeLockError::InvalidOutputMaturityDistance(outpoint, given, required)
+                OutputMaturityError::InvalidOutputMaturityDistance(outpoint, given, required)
             );
             Ok(())
         }
         OutputTimeLock::UntilHeight(_)
         | OutputTimeLock::UntilTime(_)
         | OutputTimeLock::ForSeconds(_) => Err(
-            OutputTimeLockError::InvalidOutputMaturitySettingType(outpoint),
+            OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
         ),
     }
 }

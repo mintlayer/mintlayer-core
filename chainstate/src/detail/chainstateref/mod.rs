@@ -435,7 +435,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                         let outpoint = OutPoint::new(block.get_id().into(), index as u32);
                         let required =
                             block.consensus_data().reward_maturity_distance(self.chain_config);
-                        tx_verifier::timelock_check::check_output_block_distance(
+                        tx_verifier::timelock_check::check_output_maturity_setting(
                             tl, required, outpoint,
                         )
                         .map_err(CheckBlockError::BlockRewardMaturityError)

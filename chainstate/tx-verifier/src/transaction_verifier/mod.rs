@@ -349,6 +349,7 @@ where
         let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
+        // Process tx inputs in terms of pos accounting.
         // Spending `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos should result in either
         // decommissioning a pool of spending share in accounting
         let inputs_undos = tx
@@ -397,6 +398,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        // Process tx outputs in terms of pos accounting.
         let outputs_undos = tx
             .outputs()
             .iter()
@@ -474,6 +476,7 @@ where
             None => None,
         };
 
+        // Store pos accounting operations undos
         if !inputs_undos.is_empty() || !outputs_undos.is_empty() || delete_delegation_undo.is_some()
         {
             let tx_undos = inputs_undos

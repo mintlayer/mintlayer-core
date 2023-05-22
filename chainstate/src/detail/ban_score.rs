@@ -18,7 +18,7 @@ use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
 };
 use tx_verifier::{
-    timelock_check::OutputTimeLockError,
+    timelock_check::OutputMaturityError,
     transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
 };
 
@@ -140,12 +140,12 @@ impl BanScore for ConnectTransactionError {
     }
 }
 
-impl BanScore for OutputTimeLockError {
+impl BanScore for OutputMaturityError {
     fn ban_score(&self) -> u32 {
         match self {
-            OutputTimeLockError::InvalidOutputMaturitySettingType(_) => 100,
-            OutputTimeLockError::InvalidOutputMaturityDistance(_, _, _) => 100,
-            OutputTimeLockError::InvalidOutputMaturityDistanceValue(_, _) => 100,
+            OutputMaturityError::InvalidOutputMaturitySettingType(_) => 100,
+            OutputMaturityError::InvalidOutputMaturityDistance(_, _, _) => 100,
+            OutputMaturityError::InvalidOutputMaturityDistanceValue(_, _) => 100,
         }
     }
 }
