@@ -89,7 +89,7 @@ pub fn check_timelocks<S, C, T, U>(
     utxos_view: &U,
     tx: &T,
     tx_source: &TransactionSourceForConnect,
-    tx_source_id: OutPointSourceId,
+    outpoint_source_id: OutPointSourceId,
     spending_time: &BlockTimestamp,
 ) -> Result<(), ConnectTransactionError>
 where
@@ -185,7 +185,7 @@ where
                 outputs,
                 tx_source.expected_block_height(),
                 output_check_required,
-                tx_source_id,
+                outpoint_source_id,
             )?;
         }
     }
@@ -199,13 +199,13 @@ fn check_outputs_timelock(
     outputs: &[TxOutput],
     block_height: BlockHeight,
     output_check_required: OutputTimelockCheckRequired,
-    tx_source_id: OutPointSourceId,
+    outpoint_source_id: OutPointSourceId,
 ) -> Result<(), ConnectTransactionError> {
     outputs
         .iter()
         .enumerate()
         .try_for_each(|(index, output)| {
-            let outpoint = OutPoint::new(tx_source_id.clone(), index as u32);
+            let outpoint = OutPoint::new(outpoint_source_id.clone(), index as u32);
             match output {
                 TxOutput::Transfer(_, _)
                 | TxOutput::Burn(_)
