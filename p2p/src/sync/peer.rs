@@ -29,11 +29,13 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-use chainstate::chainstate_interface::ChainstateInterface;
-use chainstate::{ban_score::BanScore, BlockError, BlockSource, ChainstateError, Locator};
+use chainstate::{
+    ban_score::BanScore, chainstate_interface::ChainstateInterface, BlockError, BlockIndex,
+    BlockSource, ChainstateError, Locator,
+};
 use common::{
     chain::{block::signed_block_header::SignedBlockHeader, Block, Transaction},
-    primitives::{BlockHeight, Id, Idable},
+    primitives::{Id, Idable},
     time_getter::TimeGetter,
 };
 use logging::log;
@@ -80,8 +82,8 @@ pub struct Peer<T: NetworkingService> {
     requested_blocks: BTreeSet<Id<Block>>,
     /// A queue of the blocks requested this peer.
     blocks_queue: VecDeque<Id<Block>>,
-    /// The height of the best known block of a peer.
-    best_known_block: Option<BlockHeight>,
+    /// The index of the best known block of a peer.
+    best_known_block: Option<BlockIndex>,
     // TODO: Add a timer to remove entries.
     /// A list of transactions that have been announced by this peer. An entry is added when the
     /// identifier is announced and removed when the actual transaction or not found response is received.
@@ -89,8 +91,10 @@ pub struct Peer<T: NetworkingService> {
     /// A number of consecutive unconnected headers received from a peer. This counter is reset
     /// after receiving a valid header.
     unconnected_headers: usize,
-    /// A time when the last message from the peer is received. This field is equal to `None` if
-    /// we aren't waiting for specific messages.
+    /// A time when the last message from the peer is received.
+    /// This field is equal to `None` if we aren't waiting for specific messages
+    /// (when the peer downloads blocks from us, or when we receive an empty header list response)
+    /// TODO: Use enum to make it clearer what's it about
     last_activity: Option<Duration>,
     time_getter: TimeGetter,
 }
@@ -166,9 +170,12 @@ where
                     self.send_block(block_to_send_to_peer).await?;
                 }
 
-                _ = stalling_interval.tick(), if self.last_activity.is_some() => {
-                    self.handle_stalling_interval().await?;
-                }
+                _ = stalling_interval.tick(), if self.last_activity.is_some() => {}
+            }
+
+            // Run on each loop iteration, so it's easier to test
+            if let Some(last_activity) = self.last_activity {
+                self.handle_stalling_interval(last_activity).await?;
             }
         }
     }
@@ -177,6 +184,7 @@ where
         let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
         debug_assert!(locator.len() <= *self.p2p_config.msg_max_locator_count);
 
+        log::trace!("Sending header list request to {} peer", self.id());
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::HeaderListRequest(HeaderListRequest::new(locator)),
@@ -256,23 +264,38 @@ where
 
         // Check that all the blocks are known and haven't been already requested.
         let ids = block_ids.clone();
-        let best_known_block = self.best_known_block.unwrap_or(0.into());
+        let best_known_block = self.best_known_block.clone();
         self.chainstate_handle
             .call(move |c| {
+                // Check that all blocks are known. Skip the first block as it has already checked.
                 for id in ids {
                     let index = c.get_block_index(&id)?.ok_or(P2pError::ProtocolError(
                         ProtocolError::UnknownBlockRequested(id),
                     ))?;
 
-                    if index.block_height() <= best_known_block {
-                        return Err(P2pError::ProtocolError(
-                            ProtocolError::DuplicatedBlockRequest(id),
-                        ));
+                    if let Some(ref best_known_block) = best_known_block {
+                        if index.block_height() <= best_known_block.block_height() {
+                            // This can be normal in case of reorg, check if the block id is the same.
+                            let known_block_id = c
+                                .get_block_id_from_height(&best_known_block.block_height())?
+                                // This should never fail because we have a block for this height.
+                                .expect("Unable to get block id from height");
+                            if &known_block_id == best_known_block.block_id() {
+                                return Err(P2pError::ProtocolError(
+                                    ProtocolError::DuplicatedBlockRequest(id),
+                                ));
+                            }
+                        }
                     }
                 }
+
                 Result::<_>::Ok(())
             })
             .await??;
+
+        // A peer can ignore the headers request if it is in the initial block download state.
+        // Assume this is the case if it asks us for blocks.
+        self.last_activity = None;
 
         self.blocks_queue.extend(block_ids.into_iter());
 
@@ -342,6 +365,11 @@ where
                 // In order to prevent spam from malicious peers we have the `unconnected_headers`
                 // counter.
                 self.unconnected_headers += 1;
+                log::debug!(
+                    "Peer {} sent {} unconnected headers",
+                    self.id(),
+                    self.unconnected_headers
+                );
                 if self.unconnected_headers <= *self.p2p_config.max_unconnected_headers {
                     self.request_headers().await?;
                     return Ok(());
@@ -594,32 +622,27 @@ where
     }
 
     async fn send_block(&mut self, id: Id<Block>) -> Result<()> {
-        let (block, height) = self
+        let (block, index) = self
             .chainstate_handle
             .call(move |c| {
-                let height = c.get_block_height_in_main_chain(&id.into());
+                let index = c.get_block_index(&id);
                 let block = c.get_block(id);
-                (block, height)
+                (block, index)
             })
             .await?;
         // All requested blocks are already checked while processing `BlockListRequest`.
         let block = block?.unwrap_or_else(|| panic!("Unknown block requested: {id}"));
-        let height = height?;
-        self.best_known_block = height;
+        self.best_known_block = index?;
 
+        log::debug!("Sending {} block to {} peer", block.get_id(), self.id());
         self.messaging_handle.send_message(
             self.id(),
             SyncMessage::BlockResponse(BlockResponse::new(block)),
         )
     }
 
-    async fn handle_stalling_interval(&mut self) -> Result<()> {
-        // Expect is OK here, because this function should only be called when the `last_activity`
-        // is set to something.
-        if self.time_getter.get_time()
-            < self.last_activity.expect("Last activity time is missing")
-                + *self.p2p_config.sync_stalling_timeout
-        {
+    async fn handle_stalling_interval(&mut self, last_activity: Duration) -> Result<()> {
+        if self.time_getter.get_time() < last_activity + *self.p2p_config.sync_stalling_timeout {
             return Ok(());
         }
 

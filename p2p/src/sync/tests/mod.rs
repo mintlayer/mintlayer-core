@@ -19,5 +19,6 @@ mod block_response;
 mod header_list_request;
 mod header_list_response;
 mod helpers;
+mod network_sync;
 mod peer_events;
 mod tx_announcement;
