@@ -19,6 +19,7 @@ use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 use crypto::key::PublicKey;
 pub mod pubkeyhash;
 use serialization::{Decode, Encode};
+use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {
@@ -42,6 +43,8 @@ pub enum AddressError {
     Bech32EncodingError(Bech32Error),
     #[error("Invalid prefix: {0}")]
     InvalidPrefix(String),
+    #[error("QR Code error: {0}")]
+    QrCodeError(#[from] QrCodeError),
 }
 
 impl From<Bech32Error> for AddressError {
@@ -106,6 +109,11 @@ impl Address {
 
     pub fn get(&self) -> &str {
         &self.address
+    }
+
+    pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
+        let qrcode = qrcode_from_str(&self.address)?;
+        Ok(qrcode)
     }
 }
 

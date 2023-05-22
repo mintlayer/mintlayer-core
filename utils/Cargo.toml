@@ -13,7 +13,9 @@ atomic-traits = "0.3"
 directories = "5.0"
 num-traits = "0.2"
 probabilistic-collections = "0.7"
+qrcodegen = "1.8"
 slave-pool = "0.2"
+
 thiserror.workspace = true
 
 [dev-dependencies]
