@@ -261,15 +261,17 @@ impl SyncManagerHandle {
 
     pub async fn join_subsystem_manager(self) {
         // Shutdown sync manager first
-        drop(self.peer_manager_receiver);
         drop(self.sync_event_sender);
-        drop(self.sync_event_receiver);
-        drop(self.error_receiver);
         let _ = self.sync_manager_handle.await;
 
         // Shutdown remaining subsystems
         self.shutdown_trigger.initiate();
         self.subsystem_manager_handle.join().await;
+
+        // Finally, when all services are down, receivers could be closed too
+        drop(self.sync_event_receiver);
+        drop(self.error_receiver);
+        drop(self.peer_manager_receiver);
     }
 }
 
