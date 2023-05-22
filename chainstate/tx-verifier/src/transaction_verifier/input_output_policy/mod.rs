@@ -86,7 +86,8 @@ pub fn check_reward_inputs_outputs_purposes(
             }
         }
         None => {
-            // if no kernel input is present it's allowed to have multiple `LockThenTransfer` outputs
+            // if no kernel input is present it's allowed to have multiple `LockThenTransfer` outputs,
+            // because this can only happen with PoW block reward.
             let all_lock_then_transfer = reward
                 .outputs()
                 .ok_or(ConnectTransactionError::SpendStakeError(
