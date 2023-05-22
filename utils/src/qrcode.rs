@@ -57,7 +57,8 @@ pub trait QrCode {
 
     /// Returns a console string representation of the QR code,
     /// using the given characters as placeholders
-    /// for empty, filled pixels, and the new line character
+    /// for empty, filled pixels, and the new line character.
+    /// Console string assumes that the height is twice the width.
     ///
     /// border_size is the number of pixels to add around the QR code
     #[must_use]
@@ -91,7 +92,8 @@ pub trait QrCode {
 
     /// Returns a console string representation of the QR code,
     /// using the default characters as placeholders
-    /// for empty and filled pixels, and the new line character
+    /// for empty and filled pixels, and the new line character.
+    /// Console string assumes that the height is twice the width.
     ///
     /// border_size is the number of pixels to add around the QR code
     #[must_use]
