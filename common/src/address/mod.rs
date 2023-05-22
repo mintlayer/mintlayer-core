@@ -111,7 +111,7 @@ impl Address {
         &self.address
     }
 
-    pub fn to_qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
+    pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
         let x = qrcode_from_str(&self.address)?;
         Ok(x)
     }
