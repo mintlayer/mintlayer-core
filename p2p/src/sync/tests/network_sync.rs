@@ -198,7 +198,7 @@ async fn initial_download_unexpected_disconnect(#[case] seed: Seed) {
     let mut managers = vec![&mut manager1, &mut manager2];
     while !sync_managers_in_sync(&managers).await {
         try_sync_managers_once(&mut rng, &mut managers, 50).await;
-        time_getter.advance_time(Duration::from_millis(100));
+        time_getter.advance_time(Duration::from_millis(10));
     }
 
     manager1.join_subsystem_manager().await;
