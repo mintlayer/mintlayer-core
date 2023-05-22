@@ -54,6 +54,8 @@ impl NodeRpcServer for NodeRpc {
         // There is no easy way to gracefully shut down the jsonrpsee server to make it finish existing RPC requests first.
         // So it's possible that the current RPC call will return an error because the process is terminated before the response is sent.
         // As a workaround, shutdown is started in background with some delay.
+        // TODO: This is supposedly fixed in jsonrpsee 0.17.1: https://github.com/paritytech/jsonrpsee/releases/tag/v0.17.1
+        // See if we can remove this workaround since we're using that version now.
         let shutdown_trigger = self.shutdown_trigger.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
