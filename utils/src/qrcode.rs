@@ -55,11 +55,13 @@ pub trait QrCode {
         result
     }
 
-    /// Returns a string representation of the QR code, using the given characters as placeholders
+    /// Returns a console string representation of the QR code,
+    /// using the given characters as placeholders
     /// for empty, filled pixels, and the new line character
+    ///
     /// border_size is the number of pixels to add around the QR code
     #[must_use]
-    fn encode_to_string(
+    fn encode_to_console_string(
         &self,
         border_size: u8,
         empty_char: char,
@@ -67,10 +69,10 @@ pub trait QrCode {
         new_line: char,
     ) -> String {
         let mut result = String::with_capacity(2 * self.side_length() * self.side_length());
-        let border: i32 = border_size as i32;
+        let border = border_size as i32;
         for y in -border..self.side_length() as i32 + border {
             for x in -border..self.side_length() as i32 + border {
-                let c: char = if self.pixel_or_false(x as usize, y as usize) {
+                let c = if self.pixel_or_false(x as usize, y as usize) {
                     filled_char
                 } else {
                     empty_char
@@ -87,11 +89,14 @@ pub trait QrCode {
         result
     }
 
-    /// Returns a string representation of the QR code, using the default characters as placeholders
+    /// Returns a console string representation of the QR code,
+    /// using the default characters as placeholders
     /// for empty and filled pixels, and the new line character
+    ///
+    /// border_size is the number of pixels to add around the QR code
     #[must_use]
-    fn encode_to_string_with_defaults(&self, border_size: u8) -> String {
-        self.encode_to_string(border_size, EMPTY_CHAR, FILLED_CHAR, NEW_LINE)
+    fn encode_to_console_string_with_defaults(&self, border_size: u8) -> String {
+        self.encode_to_console_string(border_size, EMPTY_CHAR, FILLED_CHAR, NEW_LINE)
     }
 
     /// Create an SVG string representation of the QR code, using the given border size
@@ -158,7 +163,7 @@ mod tests {
 
     fn test_string_qrcode(qr: &impl QrCode) {
         let qr_str = qr
-            .encode_to_string(0, '0', '1', '\n')
+            .encode_to_console_string(0, '0', '1', '\n')
             .chars()
             // Remove new lines to compare with vectors next
             .filter(|c| *c != '\n')
@@ -167,7 +172,7 @@ mod tests {
             .as_vec()
             .into_iter()
             // duplicate each bool twice, then flatten the vec, because QR code
-            // strings are twice as wide in the interest of making squares
+            // console strings are twice as wide in the interest of making squares
             .flat_map(|v| if v { vec!['1', '1'] } else { vec!['0', '0'] })
             .collect::<String>();
         assert_eq!(qr_str, expected_str);
