@@ -24,7 +24,10 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
+        },
         config::EpochIndex,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
@@ -430,27 +433,40 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .iter()
             .enumerate()
             .try_for_each(|(index, output)| {
-                match output {
-                    TxOutput::LockThenTransfer(_, _, tl) => {
-                        let outpoint = OutPoint::new(block.get_id().into(), index as u32);
-                        let required =
-                            block.consensus_data().reward_maturity_distance(self.chain_config);
-                        tx_verifier::timelock_check::check_output_maturity_setting(
-                            tl, required, outpoint,
-                        )
-                        .map_err(CheckBlockError::BlockRewardMaturityError)
+                match block.consensus_data() {
+                    ConsensusData::None | ConsensusData::PoW(_) => match output {
+                        TxOutput::LockThenTransfer(_, _, tl) => {
+                            let outpoint = OutPoint::new(block.get_id().into(), index as u32);
+                            let required =
+                                block.consensus_data().reward_maturity_distance(self.chain_config);
+                            tx_verifier::timelock_check::check_output_maturity_setting(
+                                tl, required, outpoint,
+                            )
+                            .map_err(CheckBlockError::BlockRewardMaturityError)
+                        }
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::CreateStakePool(_, _)
+                        | TxOutput::ProduceBlockFromStake(_, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => Err(
+                            CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                        ),
+                    },
+                    ConsensusData::PoS(_) => {
+                        match output {
+                            // The output can be reused in block reward right away
+                            TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
+                            TxOutput::Transfer(_, _)
+                            | TxOutput::LockThenTransfer(_, _, _)
+                            | TxOutput::CreateStakePool(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::DelegateStaking(_, _) => Err(
+                                CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                            ),
+                        }
                     }
-                    TxOutput::ProduceBlockFromStake(_, _) => {
-                        // The output can be reused in block reward right away
-                        Ok(())
-                    }
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::CreateStakePool(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateDelegationId(_, _)
-                    | TxOutput::DelegateStaking(_, _) => Err(
-                        CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
-                    ),
                 }
             })
     }

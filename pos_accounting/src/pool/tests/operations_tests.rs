@@ -341,7 +341,7 @@ fn spend_more_than_delegated(#[case] seed: Seed) {
     }
 }
 
-// Try deleting delegation via PoSAccountingDelta while the delegation balance is non 0
+// Try deleting delegation via PoSAccountingDelta while the delegation balance is non-zero
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -375,7 +375,7 @@ fn delta_delete_delegation_existing_balance(#[case] seed: Seed) {
     assert!(storage.all_delegation_balances().is_empty());
 }
 
-// Try deleting delegation via PoSAccountingDb while the delegation balance is non 0
+// Try deleting delegation via PoSAccountingDb while the delegation balance is non-zero
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]

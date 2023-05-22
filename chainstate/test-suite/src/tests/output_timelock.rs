@@ -24,7 +24,7 @@ use common::{
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        OutPointSourceId, TxInput, TxOutput,
+        OutPoint, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -54,27 +54,27 @@ fn output_lock_until_height(#[case] seed: Seed) {
 
         // create the first block, with a locked output
         let current_time = tf.current_time();
-        let locked_output = add_block_with_locked_output(
+        let (input_witness, locked_input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
             BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        assert!(matches!(
+        assert_eq!(
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output.1.clone(), locked_output.0.clone())
+                        .add_input(locked_input.clone(), input_witness.clone())
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
@@ -102,20 +102,20 @@ fn output_lock_until_height(#[case] seed: Seed) {
             logging::log::info!("Submitting block of height: {}", height);
 
             // Create another block, and spend the first input from the previous block.
-            assert!(matches!(
+            assert_eq!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.1.clone(), locked_output.0.clone())
+                            .add_input(locked_input.clone(), input_witness.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(_)
+                    ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
                 ))
-            ));
+            );
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height - 1)
@@ -137,7 +137,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output.1, locked_output.0)
+                    .add_input(locked_input, input_witness)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -185,16 +185,17 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
             )
             .add_anyone_can_spend_output(5000)
             .build();
+        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
 
-        assert!(matches!(
+        assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(locked_outpoint)
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -212,27 +213,27 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
 
         // create the first block, with a locked output
         let current_time = tf.current_time();
-        let locked_output = add_block_with_locked_output(
+        let (input_witness, input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             BlockTimestamp::from_duration_since_epoch(current_time),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        assert!(matches!(
+        assert_eq!(
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output.1.clone(), locked_output.0.clone())
+                        .add_input(input.clone(), input_witness.clone())
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
@@ -260,20 +261,20 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             logging::log::info!("Submitting block of height: {}", height);
 
             // create another block, and spend the first input from the previous block
-            assert!(matches!(
+            assert_eq!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.1.clone(), locked_output.0.clone())
+                            .add_input(input.clone(), input_witness.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(_)
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
                 ))
-            ));
+            );
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height - 1)
@@ -291,7 +292,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output.1, locked_output.0)
+                    .add_input(input, input_witness)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -337,15 +338,17 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
             )
             .add_anyone_can_spend_output(50000)
             .build();
-        assert!(matches!(
+        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
+
+        assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(locked_outpoint)
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -362,7 +365,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
 
         // create the first block, with a locked output
         let current_time = tf.current_time();
-        let locked_output = add_block_with_locked_output(
+        let (input_witness, input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             BlockTimestamp::from_duration_since_epoch(current_time),
@@ -373,7 +376,7 @@ fn output_lock_for_block_count_attempted_overflow(#[case] seed: Seed) {
             tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
-                        .add_input(locked_output.1, locked_output.0)
+                        .add_input(input, input_witness)
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
@@ -413,7 +416,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
 
         let expected_height = 1;
-        let locked_output = add_block_with_locked_output(
+        let (input_witness, input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
@@ -432,11 +435,11 @@ fn output_lock_until_time(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            assert!(matches!(
+            assert_eq!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.1.clone(), locked_output.0.clone())
+                            .add_input(input.clone(), input_witness.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -444,9 +447,9 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(_)
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
                 ))
-            ));
+            );
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height as u64),
@@ -466,7 +469,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output.1, locked_output.0)
+                    .add_input(input, input_witness)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -519,16 +522,17 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
             )
             .add_anyone_can_spend_output(50000)
             .build();
+        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
 
-        assert!(matches!(
+        assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(locked_outpoint)
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
@@ -560,7 +564,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
 
         let expected_height = 1;
-        let locked_output = add_block_with_locked_output(
+        let (input_witness, input, _) = add_block_with_locked_output(
             &mut tf,
             OutputTimeLock::ForSeconds(lock_seconds),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
@@ -579,11 +583,11 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
             );
 
             // Check that the output still cannot be spent.
-            assert!(matches!(
+            assert_eq!(
                 tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
-                            .add_input(locked_output.1.clone(), locked_output.0.clone())
+                            .add_input(input.clone(), input_witness.clone())
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
@@ -591,9 +595,9 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(_)
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
                 ))
-            ));
+            );
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height as u64),
@@ -614,7 +618,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
         tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
-                    .add_input(locked_output.1, locked_output.0)
+                    .add_input(input, input_witness)
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
@@ -664,16 +668,17 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
             )
             .add_anyone_can_spend_output(50000)
             .build();
+        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
 
-        assert!(matches!(
+        assert_eq!(
             tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(_)
+                ConnectTransactionError::TimeLockViolation(locked_outpoint)
             ))
-        ));
+        );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }

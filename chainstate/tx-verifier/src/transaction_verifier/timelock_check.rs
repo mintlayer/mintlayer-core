@@ -50,7 +50,7 @@ fn check_timelock(
     timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
-    outpoint: OutPoint,
+    outpoint: &OutPoint,
 ) -> Result<(), ConnectTransactionError> {
     let source_block_height = source_block_index.block_height();
     let source_block_time = source_block_index.block_timestamp();
@@ -77,7 +77,7 @@ fn check_timelock(
 
     ensure!(
         past_lock,
-        ConnectTransactionError::TimeLockViolation(outpoint)
+        ConnectTransactionError::TimeLockViolation(outpoint.clone())
     );
 
     Ok(())
@@ -112,6 +112,7 @@ where
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    debug_assert_eq!(inputs.len(), input_utxos.len());
 
     // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
     // produced outputs must be timelocked as per chain config
@@ -136,7 +137,7 @@ where
     };
 
     // check if utxos can already be spent
-    input_utxos.iter().enumerate().try_for_each(|(index,utxo)| -> Result<(), ConnectTransactionError>{
+    input_utxos.iter().zip(inputs.iter()).try_for_each(|(utxo, input)| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
@@ -165,13 +166,12 @@ where
                 ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoadedFromHeight(e, height)
             })?;
 
-        let outpoint = OutPoint::new(tx_source_id.clone(), index as u32);
             check_timelock(
                 &source_block_index,
                 timelock,
                 &tx_source.expected_block_height(),
                 spending_time,
-                outpoint
+                input.outpoint()
             )?;
         }
         Ok(())
