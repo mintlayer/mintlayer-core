@@ -357,7 +357,7 @@ where
             .iter()
             .filter_map(|input| match self.utxo_cache.utxo(input.outpoint()) {
                 Ok(input_utxo) => match input_utxo {
-                    Some(utxo) => match utxo.output() {
+                    Some(input_utxo) => match input_utxo.output() {
                         TxOutput::DelegateStaking(amount, delegation_id) => {
                             // If the input spends a `DelegateStaking` utxo, this means the user is
                             // spending part of their share in the pool.
