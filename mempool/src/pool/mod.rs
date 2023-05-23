@@ -112,7 +112,6 @@ impl<M> Mempool<M> {
             chainstate_handle,
             max_size: MAX_MEMPOOL_SIZE_BYTES,
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
-            // TODO research whether we really need parking lot
             rolling_fee_rate: RwLock::new(RollingFeeRate::new(clock.get_time())),
             clock,
             memory_usage_estimator,
@@ -755,9 +754,8 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     pub fn new_tip_set(&mut self, block_id: Id<Block>, block_height: BlockHeight) {
         log::info!("new tip: block {block_id:?} height {block_height:?}");
-        reorg::handle_new_tip(self, block_id)
-        // TODO: turn on mempool new tip broadcasts when ready
-        // self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
+        reorg::handle_new_tip(self, block_id);
+        self.events_controller.broadcast(MempoolEvent::NewTip(block_id, block_height));
     }
 }
 

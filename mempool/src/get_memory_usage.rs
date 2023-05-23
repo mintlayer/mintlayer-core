@@ -25,7 +25,7 @@ pub trait GetMemoryUsage {
 pub struct SystemUsageEstimator;
 impl GetMemoryUsage for SystemUsageEstimator {
     fn get_memory_usage(&self) -> MemoryUsage {
-        //TODO implement real usage estimation here
+        // TODO implement real usage estimation here
         0
     }
 }
