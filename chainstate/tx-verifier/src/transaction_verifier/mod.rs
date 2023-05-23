@@ -347,6 +347,9 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingTxInputs)?;
+
+        // TODO: this should also collect all the delegations after the pool decommissioning;
+        // see mintlayer/mintlayer-core/issues/909
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
         // Process tx inputs in terms of pos accounting.
@@ -369,19 +372,10 @@ where
                                 .map_err(ConnectTransactionError::PoSAccountingError);
                             Some(res)
                         }
-                        TxOutput::CreateStakePool(pool_id, _) => {
-                            // If the input spends a `CreateStakePool` utxo, this means the user is
-                            // is decommissioning the pool.
-                            let res = self
-                                .accounting_delta_adapter
-                                .operations(tx_source)
-                                .decommission_pool(*pool_id)
-                                .map_err(ConnectTransactionError::PoSAccountingError);
-                            Some(res)
-                        }
-                        TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                            // If the input spends a `ProduceBlockFromStake` utxo, this means the user is
-                            // is decommissioning the pool.
+                        TxOutput::CreateStakePool(pool_id, _)
+                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            // If the input spends `CreateStakePool` or `ProduceBlockFromStake` utxo,
+                            // this means the user is decommissioning the pool.
                             let res = self
                                 .accounting_delta_adapter
                                 .operations(tx_source)
@@ -409,19 +403,18 @@ where
             .filter_map(|output| match output {
                 TxOutput::CreateStakePool(pool_id, data) => {
                     let expected_pool_id = pos_accounting::make_pool_id(input0.outpoint());
-                    if expected_pool_id != *pool_id {
-                        Some(Err(ConnectTransactionError::SpendStakeError(
-                            SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
-                        )))
-                    } else {
-                        let res = self
-                            .accounting_delta_adapter
+                    let res = if expected_pool_id == *pool_id {
+                        self.accounting_delta_adapter
                             .operations(tx_source)
                             .create_pool(input0.outpoint(), data.as_ref().clone().into())
                             .map(|(_, undo)| undo)
-                            .map_err(ConnectTransactionError::PoSAccountingError);
-                        Some(res)
-                    }
+                            .map_err(ConnectTransactionError::PoSAccountingError)
+                    } else {
+                        Err(ConnectTransactionError::SpendStakeError(
+                            SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
+                        ))
+                    };
+                    Some(res)
                 }
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     let res = self

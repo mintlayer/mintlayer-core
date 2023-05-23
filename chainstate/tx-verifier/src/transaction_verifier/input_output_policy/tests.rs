@@ -147,7 +147,7 @@ fn prepare_utxos_and_tx(
 
     (
         UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), utxos),
-        Transaction::new(0, inputs, outputs, 0).unwrap(),
+        Transaction::new(0, inputs, outputs).unwrap(),
     )
 }
 
@@ -173,80 +173,80 @@ fn prepare_utxos_and_tx_with_random_combinations(
 }
 
 #[rstest]
-    #[rustfmt::skip]
-    #[case(transfer(), transfer(),           Ok(()))]
-    #[case(transfer(), burn(),               Ok(()))]
-    #[case(transfer(), lock_then_transfer(), Ok(()))]
-    #[case(transfer(), stake_pool(),         Ok(()))]
-    #[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(transfer(), create_delegation(),  Ok(()))]
-    #[case(transfer(), delegate_staking(),   Ok(()))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(burn(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(lock_then_transfer(), transfer(),           Ok(()))]
-    #[case(lock_then_transfer(), burn(),               Ok(()))]
-    #[case(lock_then_transfer(), lock_then_transfer(), Ok(()))]
-    #[case(lock_then_transfer(), stake_pool(),         Ok(()))]
-    #[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(lock_then_transfer(), create_delegation(),  Ok(()))]
-    #[case(lock_then_transfer(), delegate_staking(),   Ok(()))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), lock_then_transfer(), Ok(()))]
-    #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), lock_then_transfer(), Ok(()))]
-    #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), lock_then_transfer(), Ok(()))]
-    #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-    #[case(delegate_staking(), delegate_staking(),   Ok(()))]
-    fn tx_one_to_one(
-        #[case] input_utxo: TxOutput,
-        #[case] output: TxOutput,
-        #[case] result: Result<(), ConnectTransactionError>,
-    ) {
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+#[rustfmt::skip]
+#[case(transfer(), transfer(),           Ok(()))]
+#[case(transfer(), burn(),               Ok(()))]
+#[case(transfer(), lock_then_transfer(), Ok(()))]
+#[case(transfer(), stake_pool(),         Ok(()))]
+#[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(transfer(), create_delegation(),  Ok(()))]
+#[case(transfer(), delegate_staking(),   Ok(()))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(burn(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(lock_then_transfer(), transfer(),           Ok(()))]
+#[case(lock_then_transfer(), burn(),               Ok(()))]
+#[case(lock_then_transfer(), lock_then_transfer(), Ok(()))]
+#[case(lock_then_transfer(), stake_pool(),         Ok(()))]
+#[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(lock_then_transfer(), create_delegation(),  Ok(()))]
+#[case(lock_then_transfer(), delegate_staking(),   Ok(()))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(stake_pool(), lock_then_transfer(), Ok(()))]
+#[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(stake_pool(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(produce_block(), lock_then_transfer(), Ok(()))]
+#[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(produce_block(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(delegate_staking(), lock_then_transfer(), Ok(()))]
+#[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
+#[case(delegate_staking(), delegate_staking(),   Ok(()))]
+fn tx_one_to_one(
+    #[case] input_utxo: TxOutput,
+    #[case] output: TxOutput,
+    #[case] result: Result<(), ConnectTransactionError>,
+) {
+    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
-        let utxo_db = UtxosDBInMemoryImpl::new(
-            Id::<GenBlock>::new(H256::zero()),
-            BTreeMap::from_iter([(
-                outpoint.clone(),
-                Utxo::new_for_mempool(input_utxo),
-            )]),
-        );
+    let utxo_db = UtxosDBInMemoryImpl::new(
+        Id::<GenBlock>::new(H256::zero()),
+        BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(input_utxo),
+        )]),
+    );
 
-        let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
-        assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &utxo_db));
-    }
+    let tx = Transaction::new(0, vec![outpoint.into()], vec![output]).unwrap();
+    assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &utxo_db));
+}
 
 // TODO: tests for 1:N, N:1 and N:M combinations need better coverage
 
@@ -526,80 +526,80 @@ fn tx_many_to_many(#[case] seed: Seed) {
 }
 
 #[rstest]
-    #[rustfmt::skip]
-    #[case(transfer(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(burn(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(lock_then_transfer(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(lock_then_transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(stake_pool(), produce_block(),      Ok(()))]
-    #[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(produce_block(), produce_block(),      Ok(()))]
-    #[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    #[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    /*-----------------------------------------------------------------------------------------------*/
-    #[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    #[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
-    fn reward_one_to_one(
-        #[case] input_utxo: TxOutput,
-        #[case] output: TxOutput,
-        #[case] result: Result<(), ConnectTransactionError>,
-    ) {
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
-        let utxo_db = UtxosDBInMemoryImpl::new(
-            Id::<GenBlock>::new(H256::zero()),
-            BTreeMap::from_iter([(
-                outpoint.clone(),
-                Utxo::new_for_mempool(input_utxo),
-            )]),
-        );
+#[rustfmt::skip]
+#[case(transfer(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(burn(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(burn(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(lock_then_transfer(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(lock_then_transfer(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(stake_pool(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), produce_block(),      Ok(()))]
+#[case(stake_pool(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(stake_pool(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(produce_block(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(produce_block(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(produce_block(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(produce_block(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(produce_block(), produce_block(),      Ok(()))]
+#[case(produce_block(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+#[case(produce_block(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(create_delegation(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(create_delegation(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
+/*-----------------------------------------------------------------------------------------------*/
+#[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidInputTypeInReward))]
+#[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::InvalidInputTypeInReward))]
+fn reward_one_to_one(
+    #[case] input_utxo: TxOutput,
+    #[case] output: TxOutput,
+    #[case] result: Result<(), ConnectTransactionError>,
+) {
+    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+    let utxo_db = UtxosDBInMemoryImpl::new(
+        Id::<GenBlock>::new(H256::zero()),
+        BTreeMap::from_iter([(
+            outpoint.clone(),
+            Utxo::new_for_mempool(input_utxo),
+        )]),
+    );
 
-        let block = make_block(vec![outpoint.into()], vec![output]);
+    let block = make_block(vec![outpoint.into()], vec![output]);
 
-        assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db));
-    }
+    assert_eq!(result, check_reward_inputs_outputs_purposes(&block.block_reward_transactable(), &utxo_db));
+}
 
 #[rstest]
 #[trace]

@@ -13,11 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{block::BlockRewardTransactable, signature::Signable, Transaction, TxOutput};
+use common::chain::{
+    block::BlockRewardTransactable, signature::Signable, Transaction, TxInput, TxOutput,
+};
 use consensus::ConsensusPoSError;
 use utils::ensure;
 
+use itertools::Itertools;
+
 use super::error::{ConnectTransactionError, SpendStakeError};
+
+fn get_inputs_utxos(
+    utxo_view: &impl utxo::UtxosView,
+    inputs: &[TxInput],
+) -> Result<Vec<TxOutput>, ConnectTransactionError> {
+    inputs
+        .iter()
+        .map(|input| {
+            utxo_view
+                .utxo(input.outpoint())
+                .map_err(|_| utxo::Error::ViewRead)?
+                .map(|u| u.output().clone())
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        })
+        .collect::<Result<Vec<_>, _>>()
+}
 
 /// Not all `TxOutput` combinations can be used in a block reward.
 pub fn check_reward_inputs_outputs_purposes(
@@ -26,16 +46,7 @@ pub fn check_reward_inputs_outputs_purposes(
 ) -> Result<(), ConnectTransactionError> {
     match reward.inputs() {
         Some(inputs) => {
-            let inputs_utxos = inputs
-                .iter()
-                .map(|input| {
-                    utxo_view
-                        .utxo(input.outpoint())
-                        .map_err(|_| utxo::Error::ViewRead)?
-                        .map(|u| u.output().clone())
-                        .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let inputs_utxos = get_inputs_utxos(&utxo_view, inputs)?;
 
             // the rule for single input/output boils down to that the pair should satisfy:
             // `CreateStakePool` | `ProduceBlockFromStake` -> `ProduceBlockFromStake`
@@ -117,17 +128,7 @@ pub fn check_tx_inputs_outputs_purposes(
     tx: &Transaction,
     utxo_view: &impl utxo::UtxosView,
 ) -> Result<(), ConnectTransactionError> {
-    let inputs_utxos = tx
-        .inputs()
-        .iter()
-        .map(|input| {
-            utxo_view
-                .utxo(input.outpoint())
-                .map_err(|_| utxo::Error::ViewRead)?
-                .map(|u| u.output().clone())
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
 
     match inputs_utxos.as_slice() {
         // no inputs
@@ -332,8 +333,8 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::DelegateStaking(..) => false,
             TxOutput::CreateStakePool(..) => true,
         })
-        .count()
-        < 2;
+        .at_most_one()
+        .is_ok();
 
     let is_create_delegation_unique = outputs
         .iter()
@@ -346,8 +347,8 @@ fn are_outputs_valid_for_tx(outputs: &[TxOutput]) -> bool {
             | TxOutput::DelegateStaking(..) => false,
             TxOutput::CreateDelegationId(..) => true,
         })
-        .count()
-        < 2;
+        .at_most_one()
+        .is_ok();
 
     valid_outputs_types && is_stake_pool_unique && is_create_delegation_unique
 }

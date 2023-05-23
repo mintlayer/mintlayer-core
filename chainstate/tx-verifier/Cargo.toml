@@ -17,6 +17,7 @@ pos_accounting = {path = '../../pos_accounting'}
 utils = {path = '../../utils'}
 utxo = {path = '../../utxo'}
 
+itertools.workspace = true
 static_assertions.workspace = true
 thiserror.workspace = true
 
@@ -26,7 +27,6 @@ replace_with = "0.1"
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
 
-itertools.workspace = true
 rstest.workspace = true
 
 mockall = "0.11"
