@@ -45,10 +45,6 @@ fn stream_signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     target_input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    // TODO: even though this works fine, we need to make this function
-    // pull the inputs/outputs automatically through macros;
-    // the current way is not safe and may produce issues in the future
-
     let inputs = match tx.inputs() {
         Some(ins) => ins,
         None => return Err(TransactionSigError::SigHashRequestWithoutInputs),

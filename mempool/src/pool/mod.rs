@@ -60,10 +60,10 @@ mod spends_unconfirmed;
 mod store;
 mod tx_verifier;
 
-fn get_relay_fee(tx: &SignedTransaction) -> Fee {
-    // TODO we should never reach the expect, but should this be an error anyway?
-    Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
-        .into()
+fn get_relay_fee(tx: &SignedTransaction) -> Result<Fee, MempoolPolicyError> {
+    let fee = u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE)
+        .map_err(|_| MempoolPolicyError::RelayFeeOverflow)?;
+    Ok(Amount::from_atoms(fee).into())
 }
 
 pub struct Mempool<M> {
@@ -139,7 +139,7 @@ impl<M> Mempool<M> {
             self.chainstate_handle.shallow_clone(),
         );
 
-        // Clear the store, returning the list of transacitons it contained previously
+        // Clear the store, returning the list of transactions it contained previously
         mem::replace(&mut self.store, MempoolStore::new()).into_transactions()
     }
 
@@ -399,7 +399,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
     fn pays_minimum_relay_fees(&self, tx: &TxEntryWithFee) -> Result<(), MempoolPolicyError> {
         let tx_fee = tx.fee();
-        let relay_fee = get_relay_fee(tx.transaction());
+        let relay_fee = get_relay_fee(tx.transaction())?;
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         ensure!(
             tx_fee >= relay_fee,
@@ -474,7 +474,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
         log::debug!("pays_for_bandwidth: tx fee is {:?}", tx.fee());
         let additional_fees =
             (tx.fee() - total_conflict_fees).ok_or(MempoolPolicyError::AdditionalFeesUnderflow)?;
-        let relay_fee = get_relay_fee(tx.transaction());
+        let relay_fee = get_relay_fee(tx.transaction())?;
         log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
             total_conflict_fees,

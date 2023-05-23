@@ -80,16 +80,15 @@ impl std::fmt::Display for Mlt {
 /// MLT amount parsing error
 #[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
 pub enum ParseMltError {
-    // TODO we need better error reporting from Amount::from_fixedpoint_str
     #[error("MLT amount parsing error")]
-    Unknown,
+    ParsingNumbericAmountFromStrFailed,
 }
 
 impl FromStr for Mlt {
     type Err = ParseMltError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Amount::from_fixedpoint_str(s, Mlt::DECIMALS)
-            .ok_or(ParseMltError::Unknown)
+            .ok_or(ParseMltError::ParsingNumbericAmountFromStrFailed)
             .map(Mlt)
     }
 }

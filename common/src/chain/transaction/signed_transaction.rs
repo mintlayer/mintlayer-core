@@ -92,11 +92,6 @@ impl SignedTransaction {
     }
 }
 
-// TODO enforce that inputs size is equal to signatures size when decoding
-
-// TODO make the SignedTransaction serialization ignore the size of the witness vec and just use the size of the inputs
-// NOTE: there might be difficulties there as Encode cannot fail. It may lead to accepting a panic there
-
 #[cfg(test)]
 mod tests {
     use super::*;

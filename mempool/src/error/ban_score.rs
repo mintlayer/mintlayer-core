@@ -82,6 +82,7 @@ impl MempoolBanScore for MempoolPolicyError {
             MempoolPolicyError::FeeOverflow => 0,
             MempoolPolicyError::GetParentError => 0,
             MempoolPolicyError::DescendantOfExpiredTransaction => 0,
+            MempoolPolicyError::RelayFeeOverflow => 100,
         }
     }
 }
