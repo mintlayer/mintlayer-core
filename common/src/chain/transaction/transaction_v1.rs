@@ -26,7 +26,6 @@ use super::Transaction;
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
     version: VersionTag<1>,
-    #[codec(compact)]
     flags: u128,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
