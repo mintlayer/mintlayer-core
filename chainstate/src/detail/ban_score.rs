@@ -266,6 +266,7 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::InvalidDecommissionMaturityType(_) => 100,
             CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(_, _) => 100,
             CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(_, _, _) => 100,
+            CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
         }
     }
 }

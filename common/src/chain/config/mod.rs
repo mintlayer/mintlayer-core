@@ -125,6 +125,7 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    max_no_signature_data_size: usize,
     /// Length of an epoch in blocks
     epoch_length: NonZeroU64,
     /// Distance from the tip of the chain to the sealed state in epochs.
@@ -193,6 +194,10 @@ impl ChainConfig {
 
     pub fn coin_decimals(&self) -> u8 {
         self.coin_decimals
+    }
+
+    pub fn max_no_signature_data_size(&self) -> usize {
+        self.max_no_signature_data_size
     }
 
     pub fn max_future_block_time_offset(&self) -> &Duration {
@@ -330,6 +335,7 @@ impl AsRef<ChainConfig> for ChainConfig {
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
+const MAX_TX_NO_SIG_WITNESS_SIZE: usize = 128;
 const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
 const TOKEN_MAX_DEC_COUNT: u8 = 18;
 const TOKEN_MAX_TICKER_LEN: usize = 5;

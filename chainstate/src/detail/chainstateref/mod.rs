@@ -634,6 +634,28 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn check_no_signature_size(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        for tx in block.transactions() {
+            for signature in tx.signatures() {
+                match signature {
+                    common::chain::signature::inputsig::InputWitness::NoSignature(data) => {
+                        if let Some(inner_data) = data {
+                            ensure!(
+                                inner_data.len() <= self.chain_config.max_no_signature_data_size(),
+                                CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
+                                    inner_data.len(),
+                                    self.chain_config.max_no_signature_data_size(),
+                                )
+                            )
+                        }
+                    }
+                    common::chain::signature::inputsig::InputWitness::Standard(_) => (),
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn check_transactions(
         &self,
         block: &Block,
@@ -644,6 +666,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.check_duplicate_inputs(block).log_err()?;
         self.check_tokens_txs(block).log_err()?;
         self.check_outputs_timelock(block, block_height).log_err()?;
+        self.check_no_signature_size(block).log_err()?;
         Ok(())
     }
 

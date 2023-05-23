@@ -28,8 +28,8 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 
-use chainstate_test_framework::TestFramework;
 use chainstate_test_framework::TransactionBuilder;
+use chainstate_test_framework::{anyonecanspend_address, TestFramework};
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
 use common::chain::signature::sighash::signature_hash;
 use crypto::random::{Rng, SliceRandom};
@@ -349,6 +349,80 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
                 // if signatures are complete, we get no error
                 process_result.unwrap();
             }
+        }
+    });
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn too_large_no_sig_data(#[case] seed: Seed) {
+    utils::concurrency::model(move || {
+        let mut rng = test_utils::random::make_seedable_rng(seed);
+        let mut tf = TestFramework::builder(&mut rng).build();
+
+        let chain_config = tf.chainstate.get_chain_config().clone();
+
+        let max_no_sig_data_size = tf.chainstate.get_chain_config().max_no_signature_data_size();
+
+        {
+            // Valid case
+            let data: Vec<u8> = (0..max_no_sig_data_size).map(|_| rng.gen::<u8>()).collect();
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(
+                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                        0,
+                    ),
+                    InputWitness::NoSignature(Some(data)),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    anyonecanspend_address(),
+                ))
+                .build();
+
+            let process_result =
+                tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+
+            process_result.unwrap();
+        }
+
+        {
+            // Invalid case
+            let data: Vec<u8> = (0..max_no_sig_data_size + 1).map(|_| rng.gen::<u8>()).collect();
+
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::new(
+                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                        0,
+                    ),
+                    InputWitness::NoSignature(Some(data)),
+                )
+                .add_output(TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(100)),
+                    anyonecanspend_address(),
+                ))
+                .build();
+
+            let process_result =
+                tf.make_block_builder().with_transactions(vec![tx]).build_and_process();
+
+            assert_eq!(
+                process_result.unwrap_err(),
+                chainstate::ChainstateError::ProcessBlockError(
+                    chainstate::BlockError::CheckBlockFailed(
+                        chainstate::CheckBlockError::CheckTransactionFailed(
+                            chainstate::CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
+                                max_no_sig_data_size + 1,
+                                max_no_sig_data_size
+                            )
+                        )
+                    )
+                )
+            );
         }
     });
 }
