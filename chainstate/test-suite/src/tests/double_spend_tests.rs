@@ -551,7 +551,7 @@ fn tx_from_tx(tx: &SignedTransaction, output_value: u128) -> SignedTransaction {
         anyonecanspend_address(),
     );
     SignedTransaction::new(
-        Transaction::new(0, vec![input], vec![output], 0).unwrap(),
+        Transaction::new(0, vec![input], vec![output]).unwrap(),
         vec![InputWitness::NoSignature(None)],
     )
     .expect("invalid witness count")

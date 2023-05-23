@@ -98,8 +98,7 @@ pub trait Signable {
     fn inputs(&self) -> Option<&[TxInput]>;
     fn outputs(&self) -> Option<&[TxOutput]>;
     fn version_byte(&self) -> Option<u8>;
-    fn lock_time(&self) -> Option<u32>;
-    fn flags(&self) -> Option<u32>;
+    fn flags(&self) -> Option<u128>;
 }
 
 pub trait Transactable: Signable {
@@ -119,11 +118,7 @@ impl Signable for Transaction {
         Some(self.version_byte())
     }
 
-    fn lock_time(&self) -> Option<u32> {
-        Some(self.lock_time())
-    }
-
-    fn flags(&self) -> Option<u32> {
+    fn flags(&self) -> Option<u128> {
         Some(self.flags())
     }
 }
@@ -141,11 +136,7 @@ impl Signable for SignedTransaction {
         Some(self.version_byte())
     }
 
-    fn lock_time(&self) -> Option<u32> {
-        Some(self.lock_time())
-    }
-
-    fn flags(&self) -> Option<u32> {
+    fn flags(&self) -> Option<u128> {
         Some(self.flags())
     }
 }

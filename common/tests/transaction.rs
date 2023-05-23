@@ -37,28 +37,28 @@ fn transaction_id_snapshots() {
     ]
     .to_vec();
 
-    let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0xa87e4adcb5a356a3247b699d2c36cf217a135b43a29c3883f46eaed72abbd128
+        0xf368cfd2546f0256af55a6bf332f3c464891033cca644c4b00c3a0f06c2f09ff
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
-    let tx = Transaction::new(0x00, vec![], vec![], 0x02).unwrap();
+    let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0x228fea54993e15647ec580ccabde223444b43bd52c82579a2d99ffcfb756c662
+        0xf368cfd2546f0256af55a6bf332f3c464891033cca644c4b00c3a0f06c2f09ff
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
-    let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
+    let tx = Transaction::new(0x00, ins0.clone(), vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0x5218279d6b62070a822904b763386b1ff8a0eaec65e7738229799ca8495468fc
+        0xc851295108ff12448c11ca0a32daec8f373f23b44fa8359158d00e09910cce68
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
-    let tx = Transaction::new(0x00, ins1.clone(), vec![], 0x00).unwrap();
+    let tx = Transaction::new(0x00, ins1.clone(), vec![]).unwrap();
     let signed_tx = SignedTransaction::new(
         tx,
         vec![
@@ -68,18 +68,18 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0x44d93a9721d3328c31413a31060f566c83f3d96f0a32893476d0a47f900648b5
+        0x390f0465b617605e9b54bf8e7835c77790eb7b8547f9c7fa90d0efa636f45877
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
-    let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
+    let tx = Transaction::new(0x00, ins0, outs0.clone()).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0x565499df46b89728096fbf8a46da64c7ffbb7a0087b031ec5b4f0690939902c7
+        0x336a72e22d0536c1b00d75f97aed03bfaa2f3ef2ae1a292a60a2e8ca2eed2347
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
-    let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
+    let tx = Transaction::new(0x00, ins1, outs0).unwrap();
     let signed_tx = SignedTransaction::new(
         tx,
         vec![
@@ -89,7 +89,7 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0x23f411d22d3a23692e507e69d8f6c6fe4025a395b4de3b733d7e5845db212450
+        0xe60afd411a245203e062d8b4af1bd8661f7b9632816ec0c6150f9ba974ee8883
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

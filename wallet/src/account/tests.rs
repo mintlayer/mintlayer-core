@@ -188,7 +188,7 @@ fn sign_transaction(#[case] seed: Seed) {
         ),
     ];
 
-    let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+    let tx = Transaction::new(0, inputs, outputs).unwrap();
 
     let req = SendRequest::from_transaction(tx, utxos.clone());
 

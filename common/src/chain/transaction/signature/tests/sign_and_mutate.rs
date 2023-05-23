@@ -95,17 +95,6 @@ fn test_mutate_tx_internal_data(#[case] seed: Seed) {
                     ),
                     expected
                 );
-                // Test locktime change.
-                let updated_tx = change_locktime(&mut rng, &signed_tx, 1234567890);
-                assert_eq!(
-                    verify_signed_tx(
-                        &chain_config,
-                        &updated_tx,
-                        &inputs_utxos.iter().collect::<Vec<_>>(),
-                        &destination
-                    ),
-                    expected
-                )
             }
             // Not implemented.
             Err(TransactionSigError::Unsupported) => {
@@ -1134,19 +1123,9 @@ fn remove_last_output(
 fn change_flags(
     _rng: &mut impl Rng,
     original_tx: &SignedTransaction,
-    new_flags: u32,
+    new_flags: u128,
 ) -> SignedTransaction {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = new_flags;
-    tx_updater.generate_tx().unwrap()
-}
-
-fn change_locktime(
-    _rng: &mut impl Rng,
-    original_tx: &SignedTransaction,
-    new_lock_time: u32,
-) -> SignedTransaction {
-    let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.lock_time = new_lock_time;
     tx_updater.generate_tx().unwrap()
 }

@@ -26,25 +26,23 @@ use super::Transaction;
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
     version: VersionTag<1>,
-    flags: u32,
+    #[codec(compact)]
+    flags: u128,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
-    lock_time: u32,
 }
 
 impl TransactionV1 {
     pub fn new(
-        flags: u32,
+        flags: u128,
         inputs: Vec<TxInput>,
         outputs: Vec<TxOutput>,
-        lock_time: u32,
     ) -> Result<Self, TransactionCreationError> {
         let tx = TransactionV1 {
             version: VersionTag::default(),
             flags,
             inputs,
             outputs,
-            lock_time,
         };
         Ok(tx)
     }
@@ -53,7 +51,7 @@ impl TransactionV1 {
         (self.flags & 1) != 0
     }
 
-    pub fn flags(&self) -> u32 {
+    pub fn flags(&self) -> u128 {
         self.flags
     }
 
@@ -63,10 +61,6 @@ impl TransactionV1 {
 
     pub fn outputs(&self) -> &[TxOutput] {
         &self.outputs
-    }
-
-    pub fn lock_time(&self) -> u32 {
-        self.lock_time
     }
 
     pub fn serialized_hash(&self) -> H256 {
@@ -88,7 +82,6 @@ impl Idable for TransactionV1 {
         id::hash_encoded_to(&self.flags(), &mut hash_stream);
         id::hash_encoded_to(&inputs, &mut hash_stream);
         id::hash_encoded_to(&self.outputs(), &mut hash_stream);
-        id::hash_encoded_to(&self.lock_time(), &mut hash_stream);
         Id::new(hash_stream.finalize().into())
     }
 }

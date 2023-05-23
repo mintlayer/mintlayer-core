@@ -24,11 +24,10 @@ use rstest::rstest;
 
 /// The transaction builder.
 pub struct TransactionBuilder {
-    flags: u32,
+    flags: u128,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
     witnesses: Vec<InputWitness>,
-    lock_time: u32,
 }
 
 impl TransactionBuilder {
@@ -38,11 +37,10 @@ impl TransactionBuilder {
             inputs: Vec::new(),
             outputs: Vec::new(),
             witnesses: Vec::new(),
-            lock_time: 0,
         }
     }
 
-    pub fn with_flags(mut self, flags: u32) -> Self {
+    pub fn with_flags(mut self, flags: u128) -> Self {
         self.flags = flags;
         self
     }
@@ -81,14 +79,9 @@ impl TransactionBuilder {
         ))
     }
 
-    pub fn with_lock_time(mut self, lock_time: u32) -> Self {
-        self.lock_time = lock_time;
-        self
-    }
-
     pub fn build(self) -> SignedTransaction {
         SignedTransaction::new(
-            Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time).unwrap(),
+            Transaction::new(self.flags, self.inputs, self.outputs).unwrap(),
             self.witnesses,
         )
         .expect("invalid witness count")
@@ -107,7 +100,6 @@ fn build_transaction(#[case] seed: test_utils::random::Seed) {
     let mut rng = test_utils::random::make_seedable_rng(seed);
 
     let flags = 1;
-    let lock_time = 2;
     let witness = InputWitness::NoSignature(None);
     let input = TxInput::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
@@ -127,10 +119,8 @@ fn build_transaction(#[case] seed: test_utils::random::Seed) {
             OutputValue::Coin(Amount::from_atoms(200)),
             Destination::AnyoneCanSpend,
         ))
-        .with_lock_time(lock_time)
         .build();
 
     assert_eq!(flags, tx.transaction().flags());
     assert_eq!(&vec![input.clone(), input], tx.transaction().inputs());
-    assert_eq!(lock_time, tx.transaction().lock_time());
 }

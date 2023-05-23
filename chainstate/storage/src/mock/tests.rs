@@ -161,8 +161,8 @@ fn attach_block_to_top<BS: crate::BlockchainStorage>(
 
 // sample transactions and blocks
 fn sample_data() -> (Block, Block) {
-    let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
-    let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
+    let tx0 = Transaction::new(0xaabbccdd, vec![], vec![]).unwrap();
+    let tx1 = Transaction::new(0xbbccddee, vec![], vec![]).unwrap();
     let block0 = Block::new(
         vec![SignedTransaction::new(tx0, vec![]).expect("invalid witness count")],
         Id::<GenBlock>::new(H256([0x23; 32])),

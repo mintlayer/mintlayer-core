@@ -28,7 +28,7 @@ use crate::{WalletError, WalletResult};
 /// on the precise method of sending funds to a designated destination.
 #[derive(Debug, Clone)]
 pub struct SendRequest {
-    flags: u32,
+    flags: u128,
 
     /// The UTXOs for each input, this can be empty
     utxos: Vec<TxOutput>,
@@ -36,8 +36,6 @@ pub struct SendRequest {
     inputs: Vec<TxInput>,
 
     outputs: Vec<TxOutput>,
-
-    lock_time: u32,
 }
 
 pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxOutput> {
@@ -56,7 +54,6 @@ impl SendRequest {
             utxos: Vec::new(),
             inputs: Vec::new(),
             outputs: Vec::new(),
-            lock_time: 0,
         }
     }
 
@@ -66,7 +63,6 @@ impl SendRequest {
             utxos,
             inputs: transaction.inputs().to_vec(),
             outputs: transaction.outputs().to_vec(),
-            lock_time: transaction.lock_time(),
         }
     }
 
@@ -98,7 +94,7 @@ impl SendRequest {
     pub fn into_transaction_and_utxos(
         self,
     ) -> Result<(Transaction, Vec<TxOutput>), TransactionCreationError> {
-        let tx = Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time)?;
+        let tx = Transaction::new(self.flags, self.inputs, self.outputs)?;
         Ok((tx, self.utxos))
     }
 }

@@ -303,19 +303,19 @@ fn hierarchy_test_tokens(#[case] seed: Seed) {
 
     let token_id_0 = H256::random_using(&mut rng);
     let token_data_0 = TokenAuxiliaryData::new(
-        Transaction::new(0, vec![], vec![], 0).unwrap(),
+        Transaction::new(0, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),
     );
 
     let token_id_1 = H256::random_using(&mut rng);
     let token_data_1 = TokenAuxiliaryData::new(
-        Transaction::new(1, vec![], vec![], 1).unwrap(),
+        Transaction::new(1, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),
     );
 
     let token_id_2 = H256::random_using(&mut rng);
     let token_data_2 = TokenAuxiliaryData::new(
-        Transaction::new(2, vec![], vec![], 2).unwrap(),
+        Transaction::new(2, vec![], vec![]).unwrap(),
         Id::new(H256::random_using(&mut rng)),
     );
 

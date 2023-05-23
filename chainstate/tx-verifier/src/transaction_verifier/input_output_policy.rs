@@ -413,7 +413,7 @@ mod tests {
             )]),
         );
 
-        let tx = Transaction::new(0, vec![outpoint.into()], vec![output], 0).unwrap();
+        let tx = Transaction::new(0, vec![outpoint.into()], vec![output],).unwrap();
         assert_eq!(result, check_tx_inputs_outputs_purposes(&tx, &utxo_db));
     }
 
@@ -441,7 +441,7 @@ mod tests {
                 outputs.push(stake_pool());
             }
 
-            let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+            let tx = Transaction::new(0, vec![outpoint.into()], outputs).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
             assert_eq!(result, expected_result)
         };
@@ -494,7 +494,7 @@ mod tests {
         );
         outputs.append(&mut invalid_outputs);
 
-        let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+        let tx = Transaction::new(0, vec![outpoint.into()], outputs).unwrap();
         let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
         assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
     }
@@ -533,7 +533,7 @@ mod tests {
         );
         outputs.append(&mut invalid_outputs);
 
-        let tx = Transaction::new(0, vec![outpoint.into()], outputs, 0).unwrap();
+        let tx = Transaction::new(0, vec![outpoint.into()], outputs).unwrap();
         let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db).unwrap_err();
         assert_eq!(result, ConnectTransactionError::InvalidOutputTypeInTx);
     }
@@ -564,7 +564,7 @@ mod tests {
 
             let outputs = get_random_outputs_combination(&mut rng, source_outputs, 1);
 
-            let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+            let tx = Transaction::new(0, inputs, outputs).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
             assert_eq!(result, expected_result);
         };
@@ -611,7 +611,7 @@ mod tests {
             let outputs =
                 get_random_outputs_combination(&mut rng, source_outputs, number_of_outputs);
 
-            let tx = Transaction::new(0, inputs, outputs, 0).unwrap();
+            let tx = Transaction::new(0, inputs, outputs).unwrap();
             let result = check_tx_inputs_outputs_purposes(&tx, &utxo_db);
             assert_eq!(result, expected_result);
         };

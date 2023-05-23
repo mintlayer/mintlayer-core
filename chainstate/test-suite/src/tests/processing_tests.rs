@@ -384,7 +384,6 @@ fn transaction_processing_order(#[case] seed: Seed) {
                     get_output_value(&tf.genesis().utxos()[0]).unwrap(),
                     anyonecanspend_address(),
                 )],
-                0,
             )
             .unwrap(),
             vec![empty_witness(&mut rng)],
@@ -400,7 +399,6 @@ fn transaction_processing_order(#[case] seed: Seed) {
                     get_output_value(&tx1.transaction().outputs()[0]).unwrap(),
                     anyonecanspend_address(),
                 )],
-                0,
             )
             .unwrap(),
             vec![empty_witness(&mut rng)],

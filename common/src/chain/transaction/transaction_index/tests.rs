@@ -263,10 +263,9 @@ fn generate_random_invalid_transaction(rng: &mut (impl Rng + CryptoRng)) -> Tran
             .collect::<Vec<_>>()
     };
 
-    let flags = rng.next_u32();
-    let lock_time = rng.next_u32();
+    let flags = rng.gen::<u128>();
 
-    Transaction::new(flags, inputs, outputs, lock_time).expect("Creating tx caused fail")
+    Transaction::new(flags, inputs, outputs).expect("Creating tx caused fail")
 }
 
 fn generate_random_invalid_block(rng: &mut (impl Rng + CryptoRng)) -> Block {

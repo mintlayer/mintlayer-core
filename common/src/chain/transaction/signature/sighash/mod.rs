@@ -58,7 +58,6 @@ fn stream_signature_hash<T: Signable>(
 
     hash_encoded_if_some(&tx.version_byte(), stream);
     hash_encoded_if_some(&tx.flags(), stream);
-    hash_encoded_if_some(&tx.lock_time(), stream);
 
     let inputs_hashable = SignatureHashableInputs::new(inputs, inputs_utxos)?;
     inputs_hashable.signature_hash(stream, mode, target_input, target_input_num)?;

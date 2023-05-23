@@ -57,10 +57,9 @@ pub fn generate_inputs_utxos(
 // This is required because we can't access private fields of the Transaction class
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MutableTransaction {
-    pub flags: u32,
+    pub flags: u128,
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
-    pub lock_time: u32,
     pub witness: Vec<InputWitness>,
 }
 
@@ -70,7 +69,6 @@ impl From<&SignedTransaction> for MutableTransaction {
             flags: tx.flags(),
             inputs: tx.inputs().to_owned(),
             outputs: tx.outputs().to_owned(),
-            lock_time: tx.lock_time(),
             witness: tx.signatures().to_vec(),
         }
     }
@@ -79,13 +77,7 @@ impl From<&SignedTransaction> for MutableTransaction {
 impl MutableTransaction {
     pub fn generate_tx(&self) -> Result<SignedTransaction, TransactionCreationError> {
         SignedTransaction::new(
-            Transaction::new(
-                self.flags,
-                self.inputs.clone(),
-                self.outputs.clone(),
-                self.lock_time,
-            )
-            .unwrap(),
+            Transaction::new(self.flags, self.inputs.clone(), self.outputs.clone()).unwrap(),
             self.witness.clone(),
         )
     }
@@ -115,7 +107,7 @@ pub fn generate_unsigned_tx(
     .take(outputs_count)
     .collect();
 
-    let tx = Transaction::new(rng.gen(), inputs, outputs, rng.gen())?;
+    let tx = Transaction::new(rng.gen(), inputs, outputs)?;
     Ok(tx)
 }
 

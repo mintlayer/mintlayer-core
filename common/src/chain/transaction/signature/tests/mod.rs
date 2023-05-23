@@ -598,7 +598,6 @@ fn sign_mutate_then_verify(
     );
 
     check_change_flags(chain_config, &original_tx, inputs_utxos, destination);
-    check_change_locktime(chain_config, &original_tx, inputs_utxos, destination);
     check_mutate_witness(chain_config, &original_tx, inputs_utxos, destination);
     check_mutate_inputs_utxos(chain_config, &original_tx, inputs_utxos, destination);
     original_tx
@@ -616,23 +615,6 @@ fn check_change_flags(
     for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(chain_config, destination, &tx, inputs_utxos, input_num),
-            Err(TransactionSigError::SignatureVerificationFailed)
-        );
-    }
-}
-
-fn check_change_locktime(
-    chain_config: &ChainConfig,
-    original_tx: &SignedTransaction,
-    inputs_utxos: &[&TxOutput],
-    outpoint_dest: &Destination,
-) {
-    let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.lock_time = tx_updater.lock_time.wrapping_add(1234567890);
-    let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.inputs().iter().enumerate() {
-        assert_eq!(
-            verify_signature(chain_config, outpoint_dest, &tx, inputs_utxos, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }

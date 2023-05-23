@@ -54,7 +54,7 @@ impl SignedTransaction {
         self.transaction.is_replaceable()
     }
 
-    pub fn flags(&self) -> u32 {
+    pub fn flags(&self) -> u128 {
         self.transaction.flags()
     }
 
@@ -64,10 +64,6 @@ impl SignedTransaction {
 
     pub fn outputs(&self) -> &[TxOutput] {
         self.transaction.outputs()
-    }
-
-    pub fn lock_time(&self) -> u32 {
-        self.transaction.lock_time()
     }
 
     pub fn has_smart_contracts(&self) -> bool {
@@ -113,21 +109,21 @@ mod tests {
         ]
         .to_vec();
 
-        let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+        let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
         assert!(SignedTransaction::new(tx.clone(), vec![]).is_ok());
         assert_eq!(
             SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]),
             Err(TransactionCreationError::InvalidWitnessCount)
         );
 
-        let tx = Transaction::new(0x00, ins0, vec![], 0x00).unwrap();
+        let tx = Transaction::new(0x00, ins0, vec![]).unwrap();
         assert!(SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).is_ok());
         assert_eq!(
             SignedTransaction::new(tx, vec![]),
             Err(TransactionCreationError::InvalidWitnessCount)
         );
 
-        let tx = Transaction::new(0x00, ins1, vec![], 0x00).unwrap();
+        let tx = Transaction::new(0x00, ins1, vec![]).unwrap();
         assert!(SignedTransaction::new(
             tx.clone(),
             vec![

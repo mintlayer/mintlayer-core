@@ -170,8 +170,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
 
                 //use this outpoint as input for transaction
                 let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
-                let tx =
-                    Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1), 0x01).unwrap();
+                let tx = Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1)).unwrap();
 
                 //spent the transaction
                 let block_height = BlockHeight::new(rng.gen_range(0..iterations_count as u64));
