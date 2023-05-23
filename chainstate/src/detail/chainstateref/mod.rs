@@ -640,14 +640,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 match signature {
                     common::chain::signature::inputsig::InputWitness::NoSignature(data) => {
                         if let Some(inner_data) = data {
-                            if inner_data.len() > self.chain_config.max_no_signature_data_size() {
-                                return Err(
-                                    CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
-                                        inner_data.len(),
-                                        self.chain_config.max_no_signature_data_size(),
-                                    ),
-                                );
-                            }
+                            ensure!(
+                                inner_data.len() <= self.chain_config.max_no_signature_data_size(),
+                                CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(
+                                    inner_data.len(),
+                                    self.chain_config.max_no_signature_data_size(),
+                                )
+                            )
                         }
                     }
                     common::chain::signature::inputsig::InputWitness::Standard(_) => (),
