@@ -18,7 +18,7 @@ use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 use crypto::key::PublicKey;
 pub mod pubkeyhash;
-use serialization::{Decode, Encode};
+use serialization::{Decode, Encode, Input};
 use utils::qrcode::{qrcode_from_str, QrCode, QrCodeError};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
@@ -53,7 +53,7 @@ impl From<Bech32Error> for AddressError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode)]
 pub struct Address {
     address: String,
 }
@@ -114,6 +114,17 @@ impl Address {
     pub fn qrcode(&self) -> Result<impl QrCode + '_, AddressError> {
         let qrcode = qrcode_from_str(&self.address)?;
         Ok(qrcode)
+    }
+}
+
+impl Decode for Address {
+    fn decode<I: Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        let address = String::decode(input)?;
+        let result = Self { address };
+        result
+            .data_internal()
+            .map_err(|_| serialization::Error::from("Address decoding failed"))?;
+        Ok(result)
     }
 }
 
