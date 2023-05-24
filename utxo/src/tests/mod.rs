@@ -38,7 +38,8 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        Destination, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        DelegationId, Destination, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxOutput,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -53,6 +54,18 @@ use test_utils::random::{make_seedable_rng, Seed};
 
 fn make_pool_id(rng: &mut impl Rng) -> PoolId {
     H256::random_using(rng).into()
+}
+
+fn make_burn_output() -> TxOutput {
+    TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))
+}
+
+fn make_delegate_staking_output() -> TxOutput {
+    TxOutput::DelegateStaking(Amount::from_atoms(1), DelegationId::new(H256::zero()))
+}
+
+fn make_create_delegation_output() -> TxOutput {
+    TxOutput::CreateDelegationId(Destination::AnyoneCanSpend, PoolId::new(H256::zero()))
 }
 
 /// Checks `add_utxo` method behavior.
@@ -608,8 +621,10 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 
 #[rstest]
 #[trace]
-#[case(Seed::from_entropy())]
-fn check_burn_spend_undo_spend(#[case] seed: Seed) {
+#[case(Seed::from_entropy(), make_burn_output())]
+#[case(Seed::from_entropy(), make_create_delegation_output())]
+#[case(Seed::from_entropy(), make_delegate_staking_output())]
+fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     let mut rng = make_seedable_rng(seed);
     let test_view = empty_test_utxos_view(H256::zero().into());
     let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
@@ -619,7 +634,6 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, u, false).unwrap();
 
     // burn output in a tx
-    let output = TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)));
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();

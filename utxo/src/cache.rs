@@ -195,8 +195,8 @@ impl<P: UtxosView> UtxosCache<P> {
                 let utxos = inputs
                     .iter()
                     .filter_map(|tx_in| tx_in.outpoint().map(|outpoint| self.spend_utxo(outpoint)))
-                    .collect::<Result<Vec<Utxo>, Error>>()?;
-                utxos.is_empty().then(|| UtxosBlockRewardUndo::new(utxos))
+                    .collect::<Result<Vec<_>, _>>()?;
+                (!utxos.is_empty()).then(|| UtxosBlockRewardUndo::new(utxos))
             }
             None => None,
         };
@@ -467,9 +467,10 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::DelegateStaking(..) => true,
-        TxOutput::CreateDelegationId(..) | TxOutput::Burn(..) => false,
+        | TxOutput::ProduceBlockFromStake(..) => true,
+        TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
+            false
+        }
     }
 }
 
