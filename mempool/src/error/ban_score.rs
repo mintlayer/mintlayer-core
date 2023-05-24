@@ -122,6 +122,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
             ConnectTransactionError::TimeLockViolation(_) => 0,
+            ConnectTransactionError::NonceIsNotIncremental(_) => 0,
 
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),

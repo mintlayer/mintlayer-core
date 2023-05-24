@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
@@ -105,6 +105,16 @@ where
         match self.accounting_block_undo.data().get(&TransactionSource::Chain(id)) {
             Some(v) => Ok(Some(v.undo.clone())),
             None => self.storage.get_accounting_undo(id),
+        }
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<u128>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.account_nonce.get(&account) {
+            Some(nonce) => Ok(*nonce),
+            None => self.storage.get_account_nonce_count(account),
         }
     }
 }
@@ -247,6 +257,23 @@ where
         self.accounting_delta_adapter
             .apply_accounting_delta(tx_source, delta)
             .map_err(TransactionVerifierStorageError::from)?;
+        Ok(())
+    }
+
+    fn set_account_nonce_count(
+        &mut self,
+        account: AccountType,
+        nonce: u128,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.account_nonce.insert(account, Some(nonce));
+        Ok(())
+    }
+
+    fn del_account_nonce_count(
+        &mut self,
+        account: AccountType,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.account_nonce.insert(account, None);
         Ok(())
     }
 }

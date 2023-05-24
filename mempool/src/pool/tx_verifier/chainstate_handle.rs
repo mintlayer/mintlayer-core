@@ -26,8 +26,8 @@ use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
@@ -224,6 +224,10 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
 
     fn get_accounting_undo(&self, _id: Id<Block>) -> Result<Option<AccountingBlockUndo>, Error> {
         panic!("Mempool should not undo stuff in chainstate")
+    }
+
+    fn get_account_nonce_count(&self, _account: AccountType) -> Result<Option<u128>, Error> {
+        todo!("implement")
     }
 }
 

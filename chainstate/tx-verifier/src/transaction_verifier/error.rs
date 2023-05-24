@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
-        TxMainChainIndexError,
+        AccountType, DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender,
+        Transaction, TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -145,6 +145,8 @@ pub enum ConnectTransactionError {
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
     #[error("Output timelock error: {0}")]
     OutputTimelockError(#[from] timelock_check::OutputMaturityError),
+    #[error("Nonce is not incremental: {0:?}")]
+    NonceIsNotIncremental(AccountType),
     #[error(
         "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]

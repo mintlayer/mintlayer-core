@@ -122,7 +122,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
     Delegation(DelegationId),
 }
@@ -142,6 +142,10 @@ impl AccountInput {
             account,
             withdraw_amount,
         }
+    }
+
+    pub fn nonce(&self) -> u128 {
+        self.nonce
     }
 
     pub fn account(&self) -> &AccountType {

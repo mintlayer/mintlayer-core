@@ -24,8 +24,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
@@ -65,6 +65,11 @@ mockall::mock! {
             &self,
             id: Id<Block>,
         ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
+
+        fn get_account_nonce_count(
+            &self,
+            account: AccountType,
+        ) -> Result<Option<u128>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -119,6 +124,16 @@ mockall::mock! {
             &mut self,
             tx_source: TransactionSource,
             delta: &PoSAccountingDeltaData,
+        ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_account_nonce_count(
+            &mut self,
+            account: AccountType,
+            nonce: u128,
+        ) -> Result<(), TransactionVerifierStorageError>;
+        fn del_account_nonce_count(
+            &mut self,
+            account: AccountType,
         ) -> Result<(), TransactionVerifierStorageError>;
     }
 

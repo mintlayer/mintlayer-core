@@ -66,15 +66,15 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, PoolId,
-        Transaction, TxInput, TxMainChainIndex, TxOutput,
+        AccountInput, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
+        PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
 use consensus::ConsensusPoSError;
 use pos_accounting::{
-    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingView,
-    PoolData,
+    PoSAccountingDelta, PoSAccountingDeltaData, PoSAccountingOperations, PoSAccountingUndo,
+    PoSAccountingView, PoolData,
 };
 use utxo::{ConsumedUtxoCache, UtxosCache, UtxosDB, UtxosView};
 
@@ -96,6 +96,7 @@ pub struct TransactionVerifierDelta {
     accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
+    account_nonce: BTreeMap<AccountType, Option<u128>>,
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
@@ -112,6 +113,8 @@ pub struct TransactionVerifier<C, S, U, A> {
 
     accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
+
+    account_nonce: BTreeMap<AccountType, Option<u128>>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
@@ -133,6 +136,7 @@ impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, 
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta_adapter,
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            account_nonce: BTreeMap::new(),
         }
     }
 }
@@ -164,6 +168,7 @@ where
             utxo_block_undo: UtxosBlockUndoCache::new(),
             accounting_delta_adapter: PoSAccountingDeltaAdapter::new(accounting),
             accounting_block_undo: AccountingBlockUndoCache::new(),
+            account_nonce: BTreeMap::new(),
         }
     }
 }
@@ -191,6 +196,7 @@ where
             ),
             accounting_block_undo: AccountingBlockUndoCache::new(),
             best_block: self.best_block,
+            account_nonce: BTreeMap::new(),
         }
     }
 
@@ -341,6 +347,38 @@ where
         )
     }
 
+    // FIXME: cleanup nonces when delete delegation
+
+    fn spend_input_from_account(
+        &mut self,
+        tx_source: TransactionSource,
+        account_input: &AccountInput,
+    ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
+        let account = *account_input.account();
+        // Check that account nonce increments previous value
+        let current_nonce = self
+            .get_account_nonce_count(account)
+            .map_err(|_| ConnectTransactionError::TxVerifierStorage)?;
+        let expected_nonce = current_nonce.map(|nonce| nonce + 1).unwrap_or(0);
+        ensure!(
+            expected_nonce == account_input.nonce(),
+            ConnectTransactionError::NonceIsNotIncremental(account)
+        );
+        // store new nonce
+        self.account_nonce.insert(account, Some(account_input.nonce()));
+
+        match account {
+            AccountType::Delegation(delegation_id) => {
+                // If the input spends from delegation account, this means the user is
+                // spending part of their share in the pool.
+                self.accounting_delta_adapter
+                    .operations(tx_source)
+                    .spend_share_from_delegation_id(delegation_id, *account_input.withdraw_amount())
+                    .map_err(ConnectTransactionError::PoSAccountingError)
+            }
+        }
+    }
+
     fn connect_pos_accounting_outputs(
         &mut self,
         tx_source: TransactionSource,
@@ -357,8 +395,8 @@ where
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
 
         // Process tx inputs in terms of pos accounting.
-        // Spending `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos should result in either
-        // decommissioning a pool or spending share in accounting
+        // Spending `CreateStakePool`, `ProduceBlockFromStake` utxos or an account input
+        // should result in either decommissioning a pool or spending share in accounting
         let inputs_undos = tx
             .inputs()
             .iter()
@@ -391,22 +429,12 @@ where
                         ))),
                     }
                 }
-                TxInput::Account(account_input) => match account_input.account() {
-                    AccountType::Delegation(delegation_id) => {
-                        // If the input spends from delegation account, this means the user is
-                        // spending part of their share in the pool.
-                        check_for_delegation_cleanup = Some(*delegation_id);
-                        let res = self
-                            .accounting_delta_adapter
-                            .operations(tx_source)
-                            .spend_share_from_delegation_id(
-                                *delegation_id,
-                                *account_input.withdraw_amount(),
-                            )
-                            .map_err(ConnectTransactionError::PoSAccountingError);
-                        Some(res)
-                    }
-                },
+                TxInput::Account(account_input) => {
+                    check_for_delegation_cleanup = match account_input.account() {
+                        AccountType::Delegation(delegation_id) => Some(*delegation_id),
+                    };
+                    Some(self.spend_input_from_account(tx_source, &account_input))
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -479,6 +507,9 @@ where
                             ConnectTransactionError::DelegationDataNotFound(delegation_id),
                         )?;
                     if !accounting_view.pool_exists(*delegation_data.source_pool())? {
+                        // clear the nonce
+                        self.account_nonce.insert(AccountType::Delegation(delegation_id), None);
+
                         Some(
                             self.accounting_delta_adapter
                                 .operations(tx_source)
@@ -516,6 +547,26 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
+        // decrement nonce if spending from account is disconnected
+        for input in tx.inputs() {
+            match input {
+                TxInput::Utxo(_) => { /* do nothing */ }
+                TxInput::Account(account_input) => {
+                    let current_nonce = self
+                        .get_account_nonce_count(*account_input.account())
+                        .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
+                        .unwrap();
+                    let new_nonce = if current_nonce == 0 {
+                        None
+                    } else {
+                        Some(current_nonce - 1)
+                    };
+                    self.account_nonce.insert(*account_input.account(), new_nonce);
+                }
+            };
+        }
+
+        // apply undos to accounting
         tx.outputs().iter().try_for_each(|output| match output {
             TxOutput::CreateStakePool(_, _)
             | TxOutput::CreateDelegationId(_, _)
@@ -905,6 +956,7 @@ where
             accounting_delta,
             accounting_delta_undo: self.accounting_block_undo.consume(),
             accounting_block_deltas,
+            account_nonce: self.account_nonce,
         })
     }
 }

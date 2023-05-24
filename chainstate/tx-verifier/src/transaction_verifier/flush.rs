@@ -119,5 +119,13 @@ where
         }
     }
 
+    // flush nonce values
+    for (account, nonce) in consumed.account_nonce {
+        match nonce {
+            Some(nonce) => storage.set_account_nonce_count(account, nonce),
+            None => storage.del_account_nonce_count(account),
+        }?;
+    }
+
     Ok(())
 }

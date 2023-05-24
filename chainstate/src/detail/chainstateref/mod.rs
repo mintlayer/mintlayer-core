@@ -660,7 +660,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.check_duplicate_inputs(block).log_err()?;
         self.check_tokens_txs(block).log_err()?;
         self.check_no_signature_size(block).log_err()?;
-        // FIXME: check nonce
         Ok(())
     }
 

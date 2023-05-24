@@ -23,8 +23,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex,
+        AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId,
+        PoolId, Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
@@ -93,6 +93,15 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
     ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError> {
         self.storage
             .get_accounting_undo(id)
+            .map_err(TransactionVerifierStorageError::from)
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<u128>, TransactionVerifierStorageError> {
+        self.storage
+            .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
     }
 }
