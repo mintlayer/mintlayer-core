@@ -25,7 +25,7 @@ use common::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, DelegationId, GenBlock, OutPoint, PoolId,
+        AccountType, Block, DelegationId, GenBlock, OutPoint, PoolId,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -89,6 +89,8 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -188,6 +190,9 @@ mockall::mock! {
 
         fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
         fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_account_nonce_count(&mut self, account: AccountType, nonce: u128) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -329,6 +334,8 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -437,6 +444,8 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+       fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -537,6 +546,9 @@ mockall::mock! {
 
         fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
         fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_account_nonce_count(&mut self, account: AccountType, nonce: u128) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

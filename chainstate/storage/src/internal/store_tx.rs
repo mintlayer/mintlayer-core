@@ -21,7 +21,7 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
@@ -206,6 +206,10 @@ macro_rules! impl_read_ops {
                 epoch_index: EpochIndex,
             ) -> crate::Result<Option<DeltaMergeUndo>> {
                 self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
+            }
+
+            fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>> {
+                self.read::<db::DBAccountNonceCount, _, _>(account)
             }
         }
 
@@ -494,6 +498,14 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 
     fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
         self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
+    }
+
+    fn set_account_nonce_count(&mut self, account: AccountType, nonce: u128) -> crate::Result<()> {
+        self.write::<db::DBAccountNonceCount, _, _, _>(account, nonce)
+    }
+
+    fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccountNonceCount, _>().del(account).map_err(Into::into)
     }
 }
 
