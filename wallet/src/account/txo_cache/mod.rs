@@ -15,7 +15,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::chain::OutPoint;
+use common::{
+    chain::{OutPoint, OutPointSourceId, TxOutput},
+    primitives::Idable,
+};
 use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountTxId, WalletTx,
 };
@@ -23,7 +26,7 @@ use wallet_types::{
 pub struct TxoCache {
     blocks: BTreeMap<AccountBlockHeight, WalletBlock>,
     txs: BTreeMap<AccountTxId, WalletTx>,
-    outpoints: BTreeSet<OutPoint>,
+    consumed: BTreeSet<OutPoint>,
 }
 
 impl TxoCache {
@@ -31,7 +34,7 @@ impl TxoCache {
         Self {
             blocks: BTreeMap::new(),
             txs: BTreeMap::new(),
-            outpoints: BTreeSet::new(),
+            consumed: BTreeSet::new(),
         }
     }
 
@@ -58,19 +61,19 @@ impl TxoCache {
     }
 
     pub fn outpoints(&self) -> &BTreeSet<OutPoint> {
-        &self.outpoints
+        &self.consumed
     }
 
     pub fn add_block(&mut self, block_height: AccountBlockHeight, block: WalletBlock) {
-        for outpoint in block.outpoints() {
-            self.outpoints.insert(outpoint);
+        for input in block.kernel_inputs().iter() {
+            self.consumed.insert(input.outpoint().clone());
         }
         self.blocks.insert(block_height, block);
     }
 
     pub fn add_tx(&mut self, tx_id: AccountTxId, tx: WalletTx) {
-        for outpoint in tx.outpoints() {
-            self.outpoints.insert(outpoint);
+        for input in tx.tx().inputs() {
+            self.consumed.insert(input.outpoint().clone());
         }
         self.txs.insert(tx_id, tx);
     }
@@ -78,8 +81,8 @@ impl TxoCache {
     pub fn remove_block(&mut self, block_height: &AccountBlockHeight) {
         let block_opt = self.blocks.remove(block_height);
         if let Some(block) = block_opt {
-            for outpoint in block.outpoints() {
-                self.outpoints.remove(&outpoint);
+            for input in block.kernel_inputs() {
+                self.consumed.remove(input.outpoint());
             }
         }
     }
@@ -87,9 +90,39 @@ impl TxoCache {
     pub fn remove_tx(&mut self, tx_id: &AccountTxId) {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
-            for outpoint in tx.outpoints() {
-                self.outpoints.remove(&outpoint);
+            for input in tx.tx().inputs() {
+                self.consumed.remove(input.outpoint());
             }
         }
+    }
+
+    pub fn utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
+        let mut utxos = BTreeMap::new();
+
+        for block in self.blocks.values() {
+            for (index, output) in block.reward().iter().enumerate() {
+                let outpoint = OutPoint::new(
+                    OutPointSourceId::BlockReward(*block.block_id()),
+                    index as u32,
+                );
+                if !self.consumed.contains(&outpoint) {
+                    utxos.insert(outpoint, output);
+                }
+            }
+        }
+
+        for tx in self.txs.values() {
+            for (index, output) in tx.tx().outputs().iter().enumerate() {
+                let outpoint = OutPoint::new(
+                    OutPointSourceId::Transaction(tx.tx().get_id()),
+                    index as u32,
+                );
+                if !self.consumed.contains(&outpoint) {
+                    utxos.insert(outpoint, output);
+                }
+            }
+        }
+
+        utxos
     }
 }

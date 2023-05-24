@@ -24,11 +24,10 @@ use crypto::key::extended::ExtendedPublicKey;
 pub use internal::{Store, StoreTxRo, StoreTxRw};
 use std::collections::BTreeMap;
 
-use utxo::Utxo;
 use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
-    RootKeyContent, RootKeyId, WalletTx,
+    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
+    WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -44,8 +43,6 @@ pub trait WalletStorageRead {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountBlockHeight, WalletBlock>>;
-    fn get_utxo(&self, outpoint: &AccountOutPointId) -> Result<Option<Utxo>>;
-    fn get_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
@@ -81,8 +78,6 @@ pub trait WalletStorageWrite: WalletStorageRead {
         block: &WalletBlock,
     ) -> crate::Result<()>;
     fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
-    fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> Result<()>;
-    fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountTxId) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;

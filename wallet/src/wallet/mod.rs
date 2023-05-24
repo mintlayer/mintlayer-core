@@ -248,7 +248,7 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        self.for_account_ro(account_index, |account, db_tx| account.get_balance(db_tx))
+        self.for_account_ro(account_index, |account, _db_tx| account.get_balance())
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {

@@ -20,7 +20,6 @@ use common::chain::{
     Destination, OutPoint, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::Amount;
-use utxo::Utxo;
 
 use crate::{WalletError, WalletResult};
 
@@ -78,10 +77,10 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, Utxo)>) -> Self {
-        for (outpoint, utxo) in utxos {
+    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, TxOutput)>) -> Self {
+        for (outpoint, txo) in utxos {
             self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
-            self.utxos.push(utxo.take_output());
+            self.utxos.push(txo);
         }
         self
     }

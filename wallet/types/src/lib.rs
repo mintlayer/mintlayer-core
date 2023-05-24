@@ -19,9 +19,7 @@ pub mod keys;
 pub mod wallet_block;
 pub mod wallet_tx;
 
-pub use account_id::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountOutPointId, AccountTxId,
-};
+pub use account_id::{AccountDerivationPathId, AccountId, AccountKeyPurposeId, AccountTxId};
 pub use account_info::{AccountInfo, DeterministicAccountInfo};
 pub use keys::{KeyPurpose, KeychainUsageState, RootKeyContent, RootKeyId};
 pub use wallet_tx::WalletTx;

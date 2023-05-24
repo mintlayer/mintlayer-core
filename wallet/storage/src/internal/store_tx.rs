@@ -19,11 +19,10 @@ use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
-use utxo::Utxo;
 use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
-    RootKeyContent, RootKeyId, WalletTx,
+    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
+    WalletTx,
 };
 
 use crate::{
@@ -82,21 +81,6 @@ macro_rules! impl_read_ops {
             ) -> crate::Result<BTreeMap<AccountBlockHeight, WalletBlock>> {
                 self.0
                     .get::<db::DBBlocks, _>()
-                    .prefix_iter_decoded(account_id)
-                    .map(Iterator::collect)
-            }
-
-            fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>> {
-                self.read::<db::DBUtxo, _, _>(outpoint)
-            }
-
-            /// Collect and return all utxos from the storage
-            fn get_utxo_set(
-                &self,
-                account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>> {
-                self.0
-                    .get::<db::DBUtxo, _>()
                     .prefix_iter_decoded(account_id)
                     .map(Iterator::collect)
             }
@@ -212,14 +196,6 @@ impl_read_ops!(StoreTxRw);
 impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
-    }
-
-    fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> crate::Result<()> {
-        self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
-    }
-
-    fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 
     fn set_block(
