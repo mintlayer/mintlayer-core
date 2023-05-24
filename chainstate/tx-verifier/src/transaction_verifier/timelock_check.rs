@@ -17,7 +17,7 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        ChainConfig, GenBlock, OutPoint, OutPointSourceId, TxOutput,
+        AccountType, ChainConfig, GenBlock, OutPoint, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -98,10 +98,12 @@ where
     T: Transactable,
     U: UtxosView,
 {
-    let input_outpoints = match tx.inputs() {
-        Some(inputs) => inputs.iter().filter_map(|input| input.outpoint()).collect::<Vec<_>>(),
+    let inputs = match tx.inputs() {
+        Some(inputs) => inputs,
         None => return Ok(()),
     };
+
+    let input_outpoints = inputs.iter().filter_map(|input| input.outpoint()).collect::<Vec<_>>();
 
     let input_utxos = input_outpoints
         .iter()
@@ -116,20 +118,28 @@ where
 
     // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
     // produced outputs must be timelocked as per chain config
-    let output_check_required = input_utxos.iter().find_map(|utxo| match utxo.output() {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateDelegationId(_, _) => None,
-        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
-            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
-        }
-        TxOutput::DelegateStaking(_, _) => {
-            Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
-        }
+    let output_check_required = inputs.iter().find_map(|input| match input {
+        // FIXME: avoid searching for utxo again
+        TxInput::Utxo(outpoint) => utxos_view
+            .utxo(outpoint)
+            .expect("must be present")
+            .map(|utxo| match utxo.output() {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => None,
+                TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+                    Some(OutputTimelockCheckRequired::DecommissioningMaturity)
+                }
+            })
+            .flatten(),
+        TxInput::Account(account_input) => match account_input.account() {
+            AccountType::Delegation(_) => {
+                Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+            }
+        },
     });
-
-    // FIXME: check output for accounting spends
 
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
