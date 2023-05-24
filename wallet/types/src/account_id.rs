@@ -16,7 +16,7 @@
 use crate::keys::KeyPurpose;
 use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::{OutPoint, Transaction};
-use common::primitives::Id;
+use common::primitives::{BlockHeight, Id};
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use serialization::{Decode, Encode};
@@ -65,3 +65,4 @@ pub type AccountTxId = AccountPrefixedId<Id<Transaction>>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountOutPointId = AccountPrefixedId<OutPoint>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;
+pub type AccountBlockHeight = AccountPrefixedId<BlockHeight>;

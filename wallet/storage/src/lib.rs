@@ -26,8 +26,9 @@ use std::collections::BTreeMap;
 
 use utxo::Utxo;
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
-    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
+    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
+    RootKeyContent, RootKeyId, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -38,6 +39,11 @@ pub type Error = storage::Error;
 pub trait WalletStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
+    fn get_block(&self, block_height: &AccountBlockHeight) -> Result<Option<WalletBlock>>;
+    fn get_blocks(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<BTreeMap<AccountBlockHeight, WalletBlock>>;
     fn get_utxo(&self, outpoint: &AccountOutPointId) -> Result<Option<Utxo>>;
     fn get_utxo_set(&self, account_id: &AccountId) -> Result<BTreeMap<AccountOutPointId, Utxo>>;
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
@@ -69,6 +75,12 @@ pub trait WalletStorageRead {
 pub trait WalletStorageWrite: WalletStorageRead {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
+    fn set_block(
+        &mut self,
+        block_height: &AccountBlockHeight,
+        block: &WalletBlock,
+    ) -> crate::Result<()>;
+    fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
     fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> Result<()>;
     fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> Result<()>;

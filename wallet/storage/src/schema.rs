@@ -19,8 +19,9 @@ use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
 use utxo::Utxo;
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
-    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
+    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
+    RootKeyContent, RootKeyId, WalletTx,
 };
 
 storage::decl_schema! {
@@ -38,9 +39,12 @@ storage::decl_schema! {
         pub DBPubKeys: Map<AccountDerivationPathId, ExtendedPublicKey>,
         /// Store for all the addresses that belong to an account
         pub DBAddresses: Map<AccountDerivationPathId, Address>,
-        /// Store for Utxo Entries
-        pub DBUtxo: Map<AccountOutPointId, Utxo>,
+        /// Store for WalletBlock
+        pub DBBlocks: Map<AccountBlockHeight, WalletBlock>,
         /// Store for Transaction entries
         pub DBTxs: Map<AccountTxId, WalletTx>,
+
+        // TODO(PR): Remove DBUtxo
+        pub DBUtxo: Map<AccountOutPointId, Utxo>,
     }
 }
