@@ -33,7 +33,7 @@ use self::helper_types::CliUtxoTypes;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
-    // TODO: Add optional password
+    // TODO: Add Encrypt/Unlock/Lock wallet commands
     /// Create new wallet
     CreateWallet {
         /// File path

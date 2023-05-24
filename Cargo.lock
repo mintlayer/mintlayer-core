@@ -6514,6 +6514,7 @@ dependencies = [
  "storage",
  "storage-sqlite",
  "test-utils",
+ "thiserror",
  "utils",
  "utxo",
  "wallet-types",

@@ -20,7 +20,7 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::address::Address;
-use crypto::key::extended::ExtendedPublicKey;
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 pub use internal::{Store, StoreTxRo, StoreTxRw};
 use std::collections::BTreeMap;
 
@@ -29,9 +29,19 @@ use wallet_types::{
     KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
+/// Wallet Errors
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
+pub enum Error {
+    #[error("{0}")]
+    StorageError(#[from] storage::Error),
+    #[error("The wallet is locked")]
+    WalletLocked(),
+    #[error("Invalid wallet password")]
+    WalletInvalidPassword(),
+}
+
 /// Possibly failing result of wallet storage query
-pub type Result<T> = storage::Result<T>;
-pub type Error = storage::Error;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Queries on persistent wallet data
 pub trait WalletStorageRead {
@@ -50,6 +60,7 @@ pub trait WalletStorageRead {
     ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
     fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
     fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+    fn check_can_decrypt_all_root_keys(&self, encryption_key: &SymmetricKey) -> crate::Result<()>;
     fn get_keychain_usage_state(
         &self,
         id: &AccountKeyPurposeId,
@@ -63,6 +74,8 @@ pub trait WalletStorageRead {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
+
+    fn get_encryption_key_kdf_challenge(&self) -> Result<Option<KdfChallenge>>;
 }
 
 /// Modifying operations on persistent wallet data
@@ -77,6 +90,7 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn del_address(&mut self, id: &AccountDerivationPathId) -> Result<()>;
     fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
     fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
+    fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
     fn set_keychain_usage_state(
         &mut self,
         id: &AccountKeyPurposeId,
@@ -89,6 +103,7 @@ pub trait WalletStorageWrite: WalletStorageRead {
         content: &ExtendedPublicKey,
     ) -> Result<()>;
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
+    fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
 }
 
 /// Marker trait for types where read/write operations are run in a transaction

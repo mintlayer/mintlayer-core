@@ -18,12 +18,13 @@ use crate::symkey::Error;
 use chacha20poly1305::aead::{AeadInPlace, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use serialization::{Decode, Encode};
+use zeroize::ZeroizeOnDrop;
 
 pub const NONCE_LEN: usize = 24;
 pub const KEY_LEN: usize = 32;
 
 #[must_use]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, ZeroizeOnDrop)]
 pub struct Chacha20poly1305Key {
     key_data: chacha20poly1305::Key,
 }
