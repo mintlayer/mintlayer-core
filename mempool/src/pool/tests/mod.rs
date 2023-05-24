@@ -435,7 +435,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
     let mut input_values = Vec::new();
     let inputs = inputs.to_owned();
     for input in inputs.clone() {
-        let outpoint = input.outpoint().clone();
+        let outpoint = input.outpoint().unwrap().clone();
         let chainstate_outpoint_value = mempool
             .chainstate_handle
             .call(move |this| this.get_inputs_outpoints_coin_amount(&[input]))

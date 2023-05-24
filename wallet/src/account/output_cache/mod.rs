@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::chain::{OutPoint, TxOutput};
+use common::chain::{OutPoint, TxInput, TxOutput};
 use wallet_types::{AccountWalletTxId, WalletTx};
 
 /// A helper structure for the UTXO search.
@@ -60,7 +60,14 @@ impl OutputCache {
 
     pub fn add_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
         for input in tx.inputs() {
-            self.consumed.insert(input.outpoint().clone());
+            match input {
+                TxInput::Utxo(outpoint) => {
+                    self.consumed.insert(outpoint.clone());
+                }
+                TxInput::Accounting(_) => {
+                    unimplemented!()
+                }
+            }
         }
         self.txs.insert(tx_id, tx);
     }
@@ -69,7 +76,14 @@ impl OutputCache {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
             for input in tx.inputs() {
-                self.consumed.remove(input.outpoint());
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        self.consumed.remove(outpoint);
+                    }
+                    TxInput::Accounting(_) => {
+                        unimplemented!()
+                    }
+                }
             }
         }
     }

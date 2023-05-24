@@ -352,7 +352,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             let tx_id = tx.transaction().get_id();
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
-                let outpoint = tx_in.outpoint();
+                let outpoint = tx_in.outpoint().unwrap();
                 if *tf.chainstate.get_chainstate_config().tx_index_enabled {
                     let prev_out_tx_index =
                         tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();

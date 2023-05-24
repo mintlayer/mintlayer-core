@@ -105,7 +105,7 @@ pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTra
         } else {
             let value = get_unconfirmed_outpoint_value(
                 &mempool.store,
-                tx.transaction().inputs().get(i).expect("index").outpoint(),
+                tx.transaction().inputs().get(i).expect("index").outpoint().unwrap(),
             );
             input_values.push(value);
         }

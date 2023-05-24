@@ -382,11 +382,12 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         let utxo_view = chainstate_ref.make_utxo_view();
         let pos_accounting_view = chainstate_ref.make_pos_accounting_view();
 
+        // FIXME: reconsider
         inputs
             .iter()
             .map(|input| {
                 let utxo = utxo_view
-                    .utxo(input.outpoint())
+                    .utxo(input.outpoint().unwrap())
                     .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
                 match utxo {
                     Some(utxo) => get_output_coin_amount(&pos_accounting_view, utxo.output()),

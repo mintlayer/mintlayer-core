@@ -72,7 +72,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
+                ConnectTransactionError::TimeLockViolation(
+                    locked_input.outpoint().unwrap().clone()
+                )
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -113,7 +115,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(
+                        locked_input.outpoint().unwrap().clone()
+                    )
                 ))
             );
             assert_eq!(
@@ -231,7 +235,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                ConnectTransactionError::TimeLockViolation(input.outpoint().unwrap().clone())
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -272,7 +276,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().unwrap().clone())
                 ))
             );
             assert_eq!(
@@ -447,7 +451,7 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().unwrap().clone())
                 ))
             );
             assert_eq!(
@@ -595,7 +599,7 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(input.outpoint().unwrap().clone())
                 ))
             );
             assert_eq!(

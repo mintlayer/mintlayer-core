@@ -220,7 +220,7 @@ impl MempoolStore {
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         let id = entry.tx_id();
         for outpoint in entry.entry.transaction().inputs().iter().map(|input| input.outpoint()) {
-            self.spender_txs.insert(outpoint.clone(), id);
+            self.spender_txs.insert(outpoint.unwrap().clone(), id); // FIXME: impl
         }
     }
 

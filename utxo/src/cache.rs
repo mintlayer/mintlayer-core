@@ -22,7 +22,7 @@ use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
         signature::Signable,
-        GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput,
+        GenBlock, OutPoint, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -143,9 +143,10 @@ impl<P: UtxosView> UtxosCache<P> {
         let (sources, utxos) = tx
             .inputs()
             .iter()
-            .map(|tx_in| {
-                let utxo = self.spend_utxo(tx_in.outpoint())?;
-                Ok((tx_in.outpoint().tx_id(), utxo))
+            .filter_map(|tx_in| {
+                tx_in
+                    .outpoint()
+                    .map(|outpoint| self.spend_utxo(outpoint).map(|utxo| (outpoint.tx_id(), utxo)))
             })
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
@@ -171,10 +172,13 @@ impl<P: UtxosView> UtxosCache<P> {
         }
 
         assert_eq!(tx.inputs().len(), tx_undo.inner().len());
-        for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.into_inner().into_iter()) {
-            self.add_utxo(tx_in.outpoint(), utxo, false)?;
-        }
-        Ok(())
+        tx.inputs()
+            .iter()
+            .zip(tx_undo.into_inner().into_iter())
+            .try_for_each(|(tx_in, utxo)| match tx_in {
+                TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
+                TxInput::Accounting(_) => Ok(()),
+            })
     }
 
     /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
@@ -186,12 +190,16 @@ impl<P: UtxosView> UtxosCache<P> {
         block_id: &Id<GenBlock>,
         height: BlockHeight,
     ) -> Result<Option<UtxosBlockRewardUndo>, Error> {
-        let mut reward_undo: Option<UtxosBlockRewardUndo> = None;
-        if let Some(inputs) = reward_transactable.inputs() {
-            let utxos: Result<Vec<Utxo>, Error> =
-                inputs.iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
-            reward_undo = utxos.map(|utxos| Some(UtxosBlockRewardUndo::new(utxos)))?;
-        }
+        let reward_undo: Option<UtxosBlockRewardUndo> = match reward_transactable.inputs() {
+            Some(inputs) => {
+                let utxos = inputs
+                    .iter()
+                    .filter_map(|tx_in| tx_in.outpoint().map(|outpoint| self.spend_utxo(outpoint)))
+                    .collect::<Result<Vec<Utxo>, Error>>()?;
+                utxos.is_empty().then(|| UtxosBlockRewardUndo::new(utxos))
+            }
+            None => None,
+        };
 
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
@@ -223,9 +231,12 @@ impl<P: UtxosView> UtxosCache<P> {
 
         if let Some(inputs) = reward_transactable.inputs() {
             let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
-            for (tx_in, utxo) in inputs.iter().zip(block_undo.into_inner().into_iter()) {
-                self.add_utxo(tx_in.outpoint(), utxo, false)?;
-            }
+            inputs.iter().zip(block_undo.into_inner().into_iter()).try_for_each(
+                |(tx_in, utxo)| match tx_in {
+                    TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
+                    TxInput::Accounting(_) => Ok(()),
+                },
+            )?;
         }
         Ok(())
     }

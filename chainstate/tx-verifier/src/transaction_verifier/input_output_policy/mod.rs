@@ -29,9 +29,13 @@ fn get_inputs_utxos(
 ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
     inputs
         .iter()
-        .map(|input| {
+        .filter_map(|input| match input {
+            TxInput::Utxo(outpoint) => Some(outpoint),
+            TxInput::Accounting(_) => None,
+        })
+        .map(|outpoint| {
             utxo_view
-                .utxo(input.outpoint())
+                .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .map(|u| u.output().clone())
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
@@ -132,7 +136,7 @@ pub fn check_tx_inputs_outputs_purposes(
 
     match inputs_utxos.as_slice() {
         // no inputs
-        [] => return Err(ConnectTransactionError::MissingTxInputs),
+        [] => todo!("handle accounting inputs"),
         // single input
         [input_utxo] => match tx.outputs() {
             // no outputs

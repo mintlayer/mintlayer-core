@@ -529,7 +529,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // check that the spent utxos should not exist in the cache anymore.
     to_spend.iter().for_each(|input| {
-        assert!(cache.utxo(input.outpoint()).unwrap_infallible().is_none());
+        assert!(cache.utxo(input.outpoint().unwrap()).unwrap_infallible().is_none());
     });
 }
 

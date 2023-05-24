@@ -133,18 +133,15 @@ where
         Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
     let iter = inputs.iter().map(|input| {
+        let outpoint = input.outpoint().unwrap(); // FIXME: impl
         let utxo = utxo_view
-            .utxo(input.outpoint())
+            .utxo(outpoint)
             .map_err(|_| utxo::Error::ViewRead)?
             .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
         let output_value = get_output_value(pos_accounting_view, utxo.output())?;
 
-        amount_from_outpoint(
-            input.outpoint().tx_id(),
-            &output_value,
-            &issuance_token_id_getter,
-        )
+        amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
     });
 
     let iter = fallible_iterator::convert(iter);

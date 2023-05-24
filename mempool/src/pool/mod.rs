@@ -222,7 +222,7 @@ impl<M> Mempool<M> {
             .transaction()
             .inputs()
             .iter()
-            .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
+            .filter_map(|input| input.outpoint().unwrap().tx_id().get_tx_id().cloned()) // FIXME: impl
             .filter(|id| self.store.txs_by_id.contains_key(id))
             .collect::<BTreeSet<_>>();
         let ancestor_ids =
@@ -414,7 +414,8 @@ impl<M: GetMemoryUsage> Mempool<M> {
         tx.transaction()
             .inputs()
             .iter()
-            .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
+            .filter_map(|input| self.store.find_conflicting_tx(input.outpoint().unwrap()))
+        // FIXME: impl
     }
 }
 

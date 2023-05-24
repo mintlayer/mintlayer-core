@@ -29,6 +29,7 @@ where
 impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
         self.outpoint()
+            .unwrap() // FIXME: impl
             .tx_id()
             .get_tx_id()
             .map_or(false, |tx_id| mempool.contains_transaction(tx_id))

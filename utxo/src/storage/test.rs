@@ -146,7 +146,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     let spent_utxos = expected_tx_inputs
         .iter()
         .map(|input| {
-            let outpoint = input.outpoint();
+            let outpoint = input.outpoint().unwrap();
             assert!(db.has_utxo(outpoint).unwrap());
 
             db.utxo(outpoint).expect("utxo should exist.")
@@ -211,7 +211,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // check that all in tx_inputs do NOT exist
     expected_tx_inputs.iter().for_each(|input| {
-        assert_eq!(db.utxo(input.outpoint()), Ok(None));
+        assert_eq!(db.utxo(input.outpoint().unwrap()), Ok(None));
     });
 
     // save the undo data to the db.
@@ -226,7 +226,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     {
         block.transactions().iter().for_each(|tx| {
             tx.inputs().iter().for_each(|input| {
-                assert_eq!(db.utxo(input.outpoint()), Ok(None));
+                assert_eq!(db.utxo(input.outpoint().unwrap()), Ok(None));
             });
         });
     }
@@ -260,7 +260,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).unwrap();
-                cache.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
+                cache.add_utxo(input.outpoint().unwrap(), utxo.clone(), true).unwrap();
             });
         });
 
@@ -275,7 +275,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // check that all the expected_tx_inputs exists, and the same utxo is saved.
     expected_tx_inputs.iter().enumerate().for_each(|(idx, input)| {
-        let res = db.utxo(input.outpoint());
+        let res = db.utxo(input.outpoint().unwrap());
 
         let expected_utxo = spent_utxos.get(idx);
         assert_eq!(res.ok().as_ref(), expected_utxo);

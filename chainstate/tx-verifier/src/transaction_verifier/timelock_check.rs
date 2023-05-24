@@ -98,21 +98,21 @@ where
     T: Transactable,
     U: UtxosView,
 {
-    let inputs = match tx.inputs() {
-        Some(ins) => ins,
+    let input_outpoints = match tx.inputs() {
+        Some(inputs) => inputs.iter().filter_map(|input| input.outpoint()).collect::<Vec<_>>(),
         None => return Ok(()),
     };
 
-    let input_utxos = inputs
+    let input_utxos = input_outpoints
         .iter()
-        .map(|input| {
+        .map(|outpoint| {
             utxos_view
-                .utxo(input.outpoint())
+                .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    debug_assert_eq!(inputs.len(), input_utxos.len());
+    debug_assert_eq!(input_outpoints.len(), input_utxos.len());
 
     // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
     // produced outputs must be timelocked as per chain config
@@ -129,6 +129,8 @@ where
         }
     });
 
+    // FIXME: check output for accounting spends
+
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
             (*new_block_index).clone().into_gen_block_index()
@@ -137,7 +139,7 @@ where
     };
 
     // check if utxos can already be spent
-    input_utxos.iter().zip(inputs.iter()).try_for_each(|(utxo, input)| -> Result<(), ConnectTransactionError>{
+    input_utxos.iter().zip(input_outpoints.iter()).try_for_each(|(utxo, outpoint)| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
@@ -171,7 +173,7 @@ where
                 timelock,
                 &tx_source.expected_block_height(),
                 spending_time,
-                input.outpoint()
+                outpoint
             )?;
         }
         Ok(())

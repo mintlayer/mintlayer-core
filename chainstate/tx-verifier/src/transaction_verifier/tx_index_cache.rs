@@ -105,7 +105,7 @@ impl TxIndexCache {
         spender: Spender,
     ) -> Result<(), TxIndexError> {
         for input in inputs {
-            let outpoint = input.outpoint();
+            let outpoint = input.outpoint().unwrap(); // FIXME: impl
             let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
             prev_tx_index_op
                 .spend(outpoint.output_index(), spender.clone())
@@ -117,7 +117,7 @@ impl TxIndexCache {
 
     pub fn unspend_tx_index_inputs(&mut self, inputs: &[TxInput]) -> Result<(), TxIndexError> {
         for input in inputs {
-            let outpoint = input.outpoint();
+            let outpoint = input.outpoint().unwrap(); // FIXME: impl
             let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
             prev_tx_index_op.unspend(outpoint.output_index()).map_err(TxIndexError::from)?;
         }
@@ -135,7 +135,7 @@ impl TxIndexCache {
         ConnectTransactionError: From<E>,
     {
         inputs.iter().try_for_each(|input| {
-            let outpoint = input.outpoint();
+            let outpoint = input.outpoint().unwrap(); // FIXME: impl
             match self.data.entry(outpoint.tx_id()) {
                 Entry::Occupied(_) => (),
                 Entry::Vacant(entry) => {

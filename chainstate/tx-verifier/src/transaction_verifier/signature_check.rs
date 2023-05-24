@@ -41,7 +41,7 @@ where
     let inputs_utxos = inputs
         .iter()
         .map(|input| {
-            let outpoint = input.outpoint();
+            let outpoint = input.outpoint().unwrap(); // FIXME: impl
             utxo_view
                 .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?

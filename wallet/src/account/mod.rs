@@ -510,10 +510,10 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         tx: WalletTx,
     ) -> WalletResult<()> {
-        let relevant_inputs = tx
-            .inputs()
-            .iter()
-            .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
+        let relevant_inputs = tx.inputs().iter().any(|input| match input {
+            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(&outpoint),
+            TxInput::Accounting(_) => false,
+        });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
