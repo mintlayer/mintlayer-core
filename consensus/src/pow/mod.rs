@@ -20,6 +20,7 @@ pub use self::{
 
 mod error;
 mod helpers;
+pub mod input_data;
 mod work;
 
 use std::time::Duration;

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{Block, Destination, SignedTransaction};
+use common::chain::{Block, SignedTransaction};
 use consensus::GenerateBlockInputData;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
@@ -33,7 +33,6 @@ pub trait BlockProductionInterface: Send {
     async fn generate_block(
         &mut self,
         input_data: Option<GenerateBlockInputData>,
-        reward_destination: Destination,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError>;
 }

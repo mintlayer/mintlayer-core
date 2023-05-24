@@ -209,7 +209,7 @@ where
         pos_input_data.stake_private_key(),
         SigHashType::default(),
         reward_destination,
-        &block_reward,
+        &block_reward_transactable,
         &kernel_input_utxos.iter().collect::<Vec<_>>(),
         0,
     )

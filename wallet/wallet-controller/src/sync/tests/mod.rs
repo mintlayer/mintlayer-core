@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
-use common::chain::{Destination, SignedTransaction};
+use common::chain::SignedTransaction;
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use node_comm::{
@@ -138,7 +138,6 @@ impl NodeInterface for MockNode {
     async fn generate_block(
         &self,
         _input_data: Option<GenerateBlockInputData>,
-        _reward_destination_hex: Destination,
         _transactions_hex: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         unreachable!()

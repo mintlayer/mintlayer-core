@@ -34,7 +34,7 @@ use common::{
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         config::EpochIndex,
-        Block, ChainConfig, Destination, GenBlockId, SignedTransaction,
+        Block, ChainConfig, GenBlockId, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -259,7 +259,7 @@ impl BlockProduction {
                     ),
                 )))
             }
-            Some(GenerateBlockInputData::PoW) => Ok(Some(FinalizeBlockInputData::PoW)),
+            Some(GenerateBlockInputData::PoW(_)) => Ok(Some(FinalizeBlockInputData::PoW)),
             None => Ok(None),
         }
     }
@@ -290,17 +290,15 @@ impl BlockProduction {
     pub async fn produce_block(
         &self,
         input_data: Option<GenerateBlockInputData>,
-        reward_destination: Destination,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(input_data, reward_destination, transactions_source, None)
+        self.produce_block_with_custom_id(input_data, transactions_source, None)
             .await
     }
 
     async fn produce_block_with_custom_id(
         &self,
         input_data: Option<GenerateBlockInputData>,
-        _reward_destination: Destination,
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
@@ -756,7 +754,6 @@ mod tests {
 
                     block_production.produce_block_with_custom_id(
                         None,
-                        Destination::AnyoneCanSpend,
                         TransactionsSource::Provided(vec![]),
                         Some(id),
                     )
