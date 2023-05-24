@@ -36,7 +36,6 @@ class RelayTransactions(BitcoinTestFramework):
             'flags': 0,
             'inputs': [],
             'outputs': [],
-            'time_lock': 0,
         }
         signed_tx = {
             'transaction': tx,
@@ -65,7 +64,6 @@ class RelayTransactions(BitcoinTestFramework):
             'flags': 0,
             'inputs': [input],
             'outputs': [output],
-            'time_lock': 0,
         }
         signed_tx = {
             'transaction': tx,

@@ -108,7 +108,7 @@ impl<'f> BlockBuilder<'f> {
                     self.used_utxo.insert(outpoint.clone());
                     return self.add_transaction(
                         SignedTransaction::new(
-                            Transaction::new(0, vec![input], output, 0).unwrap(),
+                            Transaction::new(0, vec![input], output).unwrap(),
                             vec![witness],
                         )
                         .expect("invalid witness count"),
@@ -150,7 +150,7 @@ impl<'f> BlockBuilder<'f> {
             rng,
         );
         self.add_transaction(
-            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+            SignedTransaction::new(Transaction::new(0, inputs, outputs).unwrap(), witnesses)
                 .expect("invalid witness count"),
         )
     }
@@ -160,7 +160,7 @@ impl<'f> BlockBuilder<'f> {
         let (witnesses, inputs, outputs) =
             self.make_test_inputs_outputs(Self::filter_outputs(outputs_from_block(parent)), rng);
         self.add_transaction(
-            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+            SignedTransaction::new(Transaction::new(0, inputs, outputs).unwrap(), witnesses)
                 .expect("invalid witness count"),
         )
     }
@@ -179,7 +179,7 @@ impl<'f> BlockBuilder<'f> {
         inputs.push(TxInput::new(spend_from.keys().next().unwrap().clone(), 0));
         witnesses.push(InputWitness::NoSignature(None));
         self.transactions.push(
-            SignedTransaction::new(Transaction::new(0, inputs, outputs, 0).unwrap(), witnesses)
+            SignedTransaction::new(Transaction::new(0, inputs, outputs).unwrap(), witnesses)
                 .expect("invalid witness count"),
         );
         self

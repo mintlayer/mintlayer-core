@@ -146,11 +146,9 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        let flags = rng.next_u32();
-        let lock_time = rng.next_u32();
+        let flags = rng.gen::<u128>();
 
-        let tx = Transaction::new(flags, inputs.clone(), outputs, lock_time)
-            .expect("Creating tx caused fail");
+        let tx = Transaction::new(flags, inputs.clone(), outputs).expect("Creating tx caused fail");
 
         SignedTransaction::new(tx, generate_random_invalid_witness(inputs.len(), rng)).unwrap()
     }

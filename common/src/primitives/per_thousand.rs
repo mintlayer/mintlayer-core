@@ -39,9 +39,11 @@ impl PerThousand {
 
 impl Decode for PerThousand {
     fn decode<I: Input>(input: &mut I) -> Result<Self, Error> {
-        Self::new(u16::decode(input)?).ok_or(serialization::Error::from(
-            "PerThousand deserialization failed",
-        ))
+        let decoded_value = u16::decode(input)?;
+        Self::new(decoded_value).ok_or(
+            serialization::Error::from("PerThousand deserialization failed")
+                .chain(format!("With decoded value: {}", decoded_value)),
+        )
     }
 }
 

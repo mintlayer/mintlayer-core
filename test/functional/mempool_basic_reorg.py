@@ -32,7 +32,7 @@ def tx_input(tx_id, index = 0):
         'index': index,
     }
 
-def make_tx(inputs, output_amounts, time_lock = 0, flags = 0):
+def make_tx(inputs, output_amounts, flags = 0):
     outputs = [ {'Transfer': [ { 'Coin': amt }, { 'AnyoneCanSpend': None } ]}
                for amt in output_amounts ]
     witness = { 'NoSignature': None }
@@ -41,7 +41,6 @@ def make_tx(inputs, output_amounts, time_lock = 0, flags = 0):
         'flags': flags,
         'inputs': inputs,
         'outputs': outputs,
-        'time_lock': time_lock,
     }
     signed_tx = {
         'transaction': tx,

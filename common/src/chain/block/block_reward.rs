@@ -82,11 +82,7 @@ impl<'a> Signable for BlockRewardTransactable<'a> {
         None
     }
 
-    fn lock_time(&self) -> Option<u32> {
-        None
-    }
-
-    fn flags(&self) -> Option<u32> {
+    fn flags(&self) -> Option<u128> {
         None
     }
 }

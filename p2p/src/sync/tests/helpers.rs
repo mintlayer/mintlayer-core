@@ -540,7 +540,7 @@ pub fn new_block(
         OutputValue::Coin(Amount::from_atoms(100000)),
         Destination::AnyoneCanSpend,
     );
-    let transaction = Transaction::new(0, vec![input], vec![output], 0).unwrap();
+    let transaction = Transaction::new(0, vec![input], vec![output]).unwrap();
     let witness = InputWitness::NoSignature(Some(random_bytes));
     let signed_transaction = SignedTransaction::new(transaction, vec![witness]).unwrap();
 

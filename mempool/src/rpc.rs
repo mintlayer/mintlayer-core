@@ -20,6 +20,7 @@ use common::{
     primitives::Id,
 };
 use serialization::hex_encoded::HexEncoded;
+use utils::tap_error_log::LogError;
 
 #[rpc::rpc(server, namespace = "mempool")]
 trait MempoolRpc {
@@ -45,6 +46,7 @@ impl MempoolRpcServer for super::MempoolHandle {
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<()> {
         self.call_mut(|this| this.add_transaction(tx.take()))
             .await
+            .log_err()
             .map_err(rpc::Error::to_call_error)?
             .map_err(rpc::Error::to_call_error)
     }

@@ -297,7 +297,6 @@ fn wallet_balance_block_transactions() {
         0,
         Vec::new(),
         vec![make_address_output(address, tx_amount1).unwrap()],
-        0,
     )
     .unwrap();
     let signed_transaction1 = SignedTransaction::new(transaction1, Vec::new()).unwrap();
@@ -347,7 +346,6 @@ fn wallet_balance_parent_child_transactions() {
         0,
         Vec::new(),
         vec![make_address_output(address1, tx_amount1).unwrap()],
-        0,
     )
     .unwrap();
     let transaction_id1 = transaction1.get_id();
@@ -357,7 +355,6 @@ fn wallet_balance_parent_child_transactions() {
         0,
         vec![TxInput::new(OutPointSourceId::Transaction(transaction_id1), 0)],
         vec![make_address_output(address2, tx_amount2).unwrap()],
-        0,
     )
     .unwrap();
     let signed_transaction2 =

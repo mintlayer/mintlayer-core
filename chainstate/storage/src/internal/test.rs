@@ -50,8 +50,8 @@ fn test_storage_manipulation() {
     };
 
     // Prepare some test data
-    let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
-    let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
+    let tx0 = Transaction::new(0xaabbccdd, vec![], vec![]).unwrap();
+    let tx1 = Transaction::new(0xbbccddee, vec![], vec![]).unwrap();
     let block0 = Block::new(
         vec![SignedTransaction::new(tx0.clone(), vec![]).expect("invalid witness count")],
         Id::new(H256::default()),

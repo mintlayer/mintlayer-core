@@ -360,11 +360,9 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let one_transaction = SignedTransaction::new(
-            Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap(),
-            vec![],
-        )
-        .expect("invalid witness count");
+        let one_transaction =
+            SignedTransaction::new(Transaction::new(0, Vec::new(), Vec::new()).unwrap(), vec![])
+                .expect("invalid witness count");
         let body = BlockBody {
             reward: BlockReward::new(Vec::new()),
             transactions: vec![one_transaction],
@@ -394,7 +392,7 @@ mod tests {
         )];
 
         let one_transaction = SignedTransaction::new(
-            Transaction::new(0, inputs, Vec::new(), 0).unwrap(),
+            Transaction::new(0, inputs, Vec::new()).unwrap(),
             vec![InputWitness::NoSignature(Some(b"abc".to_vec()))],
         )
         .expect("invalid witness count");

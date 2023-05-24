@@ -74,12 +74,11 @@ pub enum TransactionCreationError {
 
 impl Transaction {
     pub fn new(
-        flags: u32,
+        flags: u128,
         inputs: Vec<TxInput>,
         outputs: Vec<TxOutput>,
-        lock_time: u32,
     ) -> Result<Self, TransactionCreationError> {
-        let tx = Transaction::V1(TransactionV1::new(flags, inputs, outputs, lock_time)?);
+        let tx = Transaction::V1(TransactionV1::new(flags, inputs, outputs)?);
         Ok(tx)
     }
 
@@ -95,7 +94,7 @@ impl Transaction {
         }
     }
 
-    pub fn flags(&self) -> u32 {
+    pub fn flags(&self) -> u128 {
         match &self {
             Transaction::V1(tx) => tx.flags(),
         }
@@ -110,12 +109,6 @@ impl Transaction {
     pub fn outputs(&self) -> &[TxOutput] {
         match &self {
             Transaction::V1(tx) => tx.outputs(),
-        }
-    }
-
-    pub fn lock_time(&self) -> u32 {
-        match &self {
-            Transaction::V1(tx) => tx.lock_time(),
         }
     }
 
@@ -144,22 +137,32 @@ impl Transaction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crypto::random::RngCore;
-    use serialization::{DecodeAll, Encode};
+    use proptest::prelude::Rng;
+    use serialization::{Decode, DecodeAll, Encode};
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    struct TestCompactU128 {
+        #[codec(compact)]
+        value: u128,
+    }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn version_byte() {
         let mut rng = crypto::random::make_pseudo_rng();
-        let flags = rng.next_u32();
-        let lock_time = rng.next_u32();
+        let flags = rng.gen::<u128>();
 
-        let tx =
-            Transaction::new(flags, vec![], vec![], lock_time).expect("Failed to create test tx");
+        let flags_compact = TestCompactU128 { value: flags };
+
+        let tx = Transaction::new(flags, vec![], vec![]).expect("Failed to create test tx");
         let encoded_tx = tx.encode();
         assert_eq!(tx.version_byte(), *encoded_tx.first().unwrap());
 
         // let's ensure that flags comes right after that
-        assert_eq!(u32::decode_all(&mut &encoded_tx[1..5]).unwrap(), flags);
+        assert_eq!(
+            TestCompactU128::decode_all(&mut &encoded_tx[1..flags_compact.encoded_size() + 1])
+                .unwrap(),
+            flags_compact
+        );
     }
 }

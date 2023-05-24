@@ -489,7 +489,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
 
     // let's test `add_utxos`
-    let tx = Transaction::new(0x00, vec![], create_tx_outputs(&mut rng, 10), 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![], create_tx_outputs(&mut rng, 10)).unwrap();
     assert!(cache
         .add_utxos_from_tx(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false)
         .is_ok());
@@ -516,7 +516,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         .collect_vec();
 
     // create a new transaction
-    let new_tx = Transaction::new(0x00, to_spend.clone(), vec![], 0).expect("should succeed");
+    let new_tx = Transaction::new(0x00, to_spend.clone(), vec![]).expect("should succeed");
     // let's test `connect_transaction`
     let tx_undo = cache
         .connect_transaction(&new_tx, BlockHeight::new(2))
@@ -589,7 +589,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
 
     // spend the utxo in a transaction
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
-    let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1), 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);
@@ -621,7 +621,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed) {
     // burn output in a tx
     let output = TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)));
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
-    let tx = Transaction::new(0x00, vec![input], vec![output], 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![input], vec![output]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);
@@ -854,7 +854,7 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
         Destination::AnyoneCanSpend,
     );
     let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
-    let tx = Transaction::new(0x00, vec![input], vec![output1, output2], 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![input], vec![output1, output2]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1.utxos().len(), 1);

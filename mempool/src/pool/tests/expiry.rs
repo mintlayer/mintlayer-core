@@ -58,7 +58,6 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(parent)?;
 
     let flags = 0;
-    let locktime = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child = tx_spend_input(
         &mempool,
@@ -66,7 +65,6 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
     let child_id = child.transaction().get_id();
@@ -122,7 +120,6 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     mempool.add_transaction(parent.clone())?;
 
     let flags = 0;
-    let locktime = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child_0 = tx_spend_input(
         &mempool,
@@ -130,7 +127,6 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
 
@@ -140,7 +136,6 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
     let child_1_id = child_1.transaction().get_id();

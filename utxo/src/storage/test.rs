@@ -57,7 +57,7 @@ fn create_transactions(
             };
 
             SignedTransaction::new(
-                Transaction::new(0x00, inputs.to_vec(), outputs, 0)
+                Transaction::new(0x00, inputs.to_vec(), outputs)
                     .expect("should create a transaction successfully"),
                 (0..inputs.len()).map(|_| InputWitness::NoSignature(None)).collect::<Vec<_>>(),
             )

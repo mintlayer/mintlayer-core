@@ -69,13 +69,9 @@ pub fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {
     let inputs = (0..num_inputs).map(|_| dummy_input()).collect();
     let outputs = (0..num_outputs).map(|_| dummy_output()).collect();
     let flags = 0;
-    let locktime = 0;
-    let size = SignedTransaction::new(
-        Transaction::new(flags, inputs, outputs, locktime).unwrap(),
-        witnesses,
-    )
-    .expect("invalid witness count")
-    .encoded_size();
+    let size = SignedTransaction::new(Transaction::new(flags, inputs, outputs).unwrap(), witnesses)
+        .expect("invalid witness count")
+        .encoded_size();
     // Take twice the encoded size of the dummy tx.Real Txs are larger than these dummy ones,
     // but taking 3 times the size seems to ensure our txs won't fail the minimum relay fee
     // validation (see the function `pays_minimum_relay_fees`)

@@ -44,7 +44,7 @@ async fn nonexistent_peer() {
 
     let peer = PeerId::new();
 
-    let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
@@ -76,7 +76,7 @@ async fn invalid_transaction(#[case] seed: Seed) {
     let peer = PeerId::new();
     handle.connect_peer(peer).await;
 
-    let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let tx = SignedTransaction::new(tx, vec![]).unwrap();
     handle.broadcast_message(peer, SyncMessage::NewTransaction(tx.transaction().get_id()));
 
@@ -353,7 +353,6 @@ fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
         0x00,
         vec![TxInput::new(OutPointSourceId::from(out_point), 0)],
         vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
-        0x01,
     )
     .unwrap();
     SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap()

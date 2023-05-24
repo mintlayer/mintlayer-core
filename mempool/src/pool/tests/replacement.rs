@@ -35,7 +35,6 @@ async fn test_replace_tx(
 
     let input = TxInput::new(outpoint_source_id, 0);
     let flags = 1;
-    let locktime = 0;
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let original = tx_spend_input(
@@ -44,7 +43,6 @@ async fn test_replace_tx(
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         original_fee,
         flags,
-        locktime,
     )
     .await
     .expect("should be able to spend here");
@@ -62,7 +60,6 @@ async fn test_replace_tx(
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         replacement_fee,
         flags,
-        locktime,
     )
     .await
     .expect("should be able to spend here");
@@ -90,7 +87,6 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let input = TxInput::new(outpoint_source_id, 0);
     let flags = 0;
-    let locktime = 0;
     let original_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
@@ -100,7 +96,6 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         original_fee,
         flags,
-        locktime,
     )
     .await
     .expect("should be able to spend here");
@@ -115,7 +110,6 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         replacement_fee,
         flags,
-        locktime,
     )
     .await
     .expect("should be able to spend here");
@@ -203,14 +197,12 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     // We want to test that even though child_tx doesn't signal replaceability directly, it is replaceable because its parent signalled replaceability
     // replaced
     let flags = 0;
-    let locktime = 0;
     let child_tx = tx_spend_input(
         &mempool,
         child_tx_input.clone(),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         Fee::new(Amount::from_atoms(100)),
         flags,
-        locktime,
     )
     .await?;
     mempool.add_transaction(child_tx)?;
@@ -223,7 +215,6 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         replacement_fee,
         flags,
-        locktime,
     )
     .await?;
     mempool.add_transaction(replacement_tx)?;
@@ -258,7 +249,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let input = TxInput::new(outpoint_source_id, 0);
 
-    let locktime = 0;
     let rbf = 1;
     let no_rbf = 0;
 
@@ -270,7 +260,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         original_fee,
         rbf,
-        locktime,
     )
     .await?;
     let replaced_tx_fee = try_get_fee(&mempool, &replaced_tx).await;
@@ -287,7 +276,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant1_fee,
         no_rbf,
-        locktime,
     )
     .await?;
     let descendant1_id = descendant1.transaction().get_id();
@@ -300,7 +288,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant2_fee,
         no_rbf,
-        locktime,
     )
     .await?;
     let descendant2_id = descendant2.transaction().get_id();
@@ -319,7 +306,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         insufficient_rbf_fee,
         no_rbf,
-        locktime,
     )
     .await?;
 
@@ -336,7 +322,6 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         sufficient_rbf_fee,
         no_rbf,
-        locktime,
     )
     .await?;
     mempool.add_transaction(incoming_tx)?;

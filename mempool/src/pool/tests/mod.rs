@@ -99,7 +99,6 @@ async fn add_single_tx() -> anyhow::Result<()> {
     let outpoint_source_id = mempool.chain_config.genesis_block_id().into();
 
     let flags = 0;
-    let locktime = 0;
     let input = TxInput::new(outpoint_source_id, 0);
     let relay_fee: Fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
     let tx = tx_spend_input(
@@ -108,7 +107,6 @@ async fn add_single_tx() -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         relay_fee,
         flags,
-        locktime,
     )
     .await?;
 
@@ -274,14 +272,12 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     let witness = b"attempted_double_spend".to_vec();
     let duplicate_input = TxInput::new(outpoint_source_id, 0);
     let flags = 0;
-    let locktime = 0;
     let outputs = tx_spend_input(
         &mempool,
         input.clone(),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?
     .transaction()
@@ -289,7 +285,7 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     .to_owned();
     let inputs = vec![input, duplicate_input];
     let tx = SignedTransaction::new(
-        Transaction::new(flags, inputs, outputs, locktime)?,
+        Transaction::new(flags, inputs, outputs)?,
         vec![
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             InputWitness::NoSignature(Some(witness)),
@@ -313,14 +309,12 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     let input = TxInput::new(outpoint_source_id, 0);
 
     let flags = 0;
-    let locktime = 0;
     let tx = tx_spend_input(
         &mempool,
         input,
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
 
@@ -347,14 +341,12 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let good_input = TxInput::new(outpoint_source_id.clone(), 0);
     let flags = 0;
-    let locktime = 0;
     let outputs = tx_spend_input(
         &mempool,
         good_input,
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?
     .transaction()
@@ -366,7 +358,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let inputs = vec![bad_input];
     let tx = SignedTransaction::new(
-        Transaction::new(flags, inputs, outputs, locktime)?,
+        Transaction::new(flags, inputs, outputs)?,
         vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
     )
     .expect("invalid witness count");
@@ -424,14 +416,13 @@ async fn tx_spend_input<M: GetMemoryUsage + Send + Sync>(
     input: TxInput,
     witness: InputWitness,
     fee: impl Into<Option<Fee>>,
-    flags: u32,
-    locktime: u32,
+    flags: u128,
 ) -> anyhow::Result<SignedTransaction> {
     let fee = fee.into().map_or_else(
         || Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into(),
         std::convert::identity,
     );
-    tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags, locktime).await
+    tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags).await
 }
 
 async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
@@ -439,8 +430,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
     inputs: &[TxInput],
     witnesses: &[InputWitness],
     fee: Fee,
-    flags: u32,
-    locktime: u32,
+    flags: u128,
 ) -> anyhow::Result<SignedTransaction> {
     let mut input_values = Vec::new();
     let inputs = inputs.to_owned();
@@ -483,7 +473,6 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
             TxOutput::Transfer(OutputValue::Coin(spent), Destination::AnyoneCanSpend),
             TxOutput::Transfer(OutputValue::Coin(change), Destination::AnyoneCanSpend),
         ],
-        locktime,
     )
     .map_err(Into::into);
     let tx = tx?;
@@ -518,7 +507,6 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
 
     let flags_replaceable = 1;
     let flags_irreplaceable = 0;
-    let locktime = 0;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let ancestor_with_signal = tx_spend_input(
@@ -527,7 +515,6 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_replaceable,
-        locktime,
     )
     .await?;
 
@@ -537,7 +524,6 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_irreplaceable,
-        locktime,
     )
     .await?;
 
@@ -569,7 +555,6 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
         ],
         original_fee,
         flags_irreplaceable,
-        locktime,
     )
     .await?;
     let replaced_tx_id = replaced_tx.transaction().get_id();
@@ -581,7 +566,6 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
             flags_irreplaceable,
             vec![input_with_irreplaceable_parent],
             vec![dummy_output],
-            locktime,
         )?,
         vec![InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec()))],
     )
@@ -605,7 +589,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let txs = (1..=6)
         .map(|i| {
             SignedTransaction::new(
-                Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {i}")),
+                Transaction::new(i, vec![], vec![]).unwrap_or_else(|_| panic!("tx {i}")),
                 vec![],
             )
             .expect("invalid witness count")
@@ -757,7 +741,6 @@ async fn test_bip125_max_replacements(
     mempool.add_transaction(tx)?;
 
     let flags = 0;
-    let locktime = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let fee = 2_000;
     for (index, _) in outputs.iter().enumerate() {
@@ -768,7 +751,6 @@ async fn test_bip125_max_replacements(
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             Fee::new(Amount::from_atoms(fee)),
             flags,
-            locktime,
         )
         .await?;
         mempool.add_transaction(tx)?;
@@ -782,7 +764,6 @@ async fn test_bip125_max_replacements(
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         replacement_fee,
         flags,
-        locktime,
     )
     .await?;
     mempool.add_transaction(replacement_tx)?;
@@ -851,7 +832,6 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let input1 = TxInput::new(outpoint_source_id.clone(), 0);
     let input2 = TxInput::new(outpoint_source_id, 1);
 
-    let locktime = 0;
     let flags = 0;
     let original_fee: Fee = Amount::from_atoms(100).into();
     let replaced_tx = tx_spend_input(
@@ -860,7 +840,6 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         original_fee,
         flags,
-        locktime,
     )
     .await?;
     mempool.add_transaction(replaced_tx)?;
@@ -875,7 +854,6 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
         ],
         replacement_fee,
         flags,
-        locktime,
     )
     .await?;
 
@@ -951,7 +929,6 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("after adding parent");
 
     let flags = 0;
-    let locktime = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
 
     // child_0 has the lower fee so it will be evicted when memory usage is too high
@@ -961,7 +938,6 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
     let child_0_id = child_0.transaction().get_id();
@@ -977,7 +953,6 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         big_fee,
         flags,
-        locktime,
     )
     .await?;
     let child_1_id = child_1.transaction().get_id();
@@ -1002,7 +977,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             )?)
         .unwrap()
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3655)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3625)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -1024,7 +999,6 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
-        locktime,
     )
     .await?;
     log::debug!(
@@ -1049,7 +1023,6 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)).unwrap(),
         flags,
-        locktime,
     )
     .await?;
     let child_2_high_fee_id = child_2_high_fee.transaction().get_id();
@@ -1290,7 +1263,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
 
     let flags = 0;
-    let locktime = 0;
 
     let tx_b_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
@@ -1302,7 +1274,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_a_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_a_id = tx_a.transaction().get_id();
@@ -1317,7 +1288,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_b_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
@@ -1331,7 +1301,6 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_c_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
@@ -1445,7 +1414,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
 
     let flags = 0;
-    let locktime = 0;
 
     let tx_b_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2))).into();
@@ -1457,7 +1425,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_a_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_a_id = tx_a.transaction().get_id();
@@ -1471,7 +1438,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_b_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_b_id = tx_b.transaction().get_id();
@@ -1485,7 +1451,6 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_c_fee,
         flags,
-        locktime,
     )
     .await?;
     let tx_c_id = tx_c.transaction().get_id();
@@ -1609,7 +1574,6 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(parent)?;
     let num_child_txs = num_outputs;
     let flags = 0;
-    let locktime = 0;
     let fee = get_relay_fee_from_tx_size(estimate_tx_size(1, num_outputs));
     let mut txs = Vec::new();
     for i in 0..num_child_txs {
@@ -1620,7 +1584,6 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
                 empty_witness(&mut rng),
                 Fee::new(Amount::from_atoms(fee + u128::try_from(i).unwrap())),
                 flags,
-                locktime,
             )
             .await?,
         )

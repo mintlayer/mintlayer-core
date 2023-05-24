@@ -79,6 +79,8 @@ pub enum MempoolPolicyError {
     GetParentError,
     #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
+    #[error("Relay fee overflow error")]
+    RelayFeeOverflow,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

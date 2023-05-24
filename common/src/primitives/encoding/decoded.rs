@@ -19,7 +19,6 @@ use super::*;
 struct Decoded<T> {
     hrp: String,
     data: Vec<T>,
-    // TODO: see if this can benefit for short string optimization
 }
 
 impl<T> Decoded<T> {

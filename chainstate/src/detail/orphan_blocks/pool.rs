@@ -179,7 +179,7 @@ mod tests {
         }
 
         pub fn gen_block_from_id(rng: &mut impl Rng, prev_block_id: Option<Id<GenBlock>>) -> Block {
-            let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
+            let tx = Transaction::new(0, Vec::new(), Vec::new()).unwrap();
 
             Block::new(
                 vec![SignedTransaction::new(tx, vec![]).expect("invalid witness count")],
