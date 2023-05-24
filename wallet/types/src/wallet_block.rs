@@ -16,13 +16,17 @@
 use serialization::{Decode, Encode};
 
 use common::{
-    chain::{Block, TxInput, TxOutput},
-    primitives::{BlockHeight, Id},
+    chain::{
+        block::ConsensusData, Block, GenBlock, Genesis, OutPoint, OutPointSourceId, TxInput,
+        TxOutput,
+    },
+    primitives::{BlockHeight, Id, Idable},
 };
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct WalletBlock {
-    block_id: Id<Block>,
+    // `GenBlock` because this may be the genesis block (kernel_inputs will be empty in this case)
+    block_id: Id<GenBlock>,
 
     height: BlockHeight,
 
@@ -32,18 +36,31 @@ pub struct WalletBlock {
 }
 
 impl WalletBlock {
-    pub fn new(
-        block_id: Id<Block>,
-        height: BlockHeight,
-        kernel_inputs: Vec<TxInput>,
-        reward: Vec<TxOutput>,
-    ) -> Self {
+    pub fn from_genesis(genesis: &Genesis) -> Self {
         WalletBlock {
-            block_id,
-            height,
-            kernel_inputs,
-            reward,
+            block_id: genesis.get_id().into(),
+            height: BlockHeight::zero(),
+            kernel_inputs: Vec::new(),
+            reward: genesis.utxos().to_vec(),
         }
+    }
+
+    pub fn from_block(block: &Block, block_height: BlockHeight) -> Self {
+        let kernel_inputs = match block.header().consensus_data() {
+            ConsensusData::PoS(pos) => pos.kernel_inputs().to_vec(),
+            ConsensusData::PoW(_) | ConsensusData::None => Vec::new(),
+        };
+
+        WalletBlock {
+            block_id: block.get_id().into(),
+            height: block_height,
+            kernel_inputs,
+            reward: block.block_reward().outputs().to_vec(),
+        }
+    }
+
+    pub fn block_id(&self) -> &Id<GenBlock> {
+        &self.block_id
     }
 
     pub fn height(&self) -> BlockHeight {
@@ -56,5 +73,11 @@ impl WalletBlock {
 
     pub fn reward(&self) -> &[TxOutput] {
         &self.reward
+    }
+
+    pub fn outpoints(&self) -> impl Iterator<Item = OutPoint> + '_ {
+        self.reward.iter().enumerate().map(|(index, _output)| {
+            OutPoint::new(OutPointSourceId::BlockReward(self.block_id), index as u32)
+        })
     }
 }
