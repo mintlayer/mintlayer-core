@@ -15,7 +15,7 @@
 
 use chainstate::ChainInfo;
 use common::{
-    chain::{Block, Destination, GenBlock, SignedTransaction},
+    chain::{Block, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 
@@ -41,8 +41,7 @@ pub trait NodeInterface {
     ) -> Result<Option<(Id<GenBlock>, BlockHeight)>, Self::Error>;
     async fn generate_block(
         &self,
-        input_data: Option<GenerateBlockInputData>,
-        reward_destination: Destination,
+        input_data: GenerateBlockInputData,
         transactions_hex: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error>;
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error>;

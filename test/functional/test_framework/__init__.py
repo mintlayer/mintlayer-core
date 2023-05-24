@@ -239,7 +239,24 @@ def init_mintlayer_types():
                     ["announcement", "Announcement"],
                     ["header_list_request", "HeaderListRequest"],
                 ]
-            }
+            },
+
+            "GenerateBlockInputData": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Nono", "()"],
+                    ["PoW", "Box<PoWGenerateBlockInputData>"],
+                    ["PoS", "()"]
+                    # TODO PoS
+                ]
+            },
+
+            "PoWGenerateBlockInputData": {
+                "type": "struct",
+                "type_mapping": [
+                    ["reward_destination", "Destination"],
+                ]
+            },
         }
     }
 

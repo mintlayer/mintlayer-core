@@ -15,10 +15,7 @@
 
 //! Block production subsystem RPC handler
 
-use common::{
-    chain::Block,
-    chain::{Destination, SignedTransaction},
-};
+use common::{chain::Block, chain::SignedTransaction};
 use consensus::GenerateBlockInputData;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
@@ -38,14 +35,14 @@ trait BlockProductionRpc {
     #[method(name = "stop_job")]
     async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> RpcResult<bool>;
 
-    /// Generate a block with the given transactions to the specified
-    /// reward destination. If transactions are None, the block will be
-    /// generated with available transactions in the mempool
+    /// Generate a block with the given transactions
+    ///
+    /// If `transactions` is `None`, the block will be generated with
+    /// available transactions in the mempool
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
-        input_data: Option<HexEncoded<GenerateBlockInputData>>,
-        reward_destination: HexEncoded<Destination>,
+        input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> RpcResult<HexEncoded<Block>>;
 }
@@ -71,22 +68,15 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
-        input_data: Option<HexEncoded<GenerateBlockInputData>>,
-        reward_destination: HexEncoded<Destination>,
+        input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> rpc::Result<HexEncoded<Block>> {
         let transactions =
             transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect::<Vec<_>>());
 
         let block = handle_error(
-            self.call_async_mut(move |this| {
-                this.generate_block(
-                    input_data.map(HexEncoded::take),
-                    reward_destination.take(),
-                    transactions,
-                )
-            })
-            .await,
+            self.call_async_mut(move |this| this.generate_block(input_data.take(), transactions))
+                .await,
         )?;
 
         Ok(block.into())

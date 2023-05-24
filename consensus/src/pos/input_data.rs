@@ -23,7 +23,8 @@ use chainstate_types::{
 };
 use common::{
     chain::block::{
-        consensus_data::PoSData, timestamp::BlockTimestamp, BlockRewardTransactable, ConsensusData,
+        consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward, BlockRewardTransactable,
+        ConsensusData,
     },
     chain::{
         config::EpochIndex,
@@ -177,7 +178,7 @@ impl PoSFinalizeBlockInputData {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn generate_pos_consensus_data<G>(
+pub fn generate_pos_consensus_data_and_reward<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
     pos_input_data: PoSGenerateBlockInputData,
@@ -186,7 +187,7 @@ pub fn generate_pos_consensus_data<G>(
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-) -> Result<ConsensusData, ConsensusCreationError>
+) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
@@ -197,7 +198,7 @@ where
         pos_input_data.pool_id(),
     )];
 
-    let block_reward = BlockRewardTransactable::new(
+    let block_reward_transactable = BlockRewardTransactable::new(
         Some(pos_input_data.kernel_inputs()),
         Some(&kernel_output),
         None,
@@ -209,7 +210,7 @@ where
         pos_input_data.stake_private_key(),
         SigHashType::default(),
         reward_destination,
-        &block_reward,
+        &block_reward_transactable,
         &kernel_input_utxos.iter().collect::<Vec<_>>(),
         0,
     )
@@ -240,11 +241,15 @@ where
         get_ancestor,
     )?;
 
-    Ok(ConsensusData::PoS(Box::new(PoSData::new(
+    let consensus_data = ConsensusData::PoS(Box::new(PoSData::new(
         pos_input_data.kernel_inputs().clone(),
         vec![input_witness],
         pos_input_data.pool_id(),
         vrf_data,
         target_required,
-    ))))
+    )));
+
+    let block_reward = BlockReward::new(kernel_output);
+
+    Ok((consensus_data, block_reward))
 }

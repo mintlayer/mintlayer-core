@@ -9,6 +9,10 @@ from test_framework.util import (
     assert_equal,
 )
 
+import scalecodec
+
+block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
+
 class SyncingTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -41,8 +45,16 @@ class SyncingTest(BitcoinTestFramework):
 
         blocks = []
 
+        block_input_data = block_input_data_obj.encode(
+            {
+                "PoW": {
+                    "reward_destination": "AnyoneCanSpend",
+                }
+            }
+        ).to_hex()[2:]
+
         # add first block
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[0])
         assert_equal(self.block_height(0), 1)
@@ -50,7 +62,7 @@ class SyncingTest(BitcoinTestFramework):
         self.assert_tip(0, blocks[0])
 
         # add second block
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[1])
         assert_equal(self.block_height(0), 2)
@@ -73,14 +85,14 @@ class SyncingTest(BitcoinTestFramework):
         self.assert_tip(1, blocks[1])
 
         # submit third block
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[2])
         assert_equal(self.block_height(0), 3)
         self.assert_tip(0, blocks[2])
 
         # submit final block
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         self.nodes[0].chainstate_submit_block(blocks[3])
         assert_equal(self.block_height(0), 4)

@@ -29,7 +29,7 @@ pub enum ConsensusData {
     #[codec(index = 0)]
     None,
     #[codec(index = 1)]
-    PoW(PoWData),
+    PoW(Box<PoWData>),
     #[codec(index = 2)]
     PoS(Box<PoSData>),
 }

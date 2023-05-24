@@ -6449,6 +6449,7 @@ dependencies = [
  "chainstate-storage",
  "clap 4.3.0",
  "common",
+ "consensus",
  "crossterm",
  "directories",
  "logging",

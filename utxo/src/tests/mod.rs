@@ -708,7 +708,7 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
         vec![],
         Id::new(H256::random_using(&mut rng)),
         BlockTimestamp::from_int_seconds(1),
-        ConsensusData::PoW(PoWData::new(Compact(1), 1)),
+        ConsensusData::PoW(Box::new(PoWData::new(Compact(1), 1))),
         BlockReward::new(create_tx_outputs(&mut rng, 1)),
     )
     .unwrap();

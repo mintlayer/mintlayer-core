@@ -27,17 +27,20 @@ use chainstate_types::{
 };
 use common::{
     chain::block::{
-        consensus_data::PoWData,
         signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData, SignedBlockHeader},
         timestamp::BlockTimestamp,
-        BlockHeader, ConsensusData,
+        BlockHeader, BlockReward, ConsensusData,
     },
-    chain::{ChainConfig, RequiredConsensus},
+    chain::{
+        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, RequiredConsensus,
+        TxOutput,
+    },
     primitives::BlockHeight,
 };
 use serialization::{Decode, Encode};
 
-use crate::pos::input_data::generate_pos_consensus_data;
+use crate::pos::input_data::generate_pos_consensus_data_and_reward;
+use crate::pow::input_data::generate_pow_consensus_data_and_reward;
 
 pub use crate::{
     error::ConsensusVerificationError,
@@ -52,7 +55,10 @@ pub use crate::{
         target::calculate_target_required_from_block_index,
         StakeResult,
     },
-    pow::{calculate_work_required, check_proof_of_work, mine, ConsensusPoWError, MiningResult},
+    pow::{
+        calculate_work_required, check_proof_of_work, input_data::PoWGenerateBlockInputData, mine,
+        ConsensusPoWError, MiningResult,
+    },
     validator::validate_consensus,
 };
 
@@ -75,8 +81,10 @@ pub enum ConsensusCreationError {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum GenerateBlockInputData {
     #[codec(index = 0)]
-    PoW,
+    None,
     #[codec(index = 1)]
+    PoW(Box<PoWGenerateBlockInputData>),
+    #[codec(index = 2)]
     PoS(Box<PoSGenerateBlockInputData>),
 }
 
@@ -86,22 +94,48 @@ pub enum FinalizeBlockInputData {
     PoS(PoSFinalizeBlockInputData),
 }
 
-pub fn generate_consensus_data<G>(
+pub fn generate_consensus_data_and_reward<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
     sealed_epoch_randomness: Option<PoSRandomness>,
-    input_data: Option<GenerateBlockInputData>,
+    input_data: GenerateBlockInputData,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
-) -> Result<ConsensusData, ConsensusCreationError>
+) -> Result<(ConsensusData, BlockReward), ConsensusCreationError>
 where
     G: Fn(&BlockIndex, BlockHeight) -> Result<GenBlockIndex, PropertyQueryError>,
 {
     match chain_config.net_upgrade().consensus_status(block_height) {
-        RequiredConsensus::IgnoreConsensus => Ok(ConsensusData::None),
+        RequiredConsensus::IgnoreConsensus => {
+            let consensus_data = ConsensusData::None;
+
+            let time_lock = {
+                let block_distance = consensus_data.reward_maturity_distance(chain_config);
+
+                let reward_maturity_distance_i64: i64 =
+                    block_distance.try_into().map_err(|_| {
+                        ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance)
+                    })?;
+
+                let reward_maturity_distance_u64: u64 =
+                    reward_maturity_distance_i64.try_into().map_err(|_| {
+                        ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance)
+                    })?;
+
+                OutputTimeLock::ForBlockCount(reward_maturity_distance_u64)
+            };
+
+            let block_reward = BlockReward::new(vec![TxOutput::LockThenTransfer(
+                OutputValue::Coin(chain_config.block_subsidy_at_height(&block_height)),
+                Destination::AnyoneCanSpend,
+                time_lock,
+            )]);
+
+            Ok((consensus_data, block_reward))
+        }
         RequiredConsensus::PoS(pos_status) => match input_data {
-            Some(GenerateBlockInputData::PoS(pos_input_data)) => generate_pos_consensus_data(
+            GenerateBlockInputData::PoS(pos_input_data) => generate_pos_consensus_data_and_reward(
                 chain_config,
                 prev_block_index,
                 *pos_input_data,
@@ -111,20 +145,27 @@ where
                 block_height,
                 get_ancestor,
             ),
-            Some(GenerateBlockInputData::PoW) => Err(ConsensusPoSError::PoWInputDataProvided)?,
-            None => Err(ConsensusPoSError::NoInputDataProvided)?,
+            GenerateBlockInputData::PoW(_) => Err(ConsensusPoSError::PoWInputDataProvided)?,
+            GenerateBlockInputData::None => Err(ConsensusPoSError::NoInputDataProvided)?,
         },
-        RequiredConsensus::PoW(pow_status) => {
-            let work_required = calculate_work_required(
+        RequiredConsensus::PoW(pow_status) => match input_data {
+            GenerateBlockInputData::PoW(pow_input_data) => generate_pow_consensus_data_and_reward(
                 chain_config,
                 prev_block_index,
                 block_timestamp,
                 &pow_status,
                 get_ancestor,
-            )?;
-
-            Ok(ConsensusData::PoW(PoWData::new(work_required, 0)))
-        }
+                *pow_input_data,
+                block_height,
+            )
+            .map_err(ConsensusCreationError::MiningError),
+            GenerateBlockInputData::PoS(_) => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::PoSInputDataProvided,
+            )),
+            GenerateBlockInputData::None => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::NoInputDataProvided,
+            )),
+        },
     }
 }
 

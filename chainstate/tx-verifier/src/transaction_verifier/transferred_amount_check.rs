@@ -362,7 +362,7 @@ mod tests {
                 &pos_accounting_db,
                 &block_reward,
                 Id::<Block>::new(H256::zero()),
-                &ConsensusData::PoW(PoWData::new(Compact(1), 1)),
+                &ConsensusData::PoW(Box::new(PoWData::new(Compact(1), 1))),
                 fee,
                 subsidy,
             )

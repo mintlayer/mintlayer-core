@@ -18,7 +18,7 @@ use thiserror::Error;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::block::Block,
-    primitives::{BlockHeight, Compact, Id},
+    primitives::{BlockDistance, BlockHeight, Compact, Id},
 };
 
 /// A proof of work consensus error.
@@ -46,4 +46,6 @@ pub enum ConsensusPoWError {
     NoInputDataProvided,
     #[error("Genesis block cannot have an ongoing difficulty")]
     GenesisCannotHaveOngoingDifficulty,
+    #[error("Block reward maturity value {0} is invalid")]
+    InvalidBlockRewardMaturityDistance(BlockDistance),
 }

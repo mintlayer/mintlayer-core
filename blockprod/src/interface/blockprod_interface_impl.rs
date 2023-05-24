@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{Block, Destination, SignedTransaction};
+use common::chain::{Block, SignedTransaction};
 use consensus::GenerateBlockInputData;
 
 use crate::{
@@ -35,8 +35,7 @@ impl BlockProductionInterface for BlockProduction {
 
     async fn generate_block(
         &mut self,
-        input_data: Option<GenerateBlockInputData>,
-        reward_destination: Destination,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError> {
         let transactions = match transactions {
@@ -44,8 +43,7 @@ impl BlockProductionInterface for BlockProduction {
             None => crate::detail::TransactionsSource::Mempool,
         };
 
-        let (block, end_receiver) =
-            self.produce_block(input_data, reward_destination, transactions).await?;
+        let (block, end_receiver) = self.produce_block(input_data, transactions).await?;
 
         // The only error that can happen is if the channel is closed. We don't care about that here.
         let _finished = end_receiver.await;

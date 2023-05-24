@@ -242,7 +242,7 @@ pub fn mine(
     bits: Compact,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<MiningResult, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0);
+    let mut data = Box::new(PoWData::new(bits, 0));
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
         data.update_nonce(nonce);

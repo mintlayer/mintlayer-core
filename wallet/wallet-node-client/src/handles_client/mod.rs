@@ -16,7 +16,7 @@
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, Destination, GenBlock, SignedTransaction},
+    chain::{Block, GenBlock, SignedTransaction},
     primitives::{BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
@@ -122,15 +122,12 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn generate_block(
         &self,
-        input_data: Option<GenerateBlockInputData>,
-        reward_destination: Destination,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| {
-                this.generate_block(input_data, reward_destination, transactions)
-            })
+            .call_async_mut(move |this| this.generate_block(input_data, transactions))
             .await??;
 
         Ok(block)

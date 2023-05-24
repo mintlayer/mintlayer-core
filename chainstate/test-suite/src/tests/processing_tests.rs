@@ -722,7 +722,7 @@ fn consensus_type(#[case] seed: Seed) {
     assert!(matches!(
         tf.make_block_builder()
             .add_test_transaction_from_best_block(&mut rng)
-            .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0)))
+            .with_consensus_data(ConsensusData::PoW(Box::new(PoWData::new(Compact(0), 0))))
             .build_and_process()
             .unwrap_err(),
         ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -1238,7 +1238,7 @@ fn make_invalid_pow_block(
     max_nonce: u128,
     bits: Compact,
 ) -> Result<bool, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0);
+    let mut data = Box::new(PoWData::new(bits, 0));
     for nonce in 0..max_nonce {
         data.update_nonce(nonce);
         block

@@ -12,6 +12,7 @@ import os
 import pdb
 import random
 import re
+import scalecodec
 import shutil
 import subprocess
 import sys
@@ -35,6 +36,7 @@ from .util import (
     wait_until_helper,
 )
 
+block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
 
 class TestStatus(Enum):
     PASSED = 1
@@ -405,13 +407,22 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         self.start_nodes()
         if self.requires_wallet:
             self.import_deterministic_coinbase_privkeys()
+
+        block_input_data = block_input_data_obj.encode(
+            {
+                "PoW": {
+                    "reward_destination": "AnyoneCanSpend",
+                }
+            }
+        ).to_hex()[2:]
+
         if not self.setup_clean_chain:
             for n in self.nodes:
                 assert_equal(n.chainstate_best_block_height(), 0)
             # To ensure that all nodes are out of IBD, the most recent block
             # must have a timestamp not too old (see chainstate_is_initial_block_download()).
             self.log.debug('Generate a block with current time')
-            block = self.nodes[0].blockprod_generate_block(None, "00", [])
+            block = self.nodes[0].blockprod_generate_block(block_input_data, [])
             for n in self.nodes:
                 n.chainstate_submit_block(block)
                 info = n.chainstate_info()

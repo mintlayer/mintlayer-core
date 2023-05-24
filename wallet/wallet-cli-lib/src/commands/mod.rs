@@ -21,6 +21,7 @@ use common::{
     chain::{Block, ChainConfig, Destination, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
+use consensus::GenerateBlockInputData;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
@@ -295,13 +296,13 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::GenerateBlock {
-            reward_destination,
+            reward_destination: _,
             transactions,
         } => {
             let transactions =
                 transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
             let block = rpc_client
-                .generate_block(None, reward_destination.take(), transactions)
+                .generate_block(GenerateBlockInputData::None, transactions)
                 .await
                 .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
