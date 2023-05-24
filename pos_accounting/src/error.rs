@@ -29,6 +29,14 @@ pub enum Error {
     AttemptedDecommissionNonexistingPoolData,
     #[error("Failed to create a delegation because the target pool doesn't exist")]
     DelegationCreationFailedPoolDoesNotExist,
+    #[error("Failed to delete a delegation because the delegation doesn't exist")]
+    DelegationDeletionFailedIdDoesNotExist,
+    #[error("Failed to delete a delegation because the delegation balance must be zero")]
+    DelegationDeletionFailedBalanceNonZero,
+    #[error("Failed to delete a delegation because the delegation pools share must be zero")]
+    DelegationDeletionFailedPoolsShareNonZero,
+    #[error("Failed to delete a delegation because the pools still exists")]
+    DelegationDeletionFailedPoolStillExists,
     #[error("Failed to create a delegation because the resulting id already exists")]
     InvariantErrorDelegationCreationFailedIdAlreadyExists,
     #[error("Delegate to a non-existing reward id")]

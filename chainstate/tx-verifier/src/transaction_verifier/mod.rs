@@ -21,7 +21,6 @@ mod input_output_policy;
 mod optional_tx_index_cache;
 mod reward_distribution;
 mod signature_check;
-mod timelock_check;
 mod token_issuance_cache;
 mod transferred_amount_check;
 mod tx_index_cache;
@@ -33,6 +32,7 @@ pub mod flush;
 pub mod hierarchy;
 pub mod signature_destination_getter;
 pub mod storage;
+pub mod timelock_check;
 
 mod tx_source;
 pub use tx_source::{TransactionSource, TransactionSourceForConnect};
@@ -66,7 +66,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex, TxOutput,
+        Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -211,9 +212,10 @@ where
                 TxOutput::Burn(v) => v.coin_amount(),
                 TxOutput::Transfer(_, _)
                 | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::CreateStakePool(_)
+                | TxOutput::CreateStakePool(_, _)
                 | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::DecommissionPool(_, _, _, _) => None,
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => None,
             })
             .sum::<Option<Amount>>()
             .ok_or_else(|| ConnectTransactionError::BurnAmountSumError(tx.get_id()))?;
@@ -235,16 +237,36 @@ where
         output: &TxOutput,
     ) -> Result<PoolData, ConnectTransactionError> {
         match output {
-            TxOutput::Transfer(_, _) | TxOutput::LockThenTransfer(_, _, _) | TxOutput::Burn(_) => {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => {
                 Err(ConnectTransactionError::InvalidOutputTypeInReward)
             }
-            TxOutput::CreateStakePool(d) => Ok(d.as_ref().clone().into()),
-            TxOutput::ProduceBlockFromStake(_, pool_id)
-            | TxOutput::DecommissionPool(_, _, pool_id, _) => self
+            TxOutput::CreateStakePool(_, d) => Ok(d.as_ref().clone().into()),
+            TxOutput::ProduceBlockFromStake(_, pool_id) => self
                 .accounting_delta_adapter
                 .accounting_delta()
                 .get_pool_data(*pool_id)?
                 .ok_or(ConnectTransactionError::PoolDataNotFound(*pool_id)),
+        }
+    }
+
+    fn get_pool_id_from_output(
+        &self,
+        output: &TxOutput,
+    ) -> Result<PoolId, ConnectTransactionError> {
+        match output {
+            TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => {
+                Err(ConnectTransactionError::InvalidOutputTypeInReward)
+            }
+            TxOutput::CreateStakePool(pool_id, _) => Ok(*pool_id),
+            TxOutput::ProduceBlockFromStake(_, pool_id) => Ok(*pool_id),
         }
     }
 
@@ -264,7 +286,6 @@ where
                     &self.utxo_cache,
                 )
                 .map_err(SpendStakeError::ConsensusPoSError)?;
-                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
 
                 let reward_output = match block_reward_transactable
                     .outputs()
@@ -274,6 +295,16 @@ where
                     [output] => Ok(output),
                     _ => Err(SpendStakeError::MultipleBlockRewardOutputs),
                 }?;
+
+                let kernel_pool_id = self.get_pool_id_from_output(&kernel_output)?;
+                let reward_pool_id = self.get_pool_id_from_output(reward_output)?;
+
+                ensure!(
+                    kernel_pool_id == reward_pool_id,
+                    SpendStakeError::StakePoolIdMismatch(kernel_pool_id, reward_pool_id)
+                );
+
+                let kernel_pool_data = self.get_pool_data_from_output(&kernel_output)?;
                 let reward_pool_data = self.get_pool_data_from_output(reward_output)?;
 
                 ensure!(
@@ -315,25 +346,95 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+        let input0 = tx.inputs().get(0).ok_or(ConnectTransactionError::MissingTxInputs)?;
 
-        let tx_undo = tx
+        // TODO: this should also collect all the delegations after the pool decommissioning;
+        // see mintlayer/mintlayer-core/issues/909
+        let mut check_for_delegation_cleanup: Option<DelegationId> = None;
+
+        // Process tx inputs in terms of pos accounting.
+        // Spending `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos should result in either
+        // decommissioning a pool or spending share in accounting
+        let inputs_undos = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| match self.utxo_cache.utxo(input.outpoint()) {
+                Ok(input_utxo) => match input_utxo {
+                    Some(input_utxo) => match input_utxo.output() {
+                        TxOutput::DelegateStaking(amount, delegation_id) => {
+                            // If the input spends a `DelegateStaking` utxo, this means the user is
+                            // spending part of their share in the pool.
+                            check_for_delegation_cleanup = Some(*delegation_id);
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .spend_share_from_delegation_id(*delegation_id, *amount)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
+                        }
+                        TxOutput::CreateStakePool(pool_id, _)
+                        | TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                            // If the input spends `CreateStakePool` or `ProduceBlockFromStake` utxo,
+                            // this means the user is decommissioning the pool.
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .decommission_pool(*pool_id)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
+                        }
+                        TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::Burn(_) => None,
+                    },
+                    None => Some(Err(ConnectTransactionError::MissingOutputOrSpent)),
+                },
+                Err(_) => Some(Err(ConnectTransactionError::UtxoError(
+                    utxo::Error::ViewRead,
+                ))),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Process tx outputs in terms of pos accounting.
+        let outputs_undos = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::CreateStakePool(data) => {
-                    let res = self
-                        .accounting_delta_adapter
-                        .operations(tx_source)
-                        .create_pool(input0.outpoint(), data.as_ref().clone().into())
-                        .map(|(_, undo)| undo);
+                TxOutput::CreateStakePool(pool_id, data) => {
+                    let expected_pool_id = pos_accounting::make_pool_id(input0.outpoint());
+                    let res = if expected_pool_id == *pool_id {
+                        self.accounting_delta_adapter
+                            .operations(tx_source)
+                            .create_pool(input0.outpoint(), data.as_ref().clone().into())
+                            .map(|(_, undo)| undo)
+                            .map_err(ConnectTransactionError::PoSAccountingError)
+                    } else {
+                        Err(ConnectTransactionError::SpendStakeError(
+                            SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
+                        ))
+                    };
                     Some(res)
                 }
-                TxOutput::DecommissionPool(_, _, pool_id, _) => {
+                TxOutput::CreateDelegationId(spend_destination, target_pool) => {
                     let res = self
                         .accounting_delta_adapter
                         .operations(tx_source)
-                        .decommission_pool(*pool_id);
+                        .create_delegation_id(
+                            *target_pool,
+                            spend_destination.clone(),
+                            input0.outpoint(),
+                        )
+                        .map(|(_, undo)| undo)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
+                    Some(res)
+                }
+                TxOutput::DelegateStaking(amount, delegation_id) => {
+                    let res = self
+                        .accounting_delta_adapter
+                        .operations(tx_source)
+                        .delegate_staking(*delegation_id, *amount)
+                        .map_err(ConnectTransactionError::PoSAccountingError);
                     Some(res)
                 }
                 TxOutput::Transfer(_, _)
@@ -343,10 +444,46 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        if !tx_undo.is_empty() {
+        // delete delegation if the balance is 0 and the pool has been decommissioned
+        let delete_delegation_undo = match check_for_delegation_cleanup {
+            Some(delegation_id) => {
+                let accounting_view = self.accounting_delta_adapter.accounting_delta();
+                let delegation_balance =
+                    accounting_view.get_delegation_balance(delegation_id)?.ok_or(
+                        ConnectTransactionError::DelegationDataNotFound(delegation_id),
+                    )?;
+                if delegation_balance == Amount::ZERO {
+                    let delegation_data =
+                        accounting_view.get_delegation_data(delegation_id)?.ok_or(
+                            ConnectTransactionError::DelegationDataNotFound(delegation_id),
+                        )?;
+                    if !accounting_view.pool_exists(*delegation_data.source_pool())? {
+                        Some(
+                            self.accounting_delta_adapter
+                                .operations(tx_source)
+                                .delete_delegation_id(delegation_id)?,
+                        )
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+
+        // Store pos accounting operations undos
+        if !inputs_undos.is_empty() || !outputs_undos.is_empty() || delete_delegation_undo.is_some()
+        {
+            let tx_undos = inputs_undos
+                .into_iter()
+                .chain(outputs_undos.into_iter())
+                .chain(delete_delegation_undo.into_iter())
+                .collect();
             self.accounting_block_undo
                 .get_or_create_block_undo(&tx_source)
-                .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undo))
+                .insert_tx_undo(tx.get_id(), pos_accounting::AccountingTxUndo::new(tx_undos))
                 .map_err(ConnectTransactionError::AccountingBlockUndoError)
         } else {
             Ok(())
@@ -359,7 +496,9 @@ where
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
         tx.outputs().iter().try_for_each(|output| match output {
-            TxOutput::CreateStakePool(_) | TxOutput::DecommissionPool(_, _, _, _) => {
+            TxOutput::CreateStakePool(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => {
                 let block_undo_fetcher = |id: Id<Block>| {
                     self.storage
                         .get_accounting_undo(id)
@@ -428,8 +567,9 @@ where
             &self.storage,
             &self.chain_config,
             &self.utxo_cache,
-            tx_source,
             tx,
+            tx_source,
+            tx.transaction().get_id().into(),
             median_time_past,
         )?;
 

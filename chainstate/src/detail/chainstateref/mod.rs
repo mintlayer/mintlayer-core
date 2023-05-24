@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, convert::TryInto};
+use std::collections::BTreeSet;
 
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
@@ -24,14 +24,17 @@ use chainstate_types::{
 };
 use common::{
     chain::{
-        block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
+        block::{
+            signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward,
+            ConsensusData,
+        },
         config::EpochIndex,
-        timelock::OutputTimeLock,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction, TxOutput,
+        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, Transaction,
+        TxOutput,
     },
-    primitives::{id::WithId, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
     Uint256,
 };
@@ -423,55 +426,49 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_block_reward_timelock(
-        &self,
-        block: &Block,
-        timelock: &OutputTimeLock,
-    ) -> Result<(), CheckBlockError> {
-        match timelock {
-            OutputTimeLock::ForBlockCount(c) => {
-                let cs: i64 = (*c)
-                    .try_into()
-                    .map_err(|_| {
-                        CheckBlockError::InvalidBlockRewardMaturityDistanceValue(block.get_id(), *c)
-                    })
-                    .log_err()?;
-                let given = BlockDistance::new(cs);
-                let required = block.consensus_data().reward_maturity_distance(self.chain_config);
-                ensure!(
-                    given >= required,
-                    CheckBlockError::InvalidBlockRewardMaturityDistance(
-                        block.get_id(),
-                        given,
-                        required
-                    )
-                );
-                Ok(())
-            }
-            OutputTimeLock::UntilHeight(_)
-            | OutputTimeLock::UntilTime(_)
-            | OutputTimeLock::ForSeconds(_) => Err(
-                CheckBlockError::InvalidBlockRewardMaturityTimelockType(block.get_id()),
-            ),
-        }
-    }
-
     fn check_block_reward_maturity_settings(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block.block_reward().outputs().iter().try_for_each(|output| {
-            match output {
-                TxOutput::LockThenTransfer(_, _, tl) => self.check_block_reward_timelock(block, tl),
-                TxOutput::ProduceBlockFromStake(_, _) => {
-                    // The output can be reused in block reward right away
-                    Ok(())
+        block
+            .block_reward()
+            .outputs()
+            .iter()
+            .enumerate()
+            .try_for_each(|(index, output)| {
+                match block.consensus_data() {
+                    ConsensusData::None | ConsensusData::PoW(_) => match output {
+                        TxOutput::LockThenTransfer(_, _, tl) => {
+                            let outpoint = OutPoint::new(block.get_id().into(), index as u32);
+                            let required =
+                                block.consensus_data().reward_maturity_distance(self.chain_config);
+                            tx_verifier::timelock_check::check_output_maturity_setting(
+                                tl, required, outpoint,
+                            )
+                            .map_err(CheckBlockError::BlockRewardMaturityError)
+                        }
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::CreateStakePool(_, _)
+                        | TxOutput::ProduceBlockFromStake(_, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => Err(
+                            CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                        ),
+                    },
+                    ConsensusData::PoS(_) => {
+                        match output {
+                            // The output can be reused in block reward right away
+                            TxOutput::ProduceBlockFromStake(_, _) => Ok(()),
+                            TxOutput::Transfer(_, _)
+                            | TxOutput::LockThenTransfer(_, _, _)
+                            | TxOutput::CreateStakePool(_, _)
+                            | TxOutput::Burn(_)
+                            | TxOutput::CreateDelegationId(_, _)
+                            | TxOutput::DelegateStaking(_, _) => Err(
+                                CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
+                            ),
+                        }
+                    }
                 }
-                TxOutput::Transfer(_, _)
-                | TxOutput::CreateStakePool(_)
-                | TxOutput::Burn(_)
-                | TxOutput::DecommissionPool(_, _, _, _) => Err(
-                    CheckBlockError::InvalidBlockRewardOutputType(block.get_id()),
-                ),
-            }
-        })
+            })
     }
 
     fn check_header_size(&self, header: &SignedBlockHeader) -> Result<(), BlockSizeError> {
@@ -576,9 +573,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     TxOutput::Transfer(v, _)
                     | TxOutput::LockThenTransfer(v, _, _)
                     | TxOutput::Burn(v) => v.token_data(),
-                    TxOutput::CreateStakePool(_)
+                    TxOutput::CreateStakePool(_, _)
                     | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::DecommissionPool(_, _, _, _) => None,
+                    | TxOutput::CreateDelegationId(_, _)
+                    | TxOutput::DelegateStaking(_, _) => None,
                 })
                 .try_for_each(|token_data| {
                     check_tokens_data(
@@ -590,46 +588,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 })
                 .map_err(CheckBlockTransactionsError::TokensError)
                 .log_err()?;
-        }
-        Ok(())
-    }
-
-    fn check_outputs_timelock(
-        &self,
-        block: &Block,
-        block_height: BlockHeight,
-    ) -> Result<(), CheckBlockTransactionsError> {
-        for tx in block.transactions() {
-            tx.outputs().iter().try_for_each(|output| {
-                match output {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::Burn(_)
-                    | TxOutput::CreateStakePool(_)
-                    | TxOutput::ProduceBlockFromStake(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _) => {}
-                    TxOutput::DecommissionPool(_, _, _, timelock) => match timelock {
-                        OutputTimeLock::ForBlockCount(c) => {
-                            let cs: i64 = (*c).try_into().map_err(|_| {
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(tx.transaction().get_id(), *c)
-                            })?;
-                            let given = BlockDistance::new(cs);
-                            let required = self.chain_config
-                                .as_ref()
-                                .decommission_pool_maturity_distance(block_height);
-                            ensure!(
-                                given >= required,
-                                CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(tx.transaction().get_id(), given, required)
-                            );
-                        }
-                        OutputTimeLock::UntilHeight(_)
-                        | OutputTimeLock::UntilTime(_)
-                        | OutputTimeLock::ForSeconds(_) => {
-                            return Err(CheckBlockTransactionsError::InvalidDecommissionMaturityType(tx.transaction().get_id()));
-                        }
-                    },
-                };
-                Ok(())
-            })?;
         }
         Ok(())
     }
@@ -656,16 +614,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_transactions(
-        &self,
-        block: &Block,
-        block_height: BlockHeight,
-    ) -> Result<(), CheckBlockTransactionsError> {
+    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Note: duplicate txs are detected through duplicate inputs
         self.check_witness_count(block).log_err()?;
         self.check_duplicate_inputs(block).log_err()?;
         self.check_tokens_txs(block).log_err()?;
-        self.check_outputs_timelock(block, block_height).log_err()?;
         self.check_no_signature_size(block).log_err()?;
         Ok(())
     }
@@ -674,11 +627,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
-    pub fn check_block(
-        &self,
-        block: &WithId<Block>,
-        block_height: BlockHeight,
-    ) -> Result<(), CheckBlockError> {
+    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
         self.check_block_header(block.header()).log_err()?;
 
         self.check_block_size(block)
@@ -710,7 +659,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             );
         }
 
-        self.check_transactions(block, block_height)
+        self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)
             .log_err()?;
 

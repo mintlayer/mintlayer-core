@@ -163,6 +163,19 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperatio
         Ok((delegation_id, undo))
     }
 
+    fn delete_delegation_id(
+        &mut self,
+        delegation_id: common::chain::DelegationId,
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
+        let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
+
+        let undo = delta.delete_delegation_id(delegation_id)?;
+
+        self.merge_delta(delta.consume())?;
+
+        Ok(undo)
+    }
+
     fn delegate_staking(
         &mut self,
         delegation_target: common::chain::DelegationId,

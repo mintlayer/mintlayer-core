@@ -15,7 +15,7 @@
 
 use crate::{
     address::pubkeyhash::PublicKeyHash,
-    chain::{tokens::OutputValue, PoolId},
+    chain::{tokens::OutputValue, DelegationId, PoolId},
     primitives::{Amount, Id},
 };
 use script::Script;
@@ -51,34 +51,27 @@ pub enum TxOutput {
     Burn(OutputValue),
     /// Output type that is used to create a stake pool
     #[codec(index = 3)]
-    CreateStakePool(Box<StakePoolData>),
+    CreateStakePool(PoolId, Box<StakePoolData>),
     /// Output type that represents spending of a stake pool output in a block reward
     /// in order to produce a block
     #[codec(index = 4)]
     ProduceBlockFromStake(Destination, PoolId),
     #[codec(index = 5)]
-    DecommissionPool(Amount, Destination, PoolId, OutputTimeLock),
+    CreateDelegationId(Destination, PoolId),
+    #[codec(index = 6)]
+    DelegateStaking(Amount, DelegationId),
 }
 
 impl TxOutput {
-    pub fn is_burn(&self) -> bool {
-        match self {
-            TxOutput::Transfer(_, _)
-            | TxOutput::LockThenTransfer(_, _, _)
-            | TxOutput::CreateStakePool(_)
-            | TxOutput::DecommissionPool(_, _, _, _)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
-            TxOutput::Burn(_) => true,
-        }
-    }
-
-    pub fn has_timelock(&self) -> bool {
+    pub fn timelock(&self) -> Option<&OutputTimeLock> {
         match self {
             TxOutput::Transfer(_, _)
             | TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_)
-            | TxOutput::ProduceBlockFromStake(_, _) => false,
-            TxOutput::DecommissionPool(_, _, _, _) | TxOutput::LockThenTransfer(_, _, _) => true,
+            | TxOutput::CreateStakePool(_, _)
+            | TxOutput::ProduceBlockFromStake(_, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => None,
+            TxOutput::LockThenTransfer(_, _, tl) => Some(tl),
         }
     }
 }

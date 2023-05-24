@@ -17,10 +17,11 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        ChainConfig, GenBlock, TxOutput,
+        ChainConfig, GenBlock, OutPoint, OutPointSourceId, TxOutput,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
+use thiserror::Error;
 use utils::ensure;
 use utxo::UtxosView;
 
@@ -29,22 +30,30 @@ use super::{
     TransactionSourceForConnect,
 };
 
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum OutputMaturityError {
+    #[error("Maturity setting type for the output {0:?} is invalid")]
+    InvalidOutputMaturitySettingType(OutPoint),
+    #[error("Maturity setting for the output {0:?} is too short: {1} < {2}")]
+    InvalidOutputMaturityDistance(OutPoint, BlockDistance, BlockDistance),
+    #[error("Maturity setting value for the output {0:?} is invalid: {1}")]
+    InvalidOutputMaturityDistanceValue(OutPoint, u64),
+}
+
+enum OutputTimelockCheckRequired {
+    DelegationSpendMaturity,
+    DecommissioningMaturity,
+}
+
 fn check_timelock(
     source_block_index: &GenBlockIndex,
-    output: &TxOutput,
+    timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
+    outpoint: &OutPoint,
 ) -> Result<(), ConnectTransactionError> {
     let source_block_height = source_block_index.block_height();
     let source_block_time = source_block_index.block_timestamp();
-
-    let timelock = match output {
-        TxOutput::Transfer(_, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateStakePool(_)
-        | TxOutput::ProduceBlockFromStake(_, _) => return Ok(()),
-        TxOutput::LockThenTransfer(_, _, tl) | TxOutput::DecommissionPool(_, _, _, tl) => tl,
-    };
 
     let past_lock = match timelock {
         OutputTimeLock::UntilHeight(h) => spend_height >= h,
@@ -66,28 +75,59 @@ fn check_timelock(
         }
     };
 
-    ensure!(past_lock, ConnectTransactionError::TimeLockViolation);
+    ensure!(
+        past_lock,
+        ConnectTransactionError::TimeLockViolation(outpoint.clone())
+    );
 
     Ok(())
 }
 
-pub fn check_timelocks<
+pub fn check_timelocks<S, C, T, U>(
+    storage: &S,
+    chain_config: &C,
+    utxos_view: &U,
+    tx: &T,
+    tx_source: &TransactionSourceForConnect,
+    outpoint_source_id: OutPointSourceId,
+    spending_time: &BlockTimestamp,
+) -> Result<(), ConnectTransactionError>
+where
     S: TransactionVerifierStorageRef,
     C: AsRef<ChainConfig>,
     T: Transactable,
     U: UtxosView,
->(
-    storage: &S,
-    chain_config: &C,
-    utxos_view: &U,
-    tx_source: &TransactionSourceForConnect,
-    tx: &T,
-    spending_time: &BlockTimestamp,
-) -> Result<(), ConnectTransactionError> {
+{
     let inputs = match tx.inputs() {
         Some(ins) => ins,
         None => return Ok(()),
     };
+
+    let input_utxos = inputs
+        .iter()
+        .map(|input| {
+            utxos_view
+                .utxo(input.outpoint())
+                .map_err(|_| utxo::Error::ViewRead)?
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    debug_assert_eq!(inputs.len(), input_utxos.len());
+
+    // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
+    // produced outputs must be timelocked as per chain config
+    let output_check_required = input_utxos.iter().find_map(|utxo| match utxo.output() {
+        TxOutput::Transfer(_, _)
+        | TxOutput::LockThenTransfer(_, _, _)
+        | TxOutput::Burn(_)
+        | TxOutput::CreateDelegationId(_, _) => None,
+        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
+        }
+        TxOutput::DelegateStaking(_, _) => {
+            Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+        }
+    });
 
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
@@ -96,14 +136,9 @@ pub fn check_timelocks<
         TransactionSourceForConnect::Mempool { current_best } => (*current_best).clone(),
     };
 
-    for input in inputs {
-        let outpoint = input.outpoint();
-        let utxo = utxos_view
-            .utxo(outpoint)
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
-
-        if utxo.output().has_timelock() {
+    // check if utxos can already be spent
+    input_utxos.iter().zip(inputs.iter()).try_for_each(|(utxo, input)| -> Result<(), ConnectTransactionError>{
+        if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
                 utxo::UtxoSource::Mempool => match tx_source {
@@ -133,12 +168,89 @@ pub fn check_timelocks<
 
             check_timelock(
                 &source_block_index,
-                utxo.output(),
+                timelock,
                 &tx_source.expected_block_height(),
                 spending_time,
+                input.outpoint()
+            )?;
+        }
+        Ok(())
+    })?;
+
+    // check if output timelocks follow the rules
+    if let Some(outputs) = tx.outputs() {
+        if let Some(output_check_required) = output_check_required {
+            check_outputs_timelock(
+                chain_config.as_ref(),
+                outputs,
+                tx_source.expected_block_height(),
+                output_check_required,
+                outpoint_source_id,
             )?;
         }
     }
 
     Ok(())
+}
+
+/// Outputs that decommission a stake pool or spend delegation share must be timelocked
+fn check_outputs_timelock(
+    chain_config: &ChainConfig,
+    outputs: &[TxOutput],
+    block_height: BlockHeight,
+    output_check_required: OutputTimelockCheckRequired,
+    outpoint_source_id: OutPointSourceId,
+) -> Result<(), ConnectTransactionError> {
+    outputs
+        .iter()
+        .enumerate()
+        .try_for_each(|(index, output)| {
+            let outpoint = OutPoint::new(outpoint_source_id.clone(), index as u32);
+            match output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::Burn(_)
+                | TxOutput::CreateStakePool(_, _)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => Ok(()),
+                TxOutput::LockThenTransfer(_, _, timelock) => match output_check_required {
+                    OutputTimelockCheckRequired::DelegationSpendMaturity => {
+                        let required =
+                            chain_config.as_ref().spend_share_maturity_distance(block_height);
+                        check_output_maturity_setting(timelock, required, outpoint)
+                    }
+                    OutputTimelockCheckRequired::DecommissioningMaturity => {
+                        let required =
+                            chain_config.as_ref().decommission_pool_maturity_distance(block_height);
+                        check_output_maturity_setting(timelock, required, outpoint)
+                    }
+                },
+            }
+        })
+        .map_err(ConnectTransactionError::OutputTimelockError)
+}
+
+pub fn check_output_maturity_setting(
+    timelock: &OutputTimeLock,
+    required: BlockDistance,
+    outpoint: OutPoint,
+) -> Result<(), OutputMaturityError> {
+    match timelock {
+        OutputTimeLock::ForBlockCount(c) => {
+            let cs: i64 = (*c).try_into().map_err(|_| {
+                OutputMaturityError::InvalidOutputMaturityDistanceValue(outpoint.clone(), *c)
+            })?;
+            let given = BlockDistance::new(cs);
+            ensure!(
+                given >= required,
+                OutputMaturityError::InvalidOutputMaturityDistance(outpoint, given, required)
+            );
+            Ok(())
+        }
+        OutputTimeLock::UntilHeight(_)
+        | OutputTimeLock::UntilTime(_)
+        | OutputTimeLock::ForSeconds(_) => Err(
+            OutputMaturityError::InvalidOutputMaturitySettingType(outpoint),
+        ),
+    }
 }

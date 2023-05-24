@@ -160,13 +160,14 @@ where
         TxOutput::Transfer(_, _)
         | TxOutput::LockThenTransfer(_, _, _)
         | TxOutput::Burn(_)
-        | TxOutput::DecommissionPool(_, _, _, _) => {
+        | TxOutput::CreateDelegationId(_, _)
+        | TxOutput::DelegateStaking(_, _) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::RandomnessError(
                 PoSRandomnessError::InvalidOutputTypeInStakeKernel(header.get_id()),
             ));
         }
-        TxOutput::CreateStakePool(d) => d.as_ref().vrf_public_key().clone(),
+        TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pool_data = pos_accounting_view
                 .get_pool_data(pool_id)?

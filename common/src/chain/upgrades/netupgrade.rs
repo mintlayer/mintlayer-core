@@ -95,6 +95,18 @@ pub enum PoSStatus {
     },
 }
 
+impl PoSStatus {
+    pub fn get_chain_config(&self) -> &PoSChainConfig {
+        match self {
+            PoSStatus::Ongoing(config)
+            | PoSStatus::Threshold {
+                initial_difficulty: _,
+                config,
+            } => config,
+        }
+    }
+}
+
 impl From<ConsensusUpgrade> for RequiredConsensus {
     fn from(upgrade: ConsensusUpgrade) -> Self {
         match upgrade {

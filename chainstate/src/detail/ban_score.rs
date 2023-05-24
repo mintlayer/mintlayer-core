@@ -17,7 +17,10 @@ use chainstate_types::pos_randomness::PoSRandomnessError;
 use consensus::{
     BlockSignatureError, ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError,
 };
-use tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError;
+use tx_verifier::{
+    timelock_check::OutputMaturityError,
+    transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
+};
 
 use super::{
     transaction_verifier::{
@@ -95,7 +98,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
-            ConnectTransactionError::TimeLockViolation => 100,
+            ConnectTransactionError::TimeLockViolation(_) => 100,
             ConnectTransactionError::MissingBlockUndo(_) => 0,
             ConnectTransactionError::MissingBlockRewardUndo(_) => 0,
             ConnectTransactionError::MissingTxUndo(_) => 0,
@@ -130,7 +133,19 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 100,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
+            ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
+            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
+        }
+    }
+}
+
+impl BanScore for OutputMaturityError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            OutputMaturityError::InvalidOutputMaturitySettingType(_) => 100,
+            OutputMaturityError::InvalidOutputMaturityDistance(_, _, _) => 100,
+            OutputMaturityError::InvalidOutputMaturityDistanceValue(_, _) => 100,
         }
     }
 }
@@ -141,6 +156,7 @@ impl BanScore for SignatureDestinationGetterError {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }
@@ -214,13 +230,11 @@ impl BanScore for CheckBlockError {
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.ban_score(),
-            CheckBlockError::InvalidBlockRewardMaturityDistance(_, _, _) => 100,
-            CheckBlockError::InvalidBlockRewardMaturityDistanceValue(_, _) => 100,
-            CheckBlockError::InvalidBlockRewardMaturityTimelockType(_) => 100,
             CheckBlockError::InvalidBlockRewardOutputType(_) => 100,
             CheckBlockError::PrevBlockRetrievalError(_, _, _) => 100,
             CheckBlockError::BlockTimeStrictOrderInvalid => 100,
             CheckBlockError::MerkleRootCalculationFailed(_, _) => 100,
+            CheckBlockError::BlockRewardMaturityError(err) => err.ban_score(),
         }
     }
 }
@@ -263,9 +277,6 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::EmptyInputsOutputsInTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokensError(err) => err.ban_score(),
             CheckBlockTransactionsError::InvalidWitnessCount => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityType(_) => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityDistanceValue(_, _) => 100,
-            CheckBlockTransactionsError::InvalidDecommissionMaturityDistance(_, _, _) => 100,
             CheckBlockTransactionsError::NoSignatureDataSizeTooLarge(_, _) => 100,
         }
     }
@@ -424,6 +435,10 @@ impl BanScore for pos_accounting::Error {
             E::PledgeAmountAdditionError => 100,
             E::InvariantErrorIncreasePledgeUndoFailedPoolBalanceNotFound => 100,
             E::InvariantErrorIncreasePledgeUndoFailedPoolDataNotFound => 100,
+            E::DelegationDeletionFailedIdDoesNotExist => 100,
+            E::DelegationDeletionFailedBalanceNonZero => 100,
+            E::DelegationDeletionFailedPoolsShareNonZero => 100,
+            E::DelegationDeletionFailedPoolStillExists => 100,
         }
     }
 }

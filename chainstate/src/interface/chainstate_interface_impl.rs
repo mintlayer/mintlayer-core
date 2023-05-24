@@ -579,7 +579,7 @@ fn get_output_coin_amount(
         TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) | TxOutput::Burn(v) => {
             v.coin_amount()
         }
-        TxOutput::CreateStakePool(data) => Some(data.value()),
+        TxOutput::CreateStakePool(_, data) => Some(data.value()),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
             let pledge_amount = pos_accounting_view
                 .get_pool_data(*pool_id)
@@ -594,7 +594,8 @@ fn get_output_coin_amount(
                 .pledge_amount();
             Some(pledge_amount)
         }
-        TxOutput::DecommissionPool(v, _, _, _) => Some(*v),
+        TxOutput::DelegateStaking(v, _) => Some(*v),
+        TxOutput::CreateDelegationId(_, _) => None,
     };
 
     Ok(amount)

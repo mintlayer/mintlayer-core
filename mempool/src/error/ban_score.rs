@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate::{
+    ban_score::BanScore,
     tx_verifier::transaction_verifier::signature_destination_getter::SignatureDestinationGetterError,
     ChainstateError, ConnectTransactionError, TokensError, TransactionVerifierStorageError,
     TxIndexError,
@@ -120,7 +121,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // These depend on the current chainstate. Since it is not easy to determine whether
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
-            ConnectTransactionError::TimeLockViolation => 0,
+            ConnectTransactionError::TimeLockViolation(_) => 0,
 
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),
@@ -144,6 +145,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::SpendStakeError(_) => 100,
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
+            ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
             ConnectTransactionError::BlockHeightArithmeticError => 0,
@@ -175,6 +177,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::DistributedDelegationsRewardExceedTotal(_, _, _, _) => 0,
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
+            ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
         }
     }
@@ -185,7 +188,8 @@ impl MempoolBanScore for SignatureDestinationGetterError {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
-            SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
+            SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
+            SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
         }
     }
@@ -275,6 +279,10 @@ impl MempoolBanScore for pos_accounting::Error {
             E::AttemptedDecommissionNonexistingPoolBalance => 0,
             E::AttemptedDecommissionNonexistingPoolData => 0,
             E::DelegationCreationFailedPoolDoesNotExist => 0,
+            E::DelegationDeletionFailedIdDoesNotExist => 0,
+            E::DelegationDeletionFailedBalanceNonZero => 0,
+            E::DelegationDeletionFailedPoolsShareNonZero => 0,
+            E::DelegationDeletionFailedPoolStillExists => 0,
             E::DelegateToNonexistingId => 0,
             E::DelegateToNonexistingPool => 0,
             E::IncreasePledgeAmountOfNonexistingPool => 0,

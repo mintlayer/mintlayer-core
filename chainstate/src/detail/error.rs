@@ -26,7 +26,7 @@ use common::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
         Block, GenBlock, PoolId, Transaction,
     },
-    primitives::{BlockDistance, BlockHeight, Id},
+    primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
@@ -110,14 +110,10 @@ pub enum CheckBlockError {
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
     ConsensusVerificationFailed(ConsensusVerificationError),
-    #[error("Block reward maturity distance too short in block {0}: {1} < {2}")]
-    InvalidBlockRewardMaturityDistance(Id<Block>, BlockDistance, BlockDistance),
-    #[error("Block reward maturity distance invalid in block {0}: {1}")]
-    InvalidBlockRewardMaturityDistanceValue(Id<Block>, u64),
-    #[error("Invalid block reward output timelock type for block {0}")]
-    InvalidBlockRewardMaturityTimelockType(Id<Block>),
     #[error("Invalid block reward output type for block {0}")]
     InvalidBlockRewardOutputType(Id<Block>),
+    #[error("Block reward maturity error: {0}")]
+    BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputMaturityError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -134,12 +130,6 @@ pub enum CheckBlockTransactionsError {
     EmptyInputsOutputsInTransactionInBlock(Id<Transaction>, Id<Block>),
     #[error("Tokens error: {0}")]
     TokensError(TokensError),
-    #[error("Maturity setting type for the decommission pool output in tx {0} is invalid")]
-    InvalidDecommissionMaturityType(Id<Transaction>),
-    #[error("Maturity setting for the decommission pool output in tx {0} too short: {1} < {2}")]
-    InvalidDecommissionMaturityDistance(Id<Transaction>, BlockDistance, BlockDistance),
-    #[error("Maturity setting value for the decommission pool output in tx {0} is invalid: {1}")]
-    InvalidDecommissionMaturityDistanceValue(Id<Transaction>, u64),
     #[error("No signature data size is too large: {0} > {1}")]
     NoSignatureDataSizeTooLarge(usize, usize),
 }

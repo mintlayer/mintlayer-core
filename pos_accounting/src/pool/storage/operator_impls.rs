@@ -25,8 +25,8 @@ use crate::{
         helpers::{make_delegation_id, make_pool_id},
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
-            DelegationDataUndo, IncreasePledgeAmountUndo, PoSAccountingOperations,
-            PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
+            DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
+            PoSAccountingOperations, PoSAccountingUndo, PoolDataUndo, SpendFromShareUndo,
         },
         pool_data::PoolData,
         view::PoSAccountingView,
@@ -148,6 +148,41 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         ))
     }
 
+    fn delete_delegation_id(
+        &mut self,
+        delegation_id: DelegationId,
+    ) -> Result<PoSAccountingUndo, Error> {
+        let delegation_data = self
+            .store
+            .get_delegation_data(delegation_id)?
+            .ok_or(Error::DelegationDeletionFailedIdDoesNotExist)?;
+
+        if self.store.get_delegation_balance(delegation_id)?.is_some() {
+            return Err(Error::DelegationDeletionFailedBalanceNonZero);
+        }
+
+        if self
+            .store
+            .get_pool_delegation_share(*delegation_data.source_pool(), delegation_id)?
+            .is_some()
+        {
+            return Err(Error::DelegationDeletionFailedPoolsShareNonZero);
+        }
+
+        if self.pool_exists(*delegation_data.source_pool())? {
+            return Err(Error::DelegationDeletionFailedPoolStillExists);
+        }
+
+        self.store.del_delegation_data(delegation_id)?;
+
+        Ok(PoSAccountingUndo::DeleteDelegationId(
+            DeleteDelegationIdUndo {
+                delegation_id,
+                data_undo: DelegationDataUndo::Data(Box::new(delegation_data)),
+            },
+        ))
+    }
+
     fn delegate_staking(
         &mut self,
         delegation_target: DelegationId,
@@ -200,6 +235,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
             PoSAccountingUndo::CreatePool(undo) => self.undo_create_pool(undo),
             PoSAccountingUndo::DecommissionPool(undo) => self.undo_decommission_pool(undo),
             PoSAccountingUndo::CreateDelegationId(undo) => self.undo_create_delegation_id(undo),
+            PoSAccountingUndo::DeleteDelegationId(undo) => self.undo_delete_delegation_id(undo),
             PoSAccountingUndo::DelegateStaking(undo) => self.undo_delegate_staking(undo),
             PoSAccountingUndo::SpendFromShare(undo) => {
                 self.undo_spend_share_from_delegation_id(undo)
@@ -273,6 +309,23 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingDB<S, T> {
         }
 
         self.store.del_delegation_data(undo.delegation_id)?;
+
+        Ok(())
+    }
+
+    fn undo_delete_delegation_id(&mut self, undo: DeleteDelegationIdUndo) -> Result<(), Error> {
+        let data_undo = match undo.data_undo {
+            DelegationDataUndo::Data(v) => v,
+            DelegationDataUndo::DataDelta(_) => {
+                panic!("incompatible DelegationDataUndo supplied")
+            }
+        };
+
+        if self.store.get_delegation_balance(undo.delegation_id)?.is_some() {
+            return Err(Error::DelegationDeletionFailedBalanceNonZero);
+        }
+
+        self.store.set_delegation_data(undo.delegation_id, &data_undo)?;
 
         Ok(())
     }

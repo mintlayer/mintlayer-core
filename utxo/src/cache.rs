@@ -22,44 +22,19 @@ use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
         signature::Signable,
-        GenBlock, OutPoint, OutPointSourceId, Transaction,
+        GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput,
     },
     primitives::{BlockHeight, Id, Idable},
 };
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Formatter},
-    ops::Deref,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConsumedUtxoCache {
     pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
     pub(crate) best_block: Id<GenBlock>,
-}
-
-impl<T> UtxosView for T
-where
-    T: Deref,
-    <T as Deref>::Target: UtxosView,
-{
-    type Error = <T::Target as UtxosView>::Error;
-
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
-        self.deref().utxo(outpoint)
-    }
-
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
-        self.deref().has_utxo(outpoint)
-    }
-
-    fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error> {
-        self.deref().best_block_hash()
-    }
-
-    fn estimated_size(&self) -> Option<usize> {
-        self.deref().estimated_size()
-    }
 }
 
 pub struct UtxosCache<P> {
@@ -145,8 +120,8 @@ impl<P: UtxosView> UtxosCache<P> {
         tx.outputs()
             .iter()
             .enumerate()
-            // burned outputs should not be included into utxo set
-            .filter(|(_, output)| !output.is_burn())
+            // outputs that cannot be spent should not be included into utxo set
+            .filter(|(_, output)| can_be_spent(output))
             .try_for_each(|(idx, output)| {
                 let outpoint = OutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.
@@ -190,7 +165,7 @@ impl<P: UtxosView> UtxosCache<P> {
         for (i, output) in tx.outputs().iter().enumerate() {
             let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
 
-            if !output.is_burn() {
+            if can_be_spent(output) {
                 self.spend_utxo(&tx_outpoint)?;
             }
         }
@@ -221,7 +196,7 @@ impl<P: UtxosView> UtxosCache<P> {
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
             for (idx, output) in outputs.iter().enumerate() {
-                if output.is_burn() {
+                if !can_be_spent(output) {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
                 let outpoint = OutPoint::new(source_id.clone(), idx as u32);
@@ -473,6 +448,17 @@ impl<P> FlushableUtxoView for UtxosCache<P> {
 
         self.current_block_hash = utxo_entries.best_block;
         Ok(())
+    }
+}
+
+fn can_be_spent(output: &TxOutput) -> bool {
+    match output {
+        TxOutput::Transfer(..)
+        | TxOutput::LockThenTransfer(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::DelegateStaking(..) => true,
+        TxOutput::CreateDelegationId(..) | TxOutput::Burn(..) => false,
     }
 }
 

@@ -28,7 +28,7 @@ pub use crate::{
         },
         delegation::DelegationData,
         delta::{data::PoSAccountingDeltaData, DeltaMergeUndo, PoSAccountingDelta},
-        helpers::make_pool_id,
+        helpers::{make_delegation_id, make_pool_id},
         operations::{PoSAccountingOperations, PoSAccountingUndo},
         pool_data::PoolData,
         storage::PoSAccountingDB,

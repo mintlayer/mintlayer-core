@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{Destination, PoolId, TxOutput};
+use common::chain::{DelegationId, Destination, PoolId, TxOutput};
 use pos_accounting::PoSAccountingView;
 
 use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
@@ -29,6 +29,8 @@ pub enum SignatureDestinationGetterError {
     SigVerifyOfBurnedOutput,
     #[error("Pool data not found for signature verification {0}")]
     PoolDataNotFound(PoolId),
+    #[error("Delegation data not found for signature verification {0}")]
+    DelegationDataNotFound(DelegationId),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]
     SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
 }
@@ -60,15 +62,21 @@ impl<'a> SignatureDestinationGetter<'a> {
         let destination_getter =
             |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
                 match output {
-                    TxOutput::Transfer(_, d)
-                    | TxOutput::LockThenTransfer(_, d, _)
-                    | TxOutput::DecommissionPool(_, d, _, _) => Ok(d.clone()),
-                    TxOutput::Burn(_) => {
+                    TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Ok(d.clone()),
+                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                         // This error is emitted in other places for attempting to make this spend,
                         // but this is just a double-check.
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                     }
-                    TxOutput::CreateStakePool(pool_data) => {
+                    TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_delta
+                        .accounting_delta()
+                        .get_delegation_data(*delegation_id)?
+                        .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
+                            *delegation_id,
+                        ))?
+                        .spend_destination()
+                        .clone()),
+                    TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation transaction is only allowed in a
                         // context of a transaction (as opposed to block reward) only if this pool
                         // is being decommissioned.
@@ -100,10 +108,10 @@ impl<'a> SignatureDestinationGetter<'a> {
                 match output {
                     TxOutput::Transfer(_, _)
                     | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DecommissionPool(_, _, _, _) => {
+                    | TxOutput::DelegateStaking(_, _) => {
                         Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
                     }
-                    TxOutput::Burn(_) => {
+                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
                         Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
                     }
 
@@ -112,7 +120,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                         // create another block, given that this is a block reward.
                         Ok(d.clone())
                     }
-                    TxOutput::CreateStakePool(pool_data) => {
+                    TxOutput::CreateStakePool(_, pool_data) => {
                         // Spending an output of a pool creation output is only allowed when
                         // creating a block (given it's in a block reward; otherwise it should
                         // be a transaction for decommissioning the pool), hence the staker key

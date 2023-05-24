@@ -19,12 +19,14 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
         TxMainChainIndexError,
     },
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
+
+use crate::timelock_check;
 
 use super::{
     signature_destination_getter::SignatureDestinationGetterError,
@@ -77,8 +79,8 @@ pub enum ConnectTransactionError {
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
-    #[error("Timelock rules violated")]
-    TimeLockViolation,
+    #[error("Timelock rules violated in output {0:?}")]
+    TimeLockViolation(OutPoint),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -127,6 +129,8 @@ pub enum ConnectTransactionError {
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Total balance of delegations in pool {0} is zero")]
     TotalDelegationBalanceZero(PoolId),
+    #[error("Delegation {0} not found")]
+    DelegationDataNotFound(DelegationId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811
@@ -137,6 +141,8 @@ pub enum ConnectTransactionError {
 
     #[error("Destination retrieval error for signature verification {0}")]
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
+    #[error("Output timelock error: {0}")]
+    OutputTimelockError(#[from] timelock_check::OutputMaturityError),
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {
@@ -258,6 +264,8 @@ pub enum SpendStakeError {
     InvalidBlockRewardOutputType,
     #[error("Stake pool data in kernel doesn't match data in block reward output")]
     StakePoolDataMismatch,
+    #[error("Pool id in kernel {0} doesn't match id in block reward output {1}")]
+    StakePoolIdMismatch(PoolId, PoolId),
     #[error("Consensus PoS error")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }
