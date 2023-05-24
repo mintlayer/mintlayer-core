@@ -16,7 +16,10 @@
 use std::collections::BTreeMap;
 
 use common::address::Address;
-use crypto::key::extended::ExtendedPublicKey;
+use crypto::{
+    kdf::KdfChallenge, key::extended::ExtendedPublicKey, random::make_true_rng,
+    symkey::SymmetricKey,
+};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
@@ -31,6 +34,8 @@ use crate::{
 };
 
 mod well_known {
+    use crypto::kdf::KdfChallenge;
+
     use super::Codec;
 
     /// Pre-defined database keys
@@ -52,13 +57,50 @@ mod well_known {
     }
 
     declare_entry!(StoreVersion: u32);
+    declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
 }
 
 /// Read-only chainstate storage transaction
-pub struct StoreTxRo<'st, B: storage::Backend>(pub(super) storage::TransactionRo<'st, B, Schema>);
+pub struct StoreTxRo<'st, B: storage::Backend> {
+    pub(super) storage: storage::TransactionRo<'st, B, Schema>,
+    encryption_key: &'st Option<SymmetricKey>,
+    locked: bool,
+}
 
 /// Read-write chainstate storage transaction
-pub struct StoreTxRw<'st, B: storage::Backend>(pub(super) storage::TransactionRw<'st, B, Schema>);
+pub struct StoreTxRw<'st, B: storage::Backend> {
+    pub(super) storage: storage::TransactionRw<'st, B, Schema>,
+    encryption_key: &'st Option<SymmetricKey>,
+    locked: bool,
+}
+
+impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
+    pub fn new(
+        storage: storage::TransactionRo<'st, B, Schema>,
+        encryption_key: &'st Option<SymmetricKey>,
+        locked: bool,
+    ) -> Self {
+        Self {
+            storage,
+            encryption_key,
+            locked,
+        }
+    }
+}
+
+impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
+    pub fn new(
+        storage: storage::TransactionRw<'st, B, Schema>,
+        encryption_key: &'st Option<SymmetricKey>,
+        locked: bool,
+    ) -> Self {
+        Self {
+            storage,
+            encryption_key,
+            locked,
+        }
+    }
+}
 
 macro_rules! impl_read_ops {
     ($TxType:ident) => {
@@ -77,9 +119,10 @@ macro_rules! impl_read_ops {
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>> {
-                self.0
+                self.storage
                     .get::<db::DBUtxo, _>()
                     .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
                     .map(Iterator::collect)
             }
 
@@ -88,7 +131,7 @@ macro_rules! impl_read_ops {
             }
 
             fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>> {
-                Ok(self.0.get::<db::DBAccounts, _>().prefix_iter_decoded(&())?.collect())
+                Ok(self.storage.get::<db::DBAccounts, _>().prefix_iter_decoded(&())?.collect())
             }
 
             fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>> {
@@ -99,22 +142,78 @@ macro_rules! impl_read_ops {
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>> {
-                self.0
+                self.storage
                     .get::<db::DBAddresses, _>()
                     .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
                     .map(Iterator::collect)
             }
 
+            fn get_encryption_key_kdf_challenge(&self) -> crate::Result<Option<KdfChallenge>> {
+                self.read_value::<well_known::EncryptionKeyKdfChallenge>()
+            }
+
             fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
-                self.read::<db::DBRootKeys, _, _>(id)
+                utils::ensure!(!self.locked, crate::Error::WalletLocked());
+                Ok(self
+                    .read::<db::DBRootKeys, _, _>(id)?
+                    .map(|v| match self.encryption_key.as_ref() {
+                        Some(key) => {
+                            (key.decrypt(v.as_slice(), None)
+                                .expect("key has been checked in unlock_private_keys"))
+                        }
+                        None => (v),
+                    })
+                    .map(|v| RootKeyContent::decode_all(&mut v.as_slice()).expect("valid decode")))
             }
 
             /// Collect and return all keys from the storage
             fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
-                self.0
+                utils::ensure!(!self.locked, crate::Error::WalletLocked());
+                self.storage
                     .get::<db::DBRootKeys, _>()
                     .prefix_iter_decoded(&())
+                    .map_err(crate::Error::from)
+                    .map(|item| {
+                        item.map(|(k, v)| match self.encryption_key.as_ref() {
+                            Some(key) => (
+                                k,
+                                key.decrypt(v.as_slice(), None)
+                                    .expect("key has been checked in unlock_private_keys"),
+                            ),
+                            None => (k, v),
+                        })
+                        .map(|(k, v)| {
+                            (
+                                k,
+                                RootKeyContent::decode_all(&mut v.as_slice())
+                                    .expect("valid decode"),
+                            )
+                        })
+                    })
                     .map(Iterator::collect)
+            }
+
+            /// Check if the provided encryption_key can decrypt all of the root keys
+            fn check_can_decrypt_all_root_keys(
+                &self,
+                encryption_key: &SymmetricKey,
+            ) -> crate::Result<()> {
+                self.storage
+                    .get::<db::DBRootKeys, _>()
+                    .prefix_iter_decoded(&())
+                    .map_err(crate::Error::from)
+                    .map(|mut item| {
+                        item.try_for_each(|(_, v)| {
+                            let decrypted_value = encryption_key
+                                .decrypt(v.as_slice(), None)
+                                .map_err(|_| crate::Error::WalletInvalidPassword())?;
+
+                            RootKeyContent::decode_all(&mut decrypted_value.as_slice())
+                                .map_err(|_| crate::Error::WalletInvalidPassword())?;
+                            Ok(())
+                        })
+                    })?
             }
 
             /// Collect and return all transactions from the storage
@@ -122,9 +221,10 @@ macro_rules! impl_read_ops {
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountTxId, WalletTx>> {
-                self.0
+                self.storage
                     .get::<db::DBTxs, _>()
                     .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
                     .map(Iterator::collect)
             }
 
@@ -139,9 +239,10 @@ macro_rules! impl_read_ops {
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>> {
-                self.0
+                self.storage
                     .get::<db::DBKeychainUsageStates, _>()
                     .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
                     .map(Iterator::collect)
             }
 
@@ -156,9 +257,10 @@ macro_rules! impl_read_ops {
                 &self,
                 account_id: &AccountId,
             ) -> crate::Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>> {
-                self.0
+                self.storage
                     .get::<db::DBPubKeys, _>()
                     .prefix_iter_decoded(account_id)
+                    .map_err(crate::Error::from)
                     .map(Iterator::collect)
             }
         }
@@ -171,7 +273,7 @@ macro_rules! impl_read_ops {
                 Schema: schema::HasDbMap<DbMap, I>,
                 K: EncodeLike<DbMap::Key>,
             {
-                let map = self.0.get::<DbMap, I>();
+                let map = self.storage.get::<DbMap, I>();
                 map.get(key).map_err(crate::Error::from).map(|x| x.map(|x| x.decode()))
             }
 
@@ -201,7 +303,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
+        self.storage.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {
@@ -209,7 +311,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
+        self.storage.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
     }
 
     fn set_account(&mut self, id: &AccountId, tx: &AccountInfo) -> crate::Result<()> {
@@ -217,7 +319,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_account(&mut self, id: &AccountId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAccounts, _>().del(id).map_err(Into::into)
+        self.storage.get_mut::<db::DBAccounts, _>().del(id).map_err(Into::into)
     }
 
     fn set_address(
@@ -229,15 +331,62 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
+        self.storage.get_mut::<db::DBAddresses, _>().del(id).map_err(Into::into)
     }
 
     fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
-        self.write::<db::DBRootKeys, _, _, _>(id, tx)
+        utils::ensure!(!self.locked, crate::Error::WalletLocked());
+        let encoded_value = match self.encryption_key.as_ref() {
+            Some(key) => key
+                .encrypt(tx.encode().as_slice(), &mut make_true_rng(), None)
+                .expect("should not fail"),
+            None => tx.encode(),
+        };
+        self.write::<db::DBRootKeys, _, _, _>(id, encoded_value)
     }
 
     fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+        utils::ensure!(!self.locked, crate::Error::WalletLocked());
+        self.storage.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
+    }
+
+    fn encrypt_root_keys(
+        &mut self,
+        new_encryption_key: &Option<SymmetricKey>,
+    ) -> crate::Result<()> {
+        utils::ensure!(!self.locked, crate::Error::WalletLocked());
+
+        let changed_root_keys: Vec<_> = self
+            .storage
+            .get::<db::DBRootKeys, _>()
+            .prefix_iter_decoded(&())
+            .map_err(crate::Error::from)
+            .map(|item| {
+                item.map(|(k, v)| match self.encryption_key.as_ref() {
+                    Some(key) => (
+                        k,
+                        key.decrypt(v.as_slice(), None)
+                            .expect("key has been checked in unlock_private_keys"),
+                    ),
+                    None => (k, v),
+                })
+                .map(|(k, v)| {
+                    (
+                        k,
+                        match new_encryption_key.as_ref() {
+                            Some(key) => key
+                                .encrypt(v.as_slice(), &mut make_true_rng(), None)
+                                .expect("should not fail"),
+                            None => v,
+                        },
+                    )
+                })
+            })?
+            .collect();
+
+        changed_root_keys
+            .into_iter()
+            .try_for_each(|(k, v)| self.write::<db::DBRootKeys, _, _, _>(k, v))
     }
 
     fn set_keychain_usage_state(
@@ -249,7 +398,10 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBKeychainUsageStates, _>().del(id).map_err(Into::into)
+        self.storage
+            .get_mut::<db::DBKeychainUsageStates, _>()
+            .del(id)
+            .map_err(Into::into)
     }
 
     fn set_public_key(
@@ -260,7 +412,12 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.write::<db::DBPubKeys, _, _, _>(id, pub_key)
     }
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> crate::Result<()> {
-        self.0.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
+        self.storage.get_mut::<db::DBPubKeys, _>().del(id).map_err(Into::into)
+    }
+
+    fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> crate::Result<()> {
+        self.write_value::<well_known::EncryptionKeyKdfChallenge>(salt)
+            .map_err(Into::into)
     }
 }
 
@@ -273,7 +430,7 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
         K: EncodeLike<<DbMap as schema::DbMap>::Key>,
         V: EncodeLike<<DbMap as schema::DbMap>::Value>,
     {
-        self.0.get_mut::<DbMap, I>().put(key, value).map_err(Into::into)
+        self.storage.get_mut::<DbMap, I>().put(key, value).map_err(Into::into)
     }
 
     // Write a value for a well-known entry
@@ -284,17 +441,17 @@ impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
 
 impl<'st, B: storage::Backend> crate::TransactionRo for StoreTxRo<'st, B> {
     fn close(self) {
-        self.0.close()
+        self.storage.close()
     }
 }
 
 impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
     fn commit(self) -> crate::Result<()> {
-        self.0.commit().map_err(Into::into)
+        self.storage.commit().map_err(Into::into)
     }
 
     fn abort(self) {
-        self.0.abort()
+        self.storage.abort()
     }
 }
 
