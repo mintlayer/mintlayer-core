@@ -11,10 +11,11 @@ from test_framework import mintlayer_hash
 import scalecodec
 import time
 
-signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
 base_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('TransactionV1')
-block_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockV1')
 block_header_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockHeader')
+block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
+block_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('BlockV1')
+signed_tx_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('SignedTransaction')
 vec_output_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('Vec<TxOutput>')
 
 def hash_object(obj, data):
@@ -116,8 +117,16 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert not node.mempool_contains_tx(tx2_id)
         assert not node.mempool_contains_tx(tx3_id)
 
+        block_input_data = block_input_data_obj.encode(
+            {
+                "PoW": {
+                    "reward_destination": "AnyoneCanSpend",
+                }
+            }
+        ).to_hex()[2:]
+
         # create a new block, taking transactions from mempool
-        block1 = node.blockprod_generate_block(None, "00", [tx1])
+        block1 = node.blockprod_generate_block(block_input_data, [tx1])
         node.chainstate_submit_block(block1)
         block1_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block1_id, timeout = 5)
@@ -133,7 +142,7 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
         assert node.mempool_contains_tx(tx3_id)
 
         # Submit a block with the other two transactions
-        block2 = node.blockprod_generate_block(None, "00", [tx2, tx3])
+        block2 = node.blockprod_generate_block(block_input_data, [tx2, tx3])
         node.chainstate_submit_block(block2)
         block2_id = node.chainstate_best_block_id()
         self.wait_until(lambda: node.mempool_local_best_block_id() == block2_id, timeout = 5)

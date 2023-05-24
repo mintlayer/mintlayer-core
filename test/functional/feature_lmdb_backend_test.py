@@ -9,6 +9,10 @@ from test_framework.util import (
     assert_equal,
 )
 
+import scalecodec
+
+block_input_data_obj = scalecodec.base.RuntimeConfiguration().create_scale_object('GenerateBlockInputData')
+
 class ExampleTest(BitcoinTestFramework):
     def set_test_params(self):
         self.setup_clean_chain = True
@@ -39,11 +43,19 @@ class ExampleTest(BitcoinTestFramework):
         # get current tip hash
         assert_equal(self.block_height(), 0)
 
+        block_input_data = block_input_data_obj.encode(
+            {
+                "PoW": {
+                    "reward_destination": "AnyoneCanSpend",
+                }
+            }
+        ).to_hex()[2:]
+
         # add two blocks
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         node.chainstate_submit_block(blocks[0])
-        block = self.nodes[0].blockprod_generate_block(None, "00", [])
+        block = self.nodes[0].blockprod_generate_block(block_input_data, [])
         blocks.append(block)
         node.chainstate_submit_block(blocks[1])
         assert_equal(self.block_height(), 2)
@@ -58,7 +70,7 @@ class ExampleTest(BitcoinTestFramework):
 
         # Add three more blocks
         for i in range(2, 5):
-            block = self.nodes[0].blockprod_generate_block(None, "00", [])
+            block = self.nodes[0].blockprod_generate_block(block_input_data, [])
             blocks.append(block)
             node.chainstate_submit_block(blocks[i])
         assert_equal(self.block_height(), 5)
