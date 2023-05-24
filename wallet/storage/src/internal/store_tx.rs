@@ -21,8 +21,9 @@ use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use utxo::Utxo;
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
-    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
+    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
+    RootKeyContent, RootKeyId, WalletTx,
 };
 
 use crate::{
@@ -66,6 +67,23 @@ macro_rules! impl_read_ops {
         impl<'st, B: storage::Backend> WalletStorageRead for $TxType<'st, B> {
             fn get_storage_version(&self) -> crate::Result<u32> {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            }
+
+            fn get_block(
+                &self,
+                block_height: &AccountBlockHeight,
+            ) -> crate::Result<Option<WalletBlock>> {
+                self.read::<db::DBBlocks, _, _>(block_height)
+            }
+
+            fn get_blocks(
+                &self,
+                account_id: &AccountId,
+            ) -> crate::Result<BTreeMap<AccountBlockHeight, WalletBlock>> {
+                self.0
+                    .get::<db::DBBlocks, _>()
+                    .prefix_iter_decoded(account_id)
+                    .map(Iterator::collect)
             }
 
             fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>> {
@@ -202,6 +220,18 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
 
     fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()> {
         self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
+    }
+
+    fn set_block(
+        &mut self,
+        block_height: &AccountBlockHeight,
+        block: &WalletBlock,
+    ) -> crate::Result<()> {
+        self.write::<db::DBBlocks, _, _, _>(block_height, block)
+    }
+
+    fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()> {
+        self.0.get_mut::<db::DBBlocks, _>().del(block_height).map_err(Into::into)
     }
 
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {

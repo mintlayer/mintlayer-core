@@ -16,6 +16,7 @@
 pub mod account_id;
 pub mod account_info;
 pub mod keys;
+pub mod wallet_block;
 pub mod wallet_tx;
 
 pub use account_id::{
