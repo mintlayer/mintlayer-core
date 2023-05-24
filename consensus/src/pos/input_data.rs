@@ -75,6 +75,22 @@ pub struct PoSGenerateBlockInputData {
 }
 
 impl PoSGenerateBlockInputData {
+    pub fn new(
+        stake_private_key: PrivateKey,
+        vrf_private_key: VRFPrivateKey,
+        pool_id: PoolId,
+        kernel_inputs: Vec<TxInput>,
+        kernel_input_utxos: Vec<TxOutput>,
+    ) -> Self {
+        Self {
+            stake_private_key,
+            vrf_private_key,
+            pool_id,
+            kernel_inputs,
+            kernel_input_utxos,
+        }
+    }
+
     pub fn kernel_inputs(&self) -> &Vec<TxInput> {
         &self.kernel_inputs
     }
