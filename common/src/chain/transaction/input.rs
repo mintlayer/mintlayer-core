@@ -123,15 +123,21 @@ impl OutPoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
-pub enum AccountType {
+pub enum Account {
     Pool(PoolId),
     Delegation(DelegationId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+pub struct AccountOutPoint {
+    nonce: u128,
+    account: Account,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum TxInput {
     Utxo(OutPoint),
-    Accounting(AccountType),
+    Accounting(AccountOutPoint),
 }
 
 impl TxInput {
