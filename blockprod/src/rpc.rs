@@ -15,10 +15,7 @@
 
 //! Block production subsystem RPC handler
 
-use common::{
-    chain::Block,
-    chain::SignedTransaction,
-};
+use common::{chain::Block, chain::SignedTransaction};
 use consensus::GenerateBlockInputData;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
@@ -79,10 +76,7 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
         let block = handle_error(
             self.call_async_mut(move |this| {
-                this.generate_block(
-                    input_data.map(HexEncoded::take),
-                    transactions,
-                )
+                this.generate_block(input_data.map(HexEncoded::take), transactions)
             })
             .await,
         )?;

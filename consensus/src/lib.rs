@@ -31,7 +31,10 @@ use common::{
         timestamp::BlockTimestamp,
         BlockHeader, BlockReward, ConsensusData,
     },
-    chain::{timelock::OutputTimeLock, ChainConfig, Destination, RequiredConsensus, TxOutput, tokens::OutputValue},
+    chain::{
+        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, RequiredConsensus,
+        TxOutput,
+    },
     primitives::BlockHeight,
 };
 use serialization::{Decode, Encode};
@@ -108,13 +111,15 @@ where
             let time_lock = {
                 let block_distance = consensus_data.reward_maturity_distance(chain_config);
 
-                let reward_maturity_distance_i64: i64 = block_distance
-                    .try_into()
-                    .map_err(|_| ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance))?;
+                let reward_maturity_distance_i64: i64 =
+                    block_distance.try_into().map_err(|_| {
+                        ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance)
+                    })?;
 
-                let reward_maturity_distance_u64: u64 = reward_maturity_distance_i64
-                    .try_into()
-                    .map_err(|_| ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance))?;
+                let reward_maturity_distance_u64: u64 =
+                    reward_maturity_distance_i64.try_into().map_err(|_| {
+                        ConsensusPoWError::InvalidBlockRewardMaturityDistance(block_distance)
+                    })?;
 
                 OutputTimeLock::ForBlockCount(reward_maturity_distance_u64)
             };
@@ -126,34 +131,43 @@ where
             )]);
 
             Ok((consensus_data, block_reward))
-        },
+        }
         RequiredConsensus::PoS(pos_status) => match input_data {
-            Some(GenerateBlockInputData::PoS(pos_input_data)) => generate_pos_consensus_data_and_reward(
-                chain_config,
-                prev_block_index,
-                *pos_input_data,
-                pos_status,
-                sealed_epoch_randomness,
-                block_timestamp,
-                block_height,
-                get_ancestor,
-            ),
+            Some(GenerateBlockInputData::PoS(pos_input_data)) => {
+                generate_pos_consensus_data_and_reward(
+                    chain_config,
+                    prev_block_index,
+                    *pos_input_data,
+                    pos_status,
+                    sealed_epoch_randomness,
+                    block_timestamp,
+                    block_height,
+                    get_ancestor,
+                )
+            }
             Some(GenerateBlockInputData::PoW(_)) => Err(ConsensusPoSError::PoWInputDataProvided)?,
             None => Err(ConsensusPoSError::NoInputDataProvided)?,
         },
         RequiredConsensus::PoW(pow_status) => match input_data {
-            Some(GenerateBlockInputData::PoW(pow_input_data)) => generate_pow_consensus_data_and_reward(
-                chain_config,
-                prev_block_index,
-                block_timestamp,
-                &pow_status,
-                get_ancestor,
-                *pow_input_data,
-                block_height,
-            ).map_err(ConsensusCreationError::MiningError),
-            Some(GenerateBlockInputData::PoS(_)) => Err(ConsensusCreationError::MiningError(ConsensusPoWError::PoSInputDataProvided)),
-            None => Err(ConsensusCreationError::MiningError(ConsensusPoWError::NoInputDataProvided)),
-        }
+            Some(GenerateBlockInputData::PoW(pow_input_data)) => {
+                generate_pow_consensus_data_and_reward(
+                    chain_config,
+                    prev_block_index,
+                    block_timestamp,
+                    &pow_status,
+                    get_ancestor,
+                    *pow_input_data,
+                    block_height,
+                )
+                .map_err(ConsensusCreationError::MiningError)
+            }
+            Some(GenerateBlockInputData::PoS(_)) => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::PoSInputDataProvided,
+            )),
+            None => Err(ConsensusCreationError::MiningError(
+                ConsensusPoWError::NoInputDataProvided,
+            )),
+        },
     }
 }
 

@@ -123,8 +123,15 @@ impl BlockProduction {
         &self,
         input_data: Option<GenerateBlockInputData>,
         block_timestamp: BlockTimestamp,
-    ) -> Result<(ConsensusData, BlockReward, GenBlockIndex, Option<FinalizeBlockInputData>), BlockProductionError>
-    {
+    ) -> Result<
+        (
+            ConsensusData,
+            BlockReward,
+            GenBlockIndex,
+            Option<FinalizeBlockInputData>,
+        ),
+        BlockProductionError,
+    > {
         let consensus_data = self
             .chainstate_handle
             .call({
@@ -168,15 +175,16 @@ impl BlockProduction {
                         // data is actually missing
                         .or_else(|| Some(PoSRandomness::at_genesis(&chain_config)));
 
-                    let (consensus_data, block_reward) = consensus::generate_consensus_data_and_reward(
-                        &chain_config,
-                        &best_block_index,
-                        sealed_epoch_randomness,
-                        input_data.clone(),
-                        block_timestamp,
-                        block_height,
-                        get_ancestor,
-                    )?;
+                    let (consensus_data, block_reward) =
+                        consensus::generate_consensus_data_and_reward(
+                            &chain_config,
+                            &best_block_index,
+                            sealed_epoch_randomness,
+                            input_data.clone(),
+                            block_timestamp,
+                            block_height,
+                            get_ancestor,
+                        )?;
 
                     let finalize_block_data = Self::generate_finalize_block_data(
                         &chain_config,
@@ -188,7 +196,12 @@ impl BlockProduction {
                         input_data,
                     )?;
 
-                    Ok((consensus_data, block_reward, best_block_index, finalize_block_data))
+                    Ok((
+                        consensus_data,
+                        block_reward,
+                        best_block_index,
+                        finalize_block_data,
+                    ))
                 }
             })
             .await?
@@ -292,8 +305,7 @@ impl BlockProduction {
         input_data: Option<GenerateBlockInputData>,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        self.produce_block_with_custom_id(input_data, transactions_source, None)
-            .await
+        self.produce_block_with_custom_id(input_data, transactions_source, None).await
     }
 
     async fn produce_block_with_custom_id(
@@ -306,7 +318,8 @@ impl BlockProduction {
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let (_, _, tip_at_start, _) = self.pull_consensus_data(input_data.clone(), timestamp).await?;
+        let (_, _, tip_at_start, _) =
+            self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;

@@ -18,7 +18,7 @@ use thiserror::Error;
 use chainstate_types::PropertyQueryError;
 use common::{
     chain::block::Block,
-    primitives::{BlockHeight, Compact, Id, BlockDistance},
+    primitives::{BlockDistance, BlockHeight, Compact, Id},
 };
 
 /// A proof of work consensus error.

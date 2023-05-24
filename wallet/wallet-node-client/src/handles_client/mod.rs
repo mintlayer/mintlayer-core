@@ -127,9 +127,7 @@ impl NodeInterface for WalletHandlesClient {
     ) -> Result<Block, Self::Error> {
         let block = self
             .block_prod
-            .call_async_mut(move |this| {
-                this.generate_block(input_data, transactions)
-            })
+            .call_async_mut(move |this| this.generate_block(input_data, transactions))
             .await??;
 
         Ok(block)

@@ -20,8 +20,8 @@ use common::{
         consensus_data::PoWData, timestamp::BlockTimestamp, BlockReward, ConsensusData,
     },
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination,
-        PoWStatus, TxOutput,
+        timelock::OutputTimeLock, tokens::OutputValue, ChainConfig, Destination, PoWStatus,
+        TxOutput,
     },
     primitives::BlockHeight,
 };
@@ -55,7 +55,7 @@ where
         chain_config,
         prev_gen_block_index,
         block_timestamp,
-        &pow_status,
+        pow_status,
         get_ancestor,
     )?;
 
