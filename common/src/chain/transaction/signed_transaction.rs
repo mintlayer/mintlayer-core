@@ -21,7 +21,7 @@ use crate::{
 use serialization::{Decode, Encode};
 use utils::ensure;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode)]
 pub struct SignedTransaction {
     transaction: Transaction,
     signatures: Vec<InputWitness>,
@@ -88,10 +88,34 @@ impl SignedTransaction {
     }
 }
 
+impl Decode for SignedTransaction {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        let transaction = Transaction::decode(input)?;
+        let witness = Vec::<InputWitness>::decode(input)?;
+        if witness.len() != transaction.inputs().len() {
+            let err = format!("{} != {}", witness.len(), transaction.inputs().len());
+            return Err(serialization::Error::from(
+                "Invalid witness count for transaction: Mismatch with input count",
+            )
+            .chain(err));
+        }
+        Ok(Self {
+            transaction,
+            signatures: witness,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::primitives::Amount;
+    use rstest::rstest;
+    use test_utils::random::inner_random::Rng;
+    use test_utils::random::{make_seedable_rng, Seed};
+
     use super::*;
 
+    use crate::chain::tokens::OutputValue;
     use crate::chain::TxInput;
     use crate::primitives::id::Id;
     use crate::primitives::H256;
@@ -109,39 +133,114 @@ mod tests {
         ]
         .to_vec();
 
-        let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
-        assert!(SignedTransaction::new(tx.clone(), vec![]).is_ok());
-        assert_eq!(
-            SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]),
-            Err(TransactionCreationError::InvalidWitnessCount)
-        );
-
-        let tx = Transaction::new(0x00, ins0, vec![]).unwrap();
-        assert!(SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).is_ok());
-        assert_eq!(
-            SignedTransaction::new(tx, vec![]),
-            Err(TransactionCreationError::InvalidWitnessCount)
-        );
-
-        let tx = Transaction::new(0x00, ins1, vec![]).unwrap();
-        assert!(SignedTransaction::new(
-            tx.clone(),
-            vec![
-                InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
-                InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
-            ],
-        )
-        .is_ok());
-        assert_eq!(
-            SignedTransaction::new(
+        {
+            let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
+            assert!(SignedTransaction::new(tx.clone(), vec![]).is_ok());
+            assert_eq!(
+                SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]),
+                Err(TransactionCreationError::InvalidWitnessCount)
+            );
+        }
+        {
+            let tx = Transaction::new(0x00, ins0, vec![]).unwrap();
+            assert!(
+                SignedTransaction::new(tx.clone(), vec![InputWitness::NoSignature(None)]).is_ok()
+            );
+            assert_eq!(
+                SignedTransaction::new(tx, vec![]),
+                Err(TransactionCreationError::InvalidWitnessCount)
+            );
+        }
+        {
+            let tx = Transaction::new(0x00, ins1, vec![]).unwrap();
+            assert!(SignedTransaction::new(
                 tx.clone(),
-                vec![InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09]))]
-            ),
-            Err(TransactionCreationError::InvalidWitnessCount)
-        );
-        assert_eq!(
-            SignedTransaction::new(tx, vec![]),
-            Err(TransactionCreationError::InvalidWitnessCount)
-        );
+                vec![
+                    InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
+                    InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
+                ],
+            )
+            .is_ok());
+            assert_eq!(
+                SignedTransaction::new(
+                    tx.clone(),
+                    vec![InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09]))]
+                ),
+                Err(TransactionCreationError::InvalidWitnessCount)
+            );
+            assert_eq!(
+                SignedTransaction::new(tx, vec![]),
+                Err(TransactionCreationError::InvalidWitnessCount)
+            );
+        }
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn ensure_sane_encoding(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        // The only reason a manual decode is done is to enforce witness rules, hence we double check that round-trip encoding works
+        let input_count = 1 + rng.gen::<usize>() % 10;
+        let inputs = (0..input_count)
+            .map(|_| {
+                TxInput::new(
+                    Id::<Transaction>::new(H256::random_using(&mut rng)).into(),
+                    rng.gen::<u32>() % 10,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let output_count = 1 + rng.gen::<usize>() % 10;
+        let outputs = (0..output_count)
+            .map(|_| {
+                TxOutput::Transfer(
+                    OutputValue::Coin(Amount::from_atoms(rng.gen::<u128>())),
+                    crate::chain::Destination::AnyoneCanSpend,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let witnesses = (0..input_count)
+            .map(|_| {
+                let witness_size = 1 + rng.gen::<usize>() % 100;
+                let witness = (0..input_count).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                InputWitness::NoSignature(Some(witness))
+            })
+            .collect::<Vec<_>>();
+
+        // Witness count that isn't equal to the input count
+        let invalid_witness_count = loop {
+            let invalid_witness_count = rng.gen::<usize>() % input_count;
+            if invalid_witness_count != witnesses.len() {
+                break invalid_witness_count;
+            }
+        };
+
+        let invalid_witnesses = (0..invalid_witness_count)
+            .map(|_| {
+                let witness_size = 1 + rng.gen::<usize>() % 100;
+                let witness = (0..witness_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                InputWitness::NoSignature(Some(witness))
+            })
+            .collect::<Vec<_>>();
+
+        {
+            let flags = rng.gen::<u128>();
+
+            let tx = Transaction::new(flags, inputs, outputs).unwrap();
+            let signed_tx = SignedTransaction::new(tx, witnesses).unwrap();
+
+            let encoded = signed_tx.encode();
+            let decoded_signed_tx = SignedTransaction::decode(&mut encoded.as_slice()).unwrap();
+            assert_eq!(signed_tx, decoded_signed_tx);
+
+            // let's manually reconstruct an invalid case with invalid witness count
+            let mut signed_tx = signed_tx;
+            signed_tx.signatures = invalid_witnesses;
+            let encoded = signed_tx.encode();
+            SignedTransaction::decode(&mut encoded.as_slice()).unwrap_err();
+        }
     }
 }
