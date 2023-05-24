@@ -205,7 +205,7 @@ mod tests {
         let witnesses = (0..input_count)
             .map(|_| {
                 let witness_size = 1 + rng.gen::<usize>() % 100;
-                let witness = (0..input_count).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
+                let witness = (0..witness_size).map(|_| rng.gen::<u8>()).collect::<Vec<_>>();
                 InputWitness::NoSignature(Some(witness))
             })
             .collect::<Vec<_>>();
