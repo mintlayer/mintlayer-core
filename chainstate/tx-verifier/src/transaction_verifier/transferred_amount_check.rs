@@ -21,7 +21,7 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
-        Block, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountType, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
 };
@@ -132,16 +132,42 @@ where
     IssuanceTokenIdGetterFunc:
         Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
-    let iter = inputs.iter().map(|input| {
-        let outpoint = input.outpoint().unwrap(); // FIXME: impl
-        let utxo = utxo_view
-            .utxo(outpoint)
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+    let iter = inputs.iter().map(|input| match input {
+        TxInput::Utxo(outpoint) => {
+            let utxo = utxo_view
+                .utxo(outpoint)
+                .map_err(|_| utxo::Error::ViewRead)?
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-        let output_value = get_output_value(pos_accounting_view, utxo.output())?;
+            let output_value = match utxo.output() {
+                TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+                TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
+                TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    let pledge_amount = pos_accounting_view
+                        .get_pool_data(*pool_id)
+                        .map_err(|_| pos_accounting::Error::ViewFail)?
+                        .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                        .pledge_amount();
+                    OutputValue::Coin(pledge_amount)
+                }
+                TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => {
+                    return Err(ConnectTransactionError::InvalidInputTypeInTx)
+                }
+            };
 
-        amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
+            amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
+        }
+        TxInput::Account(account_input) => match account_input.account() {
+            AccountType::Delegation(delegation_id) => pos_accounting_view
+                .get_delegation_balance(*delegation_id)
+                .map_err(|_| pos_accounting::Error::ViewFail)?
+                .ok_or(ConnectTransactionError::DelegationBalanceNotFound(
+                    *delegation_id,
+                ))
+                .map(|amount| (CoinOrTokenId::Coin, amount)),
+        },
     });
 
     let iter = fallible_iterator::convert(iter);

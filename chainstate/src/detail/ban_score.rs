@@ -133,6 +133,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
+            ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
