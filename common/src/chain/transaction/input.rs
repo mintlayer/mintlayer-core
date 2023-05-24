@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::chain::DelegationId;
 use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
-use crate::chain::{DelegationId, PoolId};
 use crate::primitives::{Id, H256};
 use serialization::{Decode, Encode};
 
@@ -123,21 +123,21 @@ impl OutPoint {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
-pub enum Account {
-    Pool(PoolId),
+pub enum AccountType {
     Delegation(DelegationId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
-pub struct AccountOutPoint {
+pub struct AccountInput {
+    #[codec(compact)]
     nonce: u128,
-    account: Account,
+    account: AccountType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum TxInput {
     Utxo(OutPoint),
-    Accounting(AccountOutPoint),
+    Account(AccountInput),
 }
 
 impl TxInput {
@@ -148,7 +148,7 @@ impl TxInput {
     pub fn outpoint(&self) -> Option<&OutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Accounting(_) => None,
+            TxInput::Account(_) => None,
         }
     }
 }

@@ -31,7 +31,7 @@ fn get_inputs_utxos(
         .iter()
         .filter_map(|input| match input {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Accounting(_) => None,
+            TxInput::Account(_) => None,
         })
         .map(|outpoint| {
             utxo_view

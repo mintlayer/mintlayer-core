@@ -177,7 +177,7 @@ impl<P: UtxosView> UtxosCache<P> {
             .zip(tx_undo.into_inner().into_iter())
             .try_for_each(|(tx_in, utxo)| match tx_in {
                 TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
-                TxInput::Accounting(_) => Ok(()),
+                TxInput::Account(_) => Ok(()),
             })
     }
 
@@ -234,7 +234,7 @@ impl<P: UtxosView> UtxosCache<P> {
             inputs.iter().zip(block_undo.into_inner().into_iter()).try_for_each(
                 |(tx_in, utxo)| match tx_in {
                     TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
-                    TxInput::Accounting(_) => Ok(()),
+                    TxInput::Account(_) => Ok(()),
                 },
             )?;
         }
