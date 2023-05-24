@@ -103,6 +103,20 @@ impl SchnorrkelPrivateKey {
         (sk, pk)
     }
 
+    pub fn new_from_bytes(bytes: &[u8; 32]) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
+        // `MiniSecretKey::from_bytes` only checks the slice length, so this should not fail
+        let mini_secret = schnorrkel::MiniSecretKey::from_bytes(bytes).expect("must not fail");
+        let keypair = mini_secret.expand_to_keypair(schnorrkel::ExpansionMode::Uniform);
+        (
+            SchnorrkelPrivateKey {
+                key: keypair.secret.clone(),
+            },
+            SchnorrkelPublicKey {
+                key: keypair.public,
+            },
+        )
+    }
+
     pub fn produce_vrf_data(&self, message: Transcript) -> SchnorrkelVRFReturn {
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
@@ -143,10 +157,11 @@ impl Decode for SchnorrkelPrivateKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::make_true_rng;
+    use crate::random::{make_true_rng, RngCore};
     use hex::FromHex;
     use schnorrkel::{signing_context, Keypair};
     use serialization::{DecodeAll, Encode};
+    use test_utils::random::{make_seedable_rng, Seed};
 
     #[test]
     fn key_serialization() {
@@ -231,5 +246,37 @@ mod tests {
             keypair2.public.vrf_verify(ctx.bytes(msg), out1, &proof1).is_err(),
             "VRF verification with incorrect signer passed!"
         );
+    }
+
+    #[test]
+    fn vrf_from_bytes() {
+        // Verify that [SchnorrkelPrivateKey::new_from_bytes] returns the same result to prevent future regressions
+        let keys = [
+            ("783231456c206e78989c15741764d6c4e7b96e1bac4ea322bfb5df5676876717", "a9246f2ac3b7c3c46bfd903ce077c6033148a13692ccb33a732d9c3616d93a0ca73efa91903bfe5eea90e0d6e684f6e444218baa403aece75c3036a322e845a2"),
+            ("c247d6edd1b5e32c0750eeb256ef63186c1a7cebf1729249ae31f65f959aa1ae", "3e16bf35d133fd5ae2b59838cc29847aa040f76f37a0445405bcb9238e3ae1049354882edf8916041d23c2d33cbed8e537a23da5bbf5a432f0c1737253f5c188"),
+            ("440acd9f2e1d3e197f745d11c03cd9b805acfb5c5d5f4dfe0d8a55d1d29efa42", "956c30c899065b7b3e085fe50f6431bce7adcc5dbcc114e7c6ad73c148b30c0f85bc02f31c809a173929dec21c8c2380bdc5fe5cfa37f1a6b8b6af9c0ae95515"),
+        ];
+        for (bytes_hex, expected) in keys {
+            let bytes = hex::decode(bytes_hex).unwrap();
+            let (sk, _pk) =
+                SchnorrkelPrivateKey::new_from_bytes(bytes.as_slice().try_into().unwrap());
+            let expected_sk =
+                SchnorrkelPrivateKey::decode_all(&mut hex::decode(expected).unwrap().as_slice())
+                    .unwrap();
+            assert_eq!(sk, expected_sk, "Decode fails for {bytes_hex}");
+        }
+    }
+
+    #[rstest::rstest]
+    #[trace]
+    #[case(test_utils::random::Seed::from_entropy())]
+    fn vrf_from_random_bytes(#[case] seed: Seed) {
+        // Verify that [SchnorrkelPrivateKey::new_from_bytes] does not panic
+        let mut rng = make_seedable_rng(seed);
+        for _ in 0..10 {
+            let mut bytes = [0; 32];
+            rng.fill_bytes(&mut bytes);
+            let (_sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes);
+        }
     }
 }
