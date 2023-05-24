@@ -16,10 +16,7 @@
 use serialization::{Decode, Encode};
 
 use common::{
-    chain::{
-        block::ConsensusData, Block, GenBlock, Genesis, OutPoint, OutPointSourceId, TxInput,
-        TxOutput,
-    },
+    chain::{block::ConsensusData, Block, GenBlock, Genesis, TxInput, TxOutput},
     primitives::{BlockHeight, Id, Idable},
 };
 
@@ -73,11 +70,5 @@ impl WalletBlock {
 
     pub fn reward(&self) -> &[TxOutput] {
         &self.reward
-    }
-
-    pub fn outpoints(&self) -> impl Iterator<Item = OutPoint> + '_ {
-        self.reward.iter().enumerate().map(|(index, _output)| {
-            OutPoint::new(OutPointSourceId::BlockReward(self.block_id), index as u32)
-        })
     }
 }

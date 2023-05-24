@@ -24,22 +24,18 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
-use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, Transaction,
-    TxOutput,
-};
+use common::chain::{Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput};
 use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
-use utxo::{Utxo, UtxoSource};
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::account_id::AccountBlockHeight;
 use wallet_types::wallet_block::WalletBlock;
 use wallet_types::wallet_tx::TxState;
-use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, WalletTx};
+use wallet_types::{AccountId, AccountTxId, KeyPurpose, WalletTx};
 
 use self::txo_cache::TxoCache;
 
@@ -100,15 +96,18 @@ impl Account {
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
-            let utxos: BTreeMap<OutPoint, Utxo> = db_tx
-                .get_utxo_set(&self.get_account_id())?
-                .into_iter()
-                .map(|(outpoint, utxo)| (outpoint.into_item_id(), utxo))
-                .collect();
+            let all_utxos = self.txo_cache.utxos();
+            let own_utxos = all_utxos.into_iter().filter_map(|(outpoint, txo)| {
+                if self.is_mine_or_watched(txo) {
+                    Some((outpoint, txo.clone()))
+                } else {
+                    None
+                }
+            });
 
             // TODO: Call coin selector
 
-            request = request.with_inputs(utxos);
+            request = request.with_inputs(own_utxos);
         }
 
         let (input_coin_amount, input_tokens_amounts) =
@@ -267,33 +266,6 @@ impl Account {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
     }
 
-    fn add_utxo_if_own<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        output: &TxOutput,
-        outpoint: OutPoint,
-        utxo_source: utxo::UtxoSource,
-    ) -> WalletResult<()> {
-        if self.is_mine_or_watched(output) {
-            let utxo = Utxo::new(output.clone(), utxo_source);
-            let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint);
-            db_tx.set_utxo(&account_utxo_id, utxo)?;
-            self.mark_output_as_used(db_tx, output)?;
-        }
-        Ok(())
-    }
-
-    fn del_utxo_if_own<B: storage::Backend>(
-        &self,
-        db_tx: &mut StoreTxRw<B>,
-        outpoint: &OutPoint,
-    ) -> WalletResult<()> {
-        let account_utxo_id = AccountOutPointId::new(self.get_account_id(), outpoint.clone());
-        // TODO: Mark UTXO as consumed (or leave it as is, but consult the list of known transactions)
-        db_tx.del_utxo(&account_utxo_id)?;
-        Ok(())
-    }
-
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         // TODO: Reuse code from TxVerifier
         // TODO(PR): Fix CreateStakePool and ProduceBlockFromStake
@@ -351,20 +323,17 @@ impl Account {
                         return Ok(true);
                     }
                 }
-                Destination::AnyoneCanSpend
-                | Destination::ClassicMultisig(_)
-                | Destination::ScriptHash(_) => {}
+                Destination::AnyoneCanSpend => return Ok(true),
+                Destination::ClassicMultisig(_) | Destination::ScriptHash(_) => {}
             }
         }
         Ok(false)
     }
 
-    pub fn get_balance<B: storage::Backend>(
-        &self,
-        db_tx: &StoreTxRo<B>,
-    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let utxos = db_tx.get_utxo_set(&self.get_account_id())?;
-        let balances = Self::calculate_output_amounts(utxos.values().map(|utxo| utxo.output()))?;
+    pub fn get_balance(&self) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+        let all_utxos = self.txo_cache.utxos();
+        let own_utxos = all_utxos.into_values().filter(|txo| self.is_mine_or_watched(txo));
+        let balances = Self::calculate_output_amounts(own_utxos)?;
         Ok(balances)
     }
 
@@ -373,17 +342,6 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
-        let revoked_utxos: Vec<AccountOutPointId> = db_tx
-            .get_utxo_set(&self.get_account_id())?
-            .into_iter()
-            .filter_map(|(utxo_id, utxo)| match utxo.source() {
-                UtxoSource::Blockchain(utxo_height) if *utxo_height > common_block_height => {
-                    Some(utxo_id)
-                }
-                UtxoSource::Mempool | UtxoSource::Blockchain(_) => None,
-            })
-            .collect();
-
         let revoked_blocks = self
             .txo_cache
             .blocks()
@@ -412,13 +370,11 @@ impl Account {
             })
             .collect::<Vec<_>>();
 
-        for utxo_id in revoked_utxos {
-            db_tx.del_utxo(&utxo_id)?;
-        }
         for block_id in revoked_blocks {
             db_tx.del_block(&block_id)?;
             self.txo_cache.remove_block(&block_id);
         }
+
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             self.txo_cache.remove_tx(&tx_id);
@@ -471,14 +427,6 @@ impl Account {
         let block = WalletBlock::from_genesis(chain_config.genesis_block());
         self.add_block_if_relevant(db_tx, block)?;
 
-        for (output_index, output) in chain_config.genesis_block().utxos().iter().enumerate() {
-            let utxo_source = UtxoSource::Blockchain(BlockHeight::zero());
-            let outpoint = OutPoint::new(
-                OutPointSourceId::BlockReward(self.chain_config.genesis_block_id()),
-                output_index as u32,
-            );
-            self.add_utxo_if_own(db_tx, output, outpoint, utxo_source)?
-        }
         Ok(())
     }
 
@@ -492,30 +440,10 @@ impl Account {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let tx_state = TxState::Confirmed(block_height);
 
-            let utxo_source = UtxoSource::Blockchain(block_height);
-            let block_id = block.get_id();
-
-            for (output_index, output) in block.block_reward().outputs().iter().enumerate() {
-                let outpoint = OutPoint::new(
-                    OutPointSourceId::BlockReward(block_id.into()),
-                    output_index as u32,
-                );
-                self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
-            }
-
             let wallet_block = WalletBlock::from_block(block, block_height);
             self.add_block_if_relevant(db_tx, wallet_block)?;
 
             for signed_tx in block.transactions() {
-                let tx_id = signed_tx.transaction().get_id();
-                for input in signed_tx.inputs().iter() {
-                    self.del_utxo_if_own(db_tx, input.outpoint())?
-                }
-                for (output_index, output) in signed_tx.outputs().iter().enumerate() {
-                    let outpoint =
-                        OutPoint::new(OutPointSourceId::Transaction(tx_id), output_index as u32);
-                    self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
-                }
                 self.add_tx_if_relevant(db_tx, signed_tx.transaction(), &tx_state)?;
             }
         }

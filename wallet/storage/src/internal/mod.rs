@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 
 use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
-use utxo::Utxo;
 
 use crate::{
     schema::Schema, TransactionRw, Transactional, WalletStorage, WalletStorageRead,
@@ -28,8 +27,8 @@ mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountOutPointId, AccountTxId, KeychainUsageState,
-    RootKeyContent, RootKeyId, WalletTx,
+    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
+    WalletTx,
 };
 
 /// Store for wallet data, parametrized over the backend B
@@ -102,8 +101,6 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_block(&self, block_height: &AccountBlockHeight) -> crate::Result<Option<WalletBlock>>;
         fn get_blocks(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountBlockHeight, WalletBlock>>;
-        fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>>;
-        fn get_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
         fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
         fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
@@ -123,8 +120,6 @@ impl<B: storage::Backend> WalletStorageWrite for Store<B> {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_block(&mut self, block_height: &AccountBlockHeight, block: &WalletBlock) -> crate::Result<()>;
         fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
-        fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()>;
         fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
