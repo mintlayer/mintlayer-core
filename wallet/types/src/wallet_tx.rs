@@ -15,24 +15,15 @@
 
 use serialization::{Decode, Encode};
 
-use common::chain::{GenBlock, Transaction};
+use common::chain::Transaction;
 use common::primitives::id::WithId;
-use common::primitives::Id;
+use common::primitives::BlockHeight;
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum TxState {
     /// Confirmed transaction in a block
     #[codec(index = 0)]
-    Confirmed(Id<GenBlock>),
-    /// Unconfirmed transaction in the mempool
-    #[codec(index = 1)]
-    InMempool,
-    /// Conflicted transaction with a confirmed block
-    #[codec(index = 2)]
-    Conflicted(Id<GenBlock>),
-    /// Transaction that is not confirmed or conflicted and is not in the mempool.
-    #[codec(index = 3)]
-    Inactive,
+    Confirmed(BlockHeight),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
