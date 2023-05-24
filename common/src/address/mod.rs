@@ -121,9 +121,10 @@ impl Decode for Address {
     fn decode<I: Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let address = String::decode(input)?;
         let result = Self { address };
-        result
-            .data_internal()
-            .map_err(|_| serialization::Error::from("Address decoding failed"))?;
+        result.data_internal().map_err(|_| {
+            serialization::Error::from("Address decoding failed")
+                .chain(format!("with given address {}", result.address))
+        })?;
         Ok(result)
     }
 }
