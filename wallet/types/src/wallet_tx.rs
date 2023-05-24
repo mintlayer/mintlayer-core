@@ -15,9 +15,9 @@
 
 use serialization::{Decode, Encode};
 
-use common::chain::Transaction;
+use common::chain::{OutPoint, OutPointSourceId, Transaction};
 use common::primitives::id::WithId;
-use common::primitives::BlockHeight;
+use common::primitives::{BlockHeight, Idable};
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum TxState {
@@ -44,5 +44,14 @@ impl WalletTx {
 
     pub fn state(&self) -> &TxState {
         &self.state
+    }
+
+    pub fn outpoints(&self) -> impl Iterator<Item = OutPoint> + '_ {
+        self.tx.outputs().iter().enumerate().map(|(index, _output)| {
+            OutPoint::new(
+                OutPointSourceId::Transaction(self.tx.get_id()),
+                index as u32,
+            )
+        })
     }
 }

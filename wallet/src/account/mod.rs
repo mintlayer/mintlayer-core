@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod txo_cache;
+
 use crate::key_chain::{AccountKeyChain, KeyChainError};
 use crate::send_request::make_address_output;
 use crate::{SendRequest, WalletError, WalletResult};
@@ -23,7 +25,8 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, TxOutput,
+    Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, Transaction,
+    TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
@@ -33,11 +36,17 @@ use std::ops::Add;
 use std::sync::Arc;
 use utxo::{Utxo, UtxoSource};
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::{AccountId, AccountOutPointId, KeyPurpose};
+use wallet_types::account_id::AccountBlockHeight;
+use wallet_types::wallet_block::WalletBlock;
+use wallet_types::wallet_tx::TxState;
+use wallet_types::{AccountId, AccountOutPointId, AccountTxId, KeyPurpose, WalletTx};
+
+use self::txo_cache::TxoCache;
 
 pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
+    txo_cache: TxoCache,
 }
 
 impl Account {
@@ -50,9 +59,14 @@ impl Account {
         let key_chain =
             AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, root_key)?;
 
+        let blocks = db_tx.get_blocks(&key_chain.get_account_id())?;
+        let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
+        let txo_cache = TxoCache::new(blocks, txs);
+
         Ok(Account {
             chain_config,
             key_chain,
+            txo_cache,
         })
     }
 
@@ -67,12 +81,15 @@ impl Account {
 
         db_tx.set_account(&account_id, &account_info)?;
 
+        let txo_cache = TxoCache::empty();
+
         let mut account = Account {
             chain_config,
             key_chain,
+            txo_cache,
         };
 
-        account.scan_genesis_block(db_tx)?;
+        account.scan_genesis(db_tx)?;
 
         Ok(account)
     }
@@ -279,6 +296,7 @@ impl Account {
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         // TODO: Reuse code from TxVerifier
+        // TODO(PR): Fix CreateStakePool and ProduceBlockFromStake
         match txo {
             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
             TxOutput::Burn(_)
@@ -301,25 +319,44 @@ impl Account {
         })
     }
 
+    fn mark_outputs_as_used<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        outputs: &[TxOutput],
+    ) -> WalletResult<bool> {
+        let mut found = false;
+        // Process all outputs (without short-circuiting)
+        for output in outputs {
+            found |= self.mark_output_as_used(db_tx, output)?;
+        }
+        Ok(found)
+    }
+
     fn mark_output_as_used<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        txo: &TxOutput,
-    ) -> WalletResult<()> {
-        if let Some(d) = Self::get_tx_output_destination(txo) {
+        output: &TxOutput,
+    ) -> WalletResult<bool> {
+        if let Some(d) = Self::get_tx_output_destination(output) {
             match d {
                 Destination::Address(pkh) => {
-                    self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                    let found = self.key_chain.mark_public_key_hash_as_used(db_tx, pkh)?;
+                    if found {
+                        return Ok(true);
+                    }
                 }
                 Destination::PublicKey(pk) => {
-                    self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                    let found = self.key_chain.mark_public_key_as_used(db_tx, pk)?;
+                    if found {
+                        return Ok(true);
+                    }
                 }
                 Destination::AnyoneCanSpend
                 | Destination::ClassicMultisig(_)
                 | Destination::ScriptHash(_) => {}
             }
         }
-        Ok(())
+        Ok(false)
     }
 
     pub fn get_balance<B: storage::Backend>(
@@ -347,18 +384,93 @@ impl Account {
             })
             .collect();
 
+        let revoked_blocks = self
+            .txo_cache
+            .blocks()
+            .iter()
+            .filter_map(|(id, block)| {
+                if block.height() > common_block_height {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let revoked_txs = self
+            .txo_cache
+            .txs()
+            .iter()
+            .filter_map(|(id, tx)| match tx.state() {
+                TxState::Confirmed(height) => {
+                    if *height > common_block_height {
+                        Some(id.clone())
+                    } else {
+                        None
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
         for utxo_id in revoked_utxos {
             db_tx.del_utxo(&utxo_id)?;
+        }
+        for block_id in revoked_blocks {
+            db_tx.del_block(&block_id)?;
+            self.txo_cache.remove_block(&block_id);
+        }
+        for tx_id in revoked_txs {
+            db_tx.del_transaction(&tx_id)?;
+            self.txo_cache.remove_tx(&tx_id);
         }
 
         Ok(())
     }
 
-    fn scan_genesis_block<B: storage::Backend>(
+    fn add_block_if_relevant<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
+        block: WalletBlock,
     ) -> WalletResult<()> {
+        let relevant_inputs = block
+            .kernel_inputs()
+            .iter()
+            .any(|input| self.txo_cache.outpoints().contains(input.outpoint()));
+        let relevant_outputs = self.mark_outputs_as_used(db_tx, block.reward())?;
+        if relevant_inputs || relevant_outputs {
+            let block_height = AccountBlockHeight::new(self.get_account_id(), block.height());
+            db_tx.set_block(&block_height, &block)?;
+            self.txo_cache.add_block(block_height, block);
+        }
+        Ok(())
+    }
+
+    fn add_tx_if_relevant<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        tx: &Transaction,
+        state: &TxState,
+    ) -> WalletResult<()> {
+        let relevant_inputs = tx
+            .inputs()
+            .iter()
+            .any(|input| self.txo_cache.outpoints().contains(input.outpoint()));
+        let relevant_output = self.mark_outputs_as_used(db_tx, tx.outputs())?;
+        if relevant_inputs || relevant_output {
+            let wallet_tx = WalletTx::new(tx.clone().into(), state.clone());
+            let tx_id = AccountTxId::new(self.get_account_id(), wallet_tx.tx().get_id());
+            db_tx.set_transaction(&tx_id, &wallet_tx)?;
+            self.txo_cache.add_tx(tx_id, wallet_tx);
+        }
+        Ok(())
+    }
+
+    fn scan_genesis<B: storage::Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
+
+        let block = WalletBlock::from_genesis(chain_config.genesis_block());
+        self.add_block_if_relevant(db_tx, block)?;
+
         for (output_index, output) in chain_config.genesis_block().utxos().iter().enumerate() {
             let utxo_source = UtxoSource::Blockchain(BlockHeight::zero());
             let outpoint = OutPoint::new(
@@ -378,6 +490,8 @@ impl Account {
     ) -> WalletResult<()> {
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
+            let tx_state = TxState::Confirmed(block_height);
+
             let utxo_source = UtxoSource::Blockchain(block_height);
             let block_id = block.get_id();
 
@@ -389,6 +503,9 @@ impl Account {
                 self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
             }
 
+            let wallet_block = WalletBlock::from_block(block, block_height);
+            self.add_block_if_relevant(db_tx, wallet_block)?;
+
             for signed_tx in block.transactions() {
                 let tx_id = signed_tx.transaction().get_id();
                 for input in signed_tx.inputs().iter() {
@@ -399,6 +516,7 @@ impl Account {
                         OutPoint::new(OutPointSourceId::Transaction(tx_id), output_index as u32);
                     self.add_utxo_if_own(db_tx, output, outpoint, utxo_source.clone())?
                 }
+                self.add_tx_if_relevant(db_tx, signed_tx.transaction(), &tx_state)?;
             }
         }
 
