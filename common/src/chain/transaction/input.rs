@@ -134,6 +134,16 @@ pub struct AccountInput {
     account: AccountType,
 }
 
+impl AccountInput {
+    pub fn new(nonce: u128, account: AccountType) -> Self {
+        Self { nonce, account }
+    }
+
+    pub fn account(&self) -> &AccountType {
+        &self.account
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum TxInput {
     Utxo(OutPoint),

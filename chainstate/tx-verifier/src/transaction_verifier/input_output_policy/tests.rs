@@ -21,7 +21,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        Block, DelegationId, Destination, GenBlock, OutPoint, OutPointSourceId, PoolId, TxInput,
+        AccountInput, AccountType, Block, DelegationId, Destination, GenBlock, OutPoint,
+        OutPointSourceId, PoolId, TxInput,
     },
     primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
 };
@@ -224,11 +225,11 @@ fn prepare_utxos_and_tx_with_random_combinations(
 /*-----------------------------------------------------------------------------------------------*/
 #[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-#[case(delegate_staking(), lock_then_transfer(), Ok(()))]
+#[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-#[case(delegate_staking(), delegate_staking(),   Ok(()))]
+#[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 fn tx_one_to_one(
     #[case] input_utxo: TxOutput,
     #[case] output: TxOutput,
@@ -317,26 +318,19 @@ fn tx_one_to_many(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn tx_spend_delegation(#[case] seed: Seed) {
-    let inputs = [delegate_staking()];
-    let outputs = [lock_then_transfer()];
-
     let mut rng = make_seedable_rng(seed);
+    let inputs = vec![TxInput::Account(AccountInput::new(
+        0,
+        AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng))),
+    ))];
+
     let number_of_outputs = rng.gen_range(2..10);
+    let source_outputs = [lock_then_transfer()];
+    let outputs = get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs);
 
-    let extra_output = if rng.gen::<bool>() {
-        Some(delegate_staking())
-    } else {
-        None
-    };
+    let tx = Transaction::new(0, inputs, outputs).unwrap();
 
-    let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
-        &mut rng,
-        &inputs,
-        1,
-        &outputs,
-        number_of_outputs,
-        extra_output,
-    );
+    let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), Default::default());
     assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
 }
 
@@ -348,7 +342,7 @@ fn tx_pool_decommissioning(#[case] seed: Seed) {
     let outputs = [lock_then_transfer()];
 
     let mut rng = make_seedable_rng(seed);
-    let number_of_outputs = rng.gen_range(2..10);
+    let number_of_outputs = rng.gen_range(1..10);
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
         &mut rng,
