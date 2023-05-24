@@ -122,7 +122,7 @@ impl NodeInterface for WalletHandlesClient {
 
     async fn generate_block(
         &self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         let block = self

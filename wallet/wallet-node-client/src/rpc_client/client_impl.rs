@@ -81,18 +81,14 @@ impl NodeInterface for NodeRpcClient {
 
     async fn generate_block(
         &self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         let transactions = transactions.map(|txs| txs.into_iter().map(HexEncoded::new).collect());
-        BlockProductionRpcClient::generate_block(
-            &self.http_client,
-            input_data.map(Into::into),
-            transactions,
-        )
-        .await
-        .map(HexEncoded::take)
-        .map_err(NodeRpcError::ResponseError)
+        BlockProductionRpcClient::generate_block(&self.http_client, input_data.into(), transactions)
+            .await
+            .map(HexEncoded::take)
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn submit_block(&self, block: Block) -> Result<(), Self::Error> {

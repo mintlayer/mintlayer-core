@@ -35,7 +35,7 @@ impl BlockProductionInterface for BlockProduction {
 
     async fn generate_block(
         &mut self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError> {
         let transactions = match transactions {

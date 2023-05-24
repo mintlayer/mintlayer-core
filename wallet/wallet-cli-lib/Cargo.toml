@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../../common" }
+consensus = { path = "../../consensus" }
 logging = { path = "../../logging" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }

@@ -42,7 +42,7 @@ trait BlockProductionRpc {
     #[method(name = "generate_block")]
     async fn generate_block(
         &self,
-        input_data: Option<HexEncoded<GenerateBlockInputData>>,
+        input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> RpcResult<HexEncoded<Block>>;
 }
@@ -68,17 +68,15 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
 
     async fn generate_block(
         &self,
-        input_data: Option<HexEncoded<GenerateBlockInputData>>,
+        input_data: HexEncoded<GenerateBlockInputData>,
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     ) -> rpc::Result<HexEncoded<Block>> {
         let transactions =
             transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect::<Vec<_>>());
 
         let block = handle_error(
-            self.call_async_mut(move |this| {
-                this.generate_block(input_data.map(HexEncoded::take), transactions)
-            })
-            .await,
+            self.call_async_mut(move |this| this.generate_block(input_data.take(), transactions))
+                .await,
         )?;
 
         Ok(block.into())

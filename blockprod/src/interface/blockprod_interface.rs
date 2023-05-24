@@ -32,7 +32,7 @@ pub trait BlockProductionInterface: Send {
     /// generated with available transactions in the mempool
     async fn generate_block(
         &mut self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError>;
 }

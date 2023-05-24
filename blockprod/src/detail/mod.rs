@@ -121,7 +121,7 @@ impl BlockProduction {
 
     async fn pull_consensus_data(
         &self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         block_timestamp: BlockTimestamp,
     ) -> Result<
         (
@@ -217,10 +217,10 @@ impl BlockProduction {
         block_height: BlockHeight,
         sealed_epoch_index: Option<EpochIndex>,
         sealed_epoch_randomness: Option<PoSRandomness>,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
     ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
         match input_data {
-            Some(GenerateBlockInputData::PoS(pos_input_data)) => {
+            GenerateBlockInputData::PoS(pos_input_data) => {
                 let sealed_epoch_index =
                     sealed_epoch_index.ok_or(ConsensusPoSError::NoEpochData)?;
 
@@ -272,8 +272,8 @@ impl BlockProduction {
                     ),
                 )))
             }
-            Some(GenerateBlockInputData::PoW(_)) => Ok(Some(FinalizeBlockInputData::PoW)),
-            None => Ok(None),
+            GenerateBlockInputData::PoW(_) => Ok(Some(FinalizeBlockInputData::PoW)),
+            GenerateBlockInputData::None => Ok(None),
         }
     }
 
@@ -302,7 +302,7 @@ impl BlockProduction {
     /// remnants in the job manager.
     pub async fn produce_block(
         &self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions_source: TransactionsSource,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         self.produce_block_with_custom_id(input_data, transactions_source, None).await
@@ -310,7 +310,7 @@ impl BlockProduction {
 
     async fn produce_block_with_custom_id(
         &self,
-        input_data: Option<GenerateBlockInputData>,
+        input_data: GenerateBlockInputData,
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
@@ -761,7 +761,7 @@ mod tests {
                     let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
 
                     block_production.produce_block_with_custom_id(
-                        None,
+                        GenerateBlockInputData::None,
                         TransactionsSource::Provided(vec![]),
                         Some(id),
                     )

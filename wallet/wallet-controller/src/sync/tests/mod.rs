@@ -137,7 +137,7 @@ impl NodeInterface for MockNode {
 
     async fn generate_block(
         &self,
-        _input_data: Option<GenerateBlockInputData>,
+        _input_data: GenerateBlockInputData,
         _transactions_hex: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, Self::Error> {
         unreachable!()
