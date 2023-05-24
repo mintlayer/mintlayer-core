@@ -64,13 +64,13 @@ pub use crate::{
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusCreationError {
-    #[error("Mining error")]
+    #[error("Mining error: {0}")]
     MiningError(#[from] ConsensusPoWError),
     #[error("Mining stopped")]
     MiningStopped,
     #[error("Mining failed")]
     MiningFailed,
-    #[error("Staking error")]
+    #[error("Staking error: {0}")]
     StakingError(#[from] ConsensusPoSError),
     #[error("Staking failed")]
     StakingFailed,
