@@ -87,6 +87,22 @@ impl VRFPrivateKey {
         }
     }
 
+    pub fn new_from_bytes(bytes: &[u8; 32], key_kind: VRFKeyKind) -> (VRFPrivateKey, VRFPublicKey) {
+        match key_kind {
+            VRFKeyKind::Schnorrkel => {
+                let k = schnorrkel::SchnorrkelPrivateKey::new_from_bytes(bytes);
+                (
+                    VRFPrivateKey {
+                        key: VRFPrivateKeyHolder::Schnorrkel(k.0),
+                    },
+                    VRFPublicKey {
+                        pub_key: VRFPublicKeyHolder::Schnorrkel(k.1),
+                    },
+                )
+            }
+        }
+    }
+
     pub fn kind(&self) -> VRFKeyKind {
         match self.key {
             VRFPrivateKeyHolder::Schnorrkel(_) => VRFKeyKind::Schnorrkel,
