@@ -322,6 +322,7 @@ fn tx_spend_delegation(#[case] seed: Seed) {
     let inputs = vec![TxInput::Account(AccountInput::new(
         0,
         AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng))),
+        Amount::ZERO,
     ))];
 
     let number_of_outputs = rng.gen_range(2..10);

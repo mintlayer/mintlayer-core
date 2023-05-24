@@ -160,13 +160,22 @@ where
             amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
         }
         TxInput::Account(account_input) => match account_input.account() {
-            AccountType::Delegation(delegation_id) => pos_accounting_view
-                .get_delegation_balance(*delegation_id)
-                .map_err(|_| pos_accounting::Error::ViewFail)?
-                .ok_or(ConnectTransactionError::DelegationBalanceNotFound(
-                    *delegation_id,
-                ))
-                .map(|amount| (CoinOrTokenId::Coin, amount)),
+            AccountType::Delegation(delegation_id) => {
+                let total_balance = pos_accounting_view
+                    .get_delegation_balance(*delegation_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .ok_or(ConnectTransactionError::DelegationBalanceNotFound(
+                        *delegation_id,
+                    ))?;
+                ensure!(
+                    total_balance >= *account_input.withdraw_amount(),
+                    ConnectTransactionError::AttemptToPrintMoney(
+                        total_balance,
+                        *account_input.withdraw_amount()
+                    )
+                );
+                Ok((CoinOrTokenId::Coin, *account_input.withdraw_amount()))
+            }
         },
     });
 

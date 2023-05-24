@@ -15,7 +15,7 @@
 
 use crate::chain::DelegationId;
 use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
-use crate::primitives::{Id, H256};
+use crate::primitives::{Amount, Id, H256};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -132,15 +132,24 @@ pub struct AccountInput {
     #[codec(compact)]
     nonce: u128,
     account: AccountType,
+    withdraw_amount: Amount,
 }
 
 impl AccountInput {
-    pub fn new(nonce: u128, account: AccountType) -> Self {
-        Self { nonce, account }
+    pub fn new(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
+        Self {
+            nonce,
+            account,
+            withdraw_amount,
+        }
     }
 
     pub fn account(&self) -> &AccountType {
         &self.account
+    }
+
+    pub fn withdraw_amount(&self) -> &Amount {
+        &self.withdraw_amount
     }
 }
 
