@@ -123,7 +123,7 @@ impl BlockProduction {
         &self,
         input_data: Option<GenerateBlockInputData>,
         block_timestamp: BlockTimestamp,
-    ) -> Result<(ConsensusData, GenBlockIndex, Option<FinalizeBlockInputData>), BlockProductionError>
+    ) -> Result<(ConsensusData, BlockReward, GenBlockIndex, Option<FinalizeBlockInputData>), BlockProductionError>
     {
         let consensus_data = self
             .chainstate_handle
@@ -168,7 +168,7 @@ impl BlockProduction {
                         // data is actually missing
                         .or_else(|| Some(PoSRandomness::at_genesis(&chain_config)));
 
-                    let consensus_data = consensus::generate_consensus_data(
+                    let (consensus_data, block_reward) = consensus::generate_consensus_data_and_reward(
                         &chain_config,
                         &best_block_index,
                         sealed_epoch_randomness,
@@ -188,7 +188,7 @@ impl BlockProduction {
                         input_data,
                     )?;
 
-                    Ok((consensus_data, best_block_index, finalize_block_data))
+                    Ok((consensus_data, block_reward, best_block_index, finalize_block_data))
                 }
             })
             .await?
@@ -306,7 +306,7 @@ impl BlockProduction {
 
         let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let (_, tip_at_start, _) = self.pull_consensus_data(input_data.clone(), timestamp).await?;
+        let (_, _, tip_at_start, _) = self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -319,7 +319,7 @@ impl BlockProduction {
             let timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-            let (consensus_data, current_tip_index, finalize_block_data) =
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
                 self.pull_consensus_data(input_data.clone(), timestamp).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
@@ -337,11 +337,6 @@ impl BlockProduction {
                     current_tip_index.block_height(),
                 ));
             }
-
-            // TODO: instead of the following static value, look at
-            // self.chain_config for the current block reward, then send
-            // it to self.reward_destination
-            let block_reward = BlockReward::new(vec![]);
 
             // TODO: see if we can simplify this
             let transactions = match transactions_source.clone() {
