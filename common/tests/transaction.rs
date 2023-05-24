@@ -40,21 +40,21 @@ fn transaction_id_snapshots() {
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0xf368cfd2546f0256af55a6bf332f3c464891033cca644c4b00c3a0f06c2f09ff
+        0x3db1faf0caf4f929459d5709c7f5e88c83b0c172ffc995a89035055ffadf7e2d
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, vec![], vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![]).unwrap();
     expect![[r#"
-        0xf368cfd2546f0256af55a6bf332f3c464891033cca644c4b00c3a0f06c2f09ff
+        0x3db1faf0caf4f929459d5709c7f5e88c83b0c172ffc995a89035055ffadf7e2d
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![]).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0xc851295108ff12448c11ca0a32daec8f373f23b44fa8359158d00e09910cce68
+        0xbfda14833ab08e9819fdf0b899adf0dc38655255619538a015c2b1dcc74bcc34
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -68,14 +68,14 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0x390f0465b617605e9b54bf8e7835c77790eb7b8547f9c7fa90d0efa636f45877
+        0x679ac36cd1dd5c6f53aa532d01f96c61f4ff37eb1e71219ee38a2af19198e64a
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone()).unwrap();
     let signed_tx = SignedTransaction::new(tx, vec![InputWitness::NoSignature(None)]).unwrap();
     expect![[r#"
-        0x336a72e22d0536c1b00d75f97aed03bfaa2f3ef2ae1a292a60a2e8ca2eed2347
+        0x4ef0c69971c04aeb22c95c657c0dc92477ec8944edac0a4cc7642d944ecd815c
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 
@@ -89,7 +89,7 @@ fn transaction_id_snapshots() {
     )
     .unwrap();
     expect![[r#"
-        0xe60afd411a245203e062d8b4af1bd8661f7b9632816ec0c6150f9ba974ee8883
+        0x566a068e9f4a13b6ce758a1f9ca2262d87db71e6bd82a102303fd1b5ac860f22
     "#]]
     .assert_debug_eq(&signed_tx.transaction().get_id().get());
 }

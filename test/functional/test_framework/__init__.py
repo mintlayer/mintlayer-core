@@ -70,7 +70,7 @@ def init_mintlayer_types():
                 "type": "struct",
                 "type_mapping": [
                     ["version", "u8"], # has to be 1
-                    ["flags", "u128"],
+                    ["flags", "Compact<u128>"],
                     ["inputs", "Vec<TxInput>"],
                     ["outputs", "Vec<TxOutput>"],
                 ]

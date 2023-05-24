@@ -18,7 +18,6 @@ pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
 use crate::primitives::H256;
 use crate::primitives::{id, Id, Idable, VersionTag};
-use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode, Tagged};
 
 use super::Transaction;
@@ -26,6 +25,7 @@ use super::Transaction;
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
     version: VersionTag<1>,
+    #[codec(compact)]
     flags: u128,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
@@ -70,17 +70,6 @@ impl TransactionV1 {
 impl Idable for TransactionV1 {
     type Tag = Transaction;
     fn get_id(&self) -> Id<Transaction> {
-        let mut hash_stream = id::DefaultHashAlgoStream::new();
-
-        // Collect data from inputs, excluding witnesses
-        let inputs: Vec<&OutPoint> = self.inputs().iter().map(TxInput::outpoint).collect();
-
-        // Include the transaction format version first
-        id::hash_encoded_to(&self.version, &mut hash_stream);
-        // Followed by transaction contents
-        id::hash_encoded_to(&self.flags(), &mut hash_stream);
-        id::hash_encoded_to(&inputs, &mut hash_stream);
-        id::hash_encoded_to(&self.outputs(), &mut hash_stream);
-        Id::new(hash_stream.finalize().into())
+        Id::new(id::hash_encoded(self))
     }
 }
