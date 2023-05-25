@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use common::{chain::GenBlock, primitives::Id};
 use logging::log;
@@ -72,22 +72,27 @@ impl JobsContainer {
         }
     }
 
-    /// Remove a job by its key. If `and_stop` is true, the job will be stopped.
+    /// Remove a job by its key
+    ///
+    /// If `and_stop` is true, the job will be stopped.
+    ///
     /// Returns true if the job was removed, false if it was not found.
     fn remove_job(&mut self, job_key: JobKey, and_stop: bool) -> bool {
         match self.jobs.entry(job_key) {
-            std::collections::btree_map::Entry::Vacant(j) => {
+            Entry::Vacant(j) => {
                 log::error!("Attempted to stop non-existent job: {j:?}");
                 false
             }
-            std::collections::btree_map::Entry::Occupied(entry) => {
+            Entry::Occupied(entry) => {
+                let removed_job = entry.remove();
+
                 if and_stop {
-                    _ = entry
-                        .remove()
+                    _ = removed_job
                         .cancel_sender
                         .send(())
                         .log_err_pfx("Error sending cancel job event");
                 }
+
                 true
             }
         }
