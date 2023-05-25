@@ -119,7 +119,6 @@ mockall::mock! {
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
-        fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
         fn get_inputs_outpoints_coin_amount(
             &self,
             inputs: &[TxInput],
