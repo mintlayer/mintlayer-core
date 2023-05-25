@@ -127,9 +127,7 @@ pub struct ChainConfig {
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
     max_no_signature_data_size: usize,
-    /// Length of an epoch in blocks
     epoch_length: NonZeroU64,
-    /// Distance from the tip of the chain to the sealed state in epochs.
     sealed_epoch_distance_from_tip: usize,
     initial_randomness: H256,
     token_min_issuance_fee: Amount,
@@ -145,105 +143,130 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
+    /// Bech32m addresses in this chain will use this prefix
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }
 
+    /// The BIP44 coin type for this chain
     pub fn bip44_coin_type(&self) -> ChildNumber {
         self.bip44_coin_type
     }
 
+    /// The genesis block id of the chain
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
         self.genesis_block.get_id().into()
     }
 
+    /// The genesis block of the chain
     pub fn genesis_block(&self) -> &Arc<WithId<Genesis>> {
         &self.genesis_block
     }
 
+    /// The bytes that are used to prefix p2p communication to uniquely identify this chain
     pub fn magic_bytes(&self) -> &[u8; 4] {
         &self.magic_bytes
     }
 
+    /// The port that the p2p server will listen on
     pub fn p2p_port(&self) -> u16 {
         self.p2p_port
     }
 
+    /// The current version of the protocol that this chain is running
     pub fn version(&self) -> &SemVer {
         &self.version
     }
 
+    /// The chain of this config (mainnet, testnet, regtest, etc...)
     pub fn chain_type(&self) -> &ChainType {
         &self.chain_type
     }
 
+    /// The mechanism by which we define changes in the chain, including consensus and other upgrades/forks
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
     }
 
+    /// Checkpoints enforced by the chain, as in, a block with vs height that must be satisfied
     pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
         &self.height_checkpoint_data
     }
 
+    /// The target time-distance between blocks
     pub fn target_block_spacing(&self) -> &Duration {
         &self.target_block_spacing
     }
 
+    /// Block subsidy vs block height table
     pub fn emission_schedule(&self) -> &EmissionSchedule {
         &self.emission_schedule
     }
 
+    /// The number of decimal places in the smallest unit of the coin
     pub fn coin_decimals(&self) -> u8 {
         self.coin_decimals
     }
 
+    /// The maximum size of data attached to NoSignature witness
     pub fn max_no_signature_data_size(&self) -> usize {
         self.max_no_signature_data_size
     }
 
+    /// The maximum offset of time from the current time the timestamp of a new block can be
     pub fn max_future_block_time_offset(&self) -> &Duration {
         &self.max_future_block_time_offset
     }
 
+    /// Length of an epoch in blocks
     pub fn epoch_length(&self) -> NonZeroU64 {
         self.epoch_length
     }
 
+    /// Distance from the tip of the chain to the sealed state in epochs
     pub fn sealed_epoch_distance_from_tip(&self) -> usize {
         self.sealed_epoch_distance_from_tip
     }
 
+    /// Given a block height, return the block subsidy at that height according to the emission schedule
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {
         self.emission_schedule().subsidy(*height).to_amount_atoms()
     }
 
+    /// The maximum size of a block header
     pub fn max_block_header_size(&self) -> usize {
         self.max_block_header_size
     }
 
+    /// The maximum size of a block that uses standard transactions
     pub fn max_block_size_from_txs(&self) -> usize {
         self.max_block_size_with_standard_txs
     }
 
+    /// The maximum size of a block that uses smart contracts
     pub fn max_block_size_from_smart_contracts(&self) -> usize {
         self.max_block_size_with_smart_contracts
     }
 
+    /// The initial randomness used for the first few epochs until sealed blocks kick in
     pub fn initial_randomness(&self) -> H256 {
         self.initial_randomness
     }
 
     #[must_use]
+    /// Given a block height, return the epoch index at that height
     pub fn epoch_index_from_height(&self, height: &BlockHeight) -> EpochIndex {
         let height: u64 = (*height).into();
         height / self.epoch_length
     }
 
+    /// Given a block height, return true if the block is the last block in that epoch
     pub fn is_last_block_in_epoch(&self, height: &BlockHeight) -> bool {
         let next_height: u64 = height.next_height().into();
         next_height % self.epoch_length() == 0
     }
 
+    /// Given a block height, return true if a seal operation should run at this height
     pub fn is_due_for_epoch_seal(&self, height: &BlockHeight) -> bool {
         let sealed_epoch_distance_from_tip = self.sealed_epoch_distance_from_tip() as u64;
         let current_epoch_index = self.epoch_index_from_height(height);
@@ -263,38 +286,47 @@ impl ChainConfig {
         }
     }
 
+    /// The fee for issuing a token
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
     }
 
+    /// The maximum length of a URI contained in a token
     pub fn token_max_uri_len(&self) -> usize {
         self.token_max_uri_len
     }
 
+    /// The maximum number of decimals in a token (not coins, to be accurate, just for tokens)
     pub fn token_max_dec_count(&self) -> u8 {
         self.token_max_dec_count
     }
 
+    /// The maximum length of a ticker of a token
     pub fn token_max_ticker_len(&self) -> usize {
         self.token_max_ticker_len
     }
 
+    /// The maximum length of a description of a token
     pub fn token_max_description_len(&self) -> usize {
         self.token_max_description_len
     }
 
+    /// The maximum length of a name of a token
     pub fn token_max_name_len(&self) -> usize {
         self.token_max_name_len
     }
 
+    /// The minimum length of a hash of a token
     pub fn min_hash_len(&self) -> usize {
         self.token_min_hash_len
     }
 
+    /// The maximum length of a hash of a token
     pub fn max_hash_len(&self) -> usize {
         self.token_max_hash_len
     }
 
+    /// The minimum number of blocks required for a block reward to mature
     pub fn empty_consensus_reward_maturity_distance(&self) -> BlockDistance {
         self.empty_consensus_reward_maturity_distance
     }
@@ -304,6 +336,7 @@ impl ChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
 
+    /// The minimum number of blocks required to be able to spend a utxo coming from a decommissioned pool
     pub fn decommission_pool_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
         match self.net_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
@@ -315,6 +348,7 @@ impl ChainConfig {
         }
     }
 
+    /// The number of blocks required to pass before a delegation share can be spent after taking it out of the delegation account
     pub fn spend_share_maturity_distance(&self, block_height: BlockHeight) -> BlockDistance {
         match self.net_upgrades.consensus_status(block_height) {
             RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {
@@ -326,6 +360,7 @@ impl ChainConfig {
         }
     }
 
+    /// The maximum number of public keys that can go into a classical multisig
     pub fn max_classic_multisig_public_keys_count(&self) -> usize {
         self.max_classic_multisig_public_keys_count
     }
