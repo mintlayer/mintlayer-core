@@ -103,6 +103,7 @@ impl Account {
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
+            // TODO: Add support for LockThenTransfer
             let utxos = self
                 .get_utxos(UtxoType::Transfer.into())
                 .into_iter()
@@ -160,8 +161,8 @@ impl Account {
             ))?
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
-        let keys =
-            VRFPrivateKey::new_from_bytes(private_key.as_bytes(), VRFKeyKind::Schnorrkel).unwrap();
+        let keys = VRFPrivateKey::new_from_bytes(private_key.as_bytes(), VRFKeyKind::Schnorrkel)
+            .expect("should not fail because private keys are always 32 bytes");
         Ok(keys)
     }
 
@@ -170,6 +171,9 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
+        // process_send_request can fill UTXOs, but the first UTXO is needed in advance to calculate pool_id
+
+        // TODO: Add support for LockThenTransfer
         let utxos = self
             .get_utxos(UtxoType::Transfer.into())
             .into_iter()
@@ -190,7 +194,7 @@ impl Account {
             staker.into_public_key(),
             decommission_key.into_public_key(),
             vrf_public_key,
-            PerThousand::new(1000).unwrap(),
+            PerThousand::new(1000).expect("must not fail"),
             Amount::ZERO,
         )?;
 
@@ -208,11 +212,12 @@ impl Account {
         let (kernel_input_outpoint, kernel_input_utxo) =
             utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
+
+        let stake_destination = Self::get_tx_output_destination(kernel_input_utxo)
+            .expect("must succeed for CreateStakePool and ProduceBlockFromStake outputs");
         let stake_private_key = self
             .key_chain
-            .get_private_key_for_destination(
-                Self::get_tx_output_destination(kernel_input_utxo).unwrap(),
-            )?
+            .get_private_key_for_destination(stake_destination)?
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
@@ -248,7 +253,6 @@ impl Account {
 
         // Iterate over all outputs and calculate the coin and tokens amounts
         for output in outputs {
-            // TODO: Include DecommissionPool output
             // Get the supported output value
             let output_value = match output {
                 TxOutput::Transfer(v, _)
@@ -363,7 +367,6 @@ impl Account {
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {
         // TODO: Reuse code from TxVerifier
-        // TODO(PR): Fix CreateStakePool and ProduceBlockFromStake
         match txo {
             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
