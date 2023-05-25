@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::account::UtxoType;
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -37,6 +36,7 @@ use wallet_storage::{
     DefaultBackend, Store, StoreTxRo, StoreTxRw, TransactionRo, TransactionRw, Transactional,
     WalletStorageRead, WalletStorageWrite,
 };
+use wallet_types::utxo_types::UtxoType;
 use wallet_types::{AccountId, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -257,7 +257,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn get_utxos(&self, account_index: U31) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
         self.for_account_ro(account_index, |account, _db_tx| {
-            let utxos = account.get_utxos(UtxoType::Transfer);
+            let utxos = account.get_utxos(UtxoType::Transfer.into());
             let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
             Ok(utxos)
         })
