@@ -101,7 +101,7 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
-    #[error("Error during stake spending: {0:?}")]
+    #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Attempt to use invalid input type in a transaction")]
     InvalidInputTypeInTx,
@@ -266,6 +266,6 @@ pub enum SpendStakeError {
     StakePoolDataMismatch,
     #[error("Pool id in kernel {0} doesn't match id in block reward output {1}")]
     StakePoolIdMismatch(PoolId, PoolId),
-    #[error("Consensus PoS error")]
+    #[error("Consensus PoS error: {0}")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }

@@ -103,10 +103,10 @@ impl SchnorrkelPrivateKey {
         (sk, pk)
     }
 
+    /// Derive a key from a 32-byte secret
     pub fn new_from_bytes(
         bytes: &[u8],
     ) -> Result<(SchnorrkelPrivateKey, SchnorrkelPublicKey), VRFError> {
-        // `MiniSecretKey::from_bytes` only checks the slice length, so this should not fail
         let mini_secret = schnorrkel::MiniSecretKey::from_bytes(bytes)
             .map_err(|e| VRFError::GenerateKeyError(e.to_string()))?;
         let keypair = mini_secret.expand_to_keypair(schnorrkel::ExpansionMode::Uniform);
@@ -265,7 +265,7 @@ mod tests {
             let expected_sk =
                 SchnorrkelPrivateKey::decode_all(&mut hex::decode(expected).unwrap().as_slice())
                     .unwrap();
-            assert_eq!(sk, expected_sk, "Decode fails for {bytes_hex}");
+            assert_eq!(sk, expected_sk, "Unexpected result for {bytes_hex}");
         }
     }
 
@@ -273,7 +273,7 @@ mod tests {
     #[trace]
     #[case(test_utils::random::Seed::from_entropy())]
     fn vrf_from_random_bytes(#[case] seed: Seed) {
-        // Verify that [SchnorrkelPrivateKey::new_from_bytes] does not panic
+        // Check that [SchnorrkelPrivateKey::new_from_bytes] succeeds for all 32 bytes
         let mut rng = make_seedable_rng(seed);
         for _ in 0..10 {
             let mut bytes = [0; 32];
