@@ -246,7 +246,6 @@ impl ChainConfig {
     }
 
     /// Given a block height, return the block subsidy at that height according to the emission schedule
-    #[must_use]
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {
         self.emission_schedule().subsidy(*height).to_amount_atoms()
     }
@@ -312,7 +311,6 @@ impl ChainConfig {
     }
 
     /// The fee for issuing a token
-    #[must_use]
     pub fn token_min_issuance_fee(&self) -> Amount {
         self.token_min_issuance_fee
     }
