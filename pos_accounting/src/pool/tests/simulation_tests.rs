@@ -24,6 +24,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use super::create_pool_data;
 
 use crate::{
+    make_pool_id,
     pool::{delegation::DelegationData, storage::PoSAccountingDB},
     storage::in_memory::InMemoryPoSAccounting,
     FlushablePoSAccountingView, PoSAccountingDelta, PoSAccountingOperations, PoSAccountingUndo,
@@ -149,8 +150,9 @@ fn perform_random_operation(
             let input0_outpoint = random_outpoint0(rng);
             let pledge_amount = Amount::from_atoms(rng.gen_range(1000..10_000));
             let pool_data = create_pool_data(rng, Destination::AnyoneCanSpend, pledge_amount);
+            let pool_id = make_pool_id(&input0_outpoint);
 
-            let (_, undo) = op.create_pool(&input0_outpoint, pool_data).unwrap();
+            let undo = op.create_pool(pool_id, pool_data).unwrap();
             undos.push(undo);
         }
         // decommission pool
