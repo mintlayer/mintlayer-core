@@ -221,8 +221,8 @@ impl BlockProduction {
     ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
         match input_data {
             GenerateBlockInputData::PoS(pos_input_data) => {
-                let sealed_epoch_index =
-                    sealed_epoch_index.ok_or(ConsensusPoSError::NoEpochData)?;
+                // There's no epoch information for the genesis block
+                let sealed_epoch_index = sealed_epoch_index.unwrap_or(0);
 
                 let sealed_epoch_randomness =
                     sealed_epoch_randomness.ok_or(ConsensusPoSError::PropertyQueryError(
