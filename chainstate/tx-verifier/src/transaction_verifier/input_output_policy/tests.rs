@@ -288,12 +288,27 @@ fn tx_one_to_many(#[case] seed: Seed) {
     }
 
     // invalid input
-    let invalid_inputs =
-        [stake_pool(), burn(), produce_block(), create_delegation(), delegate_staking()];
+    let invalid_inputs = [burn(), create_delegation()];
     let valid_outputs = [lock_then_transfer(), transfer(), burn()];
     check(
         &invalid_inputs,
         &valid_outputs,
+        Err(ConnectTransactionError::InvalidInputTypeInTx),
+    );
+
+    // invalid output
+    let valid_inputs = [stake_pool(), produce_block(), delegate_staking()];
+    let invalid_outputs = [
+        transfer(),
+        burn(),
+        stake_pool(),
+        produce_block(),
+        create_delegation(),
+        delegate_staking(),
+    ];
+    check(
+        &valid_inputs,
+        &invalid_outputs,
         Err(ConnectTransactionError::InvalidInputTypeInTx),
     );
 }
