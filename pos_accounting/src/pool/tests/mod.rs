@@ -26,7 +26,7 @@ use crypto::{
 };
 
 use crate::{
-    error::Error, storage::in_memory::InMemoryPoSAccounting, DelegationData,
+    error::Error, make_pool_id, storage::in_memory::InMemoryPoSAccounting, DelegationData,
     PoSAccountingOperations, PoSAccountingUndo, PoolData,
 };
 
@@ -76,8 +76,9 @@ fn create_pool(
         0,
     );
     let pool_data = create_pool_data(rng, destination, pledged_amount);
-    op.create_pool(&outpoint, pool_data.clone())
-        .map(|(id, undo)| (id, pool_data, undo))
+    let pool_id = make_pool_id(&outpoint);
+    op.create_pool(pool_id, pool_data.clone())
+        .map(|undo| (pool_id, pool_data, undo))
 }
 
 fn create_delegation_id(

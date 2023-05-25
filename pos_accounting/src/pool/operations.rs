@@ -97,9 +97,9 @@ use super::{delegation::DelegationData, pool_data::PoolData};
 pub trait PoSAccountingOperations {
     fn create_pool(
         &mut self,
-        input0_outpoint: &OutPoint,
+        pool_id: PoolId,
         pool_data: PoolData,
-    ) -> Result<(PoolId, PoSAccountingUndo), Error>;
+    ) -> Result<PoSAccountingUndo, Error>;
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error>;
 

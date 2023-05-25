@@ -536,10 +536,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     let verifier1 = {
         let mut verifier =
             TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
-        let (_, undo) = verifier
+        let undo = verifier
             .accounting_delta_adapter
             .operations(TransactionSource::Mempool)
-            .create_pool(&outpoint1, pool_data1.clone().into())
+            .create_pool(pool_id_1, pool_data1.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
@@ -561,10 +561,10 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
 
     let verifier2 = {
         let mut verifier = verifier1.derive_child();
-        let (_, undo) = verifier
+        let undo = verifier
             .accounting_delta_adapter
             .operations(TransactionSource::Mempool)
-            .create_pool(&outpoint2, pool_data2.clone().into())
+            .create_pool(pool_id_2, pool_data2.clone().into())
             .unwrap();
 
         let tx_id: Id<Transaction> = Id::new(H256::random_using(&mut rng));
