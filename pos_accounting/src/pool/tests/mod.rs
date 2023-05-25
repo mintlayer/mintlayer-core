@@ -50,14 +50,14 @@ fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
 
 fn create_pool_data(
     rng: &mut (impl Rng + CryptoRng),
-    decomission_destination: Destination,
+    decommission_destination: Destination,
     pledged_amount: Amount,
 ) -> PoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let margin_ratio = PerThousand::new(rng.gen_range(0..1000)).unwrap();
     let cost_per_block = Amount::from_atoms(rng.gen_range(0..1000));
     PoolData::new(
-        decomission_destination,
+        decommission_destination,
         pledged_amount,
         vrf_pk,
         margin_ratio,
