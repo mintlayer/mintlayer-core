@@ -324,6 +324,12 @@ impl Builder {
         self
     }
 
+    /// Set genesis block to be the testnet genesis
+    pub fn genesis_testnet(mut self) -> Self {
+        self.genesis_block = GenesisBlockInit::Testnet;
+        self
+    }
+
     /// Set emission schedule to the mainnet schedule
     pub fn emission_schedule_mainnet(mut self) -> Self {
         self.emission_schedule = EmissionScheduleInit::Mainnet;
