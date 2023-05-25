@@ -26,8 +26,7 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex,
+        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, TxInput, TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
