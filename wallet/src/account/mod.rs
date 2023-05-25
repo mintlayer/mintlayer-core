@@ -24,7 +24,9 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
-use common::chain::{Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput};
+use common::chain::{
+    Block, ChainConfig, Destination, OutPoint, SignedTransaction, Transaction, TxOutput,
+};
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
@@ -99,18 +101,11 @@ impl Account {
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
-            let all_utxos = self.txo_cache.utxos();
-            let own_utxos = all_utxos.into_iter().filter_map(|(outpoint, txo)| {
-                if self.is_mine_or_watched(txo) {
-                    Some((outpoint, txo.clone()))
-                } else {
-                    None
-                }
-            });
+            let utxos = self.get_utxos().into_iter().map(|(outpoint, txo)| (outpoint, txo.clone()));
 
             // TODO: Call coin selector
 
-            request = request.with_inputs(own_utxos);
+            request = request.with_inputs(utxos);
         }
 
         let (input_coin_amount, input_tokens_amounts) =
@@ -170,12 +165,22 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
+        let utxos = self
+            .get_utxos()
+            .into_iter()
+            .map(|(outpoint, txo)| (outpoint, txo.clone()))
+            .collect::<Vec<(OutPoint, TxOutput)>>();
+
+        let input0 = utxos.get(0).ok_or(WalletError::NoUtxos)?;
+        let pool_id = pos_accounting::make_pool_id(&input0.0);
+
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
         let decommission_key = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
         let (_vrf_private_key, vrf_public_key) = self.get_vrf_key()?;
 
         let stake_output = make_stake_output(
+            pool_id,
             amount,
             staker.into_public_key(),
             decommission_key.into_public_key(),
@@ -184,7 +189,7 @@ impl Account {
             Amount::ZERO,
         )?;
 
-        let request = SendRequest::new().with_outputs([stake_output]);
+        let request = SendRequest::new().with_inputs(utxos).with_outputs([stake_output]);
 
         self.process_send_request(db_tx, request)
     }
@@ -204,8 +209,10 @@ impl Account {
                 TxOutput::Transfer(v, _)
                 | TxOutput::LockThenTransfer(v, _, _)
                 | TxOutput::Burn(v) => v.clone(),
-                TxOutput::CreateStakePool(stake) => OutputValue::Coin(stake.value()),
-                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::DecommissionPool(_, _, _, _) => {
+                TxOutput::CreateStakePool(_, stake) => OutputValue::Coin(stake.value()),
+                TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => {
                     return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                         output.clone(),
                     )))
@@ -374,10 +381,15 @@ impl Account {
     }
 
     pub fn get_balance(&self) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let all_utxos = self.txo_cache.utxos();
-        let own_utxos = all_utxos.into_values().filter(|txo| self.is_mine_or_watched(txo));
-        let balances = Self::calculate_output_amounts(own_utxos)?;
+        let utxos = self.get_utxos();
+        let balances = Self::calculate_output_amounts(utxos.into_values())?;
         Ok(balances)
+    }
+
+    pub fn get_utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
+        let mut all_outputs = self.txo_cache.utxos();
+        all_outputs.retain(|_key, txo| self.is_mine_or_watched(txo));
+        all_outputs
     }
 
     pub fn reset_to_height<B: storage::Backend>(

@@ -26,7 +26,7 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, ChainConfig},
+    chain::{tokens::TokenId, ChainConfig, OutPoint, TxOutput},
     primitives::Amount,
 };
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
@@ -126,6 +126,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
         self.wallet
             .get_balance(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_utxos(&self) -> Result<BTreeMap<OutPoint, TxOutput>, ControllerError<T>> {
+        self.wallet
+            .get_utxos(DEFAULT_ACCOUNT_INDEX)
             .map_err(ControllerError::WalletError)
     }
 

@@ -34,6 +34,10 @@ pub struct PoWGenerateBlockInputData {
 }
 
 impl PoWGenerateBlockInputData {
+    pub fn new(reward_destination: Destination) -> Self {
+        Self { reward_destination }
+    }
+
     pub fn reward_destination(&self) -> &Destination {
         &self.reward_destination
     }
