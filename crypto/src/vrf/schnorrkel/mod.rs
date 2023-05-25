@@ -103,18 +103,21 @@ impl SchnorrkelPrivateKey {
         (sk, pk)
     }
 
-    pub fn new_from_bytes(bytes: &[u8; 32]) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
+    pub fn new_from_bytes(
+        bytes: &[u8],
+    ) -> Result<(SchnorrkelPrivateKey, SchnorrkelPublicKey), VRFError> {
         // `MiniSecretKey::from_bytes` only checks the slice length, so this should not fail
-        let mini_secret = schnorrkel::MiniSecretKey::from_bytes(bytes).expect("must not fail");
+        let mini_secret = schnorrkel::MiniSecretKey::from_bytes(bytes)
+            .map_err(|e| VRFError::GenerateKeyError(e.to_string()))?;
         let keypair = mini_secret.expand_to_keypair(schnorrkel::ExpansionMode::Uniform);
-        (
+        Ok((
             SchnorrkelPrivateKey {
                 key: keypair.secret.clone(),
             },
             SchnorrkelPublicKey {
                 key: keypair.public,
             },
-        )
+        ))
     }
 
     pub fn produce_vrf_data(&self, message: Transcript) -> SchnorrkelVRFReturn {
@@ -258,8 +261,7 @@ mod tests {
         ];
         for (bytes_hex, expected) in keys {
             let bytes = hex::decode(bytes_hex).unwrap();
-            let (sk, _pk) =
-                SchnorrkelPrivateKey::new_from_bytes(bytes.as_slice().try_into().unwrap());
+            let (sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes).unwrap();
             let expected_sk =
                 SchnorrkelPrivateKey::decode_all(&mut hex::decode(expected).unwrap().as_slice())
                     .unwrap();
@@ -276,7 +278,7 @@ mod tests {
         for _ in 0..10 {
             let mut bytes = [0; 32];
             rng.fill_bytes(&mut bytes);
-            let (_sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes);
+            let (_sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes).unwrap();
         }
     }
 }

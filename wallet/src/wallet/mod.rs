@@ -269,6 +269,17 @@ impl<B: storage::Backend> Wallet<B> {
         Ok(tx)
     }
 
+    pub fn create_stake_pool_transaction(
+        &mut self,
+        account_index: U31,
+        amount: Amount,
+    ) -> WalletResult<SignedTransaction> {
+        let tx = self.for_account_rw(account_index, |account, db_tx| {
+            account.create_stake_pool_transaction(db_tx, amount)
+        })?;
+        Ok(tx)
+    }
+
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {

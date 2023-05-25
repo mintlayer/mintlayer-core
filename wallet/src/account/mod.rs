@@ -16,7 +16,7 @@
 mod txo_cache;
 
 use crate::key_chain::{AccountKeyChain, KeyChainError};
-use crate::send_request::make_address_output;
+use crate::send_request::{make_address_output, make_stake_output};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
 use common::chain::signature::inputsig::standard_signature::StandardInputSignature;
@@ -25,9 +25,12 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{Block, ChainConfig, Destination, SignedTransaction, Transaction, TxOutput};
+use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Idable};
 use crypto::key::extended::ExtendedPrivateKey;
+use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
@@ -144,6 +147,48 @@ impl Account {
         Ok(tx)
     }
 
+    fn get_vrf_key(&mut self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
+        let public_key = self
+            .key_chain
+            .get_leaf_key_chain(KeyPurpose::ReceiveFunds)
+            .get_derived_xpub(ChildNumber::ZERO)
+            .ok_or(WalletError::WalletNotInitialized)?;
+        let private_key = self
+            .key_chain
+            .get_private_key_for_destination(&Destination::PublicKey(
+                public_key.clone().into_public_key(),
+            ))?
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+            .private_key();
+        let keys =
+            VRFPrivateKey::new_from_bytes(private_key.as_bytes(), VRFKeyKind::Schnorrkel).unwrap();
+        Ok(keys)
+    }
+
+    pub fn create_stake_pool_transaction<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        amount: Amount,
+    ) -> WalletResult<SignedTransaction> {
+        // TODO: Use other accounts here
+        let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
+        let decommission_key = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
+        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key()?;
+
+        let stake_output = make_stake_output(
+            amount,
+            staker.into_public_key(),
+            decommission_key.into_public_key(),
+            vrf_public_key,
+            PerThousand::new(1000).unwrap(),
+            Amount::ZERO,
+        )?;
+
+        let request = SendRequest::new().with_outputs([stake_output]);
+
+        self.process_send_request(db_tx, request)
+    }
+
     /// Calculate the output amount for coins and tokens
     fn calculate_output_amounts<'a>(
         outputs: impl Iterator<Item = &'a TxOutput>,
@@ -158,11 +203,9 @@ impl Account {
             let output_value = match output {
                 TxOutput::Transfer(v, _)
                 | TxOutput::LockThenTransfer(v, _, _)
-                | TxOutput::Burn(v) => v,
-                TxOutput::CreateStakePool(_, _)
-                | TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => {
+                | TxOutput::Burn(v) => v.clone(),
+                TxOutput::CreateStakePool(stake) => OutputValue::Coin(stake.value()),
+                TxOutput::ProduceBlockFromStake(_, _) | TxOutput::DecommissionPool(_, _, _, _) => {
                     return Err(WalletError::UnsupportedTransactionOutput(Box::new(
                         output.clone(),
                     )))
@@ -172,7 +215,7 @@ impl Account {
             match output_value {
                 OutputValue::Coin(output_amount) => {
                     coin_amount =
-                        coin_amount.add(*output_amount).ok_or(WalletError::OutputAmountOverflow)?
+                        coin_amount.add(output_amount).ok_or(WalletError::OutputAmountOverflow)?
                 }
                 OutputValue::Token(token_data) => {
                     let token_data = token_data.as_ref();
