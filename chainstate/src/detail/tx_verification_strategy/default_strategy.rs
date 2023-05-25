@@ -104,10 +104,6 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
             })
             .log_err()?;
 
-        // TODO: reconsider the order of connect txs and check block reward.
-        //       Ideally we want to check everything before mutating the state.
-        //       Previously check block reward was done before the reward was connected, but
-        //       the connection of reward spends the output preventing proper validation.
         tx_verifier
             .check_block_reward(block, Fee(total_fees), Subsidy(block_subsidy))
             .log_err()?;
