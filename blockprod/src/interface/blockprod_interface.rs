@@ -24,12 +24,14 @@ pub trait BlockProductionInterface: Send {
     /// to all currently running jobs to stop running
     async fn stop_all(&mut self) -> Result<usize, BlockProductionError>;
 
-    /// Stop a specific job, given its key
+    /// When called, the job manager will be notified to send a signal
+    /// to the specified job to stop running
     async fn stop_job(&mut self, job_id: JobKey) -> Result<bool, BlockProductionError>;
 
-    /// Generate a block with the given transactions to the specified
-    /// reward destination. If transactions are None, the block will be
-    /// generated with available transactions in the mempool
+    /// Generate a block with the given transactions
+    ///
+    /// If `transactions` is `None`, the block will be generated with
+    /// available transactions in the mempool
     async fn generate_block(
         &mut self,
         input_data: GenerateBlockInputData,

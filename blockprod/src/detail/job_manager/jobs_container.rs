@@ -111,7 +111,9 @@ impl JobsContainer {
             log::info!("Sending stop jobs for block production failed for {send_fail_count}");
         }
 
-        // We don't do `count - send_fail_count` because the failures are in sending, not in stopping. The jobs are assumed to have been stopped already.
+        // We don't do `count - send_fail_count` because the failures
+        // are in sending, not in stopping. The jobs are assumed to
+        // have been stopped already.
         count
     }
 
@@ -122,6 +124,7 @@ impl JobsContainer {
             Some(job_key) => self.remove_job(job_key, true) as usize,
             None => self.stop_all(),
         };
+
         _ = result_sender.send(stopped_count).log_err_pfx("Error sending stop jobs count");
     }
 

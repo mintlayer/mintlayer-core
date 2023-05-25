@@ -17,7 +17,7 @@ use common::chain::{Block, SignedTransaction};
 use consensus::GenerateBlockInputData;
 
 use crate::{
-    detail::{job_manager::JobKey, BlockProduction},
+    detail::{job_manager::JobKey, BlockProduction, TransactionsSource},
     BlockProductionError,
 };
 
@@ -39,8 +39,8 @@ impl BlockProductionInterface for BlockProduction {
         transactions: Option<Vec<SignedTransaction>>,
     ) -> Result<Block, BlockProductionError> {
         let transactions = match transactions {
-            Some(txs) => crate::detail::TransactionsSource::Provided(txs),
-            None => crate::detail::TransactionsSource::Mempool,
+            Some(txs) => TransactionsSource::Provided(txs),
+            None => TransactionsSource::Mempool,
         };
 
         let (block, end_receiver) = self.produce_block(input_data, transactions).await?;

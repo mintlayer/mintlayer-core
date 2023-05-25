@@ -62,9 +62,11 @@ pub struct JobHandle {
     serde::Deserialize,
 )]
 pub struct JobKey {
-    /// The job key is provided in tests to make it possible to run multiple block productions in parallel
+    /// The job key is provided in tests to make it possible to run
+    /// multiple block productions in parallel
     custom_id: Option<Vec<u8>>,
-    /// The current tip, which will be the "previous block" for the block that will be produced
+    /// The current tip, which will be the "previous block" for the
+    /// block that will be produced
     current_tip_id: Id<GenBlock>,
     // TODO: in proof of stake, we also add some identifier of the
     // current key so that we don't stake twice from the same key.
@@ -250,8 +252,10 @@ impl JobManager {
         result_receiver.await.map_err(|_| JobManagerError::FailedToStopJobs)
     }
 
-    /// For destructors, we make a job stopper that will send stop signal
+    /// For destructors, we make a job stopper that will send a stop signal
+    ///
     /// Returns both the function and a oneshot-receiver.
+    ///
     /// Once the job is dropped from the job manager, the receiver will be notified.
     #[must_use]
     pub fn make_job_stopper_function(
