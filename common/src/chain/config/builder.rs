@@ -18,8 +18,9 @@ use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc, time::Duration};
 use crate::{
     chain::{
         config::{
-            create_mainnet_genesis, create_unit_test_genesis, emission_schedule, ChainConfig,
-            ChainType, EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular,
+            create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
+            emission_schedule, ChainConfig, ChainType, EmissionSchedule, EmissionScheduleFn,
+            EmissionScheduleTabular,
         },
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
         UpgradeVersion,
@@ -34,7 +35,7 @@ impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
         match self {
             ChainType::Mainnet => GenesisBlockInit::Mainnet,
-            ChainType::Testnet => unimplemented!("Testnet genesis"),
+            ChainType::Testnet => GenesisBlockInit::Testnet,
             ChainType::Regtest => GenesisBlockInit::TEST,
             ChainType::Signet => GenesisBlockInit::TEST,
         }
@@ -58,7 +59,23 @@ impl ChainType {
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
-            ChainType::Testnet => unimplemented!("Testnet upgrades"),
+            ChainType::Testnet => {
+                let pos_config = crate::chain::create_unittest_pos_config();
+                let upgrades = vec![
+                    (
+                        BlockHeight::new(0),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+                    ),
+                    (
+                        BlockHeight::new(1),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: crate::chain::pow::limit(ChainType::Testnet).into(),
+                            config: pos_config,
+                        }),
+                    ),
+                ];
+                NetUpgrades::initialize(upgrades).expect("net upgrades")
+            }
             ChainType::Signet => NetUpgrades::unit_tests(),
         }
     }
@@ -77,6 +94,7 @@ enum EmissionScheduleInit {
 enum GenesisBlockInit {
     UnitTest { premine_destination: Destination },
     Mainnet,
+    Testnet,
     Custom(Genesis),
 }
 
@@ -209,6 +227,7 @@ impl Builder {
 
         let genesis_block = match genesis_block {
             GenesisBlockInit::Mainnet => create_mainnet_genesis(),
+            GenesisBlockInit::Testnet => create_testnet_genesis(),
             GenesisBlockInit::Custom(genesis) => genesis,
             GenesisBlockInit::UnitTest {
                 premine_destination,

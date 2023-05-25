@@ -17,8 +17,8 @@ mod builder;
 mod checkpoints;
 pub mod emission_schedule;
 pub use builder::Builder;
-use crypto::key::PrivateKey;
-use crypto::vrf::VRFPrivateKey;
+use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
@@ -454,54 +454,57 @@ fn create_mainnet_genesis() -> Genesis {
     )
 }
 
+fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
+    let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
+    <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
+        .expect("Decoding shouldn't fail")
+}
+
 fn create_testnet_genesis() -> Genesis {
     // TODO: use coin_decimals instead of a fixed value
     const COIN: Amount = Amount::from_atoms(100000000000);
 
-    // TODO: replace this with our mint key
-    // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
-    // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
-    // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
-    let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
-    let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
-        .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
-        &mut genesis_mint_pubkeyhash_encoded.as_slice(),
-    )
-    .expect("Decoding genesis mint destination shouldn't fail");
+    let total_amount = (COIN * 100_000_000).expect("");
+    let initial_pool_amount = (COIN * 40_000).expect("");
+    let mint_output_amount = (total_amount - initial_pool_amount).expect("");
 
     let genesis_message = String::new();
 
-    // TODO: replace this with the real genesis mint value
-    let output = TxOutput::Transfer(
-        OutputValue::Coin(Amount::from_atoms(100_000_000_000_000)),
-        genesis_mint_destination,
+    let genesis_mint_destination = decode_hex::<PublicKey>(
+        "00027a9771bbb58170a0df36ed43e56490530f0f2f45b100c42f6f405af3ef21f54e",
+    );
+    let decommission_pub_key = decode_hex::<PublicKey>(
+        "0002ea30f3bb179c58022dcf2f4fd2c88685695f9532d6a9dd071da8d7ac1fe91a7d",
+    );
+    let staker_pub_key = decode_hex::<PublicKey>(
+        "0002884adf48b0b32ab3d66e1a8b46576dfacca5dd25b66603650de792de4dd2e483",
     );
 
-    // TODO: remove private keys and deserialize raw keys as done above
-    let (decommission_priv_key, decommission_pub_key) =
-        PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let (staker_priv_key, staker_pub_key) =
-        PrivateKey::new_from_entropy(crypto::key::KeyKind::Secp256k1Schnorr);
-    let (vrf_priv_key, vrf_pub_key) =
-        VRFPrivateKey::new_from_entropy(crypto::vrf::VRFKeyKind::Schnorrkel);
+    let vrf_pub_key = decode_hex::<VRFPublicKey>(
+        "0048531d88f57d4e6c34d3ceae2f8f4b57ee63c005d9a33f365991545fdd88f82d",
+    );
+
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
+        Destination::PublicKey(genesis_mint_destination),
+    );
 
     let initial_pool = TxOutput::CreateStakePool(
         H256::zero().into(),
         Box::new(StakePoolData::new(
-            Amount::from_atoms(40000 * 100000000000),
+            initial_pool_amount,
             Destination::PublicKey(staker_pub_key),
             vrf_pub_key,
             Destination::PublicKey(decommission_pub_key),
             PerThousand::new(10).expect("Per thousand should be valid"),
-            Amount::from_atoms(2),
+            (COIN * 100).expect(""),
         )),
     );
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1685021588),
-        vec![output, initial_pool],
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, initial_pool],
     )
 }
 
