@@ -25,10 +25,11 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, SignedTransaction, Transaction, TxOutput,
+    Block, ChainConfig, Destination, OutPoint, SignedTransaction, Transaction, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Idable};
+use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
@@ -48,6 +49,26 @@ pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txo_cache: TxoCache,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum UtxoType {
+    Transfer,
+    LockThenTransfer,
+    CreateStakePool,
+    Other,
+}
+
+pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
+    match output {
+        TxOutput::Transfer(_, _) => UtxoType::Transfer,
+        TxOutput::LockThenTransfer(_, _, _) => UtxoType::LockThenTransfer,
+        TxOutput::Burn(_) => UtxoType::Other,
+        TxOutput::CreateStakePool(_, _) => UtxoType::CreateStakePool,
+        TxOutput::ProduceBlockFromStake(_, _) => UtxoType::Other,
+        TxOutput::CreateDelegationId(_, _) => UtxoType::Other,
+        TxOutput::DelegateStaking(_, _) => UtxoType::Other,
+    }
 }
 
 impl Account {
@@ -101,7 +122,10 @@ impl Account {
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
-            let utxos = self.get_utxos().into_iter().map(|(outpoint, txo)| (outpoint, txo.clone()));
+            let utxos = self
+                .get_utxos(UtxoType::Transfer)
+                .into_iter()
+                .map(|(outpoint, txo)| (outpoint, txo.clone()));
 
             // TODO: Call coin selector
 
@@ -142,7 +166,7 @@ impl Account {
         Ok(tx)
     }
 
-    fn get_vrf_key(&mut self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
+    fn get_vrf_key(&self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
         let public_key = self
             .key_chain
             .get_leaf_key_chain(KeyPurpose::ReceiveFunds)
@@ -160,13 +184,13 @@ impl Account {
         Ok(keys)
     }
 
-    pub fn create_stake_pool_transaction<B: storage::Backend>(
+    pub fn create_stake_pool_tx<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
         let utxos = self
-            .get_utxos()
+            .get_utxos(UtxoType::Transfer)
             .into_iter()
             .map(|(outpoint, txo)| (outpoint, txo.clone()))
             .collect::<Vec<(OutPoint, TxOutput)>>();
@@ -192,6 +216,46 @@ impl Account {
         let request = SendRequest::new().with_inputs(utxos).with_outputs([stake_output]);
 
         self.process_send_request(db_tx, request)
+    }
+
+    pub fn get_pos_gen_block_data<B: storage::Backend>(
+        &self,
+        _db_tx: &StoreTxRo<B>,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let utxos = self.get_utxos(UtxoType::CreateStakePool);
+        // TODO: Select by pool_id if there are more than one CreateStakePool UTXO
+        let (kernel_input_outpoint, kernel_input_utxo) =
+            utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
+        let kernel_input: TxInput = kernel_input_outpoint.into();
+        let stake_private_key = self
+            .key_chain
+            .get_private_key_for_destination(
+                Self::get_tx_output_destination(kernel_input_utxo).unwrap(),
+            )?
+            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
+            .private_key();
+
+        let pool_id = match kernel_input_utxo {
+            TxOutput::CreateStakePool(pool_id, _) => pool_id,
+            TxOutput::ProduceBlockFromStake(_, pool_id) => pool_id,
+            TxOutput::Burn(_)
+            | TxOutput::Transfer(_, _)
+            | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::CreateDelegationId(_, _)
+            | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
+        };
+
+        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key()?;
+
+        let data = PoSGenerateBlockInputData::new(
+            stake_private_key,
+            vrf_private_key,
+            *pool_id,
+            vec![kernel_input],
+            vec![kernel_input_utxo.clone()],
+        );
+
+        Ok(data)
     }
 
     /// Calculate the output amount for coins and tokens
@@ -321,8 +385,8 @@ impl Account {
         // TODO(PR): Fix CreateStakePool and ProduceBlockFromStake
         match txo {
             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
+            TxOutput::CreateStakePool(_, data) => Some(data.staker()),
             TxOutput::Burn(_)
-            | TxOutput::CreateStakePool(_, _)
             | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
@@ -381,14 +445,16 @@ impl Account {
     }
 
     pub fn get_balance(&self) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let utxos = self.get_utxos();
+        let utxos = self.get_utxos(UtxoType::Transfer);
         let balances = Self::calculate_output_amounts(utxos.into_values())?;
         Ok(balances)
     }
 
-    pub fn get_utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
+    pub fn get_utxos(&self, utxo_type: UtxoType) -> BTreeMap<OutPoint, &TxOutput> {
         let mut all_outputs = self.txo_cache.utxos();
-        all_outputs.retain(|_key, txo| self.is_mine_or_watched(txo));
+        all_outputs.retain(|_outpoint, txo| {
+            self.is_mine_or_watched(txo) && get_utxo_type(txo) == utxo_type
+        });
         all_outputs
     }
 

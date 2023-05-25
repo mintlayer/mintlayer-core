@@ -79,6 +79,8 @@ pub enum WalletCommand {
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     },
 
+    GenerateBlockPoS,
+
     /// Submit a block to be included in the chain
     ///
     /// More information about block submits.
@@ -316,6 +318,17 @@ pub async fn handle_wallet_command(
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
+        WalletCommand::GenerateBlockPoS => {
+            let block = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .generate_block()
+                .await
+                .map_err(WalletCliError::Controller)?;
+            rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
         WalletCommand::SubmitBlock { block } => {
             rpc_client.submit_block(block.take()).await.map_err(WalletCliError::RpcError)?;
             Ok(ConsoleCommand::Print(
@@ -382,7 +395,7 @@ pub async fn handle_wallet_command(
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .create_stake_pool(amount)
+                .create_stake_pool_tx(amount)
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))

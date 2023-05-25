@@ -8,14 +8,15 @@ edition = "2021"
 [dependencies]
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
+consensus = { path = "../../consensus" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 node-comm = { path = "../wallet-node-client" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
-wallet-types = { path = "../types" }
 wallet-storage = { path = "../storage" }
+wallet-types = { path = "../types" }
 
 async-trait.workspace = true
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
@@ -25,7 +26,6 @@ zeroize = "1.5"
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
-consensus = { path = "../../consensus" }
 test-utils = { path = "../../test-utils" }
 
 anyhow = "1.0"

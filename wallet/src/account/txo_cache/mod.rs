@@ -96,9 +96,8 @@ impl TxoCache {
         }
     }
 
-    fn valid_utxo(&self, outpoint: &OutPoint, output: &TxOutput) -> bool {
-        // TODO: Allow `LockThenTransfer` outputs
-        !self.consumed.contains(&outpoint) && !matches!(output, TxOutput::LockThenTransfer(_, _, _))
+    fn valid_utxo(&self, outpoint: &OutPoint) -> bool {
+        !self.consumed.contains(outpoint)
     }
 
     pub fn utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
@@ -110,7 +109,7 @@ impl TxoCache {
                     OutPointSourceId::BlockReward(*block.block_id()),
                     index as u32,
                 );
-                if self.valid_utxo(&outpoint, output) {
+                if self.valid_utxo(&outpoint) {
                     utxos.insert(outpoint, output);
                 }
             }
@@ -122,7 +121,7 @@ impl TxoCache {
                     OutPointSourceId::Transaction(tx.tx().get_id()),
                     index as u32,
                 );
-                if self.valid_utxo(&outpoint, output) {
+                if self.valid_utxo(&outpoint) {
                     utxos.insert(outpoint, output);
                 }
             }

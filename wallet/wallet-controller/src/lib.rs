@@ -26,9 +26,10 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, ChainConfig, OutPoint, TxOutput},
+    chain::{tokens::TokenId, Block, ChainConfig, OutPoint, TxOutput},
     primitives::Amount,
 };
+use consensus::GenerateBlockInputData;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -157,15 +158,28 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
-    pub async fn create_stake_pool(&mut self, amount: Amount) -> Result<(), ControllerError<T>> {
+    pub async fn create_stake_pool_tx(&mut self, amount: Amount) -> Result<(), ControllerError<T>> {
         let tx = self
             .wallet
-            .create_stake_pool_transaction(DEFAULT_ACCOUNT_INDEX, amount)
+            .create_stake_pool_tx(DEFAULT_ACCOUNT_INDEX, amount)
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)
             .await
             .map_err(ControllerError::NodeCallError)
+    }
+
+    pub async fn generate_block(&mut self) -> Result<Block, ControllerError<T>> {
+        let pos_data = self
+            .wallet
+            .get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)?;
+        let block = self
+            .rpc_client
+            .generate_block(GenerateBlockInputData::PoS(pos_data.into()), None)
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        Ok(block)
     }
 
     /// Sync the wallet block chain from the node.
