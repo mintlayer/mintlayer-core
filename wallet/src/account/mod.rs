@@ -39,6 +39,7 @@ use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::account_id::AccountBlockHeight;
+use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
 use wallet_types::wallet_block::WalletBlock;
 use wallet_types::wallet_tx::TxState;
 use wallet_types::{AccountId, AccountTxId, KeyPurpose, WalletTx};
@@ -49,26 +50,6 @@ pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txo_cache: TxoCache,
-}
-
-#[derive(PartialEq, Eq)]
-pub enum UtxoType {
-    Transfer,
-    LockThenTransfer,
-    CreateStakePool,
-    Other,
-}
-
-pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
-    match output {
-        TxOutput::Transfer(_, _) => UtxoType::Transfer,
-        TxOutput::LockThenTransfer(_, _, _) => UtxoType::LockThenTransfer,
-        TxOutput::Burn(_) => UtxoType::Other,
-        TxOutput::CreateStakePool(_, _) => UtxoType::CreateStakePool,
-        TxOutput::ProduceBlockFromStake(_, _) => UtxoType::Other,
-        TxOutput::CreateDelegationId(_, _) => UtxoType::Other,
-        TxOutput::DelegateStaking(_, _) => UtxoType::Other,
-    }
 }
 
 impl Account {
@@ -123,7 +104,7 @@ impl Account {
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
             let utxos = self
-                .get_utxos(UtxoType::Transfer)
+                .get_utxos(UtxoType::Transfer.into())
                 .into_iter()
                 .map(|(outpoint, txo)| (outpoint, txo.clone()));
 
@@ -190,7 +171,7 @@ impl Account {
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
         let utxos = self
-            .get_utxos(UtxoType::Transfer)
+            .get_utxos(UtxoType::Transfer.into())
             .into_iter()
             .map(|(outpoint, txo)| (outpoint, txo.clone()))
             .collect::<Vec<(OutPoint, TxOutput)>>();
@@ -222,8 +203,8 @@ impl Account {
         &self,
         _db_tx: &StoreTxRo<B>,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let utxos = self.get_utxos(UtxoType::CreateStakePool);
-        // TODO: Select by pool_id if there are more than one CreateStakePool UTXO
+        let utxos = self.get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake);
+        // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, kernel_input_utxo) =
             utxos.into_iter().next().ok_or(WalletError::NoUtxos)?;
         let kernel_input: TxInput = kernel_input_outpoint.into();
@@ -238,9 +219,9 @@ impl Account {
         let pool_id = match kernel_input_utxo {
             TxOutput::CreateStakePool(pool_id, _) => pool_id,
             TxOutput::ProduceBlockFromStake(_, pool_id) => pool_id,
-            TxOutput::Burn(_)
-            | TxOutput::Transfer(_, _)
+            TxOutput::Transfer(_, _)
             | TxOutput::LockThenTransfer(_, _, _)
+            | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
         };
@@ -386,8 +367,8 @@ impl Account {
         match txo {
             TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Some(d),
             TxOutput::CreateStakePool(_, data) => Some(data.staker()),
+            TxOutput::ProduceBlockFromStake(d, _) => Some(d),
             TxOutput::Burn(_)
-            | TxOutput::ProduceBlockFromStake(_, _)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => None,
         }
@@ -445,15 +426,15 @@ impl Account {
     }
 
     pub fn get_balance(&self) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let utxos = self.get_utxos(UtxoType::Transfer);
+        let utxos = self.get_utxos(UtxoType::Transfer.into());
         let balances = Self::calculate_output_amounts(utxos.into_values())?;
         Ok(balances)
     }
 
-    pub fn get_utxos(&self, utxo_type: UtxoType) -> BTreeMap<OutPoint, &TxOutput> {
+    pub fn get_utxos(&self, utxo_types: UtxoTypes) -> BTreeMap<OutPoint, &TxOutput> {
         let mut all_outputs = self.txo_cache.utxos();
         all_outputs.retain(|_outpoint, txo| {
-            self.is_mine_or_watched(txo) && get_utxo_type(txo) == utxo_type
+            self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
         all_outputs
     }
