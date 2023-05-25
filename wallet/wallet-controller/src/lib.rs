@@ -151,6 +151,17 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
+    pub async fn create_stake_pool(&mut self, amount: Amount) -> Result<(), ControllerError<T>> {
+        let tx = self
+            .wallet
+            .create_stake_pool_transaction(DEFAULT_ACCOUNT_INDEX, amount)
+            .map_err(ControllerError::WalletError)?;
+        self.rpc_client
+            .submit_transaction(tx)
+            .await
+            .map_err(ControllerError::NodeCallError)
+    }
+
     /// Sync the wallet block chain from the node.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {

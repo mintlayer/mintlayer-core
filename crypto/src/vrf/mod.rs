@@ -26,6 +26,8 @@ pub enum VRFError {
     VerificationError,
     #[error("Failed to attach input")]
     InputAttachError(String),
+    #[error("Key generation failed: {0}")]
+    GenerateKeyError(String),
 }
 
 mod primitives;
@@ -87,18 +89,21 @@ impl VRFPrivateKey {
         }
     }
 
-    pub fn new_from_bytes(bytes: &[u8; 32], key_kind: VRFKeyKind) -> (VRFPrivateKey, VRFPublicKey) {
+    pub fn new_from_bytes(
+        bytes: &[u8],
+        key_kind: VRFKeyKind,
+    ) -> Result<(VRFPrivateKey, VRFPublicKey), VRFError> {
         match key_kind {
             VRFKeyKind::Schnorrkel => {
-                let k = schnorrkel::SchnorrkelPrivateKey::new_from_bytes(bytes);
-                (
+                let k = schnorrkel::SchnorrkelPrivateKey::new_from_bytes(bytes)?;
+                Ok((
                     VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(k.0),
                     },
                     VRFPublicKey {
                         pub_key: VRFPublicKeyHolder::Schnorrkel(k.1),
                     },
-                )
+                ))
             }
         }
     }

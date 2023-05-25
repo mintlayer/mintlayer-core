@@ -112,6 +112,10 @@ pub enum WalletCommand {
         amount: String,
     },
 
+    CreateStakePool {
+        amount: String,
+    },
+
     /// Node version
     NodeVersion,
 
@@ -356,6 +360,17 @@ pub async fn handle_wallet_command(
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
                 .send_to_address(address, amount)
+                .await
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::CreateStakePool { amount } => {
+            let amount = parse_coin_amount(chain_config, &amount)?;
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .create_stake_pool(amount)
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
