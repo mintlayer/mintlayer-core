@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::account::UtxoType;
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -29,6 +30,7 @@ use common::chain::{
     TransactionCreationError, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
+use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use utils::ensure;
 use wallet_storage::{
@@ -255,7 +257,7 @@ impl<B: storage::Backend> Wallet<B> {
 
     pub fn get_utxos(&self, account_index: U31) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
         self.for_account_ro(account_index, |account, _db_tx| {
-            let utxos = account.get_utxos();
+            let utxos = account.get_utxos(UtxoType::Transfer);
             let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
             Ok(utxos)
         })
@@ -273,21 +275,28 @@ impl<B: storage::Backend> Wallet<B> {
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
-        let tx = self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
-        })?;
-        Ok(tx)
+        })
     }
 
-    pub fn create_stake_pool_transaction(
+    pub fn create_stake_pool_tx(
         &mut self,
         account_index: U31,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
-        let tx = self.for_account_rw(account_index, |account, db_tx| {
-            account.create_stake_pool_transaction(db_tx, amount)
-        })?;
-        Ok(tx)
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.create_stake_pool_tx(db_tx, amount)
+        })
+    }
+
+    pub fn get_pos_gen_block_data(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        self.for_account_ro(account_index, |account, db_tx| {
+            account.get_pos_gen_block_data(db_tx)
+        })
     }
 
     /// Returns the last scanned block hash and height.
