@@ -18,7 +18,7 @@ use common::address::Address;
 use common::chain::stakelock::StakePoolData;
 use common::chain::tokens::OutputValue;
 use common::chain::{
-    Destination, OutPoint, Transaction, TransactionCreationError, TxInput, TxOutput,
+    Destination, OutPoint, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
@@ -51,6 +51,7 @@ pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxO
 }
 
 pub fn make_stake_output(
+    pool_id: PoolId,
     amount: Amount,
     staker: PublicKey,
     decommission_key: PublicKey,
@@ -69,7 +70,7 @@ pub fn make_stake_output(
         margin_ratio_per_thousand,
         cost_per_block,
     );
-    Ok(TxOutput::CreateStakePool(stake_data.into()))
+    Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
 }
 
 impl SendRequest {

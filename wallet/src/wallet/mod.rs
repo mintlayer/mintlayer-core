@@ -25,8 +25,8 @@ use common::address::Address;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::TokenId;
 use common::chain::{
-    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
-    TxOutput,
+    Block, ChainConfig, GenBlock, OutPoint, SignedTransaction, Transaction,
+    TransactionCreationError, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use crypto::key::hdkd::u31::U31;
@@ -76,6 +76,8 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
     InvalidAddress(String, PublicKeyHashError),
+    #[error("No UTXOs")]
+    NoUtxos,
 }
 
 /// Result type used for the wallet
@@ -249,6 +251,14 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
         self.for_account_ro(account_index, |account, _db_tx| account.get_balance())
+    }
+
+    pub fn get_utxos(&self, account_index: U31) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
+        self.for_account_ro(account_index, |account, _db_tx| {
+            let utxos = account.get_utxos();
+            let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
+            Ok(utxos)
+        })
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {

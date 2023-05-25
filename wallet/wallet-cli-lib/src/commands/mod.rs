@@ -21,7 +21,7 @@ use common::{
     chain::{Block, ChainConfig, Destination, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
-use consensus::GenerateBlockInputData;
+use consensus::{GenerateBlockInputData, PoWGenerateBlockInputData};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
@@ -103,6 +103,8 @@ pub enum WalletCommand {
     Rescan,
 
     GetBalance,
+
+    ListUtxo,
 
     /// Generate a new unused address
     NewAddress,
@@ -300,13 +302,14 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::GenerateBlock {
-            reward_destination: _,
+            reward_destination,
             transactions,
         } => {
+            let pow_data = PoWGenerateBlockInputData::new(reward_destination.take());
             let transactions =
                 transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
             let block = rpc_client
-                .generate_block(GenerateBlockInputData::None, transactions)
+                .generate_block(GenerateBlockInputData::PoW(pow_data.into()), transactions)
                 .await
                 .map_err(WalletCliError::RpcError)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -342,6 +345,15 @@ pub async fn handle_wallet_command(
                 chain_config,
                 coin_balance,
             )))
+        }
+
+        WalletCommand::ListUtxo => {
+            let utxos = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .get_utxos()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(format!("{utxos:?}")))
         }
 
         WalletCommand::NewAddress => {
