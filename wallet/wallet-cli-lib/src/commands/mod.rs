@@ -18,10 +18,9 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, Destination, SignedTransaction},
+    chain::{Block, ChainConfig, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
-use consensus::{GenerateBlockInputData, PoWGenerateBlockInputData};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
@@ -70,16 +69,7 @@ pub enum WalletCommand {
         hash: String,
     },
 
-    /// Generate a block with the given transactions to the specified
-    /// reward destination. If transactions are None, the block will be
-    /// generated with available transactions in the mempool
-    GenerateBlock {
-        reward_destination: HexEncoded<Destination>,
-
-        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
-    },
-
-    GenerateBlockPoS,
+    GenerateBlock,
 
     /// Submit a block to be included in the chain
     ///
@@ -303,22 +293,7 @@ pub async fn handle_wallet_command(
             }
         }
 
-        WalletCommand::GenerateBlock {
-            reward_destination,
-            transactions,
-        } => {
-            let pow_data = PoWGenerateBlockInputData::new(reward_destination.take());
-            let transactions =
-                transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
-            let block = rpc_client
-                .generate_block(GenerateBlockInputData::PoW(pow_data.into()), transactions)
-                .await
-                .map_err(WalletCliError::RpcError)?;
-            rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
-            Ok(ConsoleCommand::Print("Success".to_owned()))
-        }
-
-        WalletCommand::GenerateBlockPoS => {
+        WalletCommand::GenerateBlock => {
             let block = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
