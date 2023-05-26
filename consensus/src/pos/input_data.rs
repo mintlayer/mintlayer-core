@@ -29,8 +29,11 @@ use common::{
     chain::{
         config::EpochIndex,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            inputsig::{
+                authorize_pubkey_spend::sign_pubkey_spending,
+                standard_signature::StandardInputSignature, InputWitness,
+            },
+            sighash::{sighashtype::SigHashType, signature_hash},
         },
         ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
     },
@@ -209,10 +212,8 @@ where
 {
     let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
 
-    let kernel_output = vec![TxOutput::ProduceBlockFromStake(
-        reward_destination.clone(),
-        pos_input_data.pool_id(),
-    )];
+    let kernel_output =
+        vec![TxOutput::ProduceBlockFromStake(reward_destination, pos_input_data.pool_id())];
 
     let block_reward_transactable = BlockRewardTransactable::new(
         Some(pos_input_data.kernel_inputs()),
@@ -220,15 +221,18 @@ where
         None,
     );
 
-    let kernel_input_utxos = pos_input_data.kernel_input_utxos();
-
-    let signature = StandardInputSignature::produce_uniparty_signature_for_input(
-        pos_input_data.stake_private_key(),
+    let sighash = signature_hash(
         SigHashType::default(),
-        reward_destination,
         &block_reward_transactable,
-        &kernel_input_utxos.iter().collect::<Vec<_>>(),
+        &pos_input_data.kernel_input_utxos().iter().collect::<Vec<_>>(),
         0,
+    )
+    .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
+
+    let signature = sign_pubkey_spending(
+        pos_input_data.stake_private_key(),
+        &pos_input_data.stake_public_key(),
+        &sighash,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
 

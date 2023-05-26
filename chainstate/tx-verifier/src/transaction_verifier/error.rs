@@ -63,7 +63,7 @@ pub enum ConnectTransactionError {
     BlockRewardInputOutputMismatch(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
-    #[error("Signature verification failed in transaction")]
+    #[error("Signature verification failed in transaction: {0}")]
     SignatureVerificationFailed(#[from] TransactionSigError),
     #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
