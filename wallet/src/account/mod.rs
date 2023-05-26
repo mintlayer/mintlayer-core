@@ -15,7 +15,7 @@
 
 mod txo_cache;
 
-use crate::key_chain::{AccountKeyChain, KeyChainError};
+use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{make_address_output, make_stake_output};
 use crate::{SendRequest, WalletError, WalletResult};
 use common::address::Address;
@@ -31,7 +31,6 @@ use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Idable};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
-use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::u31::U31;
 use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
 use std::collections::BTreeMap;
@@ -149,21 +148,12 @@ impl Account {
     }
 
     fn get_vrf_key(&self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
-        let public_key = self
-            .key_chain
-            .get_leaf_key_chain(KeyPurpose::ReceiveFunds)
-            .get_derived_xpub(ChildNumber::ZERO)
-            .ok_or(WalletError::WalletNotInitialized)?;
-        let private_key = self
-            .key_chain
-            .get_private_key_for_destination(&Destination::PublicKey(
-                public_key.clone().into_public_key(),
-            ))?
-            .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
-            .private_key();
-        let keys = VRFPrivateKey::new_from_bytes(private_key.as_bytes(), VRFKeyKind::Schnorrkel)
-            .expect("should not fail because private keys are always 32 bytes");
-        Ok(keys)
+        let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
+        let private_key = self.key_chain.get_private_key_for_path(&vrf_key_path)?.private_key();
+        let vrf_keys =
+            VRFPrivateKey::new_from_bytes(private_key.as_bytes(), VRFKeyKind::Schnorrkel)
+                .expect("should not fail because private keys are always 32 bytes");
+        Ok(vrf_keys)
     }
 
     pub fn create_stake_pool_tx<B: storage::Backend>(
