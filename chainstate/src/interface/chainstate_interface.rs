@@ -151,9 +151,6 @@ pub trait ChainstateInterface: Send {
         tx_id: &Id<Transaction>,
     ) -> Result<Option<TokenId>, ChainstateError>;
 
-    /// Returns all spendable inputs of a Transaction
-    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
-
     /// Returns the coin amounts of the outpoints spent by a transaction.
     /// If a utxo for an input was not found or contains tokens the result is `None`.
     fn get_inputs_outpoints_coin_amount(

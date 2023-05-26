@@ -371,19 +371,6 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError> {
-        let chainstate_ref = self
-            .chainstate
-            .make_db_tx_ro()
-            .map_err(|e| ChainstateError::from(PropertyQueryError::from(e)))?;
-        let utxo_view = chainstate_ref.make_utxo_view();
-        tx.inputs()
-            .iter()
-            .map(|input| utxo_view.utxo(input.outpoint()).map(|x| x.map(|_| input).cloned()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))
-    }
-
     fn get_inputs_outpoints_coin_amount(
         &self,
         inputs: &[TxInput],

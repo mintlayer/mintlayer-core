@@ -501,10 +501,12 @@ fn tx_many_to_one(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn tx_many_to_many(#[case] seed: Seed) {
-    let check = |source_inputs: &[TxOutput], source_outputs: &[TxOutput], expected_result| {
+    let check = |source_inputs: &[TxOutput],
+                 source_outputs: &[TxOutput],
+                 number_of_outputs: usize,
+                 expected_result| {
         let mut rng = make_seedable_rng(seed);
         let number_of_inputs = rng.gen_range(2..10);
-        let number_of_outputs = rng.gen_range(2..10);
 
         let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
             &mut rng,
@@ -520,24 +522,60 @@ fn tx_many_to_many(#[case] seed: Seed) {
         );
     };
 
+    let mut rng = make_seedable_rng(seed);
     // valid cases
+    let number_of_outputs = rng.gen_range(2..10);
     let valid_inputs = [lock_then_transfer(), transfer()];
     let valid_outputs = [lock_then_transfer(), transfer(), burn(), delegate_staking()];
-    check(&valid_inputs, &valid_outputs, Ok(()));
+    check(&valid_inputs, &valid_outputs, number_of_outputs, Ok(()));
 
     // invalid cases
+    let invalid_outputs = [stake_pool(), produce_block()];
+    check(
+        &valid_inputs,
+        &invalid_outputs,
+        2,
+        Err(ConnectTransactionError::InvalidOutputTypeInTx),
+    );
+
+    let invalid_outputs = [create_delegation(), produce_block()];
+    check(
+        &valid_inputs,
+        &invalid_outputs,
+        2,
+        Err(ConnectTransactionError::InvalidOutputTypeInTx),
+    );
+
     let invalid_inputs = [burn(), stake_pool(), produce_block(), create_delegation()];
     let invalid_outputs = [stake_pool(), produce_block(), create_delegation()];
+    let number_of_outputs = rng.gen_range(3..10);
     check(
         &invalid_inputs,
         &valid_outputs,
+        number_of_outputs,
         Err(ConnectTransactionError::InvalidInputTypeInTx),
     );
     check(
         &valid_inputs,
         &invalid_outputs,
+        number_of_outputs,
         Err(ConnectTransactionError::InvalidOutputTypeInTx),
     );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn tx_create_pool_and_delegation_same_tx(#[case] seed: Seed) {
+    let source_inputs = [transfer(), lock_then_transfer()];
+    let outputs = [stake_pool(), create_delegation()];
+
+    let mut rng = make_seedable_rng(seed);
+    let number_of_inputs = rng.gen_range(2..10);
+    let input_utxos = get_random_outputs_combination(&mut rng, &source_inputs, number_of_inputs);
+
+    let (utxo_db, tx) = prepare_utxos_and_tx(&mut rng, input_utxos, outputs.to_vec());
+    assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
 }
 
 #[rstest]
