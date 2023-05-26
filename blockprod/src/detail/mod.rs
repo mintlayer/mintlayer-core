@@ -34,7 +34,7 @@ use common::{
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         config::EpochIndex,
-        Block, ChainConfig, GenBlockId, RequiredConsensus, SignedTransaction,
+        Block, ChainConfig, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -235,21 +235,7 @@ impl BlockProduction {
                         PropertyQueryError::EpochDataNotFound(block_height),
                     ))?;
 
-                let previous_block_timestamp = match best_block_index.prev_block_id() {
-                    None => chain_config.genesis_block().timestamp(),
-                    Some(prev_gen_block_id) => match prev_gen_block_id.classify(chain_config) {
-                        GenBlockId::Genesis(_) => chain_config.genesis_block().timestamp(),
-                        GenBlockId::Block(block_id) => chainstate_handle
-                            .get_block(block_id)
-                            .map_err(|_| ConsensusPoSError::FailedReadingBlock(block_id))?
-                            .ok_or({
-                                ConsensusPoSError::PropertyQueryError(
-                                    PropertyQueryError::BlockNotFound(block_id),
-                                )
-                            })?
-                            .timestamp(),
-                    },
-                };
+                let previous_block_timestamp = best_block_index.block_timestamp();
 
                 let max_block_timestamp = current_timestamp
                     .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
