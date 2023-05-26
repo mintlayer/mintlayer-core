@@ -428,8 +428,11 @@ impl Account {
         Ok(false)
     }
 
-    pub fn get_balance(&self) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let utxos = self.get_utxos(UtxoType::Transfer.into());
+    pub fn get_balance(
+        &self,
+        utxo_types: UtxoTypes,
+    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+        let utxos = self.get_utxos(utxo_types);
         let balances = Self::calculate_output_amounts(utxos.into_values())?;
         Ok(balances)
     }

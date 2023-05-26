@@ -251,8 +251,11 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_balance(
         &self,
         account_index: U31,
+        utxo_types: UtxoTypes,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        self.for_account_ro(account_index, |account, _db_tx| account.get_balance())
+        self.for_account_ro(account_index, |account, _db_tx| {
+            account.get_balance(utxo_types)
+        })
     }
 
     pub fn get_utxos(

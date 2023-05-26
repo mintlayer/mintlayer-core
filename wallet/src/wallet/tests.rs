@@ -34,7 +34,7 @@ use common::{
 use crypto::key::hdkd::{
     child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath,
 };
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoType};
 
 // TODO: Many of these tests require randomization...
 
@@ -69,12 +69,22 @@ fn verify_wallet_balance(
     db: &Arc<Store<DefaultBackend>>,
     expected_balance: Amount,
 ) {
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
     assert_eq!(coin_balance, expected_balance);
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
     let wallet = Wallet::load_wallet(Arc::clone(chain_config), Arc::clone(db)).unwrap();
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
     // Check that the loaded wallet has the same balance
     assert_eq!(coin_balance, expected_balance);
 }
@@ -177,7 +187,12 @@ fn wallet_balance_block_reward() {
         Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
-    let (coin_balance, _) = wallet.get_balance(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
     assert_eq!(coin_balance, Amount::ZERO);
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, chain_config.genesis_block_id());
