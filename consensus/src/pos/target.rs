@@ -78,7 +78,12 @@ fn calculate_new_target(
     prev_target: &Uint256,
     actual_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
-    let actual_block_time = Uint512::from_u64(actual_block_time);
+    let mut actual_block_time = Uint512::from_u64(actual_block_time);
+
+    if actual_block_time == Uint512::ZERO {
+        actual_block_time = Uint512::ONE;
+    }
+
     let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
     ensure!(
         target_block_time > Uint512::ZERO,
