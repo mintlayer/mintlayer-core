@@ -34,7 +34,7 @@ use common::{
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         config::EpochIndex,
-        Block, ChainConfig, GenBlockId, SignedTransaction,
+        Block, ChainConfig, GenBlockId, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -49,7 +49,10 @@ use mempool::{
     MempoolHandle,
 };
 
-use tokio::sync::oneshot;
+use tokio::{
+    sync::oneshot,
+    time::{sleep, Duration},
+};
 use utils::once_destructor::OnceDestructor;
 
 #[derive(Debug, Clone)]
@@ -319,10 +322,11 @@ impl BlockProduction {
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let stop_flag = Arc::new(false.into());
 
-        let timestamp = BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+        let timestamp_at_start =
+            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
         let (_, _, tip_at_start, _) =
-            self.pull_consensus_data(input_data.clone(), timestamp).await?;
+            self.pull_consensus_data(input_data.clone(), timestamp_at_start).await?;
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -331,12 +335,32 @@ impl BlockProduction {
         let (job_remover_func, end_confirm_receiver) = self.job_manager.make_job_stopper_function();
         let _job_remover = OnceDestructor::new(move || job_remover_func(job_key));
 
+        let mut previous_attempt = timestamp_at_start;
+        let mut previous_consensus_status =
+            self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
+
         loop {
             let timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
+            match previous_consensus_status {
+                RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {}
+                RequiredConsensus::PoS(_) => {
+                    if previous_attempt == timestamp && timestamp != timestamp_at_start {
+                        sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
+                }
+            }
+
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
                 self.pull_consensus_data(input_data.clone(), timestamp).await?;
+
+            previous_attempt = timestamp;
+            previous_consensus_status = self
+                .chain_config
+                .net_upgrade()
+                .consensus_status(current_tip_index.block_height());
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
