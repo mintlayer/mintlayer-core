@@ -191,6 +191,7 @@ impl BlockProduction {
                         this,
                         &best_block_index,
                         block_height,
+                        block_timestamp,
                         sealed_epoch_index,
                         sealed_epoch_randomness,
                         input_data,
@@ -210,11 +211,13 @@ impl BlockProduction {
         Ok(consensus_data)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn generate_finalize_block_data(
         chain_config: &ChainConfig,
         chainstate_handle: &(dyn ChainstateInterface),
         best_block_index: &GenBlockIndex,
         block_height: BlockHeight,
+        current_timestamp: BlockTimestamp,
         sealed_epoch_index: Option<EpochIndex>,
         sealed_epoch_randomness: Option<PoSRandomness>,
         input_data: GenerateBlockInputData,
@@ -245,7 +248,7 @@ impl BlockProduction {
                     },
                 };
 
-                let max_block_timestamp = previous_block_timestamp
+                let max_block_timestamp = current_timestamp
                     .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                     .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
