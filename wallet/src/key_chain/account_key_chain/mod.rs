@@ -21,6 +21,7 @@ use common::address::Address;
 use common::chain::{ChainConfig, Destination};
 use crypto::key::extended::{ExtendedPrivateKey, ExtendedPublicKey};
 use crypto::key::hdkd::derivable::Derivable;
+use crypto::key::hdkd::derivation_path::DerivationPath;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
@@ -203,6 +204,19 @@ impl AccountKeyChain {
             }
         }
         Ok(None)
+    }
+
+    pub fn get_private_key_for_path(
+        &self,
+        path: &DerivationPath,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
+        let account_private_key = self
+            .account_private_key
+            .as_ref()
+            .as_ref()
+            .ok_or(KeyChainError::NoPrivateKeyFound)?;
+        let xpriv = account_private_key.as_key();
+        xpriv.clone().derive_absolute_path(path).map_err(KeyChainError::Derivation)
     }
 
     /// Get the leaf key chain for a particular key purpose

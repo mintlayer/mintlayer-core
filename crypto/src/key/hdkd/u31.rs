@@ -26,6 +26,8 @@ pub struct U31(u32);
 
 impl U31 {
     pub const ZERO: U31 = U31(0);
+    pub const ONE: U31 = U31(1);
+    pub const TWO: U31 = U31(2);
 
     pub const fn from_u32_with_msb(val: u32) -> (Self, bool) {
         let msb = val & MSB_BIT != 0; // If the msb is set
