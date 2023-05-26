@@ -249,6 +249,7 @@ pub fn stake(
         .is_ok()
         {
             block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
+            block_header.update_timestamp(current_timestamp);
             return Ok(StakeResult::Success);
         }
 
