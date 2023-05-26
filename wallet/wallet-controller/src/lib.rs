@@ -132,6 +132,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(wallet)
     }
 
+    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
+        self.wallet.encrypt_wallet(password).map_err(ControllerError::WalletError)
+    }
+
+    pub fn unlock_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
+        self.wallet.unlock_wallet(password).map_err(ControllerError::WalletError)
+    }
+
+    pub fn lock_wallet(&mut self) {
+        self.wallet.lock_wallet()
+    }
+
     pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
         self.wallet
             .get_balance(

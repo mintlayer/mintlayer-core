@@ -89,25 +89,23 @@ pub type WalletResult<T> = Result<T, WalletError>;
 
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
-    db: Arc<Store<B>>,
+    db: Store<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
 }
 
-pub fn open_or_create_wallet_file<P: AsRef<Path>>(
-    path: P,
-) -> WalletResult<Arc<Store<DefaultBackend>>> {
-    Ok(Arc::new(Store::new(DefaultBackend::new(path))?))
+pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new(path))?)
 }
 
-pub fn create_wallet_in_memory() -> WalletResult<Arc<Store<DefaultBackend>>> {
-    Ok(Arc::new(Store::new(DefaultBackend::new_in_memory())?))
+pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new_in_memory())?)
 }
 
 impl<B: storage::Backend> Wallet<B> {
     pub fn new_wallet(
         chain_config: Arc<ChainConfig>,
-        db: Arc<Store<B>>,
+        db: Store<B>,
         mnemonic: &str,
         passphrase: Option<&str>,
     ) -> WalletResult<Self> {
@@ -134,7 +132,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
+    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
@@ -144,6 +142,7 @@ impl<B: storage::Backend> Wallet<B> {
             return Err(WalletError::WalletNotInitialized);
         }
 
+        //TODO: if wallet is locked load into read only mode
         let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
@@ -171,6 +170,18 @@ impl<B: storage::Backend> Wallet<B> {
             key_chain,
             accounts,
         })
+    }
+
+    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
+        self.db.encrypt_private_keys(password).map_err(WalletError::from)
+    }
+
+    pub fn lock_wallet(&mut self) {
+        self.db.lock_private_keys()
+    }
+
+    pub fn unlock_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
+        self.db.unlock_private_keys(password).map_err(WalletError::from)
     }
 
     pub fn account_indexes(&self) -> impl Iterator<Item = &U31> {

@@ -66,7 +66,6 @@ fn get_address(
 fn verify_wallet_balance(
     chain_config: &Arc<ChainConfig>,
     wallet: &DefaultWallet,
-    db: &Arc<Store<DefaultBackend>>,
     expected_balance: Amount,
 ) {
     let (coin_balance, _) = wallet
@@ -78,7 +77,8 @@ fn verify_wallet_balance(
     assert_eq!(coin_balance, expected_balance);
 
     // Loading a copy of the wallet from the same DB should be safe because loading is an R/O operation
-    let wallet = Wallet::load_wallet(Arc::clone(chain_config), Arc::clone(db)).unwrap();
+    let db_copy = wallet.db.clone();
+    let wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy).unwrap();
     let (coin_balance, _) = wallet
         .get_balance(
             DEFAULT_ACCOUNT_INDEX,
@@ -104,28 +104,30 @@ fn test_balance_from_genesis(
 
     let db = create_wallet_in_memory().unwrap();
 
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
-    verify_wallet_balance(&chain_config, &wallet, &db, expected_balance);
+    verify_wallet_balance(&chain_config, &wallet, expected_balance);
 }
 
 #[test]
 fn wallet_creation_in_memory() {
     let chain_config = Arc::new(create_regtest());
-    let db = create_wallet_in_memory().unwrap();
+    let empty_db = create_wallet_in_memory().unwrap();
 
-    match Wallet::load_wallet(Arc::clone(&chain_config), Arc::clone(&db)) {
+    // fail to load an empty wallet
+    match Wallet::load_wallet(Arc::clone(&chain_config), empty_db) {
         Ok(_) => panic!("Wallet loading should fail"),
         Err(err) => assert_eq!(err, WalletError::WalletNotInitialized),
     }
 
-    let wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
-    drop(wallet);
+    let empty_db = create_wallet_in_memory().unwrap();
+    // initialize a new wallet with mnemonic
+    let wallet = Wallet::new_wallet(Arc::clone(&chain_config), empty_db, MNEMONIC, None).unwrap();
+    let initialized_db = wallet.db;
 
-    let _wallet = Wallet::load_wallet(chain_config, db).unwrap();
+    // successfully load a wallet from initialized db
+    let _wallet = Wallet::load_wallet(chain_config, initialized_db).unwrap();
 }
 
 #[test]
@@ -183,8 +185,7 @@ fn wallet_balance_block_reward() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
     let (coin_balance, _) = wallet
@@ -223,7 +224,7 @@ fn wallet_balance_block_reward() {
     let (best_block_id, best_block_height) = wallet.get_best_block().unwrap();
     assert_eq!(best_block_id, block1_id);
     assert_eq!(best_block_height, BlockHeight::new(1));
-    verify_wallet_balance(&chain_config, &wallet, &db, block1_amount);
+    verify_wallet_balance(&chain_config, &wallet, block1_amount);
 
     // Create the second block that sends the reward to the wallet
     let block2_amount = Amount::from_atoms(20000);
@@ -252,7 +253,6 @@ fn wallet_balance_block_reward() {
     verify_wallet_balance(
         &chain_config,
         &wallet,
-        &db,
         (block1_amount + block2_amount).unwrap(),
     );
 
@@ -285,7 +285,6 @@ fn wallet_balance_block_reward() {
     verify_wallet_balance(
         &chain_config,
         &wallet,
-        &db,
         (block1_amount + block2_amount_new).unwrap(),
     );
 }
@@ -295,8 +294,7 @@ fn wallet_balance_block_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
     let tx_amount1 = Amount::from_atoms(10000);
@@ -326,7 +324,7 @@ fn wallet_balance_block_transactions() {
 
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
-    verify_wallet_balance(&chain_config, &wallet, &db, tx_amount1);
+    verify_wallet_balance(&chain_config, &wallet, tx_amount1);
 }
 
 #[test]
@@ -335,8 +333,7 @@ fn wallet_balance_parent_child_transactions() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
 
     let tx_amount1 = Amount::from_atoms(20000);
@@ -386,20 +383,20 @@ fn wallet_balance_parent_child_transactions() {
 
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
-    verify_wallet_balance(&chain_config, &wallet, &db, tx_amount2);
+    verify_wallet_balance(&chain_config, &wallet, tx_amount2);
 }
 
 #[track_caller]
 fn test_wallet_accounts(
     chain_config: &Arc<ChainConfig>,
     wallet: &DefaultWallet,
-    db: &Arc<Store<DefaultBackend>>,
     expected_accounts: Vec<U31>,
 ) {
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
 
-    let mut wallet = Wallet::load_wallet(Arc::clone(chain_config), Arc::clone(db)).unwrap();
+    let db_copy = wallet.db.clone();
+    let mut wallet = Wallet::load_wallet(Arc::clone(chain_config), db_copy).unwrap();
     let accounts = wallet.account_indexes().cloned().collect::<Vec<_>>();
     assert_eq!(accounts, expected_accounts);
 
@@ -413,24 +410,21 @@ fn wallet_accounts_creation() {
     let chain_config = Arc::new(create_mainnet());
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
-    test_wallet_accounts(&chain_config, &wallet, &db, vec![]);
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    test_wallet_accounts(&chain_config, &wallet, vec![]);
 
     wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
-    test_wallet_accounts(&chain_config, &wallet, &db, vec![DEFAULT_ACCOUNT_INDEX]);
+    test_wallet_accounts(&chain_config, &wallet, vec![DEFAULT_ACCOUNT_INDEX]);
 
     wallet.create_account(1.try_into().unwrap()).unwrap();
     test_wallet_accounts(
         &chain_config,
         &wallet,
-        &db,
         vec![DEFAULT_ACCOUNT_INDEX, 1.try_into().unwrap()],
     );
 
     let db = create_wallet_in_memory().unwrap();
-    let mut wallet =
-        Wallet::new_wallet(Arc::clone(&chain_config), Arc::clone(&db), MNEMONIC, None).unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(123.try_into().unwrap()).unwrap();
-    test_wallet_accounts(&chain_config, &wallet, &db, vec![123.try_into().unwrap()]);
+    test_wallet_accounts(&chain_config, &wallet, vec![123.try_into().unwrap()]);
 }

@@ -52,6 +52,21 @@ pub enum WalletCommand {
     /// Close wallet file
     CloseWallet,
 
+    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
+    EncryptPrivateKeys {
+        // Optional new password, if not specified will remove any existing encryption.
+        password: Option<String>,
+    },
+
+    // Unlocks the private keys for usage.
+    UnlockPrivateKeys {
+        // Optional existing password if there is any.
+        password: Option<String>,
+    },
+
+    // Locks the private keys so they can't be used until they are unlocked again
+    LockPrivateKeys,
+
     /// Returns the node chainstate
     ChainstateInfo,
 
@@ -279,6 +294,45 @@ pub async fn handle_wallet_command(
             utils::ensure!(controller_opt.is_some(), WalletCliError::NoWallet);
 
             *controller_opt = None;
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::EncryptPrivateKeys { password } => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.encrypt_wallet(&password).map_err(WalletCliError::Controller)?;
+                }
+            }
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::UnlockPrivateKeys { password } => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.unlock_wallet(&password).map_err(WalletCliError::Controller)?;
+                }
+            }
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::LockPrivateKeys => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.lock_wallet();
+                }
+            }
 
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
