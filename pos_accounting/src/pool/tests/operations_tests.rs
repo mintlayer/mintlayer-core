@@ -49,15 +49,16 @@ fn create_pool_twice(#[case] seed: Seed) {
     );
     let destination = new_pub_key_destination(&mut rng);
     let pool_data = create_pool_data(&mut rng, destination, pledge_amount);
+    let pool_id = crate::make_pool_id(&outpoint);
 
     let mut db = PoSAccountingDB::new(&mut storage);
-    let _ = db.create_pool(&outpoint, pool_data.clone()).unwrap();
+    let _ = db.create_pool(pool_id, pool_data.clone()).unwrap();
 
     // using db
     {
         let mut db = PoSAccountingDB::new(&mut storage);
         assert_eq!(
-            db.create_pool(&outpoint, pool_data.clone()).unwrap_err(),
+            db.create_pool(pool_id, pool_data.clone()).unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }
@@ -67,7 +68,7 @@ fn create_pool_twice(#[case] seed: Seed) {
         let db = PoSAccountingDB::new(&mut storage);
         let mut delta = PoSAccountingDelta::new(&db);
         assert_eq!(
-            delta.create_pool(&outpoint, pool_data).unwrap_err(),
+            delta.create_pool(pool_id, pool_data).unwrap_err(),
             Error::InvariantErrorPoolBalanceAlreadyExists
         );
     }

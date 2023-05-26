@@ -406,8 +406,7 @@ where
                     let res = if expected_pool_id == *pool_id {
                         self.accounting_delta_adapter
                             .operations(tx_source)
-                            .create_pool(input0.outpoint(), data.as_ref().clone().into())
-                            .map(|(_, undo)| undo)
+                            .create_pool(*pool_id, data.as_ref().clone().into())
                             .map_err(ConnectTransactionError::PoSAccountingError)
                     } else {
                         Err(ConnectTransactionError::SpendStakeError(

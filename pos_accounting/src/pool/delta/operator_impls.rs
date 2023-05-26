@@ -23,7 +23,7 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers::{make_delegation_id, make_pool_id},
+        helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
@@ -39,10 +39,9 @@ use super::PoSAccountingDelta;
 impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
     fn create_pool(
         &mut self,
-        input0_outpoint: &OutPoint,
+        pool_id: PoolId,
         pool_data: PoolData,
-    ) -> Result<(PoolId, PoSAccountingUndo), Error> {
-        let pool_id = make_pool_id(input0_outpoint);
+    ) -> Result<PoSAccountingUndo, Error> {
         let pledge_amount = pool_data.pledge_amount();
 
         if self.get_pool_balance(pool_id).map_err(|_| Error::ViewFail)?.is_some() {
@@ -62,14 +61,11 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
             .pool_data
             .merge_delta_data_element(pool_id, DataDelta::new(None, Some(pool_data)))?;
 
-        Ok((
+        Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             pool_id,
-            PoSAccountingUndo::CreatePool(CreatePoolUndo {
-                pool_id,
-                pledge_amount,
-                data_undo: PoolDataUndo::DataDelta(Box::new(undo_data)),
-            }),
-        ))
+            pledge_amount,
+            data_undo: PoolDataUndo::DataDelta(Box::new(undo_data)),
+        }))
     }
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error> {

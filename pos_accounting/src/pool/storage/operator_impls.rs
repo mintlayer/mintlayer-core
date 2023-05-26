@@ -22,7 +22,7 @@ use crate::{
     error::Error,
     pool::{
         delegation::DelegationData,
-        helpers::{make_delegation_id, make_pool_id},
+        helpers::make_delegation_id,
         operations::{
             CreateDelegationIdUndo, CreatePoolUndo, DecommissionPoolUndo, DelegateStakingUndo,
             DelegationDataUndo, DeleteDelegationIdUndo, IncreasePledgeAmountUndo,
@@ -40,11 +40,9 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
 {
     fn create_pool(
         &mut self,
-        input0_outpoint: &OutPoint,
+        pool_id: PoolId,
         pool_data: PoolData,
-    ) -> Result<(PoolId, PoSAccountingUndo), Error> {
-        let pool_id = make_pool_id(input0_outpoint);
-
+    ) -> Result<PoSAccountingUndo, Error> {
         if self.store.get_pool_balance(pool_id)?.is_some() {
             // This should never happen since it's based on an unspent input
             return Err(Error::InvariantErrorPoolBalanceAlreadyExists);
@@ -58,14 +56,11 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         self.store.set_pool_balance(pool_id, pool_data.pledge_amount())?;
         self.store.set_pool_data(pool_id, &pool_data)?;
 
-        Ok((
+        Ok(PoSAccountingUndo::CreatePool(CreatePoolUndo {
             pool_id,
-            PoSAccountingUndo::CreatePool(CreatePoolUndo {
-                pool_id,
-                pledge_amount: pool_data.pledge_amount(),
-                data_undo: PoolDataUndo::Data(Box::new(pool_data)),
-            }),
-        ))
+            pledge_amount: pool_data.pledge_amount(),
+            data_undo: PoolDataUndo::Data(Box::new(pool_data)),
+        }))
     }
 
     fn decommission_pool(&mut self, pool_id: PoolId) -> Result<PoSAccountingUndo, Error> {
