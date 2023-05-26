@@ -28,7 +28,6 @@ use static_assertions::*;
 
 assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store, DefaultTransactionVerificationStrategy>: Send);
 
-// TODO: write tests for consensus crate
 #[test]
 fn process_genesis_block() {
     utils::concurrency::model(|| {

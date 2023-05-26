@@ -51,7 +51,7 @@ fn new_pub_key_destination(rng: &mut (impl Rng + CryptoRng)) -> Destination {
 fn create_pool_data(
     rng: &mut (impl Rng + CryptoRng),
     staker: Destination,
-    decomission_destination: Destination,
+    decommission_destination: Destination,
     pledged_amount: Amount,
 ) -> StakePoolData {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
@@ -61,7 +61,7 @@ fn create_pool_data(
         pledged_amount,
         staker,
         vrf_pk,
-        decomission_destination,
+        decommission_destination,
         margin_ratio,
         cost_per_block,
     )

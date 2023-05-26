@@ -26,8 +26,7 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex,
+        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, TxInput, TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -119,7 +118,6 @@ mockall::mock! {
             &self,
             tx_id: &Id<common::chain::Transaction>,
         ) -> Result<Option<TokenId>, ChainstateError>;
-        fn available_inputs(&self, tx: &Transaction) -> Result<Vec<Option<TxInput>>, ChainstateError>;
         fn get_inputs_outpoints_coin_amount(
             &self,
             inputs: &[TxInput],
