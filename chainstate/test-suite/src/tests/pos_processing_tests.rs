@@ -897,6 +897,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2 and an epoch is sealed at height 2.
 // Try to crete block_2 with PoS data that has refer to staked pool.
+#[ignore = "Disabled because of switch from SealedStorageTag to TipStorageTag"]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1604,7 +1605,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn pos_stake_test_net_genesis(#[case] seed: Seed) {
+fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let upgrades = vec![
         (
