@@ -32,7 +32,7 @@ use common::{
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
         config::EpochIndex,
-        Block, ChainConfig, GenBlockId, RequiredConsensus, SignedTransaction,
+        Block, ChainConfig, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
