@@ -35,7 +35,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{send_request::make_address_output, DefaultWallet};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoTypes};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ControllerError<T: NodeInterface> {
@@ -132,7 +132,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
     pub fn get_utxos(&self) -> Result<BTreeMap<OutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(DEFAULT_ACCOUNT_INDEX)
+            .get_utxos(DEFAULT_ACCOUNT_INDEX, UtxoTypes::ALL)
             .map_err(ControllerError::WalletError)
     }
 

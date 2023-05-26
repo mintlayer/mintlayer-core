@@ -15,7 +15,10 @@
 
 use common::chain::TxOutput;
 
+pub type UtxoTypeInt = u16;
+
 #[derive(PartialEq, Eq)]
+#[repr(u16)]
 pub enum UtxoType {
     Transfer = 1 << 0,
     LockThenTransfer = 1 << 1,
@@ -38,13 +41,17 @@ pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
     }
 }
 
-pub struct UtxoTypes(u32);
+pub struct UtxoTypes(UtxoTypeInt);
+
+impl UtxoTypes {
+    pub const ALL: UtxoTypes = UtxoTypes(UtxoTypeInt::MAX);
+}
 
 impl std::ops::BitOr<UtxoType> for UtxoTypes {
     type Output = UtxoTypes;
 
     fn bitor(self, rhs: UtxoType) -> Self::Output {
-        Self(self.0 | rhs as u32)
+        Self(self.0 | rhs as UtxoTypeInt)
     }
 }
 
@@ -58,12 +65,12 @@ impl std::ops::BitOr<UtxoType> for UtxoType {
 
 impl From<UtxoType> for UtxoTypes {
     fn from(value: UtxoType) -> Self {
-        Self(value as u32)
+        Self(value as UtxoTypeInt)
     }
 }
 
 impl UtxoTypes {
     pub fn contains(&self, value: UtxoType) -> bool {
-        (self.0 & value as u32) != 0
+        (self.0 & value as UtxoTypeInt) != 0
     }
 }
