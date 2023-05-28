@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod builder;
+mod checkpoints;
 pub mod emission_schedule;
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
@@ -25,16 +26,17 @@ use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::TxOutput;
-use crate::chain::{Block, GenBlock, Genesis};
+use crate::chain::{GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
-use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
+
+use self::checkpoints::Checkpoints;
 
 use super::RequiredConsensus;
 
@@ -113,7 +115,7 @@ pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
     bip44_coin_type: ChildNumber,
-    height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
+    height_checkpoint_data: Checkpoints,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
     p2p_port: u16,
@@ -197,9 +199,9 @@ impl ChainConfig {
         &self.net_upgrades
     }
 
-    /// Checkpoints enforced by the chain, as in, a block with vs height that must be satisfied
+    /// Checkpoints enforced by the chain, as in, a block id vs height that must be satisfied
     #[must_use]
-    pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
+    pub fn height_checkpoints(&self) -> &Checkpoints {
         &self.height_checkpoint_data
     }
 

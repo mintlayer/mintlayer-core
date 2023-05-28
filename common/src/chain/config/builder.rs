@@ -21,9 +21,12 @@ use crate::{
             create_mainnet_genesis, create_unit_test_genesis, emission_schedule, ChainConfig,
             ChainType, EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular,
         },
-        ConsensusUpgrade, Destination, Genesis, Mlt, NetUpgrades, PoWChainConfig, UpgradeVersion,
+        ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
+        UpgradeVersion,
     },
-    primitives::{id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, H256},
+    primitives::{
+        id::WithId, semver::SemVer, Amount, BlockDistance, BlockHeight, Id, Idable, H256,
+    },
 };
 use crypto::key::hdkd::child_number::ChildNumber;
 
@@ -213,6 +216,11 @@ impl Builder {
         };
         let genesis_block = Arc::new(WithId::new(genesis_block));
 
+        let height_checkpoint_data = vec![(0.into(), genesis_block.get_id().into())]
+            .into_iter()
+            .collect::<BTreeMap<BlockHeight, Id<GenBlock>>>()
+            .into();
+
         ChainConfig {
             chain_type,
             address_prefix,
@@ -231,7 +239,7 @@ impl Builder {
             initial_randomness,
             target_block_spacing,
             genesis_block,
-            height_checkpoint_data: BTreeMap::new(),
+            height_checkpoint_data,
             emission_schedule,
             net_upgrades,
             token_min_issuance_fee,

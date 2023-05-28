@@ -235,6 +235,10 @@ impl BanScore for CheckBlockError {
             CheckBlockError::BlockTimeStrictOrderInvalid => 100,
             CheckBlockError::MerkleRootCalculationFailed(_, _) => 100,
             CheckBlockError::BlockRewardMaturityError(err) => err.ban_score(),
+            CheckBlockError::PropertyQueryError(_) => 100,
+            CheckBlockError::CheckpointMismatch(_, _) => 100,
+            CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
+            CheckBlockError::GetAncestorError(_) => 100,
         }
     }
 }

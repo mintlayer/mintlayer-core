@@ -380,8 +380,50 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn enforce_checkpoints(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+        let prev_block_index = self
+            .get_gen_block_index(header.prev_block_id())?
+            .expect("Previous block to exist");
+        let current_height = prev_block_index.block_height().next_height();
+
+        // If the block height is at the exact checkpoint height, we need to check that the block id matches the checkpoint id
+        if let Some(e) =
+            self.chain_config.height_checkpoints().checkpoint_at_height(&current_height)
+        {
+            let expected_id = Id::<Block>::new(e.get());
+            if expected_id != header.get_id() {
+                return Err(CheckBlockError::CheckpointMismatch(
+                    expected_id,
+                    header.get_id(),
+                ));
+            }
+        }
+
+        // If the block height does not match a checkpoint height, we need to check that an ancestor block id matches the checkpoint id
+        let (expected_checkpoint_height, expected_checkpoint_id) = self
+            .chain_config
+            .height_checkpoints()
+            .parent_checkpoint_to_height(current_height);
+
+        let parent_checkpoint_block_index =
+            self.get_ancestor(&prev_block_index, expected_checkpoint_height)?;
+
+        let parent_checkpoint_id = parent_checkpoint_block_index.block_id();
+
+        if parent_checkpoint_id != expected_checkpoint_id {
+            return Err(CheckBlockError::ParentCheckpointMismatch(
+                expected_checkpoint_height,
+                expected_checkpoint_id,
+                parent_checkpoint_id,
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
+        self.enforce_checkpoints(header).log_err()?;
 
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
