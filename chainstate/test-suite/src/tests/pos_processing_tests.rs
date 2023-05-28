@@ -318,7 +318,7 @@ fn produce_kernel_signature(
         SigHashType::default(),
         staking_destination,
         &block_reward_tx,
-        std::iter::once(utxo).collect::<Vec<_>>().as_slice(),
+        std::iter::once(Some(utxo)).collect::<Vec<_>>().as_slice(),
         0,
     )
     .unwrap()

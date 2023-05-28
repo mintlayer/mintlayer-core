@@ -168,6 +168,10 @@ impl TxInput {
         TxInput::Utxo(OutPoint::new(outpoint_source_id, output_index))
     }
 
+    pub fn new_account(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
+        TxInput::Account(AccountInput::new(nonce, account, withdraw_amount))
+    }
+
     pub fn outpoint(&self) -> Option<&OutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),

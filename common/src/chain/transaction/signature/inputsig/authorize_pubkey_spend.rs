@@ -97,6 +97,7 @@ mod test {
         let destination = Destination::PublicKey(public_key);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), 2).unwrap();
 
@@ -106,7 +107,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 1,
             );
             assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
@@ -125,6 +126,7 @@ mod test {
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
@@ -134,7 +136,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 rng.gen_range(0..inputs_utxos.len()),
             )
             .unwrap();
@@ -158,6 +160,7 @@ mod test {
         let destination = Destination::PublicKey(public_key);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
@@ -167,7 +170,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 rng.gen_range(0..INPUTS),
             )
             .unwrap();
@@ -197,6 +200,7 @@ mod test {
         let destination = Destination::PublicKey(public_key.clone());
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
@@ -207,19 +211,14 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 input,
             )
             .unwrap();
             let spender_signature =
                 AuthorizedPublicKeySpend::from_data(witness.raw_signature()).unwrap();
-            let sighash = signature_hash(
-                witness.sighash_type(),
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
-                input,
-            )
-            .unwrap();
+            let sighash =
+                signature_hash(witness.sighash_type(), &tx, &inputs_utxos, input).unwrap();
             verify_public_key_spending(&public_key, &spender_signature, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
@@ -236,6 +235,7 @@ mod test {
         let destination = Destination::PublicKey(public_key.clone());
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, INPUTS);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), OUTPUTS).unwrap();
 
@@ -246,17 +246,12 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 input,
             )
             .unwrap();
-            let sighash = signature_hash(
-                witness.sighash_type(),
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
-                input,
-            )
-            .unwrap();
+            let sighash =
+                signature_hash(witness.sighash_type(), &tx, &inputs_utxos, input).unwrap();
             sign_pubkey_spending(&private_key, &public_key, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }

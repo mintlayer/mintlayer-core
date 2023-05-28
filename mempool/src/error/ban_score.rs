@@ -190,10 +190,13 @@ impl MempoolBanScore for SignatureDestinationGetterError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::UtxoOutputNotFound(_) => 0,
+            SignatureDestinationGetterError::UtxoViewError(_) => 0,
         }
     }
 }

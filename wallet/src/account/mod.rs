@@ -321,7 +321,7 @@ impl Account {
     ) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
-        let input_utxos = utxos.iter().collect::<Vec<_>>();
+        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
         if utxos.len() != inputs.len() {
             return Err(
                 TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),

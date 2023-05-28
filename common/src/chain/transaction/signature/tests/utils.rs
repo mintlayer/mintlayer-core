@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicBool;
+
 use itertools::Itertools;
 
 use crypto::{
@@ -31,7 +33,8 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        ChainConfig, Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
+        AccountType, ChainConfig, DelegationId, Destination, Transaction, TransactionCreationError,
+        TxInput, TxOutput,
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
@@ -41,8 +44,7 @@ pub fn generate_input_utxo(
 ) -> (TxOutput, crypto::key::PrivateKey) {
     let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
-    let output_value =
-        crate::chain::tokens::OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
+    let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
     let utxo = TxOutput::Transfer(output_value, destination);
     (utxo, private_key)
 }
@@ -90,10 +92,18 @@ pub fn generate_unsigned_tx(
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
     let inputs = std::iter::from_fn(|| {
-        Some(TxInput::new(
-            Id::<Transaction>::new(H256::random_using(rng)).into(),
-            rng.gen(),
-        ))
+        if rng.gen::<bool>() {
+            Some(TxInput::new(
+                Id::<Transaction>::new(H256::random_using(rng)).into(),
+                rng.gen(),
+            ))
+        } else {
+            Some(TxInput::new_account(
+                rng.gen(),
+                AccountType::Delegation(DelegationId::new(H256::random_using(rng))),
+                Amount::from_atoms(rng.gen()),
+            ))
+        }
     })
     .take(inputs_count)
     .collect();
@@ -113,7 +123,7 @@ pub fn generate_unsigned_tx(
 
 pub fn sign_whole_tx(
     tx: Transaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -142,7 +152,7 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -159,7 +169,7 @@ pub fn generate_and_sign_tx(
 
 pub fn make_signature(
     tx: &Transaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -179,7 +189,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.inputs().len() {

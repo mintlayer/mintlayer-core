@@ -650,7 +650,10 @@ where
             self.chain_config.as_ref(),
             &self.utxo_cache,
             tx,
-            SignatureDestinationGetter::new_for_transaction(&self.accounting_delta_adapter),
+            SignatureDestinationGetter::new_for_transaction(
+                &self.accounting_delta_adapter.accounting_delta(),
+                &self.utxo_cache,
+            ),
         )?;
 
         self.connect_pos_accounting_outputs(tx_source.into(), tx.transaction())?;
@@ -716,7 +719,7 @@ where
                 self.chain_config.as_ref(),
                 &self.utxo_cache,
                 &reward_transactable,
-                SignatureDestinationGetter::new_for_block_reward(),
+                SignatureDestinationGetter::new_for_block_reward(&self.utxo_cache),
             )?;
         }
 

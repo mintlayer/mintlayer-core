@@ -151,7 +151,7 @@ pub fn verify_signature<T: Transactable>(
     chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &T,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
@@ -188,7 +188,7 @@ fn verify_standard_input_signature<T: Transactable>(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
     tx: &T,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, inputs_utxos, input_num)?;

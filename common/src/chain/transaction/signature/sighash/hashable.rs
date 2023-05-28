@@ -59,13 +59,14 @@ impl SignatureHashableElement for &[TxOutput] {
 pub struct SignatureHashableInputs<'a> {
     inputs: &'a [TxInput],
     /// Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
-    inputs_utxos: &'a [&'a TxOutput],
+    /// It can be None which means that input spend from account not utxo
+    inputs_utxos: &'a [Option<&'a TxOutput>],
 }
 
 impl<'a> SignatureHashableInputs<'a> {
     pub fn new(
         inputs: &'a [TxInput],
-        inputs_utxos: &'a [&'a TxOutput],
+        inputs_utxos: &'a [Option<&'a TxOutput>],
     ) -> Result<Self, TransactionSigError> {
         if inputs.len() != inputs_utxos.len() {
             return Err(TransactionSigError::InvalidUtxoCountVsInputs(
@@ -180,7 +181,7 @@ mod tests {
             .map(|_| generate_random_invalid_output(rng))
             .collect::<Vec<_>>();
 
-        let inputs_utxos = inputs_utxos.iter().collect::<Vec<_>>();
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &inputs_utxos);
 

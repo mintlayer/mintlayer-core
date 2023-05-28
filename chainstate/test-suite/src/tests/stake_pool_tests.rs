@@ -592,6 +592,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
 
         let (best_block_source_id, best_block_utxos) =
             tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
+        let inputs_utxos = best_block_utxos.iter().map(Some).collect::<Vec<_>>();
 
         {
             // sign with staking key
@@ -615,7 +616,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                     Default::default(),
                     Destination::PublicKey(staking_pk),
                     &tx,
-                    &best_block_utxos.iter().collect::<Vec<_>>(),
+                    &inputs_utxos,
                     0,
                 )
                 .unwrap();
@@ -656,7 +657,7 @@ fn decommission_from_stake_pool_with_staker_key(#[case] seed: Seed) {
                 Default::default(),
                 Destination::PublicKey(decommission_pk),
                 &tx,
-                &best_block_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 0,
             )
             .unwrap();

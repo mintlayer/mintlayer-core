@@ -216,7 +216,7 @@ where
     let sighash = signature_hash(
         SigHashType::default(),
         &block_reward_transactable,
-        &pos_input_data.kernel_input_utxos().iter().collect::<Vec<_>>(),
+        &pos_input_data.kernel_input_utxos().iter().map(Some).collect::<Vec<_>>(),
         0,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;

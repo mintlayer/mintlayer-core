@@ -13,24 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{DelegationId, Destination, PoolId, TxOutput};
+use common::chain::{DelegationId, Destination, OutPoint, PoolId, TxInput, TxOutput};
 use pos_accounting::PoSAccountingView;
-
-use super::accounting_delta_adapter::PoSAccountingDeltaAdapter;
+use utxo::UtxosView;
 
 pub type SignatureDestinationGetterFn<'a> =
-    dyn Fn(&TxOutput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
+    dyn Fn(&TxInput) -> Result<Destination, SignatureDestinationGetterError> + 'a;
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 pub enum SignatureDestinationGetterError {
     #[error("Attempted to spend output in block reward")]
     SpendingOutputInBlockReward,
+    #[error("Attempted to spend from account in block reward")]
+    SpendingFromAccountInBlockReward,
     #[error("Attempted to verify signature for burning output")]
     SigVerifyOfBurnedOutput,
     #[error("Pool data not found for signature verification {0}")]
     PoolDataNotFound(PoolId),
     #[error("Delegation data not found for signature verification {0}")]
     DelegationDataNotFound(DelegationId),
+    #[error("Utxo for the outpoint not fount: {0:?}")]
+    UtxoOutputNotFound(OutPoint),
+    #[error("Error accessing utxo set")]
+    UtxoViewError(utxo::Error),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]
     SigVerifyPoSAccountingError(#[from] pos_accounting::Error),
 }
@@ -56,44 +61,76 @@ pub struct SignatureDestinationGetter<'a> {
 }
 
 impl<'a> SignatureDestinationGetter<'a> {
-    pub fn new_for_transaction<P: PoSAccountingView>(
-        accounting_delta: &'a PoSAccountingDeltaAdapter<P>,
+    pub fn new_for_transaction<
+        P: PoSAccountingView<Error = pos_accounting::Error>,
+        U: UtxosView,
+    >(
+        accounting_view: &'a P,
+        utxos_view: &'a U,
     ) -> Self {
         let destination_getter =
-            |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
-                match output {
-                    TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => Ok(d.clone()),
-                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
-                        // This error is emitted in other places for attempting to make this spend,
-                        // but this is just a double-check.
-                        Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+            |input: &TxInput| -> Result<Destination, SignatureDestinationGetterError> {
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo = utxos_view
+                            .utxo(outpoint)
+                            .map_err(|_| {
+                                SignatureDestinationGetterError::UtxoViewError(
+                                    utxo::Error::ViewRead,
+                                )
+                            })?
+                            .ok_or(SignatureDestinationGetterError::UtxoOutputNotFound(
+                                outpoint.clone(),
+                            ))?;
+
+                        match utxo.output() {
+                            TxOutput::Transfer(_, d) | TxOutput::LockThenTransfer(_, d, _) => {
+                                Ok(d.clone())
+                            }
+                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                                // This error is emitted in other places for attempting to make this spend,
+                                // but this is just a double-check.
+                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                            }
+                            TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_view
+                                .get_delegation_data(*delegation_id)?
+                                .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
+                                    *delegation_id,
+                                ))?
+                                .spend_destination()
+                                .clone()),
+                            TxOutput::CreateStakePool(_, pool_data) => {
+                                // Spending an output of a pool creation transaction is only allowed in a
+                                // context of a transaction (as opposed to block reward) only if this pool
+                                // is being decommissioned.
+                                // If this rule is being invalidated, it will be detected in other parts
+                                // of the code.
+                                Ok(pool_data.decommission_key().clone())
+                            }
+                            TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                                // The only way we can spend this output in a transaction
+                                // (as opposed to block reward), is if we're decommissioning a pool.
+                                Ok(accounting_view
+                                    .get_pool_data(*pool_id)?
+                                    .ok_or(SignatureDestinationGetterError::PoolDataNotFound(
+                                        *pool_id,
+                                    ))?
+                                    .decommission_destination()
+                                    .clone())
+                            }
+                        }
                     }
-                    TxOutput::DelegateStaking(_, delegation_id) => Ok(accounting_delta
-                        .accounting_delta()
-                        .get_delegation_data(*delegation_id)?
-                        .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
-                            *delegation_id,
-                        ))?
-                        .spend_destination()
-                        .clone()),
-                    TxOutput::CreateStakePool(_, pool_data) => {
-                        // Spending an output of a pool creation transaction is only allowed in a
-                        // context of a transaction (as opposed to block reward) only if this pool
-                        // is being decommissioned.
-                        // If this rule is being invalidated, it will be detected in other parts
-                        // of the code.
-                        Ok(pool_data.decommission_key().clone())
-                    }
-                    TxOutput::ProduceBlockFromStake(_, pool_id) => {
-                        // The only way we can spend this output in a transaction
-                        // (as opposed to block reward), is if we're decommissioning a pool.
-                        Ok(accounting_delta
-                            .accounting_delta()
-                            .get_pool_data(*pool_id)?
-                            .ok_or(SignatureDestinationGetterError::PoolDataNotFound(*pool_id))?
-                            .decommission_destination()
-                            .clone())
-                    }
+                    TxInput::Account(account_input) => match account_input.account() {
+                        common::chain::AccountType::Delegation(delegation_id) => {
+                            Ok(accounting_view
+                                .get_delegation_data(*delegation_id)?
+                                .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
+                                    *delegation_id,
+                                ))?
+                                .spend_destination()
+                                .clone())
+                        }
+                    },
                 }
             };
 
@@ -102,30 +139,48 @@ impl<'a> SignatureDestinationGetter<'a> {
         }
     }
 
-    pub fn new_for_block_reward() -> Self {
+    pub fn new_for_block_reward<U: UtxosView>(utxos_view: &'a U) -> Self {
         let destination_getter =
-            |output: &TxOutput| -> Result<Destination, SignatureDestinationGetterError> {
-                match output {
-                    TxOutput::Transfer(_, _)
-                    | TxOutput::LockThenTransfer(_, _, _)
-                    | TxOutput::DelegateStaking(_, _) => {
-                        Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
-                    }
-                    TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
-                        Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
-                    }
+            |input: &TxInput| -> Result<Destination, SignatureDestinationGetterError> {
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        let utxo = utxos_view
+                            .utxo(outpoint)
+                            .map_err(|_| {
+                                SignatureDestinationGetterError::UtxoViewError(
+                                    utxo::Error::ViewRead,
+                                )
+                            })?
+                            .ok_or(SignatureDestinationGetterError::UtxoOutputNotFound(
+                                outpoint.clone(),
+                            ))?;
 
-                    TxOutput::ProduceBlockFromStake(d, _) => {
-                        // Spending an output of a block creation output is only allowed to
-                        // create another block, given that this is a block reward.
-                        Ok(d.clone())
+                        match utxo.output() {
+                            TxOutput::Transfer(_, _)
+                            | TxOutput::LockThenTransfer(_, _, _)
+                            | TxOutput::DelegateStaking(_, _) => {
+                                Err(SignatureDestinationGetterError::SpendingOutputInBlockReward)
+                            }
+                            TxOutput::CreateDelegationId(_, _) | TxOutput::Burn(_) => {
+                                Err(SignatureDestinationGetterError::SigVerifyOfBurnedOutput)
+                            }
+
+                            TxOutput::ProduceBlockFromStake(d, _) => {
+                                // Spending an output of a block creation output is only allowed to
+                                // create another block, given that this is a block reward.
+                                Ok(d.clone())
+                            }
+                            TxOutput::CreateStakePool(_, pool_data) => {
+                                // Spending an output of a pool creation output is only allowed when
+                                // creating a block (given it's in a block reward; otherwise it should
+                                // be a transaction for decommissioning the pool), hence the staker key
+                                // is checked.
+                                Ok(pool_data.staker().clone())
+                            }
+                        }
                     }
-                    TxOutput::CreateStakePool(_, pool_data) => {
-                        // Spending an output of a pool creation output is only allowed when
-                        // creating a block (given it's in a block reward; otherwise it should
-                        // be a transaction for decommissioning the pool), hence the staker key
-                        // is checked.
-                        Ok(pool_data.staker().clone())
+                    TxInput::Account(_) => {
+                        Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }
             };
@@ -140,8 +195,8 @@ impl<'a> SignatureDestinationGetter<'a> {
         Self { f }
     }
 
-    pub fn call(&self, output: &TxOutput) -> Result<Destination, SignatureDestinationGetterError> {
-        (self.f)(output)
+    pub fn call(&self, input: &TxInput) -> Result<Destination, SignatureDestinationGetterError> {
+        (self.f)(input)
     }
 }
 

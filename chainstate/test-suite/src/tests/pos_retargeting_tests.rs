@@ -146,6 +146,7 @@ fn stable_block_time(#[case] seed: Seed) {
         // produce kernel signature
         let (best_block_source_id, best_block_utxos) =
             tf.outputs_from_genblock(tf.best_block_id()).into_iter().next().unwrap();
+        let inputs_utxos = best_block_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let reward_outputs =
             vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
@@ -161,7 +162,7 @@ fn stable_block_time(#[case] seed: Seed) {
             Default::default(),
             staking_destination.clone(),
             &block_reward_tx,
-            &best_block_utxos.iter().collect::<Vec<_>>(),
+            &inputs_utxos,
             0,
         )
         .unwrap();

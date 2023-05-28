@@ -194,10 +194,11 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let sig_tx = account.sign_transaction(req, &db_tx).unwrap();
 
-    let utxos_ref = utxos.iter().collect::<Vec<_>>();
+    // FIMXE: sign account input
+    let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
-        let destination = Account::get_tx_output_destination(utxos_ref[i]).unwrap();
+        let destination = Account::get_tx_output_destination(utxos_ref[i].unwrap()).unwrap();
         verify_signature(&config, destination, &sig_tx, &utxos_ref, i).unwrap();
     }
 }

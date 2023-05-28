@@ -156,10 +156,13 @@ impl BanScore for SignatureDestinationGetterError {
     fn ban_score(&self) -> u32 {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::UtxoOutputNotFound(_) => 100,
+            SignatureDestinationGetterError::UtxoViewError(_) => 100,
         }
     }
 }

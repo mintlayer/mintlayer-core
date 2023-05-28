@@ -103,7 +103,7 @@ impl StandardInputSignature {
         sighash_type: SigHashType,
         outpoint_destination: Destination,
         tx: &T,
-        inputs_utxos: &[&TxOutput],
+        inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
     ) -> Result<Self, TransactionSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
@@ -138,7 +138,7 @@ impl StandardInputSignature {
         authorization: &AuthorizedClassicalMultisigSpend,
         sighash_type: SigHashType,
         tx: &Transaction,
-        inputs_utxos: &[&TxOutput],
+        inputs_utxos: &[Option<&TxOutput>],
         input_num: usize,
     ) -> Result<Self, TransactionSigError> {
         let sighash = signature_hash(sighash_type, tx, inputs_utxos, input_num)?;
@@ -236,6 +236,7 @@ mod test {
         let destination = Destination::Address(PublicKeyHash::from(&public_key));
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), 2).unwrap();
 
@@ -247,7 +248,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &inputs_utxos,
                     INPUT_NUM,
                 ),
                 "{sighash_type:X?}"
@@ -266,6 +267,7 @@ mod test {
         let destination = Destination::PublicKey(public_key);
 
         let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), 2).unwrap();
 
@@ -277,7 +279,7 @@ mod test {
                     sighash_type,
                     destination.clone(),
                     &tx,
-                    &inputs_utxos.iter().collect::<Vec<_>>(),
+                    &inputs_utxos,
                     INPUT_NUM,
                 ),
                 "{sighash_type:X?}"
@@ -303,24 +305,20 @@ mod test {
         for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
             let (inputs_utxos, _priv_keys) = generate_inputs_utxos(&mut rng, 1);
+            let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
             let tx = generate_unsigned_tx(&mut rng, &destination, inputs_utxos.len(), 2).unwrap();
             let witness = StandardInputSignature::produce_uniparty_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
+                &inputs_utxos,
                 INPUT_NUM,
             )
             .unwrap();
 
-            let sighash = signature_hash(
-                witness.sighash_type(),
-                &tx,
-                &inputs_utxos.iter().collect::<Vec<_>>(),
-                INPUT_NUM,
-            )
-            .unwrap();
+            let sighash =
+                signature_hash(witness.sighash_type(), &tx, &inputs_utxos, INPUT_NUM).unwrap();
             witness
                 .verify_signature(&chain_config, &destination, &sighash)
                 .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
