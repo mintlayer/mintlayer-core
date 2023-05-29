@@ -103,43 +103,20 @@ where
         None => return Ok(()),
     };
 
-    let input_outpoints = inputs.iter().filter_map(|input| input.outpoint()).collect::<Vec<_>>();
-
-    let input_utxos = input_outpoints
+    let input_utxos = inputs
         .iter()
-        .map(|outpoint| {
-            utxos_view
-                .utxo(outpoint)
-                .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    debug_assert_eq!(input_outpoints.len(), input_utxos.len());
-
-    // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
-    // produced outputs must be timelocked as per chain config
-    let output_check_required = inputs.iter().find_map(|input| match input {
-        // FIXME: avoid searching for utxo again
-        TxInput::Utxo(outpoint) => utxos_view
-            .utxo(outpoint)
-            .expect("must be present")
-            .map(|utxo| match utxo.output() {
-                TxOutput::Transfer(_, _)
-                | TxOutput::LockThenTransfer(_, _, _)
-                | TxOutput::Burn(_)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => None,
-                TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
-                    Some(OutputTimelockCheckRequired::DecommissioningMaturity)
-                }
-            })
-            .flatten(),
-        TxInput::Account(account_input) => match account_input.account() {
-            AccountType::Delegation(_) => {
-                Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                let utxo = utxos_view
+                    .utxo(outpoint)
+                    .map_err(|_| utxo::Error::ViewRead)?
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                Ok(Some((outpoint.clone(), utxo)))
             }
-        },
-    });
+            TxInput::Account(_) => Ok(None),
+        })
+        .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
+    debug_assert_eq!(inputs.len(), input_utxos.len());
 
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
@@ -149,7 +126,8 @@ where
     };
 
     // check if utxos can already be spent
-    input_utxos.iter().zip(input_outpoints.iter()).try_for_each(|(utxo, outpoint)| -> Result<(), ConnectTransactionError>{
+    //input_utxos.iter().filter_map(|utxo|utxo.map(|(outpoint, utxo)| (outpoint, utxo))).try_for_each(| (outpoint, utxo)| -> Result<(), ConnectTransactionError>{
+    input_utxos.iter().filter_map(|utxo| utxo.as_ref()).try_for_each(| (outpoint, utxo)| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
@@ -191,6 +169,30 @@ where
 
     // check if output timelocks follow the rules
     if let Some(outputs) = tx.outputs() {
+        // in case `CreateStakePool`, `ProduceBlockFromStake` utxos are spent or an input from account
+        // then produced outputs must be timelocked as per chain config
+        let output_check_required = inputs.iter().zip(input_utxos.iter()).find_map(
+            |(input, utxo_with_outpoint)| match input {
+                TxInput::Utxo(_) => {
+                    match utxo_with_outpoint.clone().expect("must be present").1.output() {
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => None,
+                        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+                            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
+                        }
+                    }
+                }
+                TxInput::Account(account_input) => match account_input.account() {
+                    AccountType::Delegation(_) => {
+                        Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+                    }
+                },
+            },
+        );
+
         if let Some(output_check_required) = output_check_required {
             check_outputs_timelock(
                 chain_config.as_ref(),
