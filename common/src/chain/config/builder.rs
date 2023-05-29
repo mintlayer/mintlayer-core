@@ -60,7 +60,7 @@ impl ChainType {
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
             ChainType::Testnet => {
-                let pos_config = crate::chain::create_unittest_pos_config();
+                let pos_config = crate::chain::create_testnet_pos_config();
                 let upgrades = vec![
                     (
                         BlockHeight::new(0),

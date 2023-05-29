@@ -33,6 +33,8 @@ pub use config::ChainConfig;
 pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use mlt::Mlt;
-pub use pos::{create_unittest_pos_config, DelegationId, PoSChainConfig, PoolId};
+pub use pos::{
+    create_testnet_pos_config, create_unittest_pos_config, DelegationId, PoSChainConfig, PoolId,
+};
 pub use pow::PoWChainConfig;
 pub use upgrades::*;
