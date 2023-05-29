@@ -64,7 +64,6 @@ impl BanScore for BlockError {
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
             BlockError::SpendStakeError(_) => 100,
             BlockError::PoolDataNotFound(_) => 0,
-            BlockError::BlockProofCalculationTimeOrderError(_, _, _) => 100,
         }
     }
 }
@@ -354,6 +353,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::FailedReadingBlock(_) => 0,
             ConsensusPoSError::FutureTimestampInThePast => 0,
             ConsensusPoSError::FailedToSignKernel => 0,
+            ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(_) => 100,
         }
     }
 }

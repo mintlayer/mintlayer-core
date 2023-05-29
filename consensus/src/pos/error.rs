@@ -85,4 +85,6 @@ pub enum ConsensusPoSError {
     FailedToSignBlockHeader,
     #[error("Failed to sign kernel")]
     FailedToSignKernel,
+    #[error("Proof of stake block time ordering error in block: `{0}`")]
+    PoSBlockTimeStrictOrderInvalid(Id<Block>),
 }

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::NonZeroU64;
+use std::{num::NonZeroU64, time::Duration};
 
 use super::helpers::pos::{
     calculate_new_target, create_stake_pool_data_with_all_reward_to_owner, pos_mine,
@@ -93,6 +93,8 @@ fn add_block_with_stake_pool(
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
+    tf.progress_time_seconds_since_epoch(1);
+
     (
         OutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
         pool_id,
@@ -140,6 +142,8 @@ fn add_block_with_2_stake_pools(
         .with_transactions(vec![tx1, tx2])
         .build_and_process()
         .unwrap();
+
+    tf.progress_time_seconds_since_epoch(1);
 
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
 }
@@ -277,6 +281,47 @@ fn produce_kernel_signature(
         0,
     )
     .unwrap()
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_enforce_strict_time_ordering(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (mut tf, _stake_pool_outpoint, pool_id, _staking_sk) =
+        setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let block_timestamp = tf.chainstate.get_chain_config().genesis_block().timestamp();
+
+    // skip kernel inputs
+    {
+        // We don't need to "mine" (search for timestamp that leads to hash <= target) because timestamp is checked first
+        let transcript = construct_transcript(1, &initial_randomness, block_timestamp);
+        let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
+        let pos_data = PoSData::new(vec![], vec![], pool_id, vrf_data, current_difficulty);
+
+        let block = tf
+            .make_block_builder()
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+            .with_timestamp(block_timestamp)
+            .build();
+        let block_id = block.get_id();
+
+        let res = tf.process_block(block, BlockSource::Local).unwrap_err();
+
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
+                CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoSError(
+                    ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(block_id)
+                ))
+            ))
+        );
+    }
 }
 
 // Create a chain genesis <- block_1 <- block_2
@@ -534,7 +579,7 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
         invalid_kernel_input,
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -793,6 +838,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let res = tf
         .make_block_builder()
         .with_block_signing_key(staking_sk.clone())
+        .with_timestamp(block_timestamp)
         .with_consensus_data(ConsensusData::PoS(Box::new(invalid_pos_data)))
         .build_and_process()
         .unwrap_err();

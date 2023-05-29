@@ -64,8 +64,6 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
-    #[error("Block proof calculation error due to time ordering for block: {0}; this is most likely a bug ({1} -> {2})")]
-    BlockProofCalculationTimeOrderError(Id<Block>, BlockTimestamp, BlockTimestamp),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
     #[error("Changing tx index state is not implemented for existing DB")]
