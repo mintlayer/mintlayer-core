@@ -64,7 +64,6 @@ impl BanScore for BlockError {
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
             BlockError::SpendStakeError(_) => 100,
             BlockError::PoolDataNotFound(_) => 0,
-            BlockError::BlockProofCalculationTimeOrderError(_, _, _) => 100,
         }
     }
 }

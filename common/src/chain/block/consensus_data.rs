@@ -24,6 +24,8 @@ use crypto::vrf::VRFReturn;
 
 use serialization::{Decode, Encode};
 
+use super::timestamp::BlockTimestamp;
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum ConsensusData {
     #[codec(index = 0)]
@@ -38,11 +40,19 @@ impl ConsensusData {
     /// Block proof is the amount of trust a block adds to the blockchain. It basically quantifies the
     /// amount of work/trust that was put into the block based on criteria that depend on the consensus
     /// algorithm.
-    pub fn get_block_proof(&self, timestamp_diff: u64) -> Option<Uint256> {
+    pub fn get_block_proof(
+        &self,
+        prev_block_timestamp: BlockTimestamp,
+        this_block_timestamp: BlockTimestamp,
+    ) -> Option<Uint256> {
         match self {
             ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
             ConsensusData::PoS(_) => {
+                let timestamp_diff = this_block_timestamp
+                    .as_int_seconds()
+                    .checked_sub(prev_block_timestamp.as_int_seconds())?;
+
                 let block_proof = chaintrust::asymptote::calculate_block_proof(timestamp_diff);
                 Some(block_proof)
             }

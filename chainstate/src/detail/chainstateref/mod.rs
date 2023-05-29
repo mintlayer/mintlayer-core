@@ -393,26 +393,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .log_err()?;
 
         let prev_block_id = header.prev_block_id();
+
+        // This enforces the minimum accepted timestamp for the block. Depending on the consensus algorithm,
+        // there might be extra checks. For example, PoS requires the timestamp to be greater the previous
+        // block's timestamp.
         let median_time_past = calculate_median_time_past(self, prev_block_id);
         ensure!(
             header.timestamp() >= median_time_past,
             CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
-        );
-
-        let prev_block_timestamp = self
-            .get_gen_block_index(prev_block_id)
-            .map_err(|e| {
-                CheckBlockError::PrevBlockRetrievalError(e, *prev_block_id, header.block_id())
-            })?
-            .ok_or(CheckBlockError::PrevBlockNotFound(
-                *prev_block_id,
-                header.block_id(),
-            ))?
-            .block_timestamp();
-
-        ensure!(
-            header.timestamp() >= prev_block_timestamp,
-            CheckBlockError::BlockTimeStrictOrderInvalid
         );
 
         let max_future_offset = self.chain_config.max_future_block_time_offset();
@@ -670,20 +658,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         prev_block_timestamp: BlockTimestamp,
         block: &Block,
     ) -> Result<Uint256, BlockError> {
-        let timestamp_diff = block
-            .timestamp()
-            .as_int_seconds()
-            .checked_sub(prev_block_timestamp.as_int_seconds())
-            .ok_or(BlockError::BlockProofCalculationTimeOrderError(
-                block.get_id(),
-                prev_block_timestamp,
-                block.timestamp(),
-            ))?;
-
         block
             .header()
             .consensus_data()
-            .get_block_proof(timestamp_diff)
+            .get_block_proof(prev_block_timestamp, block.timestamp())
             .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
