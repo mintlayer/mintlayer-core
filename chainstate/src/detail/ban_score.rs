@@ -138,6 +138,8 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
             ConnectTransactionError::NonceIsNotIncremental(_) => 100,
+            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
+            ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
         }
     }
 }

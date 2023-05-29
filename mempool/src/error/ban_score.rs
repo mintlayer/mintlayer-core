@@ -147,6 +147,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
+            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
+            ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
 
             // Should not happen when processing standalone transactions

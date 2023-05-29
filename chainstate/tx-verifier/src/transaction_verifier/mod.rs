@@ -384,12 +384,6 @@ where
         tx_source: TransactionSource,
         tx: &Transaction,
     ) -> Result<(), ConnectTransactionError> {
-        let input_utxo_outpoint = tx
-            .inputs()
-            .iter()
-            .find_map(|input| input.outpoint())
-            .ok_or(ConnectTransactionError::MissingTxInputs)?;
-
         // TODO: this should also collect all the delegations after the pool decommissioning;
         // see mintlayer/mintlayer-core/issues/909
         let mut check_for_delegation_cleanup: Option<DelegationId> = None;
@@ -439,13 +433,15 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Process tx outputs in terms of pos accounting.
+        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.outpoint());
         let outputs_undos = tx
             .outputs()
             .iter()
             .filter_map(|output| match output {
-                TxOutput::CreateStakePool(pool_id, data) => {
-                    let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
-                    let res = if expected_pool_id == *pool_id {
+                TxOutput::CreateStakePool(pool_id, data) => match input_utxo_outpoint {
+                    Some(input_utxo_outpoint) => {
+                        let expected_pool_id = pos_accounting::make_pool_id(input_utxo_outpoint);
+                        let res = if expected_pool_id == *pool_id {
                         if data.value() >= self.chain_config.as_ref().min_stake_pool_pledge() {
                             self.accounting_delta_adapter
                                 .operations(tx_source)
@@ -458,25 +454,36 @@ where
                                 self.chain_config.as_ref().min_stake_pool_pledge(),
                             ))
                         }
-                    } else {
-                        Err(ConnectTransactionError::SpendStakeError(
-                            SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
-                        ))
-                    };
-                    Some(res)
-                }
+                        } else {
+                            Err(ConnectTransactionError::SpendStakeError(
+                                SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
+                            ))
+                        };
+                        Some(res)
+                    }
+                    None => Some(Err(
+                        ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
+                    )),
+                },
                 TxOutput::CreateDelegationId(spend_destination, target_pool) => {
-                    let res = self
-                        .accounting_delta_adapter
-                        .operations(tx_source)
-                        .create_delegation_id(
-                            *target_pool,
-                            spend_destination.clone(),
-                            input_utxo_outpoint,
-                        )
-                        .map(|(_, undo)| undo)
-                        .map_err(ConnectTransactionError::PoSAccountingError);
-                    Some(res)
+                    match input_utxo_outpoint {
+                        Some(input_utxo_outpoint) => {
+                            let res = self
+                                .accounting_delta_adapter
+                                .operations(tx_source)
+                                .create_delegation_id(
+                                    *target_pool,
+                                    spend_destination.clone(),
+                                    input_utxo_outpoint,
+                                )
+                                .map(|(_, undo)| undo)
+                                .map_err(ConnectTransactionError::PoSAccountingError);
+                            Some(res)
+                        }
+                        None => Some(Err(
+                            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts,
+                        )),
+                    }
                 }
                 TxOutput::DelegateStaking(amount, delegation_id) => {
                     let res = self

@@ -151,6 +151,10 @@ pub enum ConnectTransactionError {
         "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]
     NotEnoughPledgeToCreateStakePool(Id<Transaction>, Amount, Amount),
+    #[error("Attemp to create stake pool from accounting inputs")]
+    AttemptToCreateStakePoolFromAccounts,
+    #[error("Attemp to create delegation from accounting inputs")]
+    AttemptToCreateDelegationFromAccounts,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

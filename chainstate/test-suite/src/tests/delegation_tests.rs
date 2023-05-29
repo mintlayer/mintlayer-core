@@ -20,11 +20,11 @@ use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
 };
-use common::chain::{DelegationId, PoolId};
+use common::chain::{AccountInput, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
         timelock::OutputTimeLock, tokens::OutputValue, Destination, OutPoint, OutPointSourceId,
-        TxOutput,
+        TxInput, TxOutput,
     },
     primitives::{Amount, Idable, H256},
 };
@@ -316,8 +316,6 @@ fn delegate_staking(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        let delegate_staking_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -332,8 +330,14 @@ fn delegate_staking(#[case] seed: Seed) {
         let spend_change = (amount_to_delegate - (amount_to_spend * 2).unwrap()).unwrap();
 
         let tx = TransactionBuilder::new()
-            .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DelegateStaking(spend_change, delegation_id))
+            .add_input(
+                TxInput::Account(AccountInput::new(
+                    0,
+                    AccountType::Delegation(delegation_id),
+                    (amount_to_spend * 2).unwrap(),
+                )),
+                empty_witness(&mut rng),
+            )
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount_to_spend),
                 Destination::AnyoneCanSpend,
@@ -346,8 +350,6 @@ fn delegate_staking(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegate_staking_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -357,9 +359,44 @@ fn delegate_staking(#[case] seed: Seed) {
         .unwrap();
         assert_eq!(Some(spend_change), delegation_balance);
 
+        {
+            // try spend delegation without increasing nonce
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::Account(AccountInput::new(
+                        0,
+                        AccountType::Delegation(delegation_id),
+                        spend_change,
+                    )),
+                    empty_witness(&mut rng),
+                )
+                .add_output(TxOutput::LockThenTransfer(
+                    OutputValue::Coin(spend_change),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(1),
+                ))
+                .build();
+
+            assert_eq!(
+                tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::NonceIsNotIncremental(AccountType::Delegation(
+                        delegation_id
+                    ))
+                ))
+            )
+        }
+
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
-            .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
+            .add_input(
+                TxInput::Account(AccountInput::new(
+                    1,
+                    AccountType::Delegation(delegation_id),
+                    spend_change,
+                )),
+                empty_witness(&mut rng),
+            )
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(spend_change),
                 Destination::AnyoneCanSpend,
@@ -412,8 +449,6 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
             .build();
 
-        let delegate_staking_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -456,8 +491,14 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         let spend_change = (amount_to_delegate - (amount_to_spend * 2).unwrap()).unwrap();
 
         let tx = TransactionBuilder::new()
-            .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
-            .add_output(TxOutput::DelegateStaking(spend_change, delegation_id))
+            .add_input(
+                TxInput::Account(AccountInput::new(
+                    0,
+                    AccountType::Delegation(delegation_id),
+                    (amount_to_spend * 2).unwrap(),
+                )),
+                empty_witness(&mut rng),
+            )
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(amount_to_spend),
                 Destination::AnyoneCanSpend,
@@ -470,8 +511,6 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
             ))
             .build();
 
-        let delegate_staking_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
@@ -483,7 +522,14 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
 
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
-            .add_input(delegate_staking_outpoint.into(), empty_witness(&mut rng))
+            .add_input(
+                TxInput::Account(AccountInput::new(
+                    1,
+                    AccountType::Delegation(delegation_id),
+                    spend_change,
+                )),
+                empty_witness(&mut rng),
+            )
             .add_output(TxOutput::LockThenTransfer(
                 OutputValue::Coin(spend_change),
                 Destination::AnyoneCanSpend,
@@ -600,3 +646,5 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
         assert!(delegation_data.is_none());
     });
 }
+
+// FIXME: add tests that spends delegation with reward
