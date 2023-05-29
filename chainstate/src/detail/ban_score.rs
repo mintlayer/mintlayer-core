@@ -354,6 +354,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::FailedReadingBlock(_) => 0,
             ConsensusPoSError::FutureTimestampInThePast => 0,
             ConsensusPoSError::FailedToSignKernel => 0,
+            ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(_) => 100,
         }
     }
 }

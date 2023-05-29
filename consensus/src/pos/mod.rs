@@ -22,7 +22,7 @@ pub mod target;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
-    BlockIndexHandle,
+    BlockIndexHandle, GenBlockIndex,
 };
 use common::{
     chain::{
@@ -117,6 +117,21 @@ fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
     Ok(random_seed)
 }
 
+/// Proof of stake cannot have timestamp equal to previous block, since stake hash would be the same
+pub fn enforce_timestamp_ordering(
+    prev_block_index: &GenBlockIndex,
+    header: &SignedBlockHeader,
+) -> Result<(), ConsensusPoSError> {
+    let prev_block_timestamp = prev_block_index.block_timestamp();
+
+    ensure!(
+        header.timestamp() > prev_block_timestamp,
+        ConsensusPoSError::PoSBlockTimeStrictOrderInvalid(header.get_id())
+    );
+
+    Ok(())
+}
+
 pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
@@ -146,6 +161,8 @@ where
     let prev_block_index = block_index_handle
         .get_gen_block_index(header.prev_block_id())?
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+
+    enforce_timestamp_ordering(&prev_block_index, header)?;
 
     let current_height = prev_block_index.block_height().next_height();
     let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
