@@ -265,10 +265,11 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
+        let db_tx = self.db.transaction_ro()?;
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
-            .get_vrf_public_key()
+            .get_vrf_public_key(&db_tx)
     }
 
     pub fn create_transaction_to_addresses(

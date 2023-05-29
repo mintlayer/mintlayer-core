@@ -16,12 +16,10 @@
 use std::collections::BTreeMap;
 
 use common::address::Address;
-use crypto::{
-    kdf::KdfChallenge, key::extended::ExtendedPublicKey, random::make_true_rng,
-    symkey::SymmetricKey,
-};
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
+use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
     KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
@@ -59,30 +57,32 @@ mod well_known {
     declare_entry!(EncryptionKeyKdfChallenge: KdfChallenge);
 }
 
+#[derive(PartialEq, Clone)]
+pub enum EncryptionState {
+    Locked,
+    Unlocked(Option<SymmetricKey>),
+}
+
 /// Read-only chainstate storage transaction
 pub struct StoreTxRo<'st, B: storage::Backend> {
     pub(super) storage: storage::TransactionRo<'st, B, Schema>,
-    encryption_key: &'st Option<SymmetricKey>,
-    locked: bool,
+    encryption_state: &'st EncryptionState,
 }
 
 /// Read-write chainstate storage transaction
 pub struct StoreTxRw<'st, B: storage::Backend> {
     pub(super) storage: storage::TransactionRw<'st, B, Schema>,
-    encryption_key: &'st Option<SymmetricKey>,
-    locked: bool,
+    encryption_state: &'st EncryptionState,
 }
 
 impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
     pub fn new(
         storage: storage::TransactionRo<'st, B, Schema>,
-        encryption_key: &'st Option<SymmetricKey>,
-        locked: bool,
+        encryption_state: &'st EncryptionState,
     ) -> Self {
         Self {
             storage,
-            encryption_key,
-            locked,
+            encryption_state,
         }
     }
 }
@@ -90,13 +90,11 @@ impl<'st, B: storage::Backend> StoreTxRo<'st, B> {
 impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     pub fn new(
         storage: storage::TransactionRw<'st, B, Schema>,
-        encryption_key: &'st Option<SymmetricKey>,
-        locked: bool,
+        encryption_state: &'st EncryptionState,
     ) -> Self {
         Self {
             storage,
-            encryption_key,
-            locked,
+            encryption_state,
         }
     }
 }
@@ -137,44 +135,30 @@ macro_rules! impl_read_ops {
             }
 
             fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
-                utils::ensure!(!self.locked, crate::Error::WalletLocked());
-                Ok(self
-                    .read::<db::DBRootKeys, _, _>(id)?
-                    .map(|v| match self.encryption_key.as_ref() {
-                        Some(key) => {
-                            (key.decrypt(v.as_slice(), None)
-                                .expect("key has been checked in unlock_private_keys"))
-                        }
-                        None => (v),
-                    })
-                    .map(|v| RootKeyContent::decode_all(&mut v.as_slice()).expect("valid decode")))
+                match self.encryption_state {
+                    EncryptionState::Locked => Err(crate::Error::WalletLocked()),
+                    EncryptionState::Unlocked(key) => Ok(self
+                        .read::<db::DBRootKeys, _, _>(id)?
+                        .map(|v| v.try_take(key).expect("key was checked when unlocked"))),
+                }
             }
 
             /// Collect and return all keys from the storage
             fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
-                utils::ensure!(!self.locked, crate::Error::WalletLocked());
-                self.storage
-                    .get::<db::DBRootKeys, _>()
-                    .prefix_iter_decoded(&())
-                    .map_err(crate::Error::from)
-                    .map(|item| {
-                        item.map(|(k, v)| match self.encryption_key.as_ref() {
-                            Some(key) => (
-                                k,
-                                key.decrypt(v.as_slice(), None)
-                                    .expect("key has been checked in unlock_private_keys"),
-                            ),
-                            None => (k, v),
+                match self.encryption_state {
+                    EncryptionState::Locked => Err(crate::Error::WalletLocked()),
+                    EncryptionState::Unlocked(key) => self
+                        .storage
+                        .get::<db::DBRootKeys, _>()
+                        .prefix_iter_decoded(&())
+                        .map_err(crate::Error::from)
+                        .map(|item| {
+                            item.map(|(k, v)| {
+                                (k, v.try_take(key).expect("key was checked when unlocked"))
+                            })
                         })
-                        .map(|(k, v)| {
-                            (
-                                k,
-                                RootKeyContent::decode_all(&mut v.as_slice())
-                                    .expect("valid decode"),
-                            )
-                        })
-                    })
-                    .map(Iterator::collect)
+                        .map(Iterator::collect),
+                }
             }
 
             fn exactly_one_root_key(&self) -> crate::Result<bool> {
@@ -197,12 +181,10 @@ macro_rules! impl_read_ops {
                     .map_err(crate::Error::from)
                     .map(|mut item| {
                         item.try_for_each(|(_, v)| {
-                            let decrypted_value = encryption_key
-                                .decrypt(v.as_slice(), None)
+                            let _decrypted_value = v
+                                .try_take_decrypt(encryption_key)
                                 .map_err(|_| crate::Error::WalletInvalidPassword())?;
 
-                            RootKeyContent::decode_all(&mut decrypted_value.as_slice())
-                                .map_err(|_| crate::Error::WalletInvalidPassword())?;
                             Ok(())
                         })
                     })?
@@ -319,18 +301,20 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     }
 
     fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
-        utils::ensure!(!self.locked, crate::Error::WalletLocked());
-        let encoded_value = match self.encryption_key.as_ref() {
-            Some(key) => key
-                .encrypt(tx.encode().as_slice(), &mut make_true_rng(), None)
-                .expect("should not fail"),
-            None => tx.encode(),
+        let value = match self.encryption_state {
+            EncryptionState::Locked => return Err(crate::Error::WalletLocked()),
+            EncryptionState::Unlocked(key) => MaybeEncrypted::new(tx, key),
         };
-        self.write::<db::DBRootKeys, _, _, _>(id, encoded_value)
+
+        self.write::<db::DBRootKeys, _, _, _>(id, value)
     }
 
     fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
-        utils::ensure!(!self.locked, crate::Error::WalletLocked());
+        utils::ensure!(
+            *self.encryption_state != EncryptionState::Locked,
+            crate::Error::WalletLocked()
+        );
+
         self.storage.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
     }
 
@@ -338,35 +322,18 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         &mut self,
         new_encryption_key: &Option<SymmetricKey>,
     ) -> crate::Result<()> {
-        utils::ensure!(!self.locked, crate::Error::WalletLocked());
-
-        let changed_root_keys: Vec<_> = self
-            .storage
-            .get::<db::DBRootKeys, _>()
-            .prefix_iter_decoded(&())
-            .map_err(crate::Error::from)
-            .map(|item| {
-                item.map(|(k, v)| match self.encryption_key.as_ref() {
-                    Some(key) => (
-                        k,
-                        key.decrypt(v.as_slice(), None)
-                            .expect("key has been checked in unlock_private_keys"),
-                    ),
-                    None => (k, v),
-                })
+        let changed_root_keys: Vec<_> = match self.encryption_state {
+            EncryptionState::Locked => return Err(crate::Error::WalletLocked()),
+            EncryptionState::Unlocked(key) => self
+                .storage
+                .get::<db::DBRootKeys, _>()
+                .prefix_iter_decoded(&())?
                 .map(|(k, v)| {
-                    (
-                        k,
-                        match new_encryption_key.as_ref() {
-                            Some(key) => key
-                                .encrypt(v.as_slice(), &mut make_true_rng(), None)
-                                .expect("should not fail"),
-                            None => v,
-                        },
-                    )
+                    let decrypted = v.try_take(key).expect("key was checked when unlocked");
+                    (k, MaybeEncrypted::new(&decrypted, new_encryption_key))
                 })
-            })?
-            .collect();
+                .collect(),
+        };
 
         changed_root_keys
             .into_iter()

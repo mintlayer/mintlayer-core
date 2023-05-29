@@ -168,8 +168,8 @@ impl Account {
         Ok(vrf_from_private_key(&private_key))
     }
 
-    pub fn get_vrf_public_key(&self) -> WalletResult<VRFPublicKey> {
-        let vrf_keys = self.get_vrf_key()?;
+    pub fn get_vrf_public_key(&self, db_tx: &impl WalletStorageRead) -> WalletResult<VRFPublicKey> {
+        let vrf_keys = self.get_vrf_key(db_tx)?;
         Ok(vrf_keys.1)
     }
 

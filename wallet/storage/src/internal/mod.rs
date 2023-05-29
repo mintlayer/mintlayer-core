@@ -38,6 +38,8 @@ use wallet_types::{
     AccountWalletTxId, KeychainUsageState, RootKeyContent, RootKeyId,
 };
 
+use self::store_tx::EncryptionState;
+
 fn challenge_to_sym_key(
     password: &String,
     kdf_challenge: KdfChallenge,
@@ -84,8 +86,7 @@ fn password_to_sym_key(password: &String) -> crate::Result<(SymmetricKey, KdfCha
 /// Store for wallet data, parametrized over the backend B
 pub struct Store<B: storage::Backend> {
     storage: storage::Storage<B, Schema>,
-    locked: bool,
-    encryption_key: Option<SymmetricKey>,
+    encryption_state: EncryptionState,
 }
 
 impl<B: storage::Backend> Store<B> {
@@ -96,12 +97,12 @@ impl<B: storage::Backend> Store<B> {
 
         let mut storage = Self {
             storage,
-            locked: true,
-            encryption_key: None,
+            encryption_state: EncryptionState::Locked,
         };
+
         let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
         if challenge.is_none() {
-            storage.locked = false;
+            storage.encryption_state = EncryptionState::Unlocked(None);
         }
 
         Ok(storage)
@@ -110,7 +111,10 @@ impl<B: storage::Backend> Store<B> {
     /// Encrypts the root keys in the DB with the provided new_password
     /// expects that the wallet is already unlocked
     pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
-        ensure!(!self.locked, crate::Error::WalletLocked());
+        ensure!(
+            self.encryption_state != EncryptionState::Locked,
+            crate::Error::WalletLocked()
+        );
 
         let mut tx = self.transaction_rw(None).map_err(crate::Error::from)?;
         let sym_key = match new_password {
@@ -124,13 +128,16 @@ impl<B: storage::Backend> Store<B> {
         tx.encrypt_root_keys(&sym_key)?;
         tx.commit()?;
 
-        self.encryption_key = sym_key;
+        self.encryption_state = EncryptionState::Unlocked(sym_key);
 
         Ok(())
     }
 
+    /// Checks if the provided password can decrypt all of the stored private keys,
+    /// stores the new encryption_key and updates the state to Unlocked
+    /// Otherwise returns WalletInvalidPassword
     pub fn unlock_private_keys(&mut self, password: &Option<String>) -> crate::Result<()> {
-        if !self.locked {
+        if self.encryption_state != EncryptionState::Locked {
             return Ok(());
         }
 
@@ -140,26 +147,24 @@ impl<B: storage::Backend> Store<B> {
             (Some(kdf_challenge), Some(pass)) => {
                 let sym_key = challenge_to_sym_key(pass, kdf_challenge)?;
                 self.transaction_ro()?.check_can_decrypt_all_root_keys(&sym_key)?;
-                self.encryption_key = Some(sym_key);
+                self.encryption_state = EncryptionState::Unlocked(Some(sym_key));
             }
             (None, None) => {
                 // will get zeroized on Drop
-                self.encryption_key = None;
+                self.encryption_state = EncryptionState::Unlocked(None);
             }
             // mismatch, user provided password but there is non in DB or reverse
             (Some(_), None) => return Err(crate::Error::WalletInvalidPassword()),
             (None, Some(_)) => return Err(crate::Error::WalletInvalidPassword()),
         }
 
-        self.locked = false;
-
         Ok(())
     }
 
+    /// Drops the encryption_key and sets the state to Locked
     pub fn lock_private_keys(&mut self) {
         // will get zeroized on Drop
-        self.encryption_key = None;
-        self.locked = true;
+        self.encryption_state = EncryptionState::Locked;
     }
 
     /// Dump raw database contents
@@ -175,8 +180,7 @@ where
     fn clone(&self) -> Self {
         Self {
             storage: self.storage.clone(),
-            locked: self.locked,
-            encryption_key: self.encryption_key.clone(),
+            encryption_state: self.encryption_state.clone(),
         }
     }
 }
@@ -189,7 +193,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         self.storage
             .transaction_ro()
             .map_err(crate::Error::from)
-            .map(|tx| StoreTxRo::new(tx, &self.encryption_key, self.locked))
+            .map(|tx| StoreTxRo::new(tx, &self.encryption_state))
     }
 
     fn transaction_rw<'st: 'tx>(
@@ -199,7 +203,7 @@ impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
         self.storage
             .transaction_rw(size)
             .map_err(crate::Error::from)
-            .map(|tx| StoreTxRw::new(tx, &self.encryption_key, self.locked))
+            .map(|tx| StoreTxRw::new(tx, &self.encryption_state))
     }
 }
 
