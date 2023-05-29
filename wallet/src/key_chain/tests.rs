@@ -149,6 +149,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
     db_tx.commit().unwrap();
 
     let account_info = AccountInfo::new(
+        &chain_config,
         key_chain.account_index(),
         key_chain.account_public_key().clone(),
         key_chain.lookahead_size(),
@@ -212,6 +213,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     db_tx.commit().unwrap();
 
     let account_info = AccountInfo::new(
+        &chain_config,
         key_chain.account_index(),
         key_chain.account_public_key().clone(),
         key_chain.lookahead_size(),

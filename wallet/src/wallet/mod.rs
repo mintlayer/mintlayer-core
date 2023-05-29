@@ -90,8 +90,6 @@ pub struct Wallet<B: storage::Backend> {
     db: Arc<Store<B>>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
-    best_block_height: BlockHeight,
-    best_block_id: Id<GenBlock>,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(
@@ -126,16 +124,11 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        let best_block_id = chain_config.genesis_block_id();
-        let best_block_height = BlockHeight::zero();
-
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts: BTreeMap::new(),
-            best_block_id,
-            best_block_height,
         })
     }
 
@@ -170,17 +163,11 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
-        // TODO: Load best_block_id and best_block_height from DB
-        let best_block_id = chain_config.genesis_block_id();
-        let best_block_height = BlockHeight::zero();
-
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
-            best_block_id,
-            best_block_height,
         })
     }
 
@@ -309,7 +296,9 @@ impl<B: storage::Backend> Wallet<B> {
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        Ok((self.best_block_id, self.best_block_height))
+        // TODO: Scan all accounts
+        let account = self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
+        Ok(account.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.
@@ -322,28 +311,13 @@ impl<B: storage::Backend> Wallet<B> {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
-        assert!(
-            common_block_height <= self.best_block_height,
-            "Invalid common block height: {}, current block height: {}",
-            common_block_height,
-            self.best_block_height,
-        );
-        assert!(!blocks.is_empty());
-
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            if self.best_block_height > common_block_height {
-                account.reset_to_height(&mut db_tx, common_block_height)?;
-            }
             account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
         }
 
         db_tx.commit()?;
-
-        // Update best_block_height and best_block_id only after successful commit call!
-        self.best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
-        self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
 
         Ok(())
     }

@@ -25,10 +25,11 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, OutPoint, SignedTransaction, Transaction, TxInput, TxOutput,
+    Block, ChainConfig, Destination, GenBlock, OutPoint, SignedTransaction, Transaction, TxInput,
+    TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
-use common::primitives::{Amount, BlockHeight, Idable};
+use common::primitives::{Amount, BlockHeight, Id, Idable};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
@@ -49,7 +50,7 @@ pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txo_cache: TxoCache,
-    _account_info: AccountInfo,
+    account_info: AccountInfo,
 }
 
 impl Account {
@@ -79,7 +80,7 @@ impl Account {
             chain_config,
             key_chain,
             txo_cache,
-            _account_info: account_info,
+            account_info,
         })
     }
 
@@ -92,6 +93,7 @@ impl Account {
         let account_id = key_chain.get_account_id();
 
         let account_info = AccountInfo::new(
+            &chain_config,
             key_chain.account_index(),
             key_chain.account_public_key().clone(),
             key_chain.lookahead_size(),
@@ -105,7 +107,7 @@ impl Account {
             chain_config,
             key_chain,
             txo_cache,
-            _account_info: account_info,
+            account_info,
         };
 
         account.scan_genesis(db_tx)?;
@@ -452,7 +454,7 @@ impl Account {
         all_outputs
     }
 
-    pub fn reset_to_height<B: storage::Backend>(
+    fn reset_to_height<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         common_block_height: BlockHeight,
@@ -551,6 +553,18 @@ impl Account {
         common_block_height: BlockHeight,
         blocks: &[Block],
     ) -> WalletResult<()> {
+        assert!(!blocks.is_empty());
+        assert!(
+            common_block_height <= self.account_info.best_block_height(),
+            "Invalid common block height: {}, current block height: {}",
+            common_block_height,
+            self.account_info.best_block_height(),
+        );
+
+        if self.account_info.best_block_height() > common_block_height {
+            self.reset_to_height(db_tx, common_block_height)?;
+        }
+
         for (index, block) in blocks.iter().enumerate() {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let tx_state = TxState::Confirmed(block_height);
@@ -563,7 +577,21 @@ impl Account {
             }
         }
 
+        // Update best_block_height and best_block_id only after successful commit call!
+        let best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
+        let best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
+
+        self.account_info.update_best_block(best_block_height, best_block_id);
+        db_tx.set_account(&self.key_chain.get_account_id(), &self.account_info)?;
+
         Ok(())
+    }
+
+    pub fn best_block(&self) -> (Id<GenBlock>, BlockHeight) {
+        (
+            self.account_info.best_block_id(),
+            self.account_info.best_block_height(),
+        )
     }
 }
 
