@@ -20,7 +20,7 @@ use super::{
         storage::TransactionVerifierStorageError,
     },
 };
-use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
+use chainstate_types::{pos_randomness::PoSRandomnessError, GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
@@ -86,6 +86,8 @@ pub enum BlockError {
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
+    #[error("Blockchain storage error: {0}")]
+    PropertyQueryError(#[from] PropertyQueryError),
     #[error("Block merkle root calculation failed for block {0} with error: {1}")]
     MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
     #[error("Block has an invalid merkle root")]
@@ -112,6 +114,12 @@ pub enum CheckBlockError {
     InvalidBlockRewardOutputType(Id<Block>),
     #[error("Block reward maturity error: {0}")]
     BlockRewardMaturityError(#[from] tx_verifier::timelock_check::OutputMaturityError),
+    #[error("Checkpoint mismatch: expected {0} vs given {1}")]
+    CheckpointMismatch(Id<Block>, Id<Block>),
+    #[error("Parent checkpoint mismatch at height {0}: expected {1} vs given {2}")]
+    ParentCheckpointMismatch(BlockHeight, Id<GenBlock>, Id<GenBlock>),
+    #[error("CRITICAL: Failed to retrieve ancestor of submitted block: {0}")]
+    GetAncestorError(#[from] GetAncestorError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
