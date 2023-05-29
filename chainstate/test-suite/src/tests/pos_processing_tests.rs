@@ -93,6 +93,8 @@ fn add_block_with_stake_pool(
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
+    tf.progress_time_seconds_since_epoch(1);
+
     (
         OutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
         pool_id,
@@ -140,6 +142,8 @@ fn add_block_with_2_stake_pools(
         .with_transactions(vec![tx1, tx2])
         .build_and_process()
         .unwrap();
+
+    tf.progress_time_seconds_since_epoch(1);
 
     (stake_outpoint1, pool_id1, outpoint2, pool_id2)
 }
@@ -354,7 +358,7 @@ fn pos_basic(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -443,7 +447,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint.clone(),
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -509,7 +513,7 @@ fn pos_block_signature(#[case] seed: Seed) {
     );
 
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -630,8 +634,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     ));
 
     let valid_prev_randomness = tf.chainstate.get_chain_config().initial_randomness();
-    let valid_block_timestamp =
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1));
+    let valid_block_timestamp = BlockTimestamp::from_duration_since_epoch(tf.current_time());
     let valid_epoch: EpochIndex = 1;
     let valid_vrf_transcript =
         construct_transcript(valid_epoch, &valid_prev_randomness, valid_block_timestamp);
@@ -656,7 +659,7 @@ fn pos_invalid_vrf(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (valid_pos_data, valid_block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(2)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -811,7 +814,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (valid_pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -899,7 +902,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::NoSignature(None),
         &vrf_sk,
@@ -969,7 +972,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
@@ -1115,7 +1118,7 @@ fn mismatched_pools_in_kernel_and_reward(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::NoSignature(None),
         &vrf_sk_1,
@@ -1355,7 +1358,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
-        BlockTimestamp::from_duration_since_epoch(tf.current_time() + Duration::from_secs(1)),
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
         stake_pool_outpoint1,
         InputWitness::Standard(kernel_sig),
         &vrf_sk_1,

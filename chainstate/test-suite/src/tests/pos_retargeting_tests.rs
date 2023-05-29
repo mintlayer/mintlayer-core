@@ -109,6 +109,8 @@ fn setup_test_chain_with_staked_pool(
         .build();
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
+    tf.progress_time_seconds_since_epoch(TARGET_BLOCK_TIME.as_secs());
+
     (tf, pool_id, sk)
 }
 
