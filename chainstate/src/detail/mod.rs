@@ -47,7 +47,7 @@ use itertools::Itertools;
 use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
 };
-use chainstate_types::{BlockIndex, PropertyQueryError};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochData, PropertyQueryError};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
@@ -419,6 +419,14 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
                 .map_err(BlockError::StorageError)
                 .log_err()?;
         }
+
+        db_tx
+            .set_epoch_data(
+                BlockHeight::zero().into(),
+                &EpochData::new(PoSRandomness::new(self.chain_config.initial_randomness())),
+            )
+            .map_err(BlockError::StorageError)
+            .log_err()?;
 
         // initialize the utxo-set by adding genesis outputs to it
         UtxosDB::initialize_db(&mut db_tx, &self.chain_config);
