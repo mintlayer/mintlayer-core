@@ -237,6 +237,7 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
         fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;
         fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent >>;
+        fn exactly_one_root_key(&self) -> crate::Result<bool>;
         fn check_can_decrypt_all_root_keys(&self, encryption_key: &SymmetricKey) -> crate::Result<()>;
         fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
         fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;

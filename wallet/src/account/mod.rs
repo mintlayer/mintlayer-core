@@ -32,7 +32,6 @@ use common::chain::{
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
-use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
@@ -58,19 +57,13 @@ impl Account {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-        root_key: &ExtendedPrivateKey,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;
         let account_info =
             account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
 
-        let key_chain = AccountKeyChain::load_from_database(
-            chain_config.clone(),
-            db_tx,
-            id,
-            root_key,
-            &account_info,
-        )?;
+        let key_chain =
+            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
         let output_cache = OutputCache::new(txs);
@@ -160,14 +153,18 @@ impl Account {
 
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(request)?;
+        let tx = self.sign_transaction(request, db_tx)?;
 
         Ok(tx)
     }
 
-    fn get_vrf_key(&self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
+    fn get_vrf_key(
+        &self,
+        db_tx: &impl WalletStorageRead,
+    ) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
         let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
-        let private_key = self.key_chain.get_private_key_for_path(&vrf_key_path)?.private_key();
+        let private_key =
+            self.key_chain.get_private_key_for_path(&vrf_key_path, db_tx)?.private_key();
         Ok(vrf_from_private_key(&private_key))
     }
 
@@ -196,7 +193,7 @@ impl Account {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
         let decommission_key = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
-        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key()?;
+        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let stake_output = make_stake_output(
             pool_id,
@@ -213,7 +210,10 @@ impl Account {
         self.process_send_request(db_tx, request)
     }
 
-    pub fn get_pos_gen_block_data(&self) -> WalletResult<PoSGenerateBlockInputData> {
+    pub fn get_pos_gen_block_data<B: storage::Backend>(
+        &self,
+        db_tx: &StoreTxRo<B>,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
         let utxos = self.get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake);
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, kernel_input_utxo) =
@@ -224,7 +224,7 @@ impl Account {
             .expect("must succeed for CreateStakePool and ProduceBlockFromStake outputs");
         let stake_private_key = self
             .key_chain
-            .get_private_key_for_destination(stake_destination)?
+            .get_private_key_for_destination(stake_destination, db_tx)?
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
@@ -238,7 +238,7 @@ impl Account {
             | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
         };
 
-        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key()?;
+        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let data = PoSGenerateBlockInputData::new(
             stake_private_key,
@@ -304,7 +304,11 @@ impl Account {
     }
 
     // TODO: Use a different type to support partially signed transactions
-    fn sign_transaction(&self, req: SendRequest) -> WalletResult<SignedTransaction> {
+    fn sign_transaction(
+        &self,
+        req: SendRequest,
+        db_tx: &impl WalletStorageRead,
+    ) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
         let input_utxos = utxos.iter().collect::<Vec<_>>();
@@ -328,7 +332,7 @@ impl Account {
                 } else {
                     let private_key = self
                         .key_chain
-                        .get_private_key_for_destination(destination)?
+                        .get_private_key_for_destination(destination, db_tx)?
                         .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
                         .private_key();
 

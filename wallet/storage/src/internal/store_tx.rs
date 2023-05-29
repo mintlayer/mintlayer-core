@@ -177,6 +177,15 @@ macro_rules! impl_read_ops {
                     .map(Iterator::collect)
             }
 
+            fn exactly_one_root_key(&self) -> crate::Result<bool> {
+                self.storage
+                    .get::<db::DBRootKeys, _>()
+                    .prefix_iter_decoded(&())
+                    .map_err(crate::Error::from)
+                    .map(Iterator::count)
+                    .map(|count| count == 1)
+            }
+
             /// Check if the provided encryption_key can decrypt all of the root keys
             fn check_can_decrypt_all_root_keys(
                 &self,

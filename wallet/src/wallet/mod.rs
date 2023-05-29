@@ -142,20 +142,14 @@ impl<B: storage::Backend> Wallet<B> {
             return Err(WalletError::WalletNotInitialized);
         }
 
-        //TODO: if wallet is locked load into read only mode
-        let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
+        let key_chain = MasterKeyChain::existing_from_database(chain_config.clone(), &db_tx)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
 
         let accounts = accounts_info
             .keys()
             .map(|account_id| {
-                Account::load_from_database(
-                    Arc::clone(&chain_config),
-                    &db_tx,
-                    account_id,
-                    key_chain.root_private_key(),
-                )
+                Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -302,11 +296,12 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
+        let db_tx = self.db.transaction_ro()?;
         let account = self
             .accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        account.get_pos_gen_block_data()
+        account.get_pos_gen_block_data(&db_tx)
     }
 
     /// Returns the last scanned block hash and height.

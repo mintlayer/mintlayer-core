@@ -21,16 +21,14 @@ use crypto::key::hdkd::derivable::Derivable;
 use crypto::key::hdkd::u31::U31;
 use itertools::Itertools;
 use std::sync::Arc;
-use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
+use utils::ensure;
+use wallet_storage::{StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::{RootKeyContent, RootKeyId};
 use zeroize::Zeroize;
 
 pub struct MasterKeyChain {
     /// The specific chain this KeyChain is based on, this will affect the address format
     chain_config: Arc<ChainConfig>,
-    /// The master key of this key chain from where all the keys are derived from
-    // TODO implement encryption
-    root_key: ExtendedPrivateKey,
 }
 
 impl MasterKeyChain {
@@ -74,31 +72,31 @@ impl MasterKeyChain {
 
         db_tx.set_root_key(&key_id, &key_content)?;
 
-        let root_key = key_content.into_key();
-
-        Ok(MasterKeyChain {
-            chain_config,
-            root_key,
-        })
+        Ok(MasterKeyChain { chain_config })
     }
 
-    /// Load the Master key chain from database and all the account key chains it derives
-    pub fn load_from_database<B: storage::Backend>(
-        chain_config: Arc<ChainConfig>,
-        db_tx: &StoreTxRo<B>,
-    ) -> KeyChainResult<Self> {
-        // The current format supports a single root key
-        let root_key = db_tx
+    pub fn load_root_key(db_tx: &impl WalletStorageRead) -> KeyChainResult<ExtendedPrivateKey> {
+        let key = db_tx
             .get_all_root_keys()?
             .into_values()
             .exactly_one()
             .map_err(|_| KeyChainError::OnlyOneRootKeyIsSupported)?
             .into_key();
 
-        Ok(MasterKeyChain {
-            chain_config,
-            root_key,
-        })
+        Ok(key)
+    }
+
+    /// Creates a Master key chain, checks the database for an existing one
+    pub fn existing_from_database(
+        chain_config: Arc<ChainConfig>,
+        db_tx: &impl WalletStorageRead,
+    ) -> KeyChainResult<Self> {
+        ensure!(
+            db_tx.exactly_one_root_key()?,
+            KeyChainError::OnlyOneRootKeyIsSupported
+        );
+        // The current format supports a single root key
+        Ok(MasterKeyChain { chain_config })
     }
 
     pub fn create_account_key_chain<B: storage::Backend>(
@@ -106,17 +104,14 @@ impl MasterKeyChain {
         db_tx: &mut StoreTxRw<B>,
         account_index: U31,
     ) -> KeyChainResult<AccountKeyChain> {
+        let root_key = Self::load_root_key(db_tx)?;
         AccountKeyChain::new_from_root_key(
             self.chain_config.clone(),
             db_tx,
-            &self.root_key,
+            root_key,
             account_index,
             LOOKAHEAD_SIZE,
         )
-    }
-
-    pub fn root_private_key(&self) -> &ExtendedPrivateKey {
-        &self.root_key
     }
 }
 

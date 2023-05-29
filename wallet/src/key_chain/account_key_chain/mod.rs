@@ -26,17 +26,17 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
-use wallet_storage::{StoreTxRo, StoreTxRw};
+use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead};
 use wallet_types::keys::KeyPurpose;
-use wallet_types::{AccountId, AccountInfo, RootKeyContent};
+use wallet_types::{AccountId, AccountInfo};
+
+use super::MasterKeyChain;
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
-    account_index: U31,
+    chain_config: Arc<ChainConfig>,
 
-    /// The account private key from which the account public key is derived
-    // TODO: Do not store the private key here
-    account_private_key: ConstValue<Option<RootKeyContent>>,
+    account_index: U31,
 
     /// The account public key from which all the addresses are derived
     account_public_key: ConstValue<ExtendedPublicKey>,
@@ -52,13 +52,13 @@ impl AccountKeyChain {
     pub fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &mut StoreTxRw<B>,
-        root_key: &ExtendedPrivateKey,
+        root_key: ExtendedPrivateKey,
         account_index: U31,
         lookahead_size: u32,
     ) -> KeyChainResult<AccountKeyChain> {
         let account_path = make_account_path(&chain_config, account_index);
 
-        let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
+        let account_privkey = root_key.derive_absolute_path(&account_path)?;
 
         let account_pubkey = account_privkey.to_public_key();
 
@@ -75,7 +75,7 @@ impl AccountKeyChain {
         receiving_key_chain.save_usage_state(db_tx)?;
 
         let change_key_chain = LeafKeySoftChain::new_empty(
-            chain_config,
+            chain_config.clone(),
             account_id,
             KeyPurpose::Change,
             account_pubkey
@@ -87,8 +87,8 @@ impl AccountKeyChain {
         let sub_chains = WithPurpose::new(receiving_key_chain, change_key_chain);
 
         let mut new_account = AccountKeyChain {
+            chain_config,
             account_index,
-            account_private_key: Some(account_privkey.into()).into(),
             account_public_key: account_pubkey.into(),
             sub_chains,
             lookahead_size: lookahead_size.into(),
@@ -99,25 +99,31 @@ impl AccountKeyChain {
         Ok(new_account)
     }
 
+    fn derive_account_private_key(
+        &self,
+        db_tx: &impl WalletStorageRead,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
+        let account_path = make_account_path(&self.chain_config, self.account_index);
+
+        let root_key = MasterKeyChain::load_root_key(db_tx)?.derive_absolute_path(&account_path)?;
+        Ok(root_key)
+    }
+
     /// Load the key chain from the database
     pub fn load_from_database<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-        root_key: &ExtendedPrivateKey,
         account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {
         let pubkey_id = account_info.account_key().clone().into();
 
-        let account_path = make_account_path(&chain_config, account_info.account_index());
-
-        let account_privkey = root_key.clone().derive_absolute_path(&account_path)?;
-
-        let sub_chains = LeafKeySoftChain::load_leaf_keys(chain_config, account_info, db_tx, id)?;
+        let sub_chains =
+            LeafKeySoftChain::load_leaf_keys(chain_config.clone(), account_info, db_tx, id)?;
 
         Ok(AccountKeyChain {
+            chain_config,
             account_index: account_info.account_index(),
-            account_private_key: Some(account_privkey.into()).into(),
             account_public_key: pubkey_id,
             sub_chains,
             lookahead_size: account_info.lookahead_size().into(),
@@ -161,7 +167,7 @@ impl AccountKeyChain {
     }
 
     /// Get the private key that corresponds to the provided public key
-    pub fn get_private_key(
+    fn get_private_key(
         parent_key: &ExtendedPrivateKey,
         requested_key: &ExtendedPublicKey,
     ) -> KeyChainResult<ExtendedPrivateKey> {
@@ -174,23 +180,28 @@ impl AccountKeyChain {
         }
     }
 
+    pub fn derive_private_key(
+        &self,
+        requested_key: &ExtendedPublicKey,
+        db_tx: &impl WalletStorageRead,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
+        let xpriv = self.derive_account_private_key(db_tx)?;
+        Self::get_private_key(&xpriv, requested_key)
+    }
+
     pub fn get_private_key_for_destination(
         &self,
         destination: &Destination,
+        db_tx: &impl WalletStorageRead,
     ) -> KeyChainResult<Option<ExtendedPrivateKey>> {
-        let account_private_key = self
-            .account_private_key
-            .as_ref()
-            .as_ref()
-            .ok_or(KeyChainError::NoPrivateKeyFound)?;
-        let xpriv = account_private_key.as_key();
+        let xpriv = self.derive_account_private_key(db_tx)?;
         for purpose in KeyPurpose::ALL {
             let leaf_key = self.get_leaf_key_chain(purpose);
             if let Some(xpub) = leaf_key
                 .get_child_num_from_destination(destination)
                 .and_then(|child_num| leaf_key.get_derived_xpub(child_num))
             {
-                return Self::get_private_key(xpriv, xpub).map(Option::Some);
+                return Self::get_private_key(&xpriv, xpub).map(Option::Some);
             }
         }
         Ok(None)
@@ -199,14 +210,10 @@ impl AccountKeyChain {
     pub fn get_private_key_for_path(
         &self,
         path: &DerivationPath,
+        db_tx: &impl WalletStorageRead,
     ) -> KeyChainResult<ExtendedPrivateKey> {
-        let account_private_key = self
-            .account_private_key
-            .as_ref()
-            .as_ref()
-            .ok_or(KeyChainError::NoPrivateKeyFound)?;
-        let xpriv = account_private_key.as_key();
-        xpriv.clone().derive_absolute_path(path).map_err(KeyChainError::Derivation)
+        let xpriv = self.derive_account_private_key(db_tx)?;
+        xpriv.derive_absolute_path(path).map_err(KeyChainError::Derivation)
     }
 
     /// Get the leaf key chain for a particular key purpose

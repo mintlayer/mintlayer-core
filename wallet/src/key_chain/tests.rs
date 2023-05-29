@@ -100,7 +100,7 @@ fn key_chain_creation(
         key_chain.issue_key(&mut db_tx, purpose).unwrap()
     };
     assert_eq!(pk.get_derivation_path().to_string(), path_str.to_string());
-    let sk = AccountKeyChain::get_private_key(master_key_chain.root_private_key(), &pk).unwrap();
+    let sk = key_chain.derive_private_key(&pk, &db_tx).unwrap();
     let pk2 = ExtendedPublicKey::from_private_key(&sk);
     assert_eq!(pk2.get_derivation_path().to_string(), path_str.to_string());
     assert_eq!(pk, pk2);
@@ -161,7 +161,6 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Arc::clone(&chain_config),
         &db.transaction_ro().unwrap(),
         &id,
-        master_key_chain.root_private_key(),
         &account_info,
     )
     .unwrap();
@@ -225,7 +224,6 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         chain_config,
         &db.transaction_ro().unwrap(),
         &id,
-        master_key_chain.root_private_key(),
         &account_info,
     )
     .unwrap();

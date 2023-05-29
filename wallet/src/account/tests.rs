@@ -192,7 +192,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let req = SendRequest::from_transaction(tx, utxos.clone());
 
-    let sig_tx = account.sign_transaction(req).unwrap();
+    let sig_tx = account.sign_transaction(req, &db_tx).unwrap();
 
     let utxos_ref = utxos.iter().collect::<Vec<_>>();
 
