@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::AtomicBool;
-
 use itertools::Itertools;
 
 use crypto::{
@@ -39,9 +37,7 @@ use crate::{
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
-pub fn generate_input_utxo(
-    rng: &mut (impl Rng + CryptoRng),
-) -> (TxOutput, crypto::key::PrivateKey) {
+fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> (TxOutput, crypto::key::PrivateKey) {
     let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
     let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
@@ -52,8 +48,17 @@ pub fn generate_input_utxo(
 pub fn generate_inputs_utxos(
     rng: &mut (impl Rng + CryptoRng),
     input_count: usize,
-) -> (Vec<TxOutput>, Vec<PrivateKey>) {
-    (0..input_count).map(|_| generate_input_utxo(rng)).unzip()
+) -> (Vec<Option<TxOutput>>, Vec<Option<PrivateKey>>) {
+    (0..input_count)
+        .map(|_| {
+            if rng.gen::<bool>() {
+                let (utxo, priv_key) = generate_input_utxo(rng);
+                (Some(utxo), Some(priv_key))
+            } else {
+                (None, None)
+            }
+        })
+        .unzip()
 }
 
 // This is required because we can't access private fields of the Transaction class
@@ -86,27 +91,25 @@ impl MutableTransaction {
 }
 
 pub fn generate_unsigned_tx(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_count: usize,
+    inputs_utxos: &[Option<TxOutput>],
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
-    let inputs = std::iter::from_fn(|| {
-        if rng.gen::<bool>() {
-            Some(TxInput::new(
+    let inputs = inputs_utxos
+        .iter()
+        .map(|utxo| match utxo {
+            Some(_) => TxInput::new(
                 Id::<Transaction>::new(H256::random_using(rng)).into(),
                 rng.gen(),
-            ))
-        } else {
-            Some(TxInput::new_account(
+            ),
+            None => TxInput::new_account(
                 rng.gen(),
                 AccountType::Delegation(DelegationId::new(H256::random_using(rng))),
                 Amount::from_atoms(rng.gen()),
-            ))
-        }
-    })
-    .take(inputs_count)
-    .collect();
+            ),
+        })
+        .collect();
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::Transfer(
@@ -152,16 +155,28 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[Option<&TxOutput>],
+    inputs_utxos: &[Option<TxOutput>],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, inputs_utxos.len(), outputs).unwrap();
-    let signed_tx =
-        sign_whole_tx(tx, inputs_utxos, private_key, sighash_type, destination).unwrap();
+    let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
+    let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
+    let signed_tx = sign_whole_tx(
+        tx,
+        inputs_utxos_refs.as_slice(),
+        private_key,
+        sighash_type,
+        destination,
+    )
+    .unwrap();
     assert_eq!(
-        verify_signed_tx(chain_config, &signed_tx, inputs_utxos, destination),
+        verify_signed_tx(
+            chain_config,
+            &signed_tx,
+            inputs_utxos_refs.as_slice(),
+            destination
+        ),
         Ok(())
     );
     Ok(signed_tx)
