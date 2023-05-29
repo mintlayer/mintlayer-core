@@ -143,7 +143,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         include_orphans: bool,
     ) -> RpcResult<()> {
         // TODO: test this function in functional tests
-        let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
+        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
         let writer: std::io::BufWriter<Box<dyn Write + Send>> =
             std::io::BufWriter::new(Box::new(file_obj));
 
@@ -155,7 +155,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
         // TODO: test this function in functional tests
-        let file_obj = std::fs::File::open(file_path).map_err(rpc::Error::to_call_error)?;
+        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
         let reader: std::io::BufReader<Box<dyn Read + Send>> =
             std::io::BufReader::new(Box::new(file_obj));
 
