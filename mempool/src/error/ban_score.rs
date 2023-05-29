@@ -183,6 +183,7 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
+            ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
         }
     }

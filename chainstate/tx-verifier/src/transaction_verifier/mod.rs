@@ -347,8 +347,6 @@ where
         )
     }
 
-    // FIXME: cleanup nonces when delete delegation
-
     fn spend_input_from_account(
         &mut self,
         tx_source: TransactionSource,
@@ -359,7 +357,7 @@ where
         let current_nonce = self
             .get_account_nonce_count(account)
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?;
-        let expected_nonce = current_nonce.map(|nonce| nonce + 1).unwrap_or(0);
+        let expected_nonce = current_nonce.map_or(0, |nonce| nonce + 1);
         ensure!(
             expected_nonce == account_input.nonce(),
             ConnectTransactionError::NonceIsNotIncremental(account)
@@ -396,7 +394,7 @@ where
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => {
-                    match self.utxo_cache.utxo(&outpoint) {
+                    match self.utxo_cache.utxo(outpoint) {
                         Ok(input_utxo) => match input_utxo {
                             Some(input_utxo) => match input_utxo.output() {
                                 TxOutput::CreateStakePool(pool_id, _)
@@ -427,7 +425,7 @@ where
                     check_for_delegation_cleanup = match account_input.account() {
                         AccountType::Delegation(delegation_id) => Some(*delegation_id),
                     };
-                    Some(self.spend_input_from_account(tx_source, &account_input))
+                    Some(self.spend_input_from_account(tx_source, account_input))
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -562,7 +560,9 @@ where
                     let current_nonce = self
                         .get_account_nonce_count(*account_input.account())
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
-                        .unwrap();
+                        .ok_or(ConnectTransactionError::MissingTransactionNonce(
+                            *account_input.account(),
+                        ))?;
                     let new_nonce = if current_nonce == 0 {
                         None
                     } else {

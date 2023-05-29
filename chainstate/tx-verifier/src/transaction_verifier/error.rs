@@ -147,6 +147,8 @@ pub enum ConnectTransactionError {
     OutputTimelockError(#[from] timelock_check::OutputMaturityError),
     #[error("Nonce is not incremental: {0:?}")]
     NonceIsNotIncremental(AccountType),
+    #[error("Nonce is not found: {0:?}")]
+    MissingTransactionNonce(AccountType),
     #[error(
         "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]

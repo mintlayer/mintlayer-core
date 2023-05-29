@@ -140,6 +140,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::NonceIsNotIncremental(_) => 100,
             ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
             ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
+            ConnectTransactionError::MissingTransactionNonce(_) => 100,
         }
     }
 }
