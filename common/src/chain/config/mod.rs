@@ -464,9 +464,9 @@ fn create_testnet_genesis() -> Genesis {
     // TODO: use coin_decimals instead of a fixed value
     const COIN: Amount = Amount::from_atoms(100000000000);
 
-    let total_amount = (COIN * 100_000_000).expect("");
-    let initial_pool_amount = (COIN * 40_000).expect("");
-    let mint_output_amount = (total_amount - initial_pool_amount).expect("");
+    let total_amount = (COIN * 100_000_000).expect("must be valid");
+    let initial_pool_amount = (COIN * 40_000).expect("must be valid");
+    let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
 
     let genesis_message = String::new();
 
@@ -496,8 +496,8 @@ fn create_testnet_genesis() -> Genesis {
             Destination::PublicKey(staker_pub_key),
             vrf_pub_key,
             Destination::PublicKey(decommission_pub_key),
-            PerThousand::new(10).expect("Per thousand should be valid"),
-            (COIN * 100).expect(""),
+            PerThousand::new(10).expect("must be valid"),
+            (COIN * 100).expect("must be valid"),
         )),
     );
 

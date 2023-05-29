@@ -1634,6 +1634,9 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
+    // Required due to strict timestamp ordering in PoS
+    tf.set_time_seconds_since_epoch(tf.best_block_index().block_timestamp().as_int_seconds() + 1);
+
     let stake_pool_outpoint = OutPoint::new(tf.best_block_id().into(), 1);
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staker_sk));
     let reward_outputs =
@@ -1675,11 +1678,15 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         .with_timestamp(block_timestamp)
         .with_reward(reward_outputs)
         .build_and_process()
+        .unwrap()
         .unwrap();
 
     // -----------------------------------------
     // produce another block
     // -----------------------------------------
+    // Required due to strict timestamp ordering in PoS
+    tf.set_time_seconds_since_epoch(tf.best_block_index().block_timestamp().as_int_seconds() + 1);
+
     let block_1_reward_outpoint = OutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
