@@ -19,9 +19,9 @@ use common::{chain::Block, chain::SignedTransaction};
 use consensus::GenerateBlockInputData;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
+use subsystem::subsystem::CallError;
 
 use crate::{detail::job_manager::JobKey, BlockProductionError};
-use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
