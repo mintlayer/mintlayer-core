@@ -223,10 +223,21 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
         }
     }
 
-    pub async fn run(&mut self, wallet: &mut impl SyncingWallet) {
+    pub async fn run(&mut self, wallet: &mut impl SyncingWallet, expected: Option<BlockHeight>) {
         // This must be cancel safe!
         loop {
             self.start_block_fetch_if_needed(wallet);
+
+            match (
+                self.node_chain_state.as_ref(),
+                expected,
+                self.block_fetch_task.as_ref(),
+            ) {
+                (Some(node), Some(expected), None) if node.block_height >= expected => {
+                    return;
+                }
+                _ => {}
+            }
 
             tokio::select! {
                 chain_info_opt = self.node_state_rx.recv() => {

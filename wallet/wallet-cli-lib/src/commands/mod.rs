@@ -94,6 +94,8 @@ pub enum WalletCommand {
     /// Rescan
     Rescan,
 
+    SyncWallet,
+
     GetBalance,
 
     ListUtxo,
@@ -322,6 +324,16 @@ pub async fn handle_wallet_command(
         }
 
         WalletCommand::Rescan => Ok(ConsoleCommand::Print("Not implemented".to_owned())),
+
+        WalletCommand::SyncWallet => {
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .sync_once()
+                .await
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
 
         WalletCommand::GetBalance => {
             let (coin_balance, _tokens_balance) = controller_opt

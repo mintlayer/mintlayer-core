@@ -191,6 +191,16 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     /// Sync the wallet block chain from the node.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
-        self.block_sync.run(&mut self.wallet).await;
+        self.block_sync.run(&mut self.wallet, None).await;
+    }
+
+    pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
+        let node_state = self
+            .rpc_client
+            .chainstate_info()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        self.block_sync.run(&mut self.wallet, Some(node_state.best_block_height)).await;
+        Ok(())
     }
 }

@@ -209,7 +209,7 @@ async fn basic_sync(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet).await;
+        block_syncing.run(&mut wallet, None).await;
     });
 
     // Build blocks
@@ -251,7 +251,7 @@ async fn restart_from_genesis(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet).await;
+        block_syncing.run(&mut wallet, None).await;
     });
 
     create_chain(&node, &mut rng, 0, 10);
@@ -277,7 +277,7 @@ async fn randomized(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet).await;
+        block_syncing.run(&mut wallet, None).await;
     });
 
     create_chain(&node, &mut rng, 0, 1);
