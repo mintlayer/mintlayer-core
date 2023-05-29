@@ -21,23 +21,17 @@ pub const DEFAULT_ACCOUNT_INDEX: U31 = match U31::from_u32(0) {
     None => unreachable!(),
 };
 
-/// Account metadata that contains information like from which master key it was derived from
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum AccountInfo {
-    #[codec(index = 0)]
-    Deterministic(DeterministicAccountInfo),
-}
-
 /// Serialized data for deterministic accounts. The fields are documented in `AccountKeyChain`.
+/// Account metadata that contains information like from which master key it was derived from
 // TODO tbd what metadata we need to store
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct DeterministicAccountInfo {
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct AccountInfo {
     account_index: U31,
     account_key: ExtendedPublicKey,
     lookahead_size: u32,
 }
 
-impl DeterministicAccountInfo {
+impl AccountInfo {
     pub fn new(account_index: U31, account_key: ExtendedPublicKey, lookahead_size: u32) -> Self {
         Self {
             account_index,

@@ -41,7 +41,7 @@ use wallet_types::account_id::AccountBlockHeight;
 use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
 use wallet_types::wallet_block::WalletBlock;
 use wallet_types::wallet_tx::TxState;
-use wallet_types::{AccountId, AccountTxId, KeyPurpose, WalletTx};
+use wallet_types::{AccountId, AccountInfo, AccountTxId, KeyPurpose, WalletTx};
 
 use self::txo_cache::TxoCache;
 
@@ -49,6 +49,7 @@ pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
     txo_cache: TxoCache,
+    _account_info: AccountInfo,
 }
 
 impl Account {
@@ -58,8 +59,17 @@ impl Account {
         id: &AccountId,
         root_key: &ExtendedPrivateKey,
     ) -> WalletResult<Account> {
-        let key_chain =
-            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, root_key)?;
+        let mut account_infos = db_tx.get_accounts_info()?;
+        let account_info =
+            account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
+
+        let key_chain = AccountKeyChain::load_from_database(
+            chain_config.clone(),
+            db_tx,
+            id,
+            root_key,
+            &account_info,
+        )?;
 
         let blocks = db_tx.get_blocks(&key_chain.get_account_id())?;
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
@@ -69,6 +79,7 @@ impl Account {
             chain_config,
             key_chain,
             txo_cache,
+            _account_info: account_info,
         })
     }
 
@@ -79,7 +90,12 @@ impl Account {
         key_chain: AccountKeyChain,
     ) -> WalletResult<Account> {
         let account_id = key_chain.get_account_id();
-        let account_info = key_chain.get_account_info();
+
+        let account_info = AccountInfo::new(
+            key_chain.account_index(),
+            key_chain.account_public_key().clone(),
+            key_chain.lookahead_size(),
+        );
 
         db_tx.set_account(&account_id, &account_info)?;
 
@@ -89,6 +105,7 @@ impl Account {
             chain_config,
             key_chain,
             txo_cache,
+            _account_info: account_info,
         };
 
         account.scan_genesis(db_tx)?;

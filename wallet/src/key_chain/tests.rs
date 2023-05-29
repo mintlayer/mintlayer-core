@@ -26,7 +26,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use test_utils::assert_encoded_eq;
 use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
-use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
+use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, AccountInfo};
 
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -147,6 +147,13 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         Err(KeyChainError::LookAheadExceeded)
     );
     db_tx.commit().unwrap();
+
+    let account_info = AccountInfo::new(
+        key_chain.account_index(),
+        key_chain.account_public_key().clone(),
+        key_chain.lookahead_size(),
+    );
+
     drop(key_chain);
 
     let mut key_chain = AccountKeyChain::load_from_database(
@@ -154,6 +161,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
         &db.transaction_ro().unwrap(),
         &id,
         master_key_chain.root_private_key(),
+        &account_info,
     )
     .unwrap();
     assert_eq!(key_chain.lookahead_size(), LOOKAHEAD_SIZE);
@@ -202,6 +210,13 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         .unwrap();
     let id = key_chain.get_account_id();
     db_tx.commit().unwrap();
+
+    let account_info = AccountInfo::new(
+        key_chain.account_index(),
+        key_chain.account_public_key().clone(),
+        key_chain.lookahead_size(),
+    );
+
     drop(key_chain);
 
     let mut key_chain = AccountKeyChain::load_from_database(
@@ -209,6 +224,7 @@ fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
         &db.transaction_ro().unwrap(),
         &id,
         master_key_chain.root_private_key(),
+        &account_info,
     )
     .unwrap();
 

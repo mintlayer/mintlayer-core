@@ -26,9 +26,9 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
-use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
+use wallet_storage::{StoreTxRo, StoreTxRw};
 use wallet_types::keys::KeyPurpose;
-use wallet_types::{AccountId, AccountInfo, DeterministicAccountInfo, RootKeyContent};
+use wallet_types::{AccountId, AccountInfo, RootKeyContent};
 
 /// This key chain contains a pool of pre-generated keys and addresses for the usage in a wallet
 pub struct AccountKeyChain {
@@ -94,11 +94,6 @@ impl AccountKeyChain {
             lookahead_size: lookahead_size.into(),
         };
 
-        db_tx.set_account(
-            &new_account.get_account_id(),
-            &new_account.get_account_info(),
-        )?;
-
         new_account.top_up_all(db_tx)?;
 
         Ok(new_account)
@@ -110,13 +105,8 @@ impl AccountKeyChain {
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
         root_key: &ExtendedPrivateKey,
+        account_info: &AccountInfo,
     ) -> KeyChainResult<Self> {
-        let account_infos = db_tx.get_accounts_info()?;
-        let account_info =
-            account_infos.get(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
-
-        let AccountInfo::Deterministic(account_info) = account_info;
-
         let pubkey_id = account_info.account_key().clone().into();
 
         let account_path = make_account_path(&chain_config, account_info.account_index());
@@ -260,14 +250,6 @@ impl AccountKeyChain {
         KeyPurpose::ALL.iter().try_for_each(|purpose| {
             self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
         })
-    }
-
-    pub fn get_account_info(&self) -> AccountInfo {
-        AccountInfo::Deterministic(DeterministicAccountInfo::new(
-            self.account_index,
-            self.account_public_key.as_ref().clone(),
-            self.lookahead_size(),
-        ))
     }
 
     pub fn lookahead_size(&self) -> u32 {

@@ -29,9 +29,7 @@ use utils::const_value::ConstValue;
 use utils::ensure;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
-use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountKeyPurposeId, DeterministicAccountInfo,
-};
+use wallet_types::{AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId};
 
 // TODO: Switch to the hard derivation because it's more secure
 
@@ -125,7 +123,7 @@ impl LeafKeySoftChain {
 
     pub fn load_leaf_keys<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
-        account_info: &DeterministicAccountInfo,
+        account_info: &AccountInfo,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
     ) -> KeyChainResult<WithPurpose<LeafKeySoftChain>> {
