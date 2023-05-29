@@ -93,6 +93,9 @@ fn calculate_new_target(
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = prev_target * actual_block_time / target_block_time;
+    let lower_limit = prev_target - (prev_target / Uint512::from_u64(10));
+    let upper_limit = prev_target + (prev_target / Uint512::from_u64(10));
+    let new_target = num::clamp(new_target, lower_limit, upper_limit);
     let new_target = Uint256::try_from(new_target).unwrap_or(pos_config.target_limit());
 
     let new_target = std::cmp::min(new_target, pos_config.target_limit());
@@ -377,6 +380,51 @@ mod tests {
             let new_target =
                 calculate_new_target(&config, &prev_target, average_block_time).unwrap();
             assert!(new_target >= Compact::from(prev_target));
+        }
+    }
+
+    #[test]
+    fn calculate_new_target_swing_limit() {
+        {
+            let target_block_time = 100;
+            let actual_block_time = 1000; // 10 times bigger
+
+            let prev_target = Uint256::from_u64(100);
+            let expected_target = Uint256::from_u64(110); // only 10% times bigger
+
+            let config = PoSChainConfig::new(
+                Uint256::MAX,
+                target_block_time,
+                1.into(),
+                1.into(),
+                1.into(),
+                2,
+            )
+            .unwrap();
+            let new_target =
+                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+            assert_eq!(new_target, Compact::from(expected_target));
+        }
+
+        {
+            let target_block_time = 100;
+            let actual_block_time = 10; // 10 times smaller
+
+            let prev_target = Uint256::from_u64(100);
+            let expected_target = Uint256::from_u64(90); // only 10% times smaller
+
+            let config = PoSChainConfig::new(
+                Uint256::MAX,
+                target_block_time,
+                1.into(),
+                1.into(),
+                1.into(),
+                2,
+            )
+            .unwrap();
+            let new_target =
+                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+            assert_eq!(new_target, Compact::from(expected_target));
         }
     }
 
