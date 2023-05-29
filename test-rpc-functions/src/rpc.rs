@@ -104,7 +104,7 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         let message = Vec::<u8>::hex_decode_all(message_hex).map_err(rpc::Error::to_call_error)?;
 
         let signature = private_key.sign_message(&message).map_err(RpcTestFunctionsError::from);
-        let signature = handle_error(signature)?;
+        let signature: Signature = rpc::handle_result(signature)?;
 
         Ok(signature.hex_encode())
     }
@@ -192,12 +192,8 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
         .map_err(RpcTestFunctionsError::from);
 
-        let vrf_output = handle_error(vrf_output)?;
+        let vrf_output: H256 = rpc::handle_result(vrf_output)?;
 
         Ok(vrf_output.hex_encode())
     }
-}
-
-fn handle_error<T>(e: Result<T, RpcTestFunctionsError>) -> rpc::Result<T> {
-    e.map_err(rpc::Error::to_call_error)
 }

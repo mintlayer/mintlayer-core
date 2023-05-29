@@ -16,9 +16,8 @@
 use common::chain::SignedTransaction;
 use serialization::hex_encoded::HexEncoded;
 
-use crate::{error::P2pError, interface::types::ConnectedPeer, types::peer_id::PeerId};
+use crate::{interface::types::ConnectedPeer, types::peer_id::PeerId};
 use rpc::Result as RpcResult;
-use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, client, namespace = "p2p")]
 trait P2pRpc {
@@ -62,45 +61,40 @@ trait P2pRpc {
 impl P2pRpcServer for super::P2pHandle {
     async fn connect(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.connect(addr)).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn disconnect(&self, peer_id: PeerId) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.disconnect(peer_id)).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn get_peer_count(&self) -> RpcResult<usize> {
         let res = self.call_async(|this| this.get_peer_count()).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn get_bind_addresses(&self) -> RpcResult<Vec<String>> {
         let res = self.call_async(|this| this.get_bind_addresses()).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn get_connected_peers(&self) -> RpcResult<Vec<ConnectedPeer>> {
         let res = self.call_async(|this| this.get_connected_peers()).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn add_reserved_node(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(|this| this.add_reserved_node(addr)).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn remove_reserved_node(&self, addr: String) -> RpcResult<()> {
         let res = self.call_async_mut(move |this| this.remove_reserved_node(addr)).await;
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> RpcResult<()> {
-        handle_error(self.call_async_mut(|s| s.submit_transaction(tx.take())).await)
+        rpc::handle_result(self.call_async_mut(|s| s.submit_transaction(tx.take())).await)
     }
-}
-
-fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> RpcResult<T> {
-    e.map_err(rpc::Error::to_call_error)
-        .and_then(|r| r.map_err(rpc::Error::to_call_error))
 }
