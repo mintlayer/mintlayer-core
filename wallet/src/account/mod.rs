@@ -26,7 +26,6 @@ use common::chain::{
     Block, ChainConfig, Destination, OutPoint, OutPointSourceId, SignedTransaction, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Idable};
-use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
 use std::collections::BTreeMap;
 use std::ops::Add;
@@ -45,10 +44,8 @@ impl Account {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-        root_key: &ExtendedPrivateKey,
     ) -> WalletResult<Account> {
-        let key_chain =
-            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, root_key)?;
+        let key_chain = AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id)?;
 
         Ok(Account {
             chain_config,
@@ -123,7 +120,7 @@ impl Account {
 
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(request)?;
+        let tx = self.sign_transaction(request, db_tx)?;
 
         Ok(tx)
     }
@@ -182,7 +179,11 @@ impl Account {
     }
 
     // TODO: Use a different type to support partially signed transactions
-    fn sign_transaction(&self, req: SendRequest) -> WalletResult<SignedTransaction> {
+    fn sign_transaction(
+        &self,
+        req: SendRequest,
+        db_tx: &impl WalletStorageRead,
+    ) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
         let input_utxos = utxos.iter().collect::<Vec<_>>();
@@ -206,7 +207,7 @@ impl Account {
                 } else {
                     let private_key = self
                         .key_chain
-                        .get_private_key_for_destination(destination)?
+                        .get_private_key_for_destination(destination, db_tx)?
                         .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
                         .private_key();
 
