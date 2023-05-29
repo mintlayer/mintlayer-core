@@ -97,7 +97,7 @@ pub enum FinalizeBlockInputData {
 pub fn generate_consensus_data_and_reward<G>(
     chain_config: &ChainConfig,
     prev_block_index: &GenBlockIndex,
-    sealed_epoch_randomness: Option<PoSRandomness>,
+    sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,

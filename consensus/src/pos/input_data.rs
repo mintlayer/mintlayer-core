@@ -183,7 +183,7 @@ pub fn generate_pos_consensus_data_and_reward<G>(
     prev_block_index: &GenBlockIndex,
     pos_input_data: PoSGenerateBlockInputData,
     pos_status: PoSStatus,
-    sealed_epoch_randomness: Option<PoSRandomness>,
+    sealed_epoch_randomness: PoSRandomness,
     block_timestamp: BlockTimestamp,
     block_height: BlockHeight,
     get_ancestor: G,
@@ -222,12 +222,9 @@ where
     ));
 
     let vrf_data = {
-        let sealed_epoch_randomness =
-            sealed_epoch_randomness.ok_or(ConsensusPoSError::NoEpochData)?.value();
-
         let transcript = construct_transcript(
             chain_config.epoch_index_from_height(&block_height),
-            &sealed_epoch_randomness,
+            &sealed_epoch_randomness.value(),
             block_timestamp,
         );
 

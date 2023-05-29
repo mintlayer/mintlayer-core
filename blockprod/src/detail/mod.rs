@@ -160,22 +160,18 @@ impl BlockProduction {
                     };
 
                     let block_height = best_block_index.block_height().next_height();
-                    let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
+                    let sealed_epoch_index =
+                        chain_config.sealed_epoch_index(&block_height).unwrap_or(0);
 
-                    let sealed_epoch_randomness = sealed_epoch_index
-                        .map(|index| this.get_epoch_data(index))
-                        .transpose()
+                    let sealed_epoch_randomness = this
+                        .get_epoch_data(sealed_epoch_index)
                         .map_err(|_| {
                             ConsensusPoSError::PropertyQueryError(
                                 PropertyQueryError::EpochDataNotFound(block_height),
                             )
                         })?
-                        .flatten()
                         .map(|epoch_data| *epoch_data.randomness())
-                        // TODO: no epoch_data means either that no
-                        // epoch has been created yet, or that the
-                        // data is actually missing
-                        .or_else(|| Some(PoSRandomness::at_genesis(&chain_config)));
+                        .expect("There should always be epoch data avaiable");
 
                     let (consensus_data, block_reward) = generate_consensus_data_and_reward(
                         &chain_config,
@@ -191,7 +187,6 @@ impl BlockProduction {
                         &chain_config,
                         this,
                         &best_block_index,
-                        block_height,
                         sealed_epoch_index,
                         sealed_epoch_randomness,
                         input_data,
@@ -409,20 +404,12 @@ fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &(dyn ChainstateInterface),
     best_block_index: &GenBlockIndex,
-    block_height: BlockHeight,
-    sealed_epoch_index: Option<EpochIndex>,
-    sealed_epoch_randomness: Option<PoSRandomness>,
+    sealed_epoch_index: EpochIndex,
+    sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
 ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
-            let sealed_epoch_index = sealed_epoch_index.ok_or(ConsensusPoSError::NoEpochData)?;
-
-            let sealed_epoch_randomness =
-                sealed_epoch_randomness.ok_or(ConsensusPoSError::PropertyQueryError(
-                    PropertyQueryError::EpochDataNotFound(block_height),
-                ))?;
-
             let previous_block_timestamp = match best_block_index.prev_block_id() {
                 None => chain_config.genesis_block().timestamp(),
                 Some(prev_gen_block_id) => match prev_gen_block_id.classify(chain_config) {
