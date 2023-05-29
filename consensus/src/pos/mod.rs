@@ -218,7 +218,11 @@ pub fn stake(
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
-    let mut current_timestamp = finalize_pos_data.previous_block_timestamp();
+    // The block timestamp in PoS must be strictly greater than the parent block timestamp
+    let mut current_timestamp = finalize_pos_data
+        .previous_block_timestamp()
+        .add_int_seconds(1)
+        .expect("Should not fail");
 
     ensure!(
         current_timestamp < finalize_pos_data.max_block_timestamp(),
