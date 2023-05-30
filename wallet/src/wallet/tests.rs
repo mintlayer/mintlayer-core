@@ -31,9 +31,12 @@ use common::{
     },
     primitives::Idable,
 };
-use crypto::key::hdkd::{
-    child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath,
+use crypto::{
+    key::hdkd::{child_number::ChildNumber, derivable::Derivable, derivation_path::DerivationPath},
+    random::{CryptoRng, Rng},
 };
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoType};
 
 // TODO: Many of these tests require randomization...
@@ -178,6 +181,49 @@ fn wallet_balance_genesis() {
             }
         }
     }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn locked_wallet_balance_works(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_type = ChainType::Mainnet;
+    let genesis_amount = Amount::from_atoms(rng.gen_range(1..10000));
+    let genesis_output = TxOutput::Transfer(
+        OutputValue::Coin(genesis_amount),
+        Destination::AnyoneCanSpend,
+    );
+    let genesis = Genesis::new(
+        String::new(),
+        BlockTimestamp::from_int_seconds(1639975460),
+        vec![genesis_output],
+    );
+    let chain_config = Arc::new(Builder::new(chain_type).genesis_custom(genesis).build());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, genesis_amount);
+
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&password).unwrap();
+    wallet.lock_wallet();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, genesis_amount);
 }
 
 #[test]
@@ -427,4 +473,113 @@ fn wallet_accounts_creation() {
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
     wallet.create_account(123.try_into().unwrap()).unwrap();
     test_wallet_accounts(&chain_config, &wallet, vec![123.try_into().unwrap()]);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&password).unwrap();
+    wallet.lock_wallet();
+
+    let err = wallet.create_account(rng.gen_range(0..1 << 31).try_into().unwrap());
+    assert_eq!(
+        err,
+        Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
+            wallet_storage::Error::WalletLocked()
+        )))
+    );
+
+    // success after unlock
+    wallet.unlock_wallet(&password).unwrap();
+    wallet.create_account(rng.gen_range(0..1 << 31).try_into().unwrap()).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 1..NETWORK_FEE + 10000));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+
+    let password = gen_random_password(&mut rng);
+    wallet.encrypt_wallet(&password).unwrap();
+    wallet.lock_wallet();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, block1_amount);
+
+    let new_output = TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(
+            rng.gen_range(1..block1_amount.into_atoms() - NETWORK_FEE),
+        )),
+        Destination::AnyoneCanSpend,
+    );
+
+    assert_eq!(
+        wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output.clone()]),
+        Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
+            wallet_storage::Error::WalletLocked()
+        )))
+    );
+
+    // success after unlock
+    wallet.unlock_wallet(&password).unwrap();
+    wallet
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .unwrap();
+}
+
+const NETWORK_FEE: u128 = 10000;
+
+fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> Option<String> {
+    let new_password: String = (0..rng.gen_range(0..100)).map(|_| rng.gen::<char>()).collect();
+    if new_password.is_empty() {
+        Some(new_password)
+    } else {
+        None
+    }
 }
