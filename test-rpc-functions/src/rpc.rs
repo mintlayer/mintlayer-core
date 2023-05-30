@@ -85,8 +85,8 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
     }
 
     async fn public_key_from_private_key(&self, private_key_hex: String) -> rpc::Result<String> {
-        let private_key = crypto::key::PrivateKey::hex_decode_all(private_key_hex)
-            .map_err(rpc::Error::to_call_error)?;
+        let private_key =
+            rpc::handle_result(crypto::key::PrivateKey::hex_decode_all(private_key_hex))?;
 
         let public_key = crypto::key::PublicKey::from_private_key(&private_key);
 
@@ -98,13 +98,13 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         private_key_hex: String,
         message_hex: String,
     ) -> rpc::Result<String> {
-        let private_key = crypto::key::PrivateKey::hex_decode_all(private_key_hex)
-            .map_err(rpc::Error::to_call_error)?;
+        let private_key: crypto::key::PrivateKey =
+            rpc::handle_result(crypto::key::PrivateKey::hex_decode_all(private_key_hex))?;
 
-        let message = Vec::<u8>::hex_decode_all(message_hex).map_err(rpc::Error::to_call_error)?;
+        let message: Vec<u8> = rpc::handle_result(Vec::<u8>::hex_decode_all(message_hex))?;
 
         let signature = private_key.sign_message(&message).map_err(RpcTestFunctionsError::from);
-        let signature = handle_error(signature)?;
+        let signature: Signature = rpc::handle_result(signature)?;
 
         Ok(signature.hex_encode())
     }
@@ -115,12 +115,11 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         message_hex: String,
         signature_hex: String,
     ) -> rpc::Result<bool> {
-        let public_key = crypto::key::PublicKey::hex_decode_all(public_key_hex)
-            .map_err(rpc::Error::to_call_error)?;
+        let public_key: crypto::key::PublicKey =
+            rpc::handle_result(crypto::key::PublicKey::hex_decode_all(public_key_hex))?;
 
-        let message = Vec::<u8>::hex_decode_all(message_hex).map_err(rpc::Error::to_call_error)?;
-        let signature =
-            Signature::hex_decode_all(signature_hex).map_err(rpc::Error::to_call_error)?;
+        let message: Vec<u8> = rpc::handle_result(Vec::<u8>::hex_decode_all(message_hex))?;
+        let signature = rpc::handle_result(Signature::hex_decode_all(signature_hex))?;
 
         let verify_result = public_key.verify_message(&signature, &message);
 
@@ -138,8 +137,8 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         &self,
         private_key_hex: String,
     ) -> rpc::Result<String> {
-        let private_key = crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex)
-            .map_err(rpc::Error::to_call_error)?;
+        let private_key =
+            rpc::handle_result(crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex))?;
 
         let public_key = crypto::vrf::VRFPublicKey::from_private_key(&private_key);
 
@@ -153,16 +152,15 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         random_seed: String,
         block_timestamp: u64,
     ) -> rpc::Result<String> {
-        let random_seed: H256 =
-            H256::hex_decode_all(random_seed).map_err(rpc::Error::to_call_error)?;
+        let random_seed: H256 = rpc::handle_result(H256::hex_decode_all(random_seed))?;
 
         let transcript = construct_transcript(
             epoch_index,
             &random_seed,
             BlockTimestamp::from_int_seconds(block_timestamp),
         );
-        let private_key = crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex)
-            .map_err(rpc::Error::to_call_error)?;
+        let private_key: crypto::vrf::VRFPrivateKey =
+            rpc::handle_result(crypto::vrf::VRFPrivateKey::hex_decode_all(private_key_hex))?;
 
         let signature = private_key.produce_vrf_data(transcript.into());
 
@@ -177,11 +175,10 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         vrf_public_key: String,
         block_timestamp: BlockTimestamp,
     ) -> rpc::Result<String> {
-        let vrf_data =
-            crypto::vrf::VRFReturn::hex_decode_all(vrf_data).map_err(rpc::Error::to_call_error)?;
-        let vrf_public_key = crypto::vrf::VRFPublicKey::hex_decode_all(vrf_public_key)
-            .map_err(rpc::Error::to_call_error)?;
-        let random_seed = H256::hex_decode_all(random_seed).map_err(rpc::Error::to_call_error)?;
+        let vrf_data = rpc::handle_result(crypto::vrf::VRFReturn::hex_decode_all(vrf_data))?;
+        let vrf_public_key =
+            rpc::handle_result(crypto::vrf::VRFPublicKey::hex_decode_all(vrf_public_key))?;
+        let random_seed = rpc::handle_result(H256::hex_decode_all(random_seed))?;
 
         let vrf_output = verify_vrf_and_get_vrf_output(
             epoch_index,
@@ -192,12 +189,8 @@ impl RpcTestFunctionsRpcServer for super::RpcTestFunctionsHandle {
         )
         .map_err(RpcTestFunctionsError::from);
 
-        let vrf_output = handle_error(vrf_output)?;
+        let vrf_output: H256 = rpc::handle_result(vrf_output)?;
 
         Ok(vrf_output.hex_encode())
     }
-}
-
-fn handle_error<T>(e: Result<T, RpcTestFunctionsError>) -> rpc::Result<T> {
-    e.map_err(rpc::Error::to_call_error)
 }

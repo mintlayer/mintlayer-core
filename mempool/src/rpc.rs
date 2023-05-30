@@ -37,21 +37,14 @@ trait MempoolRpc {
 #[async_trait::async_trait]
 impl MempoolRpcServer for super::MempoolHandle {
     async fn contains_tx(&self, tx_id: Id<Transaction>) -> rpc::Result<bool> {
-        self.call(move |this| this.contains_transaction(&tx_id))
-            .await
-            .map_err(rpc::Error::to_call_error)?
-            .map_err(rpc::Error::to_call_error)
+        rpc::handle_result(self.call(move |this| this.contains_transaction(&tx_id)).await)
     }
 
     async fn submit_transaction(&self, tx: HexEncoded<SignedTransaction>) -> rpc::Result<()> {
-        self.call_mut(|this| this.add_transaction(tx.take()))
-            .await
-            .log_err()
-            .map_err(rpc::Error::to_call_error)?
-            .map_err(rpc::Error::to_call_error)
+        rpc::handle_result(self.call_mut(|this| this.add_transaction(tx.take())).await.log_err())
     }
 
     async fn local_best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
-        self.call(|this| this.best_block_id()).await.map_err(rpc::Error::to_call_error)
+        rpc::handle_result(self.call(|this| this.best_block_id()).await)
     }
 }

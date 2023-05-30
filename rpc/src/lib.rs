@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2022-2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -14,6 +14,7 @@
 // limitations under the License.
 
 mod config;
+mod error;
 mod rpc_auth;
 pub mod rpc_creds;
 
@@ -25,15 +26,12 @@ use jsonrpsee::server::{ServerBuilder, ServerHandle};
 use logging::log;
 
 pub use config::RpcConfig;
-pub use jsonrpsee::core::server::Methods;
-pub use jsonrpsee::core::Error;
-pub use jsonrpsee::proc_macros::rpc;
+pub use error::{handle_result, Error, Result};
+
+pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
 use rpc_creds::RpcCreds;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
-
-/// The Result type with RPC-specific error.
-pub type Result<T> = core::result::Result<T, Error>;
 
 #[rpc(server, namespace = "example_server")]
 trait RpcInfo {
