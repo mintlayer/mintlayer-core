@@ -30,7 +30,6 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        config::EpochIndex,
         Block, ChainConfig, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
@@ -189,8 +188,8 @@ impl BlockProduction {
                         &chain_config,
                         this,
                         &best_block_index,
+                        block_height,
                         block_timestamp,
-                        sealed_epoch_index,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -431,8 +430,8 @@ fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &(dyn ChainstateInterface),
     best_block_index: &GenBlockIndex,
+    block_height: BlockHeight,
     current_timestamp: BlockTimestamp,
-    sealed_epoch_index: EpochIndex,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
 ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
@@ -455,11 +454,13 @@ fn generate_finalize_block_data(
                     PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
                 ))?;
 
+            let epoch_index = chain_config.epoch_index_from_height(&block_height);
+
             Ok(Some(FinalizeBlockInputData::PoS(
                 PoSFinalizeBlockInputData::new(
                     pos_input_data.stake_private_key().clone(),
                     pos_input_data.vrf_private_key().clone(),
-                    sealed_epoch_index,
+                    epoch_index,
                     sealed_epoch_randomness,
                     previous_block_timestamp,
                     max_block_timestamp,
