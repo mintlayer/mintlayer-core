@@ -404,10 +404,18 @@ where
                 TxOutput::CreateStakePool(pool_id, data) => {
                     let expected_pool_id = pos_accounting::make_pool_id(input0.outpoint());
                     let res = if expected_pool_id == *pool_id {
-                        self.accounting_delta_adapter
-                            .operations(tx_source)
-                            .create_pool(*pool_id, data.as_ref().clone().into())
-                            .map_err(ConnectTransactionError::PoSAccountingError)
+                        if data.value() >= self.chain_config.as_ref().min_stake_pool_pledge() {
+                            self.accounting_delta_adapter
+                                .operations(tx_source)
+                                .create_pool(*pool_id, data.as_ref().clone().into())
+                                .map_err(ConnectTransactionError::PoSAccountingError)
+                        } else {
+                            Err(ConnectTransactionError::NotEnoughPledgeToCreateStakePool(
+                                tx.get_id(),
+                                data.value(),
+                                self.chain_config.as_ref().min_stake_pool_pledge(),
+                            ))
+                        }
                     } else {
                         Err(ConnectTransactionError::SpendStakeError(
                             SpendStakeError::StakePoolIdMismatch(expected_pool_id, *pool_id),
