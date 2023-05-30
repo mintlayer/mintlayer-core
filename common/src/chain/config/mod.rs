@@ -497,8 +497,8 @@ fn create_testnet_genesis() -> Genesis {
             Destination::PublicKey(staker_pub_key),
             vrf_pub_key,
             Destination::PublicKey(decommission_pub_key),
-            PerThousand::new(10).expect("must be valid"),
-            (COIN * 100).expect("must be valid"),
+            PerThousand::new(1000).expect("must be valid"),
+            Amount::ZERO,
         )),
     );
 
