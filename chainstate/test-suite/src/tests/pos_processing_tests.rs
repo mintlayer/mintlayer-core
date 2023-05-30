@@ -1506,6 +1506,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     50.into(),
                     50.into(),
                     5,
+                    PerThousand::new(100).unwrap(),
                 )
                 .unwrap(),
             }),
@@ -1521,6 +1522,7 @@ fn decommission_from_not_best_block(#[case] seed: Seed) {
                     100.into(), // decommission maturity increased
                     50.into(),
                     5,
+                    PerThousand::new(100).unwrap(),
                 )
                 .unwrap(),
             }),

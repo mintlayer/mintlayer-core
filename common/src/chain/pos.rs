@@ -18,7 +18,7 @@ use std::num::NonZeroU64;
 use typename::TypeName;
 
 use crate::{
-    primitives::{BlockDistance, Id},
+    primitives::{per_thousand::PerThousand, BlockDistance, Id},
     Uint256,
 };
 
@@ -46,6 +46,8 @@ pub struct PoSChainConfig {
     spend_share_maturity_distance: BlockDistance,
     /// Max number of blocks required to calculate average block time. Min is 2
     block_count_to_average_for_blocktime: usize,
+    /// The limit on how much the difficulty can go up or down after each block
+    difficulty_change_limit: PerThousand,
 }
 
 impl PoSChainConfig {
@@ -56,6 +58,7 @@ impl PoSChainConfig {
         decommission_maturity_distance: BlockDistance,
         spend_share_maturity_distance: BlockDistance,
         block_count_to_average_for_blocktime: usize,
+        difficulty_change_limit: PerThousand,
     ) -> Option<Self> {
         let target_block_time = NonZeroU64::new(target_block_time)?;
         if block_count_to_average_for_blocktime < 2 {
@@ -69,6 +72,7 @@ impl PoSChainConfig {
             decommission_maturity_distance,
             spend_share_maturity_distance,
             block_count_to_average_for_blocktime,
+            difficulty_change_limit,
         })
     }
 
@@ -95,6 +99,10 @@ impl PoSChainConfig {
     pub fn block_count_to_average_for_blocktime(&self) -> usize {
         self.block_count_to_average_for_blocktime
     }
+
+    pub fn difficulty_change_limit(&self) -> PerThousand {
+        self.difficulty_change_limit
+    }
 }
 
 pub fn create_testnet_pos_config() -> PoSChainConfig {
@@ -105,6 +113,7 @@ pub fn create_testnet_pos_config() -> PoSChainConfig {
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
         block_count_to_average_for_blocktime: 5,
+        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
     }
 }
 
@@ -116,6 +125,7 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
         block_count_to_average_for_blocktime: 5,
+        difficulty_change_limit: PerThousand::new(100).expect("must be valid"),
     }
 }
 

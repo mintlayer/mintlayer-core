@@ -20,7 +20,7 @@ use serialization::{Decode, Encode, Error, Input};
 pub struct PerThousand(u16);
 
 impl PerThousand {
-    pub fn new(value: u16) -> Option<Self> {
+    pub const fn new(value: u16) -> Option<Self> {
         if value <= 1000 {
             Some(Self(value))
         } else {
