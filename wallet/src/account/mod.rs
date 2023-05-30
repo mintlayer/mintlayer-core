@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod txo_cache;
+mod output_cache;
 
 use crate::key_chain::{make_path_to_vrf_key, AccountKeyChain, KeyChainError};
 use crate::send_request::{make_address_output, make_stake_output};
@@ -44,12 +44,12 @@ use wallet_types::wallet_block::WalletBlock;
 use wallet_types::wallet_tx::TxState;
 use wallet_types::{AccountId, AccountInfo, AccountTxId, KeyPurpose, WalletTx};
 
-use self::txo_cache::TxoCache;
+use self::output_cache::OutputCache;
 
 pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
-    txo_cache: TxoCache,
+    txo_cache: OutputCache,
     account_info: AccountInfo,
 }
 
@@ -74,7 +74,7 @@ impl Account {
 
         let blocks = db_tx.get_blocks(&key_chain.get_account_id())?;
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let txo_cache = TxoCache::new(blocks, txs);
+        let txo_cache = OutputCache::new(blocks, txs);
 
         Ok(Account {
             chain_config,
@@ -101,7 +101,7 @@ impl Account {
 
         db_tx.set_account(&account_id, &account_info)?;
 
-        let txo_cache = TxoCache::empty();
+        let txo_cache = OutputCache::empty();
 
         let mut account = Account {
             chain_config,

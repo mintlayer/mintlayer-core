@@ -23,13 +23,13 @@ use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountTxId, WalletTx,
 };
 
-pub struct TxoCache {
+pub struct OutputCache {
     blocks: BTreeMap<AccountBlockHeight, WalletBlock>,
     txs: BTreeMap<AccountTxId, WalletTx>,
     consumed: BTreeSet<OutPoint>,
 }
 
-impl TxoCache {
+impl OutputCache {
     pub fn empty() -> Self {
         Self {
             blocks: BTreeMap::new(),
