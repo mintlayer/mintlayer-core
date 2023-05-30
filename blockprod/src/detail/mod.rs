@@ -30,6 +30,7 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
+        config::EpochIndex,
         Block, ChainConfig, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
@@ -172,7 +173,7 @@ impl BlockProduction {
                             )
                         })?
                         .map(|epoch_data| *epoch_data.randomness())
-                        .expect("There should always be epoch data avaiable");
+                        .expect("There should always be epoch data available");
 
                     let (consensus_data, block_reward) = generate_consensus_data_and_reward(
                         &chain_config,
@@ -188,6 +189,7 @@ impl BlockProduction {
                         &chain_config,
                         this,
                         &best_block_index,
+                        block_timestamp,
                         sealed_epoch_index,
                         sealed_epoch_randomness,
                         input_data,
@@ -429,29 +431,16 @@ fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &(dyn ChainstateInterface),
     best_block_index: &GenBlockIndex,
+    current_timestamp: BlockTimestamp,
     sealed_epoch_index: EpochIndex,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
 ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
-            let previous_block_timestamp = match best_block_index.prev_block_id() {
-                None => chain_config.genesis_block().timestamp(),
-                Some(prev_gen_block_id) => match prev_gen_block_id.classify(chain_config) {
-                    GenBlockId::Genesis(_) => chain_config.genesis_block().timestamp(),
-                    GenBlockId::Block(block_id) => chainstate_handle
-                        .get_block(block_id)
-                        .map_err(|_| ConsensusPoSError::FailedReadingBlock(block_id))?
-                        .ok_or({
-                            ConsensusPoSError::PropertyQueryError(
-                                PropertyQueryError::BlockNotFound(block_id),
-                            )
-                        })?
-                        .timestamp(),
-                },
-            };
+            let previous_block_timestamp = best_block_index.block_timestamp();
 
-            let max_block_timestamp = previous_block_timestamp
+            let max_block_timestamp = current_timestamp
                 .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                 .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
@@ -466,14 +455,11 @@ fn generate_finalize_block_data(
                     PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
                 ))?;
 
-            let epoch_index = chain_config.epoch_index_from_height(&block_height);
-
             Ok(Some(FinalizeBlockInputData::PoS(
                 PoSFinalizeBlockInputData::new(
                     pos_input_data.stake_private_key().clone(),
                     pos_input_data.vrf_private_key().clone(),
                     sealed_epoch_index,
-                    epoch_index,
                     sealed_epoch_randomness,
                     previous_block_timestamp,
                     max_block_timestamp,
