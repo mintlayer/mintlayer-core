@@ -33,7 +33,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRo, StoreTxRw, TransactionRo, TransactionRw, Transactional,
+    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
     WalletStorageRead, WalletStorageWrite,
 };
 use wallet_types::utxo_types::UtxoTypes;
@@ -205,21 +205,6 @@ impl<B: storage::Backend> Wallet<B> {
         &self.db
     }
 
-    fn for_account_ro<T>(
-        &self,
-        account_index: U31,
-        f: impl FnOnce(&Account, &StoreTxRo<B>) -> WalletResult<T>,
-    ) -> WalletResult<T> {
-        let mut db_tx = self.db.transaction_ro()?;
-        let account = self
-            .accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        let value = f(account, &mut db_tx)?;
-        db_tx.close();
-        Ok(value)
-    }
-
     fn for_account_rw<T>(
         &mut self,
         account_index: U31,
@@ -240,9 +225,10 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        self.for_account_ro(account_index, |account, _db_tx| {
-            account.get_balance(utxo_types)
-        })
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get_balance(utxo_types)
     }
 
     pub fn get_utxos(
@@ -250,11 +236,13 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         utxo_types: UtxoTypes,
     ) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
-        self.for_account_ro(account_index, |account, _db_tx| {
-            let utxos = account.get_utxos(utxo_types);
-            let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
-            Ok(utxos)
-        })
+        let account = self
+            .accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let utxos = account.get_utxos(utxo_types);
+        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
+        Ok(utxos)
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
@@ -288,9 +276,11 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        self.for_account_ro(account_index, |account, db_tx| {
-            account.get_pos_gen_block_data(db_tx)
-        })
+        let account = self
+            .accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        account.get_pos_gen_block_data()
     }
 
     /// Returns the last scanned block hash and height.

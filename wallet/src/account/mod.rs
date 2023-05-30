@@ -212,10 +212,7 @@ impl Account {
         self.process_send_request(db_tx, request)
     }
 
-    pub fn get_pos_gen_block_data<B: storage::Backend>(
-        &self,
-        _db_tx: &StoreTxRo<B>,
-    ) -> WalletResult<PoSGenerateBlockInputData> {
+    pub fn get_pos_gen_block_data(&self) -> WalletResult<PoSGenerateBlockInputData> {
         let utxos = self.get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake);
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, kernel_input_utxo) =
