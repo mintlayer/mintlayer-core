@@ -163,8 +163,7 @@ impl BlockProduction {
                     let block_height = best_block_index.block_height().next_height();
                     let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
 
-                    let sealed_epoch_randomness =
-                        sealed_epoch_index
+                    let sealed_epoch_randomness = sealed_epoch_index
                         .map(|index| this.get_epoch_data(index))
                         .transpose()
                         .map_err(|_| {
