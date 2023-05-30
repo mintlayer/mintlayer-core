@@ -203,14 +203,11 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.block_sync.run(&mut self.wallet, None).await;
     }
 
-    /// Synchronize the wallet to the current tip height and return.
+    /// Synchronize the wallet to the current node tip height and return.
+    /// The node can still download new blocks when this function returns.
     /// Most useful in scripts and unit tests to make sure the wallet state is up to date.
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
-        let node_state = self
-            .rpc_client
-            .chainstate_info()
-            .await
-            .map_err(ControllerError::NodeCallError)?;
+        let node_state = self.block_sync.force_node_state_update().await?;
         self.block_sync.run(&mut self.wallet, Some(node_state.best_block_height)).await;
         Ok(())
     }

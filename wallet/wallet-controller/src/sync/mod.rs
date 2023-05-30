@@ -15,6 +15,7 @@
 
 use std::{sync::Arc, time::Duration};
 
+use chainstate::ChainInfo;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -24,6 +25,8 @@ use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
 use tokio::{sync::mpsc, task::JoinHandle};
 use wallet::{DefaultWallet, WalletResult};
+
+use crate::ControllerError;
 
 pub trait SyncingWallet {
     fn best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)>;
@@ -138,12 +141,28 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
     }
 
     fn handle_node_state_change(&mut self, node_state: NodeState) {
+        if self.node_chain_state.as_ref().map(|state| state.block_id) == Some(node_state.block_id) {
+            return;
+        }
         log::info!(
             "Node chainstate updated, block height: {}, top block id: {}",
             node_state.block_height,
             node_state.block_id.hex_encode()
         );
         self.node_chain_state = Some(node_state);
+    }
+
+    pub async fn force_node_state_update(&mut self) -> Result<ChainInfo, ControllerError<T>> {
+        let node_state = self
+            .rpc_client
+            .chainstate_info()
+            .await
+            .map_err(ControllerError::NodeCallError)?;
+        self.handle_node_state_change(NodeState {
+            block_height: node_state.best_block_height,
+            block_id: node_state.best_block_id,
+        });
+        Ok(node_state)
     }
 
     fn start_block_fetch_if_needed(&mut self, wallet: &mut impl SyncingWallet) {
