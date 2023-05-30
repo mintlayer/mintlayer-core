@@ -430,7 +430,7 @@ impl BlockProduction {
 
 fn generate_finalize_block_data(
     chain_config: &ChainConfig,
-    chainstate_handle: &(dyn ChainstateInterface),
+    chainstate_handle: &dyn ChainstateInterface,
     best_block_index: &GenBlockIndex,
     block_height: BlockHeight,
     current_timestamp: BlockTimestamp,

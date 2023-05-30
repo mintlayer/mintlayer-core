@@ -33,6 +33,8 @@ mod with_purpose;
 
 pub use account_key_chain::AccountKeyChain;
 use crypto::key::hdkd::u31::U31;
+use crypto::key::PrivateKey;
+use crypto::vrf::{VRFKeyKind, VRFPrivateKey, VRFPublicKey};
 pub use master_key_chain::MasterKeyChain;
 
 use common::address::pubkeyhash::PublicKeyHashError;
@@ -145,6 +147,15 @@ fn get_purpose_and_index(
     })?;
     let key_index = path[BIP44_KEY_INDEX];
     Ok((purpose, key_index))
+}
+
+/// Derive a VRF private key from a normal PrivateKey
+pub fn vrf_from_private_key(private_key: &PrivateKey) -> (VRFPrivateKey, VRFPublicKey) {
+    let bytes = private_key.as_bytes();
+    debug_assert_eq!(bytes.len(), 32);
+    let key_hash = crypto::hash::hash::<crypto::hash::Sha3_512, _>(bytes);
+    VRFPrivateKey::new_from_bytes(&key_hash[0..32], VRFKeyKind::Schnorrkel)
+        .expect("should not fail")
 }
 
 #[cfg(test)]

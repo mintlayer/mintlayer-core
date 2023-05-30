@@ -482,7 +482,7 @@ fn create_testnet_genesis() -> Genesis {
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "00d4b8138be57c1bddfff397ffc72ca0453131f8df364d2b6bf4a8c6558ed81d79",
+        "0010fe8dbf22f9991a8ea44118bda569dd8d970a44faf5ad818de1a24abbeead66",
     );
 
     let mint_output = TxOutput::Transfer(
