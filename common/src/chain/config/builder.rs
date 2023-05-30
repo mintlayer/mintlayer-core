@@ -69,7 +69,10 @@ impl ChainType {
                     (
                         BlockHeight::new(1),
                         UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
-                            initial_difficulty: crate::chain::pow::limit(ChainType::Testnet).into(),
+                            initial_difficulty: crate::chain::pos::initial_difficulty(
+                                ChainType::Testnet,
+                            )
+                            .into(),
                             config: pos_config,
                         }),
                     ),

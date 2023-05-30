@@ -22,6 +22,8 @@ use crate::{
     Uint256,
 };
 
+use super::config::ChainType;
+
 #[derive(Eq, PartialEq, TypeName)]
 pub enum Pool {}
 pub type PoolId = Id<Pool>;
@@ -114,5 +116,27 @@ pub fn create_unittest_pos_config() -> PoSChainConfig {
         decommission_maturity_distance: 2000.into(),
         spend_share_maturity_distance: 2000.into(),
         block_count_to_average_for_blocktime: 5,
+    }
+}
+
+pub const fn initial_difficulty(chain_type: ChainType) -> Uint256 {
+    match chain_type {
+        // TODO: Decide what to use on Mainnet.
+        // The initial_difficulty value from testnet is probably too high,
+        // because it takes a long time to converge on some stable level
+        // (about 200..300 blocks for testnet because of the 10% swing limit).
+        ChainType::Mainnet => unimplemented!(),
+        ChainType::Testnet => Uint256([
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x00000000FFFFFFFF,
+        ]),
+        ChainType::Signet | ChainType::Regtest => Uint256([
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x00000000FFFFFFFF,
+        ]),
     }
 }
