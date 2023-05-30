@@ -21,7 +21,6 @@ use std::sync::{
 };
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
-
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
 };
@@ -245,7 +244,11 @@ impl BlockProduction {
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let stop_flag = Arc::new(false.into());
+
         let tip_at_start = self.pull_best_block_index().await?;
+
+        let timestamp_at_start =
+            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -463,11 +466,14 @@ fn generate_finalize_block_data(
                     PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
                 ))?;
 
+            let epoch_index = chain_config.epoch_index_from_height(&block_height);
+
             Ok(Some(FinalizeBlockInputData::PoS(
                 PoSFinalizeBlockInputData::new(
                     pos_input_data.stake_private_key().clone(),
                     pos_input_data.vrf_private_key().clone(),
                     sealed_epoch_index,
+                    epoch_index,
                     sealed_epoch_randomness,
                     previous_block_timestamp,
                     max_block_timestamp,
