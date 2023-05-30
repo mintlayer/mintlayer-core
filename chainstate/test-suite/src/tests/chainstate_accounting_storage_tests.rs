@@ -131,7 +131,7 @@ fn store_pool_data_and_balance(#[case] seed: Seed) {
         let storage = Store::new_empty().unwrap();
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).with_storage(storage.clone()).build();
-        let amount_to_stake = Amount::from_atoms(100);
+        let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
 
         let (tx, pool_id, pool_data, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
@@ -192,21 +192,21 @@ fn accounting_storage_two_blocks_one_epoch_no_seal(#[case] seed: Seed) {
             .with_storage(storage.clone())
             .with_chain_config(chain_config)
             .build();
-        let amount_to_stake = Amount::from_atoms(100);
+        let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
         let expected_epoch_index = 0;
 
         let (tx1, pool_id1, pool_data1, tx_utxo_outpoint) = make_tx_with_stake_pool_from_genesis(
             &mut rng,
             &mut tf,
             amount_to_stake,
-            Amount::from_atoms(300),
+            (amount_to_stake * 3).unwrap(),
         );
 
         let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
             tx_utxo_outpoint,
             amount_to_stake,
-            Amount::from_atoms(200),
+            (amount_to_stake * 2).unwrap(),
         );
 
         let block1_index = tf
@@ -307,7 +307,7 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             .with_storage(storage.clone())
             .with_chain_config(chain_config)
             .build();
-        let amount_to_stake = Amount::from_atoms(100);
+        let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
@@ -316,14 +316,14 @@ fn accounting_storage_two_epochs_no_seal(#[case] seed: Seed) {
             &mut rng,
             &mut tf,
             amount_to_stake,
-            Amount::from_atoms(300),
+            (amount_to_stake * 3).unwrap(),
         );
 
         let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
             tx_utxo_outpoint,
             amount_to_stake,
-            Amount::from_atoms(200),
+            (amount_to_stake * 2).unwrap(),
         );
 
         let block1_index = tf
@@ -439,7 +439,7 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             .with_storage(storage.clone())
             .with_chain_config(chain_config)
             .build();
-        let amount_to_stake = Amount::from_atoms(100);
+        let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
         let block2_epoch_index = 2;
@@ -448,14 +448,14 @@ fn accounting_storage_seal_one_epoch(#[case] seed: Seed) {
             &mut rng,
             &mut tf,
             amount_to_stake,
-            Amount::from_atoms(300),
+            (amount_to_stake * 3).unwrap(),
         );
 
         let (tx2, pool_id2, pool_data2, _) = make_tx_with_stake_pool(
             &mut rng,
             tx_utxo_outpoint,
             amount_to_stake,
-            Amount::from_atoms(200),
+            (amount_to_stake * 2).unwrap(),
         );
 
         let block1_index = tf
@@ -578,7 +578,7 @@ fn accounting_storage_seal_every_block(#[case] seed: Seed) {
             .with_storage(storage.clone())
             .with_chain_config(chain_config)
             .build();
-        let amount_to_stake = Amount::from_atoms(100);
+        let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
         // genesis block takes epoch 0, so new blocks start from epoch 1
         let block1_epoch_index = 1;
 

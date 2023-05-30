@@ -42,7 +42,10 @@ fn prepare_stake_pool(
     tf: &mut TestFramework,
 ) -> (PoolId, OutPoint, OutPoint) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
-    let amount_to_stake = Amount::from_atoms(rng.gen_range(1000..200_000));
+    let min_stake_pool_pledge =
+        tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+    let amount_to_stake =
+        Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_owner(rng, amount_to_stake, vrf_pk);
 
@@ -204,7 +207,10 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let mut tf = TestFramework::builder(&mut rng).build();
 
         let (_, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-        let amount_to_stake = Amount::from_atoms(rng.gen_range(1000..200_000));
+        let min_stake_pool_pledge =
+            tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+        let amount_to_stake =
+            Amount::from_atoms(rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)));
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 

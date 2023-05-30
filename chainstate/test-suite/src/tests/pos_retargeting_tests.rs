@@ -51,7 +51,6 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 
 const TARGET_BLOCK_TIME: Duration = Duration::from_secs(2 * 60);
-const STAKED_BALANCE: Amount = Amount::from_atoms(1);
 
 // Create a chain genesis <- block_1
 // block_1 has tx with StakePool output
@@ -87,9 +86,10 @@ fn setup_test_chain_with_staked_pool(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
     ));
+    let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
 
     let stake_pool_data = StakePoolData::new(
-        STAKED_BALANCE,
+        amount_to_stake,
         Destination::PublicKey(pk),
         vrf_pk,
         Destination::AnyoneCanSpend,
@@ -122,6 +122,7 @@ fn stable_block_time(#[case] seed: Seed) {
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (mut tf, pool_id, staking_sk) = setup_test_chain_with_staked_pool(&mut rng, vrf_pk);
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let amount_to_stake = tf.chainstate.get_chain_config().min_stake_pool_pledge();
 
     for _i in 0..50 {
         let initial_block_time = BlockTimestamp::from_duration_since_epoch(tf.current_time());
@@ -172,7 +173,7 @@ fn stable_block_time(#[case] seed: Seed) {
             &vrf_sk,
             chainstate_types::pos_randomness::PoSRandomness::new(sealed_epoch_randomness),
             pool_id,
-            STAKED_BALANCE,
+            amount_to_stake,
             current_epoch_index,
             new_target,
         )

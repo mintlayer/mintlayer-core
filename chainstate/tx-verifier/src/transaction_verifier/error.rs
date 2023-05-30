@@ -144,7 +144,7 @@ pub enum ConnectTransactionError {
     #[error("Output timelock error: {0}")]
     OutputTimelockError(#[from] timelock_check::OutputMaturityError),
     #[error(
-        "Transction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
+        "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]
     NotEnoughPledgeToCreateStakePool(Id<Transaction>, Amount, Amount),
 }

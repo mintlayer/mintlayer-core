@@ -409,7 +409,6 @@ impl ChainConfig {
     }
 
     /// Min pledge required to create a stake pool
-    #[must_use]
     pub fn min_stake_pool_pledge(&self) -> Amount {
         self.min_stake_pool_pledge
     }
