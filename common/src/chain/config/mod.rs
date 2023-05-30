@@ -44,6 +44,7 @@ use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+// DEFAULT_EPOCH_LENGTH = 3600
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
         Some(v) => v,

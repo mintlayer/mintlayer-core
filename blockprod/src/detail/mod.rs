@@ -31,7 +31,6 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        config::EpochIndex,
         Block, ChainConfig, RequiredConsensus, SignedTransaction,
     },
     primitives::BlockHeight,
