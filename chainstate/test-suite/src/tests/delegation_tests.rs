@@ -646,5 +646,3 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
         assert!(delegation_data.is_none());
     });
 }
-
-// FIXME: add tests that spends delegation with reward

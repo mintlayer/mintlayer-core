@@ -46,8 +46,9 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        Block, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPoint,
-        OutPointSourceId, PoSChainConfig, PoolId, SignedTransaction, TxOutput, UpgradeVersion,
+        AccountInput, AccountType, Block, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OutPoint, OutPointSourceId, PoSChainConfig, PoolId, SignedTransaction,
+        TxInput, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -1939,4 +1940,285 @@ fn pos_reorg(#[case] seed: Seed) {
     tf1.chainstate.preliminary_header_check(block3_pool2.header().clone()).unwrap();
     let block3_pool2 = tf1.chainstate.preliminary_block_check(block3_pool2).unwrap();
     tf1.process_block(block3_pool2, BlockSource::Peer).unwrap().unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_from_delegation_with_reward(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staking_sk, staking_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let target_block_time = create_unittest_pos_config().target_block_time().get();
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(2),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
+        ),
+    ];
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
+    // FIXME: rebase on wallet_staking PR and remove epoch length then the test should work
+    let chain_config = ConfigBuilder::test_chain()
+        .epoch_length(TEST_EPOCH_LENGTH)
+        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
+        .net_upgrades(net_upgrades)
+        .build();
+
+    let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    // Process block_1 and create stake pool and delegation
+    let amount_to_stake = Amount::from_atoms(rng.gen_range(100..100_000));
+    let amount_to_delegate = Amount::from_atoms(rng.gen_range(100..100_000));
+
+    let staker_reward_per_block = Amount::from_atoms(1000);
+    let stake_pool_data = StakePoolData::new(
+        amount_to_stake,
+        Destination::PublicKey(staking_pk),
+        vrf_pk,
+        Destination::AnyoneCanSpend,
+        PerThousand::new(0).unwrap(),
+        staker_reward_per_block,
+    );
+    let block_subsidy =
+        tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
+    let delegation_reward_per_block = (block_subsidy - staker_reward_per_block).unwrap();
+
+    let genesis_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
+        0,
+    );
+    let pool_id = pos_accounting::make_pool_id(&genesis_outpoint);
+    let delegation_id = pos_accounting::make_delegation_id(&genesis_outpoint);
+    let tx1 = TransactionBuilder::new()
+        .add_input(genesis_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::Transfer(
+            OutputValue::Coin(amount_to_delegate),
+            Destination::AnyoneCanSpend,
+        ))
+        .add_output(TxOutput::CreateStakePool(
+            pool_id,
+            Box::new(stake_pool_data),
+        ))
+        .add_output(TxOutput::CreateDelegationId(
+            Destination::AnyoneCanSpend,
+            pool_id,
+        ))
+        .build();
+    let tx1_id = tx1.transaction().get_id();
+    let tx2 = TransactionBuilder::new()
+        .add_input(
+            OutPoint::new(tx1_id.into(), 0).into(),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+        .build();
+
+    tf.make_block_builder()
+        .with_transactions(vec![tx1, tx2])
+        .build_and_process()
+        .unwrap();
+
+    // Process block_2 and distibute reward
+    let stake_pool_outpoint = OutPoint::new(tx1_id.into(), 1);
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
+    let reward_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination.clone(),
+        tf.best_block_id(),
+        stake_pool_outpoint.clone(),
+    );
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        stake_pool_outpoint,
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        amount_to_stake,
+        0,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    tf.make_block_builder()
+        .with_block_signing_key(staking_sk.clone())
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(reward_outputs.clone())
+        .with_timestamp(block_timestamp)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // Process block_3 and spend part of the share including reward
+    let block_2_reward_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
+        0,
+    );
+
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination.clone(),
+        tf.best_block_id(),
+        block_2_reward_outpoint.clone(),
+    );
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        block_2_reward_outpoint,
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        amount_to_stake,
+        0,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
+    let tx_input_spend_from_delegation = AccountInput::new(
+        0,
+        AccountType::Delegation(delegation_id),
+        amount_to_withdraw,
+    );
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(tx_input_spend_from_delegation),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+        .build();
+
+    tf.make_block_builder()
+        .with_block_signing_key(staking_sk.clone())
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(reward_outputs.clone())
+        .with_timestamp(block_timestamp)
+        .add_transaction(tx)
+        .build_and_process()
+        .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // Process block_4 and spend some share including reward
+    let block_3_reward_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
+        0,
+    );
+
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination.clone(),
+        tf.best_block_id(),
+        block_3_reward_outpoint.clone(),
+    );
+
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        block_3_reward_outpoint,
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        amount_to_stake,
+        0,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+    let delegation_balance = (amount_to_delegate - amount_to_withdraw)
+        .and_then(|balance| balance + (delegation_reward_per_block * 3).unwrap())
+        .unwrap();
+
+    // try overspend
+    {
+        let delegation_balance_overspend = (delegation_balance + Amount::from_atoms(1)).unwrap();
+        let tx_input_spend_from_delegation = AccountInput::new(
+            0,
+            AccountType::Delegation(delegation_id),
+            delegation_balance_overspend,
+        );
+        let tx = TransactionBuilder::new()
+            .add_input(
+                TxInput::Account(tx_input_spend_from_delegation),
+                empty_witness(&mut rng),
+            )
+            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .build();
+
+        let res = tf
+            .make_block_builder()
+            .with_block_signing_key(staking_sk.clone())
+            .with_consensus_data(ConsensusData::PoS(Box::new(pos_data.clone())))
+            .with_reward(reward_outputs.clone())
+            .with_timestamp(block_timestamp)
+            .add_transaction(tx)
+            .build_and_process()
+            .unwrap_err();
+        assert_eq!(
+            res,
+            ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                ConnectTransactionError::AttemptToPrintMoney(
+                    delegation_balance,
+                    delegation_balance_overspend
+                )
+            ))
+        );
+    }
+
+    let tx_input_spend_from_delegation = AccountInput::new(
+        0,
+        AccountType::Delegation(delegation_id),
+        delegation_balance,
+    );
+    let tx = TransactionBuilder::new()
+        .add_input(
+            TxInput::Account(tx_input_spend_from_delegation),
+            empty_witness(&mut rng),
+        )
+        .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+        .build();
+
+    tf.make_block_builder()
+        .with_block_signing_key(staking_sk.clone())
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(reward_outputs)
+        .with_timestamp(block_timestamp)
+        .add_transaction(tx)
+        .build_and_process()
+        .unwrap();
+
+    let res_pool_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
+        &tf.storage,
+        delegation_id,
+    )
+    .unwrap();
+    assert_eq!(None, res_pool_balance);
 }
