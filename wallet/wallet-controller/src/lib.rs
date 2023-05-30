@@ -26,7 +26,7 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, Block, ChainConfig, OutPoint, TxOutput},
+    chain::{tokens::TokenId, Block, ChainConfig, OutPoint, SignedTransaction, TxOutput},
     primitives::Amount,
 };
 use consensus::GenerateBlockInputData;
@@ -35,7 +35,7 @@ pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
 use wallet::{send_request::make_address_output, DefaultWallet};
-use wallet_types::{
+pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoType, UtxoTypes},
 };
@@ -136,9 +136,12 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_utxos(&self) -> Result<BTreeMap<OutPoint, TxOutput>, ControllerError<T>> {
+    pub fn get_utxos(
+        &self,
+        utxo_types: UtxoTypes,
+    ) -> Result<BTreeMap<OutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(DEFAULT_ACCOUNT_INDEX, UtxoTypes::ALL)
+            .get_utxos(DEFAULT_ACCOUNT_INDEX, utxo_types)
             .map_err(ControllerError::WalletError)
     }
 
@@ -175,25 +178,33 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
-    pub async fn generate_block(&mut self) -> Result<Block, ControllerError<T>> {
+    pub async fn generate_block(
+        &mut self,
+        transactions_opt: Option<Vec<SignedTransaction>>,
+    ) -> Result<Block, ControllerError<T>> {
         let pos_data = self
             .wallet
             .get_pos_gen_block_data(DEFAULT_ACCOUNT_INDEX)
             .map_err(ControllerError::WalletError)?;
         let block = self
             .rpc_client
-            .generate_block(GenerateBlockInputData::PoS(pos_data.into()), None)
+            .generate_block(
+                GenerateBlockInputData::PoS(pos_data.into()),
+                transactions_opt,
+            )
             .await
             .map_err(ControllerError::NodeCallError)?;
         Ok(block)
     }
 
-    /// Sync the wallet block chain from the node.
+    /// Synchronize the wallet continuously from the node's blockchain.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
         self.block_sync.run(&mut self.wallet, None).await;
     }
 
+    /// Synchronize the wallet to the current tip height and return.
+    /// Most useful in scripts and unit tests to make sure the wallet state is up to date.
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
         let node_state = self
             .rpc_client

@@ -17,7 +17,7 @@ use common::chain::TxOutput;
 
 pub type UtxoTypeInt = u16;
 
-#[derive(PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
 pub enum UtxoType {
     Transfer = 1 << 0,
@@ -41,6 +41,7 @@ pub fn get_utxo_type(output: &TxOutput) -> UtxoType {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct UtxoTypes(UtxoTypeInt);
 
 impl UtxoTypes {

@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod helper_types;
+
 use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use clap::Parser;
@@ -25,6 +27,8 @@ use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
 use crate::errors::WalletCliError;
+
+use self::helper_types::CliUtxoTypes;
 
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
@@ -69,7 +73,12 @@ pub enum WalletCommand {
         hash: String,
     },
 
-    GenerateBlock,
+    /// Generate a block with the given transactions to the specified
+    /// reward destination. If transactions are None, the block will be
+    /// generated with available transactions in the mempool
+    GenerateBlock {
+        transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
+    },
 
     /// Submit a block to be included in the chain
     ///
@@ -98,7 +107,10 @@ pub enum WalletCommand {
 
     GetBalance,
 
-    ListUtxo,
+    ListUtxo {
+        #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
+        utxo_type: CliUtxoTypes,
+    },
 
     /// Generate a new unused address
     NewAddress,
@@ -295,11 +307,13 @@ pub async fn handle_wallet_command(
             }
         }
 
-        WalletCommand::GenerateBlock => {
+        WalletCommand::GenerateBlock { transactions } => {
+            let transactions_opt =
+                transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect());
             let block = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .generate_block()
+                .generate_block(transactions_opt)
                 .await
                 .map_err(WalletCliError::Controller)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
@@ -347,11 +361,11 @@ pub async fn handle_wallet_command(
             )))
         }
 
-        WalletCommand::ListUtxo => {
+        WalletCommand::ListUtxo { utxo_type } => {
             let utxos = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_utxos()
+                .get_utxos(utxo_type.to_wallet_types())
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(format!("{utxos:?}")))
         }
