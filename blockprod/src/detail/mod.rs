@@ -172,8 +172,9 @@ impl BlockProduction {
                             )
                         })?
                         .flatten()
-                        .map(|epoch_data| *epoch_data.randomness())
-                        .unwrap_or(PoSRandomness::at_genesis(&chain_config));
+                        .map_or(PoSRandomness::at_genesis(&chain_config), |epoch_data| {
+                            *epoch_data.randomness()
+                        });
 
                     let (consensus_data, block_reward) = generate_consensus_data_and_reward(
                         &chain_config,
