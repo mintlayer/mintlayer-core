@@ -89,13 +89,6 @@ impl PrivateKey {
         };
         Ok(signature)
     }
-
-    /// Returns internal private key data (32-byte slice for Secp256k1Schnorr)
-    pub fn as_bytes(&self) -> &[u8] {
-        match &self.key {
-            PrivateKeyHolder::Secp256k1Schnorr(key) => key.as_bytes(),
-        }
-    }
 }
 
 impl From<Secp256k1PrivateKey> for PrivateKey {

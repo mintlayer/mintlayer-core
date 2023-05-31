@@ -45,6 +45,7 @@ use crypto::key::extended::ExtendedKeyKind;
 use crypto::key::hdkd::child_number::ChildNumber;
 use crypto::key::hdkd::derivable::DerivationError;
 use crypto::key::hdkd::derivation_path::DerivationPath;
+use serialization::Encode;
 use wallet_types::keys::{KeyPurpose, KeyPurposeError};
 use wallet_types::AccountId;
 
@@ -151,8 +152,7 @@ fn get_purpose_and_index(
 
 /// Derive a VRF private key from a normal PrivateKey
 pub fn vrf_from_private_key(private_key: &PrivateKey) -> (VRFPrivateKey, VRFPublicKey) {
-    let bytes = private_key.as_bytes();
-    debug_assert_eq!(bytes.len(), 32);
+    let bytes = private_key.encode();
     let key_hash = crypto::hash::hash::<crypto::hash::Sha3_512, _>(bytes);
     VRFPrivateKey::new_from_bytes(&key_hash[0..32], VRFKeyKind::Schnorrkel)
         .expect("should not fail")
