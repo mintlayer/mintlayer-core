@@ -28,10 +28,13 @@ where
 
 impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
-        self.outpoint()
-            .unwrap() // FIXME: impl
-            .tx_id()
-            .get_tx_id()
-            .map_or(false, |tx_id| mempool.contains_transaction(tx_id))
+        // TODO: if TxInput spends from an account there is no way to know tx_id
+        match self {
+            TxInput::Utxo(outpoint) => outpoint
+                .tx_id()
+                .get_tx_id()
+                .map_or(false, |tx_id| mempool.contains_transaction(tx_id)),
+            TxInput::Account(_) => false,
+        }
     }
 }
