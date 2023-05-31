@@ -125,7 +125,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        current_timestamp: BlockTimestamp,
+        block_timestamp: BlockTimestamp,
     ) -> Result<
         (
             ConsensusData,
@@ -181,7 +181,7 @@ impl BlockProduction {
                         &best_block_index,
                         sealed_epoch_randomness,
                         input_data.clone(),
-                        current_timestamp,
+                        block_timestamp,
                         block_height,
                         get_ancestor,
                     )?;
@@ -189,9 +189,8 @@ impl BlockProduction {
                     let finalize_block_data = generate_finalize_block_data(
                         &chain_config,
                         this,
-                        &best_block_index,
                         block_height,
-                        current_timestamp,
+                        block_timestamp,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -249,9 +248,7 @@ impl BlockProduction {
         let stop_flag = Arc::new(false.into());
 
         let tip_at_start = self.pull_best_block_index().await?;
-
-        let timestamp_at_start =
-            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+        let timestamp_at_start = tip_at_start.block_timestamp();
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -273,6 +270,7 @@ impl BlockProduction {
         // attempted, and during Proof of Stake, will prevent
         // searching over the same search space.
         let mut last_timestamp_used = timestamp_at_start;
+
         let mut previous_consensus_status =
             self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
 
@@ -292,10 +290,12 @@ impl BlockProduction {
                 }
             }
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), current_timestamp).await?;
+            last_timestamp_used =
+                last_timestamp_used.add_int_seconds(1).expect("Time will not overflow");
 
-            last_timestamp_used = current_timestamp;
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
+                self.pull_consensus_data(input_data.clone(), last_timestamp_used).await?;
+
             previous_consensus_status = self
                 .chain_config
                 .net_upgrade()
@@ -337,7 +337,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                current_timestamp,
+                last_timestamp_used,
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -393,7 +393,7 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        current_timestamp: BlockTimestamp,
+        block_timestamp: BlockTimestamp,
         finalize_block_data: Option<FinalizeBlockInputData>,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -411,7 +411,7 @@ impl BlockProduction {
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                current_timestamp,
+                block_timestamp,
                 consensus_data,
             );
 
@@ -443,17 +443,14 @@ impl BlockProduction {
 fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &dyn ChainstateInterface,
-    best_block_index: &GenBlockIndex,
     block_height: BlockHeight,
-    current_timestamp: BlockTimestamp,
+    block_timestamp: BlockTimestamp,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
 ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
-            let previous_block_timestamp = best_block_index.block_timestamp();
-
-            let max_block_timestamp = current_timestamp
+            let max_block_timestamp = block_timestamp
                 .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                 .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
@@ -476,7 +473,6 @@ fn generate_finalize_block_data(
                     pos_input_data.vrf_private_key().clone(),
                     epoch_index,
                     sealed_epoch_randomness,
-                    previous_block_timestamp,
                     max_block_timestamp,
                     pool_balance,
                 ),

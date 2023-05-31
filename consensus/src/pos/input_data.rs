@@ -134,8 +134,6 @@ pub struct PoSFinalizeBlockInputData {
     epoch_index: EpochIndex,
     /// The sealed epoch randomness (i.e used in producing VRF data)
     sealed_epoch_randomness: PoSRandomness,
-    /// The block timestamp of the previous block
-    previous_block_timestamp: BlockTimestamp,
     /// The maximum timestamp to try and staking with
     max_block_timestamp: BlockTimestamp,
     /// The current pool balance of the stake pool
@@ -148,7 +146,6 @@ impl PoSFinalizeBlockInputData {
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
-        previous_block_timestamp: BlockTimestamp,
         max_block_timestamp: BlockTimestamp,
         pool_balance: Amount,
     ) -> Self {
@@ -157,7 +154,6 @@ impl PoSFinalizeBlockInputData {
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
-            previous_block_timestamp,
             max_block_timestamp,
             pool_balance,
         }
@@ -173,10 +169,6 @@ impl PoSFinalizeBlockInputData {
 
     pub fn pool_balance(&self) -> Amount {
         self.pool_balance
-    }
-
-    pub fn previous_block_timestamp(&self) -> BlockTimestamp {
-        self.previous_block_timestamp
     }
 
     pub fn sealed_epoch_randomness(&self) -> &PoSRandomness {
