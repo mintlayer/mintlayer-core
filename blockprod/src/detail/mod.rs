@@ -126,6 +126,7 @@ impl BlockProduction {
         &self,
         input_data: GenerateBlockInputData,
         block_timestamp: BlockTimestamp,
+        current_timestamp: BlockTimestamp,
     ) -> Result<
         (
             ConsensusData,
@@ -190,7 +191,7 @@ impl BlockProduction {
                         &chain_config,
                         this,
                         block_height,
-                        block_timestamp,
+                        current_timestamp,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -293,8 +294,9 @@ impl BlockProduction {
             last_timestamp_used =
                 last_timestamp_used.add_int_seconds(1).expect("Time will not overflow");
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), last_timestamp_used).await?;
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) = self
+                .pull_consensus_data(input_data.clone(), last_timestamp_used, current_timestamp)
+                .await?;
 
             previous_consensus_status = self
                 .chain_config
@@ -444,13 +446,13 @@ fn generate_finalize_block_data(
     chain_config: &ChainConfig,
     chainstate_handle: &dyn ChainstateInterface,
     block_height: BlockHeight,
-    block_timestamp: BlockTimestamp,
+    current_timestamp: BlockTimestamp,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
 ) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
-            let max_block_timestamp = block_timestamp
+            let max_block_timestamp = current_timestamp
                 .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                 .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
