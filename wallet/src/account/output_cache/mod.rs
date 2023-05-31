@@ -23,6 +23,17 @@ use wallet_types::{
     account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountTxId, WalletTx,
 };
 
+/// A helper structure for the UTXO search.
+///
+/// All transactions and blocks from the DB are cached here. If a transaction
+/// consumes a wallet input (send transaction) or produces a wallet output
+/// (receive transaction), it's stored in the DB and cached here. To find all UTXOs,
+/// all transaction/block outputs are collected. Then, from all these outputs,
+/// we remove all outputs that are consumed by the same locally stored
+/// transactions and blocks. Then we filter the outputs that are from our wallet
+/// (can be signed) to get the final UTXO list that is ready to use.
+/// In case of reorg, top blocks (and the transactions they contain) are simply removed from the DB/cache.
+/// A similar approach is used by the Bitcoin Core wallet.
 pub struct OutputCache {
     blocks: BTreeMap<AccountBlockHeight, WalletBlock>,
     txs: BTreeMap<AccountTxId, WalletTx>,

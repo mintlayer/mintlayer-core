@@ -51,7 +51,7 @@ use self::output_cache::OutputCache;
 pub struct Account {
     chain_config: Arc<ChainConfig>,
     key_chain: AccountKeyChain,
-    txo_cache: OutputCache,
+    output_cache: OutputCache,
     account_info: AccountInfo,
 }
 
@@ -76,12 +76,12 @@ impl Account {
 
         let blocks = db_tx.get_blocks(&key_chain.get_account_id())?;
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let txo_cache = OutputCache::new(blocks, txs);
+        let output_cache = OutputCache::new(blocks, txs);
 
         Ok(Account {
             chain_config,
             key_chain,
-            txo_cache,
+            output_cache,
             account_info,
         })
     }
@@ -103,12 +103,12 @@ impl Account {
 
         db_tx.set_account(&account_id, &account_info)?;
 
-        let txo_cache = OutputCache::empty();
+        let output_cache = OutputCache::empty();
 
         let mut account = Account {
             chain_config,
             key_chain,
-            txo_cache,
+            output_cache,
             account_info,
         };
 
@@ -443,7 +443,7 @@ impl Account {
     }
 
     pub fn get_utxos(&self, utxo_types: UtxoTypes) -> BTreeMap<OutPoint, &TxOutput> {
-        let mut all_outputs = self.txo_cache.utxos();
+        let mut all_outputs = self.output_cache.utxos();
         all_outputs.retain(|_outpoint, txo| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
         });
@@ -456,7 +456,7 @@ impl Account {
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
         let revoked_blocks = self
-            .txo_cache
+            .output_cache
             .blocks()
             .iter()
             .filter_map(|(id, block)| {
@@ -469,7 +469,7 @@ impl Account {
             .collect::<Vec<_>>();
 
         let revoked_txs = self
-            .txo_cache
+            .output_cache
             .txs()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
@@ -480,17 +480,18 @@ impl Account {
                         None
                     }
                 }
+                TxState::Inactive | TxState::Conflicted(_) | TxState::InMempool => None,
             })
             .collect::<Vec<_>>();
 
         for block_id in revoked_blocks {
             db_tx.del_block(&block_id)?;
-            self.txo_cache.remove_block(&block_id);
+            self.output_cache.remove_block(&block_id);
         }
 
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
-            self.txo_cache.remove_tx(&tx_id);
+            self.output_cache.remove_tx(&tx_id);
         }
 
         Ok(())
@@ -504,12 +505,12 @@ impl Account {
         let relevant_inputs = block
             .kernel_inputs()
             .iter()
-            .any(|input| self.txo_cache.outpoints().contains(input.outpoint()));
+            .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
         let relevant_outputs = self.mark_outputs_as_used(db_tx, block.reward())?;
         if relevant_inputs || relevant_outputs {
             let block_height = AccountBlockHeight::new(self.get_account_id(), block.height());
             db_tx.set_block(&block_height, &block)?;
-            self.txo_cache.add_block(block_height, block);
+            self.output_cache.add_block(block_height, block);
         }
         Ok(())
     }
@@ -523,13 +524,13 @@ impl Account {
         let relevant_inputs = tx
             .inputs()
             .iter()
-            .any(|input| self.txo_cache.outpoints().contains(input.outpoint()));
-        let relevant_output = self.mark_outputs_as_used(db_tx, tx.outputs())?;
-        if relevant_inputs || relevant_output {
+            .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
+        let relevant_outputs = self.mark_outputs_as_used(db_tx, tx.outputs())?;
+        if relevant_inputs || relevant_outputs {
             let wallet_tx = WalletTx::new(tx.clone().into(), state.clone());
             let tx_id = AccountTxId::new(self.get_account_id(), wallet_tx.tx().get_id());
             db_tx.set_transaction(&tx_id, &wallet_tx)?;
-            self.txo_cache.add_tx(tx_id, wallet_tx);
+            self.output_cache.add_tx(tx_id, wallet_tx);
         }
         Ok(())
     }

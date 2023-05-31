@@ -20,6 +20,13 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
 };
 
+/// This structure is used to store inputs (kernel inputs in PoS only)
+/// and reward outputs of the blocks that are related to the wallet.
+/// Spent outputs are found by looking at all locally stored transactions
+/// and blocks. In case of reorg, top blocks are simply removed from the DB.
+/// We use the same approach as the Bitcoin Core wallet, but unlike Bitcoin
+/// we don't have coinbase transactions, so the additional `WalletBlock`
+/// struct is invented here.
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct WalletBlock {
     // `GenBlock` because this may be the genesis block (kernel_inputs will be empty in this case)
