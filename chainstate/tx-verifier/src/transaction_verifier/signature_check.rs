@@ -15,7 +15,7 @@
 
 use common::chain::{
     signature::{verify_signature, Transactable},
-    ChainConfig,
+    ChainConfig, TxInput,
 };
 use utxo::UtxosView;
 
@@ -40,13 +40,13 @@ where
 
     let inputs_utxos = inputs
         .iter()
-        .map(|input| match input.outpoint() {
-            Some(outpoint) => utxo_view
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => utxo_view
                 .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
                 .map(|utxo| Some(utxo.take_output())),
-            None => Ok(None),
+            TxInput::Account(_) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     let inputs_utxos = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

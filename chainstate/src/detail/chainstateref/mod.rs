@@ -577,14 +577,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
                 ensure!(
-                    tx_inputs.insert(input.outpoint()),
+                    tx_inputs.insert(input),
                     CheckBlockTransactionsError::DuplicateInputInTransaction(
                         tx.transaction().get_id(),
                         block.get_id()
                     )
                 );
                 ensure!(
-                    block_inputs.insert(input.outpoint()),
+                    block_inputs.insert(input),
                     CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
                 );
             }

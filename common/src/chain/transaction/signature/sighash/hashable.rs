@@ -106,7 +106,7 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
                     let inputs = self.inputs;
                     hash_encoded_to(&(inputs.len() as u32), stream);
                     for input in inputs {
-                        hash_encoded_to(&input.outpoint(), stream);
+                        hash_encoded_to(&input, stream);
                     }
                 }
 
@@ -121,7 +121,7 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
             }
             sighashtype::InputsMode::AnyoneCanPay => {
                 // Commit the input being signed (target input)
-                hash_encoded_to(&target_input.outpoint(), stream);
+                hash_encoded_to(&target_input, stream);
                 // Commit the utxo of the input being signed (target input)
                 hash_encoded_to(&self.inputs_utxos[target_input_num], stream);
             }

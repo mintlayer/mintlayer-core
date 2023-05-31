@@ -1965,17 +1965,13 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         ),
     ];
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
-    // FIXME: rebase on wallet_staking PR and remove epoch length then the test should work
-    let chain_config = ConfigBuilder::test_chain()
-        .epoch_length(TEST_EPOCH_LENGTH)
-        .sealed_epoch_distance_from_tip(TEST_SEALED_EPOCH_DISTANCE)
-        .net_upgrades(net_upgrades)
-        .build();
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
 
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
     // Process block_1 and create stake pool and delegation
-    let amount_to_stake = Amount::from_atoms(rng.gen_range(100..100_000));
+    let min_pledge_atoms = tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+    let amount_to_stake = Amount::from_atoms(rng.gen_range(min_pledge_atoms..min_pledge_atoms * 3));
     let amount_to_delegate = Amount::from_atoms(rng.gen_range(100..100_000));
 
     let staker_reward_per_block = Amount::from_atoms(1000);
@@ -2025,6 +2021,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .with_transactions(vec![tx1, tx2])
         .build_and_process()
         .unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
 
     // Process block_2 and distibute reward
     let stake_pool_outpoint = OutPoint::new(tx1_id.into(), 1);
@@ -2109,7 +2106,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             TxInput::Account(tx_input_spend_from_delegation),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(amount_to_withdraw),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
         .build();
 
     tf.make_block_builder()
@@ -2132,7 +2133,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
-        staking_destination.clone(),
+        staking_destination,
         tf.best_block_id(),
         block_3_reward_outpoint.clone(),
     );
@@ -2154,14 +2155,14 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     )
     .expect("should be able to mine");
     let delegation_balance = (amount_to_delegate - amount_to_withdraw)
-        .and_then(|balance| balance + (delegation_reward_per_block * 3).unwrap())
+        .and_then(|balance| balance + (delegation_reward_per_block * 2).unwrap())
         .unwrap();
 
     // try overspend
     {
         let delegation_balance_overspend = (delegation_balance + Amount::from_atoms(1)).unwrap();
         let tx_input_spend_from_delegation = AccountInput::new(
-            0,
+            1,
             AccountType::Delegation(delegation_id),
             delegation_balance_overspend,
         );
@@ -2170,7 +2171,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
                 TxInput::Account(tx_input_spend_from_delegation),
                 empty_witness(&mut rng),
             )
-            .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+            .add_output(TxOutput::LockThenTransfer(
+                OutputValue::Coin(delegation_balance_overspend),
+                Destination::AnyoneCanSpend,
+                OutputTimeLock::ForBlockCount(2000),
+            ))
             .build();
 
         let res = tf
@@ -2194,7 +2199,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     }
 
     let tx_input_spend_from_delegation = AccountInput::new(
-        0,
+        1,
         AccountType::Delegation(delegation_id),
         delegation_balance,
     );
@@ -2203,11 +2208,15 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
             TxInput::Account(tx_input_spend_from_delegation),
             empty_witness(&mut rng),
         )
-        .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
+        .add_output(TxOutput::LockThenTransfer(
+            OutputValue::Coin(delegation_balance),
+            Destination::AnyoneCanSpend,
+            OutputTimeLock::ForBlockCount(2000),
+        ))
         .build();
 
     tf.make_block_builder()
-        .with_block_signing_key(staking_sk.clone())
+        .with_block_signing_key(staking_sk)
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)

@@ -511,7 +511,7 @@ impl Account {
         tx: WalletTx,
     ) -> WalletResult<()> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
-            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(&outpoint),
+            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(outpoint),
             TxInput::Account(_) => false,
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;

@@ -143,10 +143,11 @@ impl<P: UtxosView> UtxosCache<P> {
         let (sources, utxos) = tx
             .inputs()
             .iter()
-            .filter_map(|tx_in| {
-                tx_in
-                    .outpoint()
-                    .map(|outpoint| self.spend_utxo(outpoint).map(|utxo| (outpoint.tx_id(), utxo)))
+            .filter_map(|input| match input {
+                TxInput::Utxo(outpoint) => {
+                    Some(self.spend_utxo(outpoint).map(|utxo| (outpoint.tx_id(), utxo)))
+                }
+                TxInput::Account(_) => None,
             })
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
@@ -194,7 +195,10 @@ impl<P: UtxosView> UtxosCache<P> {
             Some(inputs) => {
                 let utxos = inputs
                     .iter()
-                    .filter_map(|tx_in| tx_in.outpoint().map(|outpoint| self.spend_utxo(outpoint)))
+                    .filter_map(|input| match input {
+                        TxInput::Utxo(outpoint) => Some(self.spend_utxo(outpoint)),
+                        TxInput::Account(_) => None,
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
                 (!utxos.is_empty()).then(|| UtxosBlockRewardUndo::new(utxos))
             }
