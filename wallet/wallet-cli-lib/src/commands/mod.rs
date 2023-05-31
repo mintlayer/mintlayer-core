@@ -80,6 +80,10 @@ pub enum WalletCommand {
         transactions: Option<Vec<HexEncoded<SignedTransaction>>>,
     },
 
+    GenerateBlocks {
+        count: u32,
+    },
+
     /// Submit a block to be included in the chain
     ///
     /// More information about block submits.
@@ -317,6 +321,16 @@ pub async fn handle_wallet_command(
                 .await
                 .map_err(WalletCliError::Controller)?;
             rpc_client.submit_block(block).await.map_err(WalletCliError::RpcError)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::GenerateBlocks { count } => {
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .generate_blocks(count)
+                .await
+                .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 

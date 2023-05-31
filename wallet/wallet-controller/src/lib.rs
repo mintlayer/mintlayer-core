@@ -197,6 +197,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(block)
     }
 
+    pub async fn generate_blocks(&mut self, count: u32) -> Result<(), ControllerError<T>> {
+        for _ in 0..count {
+            self.sync_once().await?;
+            let block = self.generate_block(None).await?;
+            self.rpc_client
+                .submit_block(block)
+                .await
+                .map_err(ControllerError::NodeCallError)?;
+        }
+        Ok(())
+    }
+
     /// Synchronize the wallet continuously from the node's blockchain.
     /// This function is cancel safe.
     pub async fn run_sync(&mut self) {
