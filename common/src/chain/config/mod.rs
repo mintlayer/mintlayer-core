@@ -427,18 +427,19 @@ const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 
+fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
+    let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
+    <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
+        .expect("Decoding shouldn't fail")
+}
+
 fn create_mainnet_genesis() -> Genesis {
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
     // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
     // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
     let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
-    let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
-        .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
-        &mut genesis_mint_pubkeyhash_encoded.as_slice(),
-    )
-    .expect("Decoding genesis mint destination shouldn't fail");
+    let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
     let genesis_message = String::new();
 
@@ -453,12 +454,6 @@ fn create_mainnet_genesis() -> Genesis {
         BlockTimestamp::from_int_seconds(1639975460),
         vec![output],
     )
-}
-
-fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
-    let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
-    <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
-        .expect("Decoding shouldn't fail")
 }
 
 fn create_testnet_genesis() -> Genesis {
@@ -555,6 +550,15 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
+    }
+
+    #[test]
+    fn testnet_creation() {
+        let config = create_testnet();
+
+        assert!(!config.net_upgrades.is_empty());
+        assert_eq!(2, config.net_upgrades.len());
+        assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
     #[test]
