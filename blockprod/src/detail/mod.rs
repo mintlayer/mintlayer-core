@@ -262,7 +262,17 @@ impl BlockProduction {
             self.job_manager.make_job_stopper_function();
         let _job_stopper_destructor = OnceDestructor::new(move || job_stopper_function(job_key));
 
-        let mut previous_attempt = timestamp_at_start;
+        // Unlike Proof of Work, which can vary any header field when
+        // searching for a valid block, Proof of Stake can only vary
+        // the header timestamp. Its search space starts at the
+        // previous block's timestamp + 1 second, and ends at the
+        // current timestamp + some distance in time defined by the
+        // blockchain.
+        //
+        // This variable keeps track of the last timestamp that was
+        // attempted, and during Proof of Stake, will prevent
+        // searching over the same search space.
+        let mut last_timestamp_used = timestamp_at_start;
         let mut previous_consensus_status =
             self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
 
@@ -273,7 +283,7 @@ impl BlockProduction {
             match previous_consensus_status {
                 RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {}
                 RequiredConsensus::PoS(_) => {
-                    if previous_attempt == current_timestamp
+                    if last_timestamp_used == current_timestamp
                         && current_timestamp != timestamp_at_start
                     {
                         sleep(Duration::from_secs(1)).await;
@@ -285,7 +295,7 @@ impl BlockProduction {
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
                 self.pull_consensus_data(input_data.clone(), current_timestamp).await?;
 
-            previous_attempt = current_timestamp;
+            last_timestamp_used = current_timestamp;
             previous_consensus_status = self
                 .chain_config
                 .net_upgrade()
