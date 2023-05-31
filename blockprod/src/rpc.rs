@@ -19,9 +19,8 @@ use common::{chain::Block, chain::SignedTransaction};
 use consensus::GenerateBlockInputData;
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
-use subsystem::subsystem::CallError;
 
-use crate::{detail::job_manager::JobKey, BlockProductionError};
+use crate::detail::job_manager::JobKey;
 
 #[rpc::rpc(server, client, namespace = "blockprod")]
 trait BlockProductionRpc {
@@ -50,20 +49,16 @@ trait BlockProductionRpc {
 #[async_trait::async_trait]
 impl BlockProductionRpcServer for super::BlockProductionHandle {
     async fn stop_all(&self) -> rpc::Result<usize> {
-        let stopped_jobs_count = handle_error(
+        rpc::handle_result(
             self.call_async_mut(move |this| Box::pin(async { this.stop_all().await })).await,
-        )?;
-
-        Ok(stopped_jobs_count)
+        )
     }
 
     async fn stop_job(&self, job_id: HexEncoded<JobKey>) -> rpc::Result<bool> {
-        let stopped = handle_error(
+        rpc::handle_result(
             self.call_async_mut(move |this| Box::pin(async { this.stop_job(job_id.take()).await }))
                 .await,
-        )?;
-
-        Ok(stopped)
+        )
     }
 
     async fn generate_block(
@@ -74,15 +69,11 @@ impl BlockProductionRpcServer for super::BlockProductionHandle {
         let transactions =
             transactions.map(|txs| txs.into_iter().map(HexEncoded::take).collect::<Vec<_>>());
 
-        let block = handle_error(
+        let block: Block = rpc::handle_result(
             self.call_async_mut(move |this| this.generate_block(input_data.take(), transactions))
                 .await,
         )?;
 
         Ok(block.into())
     }
-}
-
-fn handle_error<T>(e: Result<Result<T, BlockProductionError>, CallError>) -> rpc::Result<T> {
-    e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
 }

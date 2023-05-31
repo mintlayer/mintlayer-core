@@ -67,7 +67,7 @@ impl SomeSubsystemRpcServer for SomeSubsystemHandle {
     }
 
     async fn bump(&self) -> rpc::Result<u64> {
-        self.call_mut(SomeSubsystem::bump).await.map_err(rpc::Error::to_call_error)
+        rpc::handle_result(self.call_mut(SomeSubsystem::bump).await)
     }
 }
 

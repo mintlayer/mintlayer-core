@@ -17,14 +17,13 @@
 
 use std::io::{Read, Write};
 
-use crate::{Block, BlockSource, ChainInfo, ChainstateError, GenBlock};
+use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use common::{
     chain::tokens::{RPCTokenInfo, TokenId},
     primitives::{BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
-use subsystem::subsystem::CallError;
 
 #[rpc::rpc(server, client, namespace = "chainstate")]
 trait ChainstateRpc {
@@ -88,15 +87,16 @@ trait ChainstateRpc {
 #[async_trait::async_trait]
 impl ChainstateRpcServer for super::ChainstateHandle {
     async fn best_block_id(&self) -> RpcResult<Id<GenBlock>> {
-        handle_error(self.call(|this| this.get_best_block_id()).await)
+        rpc::handle_result(self.call(|this| this.get_best_block_id()).await)
     }
 
     async fn block_id_at_height(&self, height: BlockHeight) -> RpcResult<Option<Id<GenBlock>>> {
-        handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
+        rpc::handle_result(self.call(move |this| this.get_block_id_from_height(&height)).await)
     }
 
     async fn get_block(&self, id: Id<Block>) -> RpcResult<Option<HexEncoded<Block>>> {
-        let block = handle_error(self.call(move |this| this.get_block(id)).await)?;
+        let block: Option<Block> =
+            rpc::handle_result(self.call(move |this| this.get_block(id)).await)?;
         Ok(block.map(HexEncoded::new))
     }
 
@@ -106,18 +106,20 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             .await;
         // remove the block index from the return value
         let res = res.map(|v| v.map(|_bi| ()));
-        handle_error(res)
+        rpc::handle_result(res)
     }
 
     async fn block_height_in_main_chain(
         &self,
         block_id: Id<GenBlock>,
     ) -> RpcResult<Option<BlockHeight>> {
-        handle_error(self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await)
+        rpc::handle_result(
+            self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await,
+        )
     }
 
     async fn best_block_height(&self) -> RpcResult<BlockHeight> {
-        handle_error(self.call(move |this| this.get_best_block_height()).await)
+        rpc::handle_result(self.call(move |this| this.get_best_block_height()).await)
     }
 
     async fn last_common_ancestor_by_id(
@@ -125,14 +127,14 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>> {
-        handle_error(
+        rpc::handle_result(
             self.call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
                 .await,
         )
     }
 
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>> {
-        handle_error(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
+        rpc::handle_result(self.call(move |this| this.get_token_info_for_rpc(token_id)).await)
     }
 
     async fn export_bootstrap_file(
@@ -141,36 +143,28 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         include_orphans: bool,
     ) -> RpcResult<()> {
         // TODO: test this function in functional tests
-        let file_obj = std::fs::File::create(file_path).map_err(rpc::Error::to_call_error)?;
+        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
         let writer: std::io::BufWriter<Box<dyn Write + Send>> =
             std::io::BufWriter::new(Box::new(file_obj));
 
-        handle_error(
+        rpc::handle_result(
             self.call(move |this| this.export_bootstrap_stream(writer, include_orphans))
                 .await,
-        )?;
-
-        Ok(())
+        )
     }
 
     async fn import_bootstrap_file(&self, file_path: &std::path::Path) -> RpcResult<()> {
         // TODO: test this function in functional tests
-        let file_obj = std::fs::File::open(file_path).map_err(rpc::Error::to_call_error)?;
+        let file_obj: std::fs::File = rpc::handle_result(std::fs::File::create(file_path))?;
         let reader: std::io::BufReader<Box<dyn Read + Send>> =
             std::io::BufReader::new(Box::new(file_obj));
 
-        handle_error(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)?;
-
-        Ok(())
+        rpc::handle_result(self.call_mut(move |this| this.import_bootstrap_stream(reader)).await)
     }
 
     async fn info(&self) -> RpcResult<ChainInfo> {
-        handle_error(self.call(move |this| this.info()).await)
+        rpc::handle_result(self.call(move |this| this.info()).await)
     }
-}
-
-fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> RpcResult<T> {
-    e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
 }
 
 #[cfg(test)]
