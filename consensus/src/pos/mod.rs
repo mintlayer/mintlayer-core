@@ -218,23 +218,19 @@ pub fn stake(
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
-    // The block timestamp in PoS must be strictly greater than the parent block timestamp
-    let mut current_timestamp = finalize_pos_data
-        .previous_block_timestamp()
-        .add_int_seconds(1)
-        .expect("Should not fail");
+    let mut block_timestamp = block_header.timestamp();
 
     ensure!(
-        current_timestamp < finalize_pos_data.max_block_timestamp(),
+        block_timestamp < finalize_pos_data.max_block_timestamp(),
         ConsensusPoSError::FutureTimestampInThePast
     );
 
-    while current_timestamp <= finalize_pos_data.max_block_timestamp() {
+    while block_timestamp <= finalize_pos_data.max_block_timestamp() {
         let vrf_data = {
             let transcript = construct_transcript(
                 finalize_pos_data.epoch_index(),
                 &sealed_epoch_randomness.value(),
-                current_timestamp,
+                block_timestamp,
             );
 
             finalize_pos_data.vrf_private_key().produce_vrf_data(transcript.into())
@@ -247,13 +243,13 @@ pub fn stake(
             sealed_epoch_randomness,
             pos_data,
             &vrf_pk,
-            current_timestamp,
+            block_timestamp,
             finalize_pos_data.pool_balance(),
         )
         .is_ok()
         {
             block_header.update_consensus_data(ConsensusData::PoS(pos_data.clone()));
-            block_header.update_timestamp(current_timestamp);
+            block_header.update_timestamp(block_timestamp);
             return Ok(StakeResult::Success);
         }
 
@@ -261,7 +257,7 @@ pub fn stake(
             return Ok(StakeResult::Stopped);
         }
 
-        current_timestamp = match current_timestamp.add_int_seconds(1) {
+        block_timestamp = match block_timestamp.add_int_seconds(1) {
             Some(t) => t,
             None => return Ok(StakeResult::Failed),
         }
