@@ -458,7 +458,7 @@ fn create_mainnet_genesis() -> Genesis {
 
 fn create_testnet_genesis() -> Genesis {
     // TODO: use coin_decimals instead of a fixed value
-    const COIN: Amount = Amount::from_atoms(100000000000);
+    const COIN: Amount = Amount::from_atoms(100_000_000_000);
 
     let total_amount = (COIN * 100_000_000).expect("must be valid");
     let initial_pool_amount = (COIN * 40_000).expect("must be valid");

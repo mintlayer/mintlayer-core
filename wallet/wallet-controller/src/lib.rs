@@ -206,7 +206,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 .await
                 .map_err(ControllerError::NodeCallError)?;
         }
-        Ok(())
+        self.sync_once().await
     }
 
     /// Synchronize the wallet continuously from the node's blockchain.
