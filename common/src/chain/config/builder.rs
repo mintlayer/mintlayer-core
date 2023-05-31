@@ -22,6 +22,7 @@ use crate::{
             emission_schedule, ChainConfig, ChainType, EmissionSchedule, EmissionScheduleFn,
             EmissionScheduleTabular,
         },
+        pos::get_initial_randomness,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
         UpgradeVersion,
     },
@@ -160,8 +161,7 @@ impl Builder {
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
-            // TODO: choose proper initial randomness value
-            initial_randomness: H256::zero(),
+            initial_randomness: get_initial_randomness(chain_type),
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
