@@ -394,7 +394,7 @@ impl Account {
         })
     }
 
-    fn mark_outputs_as_used<B: storage::Backend>(
+    fn mark_outputs_as_seen<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         outputs: &[TxOutput],
@@ -402,12 +402,12 @@ impl Account {
         let mut found = false;
         // Process all outputs (without short-circuiting)
         for output in outputs {
-            found |= self.mark_output_as_used(db_tx, output)?;
+            found |= self.mark_output_as_seen(db_tx, output)?;
         }
         Ok(found)
     }
 
-    fn mark_output_as_used<B: storage::Backend>(
+    fn mark_output_as_seen<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
         output: &TxOutput,
@@ -506,7 +506,7 @@ impl Account {
             .kernel_inputs()
             .iter()
             .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
-        let relevant_outputs = self.mark_outputs_as_used(db_tx, block.reward())?;
+        let relevant_outputs = self.mark_outputs_as_seen(db_tx, block.reward())?;
         if relevant_inputs || relevant_outputs {
             let block_height = AccountBlockHeight::new(self.get_account_id(), block.height());
             db_tx.set_block(&block_height, &block)?;
@@ -525,7 +525,7 @@ impl Account {
             .inputs()
             .iter()
             .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
-        let relevant_outputs = self.mark_outputs_as_used(db_tx, tx.outputs())?;
+        let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let wallet_tx = WalletTx::new(tx.clone().into(), state.clone());
             let tx_id = AccountTxId::new(self.get_account_id(), wallet_tx.tx().get_id());
