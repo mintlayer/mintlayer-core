@@ -13,23 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crypto::{
-    kdf::{hash_from_challenge, hash_password, KdfChallenge, KdfConfig, KdfResult},
-    symkey::SymmetricKeyKind,
-};
-use std::{collections::BTreeMap, num::NonZeroUsize};
+use crypto::kdf::KdfChallenge;
+use std::collections::BTreeMap;
 use utils::ensure;
 
 use common::address::Address;
-use crypto::{
-    kdf::argon2::Argon2Config, key::extended::ExtendedPublicKey, random::make_true_rng,
-    symkey::SymmetricKey,
-};
+use crypto::{key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 
 use crate::{
     schema::Schema, TransactionRw, Transactional, WalletStorage, WalletStorageRead,
     WalletStorageWrite,
 };
+
+mod password;
+use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
@@ -39,49 +36,6 @@ use wallet_types::{
 };
 
 use self::store_tx::EncryptionState;
-
-fn challenge_to_sym_key(
-    password: &String,
-    kdf_challenge: KdfChallenge,
-) -> Result<SymmetricKey, crate::Error> {
-    let KdfResult::Argon2id {
-        hashed_password, ..
-    } = hash_from_challenge(kdf_challenge, password.as_bytes())
-        .map_err(|_| crate::Error::WalletInvalidPassword())?;
-
-    let sym_key = SymmetricKey::from_raw_key(
-        SymmetricKeyKind::XChacha20Poly1305,
-        hashed_password.as_slice(),
-    )
-    .expect("must be correct size");
-
-    Ok(sym_key)
-}
-
-fn password_to_sym_key(password: &String) -> crate::Result<(SymmetricKey, KdfChallenge)> {
-    let mut rng = make_true_rng();
-    let config = KdfConfig::Argon2id {
-        // TODO: hardcoded values
-        config: Argon2Config::new(700, 16, 2),
-        hash_length: NonZeroUsize::new(32).expect("not 0"),
-        salt_length: NonZeroUsize::new(32).expect("not 0"),
-    };
-    let kdf_result = hash_password(&mut rng, config, password.as_bytes())
-        .map_err(|_| crate::Error::WalletInvalidPassword())?;
-    let KdfResult::Argon2id {
-        hashed_password, ..
-    } = &kdf_result;
-
-    let sym_key = SymmetricKey::from_raw_key(
-        SymmetricKeyKind::XChacha20Poly1305,
-        hashed_password.as_slice(),
-    )
-    .expect("must be correct size");
-
-    let challenge = kdf_result.into_challenge();
-
-    Ok((sym_key, challenge))
-}
 
 /// Store for wallet data, parametrized over the backend B
 pub struct Store<B: storage::Backend> {
@@ -113,7 +67,7 @@ impl<B: storage::Backend> Store<B> {
     pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
         ensure!(
             self.encryption_state != EncryptionState::Locked,
-            crate::Error::WalletLocked()
+            crate::Error::WalletLocked
         );
 
         let mut tx = self.transaction_rw(None).map_err(crate::Error::from)?;
@@ -136,35 +90,39 @@ impl<B: storage::Backend> Store<B> {
     /// Checks if the provided password can decrypt all of the stored private keys,
     /// stores the new encryption_key and updates the state to Unlocked
     /// Otherwise returns WalletInvalidPassword
-    pub fn unlock_private_keys(&mut self, password: &Option<String>) -> crate::Result<()> {
+    pub fn unlock_private_keys(&mut self, password: &String) -> crate::Result<()> {
         if self.encryption_state != EncryptionState::Locked {
-            return Ok(());
+            return Err(crate::Error::WalletAlreadyUnlocked);
         }
 
         let challenge = self.transaction_ro()?.get_encryption_key_kdf_challenge()?;
 
-        match (challenge, password) {
-            (Some(kdf_challenge), Some(pass)) => {
-                let sym_key = challenge_to_sym_key(pass, kdf_challenge)?;
+        match challenge {
+            Some(kdf_challenge) => {
+                let sym_key = challenge_to_sym_key(password, kdf_challenge)?;
                 self.transaction_ro()?.check_can_decrypt_all_root_keys(&sym_key)?;
                 self.encryption_state = EncryptionState::Unlocked(Some(sym_key));
             }
-            (None, None) => {
-                // will get zeroized on Drop
-                self.encryption_state = EncryptionState::Unlocked(None);
+            None => {
+                panic!("Wallet cannot be in a locked state if there is no password");
             }
-            // mismatch, user provided password but there is non in DB or reverse
-            (Some(_), None) => return Err(crate::Error::WalletInvalidPassword()),
-            (None, Some(_)) => return Err(crate::Error::WalletInvalidPassword()),
         }
 
         Ok(())
     }
 
     /// Drops the encryption_key and sets the state to Locked
-    pub fn lock_private_keys(&mut self) {
-        // will get zeroized on Drop
-        self.encryption_state = EncryptionState::Locked;
+    /// Returns an error if no password is set
+    pub fn lock_private_keys(&mut self) -> crate::Result<()> {
+        match self.encryption_state {
+            EncryptionState::Locked => Ok(()),
+            EncryptionState::Unlocked(None) => Err(crate::Error::WalletLockedWithoutAPassword),
+            EncryptionState::Unlocked(Some(_)) => {
+                // will get zeroized on Drop
+                self.encryption_state = EncryptionState::Locked;
+                Ok(())
+            }
+        }
     }
 
     /// Dump raw database contents

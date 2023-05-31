@@ -59,8 +59,8 @@ pub enum WalletCommand {
 
     // Unlocks the private keys for usage.
     UnlockPrivateKeys {
-        // Optional existing password if there is any.
-        password: Option<String>,
+        // The existing password.
+        password: String,
     },
 
     // Locks the private keys so they can't be used until they are unlocked again
@@ -329,7 +329,7 @@ pub async fn handle_wallet_command(
                     return Err(WalletCliError::NoWallet);
                 }
                 Some(controller) => {
-                    controller.lock_wallet();
+                    controller.lock_wallet().map_err(WalletCliError::Controller)?;
                 }
             }
 

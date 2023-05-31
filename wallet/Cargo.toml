@@ -24,7 +24,7 @@ bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize
 itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
-zeroize = "1.5"
+zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

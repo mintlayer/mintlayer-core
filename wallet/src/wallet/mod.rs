@@ -142,7 +142,7 @@ impl<B: storage::Backend> Wallet<B> {
             return Err(WalletError::WalletNotInitialized);
         }
 
-        let key_chain = MasterKeyChain::existing_from_database(chain_config.clone(), &db_tx)?;
+        let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), &db_tx)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
 
@@ -170,11 +170,11 @@ impl<B: storage::Backend> Wallet<B> {
         self.db.encrypt_private_keys(password).map_err(WalletError::from)
     }
 
-    pub fn lock_wallet(&mut self) {
-        self.db.lock_private_keys()
+    pub fn lock_wallet(&mut self) -> WalletResult<()> {
+        self.db.lock_private_keys().map_err(WalletError::from)
     }
 
-    pub fn unlock_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
+    pub fn unlock_wallet(&mut self, password: &String) -> WalletResult<()> {
         self.db.unlock_private_keys(password).map_err(WalletError::from)
     }
 

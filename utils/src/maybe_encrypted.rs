@@ -19,14 +19,25 @@ use crypto::{random::make_true_rng, symkey::SymmetricKey};
 use serialization::{Decode, DecodeAll, Encode};
 use zeroize::Zeroizing;
 
-/// A generic type that stores a value as a vector of bytes that are optionally encrypted
+use thiserror::Error;
+
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum MaybeEncryptedError {
+    #[error("Error in decryption: {0}")]
+    DecryptionError(#[from] crypto::symkey::Error),
+
+    #[error("Error in decoding: {0}")]
+    DecodingError(#[from] serialization::Error),
+}
+
+/// A generic helper type that is used to encode/decode and optionaly encrypt/decrypt a type T
 #[derive(Encode, Decode)]
-pub struct MaybeEncrypted<T: Encode + Decode + DecodeAll> {
+pub struct MaybeEncrypted<T> {
     value: Vec<u8>,
     _phantom: PhantomData<fn() -> T>,
 }
 
-impl<T: Decode + Encode + DecodeAll> MaybeEncrypted<T> {
+impl<T: Encode + DecodeAll> MaybeEncrypted<T> {
     /// Creates a new `MaybeEncrypted` instance with the given value and encryption key.
     ///
     /// If the encryption key is `Some`, the value will be encrypted using the key.
@@ -60,34 +71,35 @@ impl<T: Decode + Encode + DecodeAll> MaybeEncrypted<T> {
 
     /// Attempts to take the value from the `MaybeEncrypted` instance.
     ///
-    /// If the encryption key is `Some`, the value will be decrypted using the key.
+    /// # Arguments
+    ///
+    /// * `encryption_key` - An optional `SymmetricKey`
+    /// If the encryption key is `Some`, the value will be decrypted using the key before decoding.
     /// If the encryption key is `None`, the value is assumed to be plain bytes and decoded as is.
-    pub fn try_take(
-        self,
-        encryption_key: &Option<SymmetricKey>,
-    ) -> Result<T, crypto::symkey::Error> {
+    ///
+    /// # Returns
+    ///
+    /// Returns an `MaybeEncryptedError::DecryptionError` if the `encryption_key` is wrong
+    /// Returns an `MaybeEncryptedError::DecodingError` if the MaybeEncrypted object was decoded
+    /// from an invalid slice of bytes
+    pub fn try_take(self, encryption_key: &Option<SymmetricKey>) -> Result<T, MaybeEncryptedError> {
         match encryption_key {
-            Some(key) => self.try_take_decrypt(key),
+            Some(key) => self.try_decrypt_then_take(key),
             None => self.try_take_plain(),
         }
     }
 
-    fn try_take_plain(self) -> Result<T, crypto::symkey::Error> {
-        T::decode_all(&mut self.value.as_slice()).map_err(|_| {
-            crypto::symkey::Error::DecryptionError(
-                "Could not decode plain content probably it is encrypted".into(),
-            )
-        })
+    fn try_take_plain(self) -> Result<T, MaybeEncryptedError> {
+        T::decode_all(&mut self.value.as_slice()).map_err(MaybeEncryptedError::from)
     }
 
-    pub fn try_take_decrypt(
+    pub fn try_decrypt_then_take(
         self,
         encryption_key: &SymmetricKey,
-    ) -> Result<T, crypto::symkey::Error> {
-        encryption_key.decrypt(self.value.as_slice(), None).map(|decrypted_bytes| {
-            T::decode_all(&mut Zeroizing::new(decrypted_bytes).as_slice())
-                .expect("should have been correctly encoded")
-        })
+    ) -> Result<T, MaybeEncryptedError> {
+        let decrypted_bytes = encryption_key.decrypt(self.value.as_slice(), None)?;
+        T::decode_all(&mut Zeroizing::new(decrypted_bytes).as_slice())
+            .map_err(MaybeEncryptedError::from)
     }
 }
 
@@ -173,5 +185,33 @@ mod tests {
         let different_key = Some(different_key);
 
         assert!(maybe_encrypted.try_take(&different_key).is_err());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_wrong_encode_decode(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let value = rng.gen::<u32>();
+
+        let optional_key = if rng.gen::<bool>() {
+            Some(SymmetricKey::new(
+                SymmetricKeyKind::XChacha20Poly1305,
+                &mut rng,
+            ))
+        } else {
+            None
+        };
+
+        let maybe_encrypted = MaybeEncrypted::new(&value, &optional_key);
+
+        let bytes = maybe_encrypted.encode();
+
+        let wrong_type = MaybeEncrypted::<u64>::decode(&mut bytes.as_slice()).unwrap();
+
+        match wrong_type.try_take(&optional_key) {
+            Err(MaybeEncryptedError::DecodingError(_)) => {}
+            _ => panic!("wrong error"),
+        }
     }
 }

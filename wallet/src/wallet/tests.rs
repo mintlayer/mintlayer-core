@@ -44,6 +44,12 @@ use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, utxo_types::UtxoType};
 const MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
+const NETWORK_FEE: u128 = 10000;
+
+fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
+    (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
+}
+
 fn get_address(
     chain_config: &ChainConfig,
     mnemonic: &str,
@@ -214,8 +220,8 @@ fn locked_wallet_balance_works(#[case] seed: Seed) {
     assert_eq!(coin_balance, genesis_amount);
 
     let password = gen_random_password(&mut rng);
-    wallet.encrypt_wallet(&password).unwrap();
-    wallet.lock_wallet();
+    wallet.encrypt_wallet(&Some(password)).unwrap();
+    wallet.lock_wallet().unwrap();
 
     let (coin_balance, _) = wallet
         .get_balance(
@@ -484,20 +490,20 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
 
     let db = create_wallet_in_memory().unwrap();
     let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
-    let password = gen_random_password(&mut rng);
+    let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
-    wallet.lock_wallet();
+    wallet.lock_wallet().unwrap();
 
     let err = wallet.create_account(rng.gen_range(0..1 << 31).try_into().unwrap());
     assert_eq!(
         err,
         Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
-            wallet_storage::Error::WalletLocked()
+            wallet_storage::Error::WalletLocked
         )))
     );
 
     // success after unlock
-    wallet.unlock_wallet(&password).unwrap();
+    wallet.unlock_wallet(&password.unwrap()).unwrap();
     wallet.create_account(rng.gen_range(0..1 << 31).try_into().unwrap()).unwrap();
 }
 
@@ -540,9 +546,9 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
 
-    let password = gen_random_password(&mut rng);
+    let password = Some(gen_random_password(&mut rng));
     wallet.encrypt_wallet(&password).unwrap();
-    wallet.lock_wallet();
+    wallet.lock_wallet().unwrap();
 
     let (coin_balance, _) = wallet
         .get_balance(
@@ -562,24 +568,13 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     assert_eq!(
         wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output.clone()]),
         Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
-            wallet_storage::Error::WalletLocked()
+            wallet_storage::Error::WalletLocked
         )))
     );
 
     // success after unlock
-    wallet.unlock_wallet(&password).unwrap();
+    wallet.unlock_wallet(&password.unwrap()).unwrap();
     wallet
         .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
         .unwrap();
-}
-
-const NETWORK_FEE: u128 = 10000;
-
-fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> Option<String> {
-    let new_password: String = (0..rng.gen_range(0..100)).map(|_| rng.gen::<char>()).collect();
-    if new_password.is_empty() {
-        Some(new_password)
-    } else {
-        None
-    }
 }

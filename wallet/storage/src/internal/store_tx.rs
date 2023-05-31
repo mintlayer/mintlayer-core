@@ -59,19 +59,22 @@ mod well_known {
 
 #[derive(PartialEq, Clone)]
 pub enum EncryptionState {
+    // The secret parts of the DB (the private keys) are encrypted and we don't have the key to decrypt them
     Locked,
+    // If Key is Some then DB is encrypted but we have the key to decrypt it
+    // if Key is None then DB is not encrypted
     Unlocked(Option<SymmetricKey>),
 }
 
 /// Read-only chainstate storage transaction
 pub struct StoreTxRo<'st, B: storage::Backend> {
-    pub(super) storage: storage::TransactionRo<'st, B, Schema>,
+    storage: storage::TransactionRo<'st, B, Schema>,
     encryption_state: &'st EncryptionState,
 }
 
 /// Read-write chainstate storage transaction
 pub struct StoreTxRw<'st, B: storage::Backend> {
-    pub(super) storage: storage::TransactionRw<'st, B, Schema>,
+    storage: storage::TransactionRw<'st, B, Schema>,
     encryption_state: &'st EncryptionState,
 }
 
@@ -136,7 +139,7 @@ macro_rules! impl_read_ops {
 
             fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent>> {
                 match self.encryption_state {
-                    EncryptionState::Locked => Err(crate::Error::WalletLocked()),
+                    EncryptionState::Locked => Err(crate::Error::WalletLocked),
                     EncryptionState::Unlocked(key) => Ok(self
                         .read::<db::DBRootKeys, _, _>(id)?
                         .map(|v| v.try_take(key).expect("key was checked when unlocked"))),
@@ -146,7 +149,7 @@ macro_rules! impl_read_ops {
             /// Collect and return all keys from the storage
             fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent>> {
                 match self.encryption_state {
-                    EncryptionState::Locked => Err(crate::Error::WalletLocked()),
+                    EncryptionState::Locked => Err(crate::Error::WalletLocked),
                     EncryptionState::Unlocked(key) => self
                         .storage
                         .get::<db::DBRootKeys, _>()
@@ -182,8 +185,8 @@ macro_rules! impl_read_ops {
                     .map(|mut item| {
                         item.try_for_each(|(_, v)| {
                             let _decrypted_value = v
-                                .try_take_decrypt(encryption_key)
-                                .map_err(|_| crate::Error::WalletInvalidPassword())?;
+                                .try_decrypt_then_take(encryption_key)
+                                .map_err(|_| crate::Error::WalletInvalidPassword)?;
 
                             Ok(())
                         })
@@ -302,7 +305,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
 
     fn set_root_key(&mut self, id: &RootKeyId, tx: &RootKeyContent) -> crate::Result<()> {
         let value = match self.encryption_state {
-            EncryptionState::Locked => return Err(crate::Error::WalletLocked()),
+            EncryptionState::Locked => return Err(crate::Error::WalletLocked),
             EncryptionState::Unlocked(key) => MaybeEncrypted::new(tx, key),
         };
 
@@ -312,7 +315,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
     fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()> {
         utils::ensure!(
             *self.encryption_state != EncryptionState::Locked,
-            crate::Error::WalletLocked()
+            crate::Error::WalletLocked
         );
 
         self.storage.get_mut::<db::DBRootKeys, _>().del(id).map_err(Into::into)
@@ -323,7 +326,7 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         new_encryption_key: &Option<SymmetricKey>,
     ) -> crate::Result<()> {
         let changed_root_keys: Vec<_> = match self.encryption_state {
-            EncryptionState::Locked => return Err(crate::Error::WalletLocked()),
+            EncryptionState::Locked => return Err(crate::Error::WalletLocked),
             EncryptionState::Unlocked(key) => self
                 .storage
                 .get::<db::DBRootKeys, _>()

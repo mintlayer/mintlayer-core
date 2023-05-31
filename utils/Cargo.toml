@@ -16,10 +16,10 @@ num-traits = "0.2"
 probabilistic-collections = "0.7"
 qrcodegen = "1.8"
 slave-pool = "0.2"
-zeroize = "1.5"
 
 thiserror.workspace = true
 parity-scale-codec.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
