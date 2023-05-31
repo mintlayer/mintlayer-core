@@ -125,7 +125,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_timestamp: BlockTimestamp,
+        current_timestamp: BlockTimestamp,
     ) -> Result<
         (
             ConsensusData,
@@ -181,7 +181,7 @@ impl BlockProduction {
                         &best_block_index,
                         sealed_epoch_randomness,
                         input_data.clone(),
-                        block_timestamp,
+                        current_timestamp,
                         block_height,
                         get_ancestor,
                     )?;
@@ -191,7 +191,7 @@ impl BlockProduction {
                         this,
                         &best_block_index,
                         block_height,
-                        block_timestamp,
+                        current_timestamp,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -267,13 +267,15 @@ impl BlockProduction {
             self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
 
         loop {
-            let timestamp =
+            let current_timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
             match previous_consensus_status {
                 RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {}
                 RequiredConsensus::PoS(_) => {
-                    if previous_attempt == timestamp && timestamp != timestamp_at_start {
+                    if previous_attempt == current_timestamp
+                        && current_timestamp != timestamp_at_start
+                    {
                         sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -281,9 +283,9 @@ impl BlockProduction {
             }
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), timestamp).await?;
+                self.pull_consensus_data(input_data.clone(), current_timestamp).await?;
 
-            previous_attempt = timestamp;
+            previous_attempt = current_timestamp;
             previous_consensus_status = self
                 .chain_config
                 .net_upgrade()
@@ -325,7 +327,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                timestamp,
+                current_timestamp,
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -381,7 +383,7 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        timestamp: BlockTimestamp,
+        current_timestamp: BlockTimestamp,
         finalize_block_data: Option<FinalizeBlockInputData>,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -399,7 +401,7 @@ impl BlockProduction {
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                timestamp,
+                current_timestamp,
                 consensus_data,
             );
 
