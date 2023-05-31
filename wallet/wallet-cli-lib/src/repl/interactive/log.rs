@@ -13,15 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::{Arc, Mutex};
+
 struct ReedlineLogWriter {
     printer: reedline::ExternalPrinter<String>,
     buf: Vec<u8>,
+    print_directly: Arc<Mutex<bool>>,
 }
 
 impl ReedlineLogWriter {
-    fn new(printer: reedline::ExternalPrinter<String>) -> Self {
+    fn new(printer: reedline::ExternalPrinter<String>, print_directly: Arc<Mutex<bool>>) -> Self {
         Self {
             printer,
+            print_directly,
             buf: Vec::new(),
         }
     }
@@ -32,11 +36,16 @@ impl std::io::Write for ReedlineLogWriter {
         self.buf.extend_from_slice(buf);
         if self.buf.last() == Some(&b'\n') {
             let line = std::mem::take(&mut self.buf);
-            // Try to send without blocking to avoid deadlocks (which can happen when the send buffer is full)
-            let _ = self
-                .printer
-                .sender()
-                .try_send(String::from_utf8_lossy(&line.as_slice()[0..line.len() - 1]).to_string());
+            let line = String::from_utf8_lossy(&line.as_slice()[0..line.len() - 1]);
+
+            // Hold lock while printing to stdout
+            let print_directly_lock = self.print_directly.lock().expect("must succeed");
+            if *print_directly_lock {
+                println!("{}", line);
+            } else {
+                // Try to send without blocking to avoid deadlocks (which can happen when the send buffer is full)
+                let _ = self.printer.sender().try_send(line.to_string());
+            }
         }
         Ok(buf.len())
     }
@@ -47,15 +56,36 @@ impl std::io::Write for ReedlineLogWriter {
 }
 
 /// Use [reedline::ExternalPrinter] to print log output without mangling reedline console input
-pub fn init() -> reedline::ExternalPrinter<String> {
-    // Increase the buffer to prevent dropped log output.
-    // Do not use very large buffers here, as this will increase
-    // the amount of allocated memory (even if the buffer is not used).
-    let external_printer = reedline::ExternalPrinter::new(1024);
+pub struct InteractiveLogger {
+    external_printer: reedline::ExternalPrinter<String>,
+    print_directly: Arc<Mutex<bool>>,
+}
 
-    let log_writer = ReedlineLogWriter::new(external_printer.clone());
+impl InteractiveLogger {
+    pub fn init() -> Self {
+        // Increase the buffer to prevent dropped log output.
+        // Do not use very large buffers here, as this will increase
+        // the amount of allocated memory (even if the buffer is not used).
+        let external_printer = reedline::ExternalPrinter::new(1024);
 
-    logging::init_logging_pipe(log_writer);
+        let print_directly = Arc::new(Mutex::new(true));
 
-    external_printer
+        let log_writer =
+            ReedlineLogWriter::new(external_printer.clone(), Arc::clone(&print_directly));
+
+        logging::init_logging_pipe(log_writer);
+
+        Self {
+            external_printer,
+            print_directly,
+        }
+    }
+
+    pub fn printer(&self) -> &reedline::ExternalPrinter<String> {
+        &self.external_printer
+    }
+
+    pub fn set_print_directly(&self, value: bool) {
+        *self.print_directly.lock().expect("must succeed") = value;
+    }
 }

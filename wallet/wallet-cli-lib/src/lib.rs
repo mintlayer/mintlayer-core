@@ -34,7 +34,7 @@ use utils::{
 
 enum Mode {
     Interactive {
-        printer: reedline::ExternalPrinter<String>,
+        logger: repl::interactive::log::InteractiveLogger,
     },
     NonInteractive,
     CommandsList {
@@ -64,8 +64,8 @@ pub async fn run(
         let file_input = console::FileInput::new(file_path)?;
         Mode::CommandsList { file_input }
     } else if console.is_tty() {
-        let printer = repl::interactive::log::init();
-        Mode::Interactive { printer }
+        let logger = repl::interactive::log::InteractiveLogger::init();
+        Mode::Interactive { logger }
     } else {
         repl::non_interactive::log::init();
         Mode::NonInteractive
@@ -116,11 +116,11 @@ pub async fn run(
 
     // Run a blocking loop in a separate thread
     let repl_handle = std::thread::spawn(move || match mode {
-        Mode::Interactive { printer } => repl::interactive::run(
+        Mode::Interactive { logger } => repl::interactive::run(
             console,
             event_tx,
             exit_on_error.unwrap_or(false),
-            printer,
+            logger,
             history_file,
             vi_mode,
         ),

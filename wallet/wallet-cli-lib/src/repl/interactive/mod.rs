@@ -129,7 +129,7 @@ pub fn run(
     mut console: impl ConsoleOutput,
     event_tx: mpsc::UnboundedSender<Event>,
     exit_on_error: bool,
-    printer: reedline::ExternalPrinter<String>,
+    logger: log::InteractiveLogger,
     history_file: Option<PathBuf>,
     vi_mode: bool,
 ) -> Result<(), WalletCliError> {
@@ -138,12 +138,19 @@ pub fn run(
     console.print_line("Use 'help' to see all available commands.");
     console.print_line("Use 'exit' or Ctrl-D to quit.");
 
-    let mut line_editor = create_line_editor(printer, repl_command.clone(), history_file, vi_mode)?;
+    let mut line_editor = create_line_editor(
+        logger.printer().clone(),
+        repl_command.clone(),
+        history_file,
+        vi_mode,
+    )?;
 
     let prompt = wallet_prompt::WalletPrompt::new();
 
     loop {
+        logger.set_print_directly(false);
         let sig = line_editor.read_line(&prompt).expect("Should not fail normally");
+        logger.set_print_directly(true);
 
         let res = process_line(&repl_command, &event_tx, sig);
 
