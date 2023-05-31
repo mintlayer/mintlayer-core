@@ -20,12 +20,14 @@ use chainstate_test_framework::TestFramework;
 use common::chain::SignedTransaction;
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
+use logging::log;
 use node_comm::{
     node_traits::{ConnectedPeer, PeerId},
     rpc_client::NodeRpcError,
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use tokio::sync::mpsc;
 
 use super::*;
 
@@ -209,7 +211,7 @@ async fn basic_sync(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet, None).await;
+        block_syncing.run(&mut wallet).await;
     });
 
     // Build blocks
@@ -251,7 +253,7 @@ async fn restart_from_genesis(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet, None).await;
+        block_syncing.run(&mut wallet).await;
     });
 
     create_chain(&node, &mut rng, 0, 10);
@@ -277,7 +279,7 @@ async fn randomized(#[case] seed: Seed) {
         BlockSyncing::new(test_block_syncing_config(), chain_config, node.clone());
 
     tokio::spawn(async move {
-        block_syncing.run(&mut wallet, None).await;
+        block_syncing.run(&mut wallet).await;
     });
 
     create_chain(&node, &mut rng, 0, 1);

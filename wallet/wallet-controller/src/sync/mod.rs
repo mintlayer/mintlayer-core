@@ -15,7 +15,6 @@
 
 use std::{sync::Arc, time::Duration};
 
-use chainstate::ChainInfo;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -23,7 +22,6 @@ use common::{
 use logging::log;
 use node_comm::node_traits::NodeInterface;
 use serialization::hex::HexEncode;
-use tokio::{sync::mpsc, task::JoinHandle};
 use wallet::{DefaultWallet, WalletResult};
 
 use crate::ControllerError;
@@ -58,11 +56,6 @@ struct NextBlockInfo {
     block_id: Id<Block>,
 }
 
-struct NodeState {
-    block_height: BlockHeight,
-    block_id: Id<GenBlock>,
-}
-
 struct FetchedBlock {
     block: Block,
     common_block_height: BlockHeight,
@@ -82,27 +75,12 @@ enum FetchBlockError<T: NodeInterface> {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
 
-type BlockFetchResult<T> = Result<FetchedBlock, FetchBlockError<T>>;
-
 pub struct BlockSyncing<T: NodeInterface> {
     config: BlockSyncingConfig,
 
     chain_config: Arc<ChainConfig>,
 
     rpc_client: T,
-
-    node_state_rx: mpsc::Receiver<NodeState>,
-
-    /// Last known chain state information of the remote node.
-    /// Used to start block synchronization when a new block is found.
-    node_chain_state: Option<NodeState>,
-
-    state_sync_task: JoinHandle<()>,
-
-    /// Handle of the background block fetch task, if started.
-    /// If successful, the wallet will be updated.
-    /// If there was an error, the block sync process will be retried later.
-    block_fetch_task: Option<JoinHandle<BlockFetchResult<T>>>,
 }
 
 #[derive(Clone)]
@@ -122,189 +100,70 @@ impl Default for BlockSyncingConfig {
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
     pub fn new(config: BlockSyncingConfig, chain_config: Arc<ChainConfig>, rpc_client: T) -> Self {
-        let (node_state_tx, node_state_rx) = mpsc::channel(1);
-        let state_sync_task = tokio::spawn(run_state_sync(
-            config.clone(),
-            node_state_tx,
-            rpc_client.clone(),
-        ));
-
         Self {
             config,
             chain_config,
             rpc_client,
-            node_state_rx,
-            node_chain_state: None,
-            state_sync_task,
-            block_fetch_task: None,
         }
     }
 
-    fn handle_node_state_change(&mut self, node_state: NodeState) {
-        if self.node_chain_state.as_ref().map(|state| state.block_id) == Some(node_state.block_id) {
-            return;
-        }
-        log::info!(
-            "Node chainstate updated, block height: {}, top block id: {}",
-            node_state.block_height,
-            node_state.block_id.hex_encode()
-        );
-        self.node_chain_state = Some(node_state);
-    }
+    pub async fn sync_once(
+        &mut self,
+        wallet: &mut impl SyncingWallet,
+    ) -> Result<(), ControllerError<T>> {
+        loop {
+            let chain_info = self
+                .rpc_client
+                .chainstate_info()
+                .await
+                .map_err(ControllerError::NodeCallError)?;
 
-    pub async fn force_node_state_update(&mut self) -> Result<ChainInfo, ControllerError<T>> {
-        let node_state = self
-            .rpc_client
-            .chainstate_info()
-            .await
-            .map_err(ControllerError::NodeCallError)?;
-        self.handle_node_state_change(NodeState {
-            block_height: node_state.best_block_height,
-            block_id: node_state.best_block_id,
-        });
-        Ok(node_state)
-    }
+            let (wallet_block_id, wallet_block_height) =
+                wallet.best_block().map_err(ControllerError::WalletError)?;
 
-    fn start_block_fetch_if_needed(&mut self, wallet: &mut impl SyncingWallet) {
-        if self.block_fetch_task.is_some() {
-            return;
-        }
+            if chain_info.best_block_id == wallet_block_id {
+                return Ok(());
+            }
 
-        let (node_block_id, node_block_height) = match self.node_chain_state.as_ref() {
-            Some(info) => (info.block_id, info.block_height),
-            None => return,
-        };
-
-        let (wallet_block_id, wallet_block_height) =
-            wallet.best_block().expect("`get_best_block` should not fail normally");
-
-        // Wait until the node has enough block height.
-        // Block sync may not work correctly otherwise.
-        if node_block_id == wallet_block_id || node_block_height < wallet_block_height {
-            return;
-        }
-
-        let chain_config = Arc::clone(&self.chain_config);
-        let mut rpc_client = self.rpc_client.clone();
-
-        // TODO: Download blocks in batches (100-1000 blocks at a time) to reduce overhead and shorten sync time
-
-        let error_delay = self.config.error_delay;
-        self.block_fetch_task = Some(tokio::spawn(async move {
-            let sync_res = fetch_new_block(
-                &chain_config,
-                &mut rpc_client,
-                node_block_id,
-                node_block_height,
+            let FetchedBlock {
+                block,
+                common_block_height,
+            } = fetch_new_block(
+                &self.chain_config,
+                &mut self.rpc_client,
+                chain_info.best_block_id,
+                chain_info.best_block_height,
                 wallet_block_id,
                 wallet_block_height,
             )
-            .await;
+            .await
+            .map_err(|e| ControllerError::SyncError(e.to_string()))?;
 
-            if let Err(e) = &sync_res {
-                log::error!("Block fetch failed: {e}");
-                // Wait a bit to not spam constantly if the node is unreachable
-                tokio::time::sleep(error_delay).await;
-            }
+            let block_id = block.header().block_id();
+            wallet
+                .scan_blocks(common_block_height, vec![block])
+                .map_err(ControllerError::WalletError)?;
 
-            sync_res
-        }));
-    }
-
-    fn handle_block_fetch_result(
-        &mut self,
-        res: BlockFetchResult<T>,
-        wallet: &mut impl SyncingWallet,
-    ) {
-        if let Ok(FetchedBlock {
-            block,
-            common_block_height,
-        }) = res
-        {
-            let scan_res = wallet.scan_blocks(common_block_height, vec![block]);
-            if let Err(e) = scan_res {
-                log::error!("Block scan failed: {e}");
-            }
+            log::info!(
+                "Node chainstate updated, block height: {}, top block id: {}",
+                common_block_height,
+                block_id.hex_encode()
+            );
         }
     }
 
-    async fn recv_block_fetch_result(
-        block_fetch_task: &mut Option<JoinHandle<BlockFetchResult<T>>>,
-    ) -> BlockFetchResult<T> {
-        // This must be cancel safe!
-        match block_fetch_task {
-            Some(task) => {
-                let res = task.await.expect("Block fetch should not panic");
-                *block_fetch_task = None;
-                res
-            }
-            None => std::future::pending().await,
-        }
-    }
-
-    pub async fn run(&mut self, wallet: &mut impl SyncingWallet, expected: Option<BlockHeight>) {
-        // This must be cancel safe!
+    pub async fn run(&mut self, wallet: &mut impl SyncingWallet) {
         loop {
-            self.start_block_fetch_if_needed(wallet);
+            let sync_res = self.sync_once(wallet).await;
 
-            match (
-                self.node_chain_state.as_ref(),
-                expected,
-                self.block_fetch_task.as_ref(),
-            ) {
-                (Some(node), Some(expected), None) if node.block_height >= expected => {
-                    return;
-                }
-                _ => {}
-            }
-
-            tokio::select! {
-                chain_info_opt = self.node_state_rx.recv() => {
-                    // Channel is always open because [run_tip_sync] does not return
-                    self.handle_node_state_change(chain_info_opt.expect("Channel must be open"));
-                }
-                sync_result = Self::recv_block_fetch_result(&mut self.block_fetch_task) => {
-                    self.handle_block_fetch_result(sync_result, wallet);
+            match sync_res {
+                Ok(()) => tokio::time::sleep(self.config.normal_delay).await,
+                Err(e) => {
+                    log::error!("Wallet sync failed: {e}");
+                    tokio::time::sleep(self.config.error_delay).await;
                 }
             }
         }
-    }
-}
-
-async fn run_state_sync<T: NodeInterface>(
-    config: BlockSyncingConfig,
-    state_tx: mpsc::Sender<NodeState>,
-    rpc_client: T,
-) {
-    let mut last_block_id = None;
-
-    while !state_tx.is_closed() {
-        let state_res = rpc_client.chainstate_info().await;
-        match state_res {
-            Ok(state) => {
-                if last_block_id.as_ref() != Some(&state.best_block_id) {
-                    _ = state_tx
-                        .send(NodeState {
-                            block_height: state.best_block_height,
-                            block_id: state.best_block_id,
-                        })
-                        .await;
-                    last_block_id = Some(state.best_block_id);
-                }
-                tokio::time::sleep(config.normal_delay).await;
-            }
-            Err(e) => {
-                logging::log::error!("Node state sync error: {}", e);
-                tokio::time::sleep(config.error_delay).await;
-            }
-        }
-    }
-}
-
-impl<T: NodeInterface> Drop for BlockSyncing<T> {
-    fn drop(&mut self) {
-        self.state_sync_task.abort();
-        self.block_fetch_task.as_ref().map(JoinHandle::abort);
     }
 }
 

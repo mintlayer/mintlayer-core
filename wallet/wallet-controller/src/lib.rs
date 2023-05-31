@@ -44,6 +44,8 @@ pub use wallet_types::{
 pub enum ControllerError<T: NodeInterface> {
     #[error("Node call error: {0}")]
     NodeCallError(T::Error),
+    #[error("Wallet sync error: {0}")]
+    SyncError(String),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]
@@ -209,18 +211,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.sync_once().await
     }
 
-    /// Synchronize the wallet continuously from the node's blockchain.
-    /// This function is cancel safe.
+    /// Synchronize the wallet continuously from the node's blockchain
     pub async fn run_sync(&mut self) {
-        self.block_sync.run(&mut self.wallet, None).await;
+        self.block_sync.run(&mut self.wallet).await;
     }
 
-    /// Synchronize the wallet to the current node tip height and return.
-    /// The node can still download new blocks when this function returns.
-    /// Most useful in scripts and unit tests to make sure the wallet state is up to date.
+    /// Synchronize the wallet to the current node tip height and return
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
-        let node_state = self.block_sync.force_node_state_update().await?;
-        self.block_sync.run(&mut self.wallet, Some(node_state.best_block_height)).await;
+        self.block_sync.sync_once(&mut self.wallet).await?;
         Ok(())
     }
 }
