@@ -26,7 +26,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, TxInput, TxMainChainIndex,
+        AccountType, ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, TxInput,
+        TxMainChainIndex,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -156,6 +157,10 @@ mockall::mock! {
             delegation_id: DelegationId,
         ) -> Result<Option<Amount>, ChainstateError>;
         fn info(&self) -> Result<ChainInfo, ChainstateError>;
+        fn get_account_nonce_count(
+            &self,
+            account: AccountType,
+        ) -> Result<Option<u128>, ChainstateError>;
     }
 }
 

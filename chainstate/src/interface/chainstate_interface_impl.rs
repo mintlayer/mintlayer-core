@@ -32,8 +32,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
-        TxOutput,
+        AccountType, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, TxOutput,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
 };
@@ -556,6 +556,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             median_time,
             is_initial_block_download,
         })
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<u128>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_account_nonce_count(account)
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 }
 

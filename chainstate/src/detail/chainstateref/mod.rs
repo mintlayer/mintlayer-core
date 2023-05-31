@@ -31,8 +31,8 @@ use common::{
         config::EpochIndex,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
-        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, Transaction,
-        TxOutput,
+        AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId,
+        Transaction, TxOutput,
     },
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -333,6 +333,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         epoch_index: EpochIndex,
     ) -> Result<Option<EpochData>, PropertyQueryError> {
         self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<u128>, PropertyQueryError> {
+        self.db_tx.get_account_nonce_count(account).map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_height_in_main_chain(
