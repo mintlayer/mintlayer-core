@@ -19,14 +19,17 @@ wallet-storage = { path = "../storage" }
 clap = { version = "4", features = ["derive"] }
 crossterm = "0.26"
 directories = "5.0"
+hex.workspace = true
 reedline = { version = "0.19", features = ["external_printer"] }
 shlex = "1.0"
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 
 [dev-dependencies]
-chainstate = { path = "../../chainstate/" }
+blockprod = { path = "../../blockprod" }
+chainstate = { path = "../../chainstate" }
 chainstate-storage = { path = "../../chainstate/storage" }
+crypto = { path = "../../crypto" }
 mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }

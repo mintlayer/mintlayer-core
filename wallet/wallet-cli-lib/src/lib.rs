@@ -22,7 +22,7 @@ mod repl;
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
-use common::chain::config::ChainType;
+use common::chain::{config::ChainType, ChainConfig};
 use config::WalletCliArgs;
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
@@ -45,6 +45,7 @@ enum Mode {
 pub async fn run(
     console: impl ConsoleInput + ConsoleOutput,
     args: config::WalletCliArgs,
+    chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
     let WalletCliArgs {
         network,
@@ -72,7 +73,8 @@ pub async fn run(
     };
 
     let chain_type: ChainType = network.into();
-    let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
+    let chain_config = chain_config
+        .unwrap_or_else(|| Arc::new(common::chain::config::Builder::new(chain_type).build()));
 
     // TODO: Use the constant with the node
     let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");

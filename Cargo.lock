@@ -6447,13 +6447,16 @@ dependencies = [
 name = "wallet-cli-lib"
 version = "0.1.0"
 dependencies = [
+ "blockprod",
  "chainstate",
  "chainstate-storage",
  "clap 4.3.0",
  "common",
  "consensus",
  "crossterm",
+ "crypto",
  "directories",
+ "hex",
  "logging",
  "mempool",
  "node-comm",

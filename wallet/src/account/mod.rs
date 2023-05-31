@@ -36,7 +36,6 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
-use serialization::hex::HexEncode;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;

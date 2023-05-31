@@ -34,8 +34,8 @@ pub use gen_block::{GenBlock, GenBlockId};
 pub use genesis::Genesis;
 pub use mlt::Mlt;
 pub use pos::{
-    create_testnet_pos_config, create_unittest_pos_config, get_initial_randomness, DelegationId,
-    PoSChainConfig, PoolId,
+    create_testnet_pos_config, create_unittest_pos_config, get_initial_randomness,
+    initial_difficulty, DelegationId, PoSChainConfig, PoolId,
 };
 pub use pow::PoWChainConfig;
 pub use upgrades::*;
