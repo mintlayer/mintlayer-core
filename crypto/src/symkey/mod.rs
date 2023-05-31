@@ -63,13 +63,9 @@ impl SymmetricKey {
 
     pub fn from_raw_key(kind: SymmetricKeyKind, bytes_slice: &[u8]) -> Result<Self, Error> {
         let key = match kind {
-            SymmetricKeyKind::XChacha20Poly1305 => {
-                SymmetricKeyHolder::XChacha20Poly1305(Chacha20poly1305Key::new_from_array(
-                    bytes_slice
-                        .try_into()
-                        .map_err(|_| Error::WrongLenKeyBytes(bytes_slice.len(), KEY_LEN))?,
-                ))
-            }
+            SymmetricKeyKind::XChacha20Poly1305 => SymmetricKeyHolder::XChacha20Poly1305(
+                Chacha20poly1305Key::new_from_bytes_slice(bytes_slice)?,
+            ),
         };
         Ok(Self { key })
     }

@@ -19,6 +19,17 @@ use crypto::{random::make_true_rng, symkey::SymmetricKey};
 use serialization::{Decode, DecodeAll, Encode};
 use zeroize::Zeroizing;
 
+use thiserror::Error;
+
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum MaybeEncryptedError {
+    #[error("Error in decryption: {0}")]
+    DecryptionError(#[from] crypto::symkey::Error),
+
+    #[error("Error in decoding: {0}")]
+    DecodingError(#[from] serialization::Error),
+}
+
 /// A generic type that stores a value as a vector of bytes that are optionally encrypted
 #[derive(Encode, Decode)]
 pub struct MaybeEncrypted<T: Encode + Decode + DecodeAll> {
@@ -62,32 +73,24 @@ impl<T: Decode + Encode + DecodeAll> MaybeEncrypted<T> {
     ///
     /// If the encryption key is `Some`, the value will be decrypted using the key.
     /// If the encryption key is `None`, the value is assumed to be plain bytes and decoded as is.
-    pub fn try_take(
-        self,
-        encryption_key: &Option<SymmetricKey>,
-    ) -> Result<T, crypto::symkey::Error> {
+    pub fn try_take(self, encryption_key: &Option<SymmetricKey>) -> Result<T, MaybeEncryptedError> {
         match encryption_key {
-            Some(key) => self.try_take_decrypt(key),
+            Some(key) => self.try_decrypt_then_take(key),
             None => self.try_take_plain(),
         }
     }
 
-    fn try_take_plain(self) -> Result<T, crypto::symkey::Error> {
-        T::decode_all(&mut self.value.as_slice()).map_err(|_| {
-            crypto::symkey::Error::DecryptionError(
-                "Could not decode plain content probably it is encrypted".into(),
-            )
-        })
+    fn try_take_plain(self) -> Result<T, MaybeEncryptedError> {
+        T::decode_all(&mut self.value.as_slice()).map_err(MaybeEncryptedError::from)
     }
 
-    pub fn try_take_decrypt(
+    pub fn try_decrypt_then_take(
         self,
         encryption_key: &SymmetricKey,
-    ) -> Result<T, crypto::symkey::Error> {
-        encryption_key.decrypt(self.value.as_slice(), None).map(|decrypted_bytes| {
-            T::decode_all(&mut Zeroizing::new(decrypted_bytes).as_slice())
-                .expect("should have been correctly encoded")
-        })
+    ) -> Result<T, MaybeEncryptedError> {
+        let decrypted_bytes = encryption_key.decrypt(self.value.as_slice(), None)?;
+        T::decode_all(&mut Zeroizing::new(decrypted_bytes).as_slice())
+            .map_err(MaybeEncryptedError::from)
     }
 }
 

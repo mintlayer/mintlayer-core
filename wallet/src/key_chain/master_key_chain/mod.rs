@@ -87,7 +87,7 @@ impl MasterKeyChain {
     }
 
     /// Creates a Master key chain, checks the database for an existing one
-    pub fn existing_from_database(
+    pub fn new_from_existing_database(
         chain_config: Arc<ChainConfig>,
         db_tx: &impl WalletStorageRead,
     ) -> KeyChainResult<Self> {

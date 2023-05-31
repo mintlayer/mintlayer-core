@@ -36,9 +36,13 @@ pub enum Error {
     #[error("{0}")]
     StorageError(#[from] storage::Error),
     #[error("The wallet is locked")]
-    WalletLocked(),
+    WalletLocked,
     #[error("Invalid wallet password")]
-    WalletInvalidPassword(),
+    WalletInvalidPassword,
+    #[error("The wallet is already unlocked")]
+    WalletAlreadyUnlocked,
+    #[error("Cannot lock the wallet without setting a password")]
+    WalletLockedWithoutAPassword,
 }
 
 /// Possibly failing result of wallet storage query

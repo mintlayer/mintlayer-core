@@ -43,6 +43,12 @@ impl Chacha20poly1305Key {
         }
     }
 
+    pub fn new_from_bytes_slice(bytes_slice: &[u8]) -> Result<Self, Error> {
+        Ok(Self::new_from_array(bytes_slice.try_into().map_err(
+            |_| Error::WrongLenKeyBytes(bytes_slice.len(), KEY_LEN),
+        )?))
+    }
+
     fn encrypt_with_nonce_and_aead<T: AsRef<[u8]>>(
         &self,
         nonce: &[u8],

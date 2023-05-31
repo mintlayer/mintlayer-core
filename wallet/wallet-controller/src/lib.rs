@@ -123,16 +123,39 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(wallet)
     }
 
+    /// Encrypts the wallet using the specified password, or removes the existing encryption if the password is `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `password` - An optional `String` representing the new password for encrypting the wallet.
+    ///
+    /// # Returns
+    ///
+    /// This method returns an error if the wallet is locked
     pub fn encrypt_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
         self.wallet.encrypt_wallet(password).map_err(ControllerError::WalletError)
     }
 
-    pub fn unlock_wallet(&mut self, password: &Option<String>) -> Result<(), ControllerError<T>> {
+    /// Unlocks the wallet using the specified password.
+    ///
+    /// # Arguments
+    ///
+    /// * `password` - A `String` representing the old password that was used to encrypt the wallet.
+    ///
+    /// # Returns
+    ///
+    /// This method returns an error the password is incorrect
+    pub fn unlock_wallet(&mut self, password: &String) -> Result<(), ControllerError<T>> {
         self.wallet.unlock_wallet(password).map_err(ControllerError::WalletError)
     }
 
-    pub fn lock_wallet(&mut self) {
-        self.wallet.lock_wallet()
+    /// Locks the wallet.
+    ///
+    /// # Returns
+    ///
+    /// This method returns an error the wallet is not encrypted.
+    pub fn lock_wallet(&mut self) -> Result<(), ControllerError<T>> {
+        self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
     pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
