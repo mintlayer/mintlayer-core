@@ -6464,6 +6464,7 @@ dependencies = [
  "p2p",
  "reedline",
  "rpc",
+ "rstest",
  "serialization",
  "shlex",
  "subsystem",

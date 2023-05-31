@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use blockprod::rpc::BlockProductionRpcServer;
-use crypto::{key::PublicKey, vrf::VRFPublicKey};
+use crypto::{key::PublicKey, random::Rng, vrf::VRFPublicKey};
 use hex::FromHex;
 
 use std::{
@@ -96,7 +96,7 @@ fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
         .expect("Decoding shouldn't fail")
 }
 
-fn create_custom_regtest_genesis() -> Genesis {
+fn create_custom_regtest_genesis(rng: &mut impl Rng) -> Genesis {
     // TODO: use coin_decimals instead of a fixed value
     const COIN: Amount = Amount::from_atoms(100_000_000_000);
 
@@ -135,15 +135,18 @@ fn create_custom_regtest_genesis() -> Genesis {
         )),
     );
 
+    // Must be less than the current time, otherwise block production will not work properly
+    let genesis_timestamp = rng.gen_range(1685000000..1685030000);
+
     Genesis::new(
         String::new(),
-        BlockTimestamp::from_int_seconds(1685025323),
+        BlockTimestamp::from_int_seconds(genesis_timestamp),
         vec![mint_output, initial_pool],
     )
 }
 
-fn create_chain_config() -> ChainConfig {
-    let genesis = create_custom_regtest_genesis();
+fn create_chain_config(rng: &mut impl Rng) -> ChainConfig {
+    let genesis = create_custom_regtest_genesis(rng);
     let pos_config = create_unittest_pos_config();
     let upgrades = vec![
         (
@@ -163,7 +166,7 @@ fn create_chain_config() -> ChainConfig {
     config::Builder::new(ChainType::Regtest)
         .genesis_custom(genesis)
         .net_upgrades(net_upgrades)
-        .epoch_length(10.try_into().unwrap())
+        .epoch_length(5.try_into().unwrap())
         .build()
 }
 
@@ -277,13 +280,13 @@ pub struct CliTestFramework {
 }
 
 impl CliTestFramework {
-    pub async fn setup() -> Self {
+    pub async fn setup(rng: &mut impl Rng) -> Self {
         // logging::init_logging::<std::path::PathBuf>(None);
 
         let test_root = test_utils::test_root!("wallet-cli-tests").unwrap();
         // let test_dir = test_root.fresh_test_dir("basic_wallet_cli");
 
-        let chain_config = Arc::new(create_chain_config());
+        let chain_config = Arc::new(create_chain_config(rng));
 
         let (manager, rpc_address) = start_node(Arc::clone(&chain_config)).await;
 
