@@ -58,9 +58,10 @@ class MempoolTxSubmissionTest(BitcoinTestFramework):
 
         # Submit a valid transaction
 
-        input = {
-            'id': { 'BlockReward': '0x{}'.format(tip_id) },
-            'index': 0,
+        input = { 'Utxo': {
+                'id': { 'BlockReward': '0x{}'.format(tip_id) },
+                'index': 0,
+            }
         }
         output = {
             'Transfer': [ { 'Coin': 1_000_000 }, { 'AnyoneCanSpend': None } ],

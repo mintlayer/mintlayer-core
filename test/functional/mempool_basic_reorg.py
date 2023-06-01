@@ -22,15 +22,17 @@ def hash_object(obj, data):
     return scalecodec.ScaleBytes(mintlayer_hash(obj.encode(data).data)).to_hex()[2:]
 
 def reward_input(block_id, index = 0):
-    return {
-        'id': { 'BlockReward': '0x{}'.format(block_id) },
-        'index': index,
+    return { 'Utxo' : {
+           'id': { 'BlockReward': '0x{}'.format(block_id) },
+           'index': index,
+        }
     }
 
 def tx_input(tx_id, index = 0):
-    return {
-        'id': { 'Transaction': '0x{}'.format(tx_id) },
-        'index': index,
+    return { 'Utxo' : {
+           'id': { 'Transaction': '0x{}'.format(tx_id) },
+           'index': index,
+        }
     }
 
 def make_tx(inputs, output_amounts, flags = 0):

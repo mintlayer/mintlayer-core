@@ -51,9 +51,10 @@ class RelayTransactions(BitcoinTestFramework):
 
         # Submit a valid transaction.
         genesis = self.nodes[0].chainstate_block_id_at_height(0)
-        input = {
-            'id': { 'BlockReward': '0x{}'.format(genesis) },
-            'index': 0,
+        input = { 'Utxo': {
+                'id': { 'BlockReward': '0x{}'.format(genesis) },
+                'index': 0,
+            }
         }
         output = {
             'Transfer': [ { 'Coin': 1_000_000 }, { 'AnyoneCanSpend': None } ],

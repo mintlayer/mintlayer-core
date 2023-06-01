@@ -58,11 +58,19 @@ def init_mintlayer_types():
                 ]
             },
 
-            "TxInput": {
+            "OutPoint": {
                 "type": "struct",
                 "type_mapping": [
                     ["id", "OutPointSourceId"],
                     ["index", "u32"],
+                ]
+            },
+
+            "TxInput": {
+                "type": "enum",
+                "type_mapping": [
+                    ["Utxo", "OutPoint"],
+                    # TODO account
                 ]
             },
 
