@@ -140,7 +140,7 @@ async fn diamond_graph(#[case] seed: Seed, #[case] insertion_plan: Vec<(usize, u
 
     let mut make_tx = |ins: &[(OutPointSourceId, u32)], outs: &[u128]| {
         let builder = ins.iter().fold(TransactionBuilder::new(), |b, (s, n)| {
-            b.add_input(TxInput::new(s.clone(), *n), empty_witness(&mut rng))
+            b.add_input(TxInput::from_utxo(s.clone(), *n), empty_witness(&mut rng))
         });
         let builder = outs.iter().fold(builder, |b, a| {
             b.add_output(TxOutput::Transfer(

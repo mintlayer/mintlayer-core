@@ -101,8 +101,6 @@ pub enum TxValidationError {
 pub enum OrphanPoolError {
     #[error("Transaction already present")]
     Duplicate,
-    #[error("Transaction conflicts with another")]
-    Conflict,
     #[error("Transaction {0} too large to be accepted into orphan pool (max {1})")]
     TooLarge(usize, usize),
     #[error("Orphan pool full")]
