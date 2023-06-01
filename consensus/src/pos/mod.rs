@@ -258,7 +258,9 @@ pub fn stake(
             return Ok(StakeResult::Stopped);
         }
 
-        block_timestamp = block_timestamp.add_int_seconds(1).expect("Time will not overflow");
+        block_timestamp =
+            block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
+
         block_epoch.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
     }
 

@@ -36,8 +36,8 @@ use common::{
     time_getter::TimeGetter,
 };
 use consensus::{
-    generate_consensus_data_and_reward, ConsensusPoSError, FinalizeBlockInputData,
-    GenerateBlockInputData, PoSFinalizeBlockInputData,
+    generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
+    FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
 };
 use logging::log;
 use mempool::{
@@ -286,14 +286,20 @@ impl BlockProduction {
 
             let max_block_timestamp = current_timestamp
                 .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
-                .expect("Time will not overflow");
+                .ok_or(ConsensusCreationError::TimestampOverflow(
+                    current_timestamp,
+                    self.chain_config.max_future_block_time_offset().as_secs(),
+                ))?;
 
             if max_block_timestamp <= block_timestamp {
                 sleep(Duration::from_secs(1)).await;
                 continue;
             }
 
-            block_timestamp = block_timestamp.add_int_seconds(1).expect("Time will not overflow");
+            block_timestamp = block_timestamp.add_int_seconds(1).ok_or(
+                ConsensusCreationError::TimestampOverflow(block_timestamp, 1),
+            )?;
+
             last_epoch_used.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =

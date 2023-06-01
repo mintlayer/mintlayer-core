@@ -20,7 +20,10 @@ mod pos;
 mod pow;
 mod validator;
 
-use std::sync::{atomic::{AtomicBool, AtomicU64}, Arc};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64},
+    Arc,
+};
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, PropertyQueryError,
@@ -76,6 +79,8 @@ pub enum ConsensusCreationError {
     StakingFailed,
     #[error("Staking stopped")]
     StakingStopped,
+    #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
+    TimestampOverflow(BlockTimestamp, u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
