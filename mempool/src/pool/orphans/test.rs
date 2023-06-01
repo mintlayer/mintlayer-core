@@ -21,39 +21,43 @@ use common::{
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Rng, Seed};
 
-fn check_integrity(op: &TxOrphanPool) {
-    assert_eq!(op.transactions.len(), op.maps.by_tx_id.len());
-    assert_eq!(op.transactions.len(), op.maps.by_insertion_time.len());
-    op.maps.by_tx_id.iter().for_each(|(tx_id, iid)| {
+fn check_integrity(orphans: &TxOrphanPool) {
+    let len = orphans.len();
+    assert!(len <= ORPHAN_POOL_SIZE_HARD_LIMIT);
+    assert_eq!(len, orphans.transactions.len());
+    assert_eq!(len, orphans.maps.by_tx_id.len());
+    assert_eq!(len, orphans.maps.by_insertion_time.len());
+
+    orphans.maps.by_tx_id.iter().for_each(|(tx_id, iid)| {
         assert_eq!(
-            op.get_at(*iid).tx_id(),
+            orphans.get_at(*iid).tx_id(),
             tx_id,
             "Entry {iid:?} tx ID inconsistent",
         );
     });
-    op.maps.by_insertion_time.iter().for_each(|(time, iid)| {
+    orphans.maps.by_insertion_time.iter().for_each(|(time, iid)| {
         assert_eq!(
-            op.get_at(*iid).creation_time(),
+            orphans.get_at(*iid).creation_time(),
             *time,
             "Entry {iid:?} insertion time inconsistent",
         );
     });
-    op.maps.by_input.iter().for_each(|(outpt, iid)| {
+    orphans.maps.by_input.iter().for_each(|(outpt, iid)| {
+        let inputs = orphans.get_at(*iid).transaction().inputs();
         assert!(
-            op.get_at(*iid).transaction().inputs().iter().any(|i| i.outpoint() == outpt),
+            inputs.iter().any(|i| i.utxo_outpoint() == Some(outpt)),
             "Entry {iid:?} outpoint missing",
         );
     });
 }
 
-fn sample_tx_entry(rng: &mut impl Rng) -> TxEntry {
+fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let n_inputs = rng.gen_range(1..=10);
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
-            let source = H256(rng.gen()).into();
-            let source = common::chain::OutPointSourceId::Transaction(source);
+            let source: Id<Transaction> = H256(rng.gen()).into();
             let output_index = rng.gen_range(0..=400);
-            TxInput::new(source, output_index)
+            TxInput::from_utxo(source.into(), output_index)
         })
         .collect();
 
@@ -61,6 +65,7 @@ fn sample_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let signatures = vec![InputWitness::NoSignature(None); n_inputs];
     let transaction = SignedTransaction::new(transaction, signatures).unwrap();
     let insertion_time = Time::from_secs(rng.gen());
+
     TxEntry::new(transaction, insertion_time)
 }
 
@@ -71,12 +76,11 @@ fn insert_and_delete(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new();
 
-    let entry = sample_tx_entry(&mut rng);
+    let entry = random_tx_entry(&mut rng);
     let tx_id = *entry.tx_id();
     let n_inputs = entry.transaction().inputs().len();
 
-    println!("Inserting {tx_id:?}");
-    assert!(orphans.insert(entry).is_ok());
+    assert_eq!(orphans.insert(entry), Ok(()));
 
     assert_eq!(orphans.len(), 1);
     assert_eq!(orphans.transactions.len(), 1);
@@ -86,8 +90,8 @@ fn insert_and_delete(#[case] seed: Seed) {
     );
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
     assert_eq!(orphans.maps.by_input.len(), n_inputs);
+    check_integrity(&orphans);
 
-    println!("{orphans:?}");
     assert!(orphans.remove(tx_id).is_some());
 
     assert!(orphans.transactions.is_empty());
@@ -100,17 +104,37 @@ fn insert_and_delete(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
+fn capacity_reached(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let mut orphans = TxOrphanPool::new();
+    let time = Time::from_secs(0);
+
+    for entry in (0..config::DEFAULT_ORPHAN_POOL_CAPACITY).map(|_| random_tx_entry(&mut rng)) {
+        assert_eq!(orphans.insert_and_enforce_limits(entry, time), Ok(()));
+    }
+
+    assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+
+    for entry in (0..rng.gen_range(1..100)).map(|_| random_tx_entry(&mut rng)) {
+        let _ = orphans.insert_and_enforce_limits(entry, time);
+        assert_eq!(orphans.len(), config::DEFAULT_ORPHAN_POOL_CAPACITY);
+    }
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 fn simulation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut orphans = TxOrphanPool::new();
     check_integrity(&orphans);
 
-    for _ in 0..200 {
+    for _ in 0..300 {
         let len_before = orphans.len();
-        match rng.gen_range(0..=3) {
+        match rng.gen_range(0..=4) {
             // Insert a random tx
             0..=1 => {
-                let entry = sample_tx_entry(&mut rng);
+                let entry = random_tx_entry(&mut rng);
                 assert_eq!(
                     orphans.insert(entry.clone()),
                     Ok(()),
@@ -139,6 +163,14 @@ fn simulation(#[case] seed: Seed) {
                     "Removal of non-existent {id:?} failed"
                 );
                 assert_eq!(orphans.len(), len_before);
+            }
+
+            // Enforce size limits
+            4..=4 => {
+                let limit = rng.gen_range(0..=150);
+                orphans.enforce_max_size(limit);
+                assert!(orphans.len() <= limit);
+                assert!(orphans.len() <= len_before);
             }
 
             // This should not be generated

@@ -17,17 +17,6 @@ use common::primitives::id::hash_encoded;
 
 use super::*;
 
-fn tx_status<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<TxStatus> {
-    let in_mempool = mempool.contains_transaction(tx_id);
-    let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
-    match (in_mempool, in_orphan_pool) {
-        (false, false) => None,
-        (false, true) => Some(TxStatus::InOrphanPool),
-        (true, false) => Some(TxStatus::InMempool),
-        (true, true) => panic!("Transaction both in mempool and orphan pool"),
-    }
-}
-
 #[rstest]
 #[case(
     Seed::from_entropy(),
@@ -54,7 +43,7 @@ async fn simple_sequence(
 
     let tx0 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+            TxInput::from_utxo(genesis_id.into(), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -66,7 +55,7 @@ async fn simple_sequence(
 
     let tx1 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::Transaction(tx0_id), 0),
+            TxInput::from_utxo(tx0_id.into(), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -103,10 +92,7 @@ async fn sequence_permutation(#[case] seed: Seed) {
     let full_tx_sequence: Vec<_> = {
         let tf = TestFramework::builder(&mut rng).build();
         let mut utxos = vec![(
-            TxInput::new(
-                OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
-                0,
-            ),
+            TxInput::from_utxo(tf.genesis().get_id().into(), 0),
             100_000_000_000_000_u128,
         )];
         let rng = &mut rng; // avoid moving rng into the closure below
@@ -139,12 +125,11 @@ async fn sequence_permutation(#[case] seed: Seed) {
                 let tx = builder.build();
                 let tx_id = tx.transaction().get_id();
 
-                utxos.extend(amts.into_iter().enumerate().map(|(i, amt)| {
-                    (
-                        TxInput::new(OutPointSourceId::Transaction(tx_id), i as u32),
-                        amt,
-                    )
-                }));
+                utxos.extend(
+                    amts.into_iter()
+                        .enumerate()
+                        .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
+                );
 
                 tx
             })
@@ -154,11 +139,8 @@ async fn sequence_permutation(#[case] seed: Seed) {
     let all_tx_ids: Vec<_> = full_tx_sequence.iter().map(|tx| tx.transaction().get_id()).collect();
 
     // Pick a subset of these transactions, taking each with 90% probability.
-    let tx_subseq_0: Vec<_> = full_tx_sequence
-        .iter()
-        .filter(|_| rng.gen_range(0..100) < 90)
-        .cloned()
-        .collect();
+    let tx_subseq_0: Vec<_> =
+        full_tx_sequence.iter().filter(|_| rng.gen_bool(0.9)).cloned().collect();
 
     // Take the same subsequence but with randomly shuffled order.
     // This means some transactions will be temporarily in the orphan pool.
@@ -176,11 +158,11 @@ async fn sequence_permutation(#[case] seed: Seed) {
 
         // Now add each transaction in the subsequence
         tx_subseq.into_iter().for_each(|tx| {
-            mempool.add_transaction(tx).expect("tx add");
+            let _ = mempool.add_transaction(tx).expect("tx add");
         });
 
         // Check the final state of each transaction in the original sequence
-        results.push(all_tx_ids.iter().map(|id| tx_status(&mempool, id)).collect());
+        results.push(all_tx_ids.iter().map(|id| TxStatus::fetch(&mempool, id)).collect());
     }
 
     // Check the final outcome, i.e. which transactions end up in mempool versus orphan pool, is
