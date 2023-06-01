@@ -34,7 +34,7 @@ make_config_setting!(TxIndexEnabled, bool, false);
 make_config_setting!(
     MaxTipAge,
     Duration,
-    // TODO: temporary fix so that functional tests still work
+    // TODO(PR): temporary fix so that functional tests still work
     Duration::from_secs(60 * 60 * 24 * 63353)
 );
 
