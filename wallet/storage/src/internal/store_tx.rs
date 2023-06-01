@@ -19,7 +19,7 @@ use common::address::Address;
 use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
-use utils::maybe_encrypted::MaybeEncrypted;
+use utils::maybe_encrypted::{MaybeEncrypted, MaybeEncryptedError};
 use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
     KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
@@ -257,9 +257,15 @@ impl<'st, B: storage::Backend> WalletStorageEncryptionRead for StoreTxRo<'st, B>
             .map_err(crate::Error::from)
             .map(|mut item| {
                 item.try_for_each(|(_, v)| {
-                    let _decrypted_value = v
-                        .try_decrypt_then_take(encryption_key)
-                        .map_err(|_| crate::Error::WalletInvalidPassword)?;
+                    let _decrypted_value =
+                        v.try_decrypt_then_take(encryption_key).map_err(|err| match err {
+                            MaybeEncryptedError::DecryptionError(_) => {
+                                crate::Error::WalletInvalidPassword
+                            }
+                            MaybeEncryptedError::DecodingError(err) => {
+                                panic!("corrupted DB error in decoding of root keys: {}", err)
+                            }
+                        })?;
 
                     Ok(())
                 })
