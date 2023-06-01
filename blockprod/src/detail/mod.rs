@@ -16,7 +16,7 @@
 pub mod job_manager;
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc, Arc,
 };
 
@@ -125,8 +125,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_timestamp: BlockTimestamp,
-        current_timestamp: BlockTimestamp,
+        block_epoch: &Arc<AtomicU64>,
     ) -> Result<
         (
             ConsensusData,
@@ -140,6 +139,12 @@ impl BlockProduction {
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
+
+                let block_timestamp =
+                    BlockTimestamp::from_int_seconds(block_epoch.load(Ordering::Relaxed));
+
+                let current_timestamp =
+                    BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
                 move |this| {
                     let best_block_index = this
@@ -270,19 +275,22 @@ impl BlockProduction {
         // This variable keeps track of the last timestamp that was
         // attempted, and during Proof of Stake, will prevent
         // searching over the same search space.
-        let mut last_timestamp_used = timestamp_at_start;
+        let last_epoch_used = Arc::new(AtomicU64::new(timestamp_at_start.as_int_seconds()));
 
         let mut previous_consensus_status =
             self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
 
         loop {
+            let mut block_timestamp =
+                BlockTimestamp::from_int_seconds(last_epoch_used.load(Ordering::Relaxed));
+
             let current_timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
             match previous_consensus_status {
                 RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {}
                 RequiredConsensus::PoS(_) => {
-                    if last_timestamp_used == current_timestamp
+                    if block_timestamp == current_timestamp
                         && current_timestamp != timestamp_at_start
                     {
                         sleep(Duration::from_secs(1)).await;
@@ -291,12 +299,11 @@ impl BlockProduction {
                 }
             }
 
-            last_timestamp_used =
-                last_timestamp_used.add_int_seconds(1).expect("Time will not overflow");
+            block_timestamp = block_timestamp.add_int_seconds(1).expect("Time will not overflow");
+            last_epoch_used.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) = self
-                .pull_consensus_data(input_data.clone(), last_timestamp_used, current_timestamp)
-                .await?;
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
+                self.pull_consensus_data(input_data.clone(), &last_epoch_used).await?;
 
             previous_consensus_status = self
                 .chain_config
@@ -339,7 +346,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                last_timestamp_used,
+                &last_epoch_used,
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -395,7 +402,7 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        block_timestamp: BlockTimestamp,
+        block_epoch: &Arc<AtomicU64>,
         finalize_block_data: Option<FinalizeBlockInputData>,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -405,9 +412,13 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
             let stop_flag = Arc::clone(&stop_flag);
+            let block_epoch = Arc::clone(&block_epoch);
 
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
+
+            let block_timestamp =
+                BlockTimestamp::from_int_seconds(block_epoch.load(Ordering::Relaxed));
 
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
@@ -422,6 +433,7 @@ impl BlockProduction {
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
+                    &block_epoch,
                     stop_flag,
                     finalize_block_data,
                 )

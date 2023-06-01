@@ -39,7 +39,7 @@ use common::{
 use crypto::vrf::VRFPublicKey;
 use pos_accounting::PoSAccountingView;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use utils::ensure;
@@ -212,6 +212,7 @@ where
 pub fn stake(
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
+    block_epoch: &Arc<AtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
@@ -257,10 +258,8 @@ pub fn stake(
             return Ok(StakeResult::Stopped);
         }
 
-        block_timestamp = match block_timestamp.add_int_seconds(1) {
-            Some(t) => t,
-            None => return Ok(StakeResult::Failed),
-        }
+        block_timestamp = block_timestamp.add_int_seconds(1).expect("Time will not overflow");
+        block_epoch.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
     }
 
     Ok(StakeResult::Failed)

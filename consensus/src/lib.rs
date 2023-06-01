@@ -20,7 +20,7 @@ mod pos;
 mod pow;
 mod validator;
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{atomic::{AtomicBool, AtomicU64}, Arc};
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, PropertyQueryError,
@@ -173,6 +173,7 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
+    block_epoch: &Arc<AtomicU64>,
     stop_flag: Arc<AtomicBool>,
     finalize_data: Option<FinalizeBlockInputData>,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
@@ -198,6 +199,7 @@ pub fn finalize_consensus_data(
                     let stake_result = stake(
                         &mut pos_data.clone(),
                         block_header,
+                        block_epoch,
                         finalize_pos_data,
                         stop_flag,
                     )?;
