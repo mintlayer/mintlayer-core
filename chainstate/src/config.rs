@@ -34,8 +34,7 @@ make_config_setting!(TxIndexEnabled, bool, false);
 make_config_setting!(
     MaxTipAge,
     Duration,
-    // TODO(PR): temporary fix so that functional tests still work
-    Duration::from_secs(60 * 60 * 24 * 63353)
+    Duration::from_secs(60 * 60 * 24)
 );
 
 /// The chainstate subsystem configuration.

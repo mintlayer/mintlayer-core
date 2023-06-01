@@ -99,6 +99,9 @@ class TestNode():
         rpc_address = rpc_addr(self.index)
         p2p_addr = p2p_url(self.index)
 
+        # For functional tests, we don't want to fail when blocks are too old
+        max_tip_age = 60 * 60 * 24 * 365 * 100
+
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
@@ -108,6 +111,7 @@ class TestNode():
             "regtest",
             "--http-rpc-addr={}".format(rpc_address),
             "--p2p-addr={}".format(p2p_addr),
+            "--max-tip-age={}".format(max_tip_age),
             #"-X",
             #"-logtimemicros",
             #"-debug",
