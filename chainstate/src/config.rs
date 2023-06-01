@@ -31,11 +31,7 @@ make_config_setting!(
     )
 );
 make_config_setting!(TxIndexEnabled, bool, false);
-make_config_setting!(
-    MaxTipAge,
-    Duration,
-    Duration::from_secs(60 * 60 * 24)
-);
+make_config_setting!(MaxTipAge, Duration, Duration::from_secs(60 * 60 * 24));
 
 /// The chainstate subsystem configuration.
 #[derive(Debug, Clone, Default)]
