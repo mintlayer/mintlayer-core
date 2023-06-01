@@ -35,9 +35,10 @@ use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
-    WalletStorageRead, WalletStorageWrite,
+    DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
+    WalletStorageReadLocked, WalletStorageWriteLocked,
 };
+use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::utxo_types::UtxoTypes;
 use wallet_types::{AccountId, KeyPurpose};
 
@@ -109,7 +110,7 @@ impl<B: storage::Backend> Wallet<B> {
         mnemonic: &str,
         passphrase: Option<&str>,
     ) -> WalletResult<Self> {
-        let mut db_tx = db.transaction_rw(None)?;
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         // TODO wallet should save the chain config
 
@@ -188,7 +189,7 @@ impl<B: storage::Backend> Wallet<B> {
             WalletError::AccountAlreadyExists(account_index)
         );
 
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 
         let account_key_chain =
             self.key_chain.create_account_key_chain(&mut db_tx, account_index)?;
@@ -218,6 +219,21 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw(None)?;
+        let account = self
+            .accounts
+            .get_mut(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let value = f(account, &mut db_tx)?;
+        db_tx.commit()?;
+        Ok(value)
+    }
+
+    fn for_account_rw_unlocked<T>(
+        &mut self,
+        account_index: U31,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<T>,
+    ) -> WalletResult<T> {
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = self
             .accounts
             .get_mut(&account_index)
@@ -265,7 +281,7 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
-        let db_tx = self.db.transaction_ro()?;
+        let db_tx = self.db.transaction_ro_unlocked()?;
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
@@ -278,7 +294,7 @@ impl<B: storage::Backend> Wallet<B> {
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
-        self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
         })
     }
@@ -288,7 +304,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.create_stake_pool_tx(db_tx, amount)
         })
     }
@@ -297,7 +313,7 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
-        let db_tx = self.db.transaction_ro()?;
+        let db_tx = self.db.transaction_ro_unlocked()?;
         let account = self
             .accounts
             .get(&account_index)

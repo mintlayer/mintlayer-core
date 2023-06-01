@@ -15,11 +15,16 @@
 
 use super::*;
 use crate::DefaultBackend;
+use crate::TransactionRwUnlocked;
+use crate::WalletStorageReadUnlocked;
+use crate::WalletStorageWriteUnlocked;
 
 use crypto::key::extended::{ExtendedKeyKind, ExtendedPrivateKey};
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
+use wallet_types::RootKeyContent;
+use wallet_types::RootKeyId;
 
 fn gen_random_password(rng: &mut (impl Rng + CryptoRng)) -> String {
     (0..rng.gen_range(1..100)).map(|_| rng.gen::<char>()).collect()
@@ -48,30 +53,39 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
             ExtendedPrivateKey::new_from_rng(&mut rng, ExtendedKeyKind::Secp256k1Schnorr);
         let key_id = RootKeyId::from(xpub_key);
         let key_content = RootKeyContent::from(xpriv_key);
-        store.set_root_key(&key_id, &key_content).unwrap();
+        {
+            let mut db_tx = store.transaction_rw_unlocked(None).unwrap();
+            db_tx.set_root_key(&key_id, &key_content).unwrap();
+            db_tx.commit().unwrap();
+        }
 
-        // check it was written correctly
-        assert_eq!(store.get_root_key(&key_id).unwrap().unwrap(), key_content);
+        {
+            let db_tx = store.transaction_ro_unlocked().unwrap();
+            // check it was written correctly
+            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+        }
 
         // now encrypt the keys with a new password
 
         let new_password = gen_random_password(&mut rng);
         store.encrypt_private_keys(&Some(new_password.clone())).unwrap();
 
-        // check it can decrypt it correctly
-        assert_eq!(store.get_root_key(&key_id).unwrap().unwrap(), key_content);
+        {
+            let db_tx = store.transaction_ro_unlocked().unwrap();
+            // check it can decrypt it correctly
+            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+        }
 
         // after locking the store can't operate on the root keys
         store.lock_private_keys().unwrap();
-
-        let error = store.get_root_key(&key_id);
-        assert_eq!(error, Err(crate::Error::WalletLocked));
-        let error = store.get_all_root_keys();
-        assert_eq!(error, Err(crate::Error::WalletLocked));
-        let error = store.set_root_key(&key_id, &key_content);
-        assert_eq!(error, Err(crate::Error::WalletLocked));
-        let error = store.del_root_key(&key_id);
-        assert_eq!(error, Err(crate::Error::WalletLocked));
+        {
+            let error = store.transaction_ro_unlocked();
+            assert_eq!(error.err(), Some(crate::Error::WalletLocked));
+        }
+        {
+            let error = store.transaction_rw_unlocked(None);
+            assert_eq!(error.err(), Some(crate::Error::WalletLocked));
+        }
 
         // fail to unlock with the wrong password
         let mut wrong_password = gen_random_password(&mut rng);
@@ -85,8 +99,11 @@ fn compare_encrypt_and_decrypt_root_key(#[case] seed: Seed) {
 
         // after unlocking with the right key we can get the root keys again
         store.unlock_private_keys(&new_password).unwrap();
+        {
+            let db_tx = store.transaction_ro_unlocked().unwrap();
 
-        // check it can decrypt it correctly
-        assert_eq!(store.get_root_key(&key_id).unwrap().unwrap(), key_content);
+            // check it can decrypt it correctly
+            assert_eq!(db_tx.get_root_key(&key_id).unwrap().unwrap(), key_content);
+        }
     })
 }

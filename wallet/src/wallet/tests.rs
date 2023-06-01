@@ -497,9 +497,9 @@ fn locked_wallet_accounts_creation_fail(#[case] seed: Seed) {
     let err = wallet.create_account(rng.gen_range(0..1 << 31).try_into().unwrap());
     assert_eq!(
         err,
-        Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
+        Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
-        )))
+        ))
     );
 
     // success after unlock
@@ -567,9 +567,9 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     assert_eq!(
         wallet.create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output.clone()]),
-        Err(WalletError::KeyChainError(KeyChainError::DatabaseError(
+        Err(WalletError::DatabaseError(
             wallet_storage::Error::WalletLocked
-        )))
+        ))
     );
 
     // success after unlock
@@ -577,4 +577,19 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
     wallet
         .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
         .unwrap();
+}
+
+#[test]
+fn lock_wallet_fail_empty_password() {
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    let empty_password = Some(String::new());
+    assert_eq!(
+        wallet.encrypt_wallet(&empty_password),
+        Err(WalletError::DatabaseError(
+            wallet_storage::Error::WalletEmptyPassword
+        ))
+    );
 }

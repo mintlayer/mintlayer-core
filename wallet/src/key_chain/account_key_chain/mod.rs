@@ -26,7 +26,7 @@ use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
-use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead};
+use wallet_storage::{StoreTxRo, WalletStorageReadUnlocked, WalletStorageWriteLocked};
 use wallet_types::keys::KeyPurpose;
 use wallet_types::{AccountId, AccountInfo};
 
@@ -49,9 +49,9 @@ pub struct AccountKeyChain {
 }
 
 impl AccountKeyChain {
-    pub fn new_from_root_key<B: storage::Backend>(
+    pub fn new_from_root_key(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         root_key: ExtendedPrivateKey,
         account_index: U31,
         lookahead_size: u32,
@@ -101,7 +101,7 @@ impl AccountKeyChain {
 
     fn derive_account_private_key(
         &self,
-        db_tx: &impl WalletStorageRead,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> KeyChainResult<ExtendedPrivateKey> {
         let account_path = make_account_path(&self.chain_config, self.account_index);
 
@@ -143,9 +143,9 @@ impl AccountKeyChain {
     }
 
     /// Issue a new address that hasn't been used before
-    pub fn issue_address<B: storage::Backend>(
+    pub fn issue_address(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
     ) -> KeyChainResult<Address> {
         let lookahead_size = self.lookahead_size();
@@ -155,9 +155,9 @@ impl AccountKeyChain {
     }
 
     /// Issue a new derived key that hasn't been used before
-    pub fn issue_key<B: storage::Backend>(
+    pub fn issue_key(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
     ) -> KeyChainResult<ExtendedPublicKey> {
         let lookahead_size = self.lookahead_size();
@@ -183,7 +183,7 @@ impl AccountKeyChain {
     pub fn derive_private_key(
         &self,
         requested_key: &ExtendedPublicKey,
-        db_tx: &impl WalletStorageRead,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> KeyChainResult<ExtendedPrivateKey> {
         let xpriv = self.derive_account_private_key(db_tx)?;
         Self::get_private_key(&xpriv, requested_key)
@@ -192,7 +192,7 @@ impl AccountKeyChain {
     pub fn get_private_key_for_destination(
         &self,
         destination: &Destination,
-        db_tx: &impl WalletStorageRead,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> KeyChainResult<Option<ExtendedPrivateKey>> {
         let xpriv = self.derive_account_private_key(db_tx)?;
         for purpose in KeyPurpose::ALL {
@@ -210,7 +210,7 @@ impl AccountKeyChain {
     pub fn get_private_key_for_path(
         &self,
         path: &DerivationPath,
-        db_tx: &impl WalletStorageRead,
+        db_tx: &impl WalletStorageReadUnlocked,
     ) -> KeyChainResult<ExtendedPrivateKey> {
         let xpriv = self.derive_account_private_key(db_tx)?;
         xpriv.derive_absolute_path(path).map_err(KeyChainError::Derivation)
@@ -249,10 +249,7 @@ impl AccountKeyChain {
     }
 
     /// Derive addresses until there are lookahead unused ones
-    pub fn top_up_all<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-    ) -> KeyChainResult<()> {
+    pub fn top_up_all(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> KeyChainResult<()> {
         let lookahead_size = self.lookahead_size();
         KeyPurpose::ALL.iter().try_for_each(|purpose| {
             self.get_leaf_key_chain_mut(*purpose).top_up(db_tx, lookahead_size)
@@ -264,9 +261,9 @@ impl AccountKeyChain {
     }
 
     /// Marks a public key as being used. Returns true if a key was found and set to used.
-    pub fn mark_public_key_as_used<B: storage::Backend>(
+    pub fn mark_public_key_as_used(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         public_key: &PublicKey,
     ) -> KeyChainResult<bool> {
         let lookahead_size = self.lookahead_size();
@@ -279,9 +276,9 @@ impl AccountKeyChain {
         Ok(false)
     }
 
-    pub fn mark_public_key_hash_as_used<B: storage::Backend>(
+    pub fn mark_public_key_hash_as_used(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         pub_key_hash: &PublicKeyHash,
     ) -> KeyChainResult<bool> {
         let lookahead_size = self.lookahead_size();

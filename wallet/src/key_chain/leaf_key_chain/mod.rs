@@ -27,7 +27,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use utils::const_value::ConstValue;
 use utils::ensure;
-use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
+use wallet_storage::{StoreTxRo, WalletStorageReadLocked, WalletStorageWriteLocked};
 use wallet_types::keys::{KeyPurpose, KeychainUsageState};
 use wallet_types::{AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId};
 
@@ -185,9 +185,9 @@ impl LeafKeySoftChain {
     }
 
     /// Issue a new key
-    pub fn issue_new<B: storage::Backend>(
+    pub fn issue_new(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         lookahead_size: u32,
     ) -> KeyChainResult<(ExtendedPublicKey, Address)> {
         let new_issued_index = self.get_new_issued_index(lookahead_size)?;
@@ -214,9 +214,9 @@ impl LeafKeySoftChain {
     }
 
     /// Persist the usage state to the database
-    pub fn save_usage_state<B: storage::Backend>(
+    pub fn save_usage_state(
         &self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
     ) -> KeyChainResult<()> {
         db_tx
             .set_keychain_usage_state(
@@ -275,9 +275,9 @@ impl LeafKeySoftChain {
     }
 
     /// Derives and adds a key to his key chain. This does not affect the last used and issued state
-    fn derive_and_add_key<B: storage::Backend>(
+    fn derive_and_add_key(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         key_index: U31,
     ) -> KeyChainResult<ExtendedPublicKey> {
         // Get the public key from the key pool if available
@@ -321,9 +321,9 @@ impl LeafKeySoftChain {
 
     /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
     /// used key to the last derived key is already `lookahead_size`, this method has no effect
-    pub fn top_up<B: storage::Backend>(
+    pub fn top_up(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         lookahead_size: u32,
     ) -> KeyChainResult<()> {
         // Find how many keys to derive
@@ -392,9 +392,9 @@ impl LeafKeySoftChain {
 
     /// Mark a specific key as used in the key pool. This will update the last used key index if
     /// necessary. Returns false if a key was found and set to used.
-    fn mark_child_key_as_used<B: storage::Backend>(
+    fn mark_child_key_as_used(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         child_num: ChildNumber,
         lookahead_size: u32,
     ) -> KeyChainResult<()> {
@@ -403,9 +403,9 @@ impl LeafKeySoftChain {
         self.top_up(db_tx, lookahead_size)
     }
 
-    pub fn mark_pubkey_as_used<B: storage::Backend>(
+    pub fn mark_pubkey_as_used(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         public_key: &PublicKey,
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {
@@ -417,9 +417,9 @@ impl LeafKeySoftChain {
         }
     }
 
-    pub fn mark_pub_key_hash_as_used<B: storage::Backend>(
+    pub fn mark_pub_key_hash_as_used(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         public_key_hash: &PublicKeyHash,
         lookahead_size: u32,
     ) -> KeyChainResult<bool> {

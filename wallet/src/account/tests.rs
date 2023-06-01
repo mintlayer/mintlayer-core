@@ -29,7 +29,7 @@ use crypto::random::{Rng, RngCore};
 use rstest::rstest;
 use std::ops::{Div, Mul, Sub};
 use test_utils::random::{make_seedable_rng, Seed};
-use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
+use wallet_storage::{DefaultBackend, Store, TransactionRwUnlocked, Transactional};
 use wallet_types::account_info::DEFAULT_ACCOUNT_INDEX;
 use wallet_types::KeyPurpose::{Change, ReceiveFunds};
 
@@ -40,7 +40,7 @@ const MNEMONIC: &str =
 fn account_addresses() {
     let config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
@@ -69,7 +69,7 @@ fn account_addresses() {
 fn account_addresses_lookahead() {
     let config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();
@@ -110,7 +110,7 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let config = Arc::new(create_regtest());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
 
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(config.clone(), &mut db_tx, MNEMONIC, None).unwrap();

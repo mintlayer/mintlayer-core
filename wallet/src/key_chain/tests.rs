@@ -25,7 +25,9 @@ use rstest::rstest;
 use std::str::FromStr;
 use std::sync::Arc;
 use test_utils::assert_encoded_eq;
-use wallet_storage::{DefaultBackend, Store, TransactionRw, Transactional};
+use wallet_storage::{
+    DefaultBackend, Store, TransactionRwLocked, TransactionRwUnlocked, Transactional,
+};
 use wallet_types::{account_info::DEFAULT_ACCOUNT_INDEX, AccountInfo};
 
 const MNEMONIC: &str =
@@ -66,7 +68,7 @@ fn key_chain_creation(
 ) {
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config, &mut db_tx, MNEMONIC, None).unwrap();
 
@@ -86,7 +88,7 @@ fn key_chain_creation(
     let pkh = PublicKeyHash::zero();
     assert!(!key_chain.is_public_key_hash_mine(&pkh));
 
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let path = DerivationPath::from_str(path_str).unwrap();
     // Derive expected key
     let pk = {
@@ -123,7 +125,7 @@ fn key_chain_creation(
 fn key_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(chain_config.clone(), &mut db_tx, MNEMONIC, None)
             .unwrap();
@@ -201,7 +203,7 @@ fn key_lookahead(#[case] purpose: KeyPurpose) {
 fn top_up_and_lookahead(#[case] purpose: KeyPurpose) {
     let chain_config = Arc::new(create_unit_test_config());
     let db = Arc::new(Store::new(DefaultBackend::new_in_memory()).unwrap());
-    let mut db_tx = db.transaction_rw(None).unwrap();
+    let mut db_tx = db.transaction_rw_unlocked(None).unwrap();
     let master_key_chain =
         MasterKeyChain::new_from_mnemonic(Arc::clone(&chain_config), &mut db_tx, MNEMONIC, None)
             .unwrap();

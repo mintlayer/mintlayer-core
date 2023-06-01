@@ -22,7 +22,10 @@ use crypto::key::hdkd::u31::U31;
 use itertools::Itertools;
 use std::sync::Arc;
 use utils::ensure;
-use wallet_storage::{StoreTxRw, WalletStorageRead, WalletStorageWrite};
+use wallet_storage::{
+    StoreTxRwUnlocked, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteUnlocked,
+};
 use wallet_types::{RootKeyContent, RootKeyId};
 use zeroize::Zeroize;
 
@@ -47,7 +50,7 @@ impl MasterKeyChain {
 
     pub fn new_from_mnemonic<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut StoreTxRwUnlocked<B>,
         mnemonic_str: &str,
         passphrase: Option<&str>,
     ) -> KeyChainResult<Self> {
@@ -60,7 +63,7 @@ impl MasterKeyChain {
 
     pub fn new_from_root_key<B: storage::Backend>(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut StoreTxRwUnlocked<B>,
         root_key: ExtendedPrivateKey,
     ) -> KeyChainResult<Self> {
         if !root_key.get_derivation_path().is_root() {
@@ -75,7 +78,9 @@ impl MasterKeyChain {
         Ok(MasterKeyChain { chain_config })
     }
 
-    pub fn load_root_key(db_tx: &impl WalletStorageRead) -> KeyChainResult<ExtendedPrivateKey> {
+    pub fn load_root_key(
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> KeyChainResult<ExtendedPrivateKey> {
         let key = db_tx
             .get_all_root_keys()?
             .into_values()
@@ -89,7 +94,7 @@ impl MasterKeyChain {
     /// Creates a Master key chain, checks the database for an existing one
     pub fn new_from_existing_database(
         chain_config: Arc<ChainConfig>,
-        db_tx: &impl WalletStorageRead,
+        db_tx: &impl WalletStorageReadLocked,
     ) -> KeyChainResult<Self> {
         ensure!(
             db_tx.exactly_one_root_key()?,
@@ -99,9 +104,9 @@ impl MasterKeyChain {
         Ok(MasterKeyChain { chain_config })
     }
 
-    pub fn create_account_key_chain<B: storage::Backend>(
+    pub fn create_account_key_chain(
         &self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         account_index: U31,
     ) -> KeyChainResult<AccountKeyChain> {
         let root_key = Self::load_root_key(db_tx)?;
