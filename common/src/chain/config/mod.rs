@@ -466,6 +466,8 @@ fn create_testnet_genesis() -> Genesis {
 
     let genesis_message = String::new();
 
+    // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
+
     let genesis_mint_destination = decode_hex::<PublicKey>(
         "00027a9771bbb58170a0df36ed43e56490530f0f2f45b100c42f6f405af3ef21f54e",
     );

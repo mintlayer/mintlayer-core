@@ -30,6 +30,7 @@ use common::{
     primitives::Amount,
 };
 use consensus::GenerateBlockInputData;
+use crypto::{key::PublicKey, vrf::VRFPublicKey};
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -150,6 +151,18 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
         self.wallet
             .get_new_address(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn new_public_key(&mut self) -> Result<PublicKey, ControllerError<T>> {
+        self.wallet
+            .get_new_public_key(DEFAULT_ACCOUNT_INDEX)
+            .map_err(ControllerError::WalletError)
+    }
+
+    pub fn get_vrf_public_key(&mut self) -> Result<VRFPublicKey, ControllerError<T>> {
+        self.wallet
+            .get_vrf_public_key(DEFAULT_ACCOUNT_INDEX)
             .map_err(ControllerError::WalletError)
     }
 

@@ -31,6 +31,8 @@ use common::chain::{
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
+use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
@@ -249,6 +251,19 @@ impl<B: storage::Backend> Wallet<B> {
         self.for_account_rw(account_index, |account, db_tx| {
             account.get_new_address(db_tx, KeyPurpose::ReceiveFunds)
         })
+    }
+
+    pub fn get_new_public_key(&mut self, account_index: U31) -> WalletResult<PublicKey> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
+        })
+    }
+
+    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get_vrf_public_key()
     }
 
     pub fn create_transaction_to_addresses(

@@ -35,6 +35,7 @@ use common::primitives::{Amount, BlockHeight, Id, Idable};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
+use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::ops::Add;
@@ -172,6 +173,11 @@ impl Account {
         let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
         let private_key = self.key_chain.get_private_key_for_path(&vrf_key_path)?.private_key();
         Ok(vrf_from_private_key(&private_key))
+    }
+
+    pub fn get_vrf_public_key(&self) -> WalletResult<VRFPublicKey> {
+        let vrf_keys = self.get_vrf_key()?;
+        Ok(vrf_keys.1)
     }
 
     pub fn create_stake_pool_tx<B: storage::Backend>(
@@ -368,6 +374,15 @@ impl Account {
         purpose: KeyPurpose,
     ) -> WalletResult<Address> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
+    }
+
+    /// Get a new public key that hasn't been used before
+    pub fn get_new_public_key<B: storage::Backend>(
+        &mut self,
+        db_tx: &mut StoreTxRw<B>,
+        purpose: KeyPurpose,
+    ) -> WalletResult<PublicKey> {
+        Ok(self.key_chain.issue_key(db_tx, purpose)?.into_public_key())
     }
 
     fn get_tx_output_destination(txo: &TxOutput) -> Option<&Destination> {

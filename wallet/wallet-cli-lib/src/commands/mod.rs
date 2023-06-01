@@ -119,6 +119,11 @@ pub enum WalletCommand {
     /// Generate a new unused address
     NewAddress,
 
+    /// Generate a new unused public key
+    NewPublicKey,
+
+    GetVrfPublicKey,
+
     SendToAddress {
         address: String,
         amount: String,
@@ -391,6 +396,24 @@ pub async fn handle_wallet_command(
                 .new_address()
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(address.get().to_owned()))
+        }
+
+        WalletCommand::NewPublicKey => {
+            let public_key = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .new_public_key()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(public_key.hex_encode()))
+        }
+
+        WalletCommand::GetVrfPublicKey => {
+            let vrf_public_key = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .get_vrf_public_key()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
         }
 
         WalletCommand::SendToAddress { address, amount } => {
