@@ -44,10 +44,7 @@ use mempool::{
     tx_accumulator::{DefaultTxAccumulator, TransactionAccumulator},
     MempoolHandle,
 };
-use tokio::{
-    sync::oneshot,
-    time::{sleep, Duration},
-};
+use tokio::sync::oneshot;
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
@@ -251,7 +248,7 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let stop_flag = Arc::new(false.into());
+        let stop_flag = Arc::new(AtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
@@ -273,34 +270,34 @@ impl BlockProduction {
         // This variable keeps track of the last timestamp that was
         // attempted, and during Proof of Stake, will prevent
         // searching over the same search space.
-        let last_epoch_used = Arc::new(AtomicU64::new(
-            tip_at_start.block_timestamp().as_int_seconds(),
-        ));
+        let last_epoch_used = {
+            let tip_timestamp = tip_at_start.block_timestamp();
+
+            let tip_plus_one = tip_timestamp
+                .add_int_seconds(1)
+                .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
+
+            Arc::new(AtomicU64::new(tip_plus_one.as_int_seconds()))
+        };
+
+        let current_timestamp =
+            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+
+        let max_block_timestamp = current_timestamp
+            .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+            .ok_or(ConsensusCreationError::TimestampOverflow(
+                current_timestamp,
+                self.chain_config.max_future_block_time_offset().as_secs(),
+            ))?;
 
         loop {
-            let mut block_timestamp =
+            let block_timestamp =
                 BlockTimestamp::from_int_seconds(last_epoch_used.load(Ordering::Relaxed));
 
-            let current_timestamp =
-                BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
-
-            let max_block_timestamp = current_timestamp
-                .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
-                .ok_or(ConsensusCreationError::TimestampOverflow(
-                    current_timestamp,
-                    self.chain_config.max_future_block_time_offset().as_secs(),
-                ))?;
-
             if max_block_timestamp <= block_timestamp {
-                sleep(Duration::from_secs(1)).await;
-                continue;
+                stop_flag.store(true, Ordering::Relaxed);
+                return Err(BlockProductionError::Cancelled);
             }
-
-            block_timestamp = block_timestamp.add_int_seconds(1).ok_or(
-                ConsensusCreationError::TimestampOverflow(block_timestamp, 1),
-            )?;
-
-            last_epoch_used.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
                 self.pull_consensus_data(input_data.clone(), &last_epoch_used).await?;
