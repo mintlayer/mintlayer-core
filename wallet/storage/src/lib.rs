@@ -25,9 +25,8 @@ pub use internal::{Store, StoreTxRo, StoreTxRw};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountDerivationPathId,
-    AccountId, AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
+    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -38,16 +37,11 @@ pub type Error = storage::Error;
 pub trait WalletStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
-    fn get_owned_block_data(
-        &self,
-        block_height: &AccountBlockHeight,
-    ) -> Result<Option<OwnedBlockRewardData>>;
-    fn get_all_owned_block_data(
+    fn get_transaction(&self, id: &AccountWalletTxId) -> Result<Option<WalletTx>>;
+    fn get_transactions(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountBlockHeight, OwnedBlockRewardData>>;
-    fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
-    fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
+    ) -> Result<BTreeMap<AccountWalletTxId, WalletTx>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
     fn get_address(&self, id: &AccountDerivationPathId) -> Result<Option<Address>>;
     fn get_addresses(
@@ -75,14 +69,8 @@ pub trait WalletStorageRead {
 pub trait WalletStorageWrite: WalletStorageRead {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
-    fn set_owned_block_data(
-        &mut self,
-        block_height: &AccountBlockHeight,
-        block: &OwnedBlockRewardData,
-    ) -> crate::Result<()>;
-    fn del_owned_block_data(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
-    fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> Result<()>;
-    fn del_transaction(&mut self, id: &AccountTxId) -> Result<()>;
+    fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
+    fn del_transaction(&mut self, id: &AccountWalletTxId) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;

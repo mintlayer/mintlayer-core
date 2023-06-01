@@ -27,11 +27,10 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, OutPoint, SignedTransaction, Transaction, TxInput,
-    TxOutput,
+    Block, ChainConfig, Destination, GenBlock, OutPoint, SignedTransaction, TxInput, TxOutput,
 };
 use common::primitives::per_thousand::PerThousand;
-use common::primitives::{Amount, BlockHeight, Id, Idable};
+use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
 use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
@@ -41,11 +40,9 @@ use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
-use wallet_types::account_id::AccountBlockHeight;
 use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
-use wallet_types::wallet_block::OwnedBlockRewardData;
-use wallet_types::wallet_tx::TxState;
-use wallet_types::{AccountId, AccountInfo, AccountTxId, KeyPurpose, WalletTx};
+use wallet_types::wallet_tx::{BlockData, TxData, TxState};
+use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, KeyPurpose, WalletTx};
 
 use self::output_cache::OutputCache;
 
@@ -75,9 +72,8 @@ impl Account {
             &account_info,
         )?;
 
-        let blocks = db_tx.get_all_owned_block_data(&key_chain.get_account_id())?;
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
-        let output_cache = OutputCache::new(blocks, txs);
+        let output_cache = OutputCache::new(txs);
 
         Ok(Account {
             chain_config,
@@ -470,26 +466,13 @@ impl Account {
         db_tx: &mut StoreTxRw<B>,
         common_block_height: BlockHeight,
     ) -> WalletResult<()> {
-        let revoked_blocks = self
-            .output_cache
-            .blocks()
-            .iter()
-            .filter_map(|(id, block)| {
-                if block.height() > common_block_height {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
         let revoked_txs = self
             .output_cache
             .txs()
             .iter()
             .filter_map(|(id, tx)| match tx.state() {
                 TxState::Confirmed(height) => {
-                    if *height > common_block_height {
+                    if height > common_block_height {
                         Some(id.clone())
                     } else {
                         None
@@ -499,11 +482,6 @@ impl Account {
             })
             .collect::<Vec<_>>();
 
-        for block_id in revoked_blocks {
-            db_tx.del_owned_block_data(&block_id)?;
-            self.output_cache.remove_block(&block_id);
-        }
-
         for tx_id in revoked_txs {
             db_tx.del_transaction(&tx_id)?;
             self.output_cache.remove_tx(&tx_id);
@@ -512,31 +490,11 @@ impl Account {
         Ok(())
     }
 
-    /// Store a block in the DB if any of the kernel inputs or reward outputs belong to this wallet
-    fn add_block_if_relevant<B: storage::Backend>(
+    /// Store a block or tx in the DB if any of the inputs or outputs belong to this wallet
+    fn add_wallet_tx_if_relevant<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        block: OwnedBlockRewardData,
-    ) -> WalletResult<()> {
-        let relevant_inputs = block
-            .kernel_inputs()
-            .iter()
-            .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
-        let relevant_outputs = self.mark_outputs_as_seen(db_tx, block.reward())?;
-        if relevant_inputs || relevant_outputs {
-            let block_height = AccountBlockHeight::new(self.get_account_id(), block.height());
-            db_tx.set_owned_block_data(&block_height, &block)?;
-            self.output_cache.add_block(block_height, block);
-        }
-        Ok(())
-    }
-
-    /// Store a tx in the DB if any of the inputs or outputs belong to this wallet
-    fn add_tx_if_relevant<B: storage::Backend>(
-        &mut self,
-        db_tx: &mut StoreTxRw<B>,
-        tx: &Transaction,
-        state: &TxState,
+        tx: WalletTx,
     ) -> WalletResult<()> {
         let relevant_inputs = tx
             .inputs()
@@ -544,10 +502,9 @@ impl Account {
             .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
-            let wallet_tx = WalletTx::new(tx.clone().into(), state.clone());
-            let tx_id = AccountTxId::new(self.get_account_id(), wallet_tx.tx().get_id());
-            db_tx.set_transaction(&tx_id, &wallet_tx)?;
-            self.output_cache.add_tx(tx_id, wallet_tx);
+            let id = AccountWalletTxId::new(self.get_account_id(), tx.id());
+            db_tx.set_transaction(&id, &tx)?;
+            self.output_cache.add_tx(id, tx);
         }
         Ok(())
     }
@@ -555,8 +512,8 @@ impl Account {
     fn scan_genesis<B: storage::Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
-        let block = OwnedBlockRewardData::from_genesis(chain_config.genesis_block());
-        self.add_block_if_relevant(db_tx, block)?;
+        let block = BlockData::from_genesis(chain_config.genesis_block());
+        self.add_wallet_tx_if_relevant(db_tx, WalletTx::Block(block))?;
 
         Ok(())
     }
@@ -583,11 +540,15 @@ impl Account {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let tx_state = TxState::Confirmed(block_height);
 
-            let wallet_block = OwnedBlockRewardData::from_block(block, block_height);
-            self.add_block_if_relevant(db_tx, wallet_block)?;
+            let wallet_tx = WalletTx::Block(BlockData::from_block(block, block_height));
+            self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
 
             for signed_tx in block.transactions() {
-                self.add_tx_if_relevant(db_tx, signed_tx.transaction(), &tx_state)?;
+                let wallet_tx = WalletTx::Tx(TxData::new(
+                    signed_tx.transaction().clone().into(),
+                    tx_state,
+                ));
+                self.add_wallet_tx_if_relevant(db_tx, wallet_tx)?;
             }
         }
 

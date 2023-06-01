@@ -14,9 +14,7 @@
 // limitations under the License.
 
 use crate::keys::KeyPurpose;
-use common::address::pubkeyhash::PublicKeyHash;
-use common::chain::Transaction;
-use common::primitives::{BlockHeight, Id};
+use common::{address::pubkeyhash::PublicKeyHash, chain::OutPointSourceId};
 use crypto::key::extended::ExtendedPublicKey;
 use crypto::key::hdkd::derivation_path::DerivationPath;
 use serialization::{Decode, Encode};
@@ -61,7 +59,6 @@ impl<Id: Encode> AccountPrefixedId<Id> {
 
 impl<Id: Encode> HasPrefix<AccountId> for AccountPrefixedId<Id> {}
 
-pub type AccountTxId = AccountPrefixedId<Id<Transaction>>;
+pub type AccountWalletTxId = AccountPrefixedId<OutPointSourceId>;
 pub type AccountDerivationPathId = AccountPrefixedId<DerivationPath>;
 pub type AccountKeyPurposeId = AccountPrefixedId<KeyPurpose>;
-pub type AccountBlockHeight = AccountPrefixedId<BlockHeight>;

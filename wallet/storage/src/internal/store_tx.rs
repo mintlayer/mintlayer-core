@@ -20,9 +20,8 @@ use crypto::key::extended::ExtendedPublicKey;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountDerivationPathId,
-    AccountId, AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent,
-    RootKeyId, WalletTx,
+    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
+    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
 use crate::{
@@ -68,24 +67,7 @@ macro_rules! impl_read_ops {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
             }
 
-            fn get_owned_block_data(
-                &self,
-                block_height: &AccountBlockHeight,
-            ) -> crate::Result<Option<OwnedBlockRewardData>> {
-                self.read::<db::DBOwnedBlockData, _, _>(block_height)
-            }
-
-            fn get_all_owned_block_data(
-                &self,
-                account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountBlockHeight, OwnedBlockRewardData>> {
-                self.0
-                    .get::<db::DBOwnedBlockData, _>()
-                    .prefix_iter_decoded(account_id)
-                    .map(Iterator::collect)
-            }
-
-            fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>> {
+            fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>> {
                 self.read::<db::DBTxs, _, _>(id)
             }
 
@@ -123,7 +105,7 @@ macro_rules! impl_read_ops {
             fn get_transactions(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountTxId, WalletTx>> {
+            ) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>> {
                 self.0
                     .get::<db::DBTxs, _>()
                     .prefix_iter_decoded(account_id)
@@ -198,26 +180,11 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.write_value::<well_known::StoreVersion>(&version)
     }
 
-    fn set_owned_block_data(
-        &mut self,
-        block_height: &AccountBlockHeight,
-        block: &OwnedBlockRewardData,
-    ) -> crate::Result<()> {
-        self.write::<db::DBOwnedBlockData, _, _, _>(block_height, block)
-    }
-
-    fn del_owned_block_data(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()> {
-        self.0
-            .get_mut::<db::DBOwnedBlockData, _>()
-            .del(block_height)
-            .map_err(Into::into)
-    }
-
-    fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {
+    fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()> {
         self.write::<db::DBTxs, _, _, _>(id, tx)
     }
 
-    fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()> {
+    fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()> {
         self.0.get_mut::<db::DBTxs, _>().del(id).map_err(Into::into)
     }
 

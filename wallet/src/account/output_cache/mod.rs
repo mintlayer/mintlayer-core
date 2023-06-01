@@ -15,13 +15,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::{
-    chain::{OutPoint, OutPointSourceId, TxOutput},
-    primitives::Idable,
-};
-use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountTxId, WalletTx,
-};
+use common::chain::{OutPoint, TxOutput};
+use wallet_types::{AccountWalletTxId, WalletTx};
 
 /// A helper structure for the UTXO search.
 ///
@@ -35,39 +30,27 @@ use wallet_types::{
 /// In case of reorg, top blocks (and the transactions they contain) are simply removed from the DB/cache.
 /// A similar approach is used by the Bitcoin Core wallet.
 pub struct OutputCache {
-    blocks: BTreeMap<AccountBlockHeight, OwnedBlockRewardData>,
-    txs: BTreeMap<AccountTxId, WalletTx>,
+    txs: BTreeMap<AccountWalletTxId, WalletTx>,
     consumed: BTreeSet<OutPoint>,
 }
 
 impl OutputCache {
     pub fn empty() -> Self {
         Self {
-            blocks: BTreeMap::new(),
             txs: BTreeMap::new(),
             consumed: BTreeSet::new(),
         }
     }
 
-    pub fn new(
-        blocks: BTreeMap<AccountBlockHeight, OwnedBlockRewardData>,
-        txs: BTreeMap<AccountTxId, WalletTx>,
-    ) -> Self {
+    pub fn new(txs: BTreeMap<AccountWalletTxId, WalletTx>) -> Self {
         let mut cache = Self::empty();
-        for (block_height, block) in blocks {
-            cache.add_block(block_height, block);
-        }
         for (tx_id, tx) in txs {
             cache.add_tx(tx_id, tx);
         }
         cache
     }
 
-    pub fn blocks(&self) -> &BTreeMap<AccountBlockHeight, OwnedBlockRewardData> {
-        &self.blocks
-    }
-
-    pub fn txs(&self) -> &BTreeMap<AccountTxId, WalletTx> {
+    pub fn txs(&self) -> &BTreeMap<AccountWalletTxId, WalletTx> {
         &self.txs
     }
 
@@ -75,33 +58,17 @@ impl OutputCache {
         &self.consumed
     }
 
-    pub fn add_block(&mut self, block_height: AccountBlockHeight, block: OwnedBlockRewardData) {
-        for input in block.kernel_inputs().iter() {
-            self.consumed.insert(input.outpoint().clone());
-        }
-        self.blocks.insert(block_height, block);
-    }
-
-    pub fn add_tx(&mut self, tx_id: AccountTxId, tx: WalletTx) {
-        for input in tx.tx().inputs() {
+    pub fn add_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
+        for input in tx.inputs() {
             self.consumed.insert(input.outpoint().clone());
         }
         self.txs.insert(tx_id, tx);
     }
 
-    pub fn remove_block(&mut self, block_height: &AccountBlockHeight) {
-        let block_opt = self.blocks.remove(block_height);
-        if let Some(block) = block_opt {
-            for input in block.kernel_inputs() {
-                self.consumed.remove(input.outpoint());
-            }
-        }
-    }
-
-    pub fn remove_tx(&mut self, tx_id: &AccountTxId) {
+    pub fn remove_tx(&mut self, tx_id: &AccountWalletTxId) {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
-            for input in tx.tx().inputs() {
+            for input in tx.inputs() {
                 self.consumed.remove(input.outpoint());
             }
         }
@@ -114,24 +81,9 @@ impl OutputCache {
     pub fn utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
         let mut utxos = BTreeMap::new();
 
-        for block in self.blocks.values() {
-            for (index, output) in block.reward().iter().enumerate() {
-                let outpoint = OutPoint::new(
-                    OutPointSourceId::BlockReward(*block.block_id()),
-                    index as u32,
-                );
-                if self.valid_utxo(&outpoint) {
-                    utxos.insert(outpoint, output);
-                }
-            }
-        }
-
         for tx in self.txs.values() {
-            for (index, output) in tx.tx().outputs().iter().enumerate() {
-                let outpoint = OutPoint::new(
-                    OutPointSourceId::Transaction(tx.tx().get_id()),
-                    index as u32,
-                );
+            for (index, output) in tx.outputs().iter().enumerate() {
+                let outpoint = OutPoint::new(tx.id(), index as u32);
                 if self.valid_utxo(&outpoint) {
                     utxos.insert(outpoint, output);
                 }
