@@ -18,19 +18,24 @@
 pub mod mnemonic;
 mod sync;
 
+const NORMAL_DELAY: Duration = Duration::from_secs(1);
+const ERROR_DELAY: Duration = Duration::from_secs(10);
+
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use common::{
     address::Address,
     chain::{tokens::TokenId, Block, ChainConfig, OutPoint, SignedTransaction, TxOutput},
-    primitives::Amount,
+    primitives::{Amount, Idable},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{key::PublicKey, vrf::VRFPublicKey};
+use logging::log;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
@@ -54,11 +59,13 @@ pub enum ControllerError<T: NodeInterface> {
 }
 
 pub struct Controller<T: NodeInterface> {
+    chain_config: Arc<ChainConfig>,
+
     rpc_client: T,
 
     wallet: DefaultWallet,
 
-    block_sync: sync::BlockSyncing<T>,
+    staking_started: bool,
 }
 
 pub type RpcController = Controller<NodeRpcClient>;
@@ -66,16 +73,11 @@ pub type HandlesController = Controller<WalletHandlesClient>;
 
 impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn new(chain_config: Arc<ChainConfig>, rpc_client: T, wallet: DefaultWallet) -> Self {
-        let block_sync = sync::BlockSyncing::new(
-            sync::BlockSyncingConfig::default(),
-            Arc::clone(&chain_config),
-            rpc_client.clone(),
-        );
-
         Self {
+            chain_config,
             rpc_client,
             wallet,
-            block_sync,
+            staking_started: false,
         }
     }
 
@@ -224,14 +226,54 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.sync_once().await
     }
 
-    /// Synchronize the wallet continuously from the node's blockchain
-    pub async fn run_sync(&mut self) {
-        self.block_sync.run(&mut self.wallet).await;
+    pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {
+        self.staking_started = true;
+        Ok(())
+    }
+
+    pub fn stop_staking(&mut self) -> Result<(), ControllerError<T>> {
+        self.staking_started = false;
+        Ok(())
     }
 
     /// Synchronize the wallet to the current node tip height and return
     pub async fn sync_once(&mut self) -> Result<(), ControllerError<T>> {
-        self.block_sync.sync_once(&mut self.wallet).await?;
+        sync::sync_once(&self.chain_config, &self.rpc_client, &mut self.wallet).await?;
         Ok(())
+    }
+
+    /// Synchronize the wallet continuously from the node's blockchain.
+    /// Try staking new blocks if staking was started.
+    pub async fn run(&mut self) {
+        loop {
+            let sync_res = self.sync_once().await;
+
+            if let Err(e) = sync_res {
+                log::error!("Wallet sync error: {e}");
+                tokio::time::sleep(ERROR_DELAY).await;
+                continue;
+            }
+
+            if self.staking_started {
+                let generate_res = self.generate_block(None).await;
+
+                if let Ok(block) = generate_res {
+                    log::info!(
+                        "New block generated succesfully, block id: {}",
+                        block.get_id()
+                    );
+
+                    let submit_res = self.rpc_client.submit_block(block).await;
+                    if let Err(e) = submit_res {
+                        log::error!("Block submit failed: {e}");
+                        tokio::time::sleep(ERROR_DELAY).await;
+                    }
+
+                    continue;
+                }
+            }
+
+            tokio::time::sleep(NORMAL_DELAY).await;
+        }
     }
 }

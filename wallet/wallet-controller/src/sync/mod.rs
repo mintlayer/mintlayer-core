@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
-
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
@@ -75,95 +73,46 @@ enum FetchBlockError<T: NodeInterface> {
     InvalidPrevBlockId(Id<GenBlock>, Id<GenBlock>),
 }
 
-pub struct BlockSyncing<T: NodeInterface> {
-    config: BlockSyncingConfig,
+pub async fn sync_once<T: NodeInterface>(
+    chain_config: &ChainConfig,
+    rpc_client: &T,
+    wallet: &mut impl SyncingWallet,
+) -> Result<(), ControllerError<T>> {
+    loop {
+        let chain_info =
+            rpc_client.chainstate_info().await.map_err(ControllerError::NodeCallError)?;
 
-    chain_config: Arc<ChainConfig>,
+        let (wallet_block_id, wallet_block_height) =
+            wallet.best_block().map_err(ControllerError::WalletError)?;
 
-    rpc_client: T,
-}
-
-#[derive(Clone)]
-pub struct BlockSyncingConfig {
-    normal_delay: Duration,
-    error_delay: Duration,
-}
-
-impl Default for BlockSyncingConfig {
-    fn default() -> Self {
-        Self {
-            normal_delay: Duration::from_secs(1),
-            error_delay: Duration::from_secs(10),
+        if chain_info.best_block_id == wallet_block_id {
+            return Ok(());
         }
-    }
-}
 
-impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
-    pub fn new(config: BlockSyncingConfig, chain_config: Arc<ChainConfig>, rpc_client: T) -> Self {
-        Self {
-            config,
+        let FetchedBlock {
+            block,
+            common_block_height,
+        } = fetch_new_block(
             chain_config,
             rpc_client,
-        }
-    }
+            chain_info.best_block_id,
+            chain_info.best_block_height,
+            wallet_block_id,
+            wallet_block_height,
+        )
+        .await
+        .map_err(|e| ControllerError::SyncError(e.to_string()))?;
 
-    pub async fn sync_once(
-        &mut self,
-        wallet: &mut impl SyncingWallet,
-    ) -> Result<(), ControllerError<T>> {
-        loop {
-            let chain_info = self
-                .rpc_client
-                .chainstate_info()
-                .await
-                .map_err(ControllerError::NodeCallError)?;
+        let block_id = block.header().block_id();
+        wallet
+            .scan_blocks(common_block_height, vec![block])
+            .map_err(ControllerError::WalletError)?;
 
-            let (wallet_block_id, wallet_block_height) =
-                wallet.best_block().map_err(ControllerError::WalletError)?;
-
-            if chain_info.best_block_id == wallet_block_id {
-                return Ok(());
-            }
-
-            let FetchedBlock {
-                block,
-                common_block_height,
-            } = fetch_new_block(
-                &self.chain_config,
-                &mut self.rpc_client,
-                chain_info.best_block_id,
-                chain_info.best_block_height,
-                wallet_block_id,
-                wallet_block_height,
-            )
-            .await
-            .map_err(|e| ControllerError::SyncError(e.to_string()))?;
-
-            let block_id = block.header().block_id();
-            wallet
-                .scan_blocks(common_block_height, vec![block])
-                .map_err(ControllerError::WalletError)?;
-
-            log::info!(
-                "Node chainstate updated, block height: {}, top block id: {}",
-                common_block_height,
-                block_id.hex_encode()
-            );
-        }
-    }
-
-    pub async fn run(&mut self, wallet: &mut impl SyncingWallet) {
-        loop {
-            let sync_res = self.sync_once(wallet).await;
-
-            match sync_res {
-                Ok(()) => tokio::time::sleep(self.config.normal_delay).await,
-                Err(e) => {
-                    log::error!("Wallet sync failed: {e}");
-                    tokio::time::sleep(self.config.error_delay).await;
-                }
-            }
-        }
+        log::info!(
+            "Node chainstate updated, block height: {}, top block id: {}",
+            common_block_height,
+            block_id.hex_encode()
+        );
     }
 }
 
@@ -171,7 +120,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> BlockSyncing<T> {
 // and not allow very large reorgs (for example, the Monero wallet allows reorgs of up to 100 blocks).
 async fn get_next_block_info<T: NodeInterface>(
     chain_config: &ChainConfig,
-    rpc_client: &mut T,
+    rpc_client: &T,
     node_block_id: Id<GenBlock>,
     node_block_height: BlockHeight,
     wallet_block_id: Id<GenBlock>,
@@ -221,7 +170,7 @@ async fn get_next_block_info<T: NodeInterface>(
 
 async fn fetch_new_block<T: NodeInterface>(
     chain_config: &ChainConfig,
-    rpc_client: &mut T,
+    rpc_client: &T,
     node_block_id: Id<GenBlock>,
     node_block_height: BlockHeight,
     wallet_block_id: Id<GenBlock>,

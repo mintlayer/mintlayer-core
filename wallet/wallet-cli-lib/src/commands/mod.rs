@@ -84,6 +84,10 @@ pub enum WalletCommand {
         count: u32,
     },
 
+    StartStaking,
+
+    StopStaking,
+
     /// Submit a block to be included in the chain
     ///
     /// More information about block submits.
@@ -335,6 +339,24 @@ pub async fn handle_wallet_command(
                 .ok_or(WalletCliError::NoWallet)?
                 .generate_blocks(count)
                 .await
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::StartStaking => {
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .start_staking()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::StopStaking => {
+            controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .stop_staking()
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
