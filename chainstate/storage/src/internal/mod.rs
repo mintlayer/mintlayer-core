@@ -22,7 +22,7 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -58,7 +58,7 @@ impl<B: storage::Backend> Store<B> {
     }
 
     /// Collect and return all utxos from the storage
-    pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<OutPoint, Utxo>> {
+    pub fn read_utxo_set(&self) -> crate::Result<BTreeMap<UtxoOutPoint, Utxo>> {
         let db = self.transaction_ro()?;
         db.0.get::<db::DBUtxo, _>()
             .prefix_iter_decoded(&())
@@ -256,7 +256,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
 impl<B: storage::Backend> UtxosStorageRead for Store<B> {
     type Error = crate::Error;
     delegate_to_transaction! {
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -409,8 +409,8 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
 
 impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
     delegate_to_transaction! {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_undo_data(&mut self, id: Id<Block>, undo: &UtxosBlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;

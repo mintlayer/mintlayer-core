@@ -53,7 +53,7 @@ fn signed_tx(#[case] seed: Seed) {
         // genesis block.
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(
                         tf.chainstate.get_chain_config().genesis_block_id(),
                     ),
@@ -69,7 +69,7 @@ fn signed_tx(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
@@ -141,7 +141,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
         // genesis block.
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                     0,
                 ),
@@ -155,7 +155,7 @@ fn signed_classical_multisig_tx(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
@@ -246,7 +246,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
         // genesis block.
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                     0,
                 ),
@@ -260,7 +260,7 @@ fn signed_classical_multisig_tx_missing_sigs(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),
@@ -371,7 +371,7 @@ fn too_large_no_sig_data(#[case] seed: Seed) {
 
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(
+                    TxInput::from_utxo(
                         OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                         0,
                     ),
@@ -395,7 +395,7 @@ fn too_large_no_sig_data(#[case] seed: Seed) {
 
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(
+                    TxInput::from_utxo(
                         OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                         0,
                     ),

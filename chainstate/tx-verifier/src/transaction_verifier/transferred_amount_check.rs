@@ -350,7 +350,7 @@ mod tests {
             block::consensus_data::{PoSData, PoWData},
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            AccountInput, DelegationId, Destination, GenBlock, OutPoint, PoolId,
+            AccountOutPoint, DelegationId, Destination, GenBlock, PoolId, UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -367,7 +367,7 @@ mod tests {
     fn check_block_reward_pow(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let input_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         let input_utxo =
             TxOutput::Transfer(OutputValue::Coin(input_amount), Destination::AnyoneCanSpend);
@@ -450,7 +450,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let pool_id = PoolId::new(H256::zero());
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
@@ -512,7 +512,7 @@ mod tests {
         let pool_id_1 = PoolId::new(H256::random_using(&mut rng));
         let pool_id_2 = PoolId::new(H256::random_using(&mut rng));
 
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
         let pledge_amount_2 = Amount::from_atoms(rng.gen_range(100_000..200_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -606,7 +606,7 @@ mod tests {
 
         // try overspend balance
         {
-            let input = TxInput::Account(AccountInput::new(
+            let input = TxInput::Account(AccountOutPoint::new(
                 0,
                 AccountType::Delegation(delegation_id),
                 overspend_amount,
@@ -631,7 +631,7 @@ mod tests {
 
         // try overspend input
         {
-            let input = TxInput::Account(AccountInput::new(
+            let input = TxInput::Account(AccountOutPoint::new(
                 0,
                 AccountType::Delegation(delegation_id),
                 withdraw_amount,
@@ -654,7 +654,7 @@ mod tests {
             );
         }
 
-        let input = TxInput::Account(AccountInput::new(
+        let input = TxInput::Account(AccountOutPoint::new(
             0,
             AccountType::Delegation(delegation_id),
             withdraw_amount,

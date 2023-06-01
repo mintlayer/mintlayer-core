@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex,
+        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -126,7 +126,7 @@ where
 {
     type Error = <S as utxo::UtxosStorageRead>::Error;
 
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
+    fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
         self.utxo_cache.utxo(outpoint).map_err(|e| e.into())
     }
 

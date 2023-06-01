@@ -48,7 +48,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
         // Issuance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -74,7 +74,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -101,7 +101,7 @@ fn nft_burn_invalid_amount(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -142,7 +142,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         // Issuance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -165,7 +165,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
         // Burn
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(issuance_outpoint_id, 0),
+                TxInput::from_utxo(issuance_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Burn(
@@ -194,7 +194,7 @@ fn nft_burn_valid_case(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(first_burn_outpoint_id, 0),
+                        TxInput::from_utxo(first_burn_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(

@@ -21,7 +21,7 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
@@ -216,7 +216,7 @@ macro_rules! impl_read_ops {
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
             type Error = crate::Error;
 
-            fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+            fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>> {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
 
@@ -510,11 +510,11 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
 }
 
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+    fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()> {
         self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
+    fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()> {
         self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 

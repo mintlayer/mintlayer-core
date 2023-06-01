@@ -35,8 +35,8 @@ use common::{
         create_unittest_pos_config,
         signature::inputsig::{standard_signature::StandardInputSignature, InputWitness},
         stakelock::StakePoolData,
-        ConsensusUpgrade, Destination, NetUpgrades, OutPoint, OutPointSourceId, PoolId, TxInput,
-        TxOutput, UpgradeVersion,
+        ConsensusUpgrade, Destination, NetUpgrades, OutPointSourceId, PoolId, TxInput, TxOutput,
+        UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact, Idable},
     Uint256,
@@ -82,7 +82,7 @@ fn setup_test_chain_with_staked_pool(
 
     let (sk, pk) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let genesis_id = tf.genesis().get_id();
-    let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
+    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
     ));
@@ -99,7 +99,7 @@ fn setup_test_chain_with_staked_pool(
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
             empty_witness(rng),
         )
         .add_output(TxOutput::CreateStakePool(
@@ -150,7 +150,7 @@ fn stable_block_time(#[case] seed: Seed) {
 
         let reward_outputs =
             vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
-        let kernel_inputs = vec![OutPoint::new(best_block_source_id.clone(), 0).into()];
+        let kernel_inputs = vec![UtxoOutPoint::new(best_block_source_id.clone(), 0).into()];
 
         let block_reward_tx = BlockRewardTransactable::new(
             Some(kernel_inputs.as_slice()),
@@ -169,7 +169,7 @@ fn stable_block_time(#[case] seed: Seed) {
 
         let (pos_data, valid_block_timestamp) = pos_mine(
             initial_block_time,
-            OutPoint::new(best_block_source_id, 0),
+            UtxoOutPoint::new(best_block_source_id, 0),
             InputWitness::Standard(kernel_sig),
             &vrf_sk,
             chainstate_types::pos_randomness::PoSRandomness::new(sealed_epoch_randomness),
@@ -210,7 +210,7 @@ fn invalid_target(#[case] seed: Seed) {
     let vrf_data = vrf_sk.produce_vrf_data(transcript.into());
     let best_block_outputs = tf.outputs_from_genblock(tf.best_block_id());
     let pos_data = PoSData::new(
-        vec![TxInput::new(best_block_outputs.keys().next().unwrap().clone(), 0)],
+        vec![TxInput::from_utxo(best_block_outputs.keys().next().unwrap().clone(), 0)],
         vec![InputWitness::NoSignature(None)],
         pool_id,
         vrf_data,

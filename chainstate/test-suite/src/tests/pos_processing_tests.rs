@@ -46,9 +46,9 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        AccountInput, AccountType, Block, ConsensusUpgrade, Destination, GenBlock, Genesis,
-        NetUpgrades, OutPoint, OutPointSourceId, PoSChainConfig, PoolId, SignedTransaction,
-        TxInput, TxOutput, UpgradeVersion,
+        AccountOutPoint, AccountType, Block, ConsensusUpgrade, Destination, GenBlock, Genesis,
+        NetUpgrades, OutPointSourceId, PoSChainConfig, PoolId, SignedTransaction, TxInput,
+        TxOutput, UpgradeVersion, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -109,8 +109,8 @@ fn add_block_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
     stake_pool_data: StakePoolData,
-) -> (OutPoint, PoolId) {
-    let genesis_outpoint = OutPoint::new(
+) -> (UtxoOutPoint, PoolId) {
+    let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
@@ -129,7 +129,7 @@ fn add_block_with_stake_pool(
     tf.progress_time_seconds_since_epoch(1);
 
     (
-        OutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx_id), 0),
         pool_id,
     )
 }
@@ -139,8 +139,8 @@ fn add_block_with_2_stake_pools(
     tf: &mut TestFramework,
     stake_pool_data1: StakePoolData,
     stake_pool_data2: StakePoolData,
-) -> (OutPoint, PoolId, OutPoint, PoolId) {
-    let outpoint_genesis = OutPoint::new(
+) -> (UtxoOutPoint, PoolId, UtxoOutPoint, PoolId) {
+    let outpoint_genesis = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
@@ -157,9 +157,9 @@ fn add_block_with_2_stake_pools(
         ))
         .build();
     let stake_outpoint1 =
-        OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0);
     let transfer_outpoint1 =
-        OutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1);
 
     let pool_id2 = pos_accounting::make_pool_id(&transfer_outpoint1);
     let tx2 = TransactionBuilder::new()
@@ -169,7 +169,7 @@ fn add_block_with_2_stake_pools(
             Box::new(stake_pool_data2),
         ))
         .build();
-    let outpoint2 = OutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
+    let outpoint2 = UtxoOutPoint::new(OutPointSourceId::Transaction(tx2.transaction().get_id()), 0);
 
     tf.make_block_builder()
         .with_transactions(vec![tx1, tx2])
@@ -186,7 +186,7 @@ fn add_block_with_2_stake_pools(
 fn setup_test_chain_with_staked_pool(
     rng: &mut (impl Rng + CryptoRng),
     vrf_pk: VRFPublicKey,
-) -> (TestFramework, OutPoint, PoolId, PrivateKey) {
+) -> (TestFramework, UtxoOutPoint, PoolId, PrivateKey) {
     let upgrades = vec![
         (
             BlockHeight::new(0),
@@ -227,10 +227,10 @@ fn setup_test_chain_with_2_staked_pools(
     vrf_pk_2: VRFPublicKey,
 ) -> (
     TestFramework,
-    OutPoint,
+    UtxoOutPoint,
     PoolId,
     PrivateKey,
-    OutPoint,
+    UtxoOutPoint,
     PoolId,
     PrivateKey,
 ) {
@@ -258,10 +258,10 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
     upgrades: Vec<(BlockHeight, UpgradeVersion)>,
 ) -> (
     TestFramework,
-    OutPoint,
+    UtxoOutPoint,
     PoolId,
     PrivateKey,
-    OutPoint,
+    UtxoOutPoint,
     PoolId,
     PrivateKey,
 ) {
@@ -304,7 +304,7 @@ fn produce_kernel_signature(
     reward_outputs: &[TxOutput],
     staking_destination: Destination,
     kernel_utxo_block_id: Id<GenBlock>,
-    kernel_outpoint: OutPoint,
+    kernel_outpoint: UtxoOutPoint,
 ) -> StandardInputSignature {
     let block_outputs = tf.outputs_from_genblock(kernel_utxo_block_id);
     let utxo = &block_outputs.get(&kernel_outpoint.tx_id()).unwrap()
@@ -611,12 +611,13 @@ fn pos_invalid_kernel_input(#[case] seed: Seed) {
     let genesis_id = tf.genesis().get_id();
     let (staking_sk, _) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
     let (vrf_sk, _) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-    let pool_id = pos_accounting::make_pool_id(&OutPoint::new(
+    let pool_id = pos_accounting::make_pool_id(&UtxoOutPoint::new(
         OutPointSourceId::BlockReward(genesis_id.into()),
         0,
     ));
 
-    let invalid_kernel_input = OutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);
+    let invalid_kernel_input =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(genesis_id.into()), 0);
     let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
@@ -1037,7 +1038,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // prepare and process block_3 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
-    let block_2_reward_outpoint = OutPoint::new(
+    let block_2_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -1078,7 +1079,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // prepare and process block_4 with ProduceBlockFromStake -> ProduceBlockFromStake kernel
-    let block_3_reward_outpoint = OutPoint::new(
+    let block_3_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -1204,7 +1205,7 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let genesis_outpoint = OutPoint::new(
+    let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
@@ -1310,7 +1311,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .unwrap();
 
     // prepare and process block_d with ProduceBlockFromStake -> ProduceBlockFromStake kernel
-    let block_3_reward_outpoint = OutPoint::new(
+    let block_3_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward((*block_c_index.block_id()).into()),
         0,
     );
@@ -1440,7 +1441,7 @@ fn decommission_from_produce_block(#[case] seed: Seed) {
         stake_pool_block_id,
         stake_pool_outpoint2.clone(),
     );
-    let block_2_reward_outpoint = OutPoint::new(
+    let block_2_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -1649,7 +1650,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     // Required due to strict timestamp ordering in PoS
     tf.set_time_seconds_since_epoch(tf.best_block_index().block_timestamp().as_int_seconds() + 1);
 
-    let stake_pool_outpoint = OutPoint::new(tf.best_block_id().into(), 1);
+    let stake_pool_outpoint = UtxoOutPoint::new(tf.best_block_id().into(), 1);
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staker_sk));
     let reward_outputs =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), genesis_pool_id)];
@@ -1699,7 +1700,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     // Required due to strict timestamp ordering in PoS
     tf.set_time_seconds_since_epoch(tf.best_block_index().block_timestamp().as_int_seconds() + 1);
 
-    let block_1_reward_outpoint = OutPoint::new(
+    let block_1_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -1751,7 +1752,7 @@ fn mine_pos_block(
     staker_sk: &PrivateKey,
     vrf_sk: &VRFPrivateKey,
     transactions: Vec<SignedTransaction>,
-    kernel_input_outpoint: OutPoint,
+    kernel_input_outpoint: UtxoOutPoint,
 ) -> Block {
     let parent = tf.best_block_index();
     tf.set_time_seconds_since_epoch(parent.block_timestamp().as_int_seconds() + 1);
@@ -1862,7 +1863,7 @@ fn pos_reorg(#[case] seed: Seed) {
     let mut tf1 = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
     let mut tf2 = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let genesis_mint_outpoint = OutPoint::new(
+    let genesis_mint_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf1.genesis().get_id().into()),
         0,
     );
@@ -1886,7 +1887,7 @@ fn pos_reorg(#[case] seed: Seed) {
     let pool2_tx_id = pool2_tx.transaction().get_id();
 
     // Block1
-    let kernel_outpoint = OutPoint::new(tf1.best_block_id().into(), 1);
+    let kernel_outpoint = UtxoOutPoint::new(tf1.best_block_id().into(), 1);
     let block1 = mine_pos_block(
         &mut tf1,
         genesis_pool_id,
@@ -1899,7 +1900,7 @@ fn pos_reorg(#[case] seed: Seed) {
     tf2.process_block(block1, BlockSource::Local).unwrap().unwrap();
 
     // Block with height 2 by pool1
-    let kernel_outpoint = OutPoint::new(tf1.best_block_id().into(), 0);
+    let kernel_outpoint = UtxoOutPoint::new(tf1.best_block_id().into(), 0);
     let _block2_pool1 = mine_pos_block(
         &mut tf1,
         genesis_pool_id,
@@ -1910,7 +1911,7 @@ fn pos_reorg(#[case] seed: Seed) {
     );
 
     // Block at height 2 by pool2
-    let kernel_outpoint = OutPoint::new(OutPointSourceId::Transaction(pool2_tx_id), 0);
+    let kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(pool2_tx_id), 0);
     let block2_pool2 = mine_pos_block(
         &mut tf2,
         pool2_id,
@@ -1921,7 +1922,7 @@ fn pos_reorg(#[case] seed: Seed) {
     );
 
     // Block at height 3 by pool2
-    let kernel_outpoint = OutPoint::new(tf2.best_block_id().into(), 0);
+    let kernel_outpoint = UtxoOutPoint::new(tf2.best_block_id().into(), 0);
     let block3_pool2 = mine_pos_block(
         &mut tf2,
         pool2_id,
@@ -1987,7 +1988,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
     let delegation_reward_per_block = (block_subsidy - staker_reward_per_block).unwrap();
 
-    let genesis_outpoint = OutPoint::new(
+    let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
@@ -2011,7 +2012,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     let tx1_id = tx1.transaction().get_id();
     let tx2 = TransactionBuilder::new()
         .add_input(
-            OutPoint::new(tx1_id.into(), 0).into(),
+            UtxoOutPoint::new(tx1_id.into(), 0).into(),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::DelegateStaking(amount_to_delegate, delegation_id))
@@ -2024,7 +2025,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // Process block_2 and distibute reward
-    let stake_pool_outpoint = OutPoint::new(tx1_id.into(), 1);
+    let stake_pool_outpoint = UtxoOutPoint::new(tx1_id.into(), 1);
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
     let reward_outputs =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
@@ -2064,7 +2065,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // Process block_3 and spend part of the share including reward
-    let block_2_reward_outpoint = OutPoint::new(
+    let block_2_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -2096,7 +2097,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     .expect("should be able to mine");
 
     let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
-    let tx_input_spend_from_delegation = AccountInput::new(
+    let tx_input_spend_from_delegation = AccountOutPoint::new(
         0,
         AccountType::Delegation(delegation_id),
         amount_to_withdraw,
@@ -2124,7 +2125,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     tf.progress_time_seconds_since_epoch(target_block_time);
 
     // Process block_4 and spend some share including reward
-    let block_3_reward_outpoint = OutPoint::new(
+    let block_3_reward_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.chainstate.get_best_block_id().unwrap()),
         0,
     );
@@ -2161,7 +2162,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     // try overspend
     {
         let delegation_balance_overspend = (delegation_balance + Amount::from_atoms(1)).unwrap();
-        let tx_input_spend_from_delegation = AccountInput::new(
+        let tx_input_spend_from_delegation = AccountOutPoint::new(
             1,
             AccountType::Delegation(delegation_id),
             delegation_balance_overspend,
@@ -2198,7 +2199,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         );
     }
 
-    let tx_input_spend_from_delegation = AccountInput::new(
+    let tx_input_spend_from_delegation = AccountOutPoint::new(
         1,
         AccountType::Delegation(delegation_id),
         delegation_balance,

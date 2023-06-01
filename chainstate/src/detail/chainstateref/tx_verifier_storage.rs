@@ -118,7 +118,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
 
     fn get_utxo(
         &self,
-        outpoint: &common::chain::OutPoint,
+        outpoint: &common::chain::UtxoOutPoint,
     ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.db_tx.get_utxo(outpoint)
     }

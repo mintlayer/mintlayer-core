@@ -33,7 +33,7 @@ async fn test_replace_tx(
 
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
-    let input = TxInput::new(outpoint_source_id, 0);
+    let input = TxInput::from_utxo(outpoint_source_id, 0);
     let flags = 1;
 
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
@@ -85,7 +85,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let outpoint_source_id = OutPointSourceId::BlockReward(genesis.get_id().into());
 
-    let input = TxInput::new(outpoint_source_id, 0);
+    let input = TxInput::from_utxo(outpoint_source_id, 0);
     let flags = 0;
     let original_fee: Fee =
         Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
@@ -180,7 +180,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -193,7 +193,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
     mempool.add_transaction(tx.clone())?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
-    let child_tx_input = TxInput::new(outpoint_source_id, 0);
+    let child_tx_input = TxInput::from_utxo(outpoint_source_id, 0);
     // We want to test that even though child_tx doesn't signal replaceability directly, it is replaceable because its parent signalled replaceability
     // replaced
     let flags = 0;
@@ -233,7 +233,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -247,7 +247,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     mempool.add_transaction(tx)?;
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
-    let input = TxInput::new(outpoint_source_id, 0);
+    let input = TxInput::from_utxo(outpoint_source_id, 0);
 
     let rbf = 1;
     let no_rbf = 0;
@@ -272,7 +272,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let descendant1_fee: Fee = Amount::from_atoms(100).into();
     let descendant1 = tx_spend_input(
         &mempool,
-        TxInput::new(descendant_outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(descendant_outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant1_fee,
         no_rbf,
@@ -284,7 +284,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     let descendant2_fee: Fee = Amount::from_atoms(100).into();
     let descendant2 = tx_spend_input(
         &mempool,
-        TxInput::new(descendant_outpoint_source_id, 1),
+        TxInput::from_utxo(descendant_outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         descendant2_fee,
         no_rbf,

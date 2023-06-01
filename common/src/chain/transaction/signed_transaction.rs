@@ -126,10 +126,11 @@ mod tests {
         let hash1 = H256([0x51; 32]);
         let hash2 = H256([0x52; 32]);
 
-        let ins0: Vec<TxInput> = [TxInput::new(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
+        let ins0: Vec<TxInput> =
+            [TxInput::from_utxo(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
         let ins1: Vec<TxInput> = [
-            TxInput::new(Id::<Transaction>::new(hash1).into(), 3),
-            TxInput::new(Id::<Transaction>::new(hash2).into(), 0),
+            TxInput::from_utxo(Id::<Transaction>::new(hash1).into(), 3),
+            TxInput::from_utxo(Id::<Transaction>::new(hash2).into(), 0),
         ]
         .to_vec();
 
@@ -185,7 +186,7 @@ mod tests {
         let input_count = 1 + rng.gen::<usize>() % 10;
         let inputs = (0..input_count)
             .map(|_| {
-                TxInput::new(
+                TxInput::from_utxo(
                     Id::<Transaction>::new(H256::random_using(&mut rng)).into(),
                     rng.gen::<u32>() % 10,
                 )

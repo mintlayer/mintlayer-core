@@ -25,8 +25,8 @@ use common::address::Address;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::TokenId;
 use common::chain::{
-    Block, ChainConfig, GenBlock, OutPoint, SignedTransaction, Transaction,
-    TransactionCreationError, TxOutput,
+    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
+    TxOutput, UtxoOutPoint,
 };
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
@@ -261,7 +261,7 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
-    ) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
+    ) -> WalletResult<BTreeMap<UtxoOutPoint, TxOutput>> {
         let account = self
             .accounts
             .get(&account_index)

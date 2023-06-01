@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, Destination, OutPoint, OutPointSourceId, PoolId},
+    chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
     primitives::{Amount, Id, H256},
 };
 use crypto::random::{CryptoRng, Rng};
@@ -31,9 +31,9 @@ use crate::{
     PoSAccountingView,
 };
 
-fn random_outpoint0(rng: &mut impl Rng) -> OutPoint {
+fn random_outpoint0(rng: &mut impl Rng) -> UtxoOutPoint {
     let source_id = OutPointSourceId::Transaction(Id::new(H256::random_using(rng)));
-    OutPoint::new(source_id, 0)
+    UtxoOutPoint::new(source_id, 0)
 }
 
 fn get_random_pool_id(rng: &mut impl Rng, storage: &InMemoryPoSAccounting) -> Option<PoolId> {

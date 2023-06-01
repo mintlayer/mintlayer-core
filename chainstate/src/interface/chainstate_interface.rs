@@ -27,8 +27,8 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex,
+        ChainConfig, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -180,7 +180,7 @@ pub trait ChainstateInterface: Send {
     ) -> Result<(), ChainstateError>;
 
     /// Returns the UTXO for a specified OutPoint
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
 
     /// Returns true if the initial block download isn't finished yet.
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;

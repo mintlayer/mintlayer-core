@@ -111,7 +111,7 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 
     fn get_utxo(
         &self,
-        outpoint: &common::chain::OutPoint,
+        outpoint: &common::chain::UtxoOutPoint,
     ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.storage.get_utxo(outpoint)
     }

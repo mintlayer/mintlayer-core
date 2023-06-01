@@ -18,7 +18,7 @@ use common::address::Address;
 use common::chain::stakelock::StakePoolData;
 use common::chain::tokens::OutputValue;
 use common::chain::{
-    Destination, OutPoint, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
+    Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
@@ -104,9 +104,15 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, TxOutput)>) -> Self {
+    pub fn with_inputs(
+        mut self,
+        utxos: impl IntoIterator<Item = (UtxoOutPoint, TxOutput)>,
+    ) -> Self {
         for (outpoint, txo) in utxos {
-            self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
+            self.inputs.push(TxInput::from_utxo(
+                outpoint.tx_id(),
+                outpoint.output_index(),
+            ));
             self.utxos.push(txo);
         }
         self

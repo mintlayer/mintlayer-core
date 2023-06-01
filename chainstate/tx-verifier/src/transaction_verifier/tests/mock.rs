@@ -24,8 +24,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountType, Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex,
+        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
+        TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -139,7 +139,7 @@ mockall::mock! {
 
     impl UtxosStorageRead for Store {
         type Error = storage_result::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;
     }

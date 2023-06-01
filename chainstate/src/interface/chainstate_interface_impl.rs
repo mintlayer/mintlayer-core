@@ -32,8 +32,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountType, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex, TxOutput,
+        AccountType, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
 };
@@ -455,7 +455,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(())
     }
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
         let chainstate_ref = self
             .chainstate
             .make_db_tx_ro()

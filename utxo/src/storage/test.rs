@@ -89,7 +89,7 @@ fn create_block(
 fn initialize_db(
     rng: &mut (impl Rng + CryptoRng),
     tx_outputs_size: u32,
-) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
+) -> (UtxosDBInMemoryImpl, Vec<UtxoOutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id, Default::default());
 
@@ -115,7 +115,7 @@ fn initialize_db(
 fn create_utxo_entries(
     rng: &mut (impl Rng + CryptoRng),
     num_of_utxos: u8,
-) -> BTreeMap<OutPoint, UtxoEntry> {
+) -> BTreeMap<UtxoOutPoint, UtxoEntry> {
     let mut map = BTreeMap::new();
     for _ in 0..num_of_utxos {
         let (utxo, outpoint) = create_utxo(rng, 0);
@@ -146,7 +146,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     let spent_utxos = expected_tx_inputs
         .iter()
         .map(|input| {
-            let outpoint = input.outpoint().unwrap();
+            let outpoint = input.utxo_outpoint().unwrap();
             assert!(db.has_utxo(outpoint).unwrap());
 
             db.utxo(outpoint).expect("utxo should exist.")
@@ -211,7 +211,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // check that all in tx_inputs do NOT exist
     expected_tx_inputs.iter().for_each(|input| {
-        assert_eq!(db.utxo(input.outpoint().unwrap()), Ok(None));
+        assert_eq!(db.utxo(input.utxo_outpoint().unwrap()), Ok(None));
     });
 
     // save the undo data to the db.
@@ -226,7 +226,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
     {
         block.transactions().iter().for_each(|tx| {
             tx.inputs().iter().for_each(|input| {
-                assert_eq!(db.utxo(input.outpoint().unwrap()), Ok(None));
+                assert_eq!(db.utxo(input.utxo_outpoint().unwrap()), Ok(None));
             });
         });
     }
@@ -260,7 +260,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).unwrap();
-                cache.add_utxo(input.outpoint().unwrap(), utxo.clone(), true).unwrap();
+                cache.add_utxo(input.utxo_outpoint().unwrap(), utxo.clone(), true).unwrap();
             });
         });
 
@@ -275,7 +275,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
     // check that all the expected_tx_inputs exists, and the same utxo is saved.
     expected_tx_inputs.iter().enumerate().for_each(|(idx, input)| {
-        let res = db.utxo(input.outpoint().unwrap());
+        let res = db.utxo(input.utxo_outpoint().unwrap());
 
         let expected_utxo = spent_utxos.get(idx);
         assert_eq!(res.ok().as_ref(), expected_utxo);
@@ -299,7 +299,7 @@ fn try_spend_tx_with_no_outputs(#[case] seed: Seed) {
             let id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
             let id = OutPointSourceId::BlockReward(id);
 
-            TxInput::new(id, i)
+            TxInput::from_utxo(id, i)
         })
         .collect();
 
@@ -386,7 +386,7 @@ fn try_flush_spent_utxo(#[case] seed: Seed) {
         UtxosDBInMemoryImpl::new(Id::new(H256::random_using(&mut rng)), Default::default());
     let mut utxo_db = UtxosDB::new(&mut db_interface);
 
-    let outpoint = OutPoint::new(
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
         0,
     );

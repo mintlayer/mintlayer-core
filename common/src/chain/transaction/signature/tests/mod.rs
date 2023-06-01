@@ -646,7 +646,7 @@ fn check_insert_input(
     let mut inputs_utxos = inputs_utxos.to_vec();
     inputs_utxos.push(Some(&inputs_utxo));
 
-    tx_updater.inputs.push(TxInput::new(outpoint_source_id, 1));
+    tx_updater.inputs.push(TxInput::from_utxo(outpoint_source_id, 1));
     tx_updater.witness.push(InputWitness::NoSignature(Some(vec![1, 2, 3])));
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(chain_config, destination, &tx, &inputs_utxos, 0);
@@ -752,7 +752,7 @@ fn check_mutate_input(
 ) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.inputs[0] = TxInput::new(
+    tx_updater.inputs[0] = TxInput::from_utxo(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
         9999,
     );

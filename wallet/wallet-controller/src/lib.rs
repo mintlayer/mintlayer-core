@@ -30,7 +30,7 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, Block, ChainConfig, OutPoint, SignedTransaction, TxOutput},
+    chain::{tokens::TokenId, Block, ChainConfig, SignedTransaction, TxOutput, UtxoOutPoint},
     primitives::{Amount, Idable},
 };
 use consensus::GenerateBlockInputData;
@@ -179,7 +179,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn get_utxos(
         &self,
         utxo_types: UtxoTypes,
-    ) -> Result<BTreeMap<OutPoint, TxOutput>, ControllerError<T>> {
+    ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
             .get_utxos(DEFAULT_ACCOUNT_INDEX, utxo_types)
             .map_err(ControllerError::WalletError)

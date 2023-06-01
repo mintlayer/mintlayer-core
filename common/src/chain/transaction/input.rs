@@ -13,166 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::DelegationId;
-use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
-use crate::primitives::{Amount, Id, H256};
+use crate::primitives::Amount;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub enum OutPointSourceId {
-    #[codec(index = 0)]
-    Transaction(Id<Transaction>),
-    #[codec(index = 1)]
-    BlockReward(Id<GenBlock>),
-}
-
-impl From<Id<Transaction>> for OutPointSourceId {
-    fn from(id: Id<Transaction>) -> OutPointSourceId {
-        OutPointSourceId::Transaction(id)
-    }
-}
-
-impl From<Id<GenBlock>> for OutPointSourceId {
-    fn from(id: Id<GenBlock>) -> OutPointSourceId {
-        OutPointSourceId::BlockReward(id)
-    }
-}
-
-impl From<Id<Block>> for OutPointSourceId {
-    fn from(id: Id<Block>) -> OutPointSourceId {
-        OutPointSourceId::BlockReward(id.into())
-    }
-}
-
-impl From<Id<Genesis>> for OutPointSourceId {
-    fn from(id: Id<Genesis>) -> OutPointSourceId {
-        OutPointSourceId::BlockReward(id.into())
-    }
-}
-
-impl OutPointSourceId {
-    pub fn get_tx_id(&self) -> Option<&Id<Transaction>> {
-        match self {
-            OutPointSourceId::Transaction(id) => Some(id),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct OutPoint {
-    id: OutPointSourceId,
-    index: u32,
-}
-
-impl OutPointSourceId {
-    fn outpoint_source_id_as_monolithic_tuple(&self) -> (u8, H256) {
-        const TX_OUT_INDEX: u8 = 0;
-        const BLK_REWARD_INDEX: u8 = 1;
-        match self {
-            OutPointSourceId::Transaction(h) => (TX_OUT_INDEX, h.get()),
-            OutPointSourceId::BlockReward(h) => (BLK_REWARD_INDEX, h.get()),
-        }
-    }
-}
-
-impl PartialOrd for OutPointSourceId {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OutPointSourceId {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = self.outpoint_source_id_as_monolithic_tuple();
-        let other_id = other.outpoint_source_id_as_monolithic_tuple();
-        id.cmp(&other_id)
-    }
-}
-
-impl PartialOrd for OutPoint {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OutPoint {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = self.id.outpoint_source_id_as_monolithic_tuple();
-        let other_id = other.id.outpoint_source_id_as_monolithic_tuple();
-
-        (id, self.index).cmp(&(other_id, other.index))
-    }
-}
-
-impl OutPoint {
-    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
-        OutPoint {
-            id: outpoint_source_id,
-            index: output_index,
-        }
-    }
-
-    pub fn tx_id(&self) -> OutPointSourceId {
-        self.id.clone()
-    }
-
-    pub fn output_index(&self) -> u32 {
-        self.index
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
-pub enum AccountType {
-    Delegation(DelegationId),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
-pub struct AccountInput {
-    #[codec(compact)]
-    nonce: u128,
-    account: AccountType,
-    withdraw_amount: Amount,
-}
-
-impl AccountInput {
-    pub fn new(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
-        Self {
-            nonce,
-            account,
-            withdraw_amount,
-        }
-    }
-
-    pub fn nonce(&self) -> u128 {
-        self.nonce
-    }
-
-    pub fn account(&self) -> &AccountType {
-        &self.account
-    }
-
-    pub fn withdraw_amount(&self) -> &Amount {
-        &self.withdraw_amount
-    }
-}
+use super::{AccountOutPoint, AccountType, OutPointSourceId, UtxoOutPoint};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum TxInput {
-    Utxo(OutPoint),
-    Account(AccountInput),
+    Utxo(UtxoOutPoint),
+    Account(AccountOutPoint),
 }
 
 impl TxInput {
-    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
-        TxInput::Utxo(OutPoint::new(outpoint_source_id, output_index))
+    pub fn from_utxo(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
+        TxInput::Utxo(UtxoOutPoint::new(outpoint_source_id, output_index))
     }
 
-    pub fn new_account(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
-        TxInput::Account(AccountInput::new(nonce, account, withdraw_amount))
+    pub fn from_account(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
+        TxInput::Account(AccountOutPoint::new(nonce, account, withdraw_amount))
     }
 
-    pub fn outpoint(&self) -> Option<&OutPoint> {
+    pub fn utxo_outpoint(&self) -> Option<&UtxoOutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),
             TxInput::Account(_) => None,
@@ -180,99 +41,8 @@ impl TxInput {
     }
 }
 
-impl From<OutPoint> for TxInput {
-    fn from(outpoint: OutPoint) -> TxInput {
+impl From<UtxoOutPoint> for TxInput {
+    fn from(outpoint: UtxoOutPoint) -> TxInput {
         TxInput::Utxo(outpoint)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use rstest::rstest;
-    use test_utils::random::Seed;
-
-    use super::*;
-
-    // The hash value doesn't matter because we first compare the enum arm
-    fn compare_test(block_reward_hash: &H256, tx_hash: &H256) {
-        let br = OutPointSourceId::BlockReward(Id::new(*block_reward_hash));
-        let bro0 = OutPoint::new(br.clone(), 0);
-        let bro1 = OutPoint::new(br.clone(), 1);
-        let bro2 = OutPoint::new(br, 2);
-
-        let tx = OutPointSourceId::Transaction(Id::new(*tx_hash));
-        let txo0 = OutPoint::new(tx.clone(), 0);
-        let txo1 = OutPoint::new(tx.clone(), 1);
-        let txo2 = OutPoint::new(tx, 2);
-
-        assert_eq!(bro0.cmp(&bro1), std::cmp::Ordering::Less);
-        assert_eq!(bro0.cmp(&bro2), std::cmp::Ordering::Less);
-        assert_eq!(bro1.cmp(&bro2), std::cmp::Ordering::Less);
-        assert_eq!(bro0.cmp(&bro0), std::cmp::Ordering::Equal);
-        assert_eq!(bro1.cmp(&bro1), std::cmp::Ordering::Equal);
-        assert_eq!(bro2.cmp(&bro2), std::cmp::Ordering::Equal);
-        assert_eq!(bro1.cmp(&bro0), std::cmp::Ordering::Greater);
-        assert_eq!(bro2.cmp(&bro1), std::cmp::Ordering::Greater);
-        assert_eq!(bro2.cmp(&bro0), std::cmp::Ordering::Greater);
-
-        assert_eq!(txo0.cmp(&txo1), std::cmp::Ordering::Less);
-        assert_eq!(txo0.cmp(&txo2), std::cmp::Ordering::Less);
-        assert_eq!(txo1.cmp(&txo2), std::cmp::Ordering::Less);
-        assert_eq!(txo0.cmp(&txo0), std::cmp::Ordering::Equal);
-        assert_eq!(txo1.cmp(&txo1), std::cmp::Ordering::Equal);
-        assert_eq!(txo2.cmp(&txo2), std::cmp::Ordering::Equal);
-        assert_eq!(txo1.cmp(&txo0), std::cmp::Ordering::Greater);
-        assert_eq!(txo2.cmp(&txo1), std::cmp::Ordering::Greater);
-        assert_eq!(txo2.cmp(&txo0), std::cmp::Ordering::Greater);
-
-        assert_eq!(bro0.cmp(&txo0), std::cmp::Ordering::Greater);
-        assert_eq!(bro0.cmp(&txo1), std::cmp::Ordering::Greater);
-        assert_eq!(bro0.cmp(&txo2), std::cmp::Ordering::Greater);
-
-        assert_eq!(txo0.cmp(&bro0), std::cmp::Ordering::Less);
-        assert_eq!(txo1.cmp(&bro0), std::cmp::Ordering::Less);
-        assert_eq!(txo2.cmp(&bro0), std::cmp::Ordering::Less);
-
-        assert_eq!(txo0.cmp(&bro1), std::cmp::Ordering::Less);
-        assert_eq!(txo1.cmp(&bro1), std::cmp::Ordering::Less);
-        assert_eq!(txo2.cmp(&bro1), std::cmp::Ordering::Less);
-
-        assert_eq!(txo0.cmp(&bro2), std::cmp::Ordering::Less);
-        assert_eq!(txo1.cmp(&bro2), std::cmp::Ordering::Less);
-        assert_eq!(txo2.cmp(&bro2), std::cmp::Ordering::Less);
-
-        assert_eq!(bro1.cmp(&txo1), std::cmp::Ordering::Greater);
-        assert_eq!(txo1.cmp(&bro1), std::cmp::Ordering::Less);
-
-        assert_eq!(bro2.cmp(&txo2), std::cmp::Ordering::Greater);
-        assert_eq!(txo2.cmp(&bro2), std::cmp::Ordering::Less);
-    }
-
-    #[test]
-    fn ord_and_equality_less() {
-        let hash_br = H256::from_low_u64_le(10);
-        let hash_tx = H256::from_low_u64_le(20);
-
-        compare_test(&hash_br, &hash_tx);
-    }
-
-    #[test]
-    fn ord_and_equality_greater() {
-        let hash_br = H256::from_low_u64_le(20);
-        let hash_tx = H256::from_low_u64_le(10);
-
-        compare_test(&hash_br, &hash_tx);
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    fn ord_and_equality_random(#[case] seed: Seed) {
-        let mut rng = test_utils::random::make_seedable_rng(seed);
-
-        let hash_br = H256::random_using(&mut rng);
-        let hash_tx = H256::random_using(&mut rng);
-
-        compare_test(&hash_br, &hash_tx);
     }
 }

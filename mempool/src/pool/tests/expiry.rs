@@ -33,7 +33,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let parent = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -61,7 +61,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 0),
+        TxInput::from_utxo(outpoint_source_id, 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -91,7 +91,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let genesis = tf.genesis();
     let num_outputs = 2;
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -123,7 +123,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
     let child_0 = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -132,7 +132,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
 
     let child_1 = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 1),
+        TxInput::from_utxo(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,

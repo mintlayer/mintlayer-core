@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::chain::tokens::OutputValue;
-use common::chain::OutPoint;
+use common::chain::UtxoOutPoint;
 use common::primitives::H256;
 
 // Re-export various testing utils from other crates
@@ -32,7 +32,7 @@ use super::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ValuedOutPoint {
-    pub outpoint: OutPoint,
+    pub outpoint: UtxoOutPoint,
     pub value: Amount,
 }
 
@@ -56,7 +56,7 @@ fn dummy_witness() -> InputWitness {
 fn dummy_input() -> TxInput {
     let outpoint_source_id = OutPointSourceId::Transaction(Id::new(H256::zero()));
     let output_index = 0;
-    TxInput::new(outpoint_source_id, output_index)
+    TxInput::from_utxo(outpoint_source_id, output_index)
 }
 
 fn dummy_output() -> TxOutput {
@@ -105,7 +105,7 @@ pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTra
         } else {
             let value = get_unconfirmed_outpoint_value(
                 &mempool.store,
-                tx.transaction().inputs().get(i).expect("index").outpoint().unwrap(),
+                tx.transaction().inputs().get(i).expect("index").utxo_outpoint().unwrap(),
             );
             input_values.push(value);
         }
@@ -124,7 +124,7 @@ pub async fn try_get_fee<M: GetMemoryUsage>(mempool: &Mempool<M>, tx: &SignedTra
 }
 
 // unconfirmed means: The outpoint comes from a transaction in the mempool
-pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &OutPoint) -> Amount {
+pub fn get_unconfirmed_outpoint_value(store: &MempoolStore, outpoint: &UtxoOutPoint) -> Amount {
     let tx_id = *outpoint.tx_id().get_tx_id().expect("Not a transaction");
     let entry = store.txs_by_id.get(&tx_id).expect("Entry not found");
     let tx = entry.transaction().transaction();

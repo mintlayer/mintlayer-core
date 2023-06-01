@@ -23,7 +23,7 @@ use chainstate_types::BlockIndex;
 use common::chain::block::block_body::BlockBody;
 use common::chain::block::signed_block_header::{BlockHeaderSignature, BlockHeaderSignatureData};
 use common::chain::block::BlockHeader;
-use common::chain::{OutPoint, OutPointSourceId};
+use common::chain::{OutPointSourceId, UtxoOutPoint};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
@@ -47,7 +47,7 @@ pub struct BlockBuilder<'f> {
     consensus_data: ConsensusData,
     reward: BlockReward,
     block_source: BlockSource,
-    used_utxo: BTreeSet<OutPoint>,
+    used_utxo: BTreeSet<UtxoOutPoint>,
     block_signing_key: Option<PrivateKey>,
 }
 
@@ -176,7 +176,10 @@ impl<'f> BlockBuilder<'f> {
         let (mut witnesses, mut inputs, outputs) =
             self.make_test_inputs_outputs(parent_outputs, rng);
         let spend_from = self.framework.outputs_from_genblock(spend_from.into());
-        inputs.push(TxInput::new(spend_from.keys().next().unwrap().clone(), 0));
+        inputs.push(TxInput::from_utxo(
+            spend_from.keys().next().unwrap().clone(),
+            0,
+        ));
         witnesses.push(InputWitness::NoSignature(None));
         self.transactions.push(
             SignedTransaction::new(Transaction::new(0, inputs, outputs).unwrap(), witnesses)

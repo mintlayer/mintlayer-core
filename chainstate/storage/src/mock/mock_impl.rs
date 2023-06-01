@@ -25,7 +25,7 @@ use common::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountType, Block, DelegationId, GenBlock, OutPoint, PoolId,
+        AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -95,7 +95,7 @@ mockall::mock! {
 
     impl UtxosStorageRead for Store {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -196,8 +196,8 @@ mockall::mock! {
     }
 
     impl UtxosStorageWrite for Store {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 
@@ -340,7 +340,7 @@ mockall::mock! {
 
     impl crate::UtxosStorageRead for StoreTxRo {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -450,7 +450,7 @@ mockall::mock! {
 
     impl UtxosStorageRead for StoreTxRw {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -552,8 +552,8 @@ mockall::mock! {
     }
 
     impl UtxosStorageWrite for StoreTxRw {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 

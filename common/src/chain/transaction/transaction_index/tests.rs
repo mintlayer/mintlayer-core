@@ -239,7 +239,7 @@ fn generate_random_invalid_input(rng: &mut impl Rng) -> TxInput {
         OutPointSourceId::BlockReward(Id::new(generate_random_h256(rng)))
     };
 
-    TxInput::new(outpoint, rng.next_u32())
+    TxInput::from_utxo(outpoint, rng.next_u32())
 }
 
 fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {

@@ -66,8 +66,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountInput, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPoint,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput,
+        AccountOutPoint, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
+        PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -350,7 +350,7 @@ where
     fn spend_input_from_account(
         &mut self,
         tx_source: TransactionSource,
-        account_input: &AccountInput,
+        account_input: &AccountOutPoint,
     ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
@@ -380,7 +380,7 @@ where
     fn spend_input_from_utxo(
         &mut self,
         tx_source: TransactionSource,
-        input_outpoint: &OutPoint,
+        input_outpoint: &UtxoOutPoint,
     ) -> Result<Option<PoSAccountingUndo>, ConnectTransactionError> {
         let input_utxo = self
             .utxo_cache
@@ -435,7 +435,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
 
         // Process tx outputs in terms of pos accounting.
-        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.outpoint());
+        let input_utxo_outpoint = tx.inputs().iter().find_map(|input| input.utxo_outpoint());
         let outputs_undos = tx
             .outputs()
             .iter()

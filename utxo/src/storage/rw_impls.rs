@@ -16,16 +16,16 @@
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{Utxo, UtxosBlockUndo};
 use common::{
-    chain::{Block, GenBlock, OutPoint},
+    chain::{Block, GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 
 impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Self::Error> {
+    fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> Result<(), Self::Error> {
         self.0.set_utxo(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Self::Error> {
+    fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> Result<(), Self::Error> {
         self.0.del_utxo(outpoint)
     }
 
@@ -44,7 +44,7 @@ impl<S: UtxosStorageWrite> UtxosStorageWrite for UtxosDB<S> {
 impl<S: UtxosStorageRead> UtxosStorageRead for UtxosDB<S> {
     type Error = S::Error;
 
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.0.get_utxo(outpoint)
     }
 

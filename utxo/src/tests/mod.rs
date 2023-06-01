@@ -38,8 +38,8 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        DelegationId, Destination, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxOutput,
+        DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -510,7 +510,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     // check that the outputs of tx are added in the cache.
     tx.outputs().iter().enumerate().for_each(|(i, x)| {
         let id = OutPointSourceId::from(tx.get_id());
-        let outpoint = OutPoint::new(id, i as u32);
+        let outpoint = UtxoOutPoint::new(id, i as u32);
 
         let utxo = cache.utxo(&outpoint).unwrap_infallible().expect("utxo should exist");
         assert_eq!(utxo.output(), x);
@@ -524,7 +524,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         .into_iter()
         .map(|idx| {
             let id = OutPointSourceId::from(tx.get_id());
-            TxInput::new(id, idx as u32)
+            TxInput::from_utxo(id, idx as u32)
         })
         .collect_vec();
 
@@ -542,7 +542,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // check that the spent utxos should not exist in the cache anymore.
     to_spend.iter().for_each(|input| {
-        assert!(cache.utxo(input.outpoint().unwrap()).unwrap_infallible().is_none());
+        assert!(cache.utxo(input.utxo_outpoint().unwrap()).unwrap_infallible().is_none());
     });
 }
 
@@ -582,7 +582,7 @@ fn check_add_utxos_from_block_reward(#[case] seed: Seed) {
         .is_ok());
 
     block_reward.outputs().iter().enumerate().for_each(|(i, x)| {
-        let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block_id), i as u32);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_id), i as u32);
         let utxo = cache.utxo(&outpoint).unwrap_infallible().expect("utxo should exist");
         assert_eq!(utxo.output(), x);
     });
@@ -601,7 +601,7 @@ fn check_tx_spend_undo_spend(#[case] seed: Seed) {
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
     // spend the utxo in a transaction
-    let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
@@ -634,7 +634,7 @@ fn check_burn_spend_undo_spend(#[case] seed: Seed, #[case] output: TxOutput) {
     cache.add_utxo(&outpoint, u, false).unwrap();
 
     // burn output in a tx
-    let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
@@ -664,7 +664,7 @@ fn check_pos_reward_spend_undo_spend(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -727,7 +727,7 @@ fn check_pow_reward_spend_undo_spend(#[case] seed: Seed) {
     )
     .unwrap();
     let reward = block.block_reward_transactable();
-    let outpoint = OutPoint::new(OutPointSourceId::BlockReward(block.get_id().into()), 0);
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block.get_id().into()), 0);
 
     // spend the utxo in a block reward
     let undo1 = cache
@@ -762,7 +762,7 @@ fn check_missing_reward_undo(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
     let outputs = create_tx_outputs(&mut rng, 1);
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -813,7 +813,7 @@ fn check_burn_output_in_block_reward(#[case] seed: Seed) {
     let (utxo, outpoint) = test_helper::create_utxo_from_reward(&mut rng, 1);
     cache.add_utxo(&outpoint, utxo, false).unwrap();
 
-    let inputs = vec![TxInput::new(outpoint.tx_id(), outpoint.output_index())];
+    let inputs = vec![TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())];
     let outputs = vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(10)))];
 
     let (sk, _pk) = crypto::vrf::VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -867,7 +867,7 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
         OutputValue::Coin(Amount::from_atoms(10)),
         Destination::AnyoneCanSpend,
     );
-    let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
+    let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
     let tx = Transaction::new(0x00, vec![input], vec![output1, output2]).unwrap();
     let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));

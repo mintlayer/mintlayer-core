@@ -16,7 +16,7 @@
 use std::collections::BTreeMap;
 
 use common::{
-    chain::{DelegationId, Destination, OutPoint, OutPointSourceId, PoolId},
+    chain::{DelegationId, Destination, OutPointSourceId, PoolId, UtxoOutPoint},
     primitives::{per_thousand::PerThousand, Amount, Id, H256},
 };
 use crypto::{
@@ -71,7 +71,7 @@ fn create_pool(
     pledged_amount: Amount,
 ) -> Result<(PoolId, PoolData, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = OutPoint::new(
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );
@@ -87,7 +87,7 @@ fn create_delegation_id(
     target_pool: PoolId,
 ) -> Result<(DelegationId, Destination, PoSAccountingUndo), Error> {
     let destination = new_pub_key_destination(rng);
-    let outpoint = OutPoint::new(
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );

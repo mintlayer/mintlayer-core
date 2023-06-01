@@ -16,18 +16,18 @@
 use super::{UtxosDB, UtxosStorageRead, UtxosStorageWrite};
 use crate::{ConsumedUtxoCache, Error, FlushableUtxoView, Utxo, UtxosView};
 use common::{
-    chain::{GenBlock, OutPoint},
+    chain::{GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 
 impl<S: UtxosStorageRead> UtxosView for UtxosDB<S> {
     type Error = S::Error;
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.get_utxo(outpoint)
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
         self.utxo(outpoint).map(|u| u.is_some())
     }
 

@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        AccountType, DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender,
-        Transaction, TxMainChainIndexError,
+        AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        TxMainChainIndexError, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -80,7 +80,7 @@ pub enum ConnectTransactionError {
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
     #[error("Timelock rules violated in output {0:?}")]
-    TimeLockViolation(OutPoint),
+    TimeLockViolation(UtxoOutPoint),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]

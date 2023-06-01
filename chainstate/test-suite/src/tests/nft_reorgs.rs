@@ -78,7 +78,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -111,11 +111,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 1),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -148,7 +148,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(b1_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(b1_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -181,7 +181,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(b1_outpoint_id, 1),
+                        TxInput::from_utxo(b1_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -206,7 +206,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(c1_outpoint_id, 0),
+                        TxInput::from_utxo(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -229,7 +229,7 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         // Second chain - B2
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(issuance_outpoint_id, 0),
+                TxInput::from_utxo(issuance_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -259,11 +259,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         // C2 - burn NFT in a second chain
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(b2_outpoint_id.clone(), 0),
+                TxInput::from_utxo(b2_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::new(b2_outpoint_id, 1),
+                TxInput::from_utxo(b2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Burn(
@@ -292,11 +292,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
         // Now D2 trying to spend NFT from mainchain
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(c2_outpoint_id.clone(), 0),
+                TxInput::from_utxo(c2_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::new(c2_outpoint_id, 1),
+                TxInput::from_utxo(c2_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Burn(
@@ -328,11 +328,11 @@ fn reorg_and_try_to_double_spend_nfts(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(d2_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(d2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(d2_outpoint_id, 1),
+                        TxInput::from_utxo(d2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -387,7 +387,7 @@ fn nft_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(

@@ -248,7 +248,7 @@ fn process_block(#[case] seed: test_utils::random::Seed) {
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(
+                    TxInput::from_utxo(
                         OutPointSourceId::BlockReward(<Id<GenBlock>>::from(gen_block_id)),
                         0,
                     ),

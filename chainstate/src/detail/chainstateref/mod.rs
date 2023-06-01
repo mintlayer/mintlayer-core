@@ -31,8 +31,8 @@ use common::{
         config::EpochIndex,
         tokens::TokenAuxiliaryData,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId,
-        Transaction, TxOutput,
+        AccountType, Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -483,7 +483,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 match block.consensus_data() {
                     ConsensusData::None | ConsensusData::PoW(_) => match output {
                         TxOutput::LockThenTransfer(_, _, tl) => {
-                            let outpoint = OutPoint::new(block.get_id().into(), index as u32);
+                            let outpoint = UtxoOutPoint::new(block.get_id().into(), index as u32);
                             let required =
                                 block.consensus_data().reward_maturity_distance(self.chain_config);
                             tx_verifier::timelock_check::check_output_maturity_setting(

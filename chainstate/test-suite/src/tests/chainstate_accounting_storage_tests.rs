@@ -27,7 +27,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue,
-        Destination, OutPoint, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, PoolId, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Idable},
 };
@@ -62,11 +62,11 @@ fn make_tx_with_stake_pool_from_genesis(
     tf: &mut TestFramework,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
-) -> (SignedTransaction, PoolId, PoolData, OutPoint) {
+) -> (SignedTransaction, PoolId, PoolData, UtxoOutPoint) {
     let outpoint_id = OutPointSourceId::BlockReward(tf.genesis().get_id().into());
     make_tx_with_stake_pool(
         rng,
-        OutPoint::new(outpoint_id, 0),
+        UtxoOutPoint::new(outpoint_id, 0),
         amount_to_stake,
         amount_to_transfer,
     )
@@ -74,10 +74,10 @@ fn make_tx_with_stake_pool_from_genesis(
 
 fn make_tx_with_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
-    input0_outpoint: OutPoint,
+    input0_outpoint: UtxoOutPoint,
     amount_to_stake: Amount,
     amount_to_transfer: Amount,
-) -> (SignedTransaction, PoolId, PoolData, OutPoint) {
+) -> (SignedTransaction, PoolId, PoolData, UtxoOutPoint) {
     let destination = new_pub_key_destination(rng);
     let pool_id = pos_accounting::make_pool_id(&input0_outpoint);
     let pool_data = create_pool_data(rng, destination, amount_to_stake);
@@ -114,7 +114,7 @@ fn make_tx_with_stake_pool(
             1,
         )
     };
-    let transfer_outpoint = OutPoint::new(
+    let transfer_outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(tx.transaction().get_id()),
         transfer_output_idx,
     );
@@ -668,7 +668,7 @@ fn accounting_storage_no_accounting_data(#[case] seed: Seed) {
 
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 ),

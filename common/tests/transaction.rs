@@ -31,26 +31,27 @@ fn transaction_id_snapshots() {
         Destination::ScriptHash(Id::new(hash0)),
     )]
     .to_vec();
-    let utxo_ins0: Vec<TxInput> = [TxInput::new(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
+    let utxo_ins0: Vec<TxInput> =
+        [TxInput::from_utxo(Id::<Transaction>::new(hash0).into(), 5)].to_vec();
     let utxo_ins1: Vec<TxInput> = [
-        TxInput::new(Id::<Transaction>::new(hash1).into(), 3),
-        TxInput::new(Id::<Transaction>::new(hash2).into(), 0),
+        TxInput::from_utxo(Id::<Transaction>::new(hash1).into(), 3),
+        TxInput::from_utxo(Id::<Transaction>::new(hash2).into(), 0),
     ]
     .to_vec();
 
-    let account_ins0: Vec<TxInput> = [TxInput::new_account(
+    let account_ins0: Vec<TxInput> = [TxInput::from_account(
         0,
         AccountType::Delegation(DelegationId::new(hash0)),
         Amount::from_atoms(15),
     )]
     .to_vec();
     let account_ins1: Vec<TxInput> = [
-        TxInput::new_account(
+        TxInput::from_account(
             1,
             AccountType::Delegation(DelegationId::new(hash1)),
             Amount::from_atoms(35),
         ),
-        TxInput::new_account(
+        TxInput::from_account(
             2,
             AccountType::Delegation(DelegationId::new(hash2)),
             Amount::from_atoms(55),

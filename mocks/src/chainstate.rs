@@ -26,8 +26,8 @@ use common::{
             GenBlock,
         },
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountType, ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, TxInput,
-        TxMainChainIndex,
+        AccountType, ChainConfig, DelegationId, OutPointSourceId, PoolId, TxInput,
+        TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -134,7 +134,7 @@ mockall::mock! {
             writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
             include_orphans: bool,
         ) -> Result<(), ChainstateError>;
-        fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+        fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
         fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
         fn stake_pool_exists(&self, pool_id: PoolId) -> Result<bool, ChainstateError>;
         fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, ChainstateError>;

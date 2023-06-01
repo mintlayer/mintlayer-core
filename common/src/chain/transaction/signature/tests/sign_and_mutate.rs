@@ -962,7 +962,7 @@ fn add_input(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTrans
 
 fn mutate_input(rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
-    updater.inputs[0] = TxInput::new(
+    updater.inputs[0] = TxInput::from_utxo(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
         9999,
     );

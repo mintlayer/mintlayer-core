@@ -157,7 +157,7 @@ mod tests {
             OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)))
         };
 
-        TxInput::new(outpoint, rng.next_u32())
+        TxInput::from_utxo(outpoint, rng.next_u32())
     }
 
     fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {

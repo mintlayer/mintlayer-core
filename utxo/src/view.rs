@@ -17,7 +17,7 @@ use std::ops::Deref;
 
 use crate::{ConsumedUtxoCache, Utxo, UtxosCache};
 use common::{
-    chain::{GenBlock, OutPoint},
+    chain::{GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 
@@ -26,10 +26,10 @@ pub trait UtxosView {
     type Error: std::error::Error;
 
     /// Retrieves utxo.
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error>;
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error>;
 
     /// Checks whether outpoint is unspent.
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error>;
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error>;
 
     /// Retrieves the block hash of the best block in this view
     fn best_block_hash(&self) -> Result<Id<GenBlock>, Self::Error>;
@@ -63,11 +63,11 @@ where
 {
     type Error = <T::Target as UtxosView>::Error;
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         self.deref().utxo(outpoint)
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
         self.deref().has_utxo(outpoint)
     }
 

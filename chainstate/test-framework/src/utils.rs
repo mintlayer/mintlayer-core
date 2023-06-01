@@ -92,7 +92,7 @@ pub fn create_utxo_data(
 
     Some((
         empty_witness(rng),
-        TxInput::new(outsrc, index as u32),
+        TxInput::from_utxo(outsrc, index as u32),
         new_output,
     ))
 }
@@ -219,7 +219,7 @@ pub fn create_multiple_utxo_data(
 
     Some((
         empty_witness(rng),
-        TxInput::new(outsrc, index as u32),
+        TxInput::from_utxo(outsrc, index as u32),
         new_outputs,
     ))
 }

@@ -248,7 +248,7 @@ fn test_storage_transactions_with_result_check() {
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
-fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, OutPoint) {
+fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let random_value = rng.gen_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -259,7 +259,7 @@ fn create_rand_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utx
 
     // generate utxo
     let utxo = Utxo::new_for_blockchain(output, BlockHeight::new(block_height));
-    let outpoint = OutPoint::new(
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::new(H256::random_using(rng))),
         0,
     );

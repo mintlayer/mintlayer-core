@@ -27,7 +27,7 @@ use common::chain::{
     tokens::TokenAuxiliaryData,
     AccountType, OutPointSourceId, TxMainChainIndex,
 };
-use common::chain::{OutPoint, Transaction};
+use common::chain::{Transaction, UtxoOutPoint};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
@@ -268,7 +268,7 @@ where
         self.deref().export_bootstrap_stream(writer, include_orphans)
     }
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
         self.deref().utxo(outpoint)
     }
 

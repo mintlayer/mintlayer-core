@@ -21,8 +21,8 @@ use crate::{
 };
 use common::{
     chain::{
-        tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, Transaction,
-        TxInput, TxOutput,
+        tokens::OutputValue, Destination, GenBlock, OutPointSourceId, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, H256},
 };
@@ -51,11 +51,11 @@ struct EmptyUtxosView {
 impl UtxosView for EmptyUtxosView {
     type Error = Infallible;
 
-    fn utxo(&self, _outpoint: &OutPoint) -> Result<Option<Utxo>, Infallible> {
+    fn utxo(&self, _outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Infallible> {
         Ok(None)
     }
 
-    fn has_utxo(&self, _outpoint: &OutPoint) -> Result<bool, Infallible> {
+    fn has_utxo(&self, _outpoint: &UtxoOutPoint) -> Result<bool, Infallible> {
         Ok(false)
     }
 
@@ -96,13 +96,13 @@ pub fn create_tx_outputs(rng: &mut (impl Rng + CryptoRng), size: u32) -> Vec<TxO
 }
 
 /// randomly select half of the provided outpoints to spend, and returns it in a vec of structure of TxInput
-pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[OutPoint]) -> Vec<TxInput> {
+pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[UtxoOutPoint]) -> Vec<TxInput> {
     let to_spend = seq::index::sample(rng, outpoints.len(), outpoints.len() / 2).into_vec();
     to_spend
         .into_iter()
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
-            TxInput::new(outpoint.tx_id(), outpoint.output_index())
+            TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index())
         })
         .collect_vec()
 }
@@ -113,22 +113,22 @@ pub fn convert_to_utxo(
     output: TxOutput,
     height: u64,
     output_idx: usize,
-) -> (OutPoint, Utxo) {
+) -> (UtxoOutPoint, Utxo) {
     let utxo_id: Id<GenBlock> = Id::new(H256::random_using(rng));
     let id = OutPointSourceId::BlockReward(utxo_id);
-    let outpoint = OutPoint::new(id, output_idx as u32);
+    let outpoint = UtxoOutPoint::new(id, output_idx as u32);
     let utxo = Utxo::new_for_blockchain(output, BlockHeight::new(height));
 
     (outpoint, utxo)
 }
 
-pub fn create_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, OutPoint) {
+pub fn create_utxo(rng: &mut (impl Rng + CryptoRng), block_height: u64) -> (Utxo, UtxoOutPoint) {
     let random_value = rng.gen_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, Some(block_height))
 }
 
-pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, OutPoint) {
+pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, UtxoOutPoint) {
     let random_value = rng.gen_range(0..u128::MAX);
     let is_block_reward = random_value % 3 == 0;
     inner_create_utxo(rng, is_block_reward, None)
@@ -137,7 +137,7 @@ pub fn create_utxo_for_mempool(rng: &mut (impl Rng + CryptoRng)) -> (Utxo, OutPo
 pub fn create_utxo_from_reward(
     rng: &mut (impl Rng + CryptoRng),
     block_height: u64,
-) -> (Utxo, OutPoint) {
+) -> (Utxo, UtxoOutPoint) {
     inner_create_utxo(rng, true, Some(block_height))
 }
 
@@ -146,7 +146,7 @@ fn inner_create_utxo(
     rng: &mut (impl Rng + CryptoRng),
     is_block_reward: bool,
     block_height: Option<u64>,
-) -> (Utxo, OutPoint) {
+) -> (Utxo, UtxoOutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let output_value = rng.gen_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
@@ -172,7 +172,7 @@ fn inner_create_utxo(
         }
     };
 
-    let outpoint = OutPoint::new(id, 0);
+    let outpoint = UtxoOutPoint::new(id, 0);
 
     (utxo, outpoint)
 }
@@ -189,8 +189,8 @@ pub fn insert_single_entry<P>(
     cache: &mut UtxosCache<P>,
     cache_presence: Presence,
     cache_flags: Option<(IsFresh, IsDirty)>,
-    outpoint: Option<OutPoint>,
-) -> (Utxo, OutPoint) {
+    outpoint: Option<UtxoOutPoint>,
+) -> (Utxo, UtxoOutPoint) {
     let rng_height = rng.gen_range(0..(u64::MAX - 1));
     let (utxo, outpoint_x) = create_utxo(rng, rng_height);
     let outpoint = outpoint.unwrap_or(outpoint_x);

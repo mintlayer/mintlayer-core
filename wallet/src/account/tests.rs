@@ -153,7 +153,7 @@ fn sign_transaction(#[case] seed: Seed) {
             } else {
                 Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
             };
-            TxInput::new(source_id, rng.next_u32())
+            TxInput::from_utxo(source_id, rng.next_u32())
         })
         .collect();
 

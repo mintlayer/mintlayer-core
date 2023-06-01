@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{DelegationId, Destination, OutPoint, PoolId, TxInput, TxOutput};
+use common::chain::{DelegationId, Destination, PoolId, TxInput, TxOutput, UtxoOutPoint};
 use pos_accounting::PoSAccountingView;
 use utxo::UtxosView;
 
@@ -33,7 +33,7 @@ pub enum SignatureDestinationGetterError {
     #[error("Delegation data not found for signature verification {0}")]
     DelegationDataNotFound(DelegationId),
     #[error("Utxo for the outpoint not fount: {0:?}")]
-    UtxoOutputNotFound(OutPoint),
+    UtxoOutputNotFound(UtxoOutPoint),
     #[error("Error accessing utxo set")]
     UtxoViewError(utxo::Error),
     #[error("During destination getting for signature verification: PoS accounting error {0}")]

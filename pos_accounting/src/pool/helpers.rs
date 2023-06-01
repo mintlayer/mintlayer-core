@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, PoolId, UtxoOutPoint},
     primitives::id::{hash_encoded_to, DefaultHashAlgoStream},
 };
 use crypto::hash::StreamHasher;
@@ -29,7 +29,7 @@ pub fn delegation_id_preimage_suffix() -> u32 {
     1
 }
 
-pub fn make_pool_id(input0_outpoint: &OutPoint) -> PoolId {
+pub fn make_pool_id(input0_outpoint: &UtxoOutPoint) -> PoolId {
     let mut hasher = DefaultHashAlgoStream::new();
     hash_encoded_to(&input0_outpoint, &mut hasher);
     // 0 is arbitrary here, we use this as prefix to use this information again
@@ -37,7 +37,7 @@ pub fn make_pool_id(input0_outpoint: &OutPoint) -> PoolId {
     PoolId::new(hasher.finalize().into())
 }
 
-pub fn make_delegation_id(input0_outpoint: &OutPoint) -> DelegationId {
+pub fn make_delegation_id(input0_outpoint: &UtxoOutPoint) -> DelegationId {
     let mut hasher = DefaultHashAlgoStream::new();
     hash_encoded_to(&input0_outpoint, &mut hasher);
     // 1 is arbitrary here, we use this as prefix to use this information again

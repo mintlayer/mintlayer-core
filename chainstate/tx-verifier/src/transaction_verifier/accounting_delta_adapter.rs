@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use super::{storage::TransactionVerifierStorageError, TransactionSource};
 
 use common::{
-    chain::{OutPoint, PoolId},
+    chain::{PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use pos_accounting::{
@@ -151,7 +151,7 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperatio
         &mut self,
         target_pool: PoolId,
         spend_key: common::chain::Destination,
-        input0_outpoint: &OutPoint,
+        input0_outpoint: &UtxoOutPoint,
     ) -> Result<(common::chain::DelegationId, PoSAccountingUndo), pos_accounting::Error> {
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
 

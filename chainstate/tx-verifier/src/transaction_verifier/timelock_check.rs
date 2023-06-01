@@ -17,7 +17,7 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        AccountType, ChainConfig, GenBlock, OutPoint, OutPointSourceId, TxInput, TxOutput,
+        AccountType, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -33,11 +33,11 @@ use super::{
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OutputMaturityError {
     #[error("Maturity setting type for the output {0:?} is invalid")]
-    InvalidOutputMaturitySettingType(OutPoint),
+    InvalidOutputMaturitySettingType(UtxoOutPoint),
     #[error("Maturity setting for the output {0:?} is too short: {1} < {2}")]
-    InvalidOutputMaturityDistance(OutPoint, BlockDistance, BlockDistance),
+    InvalidOutputMaturityDistance(UtxoOutPoint, BlockDistance, BlockDistance),
     #[error("Maturity setting value for the output {0:?} is invalid: {1}")]
-    InvalidOutputMaturityDistanceValue(OutPoint, u64),
+    InvalidOutputMaturityDistanceValue(UtxoOutPoint, u64),
 }
 
 enum OutputTimelockCheckRequired {
@@ -50,7 +50,7 @@ fn check_timelock(
     timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
-    outpoint: &OutPoint,
+    outpoint: &UtxoOutPoint,
 ) -> Result<(), ConnectTransactionError> {
     let source_block_height = source_block_index.block_height();
     let source_block_time = source_block_index.block_timestamp();
@@ -218,7 +218,7 @@ fn check_outputs_timelock(
         .iter()
         .enumerate()
         .try_for_each(|(index, output)| {
-            let outpoint = OutPoint::new(outpoint_source_id.clone(), index as u32);
+            let outpoint = UtxoOutPoint::new(outpoint_source_id.clone(), index as u32);
             match output {
                 TxOutput::Transfer(_, _)
                 | TxOutput::Burn(_)
@@ -246,7 +246,7 @@ fn check_outputs_timelock(
 pub fn check_output_maturity_setting(
     timelock: &OutputTimeLock,
     required: BlockDistance,
-    outpoint: OutPoint,
+    outpoint: UtxoOutPoint,
 ) -> Result<(), OutputMaturityError> {
     match timelock {
         OutputTimeLock::ForBlockCount(c) => {

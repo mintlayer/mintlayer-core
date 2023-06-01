@@ -99,11 +99,11 @@ pub fn generate_unsigned_tx(
     let inputs = inputs_utxos
         .iter()
         .map(|utxo| match utxo {
-            Some(_) => TxInput::new(
+            Some(_) => TxInput::from_utxo(
                 Id::<Transaction>::new(H256::random_using(rng)).into(),
                 rng.gen(),
             ),
-            None => TxInput::new_account(
+            None => TxInput::from_account(
                 rng.gen(),
                 AccountType::Delegation(DelegationId::new(H256::random_using(rng))),
                 Amount::from_atoms(rng.gen()),

@@ -57,7 +57,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id.clone(), 0),
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -94,7 +94,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id.clone(), 0),
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -143,7 +143,7 @@ fn token_issue_test(#[case] seed: Seed) {
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(
-                                TxInput::new(outpoint_source_id.clone(), 0),
+                                TxInput::from_utxo(outpoint_source_id.clone(), 0),
                                 InputWitness::NoSignature(None),
                             )
                             .add_output(TxOutput::Transfer(
@@ -184,7 +184,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id.clone(), 0),
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -220,7 +220,7 @@ fn token_issue_test(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -260,7 +260,7 @@ fn token_issue_test(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -298,7 +298,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id.clone(), 0),
+                        TxInput::from_utxo(outpoint_source_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -339,7 +339,7 @@ fn token_issue_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -387,7 +387,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -416,7 +416,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -439,7 +439,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -467,7 +467,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -495,7 +495,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -525,7 +525,7 @@ fn token_transfer_test(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -569,7 +569,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(genesis_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -600,7 +600,7 @@ fn multiple_token_issuance_in_one_tx(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -651,7 +651,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -688,7 +688,7 @@ fn token_issuance_with_insufficient_fee(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -730,7 +730,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -754,7 +754,7 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     // One piece of tokens in the first output, other piece of tokens in the second output
@@ -787,11 +787,11 @@ fn transfer_split_and_combine_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(split_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(split_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(split_outpoint_id, 1),
+                        TxInput::from_utxo(split_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -839,7 +839,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -864,7 +864,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -891,7 +891,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -924,7 +924,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(first_burn_outpoint_id, 1),
+                        TxInput::from_utxo(first_burn_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -957,7 +957,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(second_burn_outpoint_id.clone(), 1),
+                        TxInput::from_utxo(second_burn_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -981,7 +981,7 @@ fn burn_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(second_burn_outpoint_id, 0),
+                        TxInput::from_utxo(second_burn_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1040,7 +1040,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1069,11 +1069,11 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 1),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -1102,7 +1102,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(b1_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(b1_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1135,7 +1135,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(b1_outpoint_id, 1),
+                        TxInput::from_utxo(b1_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1156,7 +1156,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(c1_outpoint_id, 0),
+                        TxInput::from_utxo(c1_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1178,7 +1178,7 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1210,11 +1210,11 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(b2_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(b2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(b2_outpoint_id, 1),
+                        TxInput::from_utxo(b2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -1245,11 +1245,11 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(c2_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(c2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(c2_outpoint_id, 1),
+                        TxInput::from_utxo(c2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Burn(
@@ -1279,11 +1279,11 @@ fn reorg_and_try_to_double_spend_tokens(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(d2_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(d2_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(d2_outpoint_id, 1),
+                        TxInput::from_utxo(d2_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1329,7 +1329,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1354,7 +1354,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1382,7 +1382,7 @@ fn attempt_to_print_tokens_one_output(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1427,7 +1427,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1452,7 +1452,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1488,7 +1488,7 @@ fn attempt_to_print_tokens_two_outputs(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1531,7 +1531,7 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1560,11 +1560,11 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(first_issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(first_issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(first_issuance_outpoint_id, 1),
+                        TxInput::from_utxo(first_issuance_outpoint_id, 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1609,15 +1609,15 @@ fn spend_different_token_than_one_in_input(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id.clone(), 1),
+                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id, 2),
+                        TxInput::from_utxo(second_issuance_outpoint_id, 2),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1670,7 +1670,7 @@ fn tokens_reorgs_and_cleanup_data(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(genesis_outpoint_id, 0),
+                        TxInput::from_utxo(genesis_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1884,7 +1884,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
 
         let tx_1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 ),
@@ -1905,7 +1905,7 @@ fn issue_and_transfer_in_the_same_block(#[case] seed: Seed) {
 
         let tx_2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::Transaction(tx_1.transaction().get_id()),
                     0,
                 ),

@@ -67,7 +67,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -98,7 +98,7 @@ fn nft_transfer_wrong_id(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -153,7 +153,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -183,7 +183,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -213,7 +213,7 @@ fn nft_invalid_transfer(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -267,7 +267,7 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -294,11 +294,11 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
         let token_min_issuance_fee = tf.chainstate.get_chain_config().token_min_issuance_fee();
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(first_issuance_outpoint_id.clone(), 0),
+                TxInput::from_utxo(first_issuance_outpoint_id.clone(), 0),
                 InputWitness::NoSignature(None),
             )
             .add_input(
-                TxInput::new(first_issuance_outpoint_id, 1),
+                TxInput::from_utxo(first_issuance_outpoint_id, 1),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -350,15 +350,15 @@ fn spend_different_nft_than_one_in_input(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id.clone(), 0),
+                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id.clone(), 1),
+                        TxInput::from_utxo(second_issuance_outpoint_id.clone(), 1),
                         InputWitness::NoSignature(None),
                     )
                     .add_input(
-                        TxInput::new(second_issuance_outpoint_id, 2),
+                        TxInput::from_utxo(second_issuance_outpoint_id, 2),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -417,7 +417,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(genesis_outpoint_id, 0),
+                TxInput::from_utxo(genesis_outpoint_id, 0),
                 InputWitness::NoSignature(None),
             )
             .add_output(TxOutput::Transfer(
@@ -450,7 +450,7 @@ fn nft_valid_transfer(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(issuance_outpoint_id, 0),
+                        TxInput::from_utxo(issuance_outpoint_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(

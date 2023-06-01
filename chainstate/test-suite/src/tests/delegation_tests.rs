@@ -20,11 +20,11 @@ use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
 };
-use common::chain::{AccountInput, AccountType, DelegationId, PoolId};
+use common::chain::{AccountOutPoint, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, Destination, OutPoint, OutPointSourceId,
-        TxInput, TxOutput,
+        timelock::OutputTimeLock, tokens::OutputValue, Destination, OutPointSourceId, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable, H256},
 };
@@ -40,7 +40,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 fn prepare_stake_pool(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
-) -> (PoolId, OutPoint, OutPoint) {
+) -> (PoolId, UtxoOutPoint, UtxoOutPoint) {
     let (_, vrf_pk) = VRFPrivateKey::new_from_rng(rng, VRFKeyKind::Schnorrkel);
     let min_stake_pool_pledge =
         tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
@@ -49,7 +49,7 @@ fn prepare_stake_pool(
     let (stake_pool_data, _) =
         create_stake_pool_data_with_all_reward_to_owner(rng, amount_to_stake, vrf_pk);
 
-    let genesis_outpoint = OutPoint::new(
+    let genesis_outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
         0,
     );
@@ -66,9 +66,10 @@ fn prepare_stake_pool(
             Destination::AnyoneCanSpend,
         ))
         .build();
-    let stake_outpoint = OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
+    let stake_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
     let transfer_outpoint =
-        OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
@@ -78,7 +79,13 @@ fn prepare_stake_pool(
 fn prepare_delegation(
     rng: &mut (impl Rng + CryptoRng),
     tf: &mut TestFramework,
-) -> (PoolId, OutPoint, DelegationId, OutPoint, OutPoint) {
+) -> (
+    PoolId,
+    UtxoOutPoint,
+    DelegationId,
+    UtxoOutPoint,
+    UtxoOutPoint,
+) {
     let (pool_id, stake_outpoint, transfer_outpoint) = prepare_stake_pool(rng, tf);
 
     let available_amount = get_coin_amount_from_outpoint(&tf.storage, &transfer_outpoint);
@@ -96,9 +103,9 @@ fn prepare_delegation(
         ))
         .build();
     let delegation_outpoint =
-        OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
     let transfer_outpoint =
-        OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
     tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
@@ -111,7 +118,7 @@ fn prepare_delegation(
     )
 }
 
-fn get_coin_amount_from_outpoint(store: &TestStore, outpoint: &OutPoint) -> Amount {
+fn get_coin_amount_from_outpoint(store: &TestStore, outpoint: &UtxoOutPoint) -> Amount {
     get_output_value(utxo::UtxosStorageRead::get_utxo(store, outpoint).unwrap().unwrap().output())
         .unwrap()
         .coin_amount()
@@ -214,7 +221,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
         let (stake_pool_data, _) =
             create_stake_pool_data_with_all_reward_to_owner(&mut rng, amount_to_stake, vrf_pk);
 
-        let genesis_outpoint = OutPoint::new(
+        let genesis_outpoint = UtxoOutPoint::new(
             OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
             0,
         );
@@ -237,7 +244,7 @@ fn create_delegation_twice(#[case] seed: Seed) {
             ))
             .build();
         let transfer_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
+            UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 1);
 
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
@@ -331,7 +338,7 @@ fn delegate_staking(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountInput::new(
+                TxInput::Account(AccountOutPoint::new(
                     0,
                     AccountType::Delegation(delegation_id),
                     (amount_to_spend * 2).unwrap(),
@@ -363,7 +370,7 @@ fn delegate_staking(#[case] seed: Seed) {
             // try spend delegation without increasing nonce
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::Account(AccountInput::new(
+                    TxInput::Account(AccountOutPoint::new(
                         0,
                         AccountType::Delegation(delegation_id),
                         spend_change,
@@ -390,7 +397,7 @@ fn delegate_staking(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountInput::new(
+                TxInput::Account(AccountOutPoint::new(
                     1,
                     AccountType::Delegation(delegation_id),
                     spend_change,
@@ -492,7 +499,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountInput::new(
+                TxInput::Account(AccountOutPoint::new(
                     0,
                     AccountType::Delegation(delegation_id),
                     (amount_to_spend * 2).unwrap(),
@@ -523,7 +530,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountInput::new(
+                TxInput::Account(AccountOutPoint::new(
                     1,
                     AccountType::Delegation(delegation_id),
                     spend_change,
@@ -581,7 +588,7 @@ fn spend_share_then_decommission_then_cleanup_delegations(#[case] seed: Seed) {
             .build();
 
         let delegate_staking_outpoint =
-            OutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
+            UtxoOutPoint::new(OutPointSourceId::Transaction(tx.transaction().get_id()), 0);
         tf.make_block_builder().add_transaction(tx).build_and_process().unwrap();
 
         let delegation_balance = PoSAccountingStorageRead::<TipStorageTag>::get_delegation_balance(
