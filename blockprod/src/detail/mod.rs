@@ -401,7 +401,7 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
             let stop_flag = Arc::clone(&stop_flag);
-            let block_epoch = Arc::clone(&block_epoch);
+            let block_epoch = Arc::clone(block_epoch);
 
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
