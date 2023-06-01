@@ -131,7 +131,7 @@ impl BlockProduction {
             ConsensusData,
             BlockReward,
             GenBlockIndex,
-            Option<FinalizeBlockInputData>,
+            FinalizeBlockInputData,
         ),
         BlockProductionError,
     > {
@@ -398,7 +398,7 @@ impl BlockProduction {
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
         block_epoch: &Arc<AtomicU64>,
-        finalize_block_data: Option<FinalizeBlockInputData>,
+        finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
         result_sender: oneshot::Sender<Result<SignedBlockHeader, BlockProductionError>>,
@@ -456,7 +456,7 @@ fn generate_finalize_block_data(
     current_timestamp: BlockTimestamp,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
-) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
+) -> Result<FinalizeBlockInputData, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
             let max_block_timestamp = current_timestamp
@@ -476,19 +476,17 @@ fn generate_finalize_block_data(
 
             let epoch_index = chain_config.epoch_index_from_height(&block_height);
 
-            Ok(Some(FinalizeBlockInputData::PoS(
-                PoSFinalizeBlockInputData::new(
-                    pos_input_data.stake_private_key().clone(),
-                    pos_input_data.vrf_private_key().clone(),
-                    epoch_index,
-                    sealed_epoch_randomness,
-                    max_block_timestamp,
-                    pool_balance,
-                ),
+            Ok(FinalizeBlockInputData::PoS(PoSFinalizeBlockInputData::new(
+                pos_input_data.stake_private_key().clone(),
+                pos_input_data.vrf_private_key().clone(),
+                epoch_index,
+                sealed_epoch_randomness,
+                max_block_timestamp,
+                pool_balance,
             )))
         }
-        GenerateBlockInputData::PoW(_) => Ok(Some(FinalizeBlockInputData::PoW)),
-        GenerateBlockInputData::None => Ok(None),
+        GenerateBlockInputData::PoW(_) => Ok(FinalizeBlockInputData::PoW),
+        GenerateBlockInputData::None => Ok(FinalizeBlockInputData::None),
     }
 }
 

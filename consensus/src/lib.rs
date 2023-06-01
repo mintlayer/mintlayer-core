@@ -97,6 +97,7 @@ pub enum GenerateBlockInputData {
 pub enum FinalizeBlockInputData {
     PoW,
     PoS(PoSFinalizeBlockInputData),
+    None,
 }
 
 pub fn generate_consensus_data_and_reward<G>(
@@ -180,7 +181,7 @@ pub fn finalize_consensus_data(
     block_height: BlockHeight,
     block_epoch: &Arc<AtomicU64>,
     stop_flag: Arc<AtomicBool>,
-    finalize_data: Option<FinalizeBlockInputData>,
+    finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
@@ -192,13 +193,13 @@ pub fn finalize_consensus_data(
                 ConsensusPoSError::PoWInputDataProvided,
             )),
             ConsensusData::PoS(pos_data) => match finalize_data {
-                None => Err(ConsensusCreationError::StakingError(
+                FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::NoInputDataProvided,
                 )),
-                Some(FinalizeBlockInputData::PoW) => Err(ConsensusCreationError::StakingError(
+                FinalizeBlockInputData::PoW => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::PoWInputDataProvided,
                 )),
-                Some(FinalizeBlockInputData::PoS(finalize_pos_data)) => {
+                FinalizeBlockInputData::PoS(finalize_pos_data) => {
                     let stake_private_key = finalize_pos_data.stake_private_key().clone();
 
                     let stake_result = stake(
