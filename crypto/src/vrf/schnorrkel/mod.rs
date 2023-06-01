@@ -104,7 +104,7 @@ impl SchnorrkelPrivateKey {
     }
 
     /// Derive a key from a 32-byte secret
-    pub fn new_from_bytes(
+    pub fn new_using_random_bytes(
         bytes: &[u8],
     ) -> Result<(SchnorrkelPrivateKey, SchnorrkelPublicKey), VRFError> {
         let mini_secret = schnorrkel::MiniSecretKey::from_bytes(bytes)
@@ -261,7 +261,7 @@ mod tests {
         ];
         for (bytes_hex, expected) in keys {
             let bytes = hex::decode(bytes_hex).unwrap();
-            let (sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes).unwrap();
+            let (sk, _pk) = SchnorrkelPrivateKey::new_using_random_bytes(&bytes).unwrap();
             let expected_sk =
                 SchnorrkelPrivateKey::decode_all(&mut hex::decode(expected).unwrap().as_slice())
                     .unwrap();
@@ -278,7 +278,7 @@ mod tests {
         for _ in 0..10 {
             let mut bytes = [0; 32];
             rng.fill_bytes(&mut bytes);
-            let (_sk, _pk) = SchnorrkelPrivateKey::new_from_bytes(&bytes).unwrap();
+            let (_sk, _pk) = SchnorrkelPrivateKey::new_using_random_bytes(&bytes).unwrap();
         }
     }
 }

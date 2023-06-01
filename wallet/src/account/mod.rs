@@ -512,6 +512,7 @@ impl Account {
         Ok(())
     }
 
+    /// Store a block in the DB if any of the kernel inputs or reward outputs belong to this wallet
     fn add_block_if_relevant<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
@@ -530,6 +531,7 @@ impl Account {
         Ok(())
     }
 
+    /// Store a tx in the DB if any of the inputs or outputs belong to this wallet
     fn add_tx_if_relevant<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,

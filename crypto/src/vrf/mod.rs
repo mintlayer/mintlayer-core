@@ -89,13 +89,15 @@ impl VRFPrivateKey {
         }
     }
 
-    pub fn new_from_bytes(
+    /// This function initializes the key using the bytes safely, but DOES NOT mean that the bytes will be used as the key.
+    /// There could be an internal algorithm that does the initialization. The function expects a random sequence of bytes.
+    pub fn new_using_random_bytes(
         bytes: &[u8],
         key_kind: VRFKeyKind,
     ) -> Result<(VRFPrivateKey, VRFPublicKey), VRFError> {
         match key_kind {
             VRFKeyKind::Schnorrkel => {
-                let k = schnorrkel::SchnorrkelPrivateKey::new_from_bytes(bytes)?;
+                let k = schnorrkel::SchnorrkelPrivateKey::new_using_random_bytes(bytes)?;
                 Ok((
                     VRFPrivateKey {
                         key: VRFPrivateKeyHolder::Schnorrkel(k.0),
