@@ -20,7 +20,7 @@ use common::{
     primitives::Idable,
 };
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountTxId, WalletTx,
+    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountTxId, WalletTx,
 };
 
 /// A helper structure for the UTXO search.
@@ -35,7 +35,7 @@ use wallet_types::{
 /// In case of reorg, top blocks (and the transactions they contain) are simply removed from the DB/cache.
 /// A similar approach is used by the Bitcoin Core wallet.
 pub struct OutputCache {
-    blocks: BTreeMap<AccountBlockHeight, WalletBlock>,
+    blocks: BTreeMap<AccountBlockHeight, OwnedBlockRewardData>,
     txs: BTreeMap<AccountTxId, WalletTx>,
     consumed: BTreeSet<OutPoint>,
 }
@@ -50,7 +50,7 @@ impl OutputCache {
     }
 
     pub fn new(
-        blocks: BTreeMap<AccountBlockHeight, WalletBlock>,
+        blocks: BTreeMap<AccountBlockHeight, OwnedBlockRewardData>,
         txs: BTreeMap<AccountTxId, WalletTx>,
     ) -> Self {
         let mut cache = Self::empty();
@@ -63,7 +63,7 @@ impl OutputCache {
         cache
     }
 
-    pub fn blocks(&self) -> &BTreeMap<AccountBlockHeight, WalletBlock> {
+    pub fn blocks(&self) -> &BTreeMap<AccountBlockHeight, OwnedBlockRewardData> {
         &self.blocks
     }
 
@@ -75,7 +75,7 @@ impl OutputCache {
         &self.consumed
     }
 
-    pub fn add_block(&mut self, block_height: AccountBlockHeight, block: WalletBlock) {
+    pub fn add_block(&mut self, block_height: AccountBlockHeight, block: OwnedBlockRewardData) {
         for input in block.kernel_inputs().iter() {
             self.consumed.insert(input.outpoint().clone());
         }

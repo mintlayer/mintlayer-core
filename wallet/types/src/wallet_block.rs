@@ -20,15 +20,16 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
 };
 
+/// This represents the information pertaining to a block information that was created by the wallet owner.
 /// This structure is used to store inputs (kernel inputs in PoS only)
-/// and reward outputs of the blocks that are related to the wallet.
+/// and reward outputs of the blocks that belong to the wallet.
 /// Spent outputs are found by looking at all locally stored transactions
 /// and blocks. In case of reorg, top blocks are simply removed from the DB.
 /// We use the same approach as the Bitcoin Core wallet, but unlike Bitcoin
-/// we don't have coinbase transactions, so the additional `WalletBlock`
+/// we don't have coinbase transactions, so the additional `OwnedBlockRewardData`
 /// struct is invented here.
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
-pub struct WalletBlock {
+pub struct OwnedBlockRewardData {
     // `GenBlock` because this may be the genesis block (kernel_inputs will be empty in this case)
     block_id: Id<GenBlock>,
 
@@ -39,9 +40,9 @@ pub struct WalletBlock {
     reward: Vec<TxOutput>,
 }
 
-impl WalletBlock {
+impl OwnedBlockRewardData {
     pub fn from_genesis(genesis: &Genesis) -> Self {
-        WalletBlock {
+        OwnedBlockRewardData {
             block_id: genesis.get_id().into(),
             height: BlockHeight::zero(),
             kernel_inputs: Vec::new(),
@@ -55,7 +56,7 @@ impl WalletBlock {
             ConsensusData::PoW(_) | ConsensusData::None => Vec::new(),
         };
 
-        WalletBlock {
+        OwnedBlockRewardData {
             block_id: block.get_id().into(),
             height: block_height,
             kernel_inputs,

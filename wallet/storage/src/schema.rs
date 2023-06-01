@@ -18,9 +18,9 @@
 use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
-    WalletTx,
+    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountDerivationPathId,
+    AccountId, AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 storage::decl_schema! {
@@ -38,8 +38,8 @@ storage::decl_schema! {
         pub DBPubKeys: Map<AccountDerivationPathId, ExtendedPublicKey>,
         /// Store for all the addresses that belong to an account
         pub DBAddresses: Map<AccountDerivationPathId, Address>,
-        /// Store for WalletBlock
-        pub DBBlocks: Map<AccountBlockHeight, WalletBlock>,
+        /// Store for OwnedBlockRewardData
+        pub DBOwnedBlockData: Map<AccountBlockHeight, OwnedBlockRewardData>,
         /// Store for Transaction entries
         pub DBTxs: Map<AccountTxId, WalletTx>,
     }

@@ -25,9 +25,9 @@ pub use internal::{Store, StoreTxRo, StoreTxRw};
 use std::collections::BTreeMap;
 
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
-    WalletTx,
+    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountDerivationPathId,
+    AccountId, AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 /// Possibly failing result of wallet storage query
@@ -38,11 +38,14 @@ pub type Error = storage::Error;
 pub trait WalletStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
-    fn get_block(&self, block_height: &AccountBlockHeight) -> Result<Option<WalletBlock>>;
-    fn get_blocks(
+    fn get_owned_block_data(
+        &self,
+        block_height: &AccountBlockHeight,
+    ) -> Result<Option<OwnedBlockRewardData>>;
+    fn get_all_owned_block_data(
         &self,
         account_id: &AccountId,
-    ) -> Result<BTreeMap<AccountBlockHeight, WalletBlock>>;
+    ) -> Result<BTreeMap<AccountBlockHeight, OwnedBlockRewardData>>;
     fn get_transaction(&self, id: &AccountTxId) -> Result<Option<WalletTx>>;
     fn get_transactions(&self, account_id: &AccountId) -> Result<BTreeMap<AccountTxId, WalletTx>>;
     fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
@@ -72,12 +75,12 @@ pub trait WalletStorageRead {
 pub trait WalletStorageWrite: WalletStorageRead {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
-    fn set_block(
+    fn set_owned_block_data(
         &mut self,
         block_height: &AccountBlockHeight,
-        block: &WalletBlock,
+        block: &OwnedBlockRewardData,
     ) -> crate::Result<()>;
-    fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
+    fn del_owned_block_data(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()>;
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> Result<()>;
     fn del_transaction(&mut self, id: &AccountTxId) -> Result<()>;
     fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> Result<()>;

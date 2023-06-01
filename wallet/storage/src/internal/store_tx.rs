@@ -20,9 +20,9 @@ use crypto::key::extended::ExtendedPublicKey;
 use serialization::{Codec, DecodeAll, Encode, EncodeLike};
 use storage::schema;
 use wallet_types::{
-    account_id::AccountBlockHeight, wallet_block::WalletBlock, AccountDerivationPathId, AccountId,
-    AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId,
-    WalletTx,
+    account_id::AccountBlockHeight, wallet_block::OwnedBlockRewardData, AccountDerivationPathId,
+    AccountId, AccountInfo, AccountKeyPurposeId, AccountTxId, KeychainUsageState, RootKeyContent,
+    RootKeyId, WalletTx,
 };
 
 use crate::{
@@ -68,19 +68,19 @@ macro_rules! impl_read_ops {
                 self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
             }
 
-            fn get_block(
+            fn get_owned_block_data(
                 &self,
                 block_height: &AccountBlockHeight,
-            ) -> crate::Result<Option<WalletBlock>> {
-                self.read::<db::DBBlocks, _, _>(block_height)
+            ) -> crate::Result<Option<OwnedBlockRewardData>> {
+                self.read::<db::DBOwnedBlockData, _, _>(block_height)
             }
 
-            fn get_blocks(
+            fn get_all_owned_block_data(
                 &self,
                 account_id: &AccountId,
-            ) -> crate::Result<BTreeMap<AccountBlockHeight, WalletBlock>> {
+            ) -> crate::Result<BTreeMap<AccountBlockHeight, OwnedBlockRewardData>> {
                 self.0
-                    .get::<db::DBBlocks, _>()
+                    .get::<db::DBOwnedBlockData, _>()
                     .prefix_iter_decoded(account_id)
                     .map(Iterator::collect)
             }
@@ -198,16 +198,19 @@ impl<'st, B: storage::Backend> WalletStorageWrite for StoreTxRw<'st, B> {
         self.write_value::<well_known::StoreVersion>(&version)
     }
 
-    fn set_block(
+    fn set_owned_block_data(
         &mut self,
         block_height: &AccountBlockHeight,
-        block: &WalletBlock,
+        block: &OwnedBlockRewardData,
     ) -> crate::Result<()> {
-        self.write::<db::DBBlocks, _, _, _>(block_height, block)
+        self.write::<db::DBOwnedBlockData, _, _, _>(block_height, block)
     }
 
-    fn del_block(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()> {
-        self.0.get_mut::<db::DBBlocks, _>().del(block_height).map_err(Into::into)
+    fn del_owned_block_data(&mut self, block_height: &AccountBlockHeight) -> crate::Result<()> {
+        self.0
+            .get_mut::<db::DBOwnedBlockData, _>()
+            .del(block_height)
+            .map_err(Into::into)
     }
 
     fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()> {

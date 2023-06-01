@@ -43,7 +43,7 @@ use std::sync::Arc;
 use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
 use wallet_types::account_id::AccountBlockHeight;
 use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
-use wallet_types::wallet_block::WalletBlock;
+use wallet_types::wallet_block::OwnedBlockRewardData;
 use wallet_types::wallet_tx::TxState;
 use wallet_types::{AccountId, AccountInfo, AccountTxId, KeyPurpose, WalletTx};
 
@@ -75,7 +75,7 @@ impl Account {
             &account_info,
         )?;
 
-        let blocks = db_tx.get_blocks(&key_chain.get_account_id())?;
+        let blocks = db_tx.get_all_owned_block_data(&key_chain.get_account_id())?;
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
         let output_cache = OutputCache::new(blocks, txs);
 
@@ -500,7 +500,7 @@ impl Account {
             .collect::<Vec<_>>();
 
         for block_id in revoked_blocks {
-            db_tx.del_block(&block_id)?;
+            db_tx.del_owned_block_data(&block_id)?;
             self.output_cache.remove_block(&block_id);
         }
 
@@ -516,7 +516,7 @@ impl Account {
     fn add_block_if_relevant<B: storage::Backend>(
         &mut self,
         db_tx: &mut StoreTxRw<B>,
-        block: WalletBlock,
+        block: OwnedBlockRewardData,
     ) -> WalletResult<()> {
         let relevant_inputs = block
             .kernel_inputs()
@@ -525,7 +525,7 @@ impl Account {
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, block.reward())?;
         if relevant_inputs || relevant_outputs {
             let block_height = AccountBlockHeight::new(self.get_account_id(), block.height());
-            db_tx.set_block(&block_height, &block)?;
+            db_tx.set_owned_block_data(&block_height, &block)?;
             self.output_cache.add_block(block_height, block);
         }
         Ok(())
@@ -555,7 +555,7 @@ impl Account {
     fn scan_genesis<B: storage::Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
-        let block = WalletBlock::from_genesis(chain_config.genesis_block());
+        let block = OwnedBlockRewardData::from_genesis(chain_config.genesis_block());
         self.add_block_if_relevant(db_tx, block)?;
 
         Ok(())
@@ -583,7 +583,7 @@ impl Account {
             let block_height = BlockHeight::new(common_block_height.into_int() + index as u64 + 1);
             let tx_state = TxState::Confirmed(block_height);
 
-            let wallet_block = WalletBlock::from_block(block, block_height);
+            let wallet_block = OwnedBlockRewardData::from_block(block, block_height);
             self.add_block_if_relevant(db_tx, wallet_block)?;
 
             for signed_tx in block.transactions() {
