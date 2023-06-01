@@ -222,7 +222,7 @@ pub fn stake(
     let mut block_timestamp = block_header.timestamp();
 
     ensure!(
-        block_timestamp < finalize_pos_data.max_block_timestamp(),
+        block_timestamp <= finalize_pos_data.max_block_timestamp(),
         ConsensusPoSError::FutureTimestampInThePast
     );
 

@@ -30,7 +30,7 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        Block, ChainConfig, RequiredConsensus, SignedTransaction,
+        Block, ChainConfig, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
@@ -252,9 +252,7 @@ impl BlockProduction {
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
         let stop_flag = Arc::new(false.into());
-
         let tip_at_start = self.pull_best_block_index().await?;
-        let timestamp_at_start = tip_at_start.block_timestamp();
 
         let (job_key, mut cancel_receiver) =
             self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
@@ -275,10 +273,9 @@ impl BlockProduction {
         // This variable keeps track of the last timestamp that was
         // attempted, and during Proof of Stake, will prevent
         // searching over the same search space.
-        let last_epoch_used = Arc::new(AtomicU64::new(timestamp_at_start.as_int_seconds()));
-
-        let mut previous_consensus_status =
-            self.chain_config.net_upgrade().consensus_status(tip_at_start.block_height());
+        let last_epoch_used = Arc::new(AtomicU64::new(
+            tip_at_start.block_timestamp().as_int_seconds(),
+        ));
 
         loop {
             let mut block_timestamp =
@@ -287,16 +284,13 @@ impl BlockProduction {
             let current_timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-            match previous_consensus_status {
-                RequiredConsensus::IgnoreConsensus | RequiredConsensus::PoW(_) => {}
-                RequiredConsensus::PoS(_) => {
-                    if block_timestamp == current_timestamp
-                        && current_timestamp != timestamp_at_start
-                    {
-                        sleep(Duration::from_secs(1)).await;
-                        continue;
-                    }
-                }
+            let max_block_timestamp = current_timestamp
+                .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+                .expect("Time will not overflow");
+
+            if max_block_timestamp <= block_timestamp {
+                sleep(Duration::from_secs(1)).await;
+                continue;
             }
 
             block_timestamp = block_timestamp.add_int_seconds(1).expect("Time will not overflow");
@@ -304,11 +298,6 @@ impl BlockProduction {
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
                 self.pull_consensus_data(input_data.clone(), &last_epoch_used).await?;
-
-            previous_consensus_status = self
-                .chain_config
-                .net_upgrade()
-                .consensus_status(current_tip_index.block_height());
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
