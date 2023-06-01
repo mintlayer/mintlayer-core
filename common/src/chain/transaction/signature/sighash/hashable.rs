@@ -59,7 +59,7 @@ impl SignatureHashableElement for &[TxOutput] {
 pub struct SignatureHashableInputs<'a> {
     inputs: &'a [TxInput],
     /// Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
-    /// It can be None which means that input spend from account not utxo
+    /// It can be None which means that input spends from an account not utxo
     inputs_utxos: &'a [Option<&'a TxOutput>],
 }
 

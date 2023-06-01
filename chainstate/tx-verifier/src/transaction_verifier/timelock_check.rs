@@ -126,7 +126,6 @@ where
     };
 
     // check if utxos can already be spent
-    //input_utxos.iter().filter_map(|utxo|utxo.map(|(outpoint, utxo)| (outpoint, utxo))).try_for_each(| (outpoint, utxo)| -> Result<(), ConnectTransactionError>{
     input_utxos.iter().filter_map(|utxo| utxo.as_ref()).try_for_each(| (outpoint, utxo)| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {

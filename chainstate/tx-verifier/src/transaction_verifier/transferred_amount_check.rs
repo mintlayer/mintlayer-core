@@ -350,7 +350,7 @@ mod tests {
             block::consensus_data::{PoSData, PoWData},
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            Destination, GenBlock, OutPoint, PoolId,
+            AccountInput, DelegationId, Destination, GenBlock, OutPoint, PoolId,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -579,5 +579,93 @@ mod tests {
                 pledge_amount_2
             )
         )
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_tx_spend_from_delegation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let utxo_db =
+            utxo::UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
+
+        let delegation_id = DelegationId::new(H256::zero());
+        let delegated_amount = Amount::from_atoms(rng.gen_range(1..100_000));
+        let overspend_amount = Amount::from_atoms(delegated_amount.into_atoms() + 1);
+        let withdraw_amount = Amount::from_atoms(rng.gen_range(1..delegated_amount.into_atoms()));
+
+        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::from([(delegation_id, delegated_amount)]),
+            BTreeMap::new(),
+        );
+        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
+
+        // try overspend balance
+        {
+            let input = TxInput::Account(AccountInput::new(
+                0,
+                AccountType::Delegation(delegation_id),
+                overspend_amount,
+            ));
+
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(overspend_amount),
+                Destination::AnyoneCanSpend,
+            );
+            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+            let res =
+                check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| {
+                    Ok(None)
+                })
+                .unwrap_err();
+            assert_eq!(
+                res,
+                ConnectTransactionError::AttemptToPrintMoney(delegated_amount, overspend_amount)
+            );
+        }
+
+        // try overspend input
+        {
+            let input = TxInput::Account(AccountInput::new(
+                0,
+                AccountType::Delegation(delegation_id),
+                withdraw_amount,
+            ));
+
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(overspend_amount),
+                Destination::AnyoneCanSpend,
+            );
+            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+            let res =
+                check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| {
+                    Ok(None)
+                })
+                .unwrap_err();
+            assert_eq!(
+                res,
+                ConnectTransactionError::AttemptToPrintMoney(withdraw_amount, overspend_amount)
+            );
+        }
+
+        let input = TxInput::Account(AccountInput::new(
+            0,
+            AccountType::Delegation(delegation_id),
+            withdraw_amount,
+        ));
+        let output = TxOutput::Transfer(
+            OutputValue::Coin(withdraw_amount),
+            Destination::AnyoneCanSpend,
+        );
+        let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+        check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| Ok(None))
+            .unwrap();
     }
 }

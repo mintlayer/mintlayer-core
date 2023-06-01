@@ -194,7 +194,6 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let sig_tx = account.sign_transaction(req, &db_tx).unwrap();
 
-    // FIMXE: sign account input
     let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {

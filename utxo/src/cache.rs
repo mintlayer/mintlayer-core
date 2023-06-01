@@ -176,10 +176,11 @@ impl<P: UtxosView> UtxosCache<P> {
         tx.inputs()
             .iter()
             .zip(tx_undo.into_inner().into_iter())
-            .try_for_each(|(tx_in, utxo)| match tx_in {
-                TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
-                TxInput::Account(_) => Ok(()),
+            .filter_map(|(tx_in, utxo)| match tx_in {
+                TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
+                TxInput::Account(_) => None,
             })
+            .try_for_each(|(outpoint, utxo)| self.add_utxo(outpoint, utxo, false))
     }
 
     /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
@@ -235,12 +236,14 @@ impl<P: UtxosView> UtxosCache<P> {
 
         if let Some(inputs) = reward_transactable.inputs() {
             let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
-            inputs.iter().zip(block_undo.into_inner().into_iter()).try_for_each(
-                |(tx_in, utxo)| match tx_in {
-                    TxInput::Utxo(outpoint) => self.add_utxo(outpoint, utxo, false),
-                    TxInput::Account(_) => Ok(()),
-                },
-            )?;
+            inputs
+                .iter()
+                .zip(block_undo.into_inner().into_iter())
+                .filter_map(|(tx_in, utxo)| match tx_in {
+                    TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
+                    TxInput::Account(_) => None,
+                })
+                .try_for_each(|(outpoint, utxo)| self.add_utxo(outpoint, utxo, false))?;
         }
         Ok(())
     }
