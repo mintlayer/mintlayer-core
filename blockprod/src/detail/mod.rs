@@ -281,15 +281,17 @@ impl BlockProduction {
             Arc::new(AtomicU64::new(tip_plus_one.as_int_seconds()))
         };
 
-        let current_timestamp =
-            BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
+        let max_block_timestamp = {
+            let current_timestamp =
+                BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
-        let max_block_timestamp = current_timestamp
-            .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
-            .ok_or(ConsensusCreationError::TimestampOverflow(
-                current_timestamp,
-                self.chain_config.max_future_block_time_offset().as_secs(),
-            ))?;
+            current_timestamp
+                .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+                .ok_or(ConsensusCreationError::TimestampOverflow(
+                    current_timestamp,
+                    self.chain_config.max_future_block_time_offset().as_secs(),
+                ))?
+        };
 
         loop {
             let block_timestamp = BlockTimestamp::from_int_seconds(
