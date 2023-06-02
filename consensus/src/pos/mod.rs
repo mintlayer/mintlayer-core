@@ -37,7 +37,6 @@ use common::{
     Uint256, Uint512,
 };
 use crypto::vrf::VRFPublicKey;
-use logging::log;
 use pos_accounting::PoSAccountingView;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -225,13 +224,6 @@ pub fn stake(
     ensure!(
         block_timestamp <= finalize_pos_data.max_block_timestamp(),
         ConsensusPoSError::FutureTimestampInThePast
-    );
-
-    log::debug!(
-        "start PoS block solving from {} to {} ({})",
-        block_timestamp,
-        finalize_pos_data.max_block_timestamp(),
-        finalize_pos_data.max_block_timestamp().as_int_seconds() - block_timestamp.as_int_seconds(),
     );
 
     while block_timestamp <= finalize_pos_data.max_block_timestamp() {
