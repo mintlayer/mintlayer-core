@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,19 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use mockall::*;
-pub type MemoryUsage = usize;
+use super::MempoolStore;
 
-#[automock]
-pub trait GetMemoryUsage {
-    fn get_memory_usage(&self) -> MemoryUsage;
+pub trait MemoryUsageEstimator: Send + Sync + 'static {
+    fn estimate_memory_usage(&self, store: &MempoolStore) -> usize;
 }
 
-#[derive(Clone)]
-pub struct SystemUsageEstimator;
-impl GetMemoryUsage for SystemUsageEstimator {
-    fn get_memory_usage(&self) -> MemoryUsage {
-        // TODO implement real usage estimation here
-        0
+/// Estimate memory usage by asking the mempool store
+pub struct StoreMemoryUsageEstimator;
+
+impl MemoryUsageEstimator for StoreMemoryUsageEstimator {
+    fn estimate_memory_usage(&self, store: &MempoolStore) -> usize {
+        store.memory_usage()
     }
 }

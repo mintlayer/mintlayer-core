@@ -13,11 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::*;
-use crate::{
-    get_memory_usage::MockGetMemoryUsage, tx_accumulator::DefaultTxAccumulator,
-    SystemUsageEstimator,
-};
+use super::{memory_usage_estimator::StoreMemoryUsageEstimator, *};
+use crate::tx_accumulator::DefaultTxAccumulator;
 use chainstate::{
     make_chainstate, BlockSource, ChainstateConfig, DefaultTransactionVerificationStrategy,
 };
@@ -80,10 +77,7 @@ fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-impl<M> Mempool<M>
-where
-    M: GetMemoryUsage + Send + Sync,
-{
+impl<M> Mempool<M> {
     fn get_minimum_rolling_fee(&self) -> FeeRate {
         self.rolling_fee_rate.read().rolling_minimum_fee_rate()
     }
@@ -206,7 +200,7 @@ pub async fn start_chainstate_with_config(
     start_chainstate(chainstate).await
 }
 
-async fn setup() -> Mempool<SystemUsageEstimator> {
+async fn setup() -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_interface = start_chainstate_with_config(Arc::clone(&config)).await;
@@ -214,13 +208,13 @@ async fn setup() -> Mempool<SystemUsageEstimator> {
         config,
         chainstate_interface,
         Default::default(),
-        SystemUsageEstimator {},
+        StoreMemoryUsageEstimator,
     )
 }
 
 async fn setup_with_chainstate(
     chainstate: Box<dyn ChainstateInterface>,
-) -> Mempool<SystemUsageEstimator> {
+) -> Mempool<StoreMemoryUsageEstimator> {
     logging::init_logging::<&str>(None);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_handle = start_chainstate(chainstate).await;
@@ -228,7 +222,7 @@ async fn setup_with_chainstate(
         config,
         chainstate_handle,
         Default::default(),
-        SystemUsageEstimator {},
+        StoreMemoryUsageEstimator,
     )
 }
 
@@ -409,7 +403,7 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
 // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
 const TX_SPEND_INPUT_SIZE: usize = 213;
 
-async fn tx_spend_input<M: GetMemoryUsage + Send + Sync>(
+async fn tx_spend_input<M>(
     mempool: &Mempool<M>,
     input: TxInput,
     witness: InputWitness,
@@ -423,7 +417,7 @@ async fn tx_spend_input<M: GetMemoryUsage + Send + Sync>(
     tx_spend_several_inputs(mempool, &[input], &[witness], fee, flags).await
 }
 
-async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
+async fn tx_spend_several_inputs<M>(
     mempool: &Mempool<M>,
     inputs: &[TxInput],
     witnesses: &[InputWitness],
@@ -874,17 +868,17 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     logging::init_logging::<&str>(None);
     let mock_time = Arc::new(AtomicU64::new(0));
     let mock_clock = mocked_time_getter_seconds(Arc::clone(&mock_time));
-    let mut mock_usage = MockGetMemoryUsage::new();
+    let mut mock_usage = MockMemoryUsageEstimator::new();
     // Add parent
     // Add first child
-    mock_usage.expect_get_memory_usage().times(2).return_const(0usize);
+    mock_usage.expect_estimate_memory_usage().times(2).return_const(0usize);
     // Add second child, triggering the trimming process
     mock_usage
-        .expect_get_memory_usage()
+        .expect_estimate_memory_usage()
         .times(1)
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
     // After removing one entry, cause the code to exit the loop by showing a small usage
-    mock_usage.expect_get_memory_usage().return_const(0usize);
+    mock_usage.expect_estimate_memory_usage().return_const(0usize);
 
     let mut rng = make_seedable_rng(seed);
     let tf = TestFramework::builder(&mut rng).build();
@@ -1311,11 +1305,11 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
         "at first, entry tx has score {:?}",
         entry_tx.ancestor_score()
     );
-    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a").clone();
+    let entry_a = mempool.store.txs_by_id.get(&tx_a_id).expect("tx_a").deref().clone();
     log::debug!("AT FIRST, entry a has score {:?}", entry_a.ancestor_score());
-    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
+    let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b").deref();
     log::debug!("AT FIRST, entry b has score {:?}", entry_b.ancestor_score());
-    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").deref().clone();
     log::debug!(
         "AT FIRST, entry c looks like {:?} and has score {:?}",
         entry_c,
@@ -1366,9 +1360,13 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn check_txs_sorted_by_ancestor_score(mempool: &Mempool<SystemUsageEstimator>) {
-    let txs_by_ancestor_score =
-        mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+fn check_txs_sorted_by_ancestor_score<E>(mempool: &Mempool<E>) {
+    let txs_by_ancestor_score = mempool
+        .store
+        .txs_by_descendant_score
+        .values()
+        .flat_map(Deref::deref)
+        .collect::<Vec<_>>();
     for i in 0..(txs_by_ancestor_score.len() - 1) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_ancestor_score.get(i).unwrap();
@@ -1460,7 +1458,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     log::debug!("entry a has score {:?}", entry_a.descendant_score());
     let entry_b = mempool.store.txs_by_id.get(&tx_b_id).expect("tx_b");
     log::debug!("entry b has score {:?}", entry_b.descendant_score());
-    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").clone();
+    let entry_c = mempool.store.txs_by_id.get(&tx_c_id).expect("tx_c").deref().clone();
     log::debug!("entry c has score {:?}", entry_c.descendant_score());
     assert_eq!(entry_a.fee(), entry_a.fees_with_descendants());
     assert_eq!(
@@ -1485,9 +1483,13 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn check_txs_sorted_by_descendant_sore(mempool: &Mempool<SystemUsageEstimator>) {
-    let txs_by_descendant_score =
-        mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+fn check_txs_sorted_by_descendant_sore<M>(mempool: &Mempool<M>) {
+    let txs_by_descendant_score = mempool
+        .store
+        .txs_by_descendant_score
+        .values()
+        .flat_map(Deref::deref)
+        .collect::<Vec<_>>();
     for i in 0..(txs_by_descendant_score.len() - 1) {
         log::debug!("i =  {}", i);
         let tx_id = txs_by_descendant_score.get(i).unwrap();
@@ -1511,9 +1513,9 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
 
-    let mut mock_usage = MockGetMemoryUsage::new();
+    let mut mock_usage = MockMemoryUsageEstimator::new();
     mock_usage
-        .expect_get_memory_usage()
+        .expect_estimate_memory_usage()
         .times(1)
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 

@@ -24,13 +24,10 @@ pub use interface::{
     mempool_interface_impl::make_mempool,
 };
 
-use crate::{error::Error as MempoolError, get_memory_usage::GetMemoryUsage};
-
-pub use crate::get_memory_usage::SystemUsageEstimator;
+use crate::error::Error as MempoolError;
 
 mod config;
 pub mod error;
-mod get_memory_usage;
 mod interface;
 mod pool;
 pub mod rpc;

@@ -173,7 +173,6 @@ mod tests {
             Arc::clone(&chain_config),
             subsystem::Handle::clone(&chainstate),
             Default::default(),
-            mempool::SystemUsageEstimator {},
         );
         let mempool = manager.add_subsystem_with_custom_eventloop("mempool", {
             move |call, shutdn| mempool.run(call, shutdn)

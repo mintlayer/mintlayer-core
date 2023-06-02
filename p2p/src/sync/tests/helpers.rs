@@ -428,7 +428,6 @@ impl SyncManagerHandleBuilder {
             Arc::clone(&chain_config),
             chainstate.clone(),
             time_getter.clone(),
-            mempool::SystemUsageEstimator {},
         );
         let mempool = manager.add_subsystem_with_custom_eventloop("p2p-sync-test-mempool", {
             move |call, shutdn| mempool.run(call, shutdn)

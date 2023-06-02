@@ -15,18 +15,13 @@
 
 use common::chain::TxInput;
 
-use crate::get_memory_usage::GetMemoryUsage;
+use super::{MemoryUsageEstimator, Mempool};
 
-use super::Mempool;
-
-pub trait SpendsUnconfirmed<M>
-where
-    M: GetMemoryUsage,
-{
+pub trait SpendsUnconfirmed<M: MemoryUsageEstimator> {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool;
 }
 
-impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
+impl<M: MemoryUsageEstimator> SpendsUnconfirmed<M> for TxInput {
     fn spends_unconfirmed(&self, mempool: &Mempool<M>) -> bool {
         // TODO: if TxInput spends from an account there is no way to know tx_id
         match self {

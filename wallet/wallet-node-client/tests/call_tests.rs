@@ -89,7 +89,6 @@ pub async fn start_subsystems(
         Arc::clone(&chain_config),
         chainstate_handle.clone(),
         Default::default(),
-        mempool::SystemUsageEstimator {},
     );
     let mempool_handle = manager.add_subsystem_with_custom_eventloop("test-mempool", {
         move |call, shutdn| mempool.run(call, shutdn)

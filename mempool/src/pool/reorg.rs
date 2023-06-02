@@ -26,7 +26,7 @@ use logging::log;
 use utils::tap_error_log::LogError;
 use utxo::UtxosStorageRead;
 
-use crate::{get_memory_usage::GetMemoryUsage, pool::Mempool};
+use super::{MemoryUsageEstimator, Mempool};
 
 /// An error that can happen in mempool on chain reorg
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -124,7 +124,7 @@ fn fetch_disconnected_txs<M>(
         .map(ReorgData::into_disconnected_transactions)
 }
 
-pub fn handle_new_tip<M: GetMemoryUsage>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
+pub fn handle_new_tip<M: MemoryUsageEstimator>(mempool: &mut Mempool<M>, new_tip: Id<Block>) {
     mempool.rolling_fee_rate.get_mut().set_block_since_last_rolling_fee_bump(true);
 
     let disconnected_txs = fetch_disconnected_txs(mempool, new_tip)

@@ -18,6 +18,7 @@ use std::{
     collections::{BTreeSet, VecDeque},
     mem,
     num::NonZeroUsize,
+    ops::Deref,
     sync::Arc,
     time::Duration,
 };
@@ -40,6 +41,7 @@ use utils::{
     ensure, eventhandler::EventsController, shallow_clone::ShallowClone, tap_error_log::LogError,
 };
 
+pub use self::memory_usage_estimator::MemoryUsageEstimator;
 use self::{
     entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
@@ -52,7 +54,6 @@ use self::{
 use crate::{
     config,
     error::{Error, MempoolPolicyError, OrphanPoolError, TxValidationError},
-    get_memory_usage::GetMemoryUsage,
     tx_accumulator::TransactionAccumulator,
     MempoolEvent, TxStatus,
 };
@@ -62,6 +63,7 @@ use crate::config::*;
 mod entry;
 pub mod fee;
 mod feerate;
+pub mod memory_usage_estimator;
 mod orphans;
 mod reorg;
 mod rolling_fee_rate;
@@ -92,12 +94,6 @@ pub struct Mempool<M> {
 impl<M> std::fmt::Debug for Mempool<M> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.store)
-    }
-}
-
-impl<M: GetMemoryUsage> GetMemoryUsage for Mempool<M> {
-    fn get_memory_usage(&self) -> usize {
-        self.memory_usage_estimator.get_memory_usage()
     }
 }
 
@@ -164,9 +160,13 @@ impl<M> Mempool<M> {
 }
 
 // Rolling-fee-related methods
-impl<M: GetMemoryUsage> Mempool<M> {
+impl<M: MemoryUsageEstimator> Mempool<M> {
+    fn memory_usage(&self) -> usize {
+        self.memory_usage_estimator.estimate_memory_usage(&self.store)
+    }
+
     fn rolling_fee_halflife(&self) -> Time {
-        let mem_usage = self.get_memory_usage();
+        let mem_usage = self.memory_usage();
         if mem_usage < self.max_size / 4 {
             ROLLING_FEE_BASE_HALFLIFE / 4
         } else if mem_usage < self.max_size / 2 {
@@ -259,7 +259,7 @@ impl<M> Mempool<M> {
     }
 
     pub fn transaction(&self, id: &Id<Transaction>) -> Option<&SignedTransaction> {
-        self.store.txs_by_id.get(id).map(TxMempoolEntry::transaction)
+        self.store.get_entry(id).map(TxMempoolEntry::transaction)
     }
 
     pub fn contains_orphan_transaction(&self, id: &Id<Transaction>) -> bool {
@@ -302,7 +302,7 @@ enum VerificationOutcome {
 }
 
 // Transaction Validation
-impl<M: GetMemoryUsage> Mempool<M> {
+impl<M: MemoryUsageEstimator> Mempool<M> {
     /// Verify transaction according to consensus rules and check mempool rules
     fn validate_transaction(&self, transaction: TxEntry) -> Result<ValidationOutcome, Error> {
         // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
@@ -531,7 +531,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 }
 
 // RBF checks
-impl<M: GetMemoryUsage> Mempool<M> {
+impl<M: MemoryUsageEstimator> Mempool<M> {
     fn rbf_checks(&self, tx: &TxEntryWithFee) -> Result<Conflicts, MempoolPolicyError> {
         let conflicts = self
             .conflicting_tx_ids(tx.transaction())
@@ -686,7 +686,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 }
 
 // Transaction Finalization
-impl<M: GetMemoryUsage> Mempool<M> {
+impl<M: MemoryUsageEstimator> Mempool<M> {
     fn finalize_tx(&mut self, tx: TxEntryWithFee) -> Result<(), Error> {
         let entry = self.create_entry(tx)?;
         let id = *entry.tx_id();
@@ -721,11 +721,11 @@ impl<M: GetMemoryUsage> Mempool<M> {
     }
 
     fn remove_expired_transactions(&mut self) {
-        let expired: Vec<_> = self
+        let expired_ids: Vec<_> = self
             .store
             .txs_by_creation_time
             .values()
-            .flatten()
+            .flat_map(Deref::deref)
             .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
@@ -740,23 +740,23 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 }
                 expired
             })
-            .cloned()
+            .map(|entry| *entry.tx_id())
             .collect();
 
-        for tx_id in expired.iter().map(|entry| entry.tx_id()) {
+        for tx_id in expired_ids.iter() {
             self.store.drop_tx_and_descendants(tx_id, MempoolRemovalReason::Expiry)
         }
     }
 
     fn trim(&mut self) -> Result<Vec<FeeRate>, MempoolPolicyError> {
         let mut removed_fees = Vec::new();
-        while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
+        while !self.store.is_empty() && self.memory_usage() > self.max_size {
             // TODO sort by descendant score, not by fee
             let removed_id = self
                 .store
                 .txs_by_descendant_score
                 .values()
-                .flatten()
+                .flat_map(Deref::deref)
                 .copied()
                 .next()
                 .expect("pool not empty");
@@ -779,7 +779,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
 }
 
 // Mempool Interface and Event Reactions
-impl<M: GetMemoryUsage> Mempool<M> {
+impl<M: MemoryUsageEstimator> Mempool<M> {
     pub fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
         let creation_time = self.clock.get_time();
         self.add_transaction_and_descendants(TxEntry::new(tx, creation_time))
@@ -850,9 +850,8 @@ impl<M: GetMemoryUsage> Mempool<M> {
         self.store
             .txs_by_descendant_score
             .values()
-            .flatten()
-            .map(|id| self.store.get_entry(id).expect("entry").transaction())
-            .cloned()
+            .flat_map(Deref::deref)
+            .map(|id| self.store.get_entry(id).expect("entry").transaction().clone())
             .collect()
     }
 
@@ -860,7 +859,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
         &self,
         mut tx_accumulator: Box<dyn TransactionAccumulator>,
     ) -> Box<dyn TransactionAccumulator> {
-        let mut tx_iter = self.store.txs_by_ancestor_score.values().flatten().rev();
+        let mut tx_iter = self.store.txs_by_ancestor_score.values().flat_map(Deref::deref).rev();
         // TODO implement Iterator for MempoolStore so we don't need to use `expect` here
         while !tx_accumulator.done() {
             if let Some(tx_id) = tx_iter.next() {

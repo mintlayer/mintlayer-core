@@ -16,7 +16,6 @@
 use common::chain::tokens::OutputValue;
 
 use super::*;
-use crate::SystemUsageEstimator;
 
 #[rstest]
 #[trace]
@@ -53,7 +52,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         Arc::clone(chainstate.get_chain_config()),
         start_chainstate(chainstate).await,
         mock_clock,
-        SystemUsageEstimator {},
+        StoreMemoryUsageEstimator,
     );
     mempool.add_transaction(parent)?.assert_in_mempool();
 
@@ -113,7 +112,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         config,
         chainstate_interface,
         mock_clock,
-        SystemUsageEstimator {},
+        StoreMemoryUsageEstimator,
     );
 
     let parent_id = parent.transaction().get_id();
