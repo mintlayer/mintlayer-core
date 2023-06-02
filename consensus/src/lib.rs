@@ -179,7 +179,7 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
-    block_epoch: &Arc<AtomicU64>,
+    block_timestamp_seconds: Arc<AtomicU64>,
     stop_flag: Arc<AtomicBool>,
     finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
@@ -205,7 +205,7 @@ pub fn finalize_consensus_data(
                     let stake_result = stake(
                         &mut pos_data.clone(),
                         block_header,
-                        block_epoch,
+                        Arc::clone(&block_timestamp_seconds),
                         finalize_pos_data,
                         stop_flag,
                     )?;

@@ -122,7 +122,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_timestamp_seconds: &Arc<AtomicU64>,
+        block_timestamp_seconds: Arc<AtomicU64>,
     ) -> Result<
         (
             ConsensusData,
@@ -304,7 +304,7 @@ impl BlockProduction {
             }
 
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) = self
-                .pull_consensus_data(input_data.clone(), &last_timestamp_seconds_used)
+                .pull_consensus_data(input_data.clone(), Arc::clone(&last_timestamp_seconds_used))
                 .await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
@@ -343,7 +343,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                &last_timestamp_seconds_used,
+                Arc::clone(&last_timestamp_seconds_used),
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -399,7 +399,7 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        block_timestamp_seconds: &Arc<AtomicU64>,
+        block_timestamp_seconds: Arc<AtomicU64>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -409,7 +409,7 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
             let stop_flag = Arc::clone(&stop_flag);
-            let block_timestamp_seconds = Arc::clone(block_timestamp_seconds);
+            let block_timestamp_seconds = Arc::clone(&block_timestamp_seconds);
 
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
@@ -430,7 +430,7 @@ impl BlockProduction {
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
-                    &block_timestamp_seconds,
+                    Arc::clone(&block_timestamp_seconds),
                     stop_flag,
                     finalize_block_data,
                 )

@@ -213,7 +213,7 @@ where
 pub fn stake(
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
-    block_timestamp_seconds: &Arc<AtomicU64>,
+    block_timestamp_seconds: Arc<AtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
