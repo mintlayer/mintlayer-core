@@ -138,7 +138,7 @@ impl BlockProduction {
                 let chain_config = Arc::clone(&self.chain_config);
 
                 let block_timestamp = BlockTimestamp::from_int_seconds(
-                    block_timestamp_seconds.load(Ordering::Relaxed),
+                    block_timestamp_seconds.load(Ordering::SeqCst),
                 );
 
                 let current_timestamp =
@@ -297,7 +297,7 @@ impl BlockProduction {
             {
                 // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
                 let last_used_block_timestamp = BlockTimestamp::from_int_seconds(
-                    last_timestamp_seconds_used.load(Ordering::Relaxed),
+                    last_timestamp_seconds_used.load(Ordering::SeqCst),
                 );
 
                 if last_used_block_timestamp >= max_block_timestamp {
@@ -396,13 +396,12 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
             let stop_flag = Arc::clone(&stop_flag);
-            let block_timestamp_seconds = Arc::clone(&block_timestamp_seconds);
 
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
             let block_timestamp =
-                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::Relaxed));
+                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
 
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
@@ -417,7 +416,7 @@ impl BlockProduction {
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
-                    Arc::clone(&block_timestamp_seconds),
+                    block_timestamp_seconds,
                     stop_flag,
                     finalize_block_data,
                 )
