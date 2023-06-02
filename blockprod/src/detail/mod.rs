@@ -122,7 +122,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_epoch: &Arc<AtomicU64>,
+        block_timestamp_seconds: &Arc<AtomicU64>,
     ) -> Result<
         (
             ConsensusData,
@@ -137,8 +137,9 @@ impl BlockProduction {
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
 
-                let block_timestamp =
-                    BlockTimestamp::from_int_seconds(block_epoch.load(Ordering::Relaxed));
+                let block_timestamp = BlockTimestamp::from_int_seconds(
+                    block_timestamp_seconds.load(Ordering::Relaxed),
+                );
 
                 let current_timestamp =
                     BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
@@ -270,7 +271,7 @@ impl BlockProduction {
         // This variable keeps track of the last timestamp that was
         // attempted, and during Proof of Stake, will prevent
         // searching over the same search space.
-        let last_epoch_used = {
+        let last_timestamp_seconds_used = {
             let tip_timestamp = tip_at_start.block_timestamp();
 
             let tip_plus_one = tip_timestamp
@@ -291,16 +292,18 @@ impl BlockProduction {
             ))?;
 
         loop {
-            let block_timestamp =
-                BlockTimestamp::from_int_seconds(last_epoch_used.load(Ordering::Relaxed));
+            let block_timestamp = BlockTimestamp::from_int_seconds(
+                last_timestamp_seconds_used.load(Ordering::Relaxed),
+            );
 
             if max_block_timestamp <= block_timestamp {
                 stop_flag.store(true, Ordering::Relaxed);
                 return Err(BlockProductionError::Cancelled);
             }
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), &last_epoch_used).await?;
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) = self
+                .pull_consensus_data(input_data.clone(), &last_timestamp_seconds_used)
+                .await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
@@ -338,7 +341,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                &last_epoch_used,
+                &last_timestamp_seconds_used,
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -394,7 +397,7 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        block_epoch: &Arc<AtomicU64>,
+        block_timestamp_seconds: &Arc<AtomicU64>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -404,13 +407,13 @@ impl BlockProduction {
             let chain_config = Arc::clone(&self.chain_config);
             let current_tip_height = current_tip_index.block_height();
             let stop_flag = Arc::clone(&stop_flag);
-            let block_epoch = Arc::clone(block_epoch);
+            let block_timestamp_seconds = Arc::clone(block_timestamp_seconds);
 
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
             let block_timestamp =
-                BlockTimestamp::from_int_seconds(block_epoch.load(Ordering::Relaxed));
+                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::Relaxed));
 
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
@@ -425,7 +428,7 @@ impl BlockProduction {
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
-                    &block_epoch,
+                    &block_timestamp_seconds,
                     stop_flag,
                     finalize_block_data,
                 )

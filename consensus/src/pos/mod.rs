@@ -213,7 +213,7 @@ where
 pub fn stake(
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
-    block_epoch: &Arc<AtomicU64>,
+    block_timestamp_seconds: &Arc<AtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
     stop_flag: Arc<AtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
@@ -269,7 +269,7 @@ pub fn stake(
         block_timestamp =
             block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
 
-        block_epoch.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
+        block_timestamp_seconds.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
     }
 
     Ok(StakeResult::Failed)
