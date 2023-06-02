@@ -109,15 +109,15 @@ impl<'a, P: PoSAccountingView> PoSAccountingOperationImpl<'a, P> {
 impl<'a, P: PoSAccountingView> PoSAccountingOperations for PoSAccountingOperationImpl<'a, P> {
     fn create_pool(
         &mut self,
-        input0_outpoint: &OutPoint,
+        pool_id: PoolId,
         pool_data: PoolData,
-    ) -> Result<(PoolId, PoSAccountingUndo), pos_accounting::Error> {
+    ) -> Result<PoSAccountingUndo, pos_accounting::Error> {
         let mut delta = PoSAccountingDelta::new(&self.adapter.accounting_delta);
-        let (pool_id, undo) = delta.create_pool(input0_outpoint, pool_data)?;
+        let undo = delta.create_pool(pool_id, pool_data)?;
 
         self.merge_delta(delta.consume())?;
 
-        Ok((pool_id, undo))
+        Ok(undo)
     }
 
     fn decommission_pool(

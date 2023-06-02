@@ -16,12 +16,11 @@
 pub mod job_manager;
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc, Arc,
 };
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
-
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, GetAncestorError,
 };
@@ -31,15 +30,14 @@ use common::{
             block_body::BlockBody, signed_block_header::SignedBlockHeader,
             timestamp::BlockTimestamp, BlockCreationError, BlockHeader, BlockReward, ConsensusData,
         },
-        config::EpochIndex,
-        Block, ChainConfig, GenBlockId, SignedTransaction,
+        Block, ChainConfig, SignedTransaction,
     },
     primitives::BlockHeight,
     time_getter::TimeGetter,
 };
 use consensus::{
-    generate_consensus_data_and_reward, ConsensusPoSError, FinalizeBlockInputData,
-    GenerateBlockInputData, PoSFinalizeBlockInputData,
+    generate_consensus_data_and_reward, ConsensusCreationError, ConsensusPoSError,
+    FinalizeBlockInputData, GenerateBlockInputData, PoSFinalizeBlockInputData,
 };
 use logging::log;
 use mempool::{
@@ -124,13 +122,13 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_timestamp: BlockTimestamp,
+        time_getter: TimeGetter,
     ) -> Result<
         (
             ConsensusData,
             BlockReward,
             GenBlockIndex,
-            Option<FinalizeBlockInputData>,
+            FinalizeBlockInputData,
         ),
         BlockProductionError,
     > {
@@ -138,6 +136,9 @@ impl BlockProduction {
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
+
+                let current_timestamp =
+                    BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
                 move |this| {
                     let best_block_index = this
@@ -160,25 +161,27 @@ impl BlockProduction {
                     };
 
                     let block_height = best_block_index.block_height().next_height();
-                    let sealed_epoch_index =
-                        chain_config.sealed_epoch_index(&block_height).unwrap_or(0);
+                    let sealed_epoch_index = chain_config.sealed_epoch_index(&block_height);
 
-                    let sealed_epoch_randomness = this
-                        .get_epoch_data(sealed_epoch_index)
+                    let sealed_epoch_randomness = sealed_epoch_index
+                        .map(|index| this.get_epoch_data(index))
+                        .transpose()
                         .map_err(|_| {
                             ConsensusPoSError::PropertyQueryError(
                                 PropertyQueryError::EpochDataNotFound(block_height),
                             )
                         })?
-                        .map(|epoch_data| *epoch_data.randomness())
-                        .expect("There should always be epoch data avaiable");
+                        .flatten()
+                        .map_or(PoSRandomness::at_genesis(&chain_config), |epoch_data| {
+                            *epoch_data.randomness()
+                        });
 
                     let (consensus_data, block_reward) = generate_consensus_data_and_reward(
                         &chain_config,
                         &best_block_index,
                         sealed_epoch_randomness,
                         input_data.clone(),
-                        block_timestamp,
+                        BlockTimestamp::from_duration_since_epoch(time_getter.get_time()),
                         block_height,
                         get_ancestor,
                     )?;
@@ -186,8 +189,8 @@ impl BlockProduction {
                     let finalize_block_data = generate_finalize_block_data(
                         &chain_config,
                         this,
-                        &best_block_index,
-                        sealed_epoch_index,
+                        block_height,
+                        current_timestamp,
                         sealed_epoch_randomness,
                         input_data,
                     )?;
@@ -242,7 +245,7 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let stop_flag = Arc::new(false.into());
+        let stop_flag = Arc::new(AtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
@@ -254,12 +257,53 @@ impl BlockProduction {
             self.job_manager.make_job_stopper_function();
         let _job_stopper_destructor = OnceDestructor::new(move || job_stopper_function(job_key));
 
-        loop {
-            let timestamp =
+        // Unlike Proof of Work, which can vary any header field when
+        // searching for a valid block, Proof of Stake can only vary
+        // the header timestamp. Its search space starts at the
+        // previous block's timestamp + 1 second, and ends at the
+        // current timestamp + some distance in time defined by the
+        // blockchain.
+        //
+        // This variable keeps track of the last timestamp that was
+        // attempted, and during Proof of Stake, will prevent
+        // searching over the same search space.
+        let last_timestamp_seconds_used = {
+            let tip_timestamp = tip_at_start.block_timestamp();
+
+            let tip_plus_one = tip_timestamp
+                .add_int_seconds(1)
+                .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
+
+            Arc::new(AtomicU64::new(tip_plus_one.as_int_seconds()))
+        };
+
+        let max_block_timestamp = {
+            let current_timestamp =
                 BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
 
+            current_timestamp
+                .add_int_seconds(self.chain_config.max_future_block_time_offset().as_secs())
+                .ok_or(ConsensusCreationError::TimestampOverflow(
+                    current_timestamp,
+                    self.chain_config.max_future_block_time_offset().as_secs(),
+                ))?
+        };
+
+        loop {
+            {
+                // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
+                let last_used_block_timestamp = BlockTimestamp::from_int_seconds(
+                    last_timestamp_seconds_used.load(Ordering::SeqCst),
+                );
+
+                if last_used_block_timestamp >= max_block_timestamp {
+                    stop_flag.store(true, Ordering::Relaxed);
+                    return Err(BlockProductionError::TryAgainLater);
+                }
+            }
+
             let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
-                self.pull_consensus_data(input_data.clone(), timestamp).await?;
+                self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(
@@ -297,7 +341,7 @@ impl BlockProduction {
                 &current_tip_index,
                 Arc::clone(&stop_flag),
                 &block_body,
-                timestamp,
+                Arc::clone(&last_timestamp_seconds_used),
                 finalize_block_data,
                 consensus_data,
                 ended_sender,
@@ -316,28 +360,12 @@ impl BlockProduction {
                 solve_receive_result = &mut result_receiver => {
                     let mining_result = match solve_receive_result {
                         Ok(mining_result) => mining_result,
-                        Err(_) => {
-                            log::error!(
-                                "Mining thread pool channel lost on tip {} on best height {}",
-                                current_tip_index.block_id(),
-                                current_tip_index.block_height()
-                            );
-
-                            continue;
-                        }
+                        Err(_) => continue,
                     };
 
                     let signed_block_header = match mining_result {
                         Ok(header) => header,
-                        Err(e) => {
-                            log::error!(
-                                "Solving block in thread-pool returned an error on tip {} on best height {}: {e}",
-                                current_tip_index.block_id(),
-                                current_tip_index.block_height()
-                            );
-
-                            continue;
-                        }
+                        Err(_) => continue,
                     };
 
                     let block = Block::new_from_header(signed_block_header, block_body.clone())?;
@@ -353,8 +381,8 @@ impl BlockProduction {
         current_tip_index: &GenBlockIndex,
         stop_flag: Arc<AtomicBool>,
         block_body: &BlockBody,
-        timestamp: BlockTimestamp,
-        finalize_block_data: Option<FinalizeBlockInputData>,
+        block_timestamp_seconds: Arc<AtomicU64>,
+        finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
         result_sender: oneshot::Sender<Result<SignedBlockHeader, BlockProductionError>>,
@@ -367,11 +395,14 @@ impl BlockProduction {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
+            let block_timestamp =
+                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
+
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),
                 merkle_proxy.merkle_tree().root(),
                 merkle_proxy.witness_merkle_tree().root(),
-                timestamp,
+                block_timestamp,
                 consensus_data,
             );
 
@@ -380,6 +411,7 @@ impl BlockProduction {
                     &chain_config,
                     &mut block_header,
                     current_tip_height,
+                    block_timestamp_seconds,
                     stop_flag,
                     finalize_block_data,
                 )
@@ -402,31 +434,15 @@ impl BlockProduction {
 
 fn generate_finalize_block_data(
     chain_config: &ChainConfig,
-    chainstate_handle: &(dyn ChainstateInterface),
-    best_block_index: &GenBlockIndex,
-    sealed_epoch_index: EpochIndex,
+    chainstate_handle: &dyn ChainstateInterface,
+    block_height: BlockHeight,
+    current_timestamp: BlockTimestamp,
     sealed_epoch_randomness: PoSRandomness,
     input_data: GenerateBlockInputData,
-) -> Result<Option<FinalizeBlockInputData>, ConsensusPoSError> {
+) -> Result<FinalizeBlockInputData, ConsensusPoSError> {
     match input_data {
         GenerateBlockInputData::PoS(pos_input_data) => {
-            let previous_block_timestamp = match best_block_index.prev_block_id() {
-                None => chain_config.genesis_block().timestamp(),
-                Some(prev_gen_block_id) => match prev_gen_block_id.classify(chain_config) {
-                    GenBlockId::Genesis(_) => chain_config.genesis_block().timestamp(),
-                    GenBlockId::Block(block_id) => chainstate_handle
-                        .get_block(block_id)
-                        .map_err(|_| ConsensusPoSError::FailedReadingBlock(block_id))?
-                        .ok_or({
-                            ConsensusPoSError::PropertyQueryError(
-                                PropertyQueryError::BlockNotFound(block_id),
-                            )
-                        })?
-                        .timestamp(),
-                },
-            };
-
-            let max_block_timestamp = previous_block_timestamp
+            let max_block_timestamp = current_timestamp
                 .add_int_seconds(chain_config.max_future_block_time_offset().as_secs())
                 .ok_or(ConsensusPoSError::TimestampOverflow)?;
 
@@ -441,391 +457,21 @@ fn generate_finalize_block_data(
                     PropertyQueryError::PoolBalanceNotFound(pos_input_data.pool_id()),
                 ))?;
 
-            Ok(Some(FinalizeBlockInputData::PoS(
-                PoSFinalizeBlockInputData::new(
-                    pos_input_data.stake_private_key().clone(),
-                    pos_input_data.vrf_private_key().clone(),
-                    sealed_epoch_index,
-                    sealed_epoch_randomness,
-                    previous_block_timestamp,
-                    max_block_timestamp,
-                    pool_balance,
-                ),
+            let epoch_index = chain_config.epoch_index_from_height(&block_height);
+
+            Ok(FinalizeBlockInputData::PoS(PoSFinalizeBlockInputData::new(
+                pos_input_data.stake_private_key().clone(),
+                pos_input_data.vrf_private_key().clone(),
+                epoch_index,
+                sealed_epoch_randomness,
+                max_block_timestamp,
+                pool_balance,
             )))
         }
-        GenerateBlockInputData::PoW(_) => Ok(Some(FinalizeBlockInputData::PoW)),
-        GenerateBlockInputData::None => Ok(None),
+        GenerateBlockInputData::PoW(_) => Ok(FinalizeBlockInputData::PoW),
+        GenerateBlockInputData::None => Ok(FinalizeBlockInputData::None),
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use common::chain::GenBlock;
-    use common::primitives::{Id, H256};
-    use crypto::random::Rng;
-    use mempool::{MempoolInterface, MempoolSubsystemInterface};
-    use mocks::MempoolInterfaceMock;
-    use rstest::rstest;
-    use std::sync::atomic::Ordering;
-    use subsystem::CallRequest;
-    use test_utils::random::{make_seedable_rng, Seed};
-
-    use crate::{prepare_thread_pool, tests::setup_blockprod_test};
-
-    use super::*;
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn collect_transactions_subsystem_error() {
-        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
-
-        let mock_mempool = MempoolInterfaceMock::new();
-
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            let mock_mempool = mock_mempool.clone();
-            move |call: CallRequest<dyn MempoolInterface>, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
-
-        mock_mempool_subsystem.call({
-            let shutdown = manager.make_shutdown_trigger();
-            move |_| shutdown.initiate()
-        });
-
-        // shutdown straight after startup, *then* call collect_transactions()
-        manager.main().await;
-
-        // spawn rather than adding a subsystem as manager is moved into main() above
-        tokio::spawn(async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                chainstate,
-                mock_mempool_subsystem,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production.collect_transactions().await;
-
-            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
-            assert!(
-                !collected_transactions,
-                "Expected collect_tx() to not be called"
-            );
-
-            assert!(
-                matches!(
-                    accumulator,
-                    Err(BlockProductionError::SubsystemCallError(_))
-                ),
-                "Expected a subsystem error"
-            );
-        })
-        .await
-        .expect("Subsystem error thread failed");
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn collect_transactions_collect_txs_failed() {
-        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
-
-        let mock_mempool = MempoolInterfaceMock::new();
-        mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
-
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            let mock_mempool = mock_mempool.clone();
-            move |call, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
-
-        manager.add_subsystem_with_custom_eventloop(
-            "test-call",
-            move |_: CallRequest<()>, _| async move {
-                let block_production = BlockProduction::new(
-                    chain_config,
-                    chainstate,
-                    mock_mempool_subsystem,
-                    Default::default(),
-                    prepare_thread_pool(1),
-                )
-                .expect("Error initializing blockprod");
-
-                let accumulator = block_production.collect_transactions().await;
-
-                let collected_transactions =
-                    mock_mempool.collect_txs_called.load(Ordering::Relaxed);
-                assert!(collected_transactions, "Expected collect_tx() to be called");
-
-                assert!(
-                    matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
-                    "Expected collect_tx() to fail"
-                );
-            },
-        );
-
-        manager.main().await;
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn collect_transactions_succeeded() {
-        let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
-
-        let mock_mempool = MempoolInterfaceMock::new();
-
-        let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-            let mock_mempool = mock_mempool.clone();
-            move |call, shutdn| async move {
-                mock_mempool.run(call, shutdn).await;
-            }
-        });
-
-        let block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mock_mempool_subsystem,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let accumulator = block_production.collect_transactions().await;
-
-                let collected_transactions =
-                    mock_mempool.collect_txs_called.load(Ordering::Relaxed);
-                assert!(collected_transactions, "Expected collect_tx() to be called");
-
-                assert!(
-                    accumulator.is_ok(),
-                    "Expected collect_transactions() to succeed"
-                );
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_non_existent_job(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let mut rng = make_seedable_rng(seed);
-
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
-
-        let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
-
-        let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
-        assert!(!job_stopped, "Stopped a non-existent job");
-
-        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-        assert_eq!(jobs_count, 1, "Jobs count is incorrect");
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_existing_job(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let mut rng = make_seedable_rng(seed);
-
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
-
-        let (stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
-
-        let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
-        assert!(job_stopped, "Failed to stop job");
-
-        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-        assert_eq!(jobs_count, 1, "Jobs count is incorrect");
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_job_multiple_jobs(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let mut rng = make_seedable_rng(seed);
-
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let mut job_keys = Vec::new();
-        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
-
-        for _ in 1..=jobs_to_create {
-            let (job_key, _stop_job_cancel_receiver) = block_production
-                .job_manager
-                .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-                .await
-                .unwrap();
-
-            job_keys.push(job_key)
-        }
-
-        assert_eq!(
-            job_keys.len(),
-            jobs_to_create,
-            "Failed to create {jobs_to_create} jobs"
-        );
-
-        while !job_keys.is_empty() {
-            let current_jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-            assert_eq!(
-                current_jobs_count,
-                job_keys.len(),
-                "Jobs count is incorrect"
-            );
-
-            let job_key = job_keys.pop().unwrap();
-
-            let job_stopped = block_production.stop_job(job_key).await.unwrap();
-            assert!(job_stopped, "Failed to stop job");
-        }
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn produce_block_multiple_jobs(#[case] seed: Seed) {
-        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let mut rng = make_seedable_rng(seed);
-
-        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
-
-        let block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let join_handle = tokio::spawn({
-            let shutdown_trigger = manager.make_shutdown_trigger();
-            async move {
-                // Ensure a shutdown signal will be sent by the end of the scope
-                let _shutdown_signal = OnceDestructor::new(move || {
-                    shutdown_trigger.initiate();
-                });
-
-                let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
-                    let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
-
-                    block_production.produce_block_with_custom_id(
-                        GenerateBlockInputData::None,
-                        TransactionsSource::Provided(vec![]),
-                        Some(id),
-                    )
-                });
-
-                let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
-
-                let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
-
-                for (_block, job) in jobs_finished_iter {
-                    job.await.unwrap();
-                }
-
-                let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-                assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
-            }
-        });
-
-        manager.main().await;
-        join_handle.await.unwrap();
-    }
-
-    #[rstest]
-    #[trace]
-    #[case(Seed::from_entropy())]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn stop_all_jobs(#[case] seed: Seed) {
-        let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-        let mut rng = make_seedable_rng(seed);
-
-        let mut block_production = BlockProduction::new(
-            chain_config,
-            chainstate,
-            mempool,
-            Default::default(),
-            prepare_thread_pool(1),
-        )
-        .expect("Error initializing blockprod");
-
-        let (_other_job_key, _other_job_cancel_receiver) = block_production
-            .job_manager
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
-
-        let (_stop_job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager
-            .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-            .await
-            .unwrap();
-
-        let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
-        assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
-
-        let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
-        assert_eq!(jobs_count, 0, "Jobs count is incorrect");
-    }
-}
+mod tests;

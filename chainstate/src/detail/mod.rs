@@ -34,6 +34,7 @@ pub use error::{
     BlockError, CheckBlockError, CheckBlockTransactionsError, InitializationError, OrphanCheckError,
 };
 
+use pos_accounting::{PoSAccountingDB, PoSAccountingOperations};
 pub use transaction_verifier::{
     error::{ConnectTransactionError, SpendStakeError, TokensError, TxIndexError},
     storage::TransactionVerifierStorageError,
@@ -45,14 +46,15 @@ use std::{collections::VecDeque, sync::Arc};
 use itertools::Itertools;
 
 use chainstate_storage::{
-    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
+    TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochData, PropertyQueryError};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},
         config::ChainConfig,
-        Block,
+        Block, TxOutput,
     },
     primitives::{id::WithId, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -369,9 +371,10 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         if let Some(ref bi) = result {
             log::info!(
-                "New tip in chainstate {} with height {}",
+                "New tip in chainstate {} with height {}, timestamp: {}",
                 bi.block_id(),
-                bi.block_height()
+                bi.block_height(),
+                bi.block_timestamp(),
             );
 
             self.is_initial_block_download_finished = self.is_fresh_block(&bi.block_timestamp());
@@ -422,7 +425,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         db_tx
             .set_epoch_data(
-                BlockHeight::zero().into(),
+                0,
                 &EpochData::new(PoSRandomness::new(self.chain_config.initial_randomness())),
             )
             .map_err(BlockError::StorageError)
@@ -431,7 +434,36 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         // initialize the utxo-set by adding genesis outputs to it
         UtxosDB::initialize_db(&mut db_tx, &self.chain_config);
 
+        // initialize the pos accounting db by adding genesis pool to it
+        let mut pos_db_tip = PoSAccountingDB::<_, TipStorageTag>::new(&mut db_tx);
+        self.create_pool_in_storage(&mut pos_db_tip)?;
+        let mut pos_db_sealed = PoSAccountingDB::<_, SealedStorageTag>::new(&mut db_tx);
+        self.create_pool_in_storage(&mut pos_db_sealed)?;
+
         db_tx.commit().expect("Genesis database initialization failed");
+        Ok(())
+    }
+
+    fn create_pool_in_storage(
+        &self,
+        db: &mut impl PoSAccountingOperations,
+    ) -> Result<(), BlockError> {
+        for output in self.chain_config.genesis_block().utxos().iter() {
+            match output {
+                TxOutput::Transfer(_, _)
+                | TxOutput::LockThenTransfer(_, _, _)
+                | TxOutput::Burn(_)
+                | TxOutput::ProduceBlockFromStake(_, _)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => { /* do nothing */ }
+                | TxOutput::CreateStakePool(pool_id, data) => {
+                    let _ = db
+                        .create_pool(*pool_id, data.as_ref().clone().into())
+                        .map_err(BlockError::PoSAccountingError)
+                        .log_err()?;
+                }
+            };
+        }
         Ok(())
     }
 

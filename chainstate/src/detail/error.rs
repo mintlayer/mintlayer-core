@@ -76,7 +76,7 @@ pub enum BlockError {
     RandomnessError(#[from] PoSRandomnessError),
     #[error("Inconsistent db, block not found after connect: {0}")]
     InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
-    #[error("Error during stake spending")]
+    #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Data of pool {0} not found")]
     PoolDataNotFound(PoolId),

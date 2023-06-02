@@ -22,7 +22,7 @@ mod repl;
 
 use std::{net::SocketAddr, str::FromStr, sync::Arc};
 
-use common::chain::config::ChainType;
+use common::chain::{config::ChainType, ChainConfig};
 use config::WalletCliArgs;
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
@@ -34,7 +34,7 @@ use utils::{
 
 enum Mode {
     Interactive {
-        printer: reedline::ExternalPrinter<String>,
+        logger: repl::interactive::log::InteractiveLogger,
     },
     NonInteractive,
     CommandsList {
@@ -45,6 +45,7 @@ enum Mode {
 pub async fn run(
     console: impl ConsoleInput + ConsoleOutput,
     args: config::WalletCliArgs,
+    chain_config: Option<Arc<ChainConfig>>,
 ) -> Result<(), WalletCliError> {
     let WalletCliArgs {
         network,
@@ -64,15 +65,16 @@ pub async fn run(
         let file_input = console::FileInput::new(file_path)?;
         Mode::CommandsList { file_input }
     } else if console.is_tty() {
-        let printer = repl::interactive::log::init();
-        Mode::Interactive { printer }
+        let logger = repl::interactive::log::InteractiveLogger::init();
+        Mode::Interactive { logger }
     } else {
         repl::non_interactive::log::init();
         Mode::NonInteractive
     };
 
     let chain_type: ChainType = network.into();
-    let chain_config = Arc::new(common::chain::config::Builder::new(chain_type).build());
+    let chain_config = chain_config
+        .unwrap_or_else(|| Arc::new(common::chain::config::Builder::new(chain_type).build()));
 
     // TODO: Use the constant with the node
     let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
@@ -116,11 +118,11 @@ pub async fn run(
 
     // Run a blocking loop in a separate thread
     let repl_handle = std::thread::spawn(move || match mode {
-        Mode::Interactive { printer } => repl::interactive::run(
+        Mode::Interactive { logger } => repl::interactive::run(
             console,
             event_tx,
             exit_on_error.unwrap_or(false),
-            printer,
+            logger,
             history_file,
             vi_mode,
         ),

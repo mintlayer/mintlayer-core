@@ -17,7 +17,6 @@ use std::collections::BTreeMap;
 
 use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
-use utxo::Utxo;
 
 use crate::{
     schema::Schema, TransactionRw, Transactional, WalletStorage, WalletStorageRead,
@@ -27,8 +26,8 @@ use crate::{
 mod store_tx;
 pub use store_tx::{StoreTxRo, StoreTxRw};
 use wallet_types::{
-    AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountOutPointId,
-    AccountTxId, KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
+    AccountWalletTxId, KeychainUsageState, RootKeyContent, RootKeyId,
 };
 
 /// Store for wallet data, parametrized over the backend B
@@ -99,10 +98,8 @@ macro_rules! delegate_to_transaction {
 impl<B: storage::Backend> WalletStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_utxo(&self, outpoint: &AccountOutPointId) -> crate::Result<Option<Utxo>>;
-        fn get_utxo_set(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountOutPointId, Utxo>>;
-        fn get_transaction(&self, id: &AccountTxId) -> crate::Result<Option<WalletTx>>;
-        fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountTxId, WalletTx>>;
+        fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
+        fn get_transactions(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
@@ -118,10 +115,8 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
 impl<B: storage::Backend> WalletStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_utxo(&mut self, outpoint: &AccountOutPointId, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &AccountOutPointId) -> crate::Result<()>;
-        fn set_transaction(&mut self, id: &AccountTxId, tx: &WalletTx) -> crate::Result<()>;
-        fn del_transaction(&mut self, id: &AccountTxId) -> crate::Result<()>;
+        fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
+        fn del_transaction(&mut self, id: &AccountWalletTxId) -> crate::Result<()>;
         fn set_account(&mut self, id: &AccountId, content: &AccountInfo) -> crate::Result<()>;
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
         fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> crate::Result<()>;

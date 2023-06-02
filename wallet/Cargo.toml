@@ -9,8 +9,10 @@ rust-version.workspace = true
 
 [dependencies]
 common = { path = "../common" }
+consensus = { path = "../consensus" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging" }
+pos_accounting = { path = "../pos_accounting" }
 serialization = { path = "../serialization" }
 storage = { path = "../storage", features = ["inmemory"] }
 utils = { path = "../utils" }

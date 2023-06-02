@@ -27,7 +27,7 @@ async fn main() {
 
     let args = WalletCliArgs::parse();
     let mut console = StdioConsole;
-    wallet_cli_lib::run(console.clone(), args).await.unwrap_or_else(|err| {
+    wallet_cli_lib::run(console.clone(), args, None).await.unwrap_or_else(|err| {
         console.print_error(err);
         std::process::exit(1);
     })

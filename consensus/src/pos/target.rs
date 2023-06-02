@@ -78,7 +78,12 @@ fn calculate_new_target(
     prev_target: &Uint256,
     actual_block_time: u64,
 ) -> Result<Compact, ConsensusPoSError> {
-    let actual_block_time = Uint512::from_u64(actual_block_time);
+    let actual_block_time = if actual_block_time == 0 {
+        Uint512::ONE
+    } else {
+        Uint512::from_u64(actual_block_time)
+    };
+
     let target_block_time = Uint512::from_u64(pos_config.target_block_time().get());
     ensure!(
         target_block_time > Uint512::ZERO,
@@ -88,6 +93,12 @@ fn calculate_new_target(
 
     // TODO: limiting factor (mintlayer/mintlayer-core#787)
     let new_target = prev_target * actual_block_time / target_block_time;
+    let difficulty_change_limit = prev_target
+        * Uint512::from_u64(pos_config.difficulty_change_limit().value().into())
+        / Uint512::from_u64(1000);
+    let lower_limit = prev_target - difficulty_change_limit;
+    let upper_limit = prev_target + difficulty_change_limit;
+    let new_target = num::clamp(new_target, lower_limit, upper_limit);
     let new_target = Uint256::try_from(new_target).unwrap_or(pos_config.target_limit());
 
     let new_target = std::cmp::min(new_target, pos_config.target_limit());
@@ -204,7 +215,7 @@ mod tests {
             create_unittest_pos_config, Block, ConsensusUpgrade, GenBlock, Genesis, NetUpgrades,
             PoolId, UpgradeVersion,
         },
-        primitives::{Idable, H256},
+        primitives::{per_thousand::PerThousand, Idable, H256},
     };
     use crypto::{
         random::{CryptoRng, Rng},
@@ -375,13 +386,68 @@ mod tests {
         }
     }
 
+    #[test]
+    fn calculate_new_target_swing_limit() {
+        {
+            let target_block_time = 100;
+            let actual_block_time = 1000; // 10 times bigger
+
+            let prev_target = Uint256::from_u64(100);
+            let expected_target = Uint256::from_u64(110); // only 10% times bigger
+
+            let config = PoSChainConfig::new(
+                Uint256::MAX,
+                target_block_time,
+                1.into(),
+                1.into(),
+                1.into(),
+                2,
+                PerThousand::new(100).unwrap(),
+            )
+            .unwrap();
+            let new_target =
+                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+            assert_eq!(new_target, Compact::from(expected_target));
+        }
+
+        {
+            let target_block_time = 100;
+            let actual_block_time = 10; // 10 times smaller
+
+            let prev_target = Uint256::from_u64(100);
+            let expected_target = Uint256::from_u64(90); // only 10% times smaller
+
+            let config = PoSChainConfig::new(
+                Uint256::MAX,
+                target_block_time,
+                1.into(),
+                1.into(),
+                1.into(),
+                2,
+                PerThousand::new(100).unwrap(),
+            )
+            .unwrap();
+            let new_target =
+                calculate_new_target(&config, &prev_target, actual_block_time).unwrap();
+            assert_eq!(new_target, Compact::from(expected_target));
+        }
+    }
+
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
     fn calculate_new_target_too_easy(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let config =
-            PoSChainConfig::new(Uint256::ZERO, 1, 1.into(), 1.into(), 1.into(), 2).unwrap();
+        let config = PoSChainConfig::new(
+            Uint256::ZERO,
+            1,
+            1.into(),
+            1.into(),
+            1.into(),
+            2,
+            PerThousand::new(100).unwrap(),
+        )
+        .unwrap();
         let prev_target = H256::random_using(&mut rng).into();
         let new_target =
             calculate_new_target(&config, &prev_target, config.target_block_time().get()).unwrap();
@@ -391,7 +457,16 @@ mod tests {
 
     #[test]
     fn calculate_new_target_with_overflow() {
-        let config = PoSChainConfig::new(Uint256::ONE, 1, 1.into(), 1.into(), 1.into(), 2).unwrap();
+        let config = PoSChainConfig::new(
+            Uint256::ONE,
+            1,
+            1.into(),
+            1.into(),
+            1.into(),
+            2,
+            PerThousand::new(100).unwrap(),
+        )
+        .unwrap();
         let prev_target = Uint256::MAX;
         let new_target = calculate_new_target(&config, &prev_target, u64::MAX).unwrap();
 
@@ -531,10 +606,26 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
         let target_limit_1 = Uint256::from_u64(rng.gen::<u64>());
         let target_limit_2 = Uint256::from_u64(rng.gen::<u64>());
-        let pos_config_1 =
-            PoSChainConfig::new(target_limit_1, 10, 1.into(), 1.into(), 1.into(), 2).unwrap();
-        let pos_config_2 =
-            PoSChainConfig::new(target_limit_2, 20, 1.into(), 1.into(), 1.into(), 5).unwrap();
+        let pos_config_1 = PoSChainConfig::new(
+            target_limit_1,
+            10,
+            1.into(),
+            1.into(),
+            1.into(),
+            2,
+            PerThousand::new(100).unwrap(),
+        )
+        .unwrap();
+        let pos_config_2 = PoSChainConfig::new(
+            target_limit_2,
+            20,
+            1.into(),
+            1.into(),
+            1.into(),
+            5,
+            PerThousand::new(100).unwrap(),
+        )
+        .unwrap();
         let upgrades = vec![
             (
                 BlockHeight::new(0),

@@ -15,12 +15,15 @@
 
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
+use common::chain::stakelock::StakePoolData;
 use common::chain::tokens::OutputValue;
 use common::chain::{
-    Destination, OutPoint, Transaction, TransactionCreationError, TxInput, TxOutput,
+    Destination, OutPoint, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput,
 };
+use common::primitives::per_thousand::PerThousand;
 use common::primitives::Amount;
-use utxo::Utxo;
+use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 
 use crate::{WalletError, WalletResult};
 
@@ -45,6 +48,29 @@ pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxO
     let destination = Destination::Address(pub_key_hash);
 
     Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
+}
+
+pub fn make_stake_output(
+    pool_id: PoolId,
+    amount: Amount,
+    staker: PublicKey,
+    decommission_key: PublicKey,
+    vrf_public_key: VRFPublicKey,
+    margin_ratio_per_thousand: PerThousand,
+    cost_per_block: Amount,
+) -> WalletResult<TxOutput> {
+    let staker = Destination::PublicKey(staker);
+    let decommission_key = Destination::PublicKey(decommission_key);
+
+    let stake_data = StakePoolData::new(
+        amount,
+        staker,
+        vrf_public_key,
+        decommission_key,
+        margin_ratio_per_thousand,
+        cost_per_block,
+    );
+    Ok(TxOutput::CreateStakePool(pool_id, stake_data.into()))
 }
 
 impl SendRequest {
@@ -78,10 +104,10 @@ impl SendRequest {
         &self.utxos
     }
 
-    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, Utxo)>) -> Self {
-        for (outpoint, utxo) in utxos {
+    pub fn with_inputs(mut self, utxos: impl IntoIterator<Item = (OutPoint, TxOutput)>) -> Self {
+        for (outpoint, txo) in utxos {
             self.inputs.push(TxInput::new(outpoint.tx_id(), outpoint.output_index()));
-            self.utxos.push(utxo.take_output());
+            self.utxos.push(txo);
         }
         self
     }

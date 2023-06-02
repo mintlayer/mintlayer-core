@@ -240,7 +240,8 @@ mod tests {
     use common::{
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
-            config::{Builder as ConfigBuilder, EpochIndex},
+            config::{Builder as ConfigBuilder, ChainType, EpochIndex},
+            get_initial_randomness,
             stakelock::StakePoolData,
             Block, Destination, PoolId, TxOutput,
         },
@@ -253,7 +254,7 @@ mod tests {
     fn make_block(epoch_index: EpochIndex) -> Block {
         let pool_id = PoolId::new(H256::zero());
         let timestamp = BlockTimestamp::from_int_seconds(1);
-        let randomness = H256::zero();
+        let randomness = get_initial_randomness(ChainType::Mainnet);
 
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_entropy(VRFKeyKind::Schnorrkel);
         let vrf_transcript = construct_transcript(epoch_index, &randomness, timestamp);

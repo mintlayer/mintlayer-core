@@ -63,7 +63,7 @@ pub enum ConnectTransactionError {
     BlockRewardInputOutputMismatch(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     TxFeeTotalCalcFailed(Amount, Amount),
-    #[error("Signature verification failed in transaction")]
+    #[error("Signature verification failed in transaction: {0}")]
     SignatureVerificationFailed(#[from] TransactionSigError),
     #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
@@ -101,7 +101,7 @@ pub enum ConnectTransactionError {
     PoSAccountingError(#[from] pos_accounting::Error),
     #[error("PoS accounting undo is missing for transaction {0}")]
     MissingPoSAccountingUndo(Id<Transaction>),
-    #[error("Error during stake spending")]
+    #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
     #[error("Attempt to use invalid input type in a transaction")]
     InvalidInputTypeInTx,
@@ -266,6 +266,6 @@ pub enum SpendStakeError {
     StakePoolDataMismatch,
     #[error("Pool id in kernel {0} doesn't match id in block reward output {1}")]
     StakePoolIdMismatch(PoolId, PoolId),
-    #[error("Consensus PoS error")]
+    #[error("Consensus PoS error: {0}")]
     ConsensusPoSError(#[from] consensus::ConsensusPoSError),
 }

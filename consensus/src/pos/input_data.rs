@@ -29,8 +29,11 @@ use common::{
     chain::{
         config::EpochIndex,
         signature::{
-            inputsig::{standard_signature::StandardInputSignature, InputWitness},
-            sighash::sighashtype::SigHashType,
+            inputsig::{
+                authorize_pubkey_spend::sign_pubkey_spending,
+                standard_signature::StandardInputSignature, InputWitness,
+            },
+            sighash::{sighashtype::SigHashType, signature_hash},
         },
         ChainConfig, Destination, PoSStatus, PoolId, TxInput, TxOutput,
     },
@@ -75,6 +78,22 @@ pub struct PoSGenerateBlockInputData {
 }
 
 impl PoSGenerateBlockInputData {
+    pub fn new(
+        stake_private_key: PrivateKey,
+        vrf_private_key: VRFPrivateKey,
+        pool_id: PoolId,
+        kernel_inputs: Vec<TxInput>,
+        kernel_input_utxos: Vec<TxOutput>,
+    ) -> Self {
+        Self {
+            stake_private_key,
+            vrf_private_key,
+            pool_id,
+            kernel_inputs,
+            kernel_input_utxos,
+        }
+    }
+
     pub fn kernel_inputs(&self) -> &Vec<TxInput> {
         &self.kernel_inputs
     }
@@ -115,8 +134,6 @@ pub struct PoSFinalizeBlockInputData {
     epoch_index: EpochIndex,
     /// The sealed epoch randomness (i.e used in producing VRF data)
     sealed_epoch_randomness: PoSRandomness,
-    /// The block timestamp of the previous block
-    previous_block_timestamp: BlockTimestamp,
     /// The maximum timestamp to try and staking with
     max_block_timestamp: BlockTimestamp,
     /// The current pool balance of the stake pool
@@ -129,7 +146,6 @@ impl PoSFinalizeBlockInputData {
         vrf_private_key: VRFPrivateKey,
         epoch_index: EpochIndex,
         sealed_epoch_randomness: PoSRandomness,
-        previous_block_timestamp: BlockTimestamp,
         max_block_timestamp: BlockTimestamp,
         pool_balance: Amount,
     ) -> Self {
@@ -138,7 +154,6 @@ impl PoSFinalizeBlockInputData {
             vrf_private_key,
             epoch_index,
             sealed_epoch_randomness,
-            previous_block_timestamp,
             max_block_timestamp,
             pool_balance,
         }
@@ -154,10 +169,6 @@ impl PoSFinalizeBlockInputData {
 
     pub fn pool_balance(&self) -> Amount {
         self.pool_balance
-    }
-
-    pub fn previous_block_timestamp(&self) -> BlockTimestamp {
-        self.previous_block_timestamp
     }
 
     pub fn sealed_epoch_randomness(&self) -> &PoSRandomness {
@@ -193,10 +204,8 @@ where
 {
     let reward_destination = Destination::PublicKey(pos_input_data.stake_public_key());
 
-    let kernel_output = vec![TxOutput::ProduceBlockFromStake(
-        reward_destination.clone(),
-        pos_input_data.pool_id(),
-    )];
+    let kernel_output =
+        vec![TxOutput::ProduceBlockFromStake(reward_destination, pos_input_data.pool_id())];
 
     let block_reward_transactable = BlockRewardTransactable::new(
         Some(pos_input_data.kernel_inputs()),
@@ -204,15 +213,18 @@ where
         None,
     );
 
-    let kernel_input_utxos = pos_input_data.kernel_input_utxos();
-
-    let signature = StandardInputSignature::produce_uniparty_signature_for_input(
-        pos_input_data.stake_private_key(),
+    let sighash = signature_hash(
         SigHashType::default(),
-        reward_destination,
         &block_reward_transactable,
-        &kernel_input_utxos.iter().collect::<Vec<_>>(),
+        &pos_input_data.kernel_input_utxos().iter().collect::<Vec<_>>(),
         0,
+    )
+    .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
+
+    let signature = sign_pubkey_spending(
+        pos_input_data.stake_private_key(),
+        &pos_input_data.stake_public_key(),
+        &sighash,
     )
     .map_err(|_| ConsensusPoSError::FailedToSignKernel)?;
 

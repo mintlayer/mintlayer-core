@@ -54,12 +54,13 @@ pub async fn run(
     mut event_rx: mpsc::UnboundedReceiver<Event>,
 ) {
     loop {
-        let sync_task = async {
+        let background_task = async {
             match controller_opt.as_mut() {
-                Some(controller) => controller.run_sync().await,
+                Some(controller) => controller.run().await,
                 None => std::future::pending().await,
             }
         };
+
         tokio::select! {
             event_opt = event_rx.recv() => {
                 match event_opt {
@@ -69,7 +70,7 @@ pub async fn run(
                     None => return,
                 }
             }
-            _ = sync_task => {}
+            _ = background_task => {}
         }
     }
 }

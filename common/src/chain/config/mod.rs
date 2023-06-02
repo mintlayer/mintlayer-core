@@ -17,6 +17,8 @@ mod builder;
 mod checkpoints;
 pub mod emission_schedule;
 pub use builder::Builder;
+use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
@@ -29,6 +31,7 @@ use crate::chain::TxOutput;
 use crate::chain::{GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
+use crate::primitives::per_thousand::PerThousand;
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use crypto::key::hdkd::{child_number::ChildNumber, u31::U31};
@@ -37,11 +40,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use self::checkpoints::Checkpoints;
-
-use super::RequiredConsensus;
+use super::{stakelock::StakePoolData, RequiredConsensus};
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(120);
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+// DEFAULT_EPOCH_LENGTH = 3600
 const DEFAULT_EPOCH_LENGTH: NonZeroU64 =
     match NonZeroU64::new((5 * 24 * 60 * 60) / DEFAULT_TARGET_BLOCK_SPACING.as_secs()) {
         Some(v) => v,
@@ -424,18 +427,19 @@ const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
 
+fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
+    let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
+    <T as serialization::DecodeAll>::decode_all(&mut bytes.as_slice())
+        .expect("Decoding shouldn't fail")
+}
+
 fn create_mainnet_genesis() -> Genesis {
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
     // Public key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
     // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
     let genesis_mint_pubkeyhash_hex_encoded = "018640e6a3d3d53c7dffe2790b0e147c9a77197033";
-    let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
-        .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
-        &mut genesis_mint_pubkeyhash_encoded.as_slice(),
-    )
-    .expect("Decoding genesis mint destination shouldn't fail");
+    let genesis_mint_destination = decode_hex::<Destination>(genesis_mint_pubkeyhash_hex_encoded);
 
     let genesis_message = String::new();
 
@@ -449,6 +453,56 @@ fn create_mainnet_genesis() -> Genesis {
         genesis_message,
         BlockTimestamp::from_int_seconds(1639975460),
         vec![output],
+    )
+}
+
+fn create_testnet_genesis() -> Genesis {
+    // TODO: use coin_decimals instead of a fixed value
+    const COIN: Amount = Amount::from_atoms(100_000_000_000);
+
+    let total_amount = (COIN * 100_000_000).expect("must be valid");
+    let initial_pool_amount = (COIN * 40_000).expect("must be valid");
+    let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
+
+    let genesis_message = String::new();
+
+    // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
+
+    let genesis_mint_destination = decode_hex::<PublicKey>(
+        "00027a9771bbb58170a0df36ed43e56490530f0f2f45b100c42f6f405af3ef21f54e",
+    );
+    let decommission_pub_key = decode_hex::<PublicKey>(
+        "0002ea30f3bb179c58022dcf2f4fd2c88685695f9532d6a9dd071da8d7ac1fe91a7d",
+    );
+    let staker_pub_key = decode_hex::<PublicKey>(
+        "0002884adf48b0b32ab3d66e1a8b46576dfacca5dd25b66603650de792de4dd2e483",
+    );
+
+    let vrf_pub_key = decode_hex::<VRFPublicKey>(
+        "007a0d90de05984977d4b3cb3f75342a81820a8ec79aa95181186b67fc93ed5a2e",
+    );
+
+    let mint_output = TxOutput::Transfer(
+        OutputValue::Coin(mint_output_amount),
+        Destination::PublicKey(genesis_mint_destination),
+    );
+
+    let initial_pool = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            initial_pool_amount,
+            Destination::PublicKey(staker_pub_key),
+            vrf_pub_key,
+            Destination::PublicKey(decommission_pub_key),
+            PerThousand::new(1000).expect("must be valid"),
+            Amount::ZERO,
+        )),
+    );
+
+    Genesis::new(
+        genesis_message,
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, initial_pool],
     )
 }
 
@@ -498,6 +552,15 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
+    }
+
+    #[test]
+    fn testnet_creation() {
+        let config = create_testnet();
+
+        assert!(!config.net_upgrades.is_empty());
+        assert_eq!(2, config.net_upgrades.len());
+        assert_eq!(config.chain_type(), &ChainType::Testnet);
     }
 
     #[test]

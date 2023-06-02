@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
@@ -429,7 +429,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
-        let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
         consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
             .map_err(CheckBlockError::ConsensusVerificationFailed)
             .log_err()?;

@@ -66,6 +66,10 @@ impl BlockHeader {
         self.timestamp
     }
 
+    pub fn update_timestamp(&mut self, timestamp: BlockTimestamp) {
+        self.timestamp = timestamp;
+    }
+
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.consensus_data = consensus_data;
     }

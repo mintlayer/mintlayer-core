@@ -25,16 +25,20 @@ use common::address::Address;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::TokenId;
 use common::chain::{
-    Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
-    TxOutput,
+    Block, ChainConfig, GenBlock, OutPoint, SignedTransaction, Transaction,
+    TransactionCreationError, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id};
+use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
+use crypto::key::PublicKey;
+use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRo, StoreTxRw, TransactionRo, TransactionRw, Transactional,
+    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
     WalletStorageRead, WalletStorageWrite,
 };
+use wallet_types::utxo_types::UtxoTypes;
 use wallet_types::{AccountId, KeyPurpose};
 
 pub const WALLET_VERSION_UNINITIALIZED: u32 = 0;
@@ -76,6 +80,8 @@ pub enum WalletError {
     NotEnoughUtxo(Amount, Amount),
     #[error("Invalid address {0}: {1}")]
     InvalidAddress(String, PublicKeyHashError),
+    #[error("No UTXOs")]
+    NoUtxos,
 }
 
 /// Result type used for the wallet
@@ -86,8 +92,6 @@ pub struct Wallet<B: storage::Backend> {
     db: Arc<Store<B>>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
-    best_block_height: BlockHeight,
-    best_block_id: Id<GenBlock>,
 }
 
 pub fn open_or_create_wallet_file<P: AsRef<Path>>(
@@ -122,16 +126,11 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.commit()?;
 
-        let best_block_id = chain_config.genesis_block_id();
-        let best_block_height = BlockHeight::zero();
-
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts: BTreeMap::new(),
-            best_block_id,
-            best_block_height,
         })
     }
 
@@ -166,17 +165,11 @@ impl<B: storage::Backend> Wallet<B> {
 
         db_tx.close();
 
-        // TODO: Load best_block_id and best_block_height from DB
-        let best_block_id = chain_config.genesis_block_id();
-        let best_block_height = BlockHeight::zero();
-
         Ok(Wallet {
             chain_config,
             db,
             key_chain,
             accounts,
-            best_block_id,
-            best_block_height,
         })
     }
 
@@ -214,21 +207,6 @@ impl<B: storage::Backend> Wallet<B> {
         &self.db
     }
 
-    fn for_account_ro<T>(
-        &self,
-        account_index: U31,
-        f: impl FnOnce(&Account, &StoreTxRo<B>) -> WalletResult<T>,
-    ) -> WalletResult<T> {
-        let mut db_tx = self.db.transaction_ro()?;
-        let account = self
-            .accounts
-            .get(&account_index)
-            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        let value = f(account, &mut db_tx)?;
-        db_tx.close();
-        Ok(value)
-    }
-
     fn for_account_rw<T>(
         &mut self,
         account_index: U31,
@@ -247,8 +225,26 @@ impl<B: storage::Backend> Wallet<B> {
     pub fn get_balance(
         &self,
         account_index: U31,
+        utxo_types: UtxoTypes,
     ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        self.for_account_ro(account_index, |account, db_tx| account.get_balance(db_tx))
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get_balance(utxo_types)
+    }
+
+    pub fn get_utxos(
+        &self,
+        account_index: U31,
+        utxo_types: UtxoTypes,
+    ) -> WalletResult<BTreeMap<OutPoint, TxOutput>> {
+        let account = self
+            .accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let utxos = account.get_utxos(utxo_types);
+        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
+        Ok(utxos)
     }
 
     pub fn get_new_address(&mut self, account_index: U31) -> WalletResult<Address> {
@@ -257,22 +253,57 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn get_new_public_key(&mut self, account_index: U31) -> WalletResult<PublicKey> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.get_new_public_key(db_tx, KeyPurpose::ReceiveFunds)
+        })
+    }
+
+    pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
+        self.accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
+            .get_vrf_public_key()
+    }
+
     pub fn create_transaction_to_addresses(
         &mut self,
         account_index: U31,
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
-        let tx = self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
-        })?;
-        Ok(tx)
+        })
+    }
+
+    pub fn create_stake_pool_tx(
+        &mut self,
+        account_index: U31,
+        amount: Amount,
+    ) -> WalletResult<SignedTransaction> {
+        self.for_account_rw(account_index, |account, db_tx| {
+            account.create_stake_pool_tx(db_tx, amount)
+        })
+    }
+
+    pub fn get_pos_gen_block_data(
+        &mut self,
+        account_index: U31,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
+        let account = self
+            .accounts
+            .get(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        account.get_pos_gen_block_data()
     }
 
     /// Returns the last scanned block hash and height.
     /// Returns genesis block when the wallet is just created.
     pub fn get_best_block(&self) -> WalletResult<(Id<GenBlock>, BlockHeight)> {
-        Ok((self.best_block_id, self.best_block_height))
+        // TODO: Scan all accounts
+        let account = self.accounts.values().next().ok_or(WalletError::WalletNotInitialized)?;
+        Ok(account.best_block())
     }
 
     /// Scan new blocks and update best block hash/height.
@@ -285,28 +316,13 @@ impl<B: storage::Backend> Wallet<B> {
         common_block_height: BlockHeight,
         blocks: Vec<Block>,
     ) -> WalletResult<()> {
-        assert!(
-            common_block_height <= self.best_block_height,
-            "Invalid common block height: {}, current block height: {}",
-            common_block_height,
-            self.best_block_height,
-        );
-        assert!(!blocks.is_empty());
-
         let mut db_tx = self.db.transaction_rw(None)?;
 
         for account in self.accounts.values_mut() {
-            if self.best_block_height > common_block_height {
-                account.reset_to_height(&mut db_tx, common_block_height)?;
-            }
             account.scan_new_blocks(&mut db_tx, common_block_height, &blocks)?;
         }
 
         db_tx.commit()?;
-
-        // Update best_block_height and best_block_id only after successful commit call!
-        self.best_block_height = (common_block_height.into_int() + blocks.len() as u64).into();
-        self.best_block_id = blocks.last().expect("blocks not empty").header().block_id().into();
 
         Ok(())
     }

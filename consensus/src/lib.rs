@@ -20,7 +20,10 @@ mod pos;
 mod pow;
 mod validator;
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64},
+    Arc,
+};
 
 use chainstate_types::{
     pos_randomness::PoSRandomness, BlockIndex, GenBlockIndex, PropertyQueryError,
@@ -64,18 +67,20 @@ pub use crate::{
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusCreationError {
-    #[error("Mining error")]
+    #[error("Mining error: {0}")]
     MiningError(#[from] ConsensusPoWError),
     #[error("Mining stopped")]
     MiningStopped,
     #[error("Mining failed")]
     MiningFailed,
-    #[error("Staking error")]
+    #[error("Staking error: {0}")]
     StakingError(#[from] ConsensusPoSError),
     #[error("Staking failed")]
     StakingFailed,
     #[error("Staking stopped")]
     StakingStopped,
+    #[error("Overflowed when calculating a block timestamp: {0} + {1}")]
+    TimestampOverflow(BlockTimestamp, u64),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -92,6 +97,7 @@ pub enum GenerateBlockInputData {
 pub enum FinalizeBlockInputData {
     PoW,
     PoS(PoSFinalizeBlockInputData),
+    None,
 }
 
 pub fn generate_consensus_data_and_reward<G>(
@@ -173,8 +179,9 @@ pub fn finalize_consensus_data(
     chain_config: &ChainConfig,
     block_header: &mut BlockHeader,
     block_height: BlockHeight,
+    block_timestamp_seconds: Arc<AtomicU64>,
     stop_flag: Arc<AtomicBool>,
-    finalize_data: Option<FinalizeBlockInputData>,
+    finalize_data: FinalizeBlockInputData,
 ) -> Result<SignedBlockHeader, ConsensusCreationError> {
     match chain_config.net_upgrade().consensus_status(block_height.next_height()) {
         RequiredConsensus::IgnoreConsensus => Ok(block_header.clone().with_no_signature()),
@@ -186,18 +193,19 @@ pub fn finalize_consensus_data(
                 ConsensusPoSError::PoWInputDataProvided,
             )),
             ConsensusData::PoS(pos_data) => match finalize_data {
-                None => Err(ConsensusCreationError::StakingError(
+                FinalizeBlockInputData::None => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::NoInputDataProvided,
                 )),
-                Some(FinalizeBlockInputData::PoW) => Err(ConsensusCreationError::StakingError(
+                FinalizeBlockInputData::PoW => Err(ConsensusCreationError::StakingError(
                     ConsensusPoSError::PoWInputDataProvided,
                 )),
-                Some(FinalizeBlockInputData::PoS(finalize_pos_data)) => {
+                FinalizeBlockInputData::PoS(finalize_pos_data) => {
                     let stake_private_key = finalize_pos_data.stake_private_key().clone();
 
                     let stake_result = stake(
                         &mut pos_data.clone(),
                         block_header,
+                        Arc::clone(&block_timestamp_seconds),
                         finalize_pos_data,
                         stop_flag,
                     )?;

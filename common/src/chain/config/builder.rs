@@ -18,9 +18,11 @@ use std::{collections::BTreeMap, num::NonZeroU64, sync::Arc, time::Duration};
 use crate::{
     chain::{
         config::{
-            create_mainnet_genesis, create_unit_test_genesis, emission_schedule, ChainConfig,
-            ChainType, EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular,
+            create_mainnet_genesis, create_testnet_genesis, create_unit_test_genesis,
+            emission_schedule, ChainConfig, ChainType, EmissionSchedule, EmissionScheduleFn,
+            EmissionScheduleTabular,
         },
+        pos::get_initial_randomness,
         ConsensusUpgrade, Destination, GenBlock, Genesis, Mlt, NetUpgrades, PoWChainConfig,
         UpgradeVersion,
     },
@@ -34,7 +36,7 @@ impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
         match self {
             ChainType::Mainnet => GenesisBlockInit::Mainnet,
-            ChainType::Testnet => unimplemented!("Testnet genesis"),
+            ChainType::Testnet => GenesisBlockInit::Testnet,
             ChainType::Regtest => GenesisBlockInit::TEST,
             ChainType::Signet => GenesisBlockInit::TEST,
         }
@@ -58,7 +60,26 @@ impl ChainType {
                 ];
                 NetUpgrades::initialize(upgrades).expect("net upgrades")
             }
-            ChainType::Testnet => unimplemented!("Testnet upgrades"),
+            ChainType::Testnet => {
+                let pos_config = crate::chain::create_testnet_pos_config();
+                let upgrades = vec![
+                    (
+                        BlockHeight::new(0),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+                    ),
+                    (
+                        BlockHeight::new(1),
+                        UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                            initial_difficulty: crate::chain::pos::initial_difficulty(
+                                ChainType::Testnet,
+                            )
+                            .into(),
+                            config: pos_config,
+                        }),
+                    ),
+                ];
+                NetUpgrades::initialize(upgrades).expect("net upgrades")
+            }
             ChainType::Signet => NetUpgrades::unit_tests(),
         }
     }
@@ -77,6 +98,7 @@ enum EmissionScheduleInit {
 enum GenesisBlockInit {
     UnitTest { premine_destination: Destination },
     Mainnet,
+    Testnet,
     Custom(Genesis),
 }
 
@@ -139,8 +161,7 @@ impl Builder {
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
             sealed_epoch_distance_from_tip: super::DEFAULT_SEALED_EPOCH_DISTANCE_FROM_TIP,
-            // TODO: choose proper initial randomness value
-            initial_randomness: H256::zero(),
+            initial_randomness: get_initial_randomness(chain_type),
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
@@ -209,6 +230,7 @@ impl Builder {
 
         let genesis_block = match genesis_block {
             GenesisBlockInit::Mainnet => create_mainnet_genesis(),
+            GenesisBlockInit::Testnet => create_testnet_genesis(),
             GenesisBlockInit::Custom(genesis) => genesis,
             GenesisBlockInit::UnitTest {
                 premine_destination,
@@ -302,6 +324,12 @@ impl Builder {
     /// Specify a custom genesis block
     pub fn genesis_custom(mut self, genesis: Genesis) -> Self {
         self.genesis_block = GenesisBlockInit::Custom(genesis);
+        self
+    }
+
+    /// Set genesis block to be the testnet genesis
+    pub fn genesis_testnet(mut self) -> Self {
+        self.genesis_block = GenesisBlockInit::Testnet;
         self
     }
 
