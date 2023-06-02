@@ -18,7 +18,6 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use common::{chain::GenBlock, primitives::Id};
 use logging::log;
 use tokio::sync::oneshot;
-use utils::tap_error_log::LogError;
 
 use super::{JobHandle, JobKey, JobManagerError, NewJobEvent};
 
@@ -29,9 +28,7 @@ pub struct JobsContainer {
 
 impl JobsContainer {
     pub fn handle_job_count(&self, result_sender: oneshot::Sender<usize>) {
-        _ = result_sender
-            .send(self.jobs.len())
-            .log_err_pfx("Error sending get job count results");
+        _ = result_sender.send(self.jobs.len());
     }
 
     pub fn handle_add_job(&mut self, event: NewJobEvent) {
@@ -67,7 +64,7 @@ impl JobsContainer {
 
         for job_key in jobs_to_stop {
             if let Some(handle) = self.jobs.remove(&job_key) {
-                _ = handle.cancel_sender.send(()).log_err_pfx("Error sending cancel job event");
+                _ = handle.cancel_sender.send(())
             }
         }
     }
@@ -87,10 +84,7 @@ impl JobsContainer {
                 let removed_job = entry.remove();
 
                 if and_stop {
-                    _ = removed_job
-                        .cancel_sender
-                        .send(())
-                        .log_err_pfx("Error sending cancel job event");
+                    _ = removed_job.cancel_sender.send(())
                 }
 
                 true
@@ -125,7 +119,7 @@ impl JobsContainer {
             None => self.stop_all(),
         };
 
-        _ = result_sender.send(stopped_count).log_err_pfx("Error sending stop jobs count");
+        _ = result_sender.send(stopped_count);
     }
 
     pub fn handle_shutdown(&mut self, result_sender: oneshot::Sender<usize>) {
