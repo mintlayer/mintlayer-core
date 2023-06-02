@@ -22,11 +22,17 @@ pub enum AccountType {
     Delegation(DelegationId),
 }
 
+/// Type of OutPoint that represents spending from an account
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct AccountOutPoint {
+    /// An incremental value that represents sequential number of spending from an account.
+    /// It's equivalent to the nonce in Ethereum and helps preserving order of transactions and avoid double-spends.
     #[codec(compact)]
     nonce: u128,
+    /// Type of account to spend from.
     account: AccountType,
+    /// The amount to withdraw from account. This field helps solving 2 problems: calculating fees and
+    /// providing ability to sign input balance with the witness.
     withdraw_amount: Amount,
 }
 
