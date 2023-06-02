@@ -388,6 +388,15 @@ where
             // A peer can have more headers if we have received the maximum amount of them.
             if is_max_headers {
                 self.request_headers().await?;
+            } else {
+                // Temporary fix for the unexpected disconnect bug:
+                // There are two connected and fully synchronized nodes: Node1 and Node2.
+                // Node1 generates a new block and sends a header notification to the Node2.
+                // Node2 sends a header list message to all connected peers.
+                // Node1 receives the headers list messages but does nothing because the specific block is already known.
+                // Node1 unexpectedly disconnects Node2.
+                // TODO: Add a test for this situation and fix it properly.
+                self.last_activity = None;
             }
             return Ok(());
         }
