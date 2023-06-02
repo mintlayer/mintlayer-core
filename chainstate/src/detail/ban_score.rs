@@ -135,6 +135,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
+            ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
         }
     }
 }

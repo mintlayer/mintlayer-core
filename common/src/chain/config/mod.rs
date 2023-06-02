@@ -19,6 +19,7 @@ pub mod emission_schedule;
 pub use builder::Builder;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
+use emission_schedule::Mlt;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleFn, EmissionScheduleTabular};
 
 use hex::FromHex;
@@ -145,6 +146,7 @@ pub struct ChainConfig {
     token_max_hash_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
     max_classic_multisig_public_keys_count: usize,
+    min_stake_pool_pledge: Amount,
 }
 
 impl ChainConfig {
@@ -405,6 +407,11 @@ impl ChainConfig {
     pub fn max_classic_multisig_public_keys_count(&self) -> usize {
         self.max_classic_multisig_public_keys_count
     }
+
+    /// Min pledge required to create a stake pool
+    pub fn min_stake_pool_pledge(&self) -> Amount {
+        self.min_stake_pool_pledge
+    }
 }
 
 impl AsRef<ChainConfig> for ChainConfig {
@@ -426,6 +433,7 @@ const TOKEN_MAX_NAME_LEN: usize = 10;
 const TOKEN_MAX_DESCRIPTION_LEN: usize = 100;
 const TOKEN_MAX_URI_LEN: usize = 1024;
 const MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT: usize = 16;
+const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * Mlt::ATOMS_PER_MLT);
 
 fn decode_hex<T: serialization::DecodeAll>(hex: &str) -> T {
     let bytes = Vec::from_hex(hex).expect("Hex decoding shouldn't fail");
@@ -457,11 +465,8 @@ fn create_mainnet_genesis() -> Genesis {
 }
 
 fn create_testnet_genesis() -> Genesis {
-    // TODO: use coin_decimals instead of a fixed value
-    const COIN: Amount = Amount::from_atoms(100_000_000_000);
-
-    let total_amount = (COIN * 100_000_000).expect("must be valid");
-    let initial_pool_amount = (COIN * 40_000).expect("must be valid");
+    let total_amount = Amount::from_atoms(100_000_000 * Mlt::ATOMS_PER_MLT);
+    let initial_pool_amount = MIN_STAKE_POOL_PLEDGE;
     let mint_output_amount = (total_amount - initial_pool_amount).expect("must be valid");
 
     let genesis_message = String::new();

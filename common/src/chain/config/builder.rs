@@ -140,6 +140,7 @@ pub struct Builder {
     token_max_hash_len: usize,
     empty_consensus_reward_maturity_distance: BlockDistance,
     max_classic_multisig_public_keys_count: usize,
+    min_stake_pool_pledge: Amount,
 }
 
 impl Builder {
@@ -176,6 +177,7 @@ impl Builder {
             token_max_hash_len: super::TOKEN_MAX_HASH_LEN,
             empty_consensus_reward_maturity_distance: BlockDistance::new(0),
             max_classic_multisig_public_keys_count: super::MAX_CLASSIC_MULTISIG_PUBLIC_KEYS_COUNT,
+            min_stake_pool_pledge: super::MIN_STAKE_POOL_PLEDGE,
         }
     }
 
@@ -218,6 +220,7 @@ impl Builder {
             token_max_hash_len,
             empty_consensus_reward_maturity_distance,
             max_classic_multisig_public_keys_count,
+            min_stake_pool_pledge,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -274,6 +277,7 @@ impl Builder {
             token_min_hash_len,
             token_max_hash_len,
             max_classic_multisig_public_keys_count,
+            min_stake_pool_pledge,
         }
     }
 }

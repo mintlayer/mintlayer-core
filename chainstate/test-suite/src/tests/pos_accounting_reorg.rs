@@ -31,8 +31,10 @@ use common::{
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
-use crypto::random::Rng;
-use crypto::vrf::{VRFKeyKind, VRFPrivateKey};
+use crypto::{
+    random::Rng,
+    vrf::{VRFKeyKind, VRFPrivateKey},
+};
 use pos_accounting::PoSAccountingDeltaData;
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -71,6 +73,11 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .with_chain_config(chain_config.clone())
                 .build();
             let genesis_id = tf.genesis().get_id();
+            let min_stake_pool_pledge =
+                tf.chainstate.get_chain_config().min_stake_pool_pledge().into_atoms();
+            let pledge_amount = Amount::from_atoms(
+                rng.gen_range(min_stake_pool_pledge..(min_stake_pool_pledge * 10)),
+            );
 
             // prepare tx_a
             let destination_a = new_pub_key_destination(&mut rng);
@@ -85,7 +92,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .add_output(TxOutput::CreateStakePool(
                     pool_id_a,
                     Box::new(StakePoolData::new(
-                        Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                        pledge_amount,
                         anyonecanspend_address(),
                         vrf_pub_key_a,
                         destination_a,
@@ -102,7 +109,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                     empty_witness(&mut rng),
                 )
                 .add_output(TxOutput::Transfer(
-                    OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
+                    OutputValue::Coin(pledge_amount),
                     anyonecanspend_address(),
                 ))
                 .build();
@@ -120,7 +127,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
                 .add_output(TxOutput::CreateStakePool(
                     pool_id_c,
                     Box::new(StakePoolData::new(
-                        Amount::from_atoms(rng.gen_range(1000..100_000)),
+                        pledge_amount,
                         anyonecanspend_address(),
                         vrf_pub_key_c,
                         destination_c,

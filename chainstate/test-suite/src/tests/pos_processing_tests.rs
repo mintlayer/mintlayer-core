@@ -151,7 +151,7 @@ fn add_block_with_2_stake_pools(
             Box::new(stake_pool_data1),
         ))
         .add_output(TxOutput::Transfer(
-            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputValue::Coin(tf.chainstate.get_chain_config().min_stake_pool_pledge()),
             anyonecanspend_address(),
         ))
         .build();
@@ -208,8 +208,11 @@ fn setup_test_chain_with_staked_pool(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(rng, Amount::from_atoms(1), vrf_pk);
+    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_owner(
+        rng,
+        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+        vrf_pk,
+    );
     let (stake_pool_outpoint, pool_id) = add_block_with_stake_pool(rng, &mut tf, stake_pool_data);
 
     (tf, stake_pool_outpoint, pool_id, staking_sk)
@@ -270,10 +273,16 @@ fn setup_test_chain_with_2_staked_pools_with_net_upgrades(
 
     let mut tf = TestFramework::builder(rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data1, pk1) =
-        create_stake_pool_data_with_all_reward_to_owner(rng, Amount::from_atoms(1), vrf_pk_1);
-    let (stake_pool_data2, pk2) =
-        create_stake_pool_data_with_all_reward_to_owner(rng, Amount::from_atoms(1), vrf_pk_2);
+    let (stake_pool_data1, pk1) = create_stake_pool_data_with_all_reward_to_owner(
+        rng,
+        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+        vrf_pk_1,
+    );
+    let (stake_pool_data2, pk2) = create_stake_pool_data_with_all_reward_to_owner(
+        rng,
+        tf.chainstate.get_chain_config().min_stake_pool_pledge(),
+        vrf_pk_2,
+    );
     let (stake_pool_outpoint1, pool_id1, stake_pool_outpoint2, pool_id2) =
         add_block_with_2_stake_pools(rng, &mut tf, stake_pool_data1, stake_pool_data2);
 
@@ -444,7 +453,7 @@ fn pos_basic(#[case] seed: Seed) {
 
     // valid case
     let subsidy = tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(2));
-    let initially_staked = Amount::from_atoms(1);
+    let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
     let total_reward = (subsidy + initially_staked).unwrap();
 
     tf.make_block_builder()
@@ -1121,7 +1130,7 @@ fn spend_stake_pool_in_block_reward(#[case] seed: Seed) {
             .unwrap();
     let total_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
-    let initially_staked = Amount::from_atoms(1);
+    let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
     assert_eq!(
         (total_subsidy.unwrap() + initially_staked).unwrap(),
         res_pool_balance
@@ -1342,7 +1351,7 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
             .unwrap();
     let total_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1)) * 3;
-    let initially_staked = Amount::from_atoms(1);
+    let initially_staked = tf.chainstate.get_chain_config().min_stake_pool_pledge();
     assert_eq!(
         (total_subsidy.unwrap() + initially_staked).unwrap(),
         res_pool_balance
@@ -1625,7 +1634,7 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
     let genesis_pool_id = PoolId::new(H256::zero());
     let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
     let (staker_sk, staker_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
-    let genesis_amount = Amount::from_atoms(100000000000);
+    let genesis_amount = Amount::from_atoms(100_000_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
     let genesis = create_custom_genesis(genesis_amount, staker_pk, vrf_pk);
 
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid net-upgrades");
