@@ -242,7 +242,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         Ok(())
     }
 
-    /// Synchronize the wallet continuously from the node's blockchain.
+    /// Synchronize the wallet in the background from the node's blockchain.
     /// Try staking new blocks if staking was started.
     pub async fn run(&mut self) {
         loop {
@@ -259,7 +259,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
 
                 if let Ok(block) = generate_res {
                     log::info!(
-                        "New block generated succesfully, block id: {}",
+                        "New block generated successfully, block id: {}",
                         block.get_id()
                     );
 

@@ -425,7 +425,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
 
         db_tx
             .set_epoch_data(
-                BlockHeight::zero().into(),
+                0,
                 &EpochData::new(PoSRandomness::new(self.chain_config.initial_randomness())),
             )
             .map_err(BlockError::StorageError)
