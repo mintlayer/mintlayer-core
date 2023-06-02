@@ -99,7 +99,7 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
-        fn get_transactions(&self,account_id: &AccountId) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>>;
+        fn get_transactions(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountWalletTxId, WalletTx>>;
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
