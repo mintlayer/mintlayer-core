@@ -362,28 +362,12 @@ impl BlockProduction {
                 solve_receive_result = &mut result_receiver => {
                     let mining_result = match solve_receive_result {
                         Ok(mining_result) => mining_result,
-                        Err(_) => {
-                            log::error!(
-                                "Mining thread pool channel lost on tip {} on best height {}",
-                                current_tip_index.block_id(),
-                                current_tip_index.block_height()
-                            );
-
-                            continue;
-                        }
+                        Err(_) => continue,
                     };
 
                     let signed_block_header = match mining_result {
                         Ok(header) => header,
-                        Err(e) => {
-                            log::error!(
-                                "Solving block in thread-pool returned an error on tip {} on best height {}: {e}",
-                                current_tip_index.block_id(),
-                                current_tip_index.block_height()
-                            );
-
-                            continue;
-                        }
+                        Err(_) => continue,
                     };
 
                     let block = Block::new_from_header(signed_block_header, block_body.clone())?;
