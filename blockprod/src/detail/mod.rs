@@ -122,7 +122,7 @@ impl BlockProduction {
     async fn pull_consensus_data(
         &self,
         input_data: GenerateBlockInputData,
-        block_timestamp_seconds: Arc<AtomicU64>,
+        time_getter: TimeGetter,
     ) -> Result<
         (
             ConsensusData,
@@ -136,10 +136,6 @@ impl BlockProduction {
             .chainstate_handle
             .call({
                 let chain_config = Arc::clone(&self.chain_config);
-
-                let block_timestamp = BlockTimestamp::from_int_seconds(
-                    block_timestamp_seconds.load(Ordering::SeqCst),
-                );
 
                 let current_timestamp =
                     BlockTimestamp::from_duration_since_epoch(self.time_getter().get_time());
@@ -185,7 +181,7 @@ impl BlockProduction {
                         &best_block_index,
                         sealed_epoch_randomness,
                         input_data.clone(),
-                        block_timestamp,
+                        BlockTimestamp::from_duration_since_epoch(time_getter.get_time()),
                         block_height,
                         get_ancestor,
                     )?;
@@ -306,9 +302,8 @@ impl BlockProduction {
                 }
             }
 
-            let (consensus_data, block_reward, current_tip_index, finalize_block_data) = self
-                .pull_consensus_data(input_data.clone(), Arc::clone(&last_timestamp_seconds_used))
-                .await?;
+            let (consensus_data, block_reward, current_tip_index, finalize_block_data) =
+                self.pull_consensus_data(input_data.clone(), self.time_getter.clone()).await?;
 
             if current_tip_index.block_id() != tip_at_start.block_id() {
                 log::info!(

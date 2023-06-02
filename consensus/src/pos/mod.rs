@@ -219,7 +219,8 @@ pub fn stake(
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
-    let mut block_timestamp = block_header.timestamp();
+    let mut block_timestamp =
+        BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
 
     ensure!(
         block_timestamp <= finalize_pos_data.max_block_timestamp(),
