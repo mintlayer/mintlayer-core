@@ -152,6 +152,7 @@ fn get_purpose_and_index(
 
 /// Derive a VRF private key from a normal PrivateKey
 pub fn vrf_from_private_key(private_key: &PrivateKey) -> (VRFPrivateKey, VRFPublicKey) {
+    // TODO: This whole thing is a temporary solution. The proper way is to use BIP-44 secrets.
     let bytes = private_key.encode();
     let key_hash = crypto::hash::hash::<crypto::hash::Sha3_512, _>(bytes);
     VRFPrivateKey::new_using_random_bytes(&key_hash[0..32], VRFKeyKind::Schnorrkel)
