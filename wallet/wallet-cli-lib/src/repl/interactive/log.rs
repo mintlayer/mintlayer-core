@@ -58,6 +58,7 @@ impl std::io::Write for ReedlineLogWriter {
 /// Use [reedline::ExternalPrinter] to print log output without mangling reedline console input
 pub struct InteractiveLogger {
     external_printer: reedline::ExternalPrinter<String>,
+    // A mutex is used to ensure that prints to logs/stdout is serialized
     print_directly: Arc<Mutex<bool>>,
 }
 
