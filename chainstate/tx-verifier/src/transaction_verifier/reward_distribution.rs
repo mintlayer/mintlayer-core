@@ -111,10 +111,13 @@ fn calculate_pool_owner_reward(
     cost_per_block: Amount,
     mpt: PerThousand,
 ) -> Option<Amount> {
-    let pool_owner_reward = (total_reward - cost_per_block)
-        .and_then(|v| v * mpt.value().into())
-        .and_then(|v| v / 1000)
-        .and_then(|v| v + cost_per_block)?;
+    let pool_owner_reward = match total_reward - cost_per_block {
+        Some(v) => (v * mpt.value().into())
+            .and_then(|v| v / 1000)
+            .and_then(|v| v + cost_per_block)?,
+        // if cost per block > total reward then give the reward to pool owner
+        None => total_reward,
+    };
 
     debug_assert!(pool_owner_reward <= total_reward);
     Some(pool_owner_reward)
@@ -240,6 +243,8 @@ mod tests {
 
         let reward = Amount::from_atoms(rng.gen_range(1..=100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(1..=reward.into_atoms()));
+        let cost_per_block_over_reward =
+            (reward + Amount::from_atoms(rng.gen_range(1..=100_000_000))).unwrap();
         let mpt = PerThousand::new_from_rng(&mut rng);
         let mpt_zero = PerThousand::new(0).unwrap();
         let mpt_more_than_one = PerThousand::new(rng.gen_range(2..=1000)).unwrap();
@@ -252,7 +257,15 @@ mod tests {
         assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt_zero).is_some());
         assert!(calculate_pool_owner_reward(reward, cost_per_block, mpt).is_some());
         // negative amount
-        assert!(calculate_pool_owner_reward(Amount::ZERO, cost_per_block, mpt_zero).is_none());
+        assert_eq!(
+            calculate_pool_owner_reward(Amount::ZERO, cost_per_block, mpt_zero),
+            Some(Amount::ZERO)
+        );
+        // cost per block > reward
+        assert_eq!(
+            calculate_pool_owner_reward(reward, cost_per_block_over_reward, mpt_zero),
+            Some(reward)
+        );
         // overflow
         assert!(
             calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none()
