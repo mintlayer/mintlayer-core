@@ -316,7 +316,7 @@ impl LeafKeySoftChain {
 
     /// Get the last derived key index
     pub fn get_last_derived_index(&self) -> Option<ChildNumber> {
-        self.derived_public_keys.last_key_value().map(|(k, _)| *k)
+        self.derived_public_keys.keys().last().copied()
     }
 
     /// Derive up `lookahead_size` keys starting from the last used index. If the gap from the last
@@ -382,12 +382,12 @@ impl LeafKeySoftChain {
 
     /// Get the extended public key provided a public key or None if no key found
     pub fn get_child_num_from_public_key(&self, pub_key: &PublicKey) -> Option<ChildNumber> {
-        self.public_key_to_index.get(pub_key).cloned()
+        self.public_key_to_index.get(pub_key).copied()
     }
 
     /// Get the extended public key provided a public key hash or None if no key found
     pub fn get_child_num_from_public_key_hash(&self, pkh: &PublicKeyHash) -> Option<ChildNumber> {
-        self.public_key_hash_to_index.get(pkh).cloned()
+        self.public_key_hash_to_index.get(pkh).copied()
     }
 
     /// Mark a specific key as used in the key pool. This will update the last used key index if

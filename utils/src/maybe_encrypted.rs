@@ -30,7 +30,7 @@ pub enum MaybeEncryptedError {
     DecodingError(#[from] serialization::Error),
 }
 
-/// A generic helper type that is used to encode/decode and optionaly encrypt/decrypt a type T
+/// A generic helper type that is used to encode/decode and optionally encrypt/decrypt a type T
 #[derive(Encode, Decode)]
 pub struct MaybeEncrypted<T> {
     value: Vec<u8>,

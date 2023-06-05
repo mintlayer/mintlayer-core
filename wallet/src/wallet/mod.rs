@@ -183,6 +183,9 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.keys()
     }
 
+    // TODO: this should not be public, as specified by BIP44 accounts must be created sequentially
+    // and a new next account should be rejected if the previously created one has no transactions
+    // associated with it
     pub fn create_account(&mut self, account_index: U31) -> WalletResult<()> {
         ensure!(
             !self.accounts.contains_key(&account_index),

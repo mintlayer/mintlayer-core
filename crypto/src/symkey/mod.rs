@@ -122,7 +122,7 @@ mod test {
     }
 
     #[test]
-    fn constryct_key_from_slice_random_size() {
+    fn construct_key_from_slice_random_size() {
         let mut rng = make_true_rng();
         let bytes: Vec<u8> = (0..rng.gen_range(0..100)).map(|_| rng.gen::<u8>()).collect();
         let result =
