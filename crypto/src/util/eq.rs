@@ -47,6 +47,7 @@ impl SliceEqualityCheckMethod {
 }
 
 #[cfg(test)]
+#[allow(clippy::redundant_clone)]
 pub mod test {
     use rstest::rstest;
 
