@@ -15,11 +15,13 @@
 
 //! Wallet database schema
 
+use crate::RootKeyContent;
 use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
+use utils::maybe_encrypted::MaybeEncrypted;
 use wallet_types::{
     AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId, AccountWalletTxId,
-    KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
+    KeychainUsageState, RootKeyId, WalletTx,
 };
 
 storage::decl_schema! {
@@ -32,7 +34,7 @@ storage::decl_schema! {
         /// Store keychain usage states
         pub DBKeychainUsageStates: Map<AccountKeyPurposeId, KeychainUsageState>,
         /// Store for all the private keys in this wallet
-        pub DBRootKeys: Map<RootKeyId, RootKeyContent>,
+        pub DBRootKeys: Map<RootKeyId, MaybeEncrypted<RootKeyContent>>,
         /// Store for all the public keys in this wallet
         pub DBPubKeys: Map<AccountDerivationPathId, ExtendedPublicKey>,
         /// Store for all the addresses that belong to an account

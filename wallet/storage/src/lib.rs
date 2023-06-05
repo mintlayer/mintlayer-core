@@ -20,8 +20,8 @@ mod is_transaction_seal;
 pub mod schema;
 
 use common::address::Address;
-use crypto::key::extended::ExtendedPublicKey;
-pub use internal::{Store, StoreTxRo, StoreTxRw};
+use crypto::{kdf::KdfChallenge, key::extended::ExtendedPublicKey, symkey::SymmetricKey};
+pub use internal::{Store, StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use std::collections::BTreeMap;
 
 use wallet_types::{
@@ -29,12 +29,28 @@ use wallet_types::{
     KeychainUsageState, RootKeyContent, RootKeyId, WalletTx,
 };
 
+/// Wallet Errors
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, thiserror::Error)]
+pub enum Error {
+    #[error("{0}")]
+    StorageError(#[from] storage::Error),
+    #[error("The wallet is locked")]
+    WalletLocked,
+    #[error("Cannot encrypt the wallet with an empty password")]
+    WalletEmptyPassword,
+    #[error("Invalid wallet password")]
+    WalletInvalidPassword,
+    #[error("The wallet is already unlocked")]
+    WalletAlreadyUnlocked,
+    #[error("Cannot lock the wallet without setting a password")]
+    WalletLockedWithoutAPassword,
+}
+
 /// Possibly failing result of wallet storage query
-pub type Result<T> = storage::Result<T>;
-pub type Error = storage::Error;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Queries on persistent wallet data
-pub trait WalletStorageRead {
+pub trait WalletStorageReadLocked {
     /// Get storage version
     fn get_storage_version(&self) -> Result<u32>;
     fn get_transaction(&self, id: &AccountWalletTxId) -> Result<Option<WalletTx>>;
@@ -48,8 +64,7 @@ pub trait WalletStorageRead {
         &self,
         account_id: &AccountId,
     ) -> Result<BTreeMap<AccountDerivationPathId, Address>>;
-    fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
-    fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+    fn exactly_one_root_key(&self) -> Result<bool>;
     fn get_keychain_usage_state(
         &self,
         id: &AccountKeyPurposeId,
@@ -65,8 +80,20 @@ pub trait WalletStorageRead {
     ) -> Result<BTreeMap<AccountDerivationPathId, ExtendedPublicKey>>;
 }
 
+/// Queries on persistent wallet data with access to encrypted data
+pub trait WalletStorageReadUnlocked: WalletStorageReadLocked {
+    fn get_root_key(&self, id: &RootKeyId) -> Result<Option<RootKeyContent>>;
+    fn get_all_root_keys(&self) -> Result<BTreeMap<RootKeyId, RootKeyContent>>;
+}
+
+/// Queries on persistent wallet data for encryption
+pub trait WalletStorageEncryptionRead {
+    fn get_encryption_key_kdf_challenge(&self) -> Result<Option<KdfChallenge>>;
+    fn check_can_decrypt_all_root_keys(&self, encryption_key: &SymmetricKey) -> crate::Result<()>;
+}
+
 /// Modifying operations on persistent wallet data
-pub trait WalletStorageWrite: WalletStorageRead {
+pub trait WalletStorageWriteLocked: WalletStorageReadLocked {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> Result<()>;
     fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> Result<()>;
@@ -75,8 +102,6 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn del_account(&mut self, id: &AccountId) -> Result<()>;
     fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> Result<()>;
     fn del_address(&mut self, id: &AccountDerivationPathId) -> Result<()>;
-    fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
-    fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
     fn set_keychain_usage_state(
         &mut self,
         id: &AccountKeyPurposeId,
@@ -91,17 +116,44 @@ pub trait WalletStorageWrite: WalletStorageRead {
     fn det_public_key(&mut self, id: &AccountDerivationPathId) -> Result<()>;
 }
 
+/// Modifying operations on persistent wallet data with access to encrypted data
+pub trait WalletStorageWriteUnlocked: WalletStorageReadUnlocked + WalletStorageWriteLocked {
+    fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> Result<()>;
+    fn del_root_key(&mut self, id: &RootKeyId) -> Result<()>;
+}
+
+/// Modifying operations on persistent wallet data for encryption
+pub trait WalletStorageEncryptionWrite {
+    fn set_encryption_kdf_challenge(&mut self, salt: &KdfChallenge) -> Result<()>;
+    fn encrypt_root_keys(&mut self, new_encryption_key: &Option<SymmetricKey>) -> Result<()>;
+}
+
 /// Marker trait for types where read/write operations are run in a transaction
 pub trait IsTransaction: is_transaction_seal::Seal {}
 
 /// Operations on read-only transactions
-pub trait TransactionRo: WalletStorageRead + IsTransaction {
+pub trait TransactionRoLocked: WalletStorageReadLocked + IsTransaction {
+    /// Close the transaction
+    fn close(self);
+}
+
+/// Operations on read-only unlocked transactions
+pub trait TransactionRoUnlocked: WalletStorageReadUnlocked + IsTransaction {
     /// Close the transaction
     fn close(self);
 }
 
 /// Operations on read-write transactions
-pub trait TransactionRw: WalletStorageWrite + IsTransaction {
+pub trait TransactionRwLocked: WalletStorageWriteLocked + IsTransaction {
+    /// Abort the transaction
+    fn abort(self);
+
+    /// Commit the transaction
+    fn commit(self) -> Result<()>;
+}
+
+/// Operations on read-write transactions
+pub trait TransactionRwUnlocked: WalletStorageWriteUnlocked + IsTransaction {
     /// Abort the transaction
     fn abort(self);
 
@@ -112,19 +164,34 @@ pub trait TransactionRw: WalletStorageWrite + IsTransaction {
 /// Support for transactions over wallet storage
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: TransactionRo + 't;
+    type TransactionRoLocked: TransactionRoLocked + 't;
+
+    /// Associated read-only unlocked transaction type.
+    type TransactionRoUnlocked: TransactionRoUnlocked + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: TransactionRw + 't;
+    type TransactionRwLocked: TransactionRwLocked + 't;
+
+    /// Associated read-write transaction type.
+    type TransactionRwUnlocked: TransactionRwUnlocked + 't;
 
     /// Start a read-only transaction.
-    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRo>;
+    fn transaction_ro<'s: 't>(&'s self) -> Result<Self::TransactionRoLocked>;
+
+    /// Start a read-only transaction.
+    fn transaction_ro_unlocked<'s: 't>(&'s self) -> Result<Self::TransactionRoUnlocked>;
 
     /// Start a read-write transaction.
-    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRw>;
+    fn transaction_rw<'s: 't>(&'s self, size: Option<usize>) -> Result<Self::TransactionRwLocked>;
+
+    /// Start a read-write transaction.
+    fn transaction_rw_unlocked<'s: 't>(
+        &'s self,
+        size: Option<usize>,
+    ) -> Result<Self::TransactionRwUnlocked>;
 }
 
-pub trait WalletStorage: WalletStorageWrite + for<'tx> Transactional<'tx> + Send {}
+pub trait WalletStorage: WalletStorageWriteLocked + for<'tx> Transactional<'tx> + Send {}
 
 pub type DefaultBackend = storage_sqlite::Sqlite;
 pub type WalletStorageTxRwImpl<'st> = StoreTxRw<'st, storage_sqlite::Sqlite>;

@@ -22,7 +22,7 @@ async-trait.workspace = true
 bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
-zeroize = "1.5"
+zeroize.workspace = true
 
 [dev-dependencies]
 chainstate-test-framework = { path = "../../chainstate/test-framework" }

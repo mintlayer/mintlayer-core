@@ -33,7 +33,6 @@ use self::helper_types::CliUtxoTypes;
 #[derive(Debug, Parser)]
 #[clap(rename_all = "lower")]
 pub enum WalletCommand {
-    // TODO: Add optional password
     /// Create new wallet
     CreateWallet {
         /// File path
@@ -51,6 +50,24 @@ pub enum WalletCommand {
 
     /// Close wallet file
     CloseWallet,
+
+    /// Encrypts the private keys with a new password, expects the wallet to be unlocked
+    EncryptPrivateKeys {
+        // The new password
+        password: String,
+    },
+
+    /// Remove any existing encryption, expects the wallet to be unlocked
+    RemovePrivateKeysEncryption,
+
+    // Unlocks the private keys for usage.
+    UnlockPrivateKeys {
+        // The existing password.
+        password: String,
+    },
+
+    // Locks the private keys so they can't be used until they are unlocked again
+    LockPrivateKeys,
 
     /// Returns the node chainstate
     ChainstateInfo,
@@ -279,6 +296,60 @@ pub async fn handle_wallet_command(
             utils::ensure!(controller_opt.is_some(), WalletCliError::NoWallet);
 
             *controller_opt = None;
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::EncryptPrivateKeys { password } => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller
+                        .encrypt_wallet(&Some(password))
+                        .map_err(WalletCliError::Controller)?;
+                }
+            }
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::RemovePrivateKeysEncryption => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.encrypt_wallet(&None).map_err(WalletCliError::Controller)?;
+                }
+            }
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::UnlockPrivateKeys { password } => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.unlock_wallet(&password).map_err(WalletCliError::Controller)?;
+                }
+            }
+
+            Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::LockPrivateKeys => {
+            match controller_opt.as_mut() {
+                None => {
+                    return Err(WalletCliError::NoWallet);
+                }
+                Some(controller) => {
+                    controller.lock_wallet().map_err(WalletCliError::Controller)?;
+                }
+            }
 
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }

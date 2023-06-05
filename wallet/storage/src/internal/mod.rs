@@ -19,30 +19,109 @@ use common::address::Address;
 use crypto::key::extended::ExtendedPublicKey;
 
 use crate::{
-    schema::Schema, TransactionRw, Transactional, WalletStorage, WalletStorageRead,
-    WalletStorageWrite,
+    schema::Schema, TransactionRwLocked, TransactionRwUnlocked, Transactional, WalletStorage,
+    WalletStorageEncryptionRead, WalletStorageEncryptionWrite, WalletStorageReadLocked,
+    WalletStorageWriteLocked,
 };
+
+mod password;
+use password::{challenge_to_sym_key, password_to_sym_key};
 
 mod store_tx;
-pub use store_tx::{StoreTxRo, StoreTxRw};
+pub use store_tx::{StoreTxRo, StoreTxRoUnlocked, StoreTxRw, StoreTxRwUnlocked};
 use wallet_types::{
     wallet_tx::WalletTx, AccountDerivationPathId, AccountId, AccountInfo, AccountKeyPurposeId,
-    AccountWalletTxId, KeychainUsageState, RootKeyContent, RootKeyId,
+    AccountWalletTxId, KeychainUsageState,
 };
 
+use self::store_tx::EncryptionState;
+
 /// Store for wallet data, parametrized over the backend B
-pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
+pub struct Store<B: storage::Backend> {
+    storage: storage::Storage<B, Schema>,
+    encryption_state: EncryptionState,
+}
 
 impl<B: storage::Backend> Store<B> {
     /// Create a new wallet storage
     pub fn new(backend: B) -> crate::Result<Self> {
-        let storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
+        let storage: storage::Storage<B, Schema> =
+            storage::Storage::new(backend).map_err(crate::Error::from)?;
+
+        let mut storage = Self {
+            storage,
+            encryption_state: EncryptionState::Locked,
+        };
+
+        let challenge = storage.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+        if challenge.is_none() {
+            storage.encryption_state = EncryptionState::Unlocked(None);
+        }
+
         Ok(storage)
+    }
+
+    /// Encrypts the root keys in the DB with the provided new_password
+    /// expects that the wallet is already unlocked
+    pub fn encrypt_private_keys(&mut self, new_password: &Option<String>) -> crate::Result<()> {
+        let mut tx = self.transaction_rw_unlocked(None).map_err(crate::Error::from)?;
+        let sym_key = match new_password {
+            None => None,
+            Some(pass) => {
+                let (sym_key, kdf_challenge) = password_to_sym_key(pass)?;
+                tx.set_encryption_kdf_challenge(&kdf_challenge).map_err(crate::Error::from)?;
+                Some(sym_key)
+            }
+        };
+        tx.encrypt_root_keys(&sym_key)?;
+        tx.commit()?;
+
+        self.encryption_state = EncryptionState::Unlocked(sym_key);
+
+        Ok(())
+    }
+
+    /// Checks if the provided password can decrypt all of the stored private keys,
+    /// stores the new encryption_key and updates the state to Unlocked
+    /// Otherwise returns WalletInvalidPassword
+    pub fn unlock_private_keys(&mut self, password: &String) -> crate::Result<()> {
+        if self.encryption_state != EncryptionState::Locked {
+            return Err(crate::Error::WalletAlreadyUnlocked);
+        }
+
+        let challenge = self.transaction_ro()?.get_encryption_key_kdf_challenge()?;
+
+        match challenge {
+            Some(kdf_challenge) => {
+                let sym_key = challenge_to_sym_key(password, kdf_challenge)?;
+                self.transaction_ro()?.check_can_decrypt_all_root_keys(&sym_key)?;
+                self.encryption_state = EncryptionState::Unlocked(Some(sym_key));
+            }
+            None => {
+                panic!("Wallet cannot be in a locked state if there is no password");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Drops the encryption_key and sets the state to Locked
+    /// Returns an error if no password is set
+    pub fn lock_private_keys(&mut self) -> crate::Result<()> {
+        match self.encryption_state {
+            EncryptionState::Locked => Ok(()),
+            EncryptionState::Unlocked(None) => Err(crate::Error::WalletLockedWithoutAPassword),
+            EncryptionState::Unlocked(Some(_)) => {
+                // will get zeroized on Drop
+                self.encryption_state = EncryptionState::Locked;
+                Ok(())
+            }
+        }
     }
 
     /// Dump raw database contents
     pub fn dump_raw(&self) -> crate::Result<storage::raw::StorageContents<Schema>> {
-        self.0.dump_raw().map_err(crate::Error::from)
+        self.storage.dump_raw().map_err(crate::Error::from)
     }
 }
 
@@ -51,23 +130,59 @@ where
     B::Impl: Clone,
 {
     fn clone(&self) -> Self {
-        Self(self.0.clone())
+        Self {
+            storage: self.storage.clone(),
+            encryption_state: self.encryption_state.clone(),
+        }
     }
 }
 
 impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
-    type TransactionRo = StoreTxRo<'tx, B>;
-    type TransactionRw = StoreTxRw<'tx, B>;
+    type TransactionRoLocked = StoreTxRo<'tx, B>;
+    type TransactionRwLocked = StoreTxRw<'tx, B>;
+    type TransactionRoUnlocked = StoreTxRoUnlocked<'tx, B>;
+    type TransactionRwUnlocked = StoreTxRwUnlocked<'tx, B>;
 
-    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRo> {
-        self.0.transaction_ro().map_err(crate::Error::from).map(StoreTxRo)
+    fn transaction_ro<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoLocked> {
+        self.storage
+            .transaction_ro()
+            .map_err(crate::Error::from)
+            .map(|tx| StoreTxRo::new(tx))
+    }
+
+    fn transaction_ro_unlocked<'st: 'tx>(&'st self) -> crate::Result<Self::TransactionRoUnlocked> {
+        match self.encryption_state {
+            EncryptionState::Locked => Err(crate::Error::WalletLocked),
+            EncryptionState::Unlocked(ref key) => self
+                .storage
+                .transaction_ro()
+                .map_err(crate::Error::from)
+                .map(|tx| StoreTxRoUnlocked::new(tx, key)),
+        }
     }
 
     fn transaction_rw<'st: 'tx>(
         &'st self,
         size: Option<usize>,
-    ) -> crate::Result<Self::TransactionRw> {
-        self.0.transaction_rw(size).map_err(crate::Error::from).map(StoreTxRw)
+    ) -> crate::Result<Self::TransactionRwLocked> {
+        self.storage
+            .transaction_rw(size)
+            .map_err(crate::Error::from)
+            .map(|tx| StoreTxRw::new(tx))
+    }
+
+    fn transaction_rw_unlocked<'st: 'tx>(
+        &'st self,
+        size: Option<usize>,
+    ) -> crate::Result<Self::TransactionRwUnlocked> {
+        match self.encryption_state {
+            EncryptionState::Locked => Err(crate::Error::WalletLocked),
+            EncryptionState::Unlocked(ref key) => self
+                .storage
+                .transaction_rw(size)
+                .map_err(crate::Error::from)
+                .map(|tx| StoreTxRwUnlocked::new(tx, key)),
+        }
     }
 }
 
@@ -95,7 +210,7 @@ macro_rules! delegate_to_transaction {
     (@SIZE $s:literal) => { Some($s) };
 }
 
-impl<B: storage::Backend> WalletStorageRead for Store<B> {
+impl<B: storage::Backend> WalletStorageReadLocked for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_transaction(&self, id: &AccountWalletTxId) -> crate::Result<Option<WalletTx>>;
@@ -103,8 +218,7 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
         fn get_accounts_info(&self) -> crate::Result<BTreeMap<AccountId, AccountInfo>>;
         fn get_address(&self, id: &AccountDerivationPathId) -> crate::Result<Option<Address>>;
         fn get_addresses(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountDerivationPathId, Address>>;
-        fn get_root_key(&self, id: &RootKeyId) -> crate::Result<Option<RootKeyContent >>;
-        fn get_all_root_keys(&self) -> crate::Result<BTreeMap<RootKeyId, RootKeyContent >>;
+        fn exactly_one_root_key(&self) -> crate::Result<bool>;
         fn get_keychain_usage_state(&self, id: &AccountKeyPurposeId) -> crate::Result<Option<KeychainUsageState>>;
         fn get_keychain_usage_states(&self, account_id: &AccountId) -> crate::Result<BTreeMap<AccountKeyPurposeId, KeychainUsageState>>;
         fn get_public_key(&self, id: &AccountDerivationPathId) -> crate::Result<Option<ExtendedPublicKey>>;
@@ -112,7 +226,7 @@ impl<B: storage::Backend> WalletStorageRead for Store<B> {
     }
 }
 
-impl<B: storage::Backend> WalletStorageWrite for Store<B> {
+impl<B: storage::Backend> WalletStorageWriteLocked for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_transaction(&mut self, id: &AccountWalletTxId, tx: &WalletTx) -> crate::Result<()>;
@@ -121,8 +235,6 @@ impl<B: storage::Backend> WalletStorageWrite for Store<B> {
         fn del_account(&mut self, id: &AccountId) -> crate::Result<()>;
         fn set_address(&mut self, id: &AccountDerivationPathId, address: &Address) -> crate::Result<()>;
         fn del_address(&mut self, id: &AccountDerivationPathId) -> crate::Result<()>;
-        fn set_root_key(&mut self, id: &RootKeyId, content: &RootKeyContent) -> crate::Result<()>;
-        fn del_root_key(&mut self, id: &RootKeyId) -> crate::Result<()>;
         fn set_keychain_usage_state(&mut self, id: &AccountKeyPurposeId, address: &KeychainUsageState) -> crate::Result<()>;
         fn del_keychain_usage_state(&mut self, id: &AccountKeyPurposeId) -> crate::Result<()>;
         fn set_public_key(&mut self, id: &AccountDerivationPathId, content: &ExtendedPublicKey) -> crate::Result<()>;

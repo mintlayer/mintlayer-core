@@ -6303,13 +6303,16 @@ dependencies = [
  "logging",
  "loom",
  "num-traits",
+ "parity-scale-codec",
  "probabilistic-collections",
  "qrcodegen",
  "rstest",
+ "serialization",
  "slave-pool",
  "static_assertions",
  "test-utils",
  "thiserror",
+ "zeroize",
 ]
 
 [[package]]
@@ -6514,6 +6517,7 @@ dependencies = [
  "storage",
  "storage-sqlite",
  "test-utils",
+ "thiserror",
  "utils",
  "utxo",
  "wallet-types",

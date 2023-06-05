@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 logging = {path = '../logging'}
 crypto = { path = "../crypto/" }
+serialization = { path = "../serialization" }
 
 atomic-traits = "0.3"
 directories = "5.0"
@@ -17,6 +18,8 @@ qrcodegen = "1.8"
 slave-pool = "0.2"
 
 thiserror.workspace = true
+parity-scale-codec.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

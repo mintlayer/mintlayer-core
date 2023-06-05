@@ -32,14 +32,16 @@ use common::chain::{
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
 use consensus::PoSGenerateBlockInputData;
-use crypto::key::extended::ExtendedPrivateKey;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
-use wallet_storage::{StoreTxRo, StoreTxRw, WalletStorageRead, WalletStorageWrite};
+use wallet_storage::{
+    StoreTxRo, StoreTxRw, WalletStorageReadLocked, WalletStorageReadUnlocked,
+    WalletStorageWriteLocked, WalletStorageWriteUnlocked,
+};
 use wallet_types::utxo_types::{get_utxo_type, UtxoType, UtxoTypes};
 use wallet_types::wallet_tx::{BlockData, TxData, TxState};
 use wallet_types::{AccountId, AccountInfo, AccountWalletTxId, KeyPurpose, WalletTx};
@@ -58,19 +60,13 @@ impl Account {
         chain_config: Arc<ChainConfig>,
         db_tx: &StoreTxRo<B>,
         id: &AccountId,
-        root_key: &ExtendedPrivateKey,
     ) -> WalletResult<Account> {
         let mut account_infos = db_tx.get_accounts_info()?;
         let account_info =
             account_infos.remove(id).ok_or(KeyChainError::NoAccountFound(id.clone()))?;
 
-        let key_chain = AccountKeyChain::load_from_database(
-            chain_config.clone(),
-            db_tx,
-            id,
-            root_key,
-            &account_info,
-        )?;
+        let key_chain =
+            AccountKeyChain::load_from_database(chain_config.clone(), db_tx, id, &account_info)?;
 
         let txs = db_tx.get_transactions(&key_chain.get_account_id())?;
         let output_cache = OutputCache::new(txs);
@@ -84,9 +80,9 @@ impl Account {
     }
 
     /// Create a new account by providing a key chain
-    pub fn new<B: storage::Backend>(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         key_chain: AccountKeyChain,
     ) -> WalletResult<Account> {
         let account_id = key_chain.get_account_id();
@@ -114,9 +110,9 @@ impl Account {
         Ok(account)
     }
 
-    pub fn process_send_request<B: storage::Backend>(
+    pub fn process_send_request(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
         if request.utxos().is_empty() {
@@ -160,25 +156,32 @@ impl Account {
 
         // TODO: Randomize inputs and outputs
 
-        let tx = self.sign_transaction(request)?;
+        let tx = self.sign_transaction(request, db_tx)?;
 
         Ok(tx)
     }
 
-    fn get_vrf_key(&self) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
+    fn get_vrf_key(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<(VRFPrivateKey, VRFPublicKey)> {
         let vrf_key_path = make_path_to_vrf_key(&self.chain_config, self.account_index());
-        let private_key = self.key_chain.get_private_key_for_path(&vrf_key_path)?.private_key();
+        let private_key =
+            self.key_chain.get_private_key_for_path(&vrf_key_path, db_tx)?.private_key();
         Ok(vrf_from_private_key(&private_key))
     }
 
-    pub fn get_vrf_public_key(&self) -> WalletResult<VRFPublicKey> {
-        let vrf_keys = self.get_vrf_key()?;
+    pub fn get_vrf_public_key(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<VRFPublicKey> {
+        let vrf_keys = self.get_vrf_key(db_tx)?;
         Ok(vrf_keys.1)
     }
 
-    pub fn create_stake_pool_tx<B: storage::Backend>(
+    pub fn create_stake_pool_tx(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteUnlocked,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
         // process_send_request can fill UTXOs, but the first UTXO is needed in advance to calculate pool_id
@@ -196,7 +199,7 @@ impl Account {
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
         let decommission_key = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
-        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key()?;
+        let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let stake_output = make_stake_output(
             pool_id,
@@ -213,7 +216,10 @@ impl Account {
         self.process_send_request(db_tx, request)
     }
 
-    pub fn get_pos_gen_block_data(&self) -> WalletResult<PoSGenerateBlockInputData> {
+    pub fn get_pos_gen_block_data(
+        &self,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<PoSGenerateBlockInputData> {
         let utxos = self.get_utxos(UtxoType::CreateStakePool | UtxoType::ProduceBlockFromStake);
         // TODO: Select by pool_id if there is more than one UTXO
         let (kernel_input_outpoint, kernel_input_utxo) =
@@ -224,7 +230,7 @@ impl Account {
             .expect("must succeed for CreateStakePool and ProduceBlockFromStake outputs");
         let stake_private_key = self
             .key_chain
-            .get_private_key_for_destination(stake_destination)?
+            .get_private_key_for_destination(stake_destination, db_tx)?
             .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
             .private_key();
 
@@ -238,7 +244,7 @@ impl Account {
             | TxOutput::DelegateStaking(_, _) => panic!("Unexpected UTXO"),
         };
 
-        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key()?;
+        let (vrf_private_key, _vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let data = PoSGenerateBlockInputData::new(
             stake_private_key,
@@ -304,7 +310,11 @@ impl Account {
     }
 
     // TODO: Use a different type to support partially signed transactions
-    fn sign_transaction(&self, req: SendRequest) -> WalletResult<SignedTransaction> {
+    fn sign_transaction(
+        &self,
+        req: SendRequest,
+        db_tx: &impl WalletStorageReadUnlocked,
+    ) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
         let input_utxos = utxos.iter().collect::<Vec<_>>();
@@ -328,7 +338,7 @@ impl Account {
                 } else {
                     let private_key = self
                         .key_chain
-                        .get_private_key_for_destination(destination)?
+                        .get_private_key_for_destination(destination, db_tx)?
                         .ok_or(WalletError::KeyChainError(KeyChainError::NoPrivateKeyFound))?
                         .private_key();
 
@@ -364,9 +374,9 @@ impl Account {
     }
 
     /// Get a new address that hasn't been used before
-    pub fn get_new_address<B: storage::Backend>(
+    pub fn get_new_address(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         purpose: KeyPurpose,
     ) -> WalletResult<Address> {
         Ok(self.key_chain.issue_address(db_tx, purpose)?)
@@ -405,9 +415,9 @@ impl Account {
         })
     }
 
-    fn mark_outputs_as_seen<B: storage::Backend>(
+    fn mark_outputs_as_seen(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         outputs: &[TxOutput],
     ) -> WalletResult<bool> {
         let mut found = false;
@@ -418,9 +428,9 @@ impl Account {
         Ok(found)
     }
 
-    fn mark_output_as_seen<B: storage::Backend>(
+    fn mark_output_as_seen(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         output: &TxOutput,
     ) -> WalletResult<bool> {
         if let Some(d) = Self::get_tx_output_destination(output) {
@@ -491,9 +501,9 @@ impl Account {
     }
 
     /// Store a block or tx in the DB if any of the inputs or outputs belong to this wallet
-    fn add_wallet_tx_if_relevant<B: storage::Backend>(
+    fn add_wallet_tx_if_relevant(
         &mut self,
-        db_tx: &mut StoreTxRw<B>,
+        db_tx: &mut impl WalletStorageWriteLocked,
         tx: WalletTx,
     ) -> WalletResult<()> {
         let relevant_inputs = tx
@@ -509,7 +519,7 @@ impl Account {
         Ok(())
     }
 
-    fn scan_genesis<B: storage::Backend>(&mut self, db_tx: &mut StoreTxRw<B>) -> WalletResult<()> {
+    fn scan_genesis(&mut self, db_tx: &mut impl WalletStorageWriteLocked) -> WalletResult<()> {
         let chain_config = Arc::clone(&self.chain_config);
 
         let block = BlockData::from_genesis(chain_config.genesis_block());

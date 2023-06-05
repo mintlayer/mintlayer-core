@@ -35,9 +35,10 @@ use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
 use utils::ensure;
 use wallet_storage::{
-    DefaultBackend, Store, StoreTxRw, TransactionRo, TransactionRw, Transactional,
-    WalletStorageRead, WalletStorageWrite,
+    DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
+    WalletStorageReadLocked, WalletStorageWriteLocked,
 };
+use wallet_storage::{StoreTxRwUnlocked, TransactionRwUnlocked};
 use wallet_types::utxo_types::UtxoTypes;
 use wallet_types::{AccountId, KeyPurpose};
 
@@ -89,29 +90,27 @@ pub type WalletResult<T> = Result<T, WalletError>;
 
 pub struct Wallet<B: storage::Backend> {
     chain_config: Arc<ChainConfig>,
-    db: Arc<Store<B>>,
+    db: Store<B>,
     key_chain: MasterKeyChain,
     accounts: BTreeMap<U31, Account>,
 }
 
-pub fn open_or_create_wallet_file<P: AsRef<Path>>(
-    path: P,
-) -> WalletResult<Arc<Store<DefaultBackend>>> {
-    Ok(Arc::new(Store::new(DefaultBackend::new(path))?))
+pub fn open_or_create_wallet_file<P: AsRef<Path>>(path: P) -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new(path))?)
 }
 
-pub fn create_wallet_in_memory() -> WalletResult<Arc<Store<DefaultBackend>>> {
-    Ok(Arc::new(Store::new(DefaultBackend::new_in_memory())?))
+pub fn create_wallet_in_memory() -> WalletResult<Store<DefaultBackend>> {
+    Ok(Store::new(DefaultBackend::new_in_memory())?)
 }
 
 impl<B: storage::Backend> Wallet<B> {
     pub fn new_wallet(
         chain_config: Arc<ChainConfig>,
-        db: Arc<Store<B>>,
+        db: Store<B>,
         mnemonic: &str,
         passphrase: Option<&str>,
     ) -> WalletResult<Self> {
-        let mut db_tx = db.transaction_rw(None)?;
+        let mut db_tx = db.transaction_rw_unlocked(None)?;
 
         // TODO wallet should save the chain config
 
@@ -134,7 +133,7 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
-    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Arc<Store<B>>) -> WalletResult<Self> {
+    pub fn load_wallet(chain_config: Arc<ChainConfig>, db: Store<B>) -> WalletResult<Self> {
         // Please continue to use read-only transaction here.
         // Some unit tests expect that loading the wallet does not change the DB.
         let db_tx = db.transaction_ro()?;
@@ -144,19 +143,14 @@ impl<B: storage::Backend> Wallet<B> {
             return Err(WalletError::WalletNotInitialized);
         }
 
-        let key_chain = MasterKeyChain::load_from_database(Arc::clone(&chain_config), &db_tx)?;
+        let key_chain = MasterKeyChain::new_from_existing_database(chain_config.clone(), &db_tx)?;
 
         let accounts_info = db_tx.get_accounts_info()?;
 
         let accounts = accounts_info
             .keys()
             .map(|account_id| {
-                Account::load_from_database(
-                    Arc::clone(&chain_config),
-                    &db_tx,
-                    account_id,
-                    key_chain.root_private_key(),
-                )
+                Account::load_from_database(Arc::clone(&chain_config), &db_tx, account_id)
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -173,17 +167,32 @@ impl<B: storage::Backend> Wallet<B> {
         })
     }
 
+    pub fn encrypt_wallet(&mut self, password: &Option<String>) -> WalletResult<()> {
+        self.db.encrypt_private_keys(password).map_err(WalletError::from)
+    }
+
+    pub fn lock_wallet(&mut self) -> WalletResult<()> {
+        self.db.lock_private_keys().map_err(WalletError::from)
+    }
+
+    pub fn unlock_wallet(&mut self, password: &String) -> WalletResult<()> {
+        self.db.unlock_private_keys(password).map_err(WalletError::from)
+    }
+
     pub fn account_indexes(&self) -> impl Iterator<Item = &U31> {
         self.accounts.keys()
     }
 
+    // TODO: this should not be public, as specified by BIP44 accounts must be created sequentially
+    // and a new next account should be rejected if the previously created one has no transactions
+    // associated with it
     pub fn create_account(&mut self, account_index: U31) -> WalletResult<()> {
         ensure!(
             !self.accounts.contains_key(&account_index),
             WalletError::AccountAlreadyExists(account_index)
         );
 
-        let mut db_tx = self.db.transaction_rw(None)?;
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 
         let account_key_chain =
             self.key_chain.create_account_key_chain(&mut db_tx, account_index)?;
@@ -213,6 +222,21 @@ impl<B: storage::Backend> Wallet<B> {
         f: impl FnOnce(&mut Account, &mut StoreTxRw<B>) -> WalletResult<T>,
     ) -> WalletResult<T> {
         let mut db_tx = self.db.transaction_rw(None)?;
+        let account = self
+            .accounts
+            .get_mut(&account_index)
+            .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
+        let value = f(account, &mut db_tx)?;
+        db_tx.commit()?;
+        Ok(value)
+    }
+
+    fn for_account_rw_unlocked<T>(
+        &mut self,
+        account_index: U31,
+        f: impl FnOnce(&mut Account, &mut StoreTxRwUnlocked<B>) -> WalletResult<T>,
+    ) -> WalletResult<T> {
+        let mut db_tx = self.db.transaction_rw_unlocked(None)?;
         let account = self
             .accounts
             .get_mut(&account_index)
@@ -260,10 +284,11 @@ impl<B: storage::Backend> Wallet<B> {
     }
 
     pub fn get_vrf_public_key(&mut self, account_index: U31) -> WalletResult<VRFPublicKey> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?
-            .get_vrf_public_key()
+            .get_vrf_public_key(&db_tx)
     }
 
     pub fn create_transaction_to_addresses(
@@ -272,7 +297,7 @@ impl<B: storage::Backend> Wallet<B> {
         outputs: impl IntoIterator<Item = TxOutput>,
     ) -> WalletResult<SignedTransaction> {
         let request = SendRequest::new().with_outputs(outputs);
-        self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.process_send_request(db_tx, request)
         })
     }
@@ -282,7 +307,7 @@ impl<B: storage::Backend> Wallet<B> {
         account_index: U31,
         amount: Amount,
     ) -> WalletResult<SignedTransaction> {
-        self.for_account_rw(account_index, |account, db_tx| {
+        self.for_account_rw_unlocked(account_index, |account, db_tx| {
             account.create_stake_pool_tx(db_tx, amount)
         })
     }
@@ -291,11 +316,12 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
     ) -> WalletResult<PoSGenerateBlockInputData> {
+        let db_tx = self.db.transaction_ro_unlocked()?;
         let account = self
             .accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
-        account.get_pos_gen_block_data()
+        account.get_pos_gen_block_data(&db_tx)
     }
 
     /// Returns the last scanned block hash and height.

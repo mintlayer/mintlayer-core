@@ -29,6 +29,8 @@ pub enum Error {
     CipherTextTooShort(usize, usize),
     #[error("Decryption error: {0}")]
     DecryptionError(String),
+    #[error("Raw Key bytes wrong size: {0} expected {1}")]
+    WrongLenKeyBytes(usize, usize),
 }
 
 use self::chacha20poly1305::Chacha20poly1305Key;
@@ -36,6 +38,12 @@ use self::chacha20poly1305::Chacha20poly1305Key;
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Decode, Encode)]
 pub enum SymmetricKeyKind {
     XChacha20Poly1305,
+}
+
+pub const fn key_size(kind: SymmetricKeyKind) -> usize {
+    match kind {
+        SymmetricKeyKind::XChacha20Poly1305 => Chacha20poly1305Key::KEY_LEN,
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
@@ -52,11 +60,22 @@ pub struct SymmetricKey {
 impl SymmetricKey {
     pub fn new<R: Rng + CryptoRng>(kind: SymmetricKeyKind, rng: &mut R) -> Self {
         let key = match kind {
-            SymmetricKeyKind::XChacha20Poly1305 => SymmetricKeyHolder::XChacha20Poly1305(
-                Chacha20poly1305Key::new_from_array(rng.gen::<[u8; 32]>()),
-            ),
+            SymmetricKeyKind::XChacha20Poly1305 => {
+                SymmetricKeyHolder::XChacha20Poly1305(Chacha20poly1305Key::new_from_array(
+                    rng.gen::<[u8; Chacha20poly1305Key::KEY_LEN]>(),
+                ))
+            }
         };
         Self { key }
+    }
+
+    pub fn from_raw_key(kind: SymmetricKeyKind, bytes_slice: &[u8]) -> Result<Self, Error> {
+        let key = match kind {
+            SymmetricKeyKind::XChacha20Poly1305 => SymmetricKeyHolder::XChacha20Poly1305(
+                Chacha20poly1305Key::new_from_bytes_slice(bytes_slice)?,
+            ),
+        };
+        Ok(Self { key })
     }
 
     pub fn encrypt<R: Rng + CryptoRng>(
@@ -91,6 +110,35 @@ mod test {
     use crate::random::make_true_rng;
 
     use super::*;
+
+    #[test]
+    fn encode_then_decode_key_from_slice() {
+        let mut rng = make_true_rng();
+        let bytes = rng.gen::<[u8; Chacha20poly1305Key::KEY_LEN]>();
+        let key = SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, &bytes).unwrap();
+        let encoded = key.encode();
+        let decoded = SymmetricKey::decode_all(&mut encoded.as_slice()).unwrap();
+        assert_eq!(key, decoded);
+    }
+
+    #[test]
+    fn construct_key_from_slice_random_size() {
+        let mut rng = make_true_rng();
+        let bytes: Vec<u8> = (0..rng.gen_range(0..100)).map(|_| rng.gen::<u8>()).collect();
+        let result =
+            SymmetricKey::from_raw_key(SymmetricKeyKind::XChacha20Poly1305, bytes.as_slice());
+        if bytes.len() == Chacha20poly1305Key::KEY_LEN {
+            assert!(result.is_ok());
+        } else {
+            assert_eq!(
+                result,
+                Err(Error::WrongLenKeyBytes(
+                    bytes.len(),
+                    Chacha20poly1305Key::KEY_LEN
+                ))
+            );
+        }
+    }
 
     #[test]
     fn encode_then_decode() {
