@@ -96,7 +96,7 @@ pub struct TransactionVerifierDelta {
     accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
-    account_nonce: BTreeMap<AccountType, Option<u128>>,
+    account_nonce: BTreeMap<AccountType, CachedOperation<u128>>,
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
@@ -114,7 +114,7 @@ pub struct TransactionVerifier<C, S, U, A> {
     accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
 
-    account_nonce: BTreeMap<AccountType, Option<u128>>,
+    account_nonce: BTreeMap<AccountType, CachedOperation<u128>>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
@@ -363,7 +363,8 @@ where
             ConnectTransactionError::NonceIsNotIncremental(account)
         );
         // store new nonce
-        self.account_nonce.insert(account, Some(account_input.nonce()));
+        self.account_nonce
+            .insert(account, CachedOperation::Write(account_input.nonce()));
 
         match account {
             AccountType::Delegation(delegation_id) => {
@@ -517,7 +518,10 @@ where
                         )?;
                     if !accounting_view.pool_exists(*delegation_data.source_pool())? {
                         // clear the nonce
-                        self.account_nonce.insert(AccountType::Delegation(delegation_id), None);
+                        self.account_nonce.insert(
+                            AccountType::Delegation(delegation_id),
+                            CachedOperation::Erase,
+                        );
 
                         Some(
                             self.accounting_delta_adapter
@@ -567,12 +571,12 @@ where
                         .ok_or(ConnectTransactionError::MissingTransactionNonce(
                             *account_input.account(),
                         ))?;
-                    let new_nonce = if current_nonce == 0 {
-                        None
+                    let new_nonce_op = if current_nonce == 0 {
+                        CachedOperation::Erase
                     } else {
-                        Some(current_nonce - 1)
+                        CachedOperation::Write(current_nonce - 1)
                     };
-                    self.account_nonce.insert(*account_input.account(), new_nonce);
+                    self.account_nonce.insert(*account_input.account(), new_nonce_op);
                 }
             };
         }

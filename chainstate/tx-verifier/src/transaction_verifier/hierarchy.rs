@@ -22,7 +22,7 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    TransactionSource, TransactionVerifier,
+    CachedOperation, TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
@@ -113,7 +113,11 @@ where
         account: AccountType,
     ) -> Result<Option<u128>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.account_nonce.get(&account) {
-            Some(nonce) => Ok(*nonce),
+            Some(op) => match *op {
+                CachedOperation::Write(nonce) => Ok(Some(nonce)),
+                CachedOperation::Read(nonce) => Ok(Some(nonce)),
+                CachedOperation::Erase => Ok(None),
+            },
             None => self.storage.get_account_nonce_count(account),
         }
     }
@@ -265,7 +269,7 @@ where
         account: AccountType,
         nonce: u128,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.account_nonce.insert(account, Some(nonce));
+        self.account_nonce.insert(account, CachedOperation::Write(nonce));
         Ok(())
     }
 
@@ -273,7 +277,7 @@ where
         &mut self,
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.account_nonce.insert(account, None);
+        self.account_nonce.insert(account, CachedOperation::<u128>::Erase);
         Ok(())
     }
 }
