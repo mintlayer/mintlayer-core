@@ -494,6 +494,7 @@ dependencies = [
  "jsonrpsee",
  "logging",
  "mempool",
+ "mockall",
  "mocks",
  "parity-scale-codec",
  "rpc",

@@ -46,7 +46,7 @@ use utils::atomics::{RelAtomicBool, SynAtomicU64};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    detail::job_manager::{JobKey, JobManagerImpl, JobManagerHandle},
+    detail::job_manager::{JobKey, JobManagerHandle, JobManagerImpl},
     BlockProductionError,
 };
 
@@ -486,4 +486,34 @@ fn generate_finalize_block_data(
 }
 
 #[cfg(test)]
-mod tests;
+mod tests {
+    use common::{chain::GenBlock, primitives::Id};
+    use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
+
+    use crate::detail::job_manager::{JobManagerError, JobManagerInterface};
+
+    use super::*;
+
+    mockall::mock! {
+        pub JobManager {}
+
+        #[async_trait::async_trait]
+        impl JobManagerInterface for JobManager {
+            async fn get_job_count(&self) -> Result<usize, JobManagerError>;
+
+            async fn add_job(
+                &self,
+                custom_id: Option<Vec<u8>>,
+                block_id: Id<GenBlock>,
+            ) -> Result<(JobKey, UnboundedReceiver<()>), JobManagerError>;
+
+            async fn stop_all_jobs(&mut self) -> Result<usize, JobManagerError>;
+
+            async fn stop_job(&mut self, job_key: JobKey) -> Result<usize, JobManagerError>;
+
+            fn make_job_stopper_function(
+                &self,
+            ) -> (Box<dyn FnOnce(JobKey) + Send>, oneshot::Receiver<usize>);
+        }
+    }
+}
