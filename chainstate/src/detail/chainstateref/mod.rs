@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
@@ -428,6 +428,37 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
+    fn check_block_height_vs_epoch_seal(
+        &self,
+        header: &SignedBlockHeader,
+    ) -> Result<(), CheckBlockError> {
+        // TODO: this solution works assuming that the block always attaches to main-chain, which is not true.
+        //       An esoteric case is when the block added is higher than the seal, but attaches to a fork.
+        //       To solve this, we should write a function, similar to get_common_ancestor, but gets the common ancestor
+        //       in the main-chain. Let's call it get_common_ancestor_in_main_chain().
+        let current_block_height = self
+            .get_gen_block_index(header.prev_block_id())?
+            .expect("Previous block to exist")
+            .block_height()
+            .next_height();
+        let current_epoch = self.chain_config.epoch_index_from_height(&current_block_height);
+
+        let tip_block_height =
+            self.get_best_block_index()?.expect("Best block to exist").block_height();
+        let sealed_epoch = self.chain_config.sealed_epoch_index(&tip_block_height).unwrap_or(0);
+
+        if current_epoch < sealed_epoch {
+            return Err(CheckBlockError::AttemptedToAddBlockBeforeSealedEpoch(
+                current_epoch,
+                current_block_height,
+                sealed_epoch,
+                tip_block_height,
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn check_block_header(
         &self,
         header: &SignedBlockHeader,
@@ -435,12 +466,13 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
+        self.check_block_height_vs_epoch_seal(header)?;
 
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
-        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, SealedStorageTag>::new(&self.db_tx);
         consensus::validate_consensus(
             self.chain_config,
             header,
@@ -701,8 +733,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 CheckBlockError::MerkleRootMismatch
             );
         }
-        // Witness merkle root
         {
+            // Witness merkle root
             let witness_merkle_root = block.witness_merkle_root();
             ensure!(
                 witness_merkle_root == merkle_proxy.witness_merkle_tree().root(),

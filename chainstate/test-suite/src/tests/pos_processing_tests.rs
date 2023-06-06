@@ -908,7 +908,6 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2 and an epoch is sealed at height 2.
 // Try to crete block_2 with PoS data that has refer to staked pool.
-#[ignore = "Disabled because of switch from SealedStorageTag to TipStorageTag"]
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -937,8 +936,11 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         .build();
     let mut tf = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
 
-    let (stake_pool_data, staking_sk) =
-        create_stake_pool_data_with_all_reward_to_owner(&mut rng, Amount::from_atoms(1), vrf_pk);
+    let (stake_pool_data, staking_sk) = create_stake_pool_data_with_all_reward_to_owner(
+        &mut rng,
+        Amount::from_atoms(4000000000000000),
+        vrf_pk,
+    );
     let (stake_pool_outpoint, pool_id) =
         add_block_with_stake_pool(&mut rng, &mut tf, stake_pool_data);
 
