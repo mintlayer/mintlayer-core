@@ -91,6 +91,10 @@ impl BlockProduction {
     pub fn time_getter(&self) -> &TimeGetter {
         &self.time_getter
     }
+    #[allow(dead_code)]
+    fn set_job_manager(&mut self, job_manager_handle: JobManagerHandle) {
+        self.job_manager_handle = job_manager_handle
+    }
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
         self.job_manager_handle
