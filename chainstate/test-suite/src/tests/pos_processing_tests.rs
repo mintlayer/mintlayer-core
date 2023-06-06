@@ -2024,7 +2024,7 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time);
 
-    // Process block_2 and distibute reward
+    // Process block_2 and distribute reward
     let stake_pool_outpoint = UtxoOutPoint::new(tx1_id.into(), 1);
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
     let reward_outputs =

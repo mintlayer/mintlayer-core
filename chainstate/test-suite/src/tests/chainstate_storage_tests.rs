@@ -101,10 +101,10 @@ fn store_coin(#[case] seed: Seed) {
 
         let expected_undo_utxo_data: BTreeMap<Id<Transaction>, UtxosTxUndo> = [(
             tx_id,
-            UtxosTxUndo::new(vec![Utxo::new_for_blockchain(
+            UtxosTxUndo::new(vec![Some(Utxo::new_for_blockchain(
                 tf.genesis().utxos().first().unwrap().clone(),
                 BlockHeight::zero(),
-            )]),
+            ))]),
         )]
         .into();
 

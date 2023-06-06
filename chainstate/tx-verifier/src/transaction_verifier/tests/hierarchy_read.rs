@@ -117,7 +117,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo0_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo0_undo)], vec![]),
         )]),
     )
     .unwrap();
@@ -128,7 +128,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo1_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo1_undo)], vec![]),
         )]),
     )
     .unwrap();
@@ -139,7 +139,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo2_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo2_undo)], vec![]),
         )]),
     )
     .unwrap();

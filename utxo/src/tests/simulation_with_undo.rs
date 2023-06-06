@@ -202,7 +202,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 cache
                     .add_utxo(
                         &undo_info.prev_outpoint,
-                        undo_info.tx_undo.utxos()[0].clone(),
+                        undo_info.tx_undo.utxos()[0].clone().unwrap(),
                         cache.has_utxo(&undo_info.prev_outpoint).unwrap_infallible(),
                     )
                     .unwrap();

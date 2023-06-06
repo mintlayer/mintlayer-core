@@ -290,7 +290,7 @@ pub fn create_rand_block_undo(
         let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
         let tx_utxos = (0..utxo_rng)
             .enumerate()
-            .map(|(i, _)| create_rand_utxo(rng, i as u64).0)
+            .map(|(i, _)| rng.gen::<bool>().then(|| create_rand_utxo(rng, i as u64).0))
             .collect();
 
         tx_undo.push(UtxosTxUndoWithSources::new(tx_utxos, vec![]));

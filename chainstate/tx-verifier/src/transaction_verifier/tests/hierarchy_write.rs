@@ -53,7 +53,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             tx_1_id,
-            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]),
         )]),
     )
     .unwrap();
@@ -65,7 +65,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             tx_2_id,
-            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]),
         )]),
     )
     .unwrap();
@@ -549,7 +549,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
         BTreeMap::from([(
             tx_1_id,
-            UtxosTxUndoWithSources::new(vec![utxo2.clone()], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]),
         )]),
     )
     .unwrap();
@@ -558,15 +558,21 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
         BTreeMap::from([(
             tx_2_id,
-            UtxosTxUndoWithSources::new(vec![utxo4.clone()], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo4.clone())], vec![]),
         )]),
     )
     .unwrap();
     let expected_block_undo = UtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
         BTreeMap::from([
-            (tx_1_id, UtxosTxUndoWithSources::new(vec![utxo2], vec![])),
-            (tx_2_id, UtxosTxUndoWithSources::new(vec![utxo4], vec![])),
+            (
+                tx_1_id,
+                UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![]),
+            ),
+            (
+                tx_2_id,
+                UtxosTxUndoWithSources::new(vec![Some(utxo4)], vec![]),
+            ),
         ]),
     )
     .unwrap();

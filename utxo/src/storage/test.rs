@@ -193,10 +193,7 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
         {
             block_undo.tx_undos().iter().enumerate().for_each(|(b_idx, (_tx_id, tx_undo))| {
                 tx_undo.inner().iter().enumerate().for_each(|(t_idx, utxo)| {
-                    assert_eq!(
-                        Some(Some(utxo)),
-                        spent_utxos.get(b_idx + t_idx).map(|x| x.as_ref())
-                    );
+                    assert_eq!(Some(utxo), spent_utxos.get(b_idx + t_idx));
                 })
             })
         }
@@ -259,8 +256,8 @@ fn utxo_and_undo_test(#[case] seed: Seed) {
 
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
-                let utxo = undos.get(in_idx).unwrap();
-                cache.add_utxo(input.utxo_outpoint().unwrap(), utxo.clone(), true).unwrap();
+                let utxo = undos[in_idx].clone().unwrap();
+                cache.add_utxo(input.utxo_outpoint().unwrap(), utxo, true).unwrap();
             });
         });
 

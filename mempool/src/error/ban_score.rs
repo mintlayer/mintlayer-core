@@ -276,6 +276,7 @@ impl MempoolBanScore for utxo::Error {
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::ViewRead => 0,
             utxo::Error::StorageWrite => 0,
+            utxo::Error::TxInputAndUndoMismatch(_) => 0,
         }
     }
 }

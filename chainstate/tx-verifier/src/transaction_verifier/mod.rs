@@ -354,10 +354,10 @@ where
     ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
-        let current_nonce = self
+        let expected_nonce = self
             .get_account_nonce_count(account)
-            .map_err(|_| ConnectTransactionError::TxVerifierStorage)?;
-        let expected_nonce = current_nonce.map_or(0, |nonce| nonce + 1);
+            .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
+            .map_or(0, |nonce| nonce + 1);
         ensure!(
             expected_nonce == account_input.nonce(),
             ConnectTransactionError::NonceIsNotIncremental(account)

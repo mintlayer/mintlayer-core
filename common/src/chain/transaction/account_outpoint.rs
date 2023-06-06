@@ -19,6 +19,7 @@ use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
+    #[codec(index = 0)]
     Delegation(DelegationId),
 }
 
@@ -26,7 +27,8 @@ pub enum AccountType {
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct AccountOutPoint {
     /// An incremental value that represents sequential number of spending from an account.
-    /// It's equivalent to the nonce in Ethereum and helps preserving order of transactions and avoid double-spends.
+    /// It's equivalent to the nonce in Ethereum and helps preserving order of transactions and
+    /// avoid transaction replay.
     #[codec(compact)]
     nonce: u128,
     /// Type of account to spend from.

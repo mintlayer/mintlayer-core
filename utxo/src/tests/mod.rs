@@ -38,8 +38,8 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput, TxOutput,
-        UtxoOutPoint,
+        AccountType, DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
 };
@@ -537,7 +537,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
 
     // check that these utxos came from the tx's output
     tx_undo.utxos().iter().for_each(|x| {
-        assert!(tx.outputs().contains(x.output()));
+        assert!(tx.outputs().contains(x.clone().unwrap().output()));
     });
 
     // check that the spent utxos should not exist in the cache anymore.
@@ -883,4 +883,42 @@ fn check_burn_output_indexing(#[case] seed: Seed) {
     let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
     assert!(!cache.has_utxo_in_cache(&outpoint));
     assert_eq!(undo1, undo2);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let test_view = empty_test_utxos_view(H256::zero().into());
+    let mut cache = UtxosCache::new(&test_view).unwrap_infallible();
+
+    // spend from an account in a transaction
+    let input = TxInput::from_account(
+        rng.gen(),
+        AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng))),
+        Amount::from_atoms(rng.gen()),
+    );
+    let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
+    let new_utxo_outpoint = UtxoOutPoint::new(tx.get_id().into(), 0);
+
+    let undo1 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert!(cache.has_utxo_in_cache(&new_utxo_outpoint));
+    assert_eq!(undo1.utxos(), vec![None]);
+    assert_eq!(cache.utxos.len(), 1);
+
+    //undo spending
+    cache
+        .disconnect_transaction(&tx, UtxosTxUndo::new(undo1.utxos().to_owned()))
+        .unwrap();
+    assert!(!cache.has_utxo_in_cache(&new_utxo_outpoint));
+    assert!(cache.utxos.is_empty());
+
+    //spend the transaction again
+    let undo2 = cache.connect_transaction(&tx, BlockHeight::new(1)).unwrap();
+    assert_eq!(undo2.utxos(), vec![None]);
+
+    let consumed_cache = cache.consume();
+    assert_eq!(consumed_cache.container.len(), 1);
+    assert!(consumed_cache.container.contains_key(&new_utxo_outpoint));
 }

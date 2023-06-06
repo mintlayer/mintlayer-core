@@ -252,7 +252,7 @@ def init_mintlayer_types():
             "GenerateBlockInputData": {
                 "type": "enum",
                 "type_mapping": [
-                    ["Nono", "()"],
+                    ["None", "()"],
                     ["PoW", "Box<PoWGenerateBlockInputData>"],
                     ["PoS", "()"]
                     # TODO PoS
