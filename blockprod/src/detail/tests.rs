@@ -185,7 +185,7 @@ async fn stop_job_non_existent_job(#[case] seed: Seed) {
     .expect("Error initializing blockprod");
 
     let (_other_job_key, _other_job_cancel_receiver) = block_production
-        .job_manager
+        .job_manager_handle
         .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
         .await
         .unwrap();
@@ -195,7 +195,7 @@ async fn stop_job_non_existent_job(#[case] seed: Seed) {
     let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
     assert!(!job_stopped, "Stopped a non-existent job");
 
-    let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+    let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
     assert_eq!(jobs_count, 1, "Jobs count is incorrect");
 }
 
@@ -218,13 +218,13 @@ async fn stop_job_existing_job(#[case] seed: Seed) {
     .expect("Error initializing blockprod");
 
     let (_other_job_key, _other_job_cancel_receiver) = block_production
-        .job_manager
+        .job_manager_handle
         .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
         .await
         .unwrap();
 
     let (stop_job_key, _stop_job_cancel_receiver) = block_production
-        .job_manager
+        .job_manager_handle
         .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
         .await
         .unwrap();
@@ -232,7 +232,7 @@ async fn stop_job_existing_job(#[case] seed: Seed) {
     let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
     assert!(job_stopped, "Failed to stop job");
 
-    let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+    let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
     assert_eq!(jobs_count, 1, "Jobs count is incorrect");
 }
 
@@ -259,7 +259,7 @@ async fn stop_job_multiple_jobs(#[case] seed: Seed) {
 
     for _ in 1..=jobs_to_create {
         let (job_key, _stop_job_cancel_receiver) = block_production
-            .job_manager
+            .job_manager_handle
             .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
             .await
             .unwrap();
@@ -274,7 +274,7 @@ async fn stop_job_multiple_jobs(#[case] seed: Seed) {
     );
 
     while !job_keys.is_empty() {
-        let current_jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+        let current_jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
         assert_eq!(
             current_jobs_count,
             job_keys.len(),
@@ -334,7 +334,7 @@ async fn produce_block_multiple_jobs(#[case] seed: Seed) {
                 job.await.unwrap();
             }
 
-            let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+            let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
             assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
         }
     });
@@ -362,13 +362,13 @@ async fn stop_all_jobs(#[case] seed: Seed) {
     .expect("Error initializing blockprod");
 
     let (_other_job_key, _other_job_cancel_receiver) = block_production
-        .job_manager
+        .job_manager_handle
         .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
         .await
         .unwrap();
 
     let (_stop_job_key, _stop_job_cancel_receiver) = block_production
-        .job_manager
+        .job_manager_handle
         .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
         .await
         .unwrap();
@@ -376,6 +376,6 @@ async fn stop_all_jobs(#[case] seed: Seed) {
     let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
     assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
 
-    let jobs_count = block_production.job_manager.get_job_count().await.unwrap();
+    let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
     assert_eq!(jobs_count, 0, "Jobs count is incorrect");
 }

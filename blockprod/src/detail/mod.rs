@@ -46,7 +46,7 @@ use utils::atomics::{RelAtomicBool, SynAtomicU64};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
-    detail::job_manager::{JobKey, JobManager},
+    detail::job_manager::{JobKey, JobManagerImpl, JobManagerHandle},
     BlockProductionError,
 };
 
@@ -62,7 +62,7 @@ pub struct BlockProduction {
     chainstate_handle: ChainstateHandle,
     mempool_handle: MempoolHandle,
     time_getter: TimeGetter,
-    job_manager: JobManager,
+    job_manager_handle: JobManagerHandle,
     mining_thread_pool: Arc<slave_pool::ThreadPool>,
 }
 
@@ -74,14 +74,14 @@ impl BlockProduction {
         time_getter: TimeGetter,
         mining_thread_pool: Arc<slave_pool::ThreadPool>,
     ) -> Result<Self, BlockProductionError> {
-        let job_manager = JobManager::new(chainstate_handle.clone());
+        let job_manager_handle = Box::new(JobManagerImpl::new(chainstate_handle.clone()));
 
         let block_production = Self {
             chain_config,
             chainstate_handle,
             mempool_handle,
             time_getter,
-            job_manager,
+            job_manager_handle,
             mining_thread_pool,
         };
 
@@ -93,14 +93,14 @@ impl BlockProduction {
     }
 
     pub async fn stop_all_jobs(&mut self) -> Result<usize, BlockProductionError> {
-        self.job_manager
+        self.job_manager_handle
             .stop_all_jobs()
             .await
             .map_err(BlockProductionError::JobManagerError)
     }
 
     pub async fn stop_job(&mut self, job_key: JobKey) -> Result<bool, BlockProductionError> {
-        Ok(self.job_manager.stop_job(job_key).await? == 1)
+        Ok(self.job_manager_handle.stop_job(job_key).await? == 1)
     }
 
     pub async fn collect_transactions(
@@ -247,12 +247,12 @@ impl BlockProduction {
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
-            self.job_manager.add_job(custom_id, tip_at_start.block_id()).await?;
+            self.job_manager_handle.add_job(custom_id, tip_at_start.block_id()).await?;
 
         // This destructor ensures that the job manager cleans up its
         // housekeeping for the job when this current function returns
         let (job_stopper_function, job_finished_receiver) =
-            self.job_manager.make_job_stopper_function();
+            self.job_manager_handle.make_job_stopper_function();
         let _job_stopper_destructor = OnceDestructor::new(move || job_stopper_function(job_key));
 
         // Unlike Proof of Work, which can vary any header field when
