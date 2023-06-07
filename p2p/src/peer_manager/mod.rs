@@ -22,13 +22,14 @@ pub mod peerdb;
 mod peers_eviction;
 
 use std::{
+    future::Future,
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
     time::Duration,
 };
 
+use futures::{never::Never, FutureExt};
 use tokio::sync::mpsc;
-use void::Void;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -142,7 +143,7 @@ where
 
 impl<T, S> PeerManager<T, S>
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService, // + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
     S: PeerDbStorage,
 {
@@ -1074,6 +1075,11 @@ where
         }
     }
 
+    pub async fn run_forever(&mut self) -> crate::Result<Never> {
+        self.run(std::future::pending::<()>()).await?;
+        unreachable!()
+    }
+
     /// Runs the `PeerManager` event loop.
     ///
     /// The event loop has this main responsibilities:
@@ -1089,7 +1095,7 @@ where
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<Void> {
+    pub async fn run(&mut self, shutdown_requested: impl Future) -> crate::Result<()> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
@@ -1103,12 +1109,32 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
+        let shutdown_requested = shutdown_requested.fuse();
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+
         loop {
             tokio::select! {
-                event_res = self.rx_peer_manager.recv() => {
-                    self.handle_control_event(event_res.ok_or(P2pError::ChannelClosed)?);
-                    heartbeat_call_needed = true;
-                }
+                _ = shutdown_requested.as_mut() => {
+                    log::info!("Shutdown requested");
+
+                    // This activity has a "mailbox": 
+                    // - close this channel;
+                    // - drain all the incoming messages (keep calling recv, until it returns None);
+                    // - break out of the event-loop.
+
+                    self.rx_peer_manager.close();
+                },
+
+                event_opt = self.rx_peer_manager.recv() => match event_opt {
+                    Some(event) => {
+                        self.handle_control_event(event);
+                        heartbeat_call_needed = true;
+                    },
+                    None => 
+                        // Yay! No more unhandled requests — let's shutdown.
+                        break
+                    
+                },
 
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);
@@ -1148,6 +1174,9 @@ where
                 last_ping_check = now;
             }
         }
+
+        log::info!("Shutting down normally");
+        Ok(())
     }
 }
 

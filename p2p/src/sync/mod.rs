@@ -19,6 +19,7 @@
 mod peer;
 
 use std::{
+    future::Future,
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -26,8 +27,8 @@ use std::{
     },
 };
 
+use futures::{never::Never, FutureExt};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use void::Void;
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
@@ -109,8 +110,13 @@ where
         }
     }
 
+    pub async fn run_forever(&mut self) -> Result<Never> {
+        self.run(std::future::pending::<()>()).await?;
+        unreachable!()
+    }
+
     /// Runs the sync manager event loop.
-    pub async fn run(&mut self) -> Result<Void> {
+    pub async fn run(&mut self, shutdown_requested: impl Future) -> Result<()> {
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;
@@ -124,8 +130,17 @@ where
             Ordering::Release,
         );
 
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+
         loop {
             tokio::select! {
+                _ = shutdown_requested.as_mut() => {
+                    log::info!("Shutdown requested");
+
+                    // There is no "mailbox" for this activity. 
+                    // Just break out of the event-loop, and call it a day.
+                    break
+                }
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.expect("New tip sender was closed");
@@ -137,6 +152,9 @@ where
                 },
             }
         }
+
+        log::info!("Shutting down normally");
+        Ok(())
     }
 
     /// Starts a task for the new peer.
@@ -242,7 +260,7 @@ pub async fn subscribe_to_new_tip(
         Arc::new(
             move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
                 chainstate::ChainstateEvent::NewTip(block_id, _) => {
-                    let _ = sender.send(block_id).log_err_pfx("The new tip receiver closed");
+                    let _ = sender.send(block_id).log_err_pfx(/* FIXME: this subscription should be dropped then, shouldn't it? */ "The new tip receiver closed");
                 }
             },
         );

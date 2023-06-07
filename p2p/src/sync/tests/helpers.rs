@@ -131,7 +131,7 @@ impl SyncManagerHandle {
 
         let (error_sender, error_receiver) = mpsc::unbounded_channel();
         let sync_manager_handle = tokio::spawn(async move {
-            let e = sync.run().await.unwrap_err();
+            let e = sync.run_forever().await.unwrap_err();
             let _ = error_sender.send(e);
         });
 

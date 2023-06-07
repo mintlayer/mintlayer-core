@@ -90,7 +90,7 @@ async fn ping_timeout() {
     .unwrap();
 
     tokio::spawn(async move {
-        let _ = peer_manager.run().await;
+        let _ = peer_manager.run_forever().await;
     });
 
     // Notify about new inbound connection

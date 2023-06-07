@@ -117,7 +117,7 @@ where
     )
     .unwrap();
 
-    let sync1_handle = tokio::spawn(async move { sync1.run().await });
+    let sync1_handle = tokio::spawn(async move { sync1.run_forever().await });
 
     // spawn `sync2` into background and spam an orphan block on the network
     tokio::spawn(async move {

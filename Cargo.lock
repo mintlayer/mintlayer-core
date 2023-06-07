@@ -3903,7 +3903,6 @@ dependencies = [
  "tokio-socks",
  "tokio-util",
  "utils",
- "void",
 ]
 
 [[package]]

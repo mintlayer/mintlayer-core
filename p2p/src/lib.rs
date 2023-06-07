@@ -26,8 +26,6 @@ pub mod testing_utils;
 pub mod types;
 pub mod utils;
 
-mod run_p2p;
-
 mod p2p_event;
 mod peer_manager_event;
 
@@ -156,7 +154,7 @@ where
         )?;
         let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
-            match peer_manager.run().await {
+            match peer_manager.run_forever().await {
                 Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
                 Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
@@ -188,7 +186,7 @@ where
                     tx_peer_manager,
                     time_getter,
                 )
-                .run()
+                .run_forever()
                 .await
                 {
                     Ok(_) => unreachable!(),

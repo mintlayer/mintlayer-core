@@ -445,7 +445,7 @@ where
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
-    tokio::spawn(async move { pm1.run().await });
+    tokio::spawn(async move { pm1.run_forever().await });
 
     let event = get_connectivity_event::<T>(&mut pm2.peer_connectivity_handle).await;
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) = event {
@@ -640,7 +640,7 @@ async fn connection_timeout_rpc_notified<T>(
     .unwrap();
 
     tokio::spawn(async move {
-        peer_manager.run().await.unwrap();
+        peer_manager.run_forever().await.unwrap();
     });
 
     let (rtx, rrx) = oneshot_nofail::channel();
