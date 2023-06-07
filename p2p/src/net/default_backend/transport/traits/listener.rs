@@ -18,12 +18,14 @@ use async_trait::async_trait;
 use crate::Result;
 
 /// An abstraction layer over a potential inbound network connection (acceptor in boost terminology).
-// TODO: Replace Stream and Address trait parameters with associated types?
 #[async_trait]
-pub trait TransportListener<Stream, Address>: Send {
+pub trait TransportListener: Send {
+    type Stream;
+    type Address;
+
     /// Accepts a new inbound connection.
-    async fn accept(&mut self) -> Result<(Stream, Address)>;
+    async fn accept(&mut self) -> Result<(Self::Stream, Self::Address)>;
 
     /// Returns the local address of the listener.
-    fn local_addresses(&self) -> Result<Vec<Address>>;
+    fn local_addresses(&self) -> Result<Vec<Self::Address>>;
 }

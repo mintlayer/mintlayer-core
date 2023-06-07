@@ -131,7 +131,10 @@ impl TcpTransportListener {
 }
 
 #[async_trait]
-impl TransportListener<TcpTransportStream, SocketAddr> for TcpTransportListener {
+impl TransportListener for TcpTransportListener {
+    type Stream = TcpTransportStream;
+    type Address = SocketAddr;
+
     async fn accept(&mut self) -> Result<(TcpTransportStream, SocketAddr)> {
         // select_next_some will panic if polled while empty
         if self.listeners.is_empty() {
