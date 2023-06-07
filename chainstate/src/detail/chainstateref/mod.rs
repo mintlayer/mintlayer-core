@@ -428,7 +428,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn check_block_height_vs_epoch_seal(
+    fn check_block_height_vs_max_reorg_depth(
         &self,
         header: &SignedBlockHeader,
     ) -> Result<(), CheckBlockError> {
@@ -441,18 +441,17 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .expect("Previous block to exist")
             .block_height()
             .next_height();
-        let current_epoch = self.chain_config.epoch_index_from_height(&current_block_height);
 
         let tip_block_height =
             self.get_best_block_index()?.expect("Best block to exist").block_height();
-        let sealed_epoch = self.chain_config.sealed_epoch_index(&tip_block_height).unwrap_or(0);
 
-        if current_epoch < sealed_epoch {
-            return Err(CheckBlockError::AttemptedToAddBlockBeforeSealedEpoch(
-                current_epoch,
+        let min_allowed_height = self.chain_config.min_height_with_allowed_reorg(tip_block_height);
+
+        if current_block_height < min_allowed_height {
+            return Err(CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(
                 current_block_height,
-                sealed_epoch,
                 tip_block_height,
+                min_allowed_height,
             ));
         }
 
@@ -466,7 +465,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
     ) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
-        self.check_block_height_vs_epoch_seal(header)?;
+        self.check_block_height_vs_max_reorg_depth(header)?;
 
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't

@@ -203,7 +203,14 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let common_height = rng.gen_range(100..10_000);
 
-        let mut tf = TestFramework::builder(&mut rng).build();
+        let mut tf = TestFramework::builder(&mut rng)
+            .with_chain_config(
+                common::chain::config::Builder::new(common::chain::config::ChainType::Regtest)
+                    .net_upgrades(common::chain::NetUpgrades::unit_tests())
+                    .max_depth_for_reorg(BlockDistance::new(1000000000))
+                    .build(),
+            )
+            .build();
         let common_block_id =
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();
 

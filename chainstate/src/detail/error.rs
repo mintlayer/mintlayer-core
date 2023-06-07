@@ -120,8 +120,8 @@ pub enum CheckBlockError {
     ParentCheckpointMismatch(BlockHeight, Id<GenBlock>, Id<GenBlock>),
     #[error("CRITICAL: Failed to retrieve ancestor of submitted block: {0}")]
     GetAncestorError(#[from] GetAncestorError),
-    #[error("Epoch sealed already; cannot add new blocks before sealed epoch (attempted at epoch: {0} with block height {1} while sealed at: {2} with best block height {3})")]
-    AttemptedToAddBlockBeforeSealedEpoch(u64, BlockHeight, u64, BlockHeight),
+    #[error("Attempted to add a block before reorg limit (attempted at height: {0} while current height is: {1} and min allowed is: {2})")]
+    AttemptedToAddBlockBeforeReorgLimit(BlockHeight, BlockHeight, BlockHeight),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
