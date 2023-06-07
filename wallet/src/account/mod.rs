@@ -14,7 +14,11 @@
 // limitations under the License.
 
 mod output_cache;
+mod utxo_selector;
 
+pub use utxo_selector::CoinSelectorError;
+
+use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{
     make_path_to_vrf_key, vrf_from_private_key, AccountKeyChain, KeyChainError,
 };
@@ -35,6 +39,7 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::{VRFPrivateKey, VRFPublicKey};
+use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::ops::Add;
 use std::sync::Arc;
@@ -115,23 +120,36 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteUnlocked,
         mut request: SendRequest,
     ) -> WalletResult<SignedTransaction> {
+        let (output_coin_amount, output_tokens_amounts) =
+            Self::calculate_output_amounts(request.outputs().iter())?;
+
         if request.utxos().is_empty() {
+            // TODO: get current_fee_rate and long_term_fee_rate
+            // let current_fee_rate = 1;
+            // let long_term_fee_rate = 1;
+
             // TODO: Add support for LockThenTransfer
             let utxos = self
                 .get_utxos(UtxoType::Transfer.into())
                 .into_iter()
-                .map(|(outpoint, txo)| (outpoint, txo.clone()));
+                // FIXME: group outputs by destination
+                .map(|(outpoint, txo)| {
+                    // TODO: using current_fee_rate and long_term_fee_rate and the size in bytes
+                    // calculate the fee and long_term_fee_rate
+                    let fee = Amount::ZERO;
+                    let long_term_fee = Amount::ZERO;
+                    let weight = 0;
+                    OutputGroup::new((outpoint, txo.clone()), fee, long_term_fee, weight)
+                })
+                .try_collect()?;
 
-            // TODO: Call coin selector
+            let selected_inputs = select_coins(utxos, output_coin_amount)?;
 
-            request = request.with_inputs(utxos);
+            request = request.with_inputs(selected_inputs);
         }
 
         let (input_coin_amount, input_tokens_amounts) =
             Self::calculate_output_amounts(request.utxos().iter())?;
-
-        let (output_coin_amount, output_tokens_amounts) =
-            Self::calculate_output_amounts(request.outputs().iter())?;
 
         // TODO: Implement tokens sending
         utils::ensure!(

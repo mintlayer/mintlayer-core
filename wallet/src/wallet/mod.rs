@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::account::CoinSelectorError;
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
@@ -83,6 +84,8 @@ pub enum WalletError {
     InvalidAddress(String, PublicKeyHashError),
     #[error("No UTXOs")]
     NoUtxos,
+    #[error("Coin selection error: {0}")]
+    CoinSelectionError(#[from] CoinSelectorError),
 }
 
 /// Result type used for the wallet
