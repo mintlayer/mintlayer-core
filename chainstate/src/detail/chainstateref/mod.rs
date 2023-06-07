@@ -421,7 +421,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
+    pub fn check_block_header(
+        &self,
+        header: &SignedBlockHeader,
+        strict_pos_consensus_check: bool,
+    ) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
 
@@ -430,9 +434,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
-        consensus::validate_consensus(self.chain_config, header, self, &utxos_db, &pos_db)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)
-            .log_err()?;
+        consensus::validate_consensus(
+            self.chain_config,
+            header,
+            self,
+            &utxos_db,
+            &pos_db,
+            strict_pos_consensus_check,
+        )
+        .map_err(CheckBlockError::ConsensusVerificationFailed)
+        .log_err()?;
 
         let prev_block_id = header.prev_block_id();
 
@@ -656,8 +667,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
-    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header()).log_err()?;
+    pub fn check_block(
+        &self,
+        block: &WithId<Block>,
+        strict_pos_consensus_check: bool,
+    ) -> Result<(), CheckBlockError> {
+        self.check_block_header(block.header(), strict_pos_consensus_check).log_err()?;
 
         self.check_block_size(block)
             .map_err(CheckBlockError::BlockSizeError)
@@ -861,6 +876,11 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         new_tip_block_index: &BlockIndex,
         new_tip: &WithId<Block>,
     ) -> Result<(), BlockError> {
+        // Recheck the block without skipping PoS consensus checks.
+        // See also https://github.com/mintlayer/mintlayer-core/issues/752 for details.
+        // TODO: Remove this check once this issue is resolved.
+        self.check_block(new_tip, true)?;
+
         let best_block_id =
             self.get_best_block_id().map_err(BlockError::BestBlockLoadError).log_err()?;
         utils::ensure!(
