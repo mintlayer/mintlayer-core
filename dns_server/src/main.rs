@@ -76,7 +76,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-    let (conn, _messaging_handle, sync, _) = p2p::P2pNetworkingService::start(
+    let (conn, _messaging_handle, sync, backend_running) = p2p::P2pNetworkingService::start(
         transport,
         vec![],
         Arc::clone(&chain_config),
@@ -86,6 +86,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         subscribers_receiver,
     )
     .await?;
+    tokio::spawn(backend_running);
 
     let data_dir = prepare_data_dir(
         || default_data_dir_for_chain(chain_type.name()),

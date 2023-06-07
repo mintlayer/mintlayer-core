@@ -40,7 +40,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, backend_running1) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -51,10 +51,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (conn2, _, _, backend_running2) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -65,6 +66,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     let addr = conn2.local_addresses();
     conn1.connect(addr[0].clone()).unwrap();
@@ -111,7 +113,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, backend_running1) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -122,10 +124,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn2, _, _, backend_running2) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -136,6 +139,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     let bind_address = conn2.local_addresses();
     conn1.connect(bind_address[0].clone()).unwrap();
@@ -180,7 +184,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, backend_running1) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -191,10 +195,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn2, _, _, backend_running2) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         config,
@@ -205,6 +210,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     conn1.connect(conn2.local_addresses()[0].clone()).unwrap();
     let res2 = conn2.poll_next().await;
@@ -247,7 +253,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn1, _, _, backend_running1) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -258,10 +264,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (conn2, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (conn2, _, _, backend_running2) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -272,6 +279,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     // Try connect to self
     let addr = conn1.local_addresses();
@@ -338,7 +346,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
+    let (mut conn, _, _, backend_running) = DefaultNetworkingService::<T>::start(
         A::make_transport(),
         vec![],
         Arc::clone(&config),
@@ -349,6 +357,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running);
 
     // Try to connect to some broken peer
     conn.connect(addr[0].clone()).unwrap();

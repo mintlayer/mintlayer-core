@@ -57,7 +57,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
+    let (mut conn1, mut messaging_handle1, _sync1, backend_running) = S::start(
         A::make_transport(),
         vec![A::make_address()],
         Arc::clone(&config),
@@ -68,6 +68,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running);
 
     let (_shutdown_sender, shutdown_receiver_1) = oneshot::channel();
     let (_shutdown_sender, shutdown_receiver_2) = oneshot::channel();
@@ -87,7 +88,7 @@ where
                 .zip(subscribers_receivers.into_iter())
                 .map(
                     |((shutdown, shutdown_receiver), subscribers_receiver)| async {
-                        let res = S::start(
+                        let (c_handle, _m_handle, se_rx, backend_running) = S::start(
                             A::make_transport(),
                             vec![A::make_address()],
                             Arc::clone(&config),
@@ -98,7 +99,8 @@ where
                         )
                         .await
                         .unwrap();
-                        (res.0, res.2)
+                        tokio::spawn(backend_running);
+                        (c_handle, se_rx)
                     },
                 ),
         )

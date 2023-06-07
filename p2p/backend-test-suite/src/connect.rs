@@ -78,7 +78,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (connectivity, _messaging_handle, _sync, _) = N::start(
+    let (connectivity, _messaging_handle, _sync, backend_running) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -89,6 +89,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running);
 
     let addresses = connectivity.local_addresses().to_vec();
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
@@ -133,7 +134,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service1, _, _, _) = N::start(
+    let (mut service1, _, _, backend_running1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -144,10 +145,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service2, _, _, _) = N::start(
+    let (mut service2, _, _, backend_running2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -158,6 +160,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     let conn_addr = service1.local_addresses().to_vec();
     service2.connect(conn_addr[0].clone()).unwrap();

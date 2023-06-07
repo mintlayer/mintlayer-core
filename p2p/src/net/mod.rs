@@ -25,9 +25,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use tokio::{
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     config,

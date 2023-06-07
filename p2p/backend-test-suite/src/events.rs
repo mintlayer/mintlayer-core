@@ -55,7 +55,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service1, _, _sync, _) = N::start(
+    let (mut service1, _, _sync, backend_running1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -66,6 +66,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (events_sender, mut events_receiver) = mpsc::unbounded_channel();
     let handler = Arc::new(move |event| {
@@ -75,7 +76,7 @@ where
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut service2, _, _sync, _) = N::start(
+    let (mut service2, _, _sync, backend_running2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -86,6 +87,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     assert_eq!(events_receiver.try_recv(), Err(TryRecvError::Empty));
     let (_, _, info) = connect_and_accept_services::<N>(&mut service1, &mut service2).await;

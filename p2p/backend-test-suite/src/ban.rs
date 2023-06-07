@@ -65,7 +65,7 @@ where
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-    let (mut conn1, messaging_handle, sync_event_receiver, _) = N::start(
+    let (mut conn1, messaging_handle, sync_event_receiver, backend_running1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -76,6 +76,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let mut sync1 = BlockSyncManager::<N>::new(
         Arc::clone(&chain_config),
@@ -90,7 +91,7 @@ where
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, mut messaging_handle_2, mut sync2, _) = N::start(
+    let (mut conn2, mut messaging_handle_2, mut sync2, backend_running2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -101,6 +102,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     let (_address, _peer_info1, peer_info2) =
         connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;

@@ -54,7 +54,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, mut sync1, _) = N::start(
+    let (mut conn1, mut messaging_handle1, mut sync1, backend_running1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -65,10 +65,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, mut messaging_handle2, mut sync2, _) = N::start(
+    let (mut conn2, mut messaging_handle2, mut sync2, backend_running2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&config),
@@ -79,6 +80,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
@@ -188,7 +190,7 @@ where
     let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn1, mut messaging_handle1, _sync1, _) = N::start(
+    let (mut conn1, mut messaging_handle1, _sync1, backend_running1) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         Arc::clone(&chain_config),
@@ -199,10 +201,11 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running1);
 
     let (shutdown_sender_2, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-    let (mut conn2, _messaging_handle2, _sync2, _) = N::start(
+    let (mut conn2, _messaging_handle2, _sync2, backend_running2) = N::start(
         T::make_transport(),
         vec![T::make_address()],
         chain_config,
@@ -213,6 +216,7 @@ where
     )
     .await
     .unwrap();
+    tokio::spawn(backend_running2);
 
     connect_and_accept_services::<N>(&mut conn1, &mut conn2).await;
 
