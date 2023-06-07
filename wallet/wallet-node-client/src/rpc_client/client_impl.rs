@@ -16,8 +16,8 @@
 use blockprod::rpc::BlockProductionRpcClient;
 use chainstate::{rpc::ChainstateRpcClient, ChainInfo};
 use common::{
-    chain::{Block, GenBlock, SignedTransaction},
-    primitives::{BlockHeight, Id},
+    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use p2p::{interface::types::ConnectedPeer, rpc::P2pRpcClient, types::peer_id::PeerId};
@@ -77,6 +77,12 @@ impl NodeInterface for NodeRpcClient {
         )
         .await
         .map_err(NodeRpcError::ResponseError)
+    }
+
+    async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        ChainstateRpcClient::stake_pool_balance(&self.http_client, pool_id)
+            .await
+            .map_err(NodeRpcError::ResponseError)
     }
 
     async fn generate_block(

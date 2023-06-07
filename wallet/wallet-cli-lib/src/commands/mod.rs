@@ -20,7 +20,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 use clap::Parser;
 use common::{
     address::Address,
-    chain::{Block, ChainConfig, SignedTransaction},
+    chain::{Block, ChainConfig, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
@@ -104,6 +104,10 @@ pub enum WalletCommand {
     StartStaking,
 
     StopStaking,
+
+    StakePoolBalance {
+        pool_id: HexEncoded<PoolId>,
+    },
 
     /// Submit a block to be included in the chain
     ///
@@ -430,6 +434,20 @@ pub async fn handle_wallet_command(
                 .stop_staking()
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
+        }
+
+        WalletCommand::StakePoolBalance { pool_id } => {
+            let balance_opt = rpc_client
+                .get_stake_pool_balance(pool_id.take())
+                .await
+                .map_err(WalletCliError::RpcError)?;
+            match balance_opt {
+                Some(balance) => Ok(ConsoleCommand::Print(print_coin_amount(
+                    chain_config,
+                    balance,
+                ))),
+                None => Ok(ConsoleCommand::Print("Not found".to_owned())),
+            }
         }
 
         WalletCommand::SubmitBlock { block } => {

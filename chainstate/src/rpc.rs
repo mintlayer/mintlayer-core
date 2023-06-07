@@ -19,8 +19,11 @@ use std::io::{Read, Write};
 
 use crate::{Block, BlockSource, ChainInfo, GenBlock};
 use common::{
-    chain::tokens::{RPCTokenInfo, TokenId},
-    primitives::{BlockHeight, Id},
+    chain::{
+        tokens::{RPCTokenInfo, TokenId},
+        PoolId,
+    },
+    primitives::{Amount, BlockHeight, Id},
 };
 use rpc::Result as RpcResult;
 use serialization::hex_encoded::HexEncoded;
@@ -62,6 +65,9 @@ trait ChainstateRpc {
         first_block: Id<GenBlock>,
         second_block: Id<GenBlock>,
     ) -> RpcResult<Option<(Id<GenBlock>, BlockHeight)>>;
+
+    #[method(name = "stake_pool_balance")]
+    async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>>;
 
     /// Get token information
     #[method(name = "token_info")]
@@ -131,6 +137,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
             self.call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
                 .await,
         )
+    }
+
+    async fn stake_pool_balance(&self, pool_id: PoolId) -> RpcResult<Option<Amount>> {
+        rpc::handle_result(self.call(move |this| this.get_stake_pool_balance(pool_id)).await)
     }
 
     async fn token_info(&self, token_id: TokenId) -> RpcResult<Option<RPCTokenInfo>> {
