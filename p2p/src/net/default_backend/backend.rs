@@ -118,9 +118,6 @@ pub struct Backend<T: TransportSocket> {
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
-    #[deprecated]
-    shutdown: Arc<AtomicBool>,
-
     events_controller: EventsController<P2pEvent>,
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
 }
@@ -155,8 +152,6 @@ where
             command_queue: FuturesUnordered::new(),
             events_controller: EventsController::new(),
             subscribers_receiver,
-
-            shutdown: Default::default(),
         }
     }
 
@@ -202,11 +197,7 @@ where
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
 
-        Self::send_sync_event(
-            &self.sync_tx,
-            SyncingEvent::Connected { peer_id },
-            &self.shutdown,
-        );
+        Self::send_sync_event(&self.sync_tx, SyncingEvent::Connected { peer_id });
         self.events_controller.broadcast(P2pEvent::PeerConnected {
             id: peer_id,
             services: peer.services,
@@ -340,7 +331,6 @@ where
         let backend_tx = self.peer_chan.0.clone();
         let chain_config = Arc::clone(&self.chain_config);
         let p2p_config = Arc::clone(&self.p2p_config);
-        let shutdown = Arc::clone(&self.shutdown);
 
         let handle = tokio::spawn(async move {
             let mut peer = peer::Peer::<T>::new(
@@ -354,8 +344,7 @@ where
                 peer_rx,
             );
             match peer.run().await {
-                Ok(()) => {}
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {}
+                Ok(()) => (),
                 Err(e) => log::error!("peer {remote_peer_id} failed: {e}"),
             }
         });
@@ -445,11 +434,7 @@ where
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         if peer.was_accepted.test() {
-            Self::send_sync_event(
-                &self.sync_tx,
-                SyncingEvent::Disconnected { peer_id },
-                &self.shutdown,
-            );
+            Self::send_sync_event(&self.sync_tx, SyncingEvent::Disconnected { peer_id });
             self.events_controller.broadcast(P2pEvent::PeerDisconnected(peer_id));
         }
 
@@ -583,7 +568,6 @@ where
                     peer,
                     message: SyncMessage::HeaderListRequest(r),
                 },
-                &self.shutdown,
             ),
             Message::BlockListRequest(r) => Self::send_sync_event(
                 &self.sync_tx,
@@ -591,7 +575,6 @@ where
                     peer,
                     message: SyncMessage::BlockListRequest(r),
                 },
-                &self.shutdown,
             ),
             Message::TransactionRequest(id) => Self::send_sync_event(
                 &self.sync_tx,
@@ -599,7 +582,6 @@ where
                     peer,
                     message: SyncMessage::TransactionRequest(id),
                 },
-                &self.shutdown,
             ),
             Message::TransactionResponse(tx) => Self::send_sync_event(
                 &self.sync_tx,
@@ -607,7 +589,6 @@ where
                     peer,
                     message: SyncMessage::TransactionResponse(tx),
                 },
-                &self.shutdown,
             ),
             Message::AddrListRequest(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -627,7 +608,6 @@ where
                     peer,
                     message: SyncMessage::HeaderList(r),
                 },
-                &self.shutdown,
             ),
             Message::BlockResponse(r) => Self::send_sync_event(
                 &self.sync_tx,
@@ -635,7 +615,6 @@ where
                     peer,
                     message: SyncMessage::BlockResponse(r),
                 },
-                &self.shutdown,
             ),
             Message::NewTransaction(id) => Self::send_sync_event(
                 &self.sync_tx,
@@ -643,7 +622,6 @@ where
                     peer,
                     message: SyncMessage::NewTransaction(id),
                 },
-                &self.shutdown,
             ),
             Message::AddrListResponse(r) => self.conn_tx.send(ConnectivityEvent::Message {
                 peer,
@@ -708,16 +686,11 @@ where
         };
     }
 
-    fn send_sync_event(
-        sync_tx: &mpsc::UnboundedSender<SyncingEvent>,
-        event: SyncingEvent,
-        shutdown: &Arc<AtomicBool>,
-    ) {
+    fn send_sync_event(sync_tx: &mpsc::UnboundedSender<SyncingEvent>, event: SyncingEvent) {
         // SyncManager should always be active and so sending to a closed `conn_tx` is not a backend's problem, just log the error.
         // NOTE: `sync_tx` is not connected in some PeerManager tests.
         match sync_tx.send(event) {
             Ok(()) => {}
-            Err(_) if shutdown.load(Ordering::SeqCst) => {}
             Err(_) => log::error!("sending sync event from the backend failed unexpectedly"),
         }
     }
