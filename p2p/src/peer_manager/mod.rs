@@ -22,8 +22,8 @@ pub mod peerdb;
 mod peers_eviction;
 
 use std::{
-    future::Future,
     collections::{BTreeMap, BTreeSet, HashMap},
+    future::Future,
     sync::Arc,
     time::Duration,
 };
@@ -1117,7 +1117,7 @@ where
                 _ = shutdown_requested.as_mut() => {
                     log::info!("Shutdown requested");
 
-                    // This activity has a "mailbox": 
+                    // This activity has a "mailbox":
                     // - close this channel;
                     // - drain all the incoming messages (keep calling recv, until it returns None);
                     // - break out of the event-loop.
@@ -1130,10 +1130,10 @@ where
                         self.handle_control_event(event);
                         heartbeat_call_needed = true;
                     },
-                    None => 
+                    None =>
                         // Yay! No more unhandled requests — let's shutdown.
                         break
-                    
+
                 },
 
                 event_res = self.peer_connectivity_handle.poll_next() => {

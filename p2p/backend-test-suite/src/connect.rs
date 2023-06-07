@@ -15,13 +15,7 @@
 
 //! Connection tests.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -44,7 +38,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     N::start(
@@ -52,14 +45,12 @@ where
         vec![T::make_address()],
         config,
         p2p_config,
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
     .await
     .unwrap();
 
-    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender.send(());
 }
 
@@ -75,7 +66,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (connectivity, _messaging_handle, _sync, backend_running) = N::start(
@@ -83,7 +73,6 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -99,7 +88,6 @@ where
         addresses,
         config,
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -113,7 +101,6 @@ where
         ))
     ));
 
-    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }
@@ -131,7 +118,7 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
+
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut service1, _, _, backend_running1) = N::start(
@@ -139,7 +126,6 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -154,7 +140,6 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -166,7 +151,6 @@ where
     service2.connect(conn_addr[0].clone()).unwrap();
     service1.poll_next().await.unwrap();
 
-    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }

@@ -13,14 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{fmt::Debug, sync::Arc, time::Duration};
 
 use tokio::{
     sync::{
@@ -52,7 +45,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender_1, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut service1, _, _sync, backend_running1) = N::start(
@@ -60,7 +52,6 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -81,7 +72,6 @@ where
         vec![T::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -108,7 +98,6 @@ where
         Some(P2pEvent::PeerDisconnected(info.peer_id))
     );
 
-    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender_2.send(());
     let _ = shutdown_sender_1.send(());
 }

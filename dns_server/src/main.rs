@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::Arc;
 
 use clap::Parser;
 use tokio::sync::{mpsc, oneshot};
@@ -72,8 +72,7 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
     });
 
     let transport = p2p::make_p2p_transport();
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
     let (conn, _messaging_handle, sync, backend_running) = p2p::P2pNetworkingService::start(
@@ -81,7 +80,6 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
         vec![],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )

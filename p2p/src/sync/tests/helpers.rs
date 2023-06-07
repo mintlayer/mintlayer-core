@@ -15,6 +15,7 @@
 
 use std::{
     collections::BTreeSet,
+    future::Future,
     net::{IpAddr, SocketAddr},
     panic,
     sync::{atomic::AtomicBool, Arc, Mutex},
@@ -26,10 +27,7 @@ use crypto::random::Rng;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use tokio::{
-    sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot,
-    },
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
     time,
 };
@@ -465,19 +463,18 @@ impl NetworkingService for NetworkingServiceStub {
     type MessagingHandle = MessagingHandleMock;
     type SyncingEventReceiver = SyncingEventReceiverMock;
 
-    async fn start(
+    async fn start<'a>(
         _: Self::Transport,
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
-        _: Arc<AtomicBool>,
-        _: oneshot::Receiver<()>,
+        _: impl Future + Send + 'a,
         _: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        BoxFuture<'static, ()>,
+        BoxFuture<'a, ()>,
     )> {
         panic!("Stub service shouldn't be used directly");
     }

@@ -19,17 +19,15 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
 
-use futures::{future::BoxFuture, stream::FuturesUnordered, FutureExt, StreamExt, never::Never};
-use tokio::{
-    sync::{mpsc, oneshot},
-    time::timeout,
-};
+use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
+use tokio::{sync::mpsc, time::timeout};
 
 use common::chain::ChainConfig;
 use crypto::random::{make_pseudo_rng, Rng, SliceRandom};
@@ -120,8 +118,8 @@ pub struct Backend<T: TransportSocket> {
     /// to make receiving commands can run concurrently with other backend operations
     command_queue: FuturesUnordered<BackendTask<T>>,
 
+    #[deprecated]
     shutdown: Arc<AtomicBool>,
-    shutdown_receiver: oneshot::Receiver<()>,
 
     events_controller: EventsController<P2pEvent>,
     subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
@@ -140,8 +138,7 @@ where
         cmd_rx: mpsc::UnboundedReceiver<Command<T::Address>>,
         conn_tx: mpsc::UnboundedSender<ConnectivityEvent<T::Address>>,
         sync_tx: mpsc::UnboundedSender<SyncingEvent>,
-        shutdown: Arc<AtomicBool>,
-        shutdown_receiver: oneshot::Receiver<()>,
+
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Self {
         Self {
@@ -156,10 +153,10 @@ where
             pending: HashMap::new(),
             peer_chan: mpsc::unbounded_channel(),
             command_queue: FuturesUnordered::new(),
-            shutdown,
-            shutdown_receiver,
             events_controller: EventsController::new(),
             subscribers_receiver,
+
+            shutdown: Default::default(),
         }
     }
 
@@ -257,16 +254,28 @@ where
         Ok(())
     }
 
+    pub async fn run_forever(&mut self) -> crate::Result<Never> {
+        self.run(std::future::pending::<()>()).await?;
+        unreachable!()
+    }
+
     /// Runs the backend events loop.
-    pub async fn run(&mut self) -> crate::Result<Never> {
+    pub async fn run(&mut self, shutdown_requested: impl Future) -> crate::Result<()> {
+        let shutdown_requested = shutdown_requested.fuse();
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+
         loop {
             tokio::select! {
                 // Select from the channels in the specified order
                 biased;
 
                 // Handle commands.
-                command = self.cmd_rx.recv() => {
-                    self.handle_command(command.ok_or(P2pError::ChannelClosed)?);
+                command_opt = self.cmd_rx.recv() => match command_opt {
+                    Some(command) =>
+                        self.handle_command(command),
+
+                    None =>
+                        break
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
@@ -297,11 +306,14 @@ where
                 handler = self.subscribers_receiver.recv() => {
                     self.events_controller.subscribe_to_events(handler.ok_or(P2pError::ChannelClosed)?);
                 }
-                _ = &mut self.shutdown_receiver => {
-                    return Err(P2pError::ChannelClosed);
-                }
+
+                _ = shutdown_requested.as_mut() =>
+                    self.cmd_rx.close(),
             }
         }
+
+        log::info!("Shutting down normally");
+        Ok(())
     }
 
     /// Create new pending peer

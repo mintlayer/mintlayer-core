@@ -19,15 +19,15 @@
 mod peer;
 
 use std::{
-    future::Future,
     collections::HashMap,
+    future::Future,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
 };
 
-use futures::{never::Never, FutureExt};
+use futures::never::Never;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
@@ -137,7 +137,7 @@ where
                 _ = shutdown_requested.as_mut() => {
                     log::info!("Shutdown requested");
 
-                    // There is no "mailbox" for this activity. 
+                    // There is no "mailbox" for this activity.
                     // Just break out of the event-loop, and call it a day.
                     break
                 }
@@ -260,7 +260,10 @@ pub async fn subscribe_to_new_tip(
         Arc::new(
             move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
                 chainstate::ChainstateEvent::NewTip(block_id, _) => {
-                    let _ = sender.send(block_id).log_err_pfx(/* FIXME: this subscription should be dropped then, shouldn't it? */ "The new tip receiver closed");
+                    let _ = sender.send(block_id).log_err_pfx(
+                        /* FIXME: this subscription should be dropped then, shouldn't it? */
+                        "The new tip receiver closed",
+                    );
                 }
             },
         );

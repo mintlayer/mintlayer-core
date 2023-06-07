@@ -540,15 +540,13 @@ where
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, backend_running) = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
         p2p_config,
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -612,15 +610,14 @@ async fn connection_timeout_rpc_notified<T>(
 {
     let config = Arc::new(config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
-    let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
+
+    let (_shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, backend_running) = T::start(
         transport,
         vec![addr1],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )

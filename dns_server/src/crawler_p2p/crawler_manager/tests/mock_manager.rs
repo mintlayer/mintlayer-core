@@ -19,6 +19,7 @@
 
 use std::{
     collections::BTreeMap,
+    future::Future,
     net::{IpAddr, SocketAddr},
     sync::{atomic::AtomicBool, Arc, Mutex},
     time::Duration,
@@ -121,19 +122,18 @@ impl NetworkingService for MockNetworkingService {
     type MessagingHandle = ();
     type SyncingEventReceiver = MockSyncingEventReceiver;
 
-    async fn start(
+    async fn start<'a>(
         _transport: Self::Transport,
         _bind_addresses: Vec<Self::Address>,
         _chain_config: Arc<ChainConfig>,
         _p2p_config: Arc<P2pConfig>,
-        _shutdown: Arc<AtomicBool>,
-        _shutdown_receiver: oneshot::Receiver<()>,
+        _shutdown_requested: impl Future + Send + 'a,
         _subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> p2p::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        BoxFuture<'static, ()>,
+        BoxFuture<'a, ()>,
     )> {
         unreachable!()
     }

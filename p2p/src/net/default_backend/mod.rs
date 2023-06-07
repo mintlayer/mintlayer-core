@@ -18,20 +18,11 @@ pub mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{future::Future, marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{future::BoxFuture, FutureExt};
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::mpsc;
 
 use logging::log;
 
@@ -115,19 +106,18 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
     type MessagingHandle = MessagingHandle<T>;
     type SyncingEventReceiver = SyncingReceiver;
 
-    async fn start(
+    async fn start<'a>(
         transport: Self::Transport,
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        shutdown: Arc<AtomicBool>,
-        shutdown_receiver: oneshot::Receiver<()>,
+        shutdown_requested: impl Future + Send + 'a,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        BoxFuture<'static, ()>,
+        BoxFuture<'a, ()>,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
@@ -136,7 +126,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let p2p_config_ = Arc::clone(&p2p_config);
-        let shutdown_ = Arc::clone(&shutdown);
+
         let backend_running = async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
@@ -146,18 +136,16 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                shutdown_,
-                shutdown_receiver,
                 subscribers_receiver,
             );
 
-            match backend.run().await {
+            match backend.run(shutdown_requested).await {
                 Ok(_) => unreachable!(),
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
-                    log::info!("Backend is shut down");
-                }
+                // Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
+                //     log::info!("Backend is shut down");
+                // }
                 Err(e) => {
-                    shutdown.store(true, Ordering::SeqCst);
+                    // shutdown.store(true, Ordering::SeqCst);
                     log::error!("Failed to run backend: {e}");
                 }
             }
