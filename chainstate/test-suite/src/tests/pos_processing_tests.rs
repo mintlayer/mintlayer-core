@@ -46,8 +46,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPoint, OutPointSourceId,
-        PoSChainConfig, PoolId, TxOutput, UpgradeVersion,
+        Block, ConsensusUpgrade, Destination, GenBlock, Genesis, NetUpgrades, OutPoint,
+        OutPointSourceId, PoSChainConfig, PoolId, SignedTransaction, TxOutput, UpgradeVersion,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -1742,4 +1742,201 @@ fn pos_stake_testnet_genesis(#[case] seed: Seed) {
         .with_reward(reward_outputs)
         .build_and_process()
         .unwrap();
+}
+
+fn mine_pos_block(
+    tf: &mut TestFramework,
+    pool_id: PoolId,
+    staker_sk: &PrivateKey,
+    vrf_sk: &VRFPrivateKey,
+    transactions: Vec<SignedTransaction>,
+    kernel_input_outpoint: OutPoint,
+) -> Block {
+    let parent = tf.best_block_index();
+    tf.set_time_seconds_since_epoch(parent.block_timestamp().as_int_seconds() + 1);
+
+    let staking_destination = Destination::PublicKey(PublicKey::from_private_key(staker_sk));
+    let kernel_outputs =
+        vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
+
+    let kernel_sig = produce_kernel_signature(
+        tf,
+        staker_sk,
+        kernel_outputs.as_slice(),
+        staking_destination,
+        parent.block_id(),
+        kernel_input_outpoint.clone(),
+    );
+
+    let new_block_height = parent.block_height().next_height();
+    let current_difficulty = calculate_new_target(tf, new_block_height).unwrap();
+    let initial_randomness = tf.chainstate.get_chain_config().initial_randomness();
+    let pool_balance =
+        PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        kernel_input_outpoint,
+        InputWitness::Standard(kernel_sig),
+        vrf_sk,
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        pool_balance,
+        0,
+        current_difficulty,
+    )
+    .unwrap();
+    let consensus_data = ConsensusData::PoS(Box::new(pos_data));
+
+    let block = tf
+        .make_block_builder()
+        .with_consensus_data(consensus_data)
+        .with_block_signing_key(staker_sk.clone())
+        .with_timestamp(block_timestamp)
+        .with_transactions(transactions)
+        .with_reward(kernel_outputs)
+        .build();
+
+    tf.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
+
+    block
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pos_reorg(#[case] seed: Seed) {
+    logging::init_logging::<std::path::PathBuf>(None);
+
+    let mut rng = make_seedable_rng(seed);
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(1),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                initial_difficulty: MIN_DIFFICULTY.into(),
+                config: create_unittest_pos_config(),
+            }),
+        ),
+    ];
+    let genesis_pool_id = PoolId::new(H256::zero());
+    let (vrf1_sk, vrf1_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staker1_sk, staker1_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let (vrf2_sk, vrf2_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+    let (staker2_sk, staker2_pk) = PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+    let mint_amount = Amount::from_atoms(100_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+    let stake_amount = Amount::from_atoms(40_000_000 * common::chain::Mlt::ATOMS_PER_MLT);
+
+    let mint_output =
+        TxOutput::Transfer(OutputValue::Coin(mint_amount), Destination::AnyoneCanSpend);
+
+    let pool1 = TxOutput::CreateStakePool(
+        H256::zero().into(),
+        Box::new(StakePoolData::new(
+            stake_amount,
+            Destination::PublicKey(staker1_pk.clone()),
+            vrf1_pk,
+            Destination::PublicKey(staker1_pk),
+            PerThousand::new(0).unwrap(),
+            Amount::ZERO,
+        )),
+    );
+
+    let genesis = Genesis::new(
+        String::new(),
+        BlockTimestamp::from_int_seconds(1685025323),
+        vec![mint_output, pool1],
+    );
+
+    let net_upgrades = NetUpgrades::initialize(upgrades).unwrap();
+    let chain_config = ConfigBuilder::new(ChainType::Regtest)
+        .net_upgrades(net_upgrades)
+        .genesis_custom(genesis)
+        .build();
+
+    let mut tf1 = TestFramework::builder(&mut rng).with_chain_config(chain_config.clone()).build();
+    let mut tf2 = TestFramework::builder(&mut rng).with_chain_config(chain_config).build();
+
+    let genesis_mint_outpoint = OutPoint::new(
+        OutPointSourceId::BlockReward(tf1.genesis().get_id().into()),
+        0,
+    );
+
+    // Pool2 CreateStakePool transaction
+    let pool2_id = pos_accounting::make_pool_id(&genesis_mint_outpoint);
+    let pool2_tx = TransactionBuilder::new()
+        .add_input(genesis_mint_outpoint.into(), empty_witness(&mut rng))
+        .add_output(TxOutput::CreateStakePool(
+            pool2_id,
+            Box::new(StakePoolData::new(
+                stake_amount,
+                Destination::PublicKey(staker2_pk.clone()),
+                vrf2_pk,
+                Destination::PublicKey(staker2_pk),
+                PerThousand::new(0).unwrap(),
+                Amount::ZERO,
+            )),
+        ))
+        .build();
+    let pool2_tx_id = pool2_tx.transaction().get_id();
+
+    // Block1
+    let kernel_outpoint = OutPoint::new(tf1.best_block_id().into(), 1);
+    let block1 = mine_pos_block(
+        &mut tf1,
+        genesis_pool_id,
+        &staker1_sk,
+        &vrf1_sk,
+        vec![pool2_tx],
+        kernel_outpoint,
+    );
+
+    tf2.process_block(block1, BlockSource::Local).unwrap().unwrap();
+
+    // Block with height 2 by pool1
+    let kernel_outpoint = OutPoint::new(tf1.best_block_id().into(), 0);
+    let _block2_pool1 = mine_pos_block(
+        &mut tf1,
+        genesis_pool_id,
+        &staker1_sk,
+        &vrf1_sk,
+        vec![],
+        kernel_outpoint,
+    );
+
+    // Block at height 2 by pool2
+    let kernel_outpoint = OutPoint::new(OutPointSourceId::Transaction(pool2_tx_id), 0);
+    let block2_pool2 = mine_pos_block(
+        &mut tf2,
+        pool2_id,
+        &staker2_sk,
+        &vrf2_sk,
+        vec![],
+        kernel_outpoint,
+    );
+
+    // Block at height 3 by pool2
+    let kernel_outpoint = OutPoint::new(tf2.best_block_id().into(), 0);
+    let block3_pool2 = mine_pos_block(
+        &mut tf2,
+        pool2_id,
+        &staker2_sk,
+        &vrf2_sk,
+        vec![],
+        kernel_outpoint,
+    );
+
+    // Try to switch to a new branch
+
+    tf1.chainstate.preliminary_header_check(block2_pool2.header().clone()).unwrap();
+    let block2_pool2 = tf1.chainstate.preliminary_block_check(block2_pool2).unwrap();
+    tf1.process_block(block2_pool2, BlockSource::Peer).unwrap();
+
+    tf1.chainstate.preliminary_header_check(block3_pool2.header().clone()).unwrap();
+    let block3_pool2 = tf1.chainstate.preliminary_block_check(block3_pool2).unwrap();
+    tf1.process_block(block3_pool2, BlockSource::Peer).unwrap().unwrap();
 }

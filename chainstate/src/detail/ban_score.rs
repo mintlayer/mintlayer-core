@@ -29,7 +29,7 @@ use super::{
     },
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, TxIndexError,
 };
-use crate::BlockError;
+use crate::{BlockError, ChainstateError};
 use chainstate_types::GetAncestorError;
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -444,6 +444,17 @@ impl BanScore for pos_accounting::Error {
             E::DelegationDeletionFailedBalanceNonZero => 100,
             E::DelegationDeletionFailedPoolsShareNonZero => 100,
             E::DelegationDeletionFailedPoolStillExists => 100,
+        }
+    }
+}
+
+impl BanScore for ChainstateError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ChainstateError::FailedToInitializeChainstate(_) => 0,
+            ChainstateError::ProcessBlockError(e) => e.ban_score(),
+            ChainstateError::FailedToReadProperty(_) => 0,
+            ChainstateError::BootstrapError(_) => 0,
         }
     }
 }

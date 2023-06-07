@@ -108,7 +108,7 @@ pub enum CheckBlockError {
     BlockSizeError(#[from] BlockSizeError),
     #[error("Check transaction failed: {0}")]
     CheckTransactionFailed(CheckBlockTransactionsError),
-    #[error("Check transaction failed: {0}")]
+    #[error("Consensus verification failed: {0}")]
     ConsensusVerificationFailed(ConsensusVerificationError),
     #[error("Invalid block reward output type for block {0}")]
     InvalidBlockRewardOutputType(Id<Block>),
