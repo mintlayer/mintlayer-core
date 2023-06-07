@@ -132,6 +132,7 @@ pub fn enforce_timestamp_ordering(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn check_proof_of_stake<H, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
