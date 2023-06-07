@@ -16,8 +16,8 @@
 use blockprod::{BlockProductionError, BlockProductionHandle};
 use chainstate::{BlockSource, ChainInfo, ChainstateError, ChainstateHandle};
 use common::{
-    chain::{Block, GenBlock, SignedTransaction},
-    primitives::{BlockHeight, Id},
+    chain::{Block, GenBlock, PoolId, SignedTransaction},
+    primitives::{Amount, BlockHeight, Id},
 };
 use consensus::GenerateBlockInputData;
 use mempool::MempoolHandle;
@@ -117,6 +117,12 @@ impl NodeInterface for WalletHandlesClient {
             .chainstate
             .call(move |this| this.last_common_ancestor_by_id(&first_block, &second_block))
             .await??;
+        Ok(result)
+    }
+
+    async fn get_stake_pool_balance(&self, pool_id: PoolId) -> Result<Option<Amount>, Self::Error> {
+        let result =
+            self.chainstate.call(move |this| this.get_stake_pool_balance(pool_id)).await??;
         Ok(result)
     }
 

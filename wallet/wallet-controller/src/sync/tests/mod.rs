@@ -20,7 +20,10 @@ use std::{
 
 use chainstate::ChainInfo;
 use chainstate_test_framework::TestFramework;
-use common::chain::SignedTransaction;
+use common::{
+    chain::{PoolId, SignedTransaction},
+    primitives::Amount,
+};
 use consensus::GenerateBlockInputData;
 use crypto::random::{seq::IteratorRandom, CryptoRng, Rng};
 use logging::log;
@@ -138,6 +141,12 @@ impl NodeInterface for MockNode {
             .chainstate
             .last_common_ancestor_by_id(&first_block, &second_block)
             .unwrap())
+    }
+    async fn get_stake_pool_balance(
+        &self,
+        _pool_id: PoolId,
+    ) -> Result<Option<Amount>, Self::Error> {
+        unreachable!()
     }
 
     async fn generate_block(
