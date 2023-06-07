@@ -474,17 +474,17 @@ fn create_testnet_genesis() -> Genesis {
     // To get these values, use the `newpublickey` and `getvrfpublickey` wallet-cli commands
 
     let genesis_mint_destination = decode_hex::<PublicKey>(
-        "00027a9771bbb58170a0df36ed43e56490530f0f2f45b100c42f6f405af3ef21f54e",
+        "0003727094d1a790ac49b0753fe6f7e2caccf9c0040ba9ef30309b25f8be59b61dec",
     );
     let decommission_pub_key = decode_hex::<PublicKey>(
-        "0002ea30f3bb179c58022dcf2f4fd2c88685695f9532d6a9dd071da8d7ac1fe91a7d",
+        "000290acefad24844c5ac7ac2fef3e4df86a089f37df8abf39c6c41a3517287855f2",
     );
     let staker_pub_key = decode_hex::<PublicKey>(
-        "0002884adf48b0b32ab3d66e1a8b46576dfacca5dd25b66603650de792de4dd2e483",
+        "000296fde6aaccc723fc0aeb86223bbc83608f730d60875874a5abf64f6fdc7575da",
     );
 
     let vrf_pub_key = decode_hex::<VRFPublicKey>(
-        "007a0d90de05984977d4b3cb3f75342a81820a8ec79aa95181186b67fc93ed5a2e",
+        "009a1a375735d0e252f206c90a6daf637ba88044b80473afdebe33eee62e840257",
     );
 
     let mint_output = TxOutput::Transfer(
@@ -506,7 +506,7 @@ fn create_testnet_genesis() -> Genesis {
 
     Genesis::new(
         genesis_message,
-        BlockTimestamp::from_int_seconds(1685025323),
+        BlockTimestamp::from_int_seconds(1686148208),
         vec![mint_output, initial_pool],
     )
 }
