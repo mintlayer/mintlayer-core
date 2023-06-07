@@ -13,8 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::GenBlock;
-use common::primitives::{Id, H256};
+use common::{
+    chain::GenBlock,
+    primitives::{Id, H256},
+};
 use crypto::random::Rng;
 use mempool::{MempoolInterface, MempoolSubsystemInterface};
 use mocks::MempoolInterfaceMock;
@@ -22,10 +24,58 @@ use rstest::rstest;
 use std::sync::atomic::Ordering;
 use subsystem::CallRequest;
 use test_utils::random::{make_seedable_rng, Seed};
+use utils::once_destructor::OnceDestructor;
 
-use crate::{prepare_thread_pool, tests::setup_blockprod_test};
+use crate::{
+    detail::{
+        job_manager::{tests::MockJobManager, JobManagerError},
+        GenerateBlockInputData, TransactionsSource,
+    },
+    prepare_thread_pool,
+    tests::setup_blockprod_test,
+    BlockProduction, BlockProductionError, JobKey,
+};
 
-use super::*;
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn collect_transactions_collect_txs_failed() {
+    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+
+    let mock_mempool = MempoolInterfaceMock::new();
+    mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
+
+    let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
+        let mock_mempool = mock_mempool.clone();
+        move |call, shutdn| async move {
+            mock_mempool.run(call, shutdn).await;
+        }
+    });
+
+    manager.add_subsystem_with_custom_eventloop(
+        "test-call",
+        move |_: CallRequest<()>, _| async move {
+            let block_production = BlockProduction::new(
+                chain_config,
+                chainstate,
+                mock_mempool_subsystem,
+                Default::default(),
+                prepare_thread_pool(1),
+            )
+            .expect("Error initializing blockprod");
+
+            let accumulator = block_production.collect_transactions().await;
+
+            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
+            assert!(collected_transactions, "Expected collect_tx() to be called");
+
+            assert!(
+                matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
+                "Expected collect_tx() to fail"
+            );
+        },
+    );
+
+    manager.main().await;
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions_subsystem_error() {
@@ -80,47 +130,6 @@ async fn collect_transactions_subsystem_error() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn collect_transactions_collect_txs_failed() {
-    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
-
-    let mock_mempool = MempoolInterfaceMock::new();
-    mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
-
-    let mock_mempool_subsystem = manager.add_subsystem_with_custom_eventloop("mock-mempool", {
-        let mock_mempool = mock_mempool.clone();
-        move |call, shutdn| async move {
-            mock_mempool.run(call, shutdn).await;
-        }
-    });
-
-    manager.add_subsystem_with_custom_eventloop(
-        "test-call",
-        move |_: CallRequest<()>, _| async move {
-            let block_production = BlockProduction::new(
-                chain_config,
-                chainstate,
-                mock_mempool_subsystem,
-                Default::default(),
-                prepare_thread_pool(1),
-            )
-            .expect("Error initializing blockprod");
-
-            let accumulator = block_production.collect_transactions().await;
-
-            let collected_transactions = mock_mempool.collect_txs_called.load(Ordering::Relaxed);
-            assert!(collected_transactions, "Expected collect_tx() to be called");
-
-            assert!(
-                matches!(accumulator, Err(BlockProductionError::MempoolChannelClosed)),
-                "Expected collect_tx() to fail"
-            );
-        },
-    );
-
-    manager.main().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions_succeeded() {
     let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
 
@@ -170,7 +179,62 @@ async fn collect_transactions_succeeded() {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn stop_job_non_existent_job(#[case] seed: Seed) {
+async fn produce_block_multiple_jobs(#[case] seed: Seed) {
+    let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+    let mut rng = make_seedable_rng(seed);
+
+    let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+
+    let block_production = BlockProduction::new(
+        chain_config,
+        chainstate,
+        mempool,
+        Default::default(),
+        prepare_thread_pool(1),
+    )
+    .expect("Error initializing blockprod");
+
+    let join_handle = tokio::spawn({
+        let shutdown_trigger = manager.make_shutdown_trigger();
+        async move {
+            // Ensure a shutdown signal will be sent by the end of the scope
+            let _shutdown_signal = OnceDestructor::new(move || {
+                shutdown_trigger.initiate();
+            });
+
+            let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
+                let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
+
+                block_production.produce_block_with_custom_id(
+                    GenerateBlockInputData::None,
+                    TransactionsSource::Provided(vec![]),
+                    Some(id),
+                )
+            });
+
+            let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
+
+            let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
+
+            for (_block, job) in jobs_finished_iter {
+                job.await.unwrap();
+            }
+
+            let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
+            assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
+        }
+    });
+
+    manager.main().await;
+    join_handle.await.unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_all_jobs(#[case] seed: Seed) {
     let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
     let mut rng = make_seedable_rng(seed);
@@ -190,13 +254,115 @@ async fn stop_job_non_existent_job(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+    let (_stop_job_key, _stop_job_cancel_receiver) = block_production
+        .job_manager_handle
+        .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
+        .await
+        .unwrap();
 
-    let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
-    assert!(!job_stopped, "Stopped a non-existent job");
+    let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
+    assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
 
     let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
-    assert_eq!(jobs_count, 1, "Jobs count is incorrect");
+    assert_eq!(jobs_count, 0, "Jobs count is incorrect");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_all_jobs_error() {
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+    let mut block_production = BlockProduction::new(
+        chain_config,
+        chainstate.clone(),
+        mempool,
+        Default::default(),
+        prepare_thread_pool(1),
+    )
+    .expect("Error initializing blockprod");
+
+    let mut mock_job_manager = Box::new(MockJobManager::default());
+
+    mock_job_manager
+        .expect_stop_all_jobs()
+        .times(1)
+        .returning(|| Err(JobManagerError::FailedToStopJobs));
+
+    block_production.set_job_manager(mock_job_manager);
+
+    let result = block_production.stop_all_jobs().await;
+
+    assert!(matches!(
+        result,
+        Err(BlockProductionError::JobManagerError(_))
+    ));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_all_jobs_ok(#[case] seed: Seed) {
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+    let mut block_production = BlockProduction::new(
+        chain_config,
+        chainstate.clone(),
+        mempool,
+        Default::default(),
+        prepare_thread_pool(1),
+    )
+    .expect("Error initializing blockprod");
+
+    let mut mock_job_manager = Box::new(MockJobManager::default());
+    let return_value = make_seedable_rng(seed).gen();
+    let _expected_value = return_value;
+
+    mock_job_manager
+        .expect_stop_all_jobs()
+        .times(1)
+        .returning(move || Ok(return_value));
+
+    block_production.set_job_manager(mock_job_manager);
+
+    let result = block_production.stop_all_jobs().await;
+
+    assert!(matches!(result, Ok(_expected_value)));
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_job_error(#[case] seed: Seed) {
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+    let mut block_production = BlockProduction::new(
+        chain_config,
+        chainstate.clone(),
+        mempool,
+        Default::default(),
+        prepare_thread_pool(1),
+    )
+    .expect("Error initializing blockprod");
+
+    let mut mock_job_manager = Box::new(MockJobManager::default());
+
+    mock_job_manager
+        .expect_stop_job()
+        .times(1)
+        .returning(|_| Err(JobManagerError::FailedToStopJobs));
+
+    block_production.set_job_manager(mock_job_manager);
+
+    let mut rng = make_seedable_rng(seed);
+    let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+
+    let result = block_production.stop_job(job_key).await;
+
+    assert!(matches!(
+        result,
+        Err(BlockProductionError::JobManagerError(_))
+    ));
 }
 
 #[rstest]
@@ -292,62 +458,7 @@ async fn stop_job_multiple_jobs(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn produce_block_multiple_jobs(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
-
-    let mut rng = make_seedable_rng(seed);
-
-    let jobs_to_create = rng.gen::<usize>() % 20 + 1;
-
-    let block_production = BlockProduction::new(
-        chain_config,
-        chainstate,
-        mempool,
-        Default::default(),
-        prepare_thread_pool(1),
-    )
-    .expect("Error initializing blockprod");
-
-    let join_handle = tokio::spawn({
-        let shutdown_trigger = manager.make_shutdown_trigger();
-        async move {
-            // Ensure a shutdown signal will be sent by the end of the scope
-            let _shutdown_signal = OnceDestructor::new(move || {
-                shutdown_trigger.initiate();
-            });
-
-            let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
-                let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
-
-                block_production.produce_block_with_custom_id(
-                    GenerateBlockInputData::None,
-                    TransactionsSource::Provided(vec![]),
-                    Some(id),
-                )
-            });
-
-            let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
-
-            let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
-
-            for (_block, job) in jobs_finished_iter {
-                job.await.unwrap();
-            }
-
-            let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
-            assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
-        }
-    });
-
-    manager.main().await;
-    join_handle.await.unwrap();
-}
-
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn stop_all_jobs(#[case] seed: Seed) {
+async fn stop_job_non_existent_job(#[case] seed: Seed) {
     let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
 
     let mut rng = make_seedable_rng(seed);
@@ -367,15 +478,41 @@ async fn stop_all_jobs(#[case] seed: Seed) {
         .await
         .unwrap();
 
-    let (_stop_job_key, _stop_job_cancel_receiver) = block_production
-        .job_manager_handle
-        .add_job(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>)
-        .await
-        .unwrap();
+    let stop_job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
 
-    let jobs_stopped = block_production.stop_all_jobs().await.unwrap();
-    assert_eq!(jobs_stopped, 2, "Incorrect number of jobs stopped");
+    let job_stopped = block_production.stop_job(stop_job_key).await.unwrap();
+    assert!(!job_stopped, "Stopped a non-existent job");
 
     let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
-    assert_eq!(jobs_count, 0, "Jobs count is incorrect");
+    assert_eq!(jobs_count, 1, "Jobs count is incorrect");
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn stop_job_ok(#[case] seed: Seed) {
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+
+    let mut block_production = BlockProduction::new(
+        chain_config,
+        chainstate.clone(),
+        mempool,
+        Default::default(),
+        prepare_thread_pool(1),
+    )
+    .expect("Error initializing blockprod");
+
+    let mut mock_job_manager = Box::new(MockJobManager::default());
+
+    mock_job_manager.expect_stop_job().times(1).returning(|_| Ok(1));
+
+    block_production.set_job_manager(mock_job_manager);
+
+    let mut rng = make_seedable_rng(seed);
+    let job_key = JobKey::new(None, Id::new(H256::random_using(&mut rng)) as Id<GenBlock>);
+
+    let result = block_production.stop_job(job_key).await;
+
+    assert!(matches!(result, Ok(true)));
 }
