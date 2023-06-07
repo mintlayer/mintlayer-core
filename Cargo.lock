@@ -1537,6 +1537,7 @@ dependencies = [
  "common",
  "crypto",
  "directories",
+ "futures",
  "logging",
  "p2p",
  "p2p-test-utils",

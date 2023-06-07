@@ -8,13 +8,14 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../crypto" }
-p2p = { path = "../p2p" }
 common = { path = "../common" }
+crypto = { path = "../crypto" }
+futures = { workspace = true }
+logging = { path = "../logging" }
+p2p = { path = "../p2p" }
+serialization = { path = "../serialization" }
 storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
-serialization = { path = "../serialization" }
-logging = { path = "../logging" }
 utils = { path = '../utils' }
 
 tokio = { workspace = true, default-features = false }
