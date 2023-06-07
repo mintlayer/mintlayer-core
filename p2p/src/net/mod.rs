@@ -24,9 +24,9 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use tokio::{
     sync::{mpsc, oneshot},
-    task::JoinHandle,
 };
 
 use crate::{
@@ -95,7 +95,7 @@ pub trait NetworkingService {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'static, ()>,
     )>;
 }
 

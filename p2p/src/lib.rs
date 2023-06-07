@@ -26,6 +26,8 @@ pub mod testing_utils;
 pub mod types;
 pub mod utils;
 
+mod run_p2p;
+
 mod p2p_event;
 mod peer_manager_event;
 
@@ -122,7 +124,7 @@ where
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
-        let (conn, messaging_handle, sync_event_receiver, backend_task) = T::start(
+        let (conn, messaging_handle, sync_event_receiver, backend_running) = T::start(
             transport,
             bind_addresses,
             Arc::clone(&chain_config),
@@ -132,6 +134,7 @@ where
             subscribers_receiver,
         )
         .await?;
+        let backend_task = tokio::spawn(backend_running);
 
         // P2P creates its components (such as PeerManager, sync, pubsub, etc) and makes
         // communications with them in two possible ways:

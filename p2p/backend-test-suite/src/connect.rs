@@ -103,7 +103,8 @@ where
         subscribers_receiver,
     )
     .await
-    .expect_err("address is not in use");
+    .err()
+    .expect("address is not in use");
     assert!(matches!(
         res,
         P2pError::DialError(DialError::IoError(

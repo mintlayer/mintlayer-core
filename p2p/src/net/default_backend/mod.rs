@@ -27,6 +27,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::{future::BoxFuture, FutureExt};
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -126,7 +127,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'static, ()>,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let (conn_tx, conn_rx) = mpsc::unbounded_channel();
@@ -136,7 +137,7 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
 
         let p2p_config_ = Arc::clone(&p2p_config);
         let shutdown_ = Arc::clone(&shutdown);
-        let backend_task = tokio::spawn(async move {
+        let backend_running = async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
                 socket,
@@ -160,13 +161,14 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                     log::error!("Failed to run backend: {e}");
                 }
             }
-        });
+        }
+        .boxed();
 
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
             MessagingHandle::new(cmd_tx),
             Self::SyncingEventReceiver { sync_rx },
-            backend_task,
+            backend_running,
         ))
     }
 }

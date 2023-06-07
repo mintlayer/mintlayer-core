@@ -23,6 +23,7 @@ use std::{
 
 use async_trait::async_trait;
 use crypto::random::Rng;
+use futures::future::BoxFuture;
 use itertools::Itertools;
 use tokio::{
     sync::{
@@ -476,7 +477,7 @@ impl NetworkingService for NetworkingServiceStub {
         Self::ConnectivityHandle,
         Self::MessagingHandle,
         Self::SyncingEventReceiver,
-        JoinHandle<()>,
+        BoxFuture<'static, ()>,
     )> {
         panic!("Stub service shouldn't be used directly");
     }
