@@ -91,6 +91,8 @@ impl BlockProduction {
     pub fn time_getter(&self) -> &TimeGetter {
         &self.time_getter
     }
+
+    /// Private method used for unit testing
     #[allow(dead_code)]
     fn set_job_manager(&mut self, job_manager_handle: JobManagerHandle) {
         self.job_manager_handle = job_manager_handle
