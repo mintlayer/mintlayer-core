@@ -87,7 +87,10 @@ impl Socks5TransportListener {
 }
 
 #[async_trait]
-impl TransportListener<Socks5TransportStream, SocketAddr> for Socks5TransportListener {
+impl TransportListener for Socks5TransportListener {
+    type Stream = Socks5TransportStream;
+    type Address = SocketAddr;
+
     async fn accept(&mut self) -> Result<(Socks5TransportStream, SocketAddr)> {
         std::future::pending().await
     }

@@ -45,7 +45,7 @@ pub trait TransportSocket: Send + Sync + 'static {
     type BannableAddress: Debug + Eq + Ord + Send + ToString + FromStr;
 
     /// A listener type (or acceptor as per boost terminology).
-    type Listener: TransportListener<Self::Stream, Self::Address>;
+    type Listener: TransportListener<Stream = Self::Stream, Address = Self::Address>;
 
     /// A messages stream.
     type Stream: PeerStream;

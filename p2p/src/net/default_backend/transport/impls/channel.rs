@@ -159,7 +159,10 @@ pub struct ChannelListener {
 }
 
 #[async_trait]
-impl TransportListener<ChannelStream, SocketAddr> for ChannelListener {
+impl TransportListener for ChannelListener {
+    type Stream = ChannelStream;
+    type Address = SocketAddr;
+
     async fn accept(&mut self) -> Result<(ChannelStream, SocketAddr)> {
         let (remote_address, response_sender) =
             self.receiver.recv().await.ok_or(P2pError::ChannelClosed)?;

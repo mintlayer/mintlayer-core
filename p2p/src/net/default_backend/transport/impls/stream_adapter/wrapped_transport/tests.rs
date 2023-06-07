@@ -160,12 +160,10 @@ impl TransportSocket for TestTransport {
 }
 
 #[async_trait]
-impl
-    TransportListener<
-        <MpscChannelTransport as TransportSocket>::Stream,
-        <MpscChannelTransport as TransportSocket>::Address,
-    > for TestListener
-{
+impl TransportListener for TestListener {
+    type Stream = <MpscChannelTransport as TransportSocket>::Stream;
+    type Address = <MpscChannelTransport as TransportSocket>::Address;
+
     async fn accept(
         &mut self,
     ) -> crate::Result<(

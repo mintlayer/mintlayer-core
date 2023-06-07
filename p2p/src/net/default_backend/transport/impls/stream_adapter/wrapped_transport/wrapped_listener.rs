@@ -53,9 +53,10 @@ impl<S: StreamAdapter<T::Stream>, T: TransportSocket> AdaptedListener<S, T> {
 }
 
 #[async_trait]
-impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener<S::Stream, T::Address>
-    for AdaptedListener<S, T>
-{
+impl<S: StreamAdapter<T::Stream>, T: TransportSocket> TransportListener for AdaptedListener<S, T> {
+    type Stream = S::Stream;
+    type Address = T::Address;
+
     async fn accept(&mut self) -> Result<(S::Stream, T::Address)> {
         loop {
             let accept_new = self.handshakes.len() < MAX_CONCURRENT_HANDSHAKES;
