@@ -46,7 +46,7 @@ where
                 .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
                 .map(|utxo| Some(utxo.take_output())),
-            TxInput::Account(_) => Ok(None),
+            TxInput::Account(_, _) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     let inputs_utxos = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();

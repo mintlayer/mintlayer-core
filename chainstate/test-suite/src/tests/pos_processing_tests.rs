@@ -2097,14 +2097,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     .expect("should be able to mine");
 
     let amount_to_withdraw = Amount::from_atoms(rng.gen_range(1..amount_to_delegate.into_atoms()));
-    let tx_input_spend_from_delegation = AccountOutPoint::new(
-        0,
-        AccountType::Delegation(delegation_id),
-        amount_to_withdraw,
-    );
+    let tx_input_spend_from_delegation =
+        AccountOutPoint::new(0, AccountType::Delegation(delegation_id));
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::Account(tx_input_spend_from_delegation),
+            TxInput::Account(tx_input_spend_from_delegation, amount_to_withdraw),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::LockThenTransfer(
@@ -2162,14 +2159,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
     // try overspend
     {
         let delegation_balance_overspend = (delegation_balance + Amount::from_atoms(1)).unwrap();
-        let tx_input_spend_from_delegation = AccountOutPoint::new(
-            1,
-            AccountType::Delegation(delegation_id),
-            delegation_balance_overspend,
-        );
+        let tx_input_spend_from_delegation =
+            AccountOutPoint::new(1, AccountType::Delegation(delegation_id));
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(tx_input_spend_from_delegation),
+                TxInput::Account(tx_input_spend_from_delegation, delegation_balance_overspend),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -2199,14 +2193,11 @@ fn spend_from_delegation_with_reward(#[case] seed: Seed) {
         );
     }
 
-    let tx_input_spend_from_delegation = AccountOutPoint::new(
-        1,
-        AccountType::Delegation(delegation_id),
-        delegation_balance,
-    );
+    let tx_input_spend_from_delegation =
+        AccountOutPoint::new(1, AccountType::Delegation(delegation_id));
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::Account(tx_input_spend_from_delegation),
+            TxInput::Account(tx_input_spend_from_delegation, delegation_balance),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::LockThenTransfer(

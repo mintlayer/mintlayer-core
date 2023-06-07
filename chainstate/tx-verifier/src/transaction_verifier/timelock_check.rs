@@ -113,7 +113,7 @@ where
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                 Ok(Some((outpoint.clone(), utxo)))
             }
-            TxInput::Account(_) => Ok(None),
+            TxInput::Account(_, _) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     debug_assert_eq!(inputs.len(), input_utxos.len());
@@ -184,7 +184,7 @@ where
                         }
                     }
                 }
-                TxInput::Account(account_input) => match account_input.account() {
+                TxInput::Account(account_input, _) => match account_input.account() {
                     AccountType::Delegation(_) => {
                         Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
                     }

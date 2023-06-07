@@ -14,7 +14,6 @@
 // limitations under the License.
 
 use crate::chain::DelegationId;
-use crate::primitives::Amount;
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -33,18 +32,11 @@ pub struct AccountOutPoint {
     nonce: u128,
     /// Type of account to spend from.
     account: AccountType,
-    /// The amount to withdraw from account. This field helps solving 2 problems: calculating fees and
-    /// providing ability to sign input balance with the witness.
-    withdraw_amount: Amount,
 }
 
 impl AccountOutPoint {
-    pub fn new(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
-        Self {
-            nonce,
-            account,
-            withdraw_amount,
-        }
+    pub fn new(nonce: u128, account: AccountType) -> Self {
+        Self { nonce, account }
     }
 
     pub fn nonce(&self) -> u128 {
@@ -53,9 +45,5 @@ impl AccountOutPoint {
 
     pub fn account(&self) -> &AccountType {
         &self.account
-    }
-
-    pub fn withdraw_amount(&self) -> &Amount {
-        &self.withdraw_amount
     }
 }

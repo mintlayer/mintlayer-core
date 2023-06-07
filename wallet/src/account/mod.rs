@@ -512,7 +512,7 @@ impl Account {
     ) -> WalletResult<()> {
         let relevant_inputs = tx.inputs().iter().any(|input| match input {
             TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(outpoint),
-            TxInput::Account(_) => false,
+            TxInput::Account(_, _) => false,
         });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {

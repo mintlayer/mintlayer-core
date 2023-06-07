@@ -21,7 +21,9 @@ use super::{AccountOutPoint, AccountType, OutPointSourceId, UtxoOutPoint};
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum TxInput {
     Utxo(UtxoOutPoint),
-    Account(AccountOutPoint),
+    /// `Amount` type represents the amount to withdraw from account.
+    /// It helps solving 2 problems: calculating fees and providing ability to sign input balance with the witness.
+    Account(AccountOutPoint, Amount),
 }
 
 impl TxInput {
@@ -30,13 +32,13 @@ impl TxInput {
     }
 
     pub fn from_account(nonce: u128, account: AccountType, withdraw_amount: Amount) -> Self {
-        TxInput::Account(AccountOutPoint::new(nonce, account, withdraw_amount))
+        TxInput::Account(AccountOutPoint::new(nonce, account), withdraw_amount)
     }
 
     pub fn utxo_outpoint(&self) -> Option<&UtxoOutPoint> {
         match self {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_) => None,
+            TxInput::Account(_, _) => None,
         }
     }
 }

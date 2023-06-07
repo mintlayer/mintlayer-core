@@ -64,7 +64,7 @@ impl OutputCache {
                 TxInput::Utxo(outpoint) => {
                     self.consumed.insert(outpoint.clone());
                 }
-                TxInput::Account(_) => {
+                TxInput::Account(_, _) => {
                     unimplemented!()
                 }
             }
@@ -80,7 +80,7 @@ impl OutputCache {
                     TxInput::Utxo(outpoint) => {
                         self.consumed.remove(outpoint);
                     }
-                    TxInput::Account(_) => {
+                    TxInput::Account(_, _) => {
                         unimplemented!()
                     }
                 }

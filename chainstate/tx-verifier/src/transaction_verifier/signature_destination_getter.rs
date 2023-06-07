@@ -120,7 +120,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(account_input) => match account_input.account() {
+                    TxInput::Account(account_input, _) => match account_input.account() {
                         common::chain::AccountType::Delegation(delegation_id) => {
                             Ok(accounting_view
                                 .get_delegation_data(*delegation_id)?
@@ -179,7 +179,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(_) => {
+                    TxInput::Account(_, _) => {
                         Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }

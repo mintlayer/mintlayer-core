@@ -31,7 +31,7 @@ fn get_inputs_utxos(
         .iter()
         .filter_map(|input| match input {
             TxInput::Utxo(outpoint) => Some(outpoint),
-            TxInput::Account(_) => None,
+            TxInput::Account(_, _) => None,
         })
         .map(|outpoint| {
             utxo_view
@@ -170,7 +170,7 @@ fn is_valid_tx_with_accounting_input(tx: &Transaction) -> Result<(), ConnectTran
         .iter()
         .filter(|input| match input {
             TxInput::Utxo(_) => false,
-            TxInput::Account(account) => match account.account() {
+            TxInput::Account(account, _) => match account.account() {
                 common::chain::AccountType::Delegation(_) => true,
             },
         })

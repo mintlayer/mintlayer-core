@@ -34,7 +34,7 @@ impl<M: GetMemoryUsage> SpendsUnconfirmed<M> for TxInput {
                 .tx_id()
                 .get_tx_id()
                 .map_or(false, |tx_id| mempool.contains_transaction(tx_id)),
-            TxInput::Account(_) => false,
+            TxInput::Account(_, _) => false,
         }
     }
 }

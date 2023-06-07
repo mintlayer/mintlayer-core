@@ -338,11 +338,10 @@ fn delegate_staking(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountOutPoint::new(
-                    0,
-                    AccountType::Delegation(delegation_id),
+                TxInput::Account(
+                    AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
                     (amount_to_spend * 2).unwrap(),
-                )),
+                ),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -370,11 +369,10 @@ fn delegate_staking(#[case] seed: Seed) {
             // try spend delegation without increasing nonce
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::Account(AccountOutPoint::new(
-                        0,
-                        AccountType::Delegation(delegation_id),
+                    TxInput::Account(
+                        AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
                         spend_change,
-                    )),
+                    ),
                     empty_witness(&mut rng),
                 )
                 .add_output(TxOutput::LockThenTransfer(
@@ -397,11 +395,10 @@ fn delegate_staking(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountOutPoint::new(
-                    1,
-                    AccountType::Delegation(delegation_id),
+                TxInput::Account(
+                    AccountOutPoint::new(1, AccountType::Delegation(delegation_id)),
                     spend_change,
-                )),
+                ),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -499,11 +496,10 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountOutPoint::new(
-                    0,
-                    AccountType::Delegation(delegation_id),
+                TxInput::Account(
+                    AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
                     (amount_to_spend * 2).unwrap(),
-                )),
+                ),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -530,11 +526,10 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(AccountOutPoint::new(
-                    1,
-                    AccountType::Delegation(delegation_id),
+                TxInput::Account(
+                    AccountOutPoint::new(1, AccountType::Delegation(delegation_id)),
                     spend_change,
-                )),
+                ),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(

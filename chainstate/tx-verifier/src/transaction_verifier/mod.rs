@@ -351,6 +351,7 @@ where
         &mut self,
         tx_source: TransactionSource,
         account_input: &AccountOutPoint,
+        withdraw_amount: Amount,
     ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
@@ -372,7 +373,7 @@ where
                 // spending part of their share in the pool.
                 self.accounting_delta_adapter
                     .operations(tx_source)
-                    .spend_share_from_delegation_id(delegation_id, *account_input.withdraw_amount())
+                    .spend_share_from_delegation_id(delegation_id, withdraw_amount)
                     .map_err(ConnectTransactionError::PoSAccountingError)
             }
         }
@@ -426,11 +427,11 @@ where
                 TxInput::Utxo(outpoint) => {
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
-                TxInput::Account(account_input) => {
+                TxInput::Account(account_input, withdraw_amount) => {
                     check_for_delegation_cleanup = match account_input.account() {
                         AccountType::Delegation(delegation_id) => Some(*delegation_id),
                     };
-                    Some(self.spend_input_from_account(tx_source, account_input))
+                    Some(self.spend_input_from_account(tx_source, account_input, *withdraw_amount))
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -564,7 +565,7 @@ where
         for input in tx.inputs() {
             match input {
                 TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(account_input) => {
+                TxInput::Account(account_input, _) => {
                     let current_nonce = self
                         .get_account_nonce_count(*account_input.account())
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)?

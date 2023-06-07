@@ -224,7 +224,7 @@ impl<M> Mempool<M> {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => outpoint.tx_id().get_tx_id().cloned(),
-                TxInput::Account(_) => None,
+                TxInput::Account(_, _) => None,
             })
             .filter(|id| self.store.txs_by_id.contains_key(id))
             .collect::<BTreeSet<_>>();
