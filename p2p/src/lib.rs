@@ -26,6 +26,8 @@ pub mod testing_utils;
 pub mod types;
 pub mod utils;
 
+mod run_p2p;
+
 mod p2p_event;
 mod peer_manager_event;
 
@@ -351,7 +353,7 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
     peerdb_storage: S,
     bind_addresses: Vec<SocketAddr>,
     call: CallRequest<dyn P2pInterface>,
-    shutdown: ShutdownRequest,
+    mut shutdown: ShutdownRequest,
 ) -> Result<()> {
     if let Some(true) = p2p_config.disable_noise {
         assert_eq!(*chain_config.chain_type(), ChainType::Regtest);
@@ -359,7 +361,7 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
 
         let transport = make_p2p_transport_unencrypted();
 
-        P2p::<P2pNetworkingServiceUnencrypted>::new(
+        let p2p_running = run_p2p::run_p2p::<P2pNetworkingServiceUnencrypted, S>(
             transport,
             bind_addresses,
             chain_config,
@@ -368,14 +370,15 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             mempool_handle,
             time_getter,
             peerdb_storage,
+            call,
+            shutdown.recv(),
         )
-        .await?
-        .run(call, shutdown)
-        .await;
+        .await?;
+        p2p_running.await;
     } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
         let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
-        P2p::<P2pNetworkingServiceSocks5Proxy>::new(
+        let p2p_running = run_p2p::run_p2p::<P2pNetworkingServiceSocks5Proxy, S>(
             transport,
             bind_addresses,
             chain_config,
@@ -384,14 +387,15 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             mempool_handle,
             time_getter,
             peerdb_storage,
+            call,
+            shutdown.recv(),
         )
-        .await?
-        .run(call, shutdown)
-        .await;
+        .await?;
+        p2p_running.await;
     } else {
         let transport = make_p2p_transport();
 
-        P2p::<P2pNetworkingService>::new(
+        let p2p_running = run_p2p::run_p2p::<P2pNetworkingService, S>(
             transport,
             bind_addresses,
             chain_config,
@@ -400,10 +404,11 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             mempool_handle,
             time_getter,
             peerdb_storage,
+            call,
+            shutdown.recv(),
         )
-        .await?
-        .run(call, shutdown)
-        .await;
+        .await?;
+        p2p_running.await;
     }
 
     Ok(())

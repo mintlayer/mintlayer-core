@@ -1125,16 +1125,13 @@ where
                     self.rx_peer_manager.close();
                 },
 
-                event_opt = self.rx_peer_manager.recv() => match event_opt {
-                    Some(event) => {
+                event_opt = self.rx_peer_manager.recv() => if let Some(event) = event_opt {
                         self.handle_control_event(event);
                         heartbeat_call_needed = true;
-                    },
-                    None =>
+                    } else {
                         // Yay! No more unhandled requests — let's shutdown.
                         break
-
-                },
+                    },
 
                 event_res = self.peer_connectivity_handle.poll_next() => {
                     self.handle_connectivity_event(event_res?);

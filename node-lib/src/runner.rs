@@ -102,6 +102,7 @@ pub async fn initialize(
         Default::default(),
         peerdb_storage,
     )?;
+    
     let p2p = manager.add_subsystem_with_custom_eventloop("p2p", {
         move |call, shutdown| p2p.run(call, shutdown)
     });

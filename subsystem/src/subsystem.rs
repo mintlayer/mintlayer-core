@@ -54,8 +54,22 @@ impl<T: 'static + ?Sized> CallRequest<T> {
             // We have a call, return it
             Some(action) => action,
             // All handles to this subsystem dropped, suspend call handling.
-            None => std::future::pending().await,
+            None => {
+                log::warn!(
+                    "CallRequest<{}>: suspending forever",
+                    std::any::type_name::<T>()
+                );
+                std::future::pending().await
+            }
         }
+    }
+
+    pub async fn recv_opt(&mut self) -> Option<Action<T, ()>> {
+        self.0.recv().await
+    }
+
+    pub fn close(&mut self) {
+        self.0.close()
     }
 }
 

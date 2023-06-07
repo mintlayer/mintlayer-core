@@ -17,14 +17,7 @@
 //!
 //! Every connected peer gets unique ID (generated locally from a counter).
 
-use std::{
-    collections::HashMap,
-    future::Future,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, future::Future, sync::Arc};
 
 use futures::{future::BoxFuture, never::Never, stream::FuturesUnordered, FutureExt, StreamExt};
 use tokio::{sync::mpsc, time::timeout};
@@ -261,12 +254,10 @@ where
                 biased;
 
                 // Handle commands.
-                command_opt = self.cmd_rx.recv() => match command_opt {
-                    Some(command) =>
-                        self.handle_command(command),
-
-                    None =>
-                        break
+                command_opt = self.cmd_rx.recv() => if let Some(command) = command_opt {
+                    self.handle_command(command)
+                } else {
+                    break
                 },
                 // Process pending commands
                 callback = self.command_queue.select_next_some(), if !self.command_queue.is_empty() => {
@@ -294,9 +285,9 @@ where
                         },
                     }
                 }
-                handler = self.subscribers_receiver.recv() => {
-                    self.events_controller.subscribe_to_events(handler.ok_or(P2pError::ChannelClosed)?);
-                }
+                handler_opt = self.subscribers_receiver.recv() => if let Some(handler) = handler_opt {
+                    self.events_controller.subscribe_to_events(handler);
+                },
 
                 _ = shutdown_requested.as_mut() =>
                     self.cmd_rx.close(),

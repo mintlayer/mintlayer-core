@@ -140,44 +140,14 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
             );
 
             match backend.run(shutdown_requested).await {
-                Ok(_) => unreachable!(),
-                // Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
-                //     log::info!("Backend is shut down");
-                // }
+                Ok(()) => (),
+
                 Err(e) => {
-                    // shutdown.store(true, Ordering::SeqCst);
                     log::error!("Failed to run backend: {e}");
                 }
             }
         }
         .boxed();
-
-        // let backend_running = tokio::spawn(async move {
-        //     let mut backend = backend::Backend::<T>::new(
-        //         transport,
-        //         socket,
-        //         chain_config,
-        //         p2p_config_,
-        //         cmd_rx,
-        //         conn_tx,
-        //         sync_tx,
-        //         shutdown_,
-        //         shutdown_receiver,
-        //         subscribers_receiver,
-        //     );
-
-        //     match backend.run().await {
-        //         Ok(_) => unreachable!(),
-        //         Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
-        //             log::info!("Backend is shut down");
-        //         }
-        //         Err(e) => {
-        //             shutdown.store(true, Ordering::SeqCst);
-        //             log::error!("Failed to run backend: {e}");
-        //         }
-        //     }
-        // }).map(|_| ())
-        // .boxed();
 
         Ok((
             ConnectivityHandle::new(local_addresses, cmd_tx.clone(), conn_rx),
