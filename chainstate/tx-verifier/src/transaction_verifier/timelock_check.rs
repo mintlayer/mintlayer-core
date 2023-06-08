@@ -21,6 +21,7 @@ use common::{
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
+use itertools::Itertools;
 use thiserror::Error;
 use utils::ensure;
 use utxo::UtxosView;
@@ -171,7 +172,7 @@ where
     if let Some(outputs) = tx.outputs() {
         // in case `CreateStakePool`, `ProduceBlockFromStake` utxos are spent or an input from account
         // then produced outputs must be timelocked as per chain config
-        let output_checks_required = inputs
+        let output_check_required = inputs
             .iter()
             .zip(input_utxos.iter())
             .filter_map(|(input, utxo_with_outpoint)| match input {
@@ -193,21 +194,17 @@ where
                     }
                 },
             })
-            .collect::<Vec<_>>();
+            // Note: theoretically there could be several inputs that impose timelock requirement
+            // but for now such transaction is considered invalid
+            .at_most_one()
+            .map_err(|_| ConnectTransactionError::InvalidInputTypeInTx)?;
 
-        // Note: theoretically there could be several inputs that impose timelock requirement
-        // but for now such transaction is considered invalid
-        ensure!(
-            output_checks_required.len() < 2,
-            ConnectTransactionError::InvalidInputTypeInTx
-        );
-
-        if let Some(output_check_required) = output_checks_required.get(0) {
+        if let Some(output_check_required) = output_check_required {
             check_outputs_timelock(
                 chain_config.as_ref(),
                 outputs,
                 tx_source.expected_block_height(),
-                *output_check_required,
+                output_check_required,
                 outpoint_source_id,
             )?;
         }

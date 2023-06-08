@@ -31,11 +31,11 @@ impl AccountNonce {
     }
 
     pub fn increment(self) -> Option<Self> {
-        (self.0 < u64::MAX).then(|| AccountNonce::new(self.0 + 1))
+        self.0.checked_add(1).map(AccountNonce::new)
     }
 
     pub fn decrement(self) -> Option<Self> {
-        (self.0 > 0).then(|| AccountNonce::new(self.0 - 1))
+        self.0.checked_sub(1).map(AccountNonce::new)
     }
 }
 #[cfg(test)]

@@ -392,6 +392,33 @@ fn delegate_staking(#[case] seed: Seed) {
             )
         }
 
+        {
+            // try spend delegation skipping values of nonce
+            let tx = TransactionBuilder::new()
+                .add_input(
+                    TxInput::Account(AccountOutPoint::new(
+                        AccountNonce::new(2),
+                        AccountSpending::Delegation(delegation_id, spend_change),
+                    )),
+                    empty_witness(&mut rng),
+                )
+                .add_output(TxOutput::LockThenTransfer(
+                    OutputValue::Coin(spend_change),
+                    Destination::AnyoneCanSpend,
+                    OutputTimeLock::ForBlockCount(1),
+                ))
+                .build();
+
+            assert_eq!(
+                tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
+                ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
+                    ConnectTransactionError::NonceIsNotIncremental(AccountType::Delegation(
+                        delegation_id
+                    ))
+                ))
+            )
+        }
+
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
