@@ -59,7 +59,7 @@ impl<T: 'static + ?Sized> CallRequest<T> {
                 //     "CallRequest<{}>: suspending forever",
                 //     std::any::type_name::<T>()
                 // );
-                
+
                 // XXX: is this really the desired behaviour? (@RGafiyatullin)
                 std::future::pending().await
             }

@@ -14,6 +14,5 @@
 // limitations under the License.
 
 pub mod p2p_interface;
-// pub mod p2p_interface_impl;
 pub mod p2p_interface_impl_delegation;
 pub mod types;
