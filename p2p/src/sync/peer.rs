@@ -68,7 +68,7 @@ use crate::{
 pub struct Peer<T: NetworkingService> {
     id: ConstValue<PeerId>,
     p2p_config: Arc<P2pConfig>,
-    services: Services,
+    common_services: Services,
     chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
     mempool_handle: MempoolHandle,
     peer_manager_sender: UnboundedSender<PeerManagerEvent<T>>,
@@ -107,6 +107,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: PeerId,
+        remote_services: Services,
         p2p_config: Arc<P2pConfig>,
         chainstate_handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
         mempool_handle: MempoolHandle,
@@ -116,12 +117,13 @@ where
         is_initial_block_download: Arc<AtomicBool>,
         time_getter: TimeGetter,
     ) -> Self {
-        let services = (*p2p_config.node_type).into();
+        let local_services: Services = (*p2p_config.node_type).into();
+        let common_services = local_services & remote_services;
 
         Self {
             id: id.into(),
             p2p_config,
-            services,
+            common_services,
             chainstate_handle,
             mempool_handle,
             peer_manager_sender,
@@ -156,8 +158,10 @@ where
         let mut stalling_interval = tokio::time::interval(*self.p2p_config.sync_stalling_timeout);
         stalling_interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-        self.request_headers().await?;
-        self.last_activity = Some(self.time_getter.get_time());
+        if self.common_services.has_service(Service::Blocks) {
+            self.request_headers().await?;
+            self.last_activity = Some(self.time_getter.get_time());
+        }
 
         loop {
             tokio::select! {
@@ -452,7 +456,7 @@ where
     }
 
     async fn handle_transaction_request(&mut self, id: Id<Transaction>) -> Result<()> {
-        if !self.services.has_service(Service::Transactions) {
+        if !self.common_services.has_service(Service::Transactions) {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "A transaction request is received, but this node doesn't have the corresponding service".to_owned(),
             )));
@@ -502,7 +506,7 @@ where
             return Ok(());
         }
 
-        if !self.services.has_service(Service::Transactions) {
+        if !self.common_services.has_service(Service::Transactions) {
             return Err(P2pError::ProtocolError(ProtocolError::UnexpectedMessage(
                 "A transaction announcement is received, but this node doesn't have the corresponding service".to_owned(),
             )));

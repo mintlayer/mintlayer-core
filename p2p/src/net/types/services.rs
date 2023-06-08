@@ -39,6 +39,22 @@ impl From<&[Service]> for Services {
     }
 }
 
+impl std::ops::BitAnd for Services {
+    type Output = Services;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Services(self.0 & rhs.0)
+    }
+}
+
+impl std::ops::BitOr for Services {
+    type Output = Services;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Services(self.0 | rhs.0)
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;

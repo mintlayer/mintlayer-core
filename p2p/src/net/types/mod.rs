@@ -148,6 +148,7 @@ pub enum SyncingEvent {
     /// Peer connected
     Connected {
         peer_id: PeerId,
+        services: Services,
     },
 
     /// Peer disconnected

@@ -219,10 +219,14 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
             .map_err(ControllerError::NodeCallError)
     }
 
-    pub async fn create_stake_pool_tx(&mut self, amount: Amount) -> Result<(), ControllerError<T>> {
+    pub async fn create_stake_pool_tx(
+        &mut self,
+        amount: Amount,
+        decomission_key: Option<PublicKey>,
+    ) -> Result<(), ControllerError<T>> {
         let tx = self
             .wallet
-            .create_stake_pool_tx(DEFAULT_ACCOUNT_INDEX, amount)
+            .create_stake_pool_tx(DEFAULT_ACCOUNT_INDEX, amount, decomission_key)
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)

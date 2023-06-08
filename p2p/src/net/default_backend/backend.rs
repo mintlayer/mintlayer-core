@@ -208,7 +208,10 @@ where
 
         Self::send_sync_event(
             &self.sync_tx,
-            SyncingEvent::Connected { peer_id },
+            SyncingEvent::Connected {
+                peer_id,
+                services: peer.services,
+            },
             &self.shutdown,
         );
         self.events_controller.broadcast(P2pEvent::PeerConnected {

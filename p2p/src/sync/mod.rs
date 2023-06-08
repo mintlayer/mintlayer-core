@@ -43,7 +43,10 @@ use crate::{
     config::P2pConfig,
     error::{P2pError, PeerError},
     message::{HeaderList, SyncMessage},
-    net::{types::SyncingEvent, MessagingService, NetworkingService, SyncingEventReceiver},
+    net::{
+        types::{services::Services, SyncingEvent},
+        MessagingService, NetworkingService, SyncingEventReceiver,
+    },
     sync::peer::Peer,
     types::peer_id::PeerId,
     PeerManagerEvent, Result,
@@ -140,7 +143,7 @@ where
     }
 
     /// Starts a task for the new peer.
-    pub fn register_peer(&mut self, peer: PeerId) -> Result<()> {
+    pub fn register_peer(&mut self, peer: PeerId, remote_services: Services) -> Result<()> {
         log::debug!("Register peer {peer} to sync manager");
 
         let (sender, receiver) = mpsc::unbounded_channel();
@@ -160,6 +163,7 @@ where
         tokio::spawn(async move {
             Peer::<T>::new(
                 peer,
+                remote_services,
                 p2p_config,
                 chainstate_handle,
                 mempool_handle,
@@ -213,8 +217,8 @@ where
     /// Sends an event to the corresponding peer.
     fn handle_peer_event(&mut self, event: SyncingEvent) -> Result<()> {
         let (peer, message) = match event {
-            SyncingEvent::Connected { peer_id } => {
-                self.register_peer(peer_id)?;
+            SyncingEvent::Connected { peer_id, services } => {
+                self.register_peer(peer_id, services)?;
                 return Ok(());
             }
             SyncingEvent::Disconnected { peer_id } => {

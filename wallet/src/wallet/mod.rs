@@ -306,9 +306,10 @@ impl<B: storage::Backend> Wallet<B> {
         &mut self,
         account_index: U31,
         amount: Amount,
+        decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
         self.for_account_rw_unlocked(account_index, |account, db_tx| {
-            account.create_stake_pool_tx(db_tx, amount)
+            account.create_stake_pool_tx(db_tx, amount, decomission_key)
         })
     }
 
