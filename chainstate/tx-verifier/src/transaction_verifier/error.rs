@@ -157,6 +157,8 @@ pub enum ConnectTransactionError {
     AttemptToCreateStakePoolFromAccounts,
     #[error("Attempt to create delegation from accounting inputs")]
     AttemptToCreateDelegationFromAccounts,
+    #[error("Failed to increment account nonce")]
+    FailedToIncrementAccountNonce,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

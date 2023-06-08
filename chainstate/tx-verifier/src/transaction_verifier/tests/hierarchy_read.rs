@@ -658,13 +658,13 @@ fn hierarchy_test_nonce(#[case] seed: Seed) {
 
     let chain_config = ConfigBuilder::test_chain().build();
 
-    let nonce0 = rng.gen::<u128>();
+    let nonce0 = AccountNonce::new(rng.gen());
     let account0 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
 
-    let nonce1 = rng.gen::<u128>();
+    let nonce1 = AccountNonce::new(rng.gen());
     let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
 
-    let nonce2 = rng.gen::<u128>();
+    let nonce2 = AccountNonce::new(rng.gen());
     let account2 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
 
     let mut store = mock::MockStore::new();

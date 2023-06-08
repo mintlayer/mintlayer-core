@@ -20,8 +20,8 @@ use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -54,7 +54,7 @@ storage::decl_schema! {
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
         /// Store the number of transactions per account
-        pub DBAccountNonceCount: Map<AccountType, u128>,
+        pub DBAccountNonceCount: Map<AccountType, AccountNonce>,
 
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,

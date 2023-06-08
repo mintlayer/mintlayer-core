@@ -119,16 +119,13 @@ impl TxIndexCache {
     }
 
     pub fn unspend_tx_index_inputs(&mut self, inputs: &[TxInput]) -> Result<(), TxIndexError> {
-        inputs
-            .iter()
-            .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => Some(outpoint),
-                TxInput::Account(_) => None,
-            })
-            .try_for_each(|outpoint| {
+        inputs.iter().try_for_each(|input| match input {
+            TxInput::Utxo(outpoint) => {
                 let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
                 prev_tx_index_op.unspend(outpoint.output_index()).map_err(TxIndexError::from)
-            })
+            }
+            TxInput::Account(_) => Ok(()),
+        })
     }
 
     pub fn precache_inputs<F, E>(
@@ -140,13 +137,8 @@ impl TxIndexCache {
         F: Fn(&OutPointSourceId) -> Result<Option<TxMainChainIndex>, E>,
         ConnectTransactionError: From<E>,
     {
-        inputs
-            .iter()
-            .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => Some(outpoint),
-                TxInput::Account(_) => None,
-            })
-            .try_for_each(|outpoint| {
+        inputs.iter().try_for_each(|input| match input {
+            TxInput::Utxo(outpoint) => {
                 match self.data.entry(outpoint.tx_id()) {
                     Entry::Occupied(_) => (),
                     Entry::Vacant(entry) => {
@@ -157,7 +149,9 @@ impl TxIndexCache {
                     }
                 };
                 Ok(())
-            })
+            }
+            TxInput::Account(_) => Ok(()),
+        })
     }
 }
 

@@ -347,7 +347,8 @@ mod tests {
             block::consensus_data::{PoSData, PoWData},
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            AccountOutPoint, DelegationId, Destination, GenBlock, PoolId, UtxoOutPoint,
+            AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, PoolId,
+            UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -604,7 +605,7 @@ mod tests {
         // try overspend balance
         {
             let input = TxInput::Account(AccountOutPoint::new(
-                0,
+                AccountNonce::new(0),
                 AccountSpending::Delegation(delegation_id, overspend_amount),
             ));
 
@@ -628,7 +629,7 @@ mod tests {
         // try overspend input
         {
             let input = TxInput::Account(AccountOutPoint::new(
-                0,
+                AccountNonce::new(0),
                 AccountSpending::Delegation(delegation_id, withdraw_amount),
             ));
 
@@ -650,7 +651,7 @@ mod tests {
         }
 
         let input = TxInput::Account(AccountOutPoint::new(
-            0,
+            AccountNonce::new(0),
             AccountSpending::Delegation(delegation_id, withdraw_amount),
         ));
         let output = TxOutput::Transfer(

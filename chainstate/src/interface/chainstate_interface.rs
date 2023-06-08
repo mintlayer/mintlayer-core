@@ -22,7 +22,7 @@ use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 
 use common::chain::block::signed_block_header::SignedBlockHeader;
-use common::chain::AccountType;
+use common::chain::{AccountNonce, AccountType};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
@@ -230,5 +230,5 @@ pub trait ChainstateInterface: Send {
     fn get_account_nonce_count(
         &self,
         account: AccountType,
-    ) -> Result<Option<u128>, ChainstateError>;
+    ) -> Result<Option<AccountNonce>, ChainstateError>;
 }

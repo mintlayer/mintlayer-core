@@ -66,8 +66,9 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig, DelegationId, GenBlock,
-        OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountNonce, AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig,
+        DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
+        TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -96,7 +97,7 @@ pub struct TransactionVerifierDelta {
     accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
-    account_nonce: BTreeMap<AccountType, CachedOperation<u128>>,
+    account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
 /// The tool used to verify transactions and cache their updated states in memory
@@ -114,7 +115,7 @@ pub struct TransactionVerifier<C, S, U, A> {
     accounting_delta_adapter: PoSAccountingDeltaAdapter<A>,
     accounting_block_undo: AccountingBlockUndoCache,
 
-    account_nonce: BTreeMap<AccountType, CachedOperation<u128>>,
+    account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,
 }
 
 impl<C, S: TransactionVerifierStorageRef + ShallowClone> TransactionVerifier<C, S, UtxosDB<S>, S> {
@@ -354,10 +355,15 @@ where
     ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
-        let expected_nonce = self
+        let expected_nonce = match self
             .get_account_nonce_count(account.into())
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
-            .map_or(0, |nonce| nonce + 1);
+        {
+            Some(nonce) => nonce
+                .increment()
+                .ok_or(ConnectTransactionError::FailedToIncrementAccountNonce)?,
+            None => AccountNonce::new(0),
+        };
         ensure!(
             expected_nonce == account_input.nonce(),
             ConnectTransactionError::NonceIsNotIncremental(account.into())
@@ -568,16 +574,13 @@ where
                 TxInput::Utxo(_) => { /* do nothing */ }
                 TxInput::Account(account_input) => {
                     let account: AccountType = (*account_input.account()).into();
-                    let current_nonce = self
+                    let new_nonce = self
                         .get_account_nonce_count(account)
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
-                        .ok_or(ConnectTransactionError::MissingTransactionNonce(account))?;
-                    let new_nonce_op = if current_nonce == 0 {
-                        CachedOperation::Erase
-                    } else {
-                        CachedOperation::Write(current_nonce - 1)
-                    };
-                    self.account_nonce.insert(account, new_nonce_op);
+                        .ok_or(ConnectTransactionError::MissingTransactionNonce(account))?
+                        .decrement()
+                        .map_or(CachedOperation::Erase, CachedOperation::Write);
+                    self.account_nonce.insert(account, new_nonce);
                 }
             };
         }

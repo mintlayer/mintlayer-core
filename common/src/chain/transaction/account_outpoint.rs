@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{chain::DelegationId, primitives::Amount};
+use crate::{
+    chain::{AccountNonce, DelegationId},
+    primitives::Amount,
+};
 use serialization::{Decode, Encode};
 
 // Type of an account that can be used to identify series of spending from an account
@@ -42,21 +45,16 @@ pub enum AccountSpending {
 /// Type of OutPoint that represents spending from an account
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct AccountOutPoint {
-    /// An incremental value that represents sequential number of spending from an account.
-    /// It's equivalent to the nonce in Ethereum and helps preserving order of transactions and
-    /// avoid transaction replay.
-    #[codec(compact)]
-    nonce: u128,
-    /// Type of account to spend from.
+    nonce: AccountNonce,
     account: AccountSpending,
 }
 
 impl AccountOutPoint {
-    pub fn new(nonce: u128, account: AccountSpending) -> Self {
+    pub fn new(nonce: AccountNonce, account: AccountSpending) -> Self {
         Self { nonce, account }
     }
 
-    pub fn nonce(&self) -> u128 {
+    pub fn nonce(&self) -> AccountNonce {
         self.nonce
     }
 

@@ -23,8 +23,8 @@ use chainstate_test_framework::{
 use common::chain::{AccountOutPoint, AccountSpending, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
-        timelock::OutputTimeLock, tokens::OutputValue, Destination, OutPointSourceId, TxInput,
-        TxOutput, UtxoOutPoint,
+        timelock::OutputTimeLock, tokens::OutputValue, AccountNonce, Destination, OutPointSourceId,
+        TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Idable, H256},
 };
@@ -339,7 +339,7 @@ fn delegate_staking(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
-                    0,
+                    AccountNonce::new(0),
                     AccountSpending::Delegation(delegation_id, (amount_to_spend * 2).unwrap()),
                 )),
                 empty_witness(&mut rng),
@@ -370,7 +370,7 @@ fn delegate_staking(#[case] seed: Seed) {
             let tx = TransactionBuilder::new()
                 .add_input(
                     TxInput::Account(AccountOutPoint::new(
-                        0,
+                        AccountNonce::new(0),
                         AccountSpending::Delegation(delegation_id, spend_change),
                     )),
                     empty_witness(&mut rng),
@@ -396,7 +396,7 @@ fn delegate_staking(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
-                    1,
+                    AccountNonce::new(1),
                     AccountSpending::Delegation(delegation_id, spend_change),
                 )),
                 empty_witness(&mut rng),
@@ -497,7 +497,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
-                    0,
+                    AccountNonce::new(0),
                     AccountSpending::Delegation(delegation_id, (amount_to_spend * 2).unwrap()),
                 )),
                 empty_witness(&mut rng),
@@ -527,7 +527,7 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         let tx = TransactionBuilder::new()
             .add_input(
                 TxInput::Account(AccountOutPoint::new(
-                    1,
+                    AccountNonce::new(1),
                     AccountSpending::Delegation(delegation_id, spend_change),
                 )),
                 empty_witness(&mut rng),

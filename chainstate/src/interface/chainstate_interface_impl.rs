@@ -32,7 +32,7 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        AccountType, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
         TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
@@ -561,7 +561,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
     fn get_account_nonce_count(
         &self,
         account: AccountType,
-    ) -> Result<Option<u128>, ChainstateError> {
+    ) -> Result<Option<AccountNonce>, ChainstateError> {
         self.chainstate
             .make_db_tx_ro()
             .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?

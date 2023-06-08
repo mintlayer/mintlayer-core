@@ -31,7 +31,7 @@ use common::chain::block::BlockReward;
 use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{AccountType, Block, GenBlock, OutPointSourceId};
+use common::chain::{AccountNonce, AccountType, Block, GenBlock, OutPointSourceId};
 use common::primitives::{BlockHeight, Id};
 use pos_accounting::{
     AccountingBlockUndo, DeltaMergeUndo, PoSAccountingDeltaData, PoSAccountingStorageRead,
@@ -119,7 +119,7 @@ pub trait BlockchainStorageRead:
     ) -> crate::Result<Option<DeltaMergeUndo>>;
 
     /// Get nonce value for specific account
-    fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>>;
+    fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -212,7 +212,7 @@ pub trait BlockchainStorageWrite:
     // Remove accounting block undo data for specific block
     fn del_accounting_epoch_undo_delta(&mut self, epoch_index: EpochIndex) -> Result<()>;
 
-    fn set_account_nonce_count(&mut self, account: AccountType, nonce: u128) -> Result<()>;
+    fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> Result<()>;
     fn del_account_nonce_count(&mut self, account: AccountType) -> Result<()>;
 }
 

@@ -25,7 +25,7 @@ use common::chain::{
     block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
-    AccountType, OutPointSourceId, TxMainChainIndex,
+    AccountNonce, AccountType, OutPointSourceId, TxMainChainIndex,
 };
 use common::chain::{Transaction, UtxoOutPoint};
 use common::{
@@ -331,7 +331,7 @@ where
     fn get_account_nonce_count(
         &self,
         account: AccountType,
-    ) -> Result<Option<u128>, ChainstateError> {
+    ) -> Result<Option<AccountNonce>, ChainstateError> {
         self.deref().get_account_nonce_count(account)
     }
 }

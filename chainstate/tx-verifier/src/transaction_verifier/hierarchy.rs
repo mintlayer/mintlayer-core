@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -111,7 +111,7 @@ where
     fn get_account_nonce_count(
         &self,
         account: AccountType,
-    ) -> Result<Option<u128>, <Self as TransactionVerifierStorageRef>::Error> {
+    ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error> {
         match self.account_nonce.get(&account) {
             Some(op) => match *op {
                 CachedOperation::Write(nonce) => Ok(Some(nonce)),
@@ -267,7 +267,7 @@ where
     fn set_account_nonce_count(
         &mut self,
         account: AccountType,
-        nonce: u128,
+        nonce: AccountNonce,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.account_nonce.insert(account, CachedOperation::Write(nonce));
         Ok(())
@@ -277,7 +277,7 @@ where
         &mut self,
         account: AccountType,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
-        self.account_nonce.insert(account, CachedOperation::<u128>::Erase);
+        self.account_nonce.insert(account, CachedOperation::<AccountNonce>::Erase);
         Ok(())
     }
 }

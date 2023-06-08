@@ -22,7 +22,8 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId, UtxoOutPoint,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -249,7 +250,7 @@ impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
 
-        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<u128>>;
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
     }
 }
 
@@ -402,7 +403,7 @@ impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
         fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
         fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
 
-        fn set_account_nonce_count(&mut self, account: AccountType, nonce: u128) -> crate::Result<()>;
+        fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
         fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
     }
 }

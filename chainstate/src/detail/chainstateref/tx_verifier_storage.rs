@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId,
-        PoolId, Transaction,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId,
+        OutPointSourceId, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
@@ -89,7 +89,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
     fn get_account_nonce_count(
         &self,
         account: AccountType,
-    ) -> Result<Option<u128>, TransactionVerifierStorageError> {
+    ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
         self.db_tx
             .get_account_nonce_count(account)
             .map_err(TransactionVerifierStorageError::from)
@@ -307,7 +307,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
     fn set_account_nonce_count(
         &mut self,
         account: AccountType,
-        nonce: u128,
+        nonce: AccountNonce,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
         self.db_tx
             .set_account_nonce_count(account, nonce)
