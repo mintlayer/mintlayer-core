@@ -270,8 +270,6 @@ impl<'f> BlockBuilder<'f> {
         outputs
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(&self.framework.chainstate, s, &o, rng))
-            .collect::<Vec<_>>()
-            .into_iter()
             .multiunzip()
     }
 }

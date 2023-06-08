@@ -430,10 +430,11 @@ fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
     });
 }
 
+// Try to use the transaction three times in one block.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn duplicate_odd_tx_in_the_same_block(#[case] seed: Seed) {
+fn triplicate_tx_in_the_same_block(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::builder(&mut rng).build();
