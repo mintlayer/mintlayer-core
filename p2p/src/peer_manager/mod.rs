@@ -98,7 +98,7 @@ const PEER_ADDRESSES_ROLLING_BLOOM_FPP: f64 = 0.001;
 /// Hardcoded seed DNS hostnames
 // TODO: Replace with actual values
 const DNS_SEEDS_MAINNET: [&str; 0] = [];
-const DNS_SEEDS_TESTNET: [&str; 1] = ["mintlayer-testnet.kklm.in"];
+const DNS_SEEDS_TESTNET: [&str; 2] = ["mintlayer-testnet.mooo.com", "mintlayer-testnet.kklm.in"];
 
 /// Maximum number of records accepted in a single DNS server response
 const MAX_DNS_RECORDS: usize = 10;
