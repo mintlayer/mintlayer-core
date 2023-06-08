@@ -468,10 +468,13 @@ mod tests {
         .unwrap();
     }
 
+    // Create 2 pools with different balances.
+    // For block reward total inputs and total outputs must be equal.
+    // Check that if different balances are used for inputs and outputs an error is produced.
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn check_block_reward_pos_mismatch(#[case] seed: Seed) {
+    fn check_block_reward_pos_amount_mismatch(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
         let pool_id_1 = PoolId::new(H256::random_using(&mut rng));
@@ -479,7 +482,7 @@ mod tests {
 
         let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
-        let pledge_amount_2 = Amount::from_atoms(rng.gen_range(0..100_000));
+        let pledge_amount_2 = Amount::from_atoms(rng.gen_range(100_000..200_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
         let stake_pool_data_1 = StakePoolData::new(
