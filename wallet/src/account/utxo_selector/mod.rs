@@ -653,3 +653,6 @@ pub fn select_coins(
         .map(|res| res.into_output_pairs())
         .ok_or_else(|| errors.pop().unwrap_or(CoinSelectorError::NoSolutionFound))
 }
+
+#[cfg(test)]
+mod tests;
