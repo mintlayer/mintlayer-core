@@ -53,6 +53,7 @@ use mempool::{MempoolHandle, MempoolSubsystemInterface};
 use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
 use crate::{
+    config::NodeType,
     message::{SyncMessage, TransactionResponse},
     net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
     sync::{subscribe_to_new_tip, BlockSyncManager},
@@ -157,7 +158,12 @@ impl SyncManagerHandle {
 
     /// Sends the `SyncControlEvent::Connected` event without checking outgoing messages.
     pub fn try_connect_peer(&mut self, peer: PeerId) {
-        self.sync_event_sender.send(SyncingEvent::Connected { peer_id: peer }).unwrap();
+        self.sync_event_sender
+            .send(SyncingEvent::Connected {
+                peer_id: peer,
+                services: NodeType::Full.into(),
+            })
+            .unwrap();
         self.connected_peers.lock().unwrap().insert(peer);
     }
 

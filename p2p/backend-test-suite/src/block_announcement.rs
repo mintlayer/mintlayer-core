@@ -97,7 +97,10 @@ where
         .unwrap();
 
     match sync2.poll_next().await.unwrap() {
-        SyncingEvent::Connected { peer_id: _ } => {}
+        SyncingEvent::Connected {
+            peer_id: _,
+            services: _,
+        } => {}
         event => panic!("Unexpected event: {event:?}"),
     };
 
@@ -130,7 +133,10 @@ where
         .unwrap();
 
     match sync1.poll_next().await.unwrap() {
-        SyncingEvent::Connected { peer_id: _ } => {}
+        SyncingEvent::Connected {
+            peer_id: _,
+            services: _,
+        } => {}
         event => panic!("Unexpected event: {event:?}"),
     };
 
