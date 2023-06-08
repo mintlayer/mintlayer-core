@@ -31,7 +31,8 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        ChainConfig, Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountNonce, AccountOutPoint, AccountSpending, ChainConfig, DelegationId, Destination,
+        OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, Id, H256},
 };
@@ -384,7 +385,7 @@ fn mutate_all(#[case] seed: Seed) {
 
     let mutations = [
         add_input,
-        mutate_input,
+        mutate_first_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -452,7 +453,7 @@ fn mutate_all_anyonecanpay(#[case] seed: Seed) {
             tx: tx.clone(),
             inputs_utxos: inputs_utxos.clone(),
         };
-        let tx = mutate_input(&mut rng, &tx);
+        let tx = mutate_first_input(&mut rng, &tx);
         assert_eq!(
             verify_signature(&chain_config, &destination, &tx.tx, &inputs_utxos_refs, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -497,7 +498,7 @@ fn mutate_none(#[case] seed: Seed) {
 
     let mutations = [
         add_input,
-        mutate_input,
+        mutate_first_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -560,7 +561,7 @@ fn mutate_none_anyonecanpay(#[case] seed: Seed) {
             tx: tx.clone(),
             inputs_utxos: inputs_utxos.clone(),
         };
-        let tx = mutate_input(&mut rng, &tx);
+        let tx = mutate_first_input(&mut rng, &tx);
         let inputs = tx.tx.inputs().len();
 
         assert_eq!(
@@ -640,7 +641,7 @@ fn mutate_single(#[case] seed: Seed) {
 
     let mutations = [
         add_input,
-        mutate_input,
+        mutate_first_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -820,7 +821,7 @@ fn mutate_single_anyonecanpay(#[case] seed: Seed) {
         );
     }
 
-    let mutations = [mutate_input, mutate_output];
+    let mutations = [mutate_first_input, mutate_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&mut rng, &tx);
         let total_inputs = tx.tx.inputs().len();
@@ -960,12 +961,42 @@ fn add_input(_rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTrans
     }
 }
 
-fn mutate_input(rng: &mut impl Rng, tx: &SignedTransactionWithUtxo) -> SignedTransactionWithUtxo {
+fn mutate_first_input(
+    rng: &mut impl Rng,
+    tx: &SignedTransactionWithUtxo,
+) -> SignedTransactionWithUtxo {
     let mut updater = MutableTransaction::from(&tx.tx);
-    updater.inputs[0] = TxInput::from_utxo(
-        OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
-        9999,
-    );
+
+    let mutated_input = match updater.inputs.get(0).unwrap() {
+        TxInput::Utxo(outpoint) => {
+            if rng.gen::<bool>() {
+                TxInput::Utxo(UtxoOutPoint::new(outpoint.tx_id(), rng.gen()))
+            } else {
+                TxInput::Utxo(UtxoOutPoint::new(
+                    OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random_using(rng))),
+                    outpoint.output_index(),
+                ))
+            }
+        }
+        TxInput::Account(outpoint) => {
+            if rng.gen::<bool>() {
+                TxInput::Account(AccountOutPoint::new(
+                    outpoint.nonce(),
+                    AccountSpending::Delegation(
+                        DelegationId::new(H256::random_using(rng)),
+                        Amount::from_atoms(rng.gen()),
+                    ),
+                ))
+            } else {
+                TxInput::Account(AccountOutPoint::new(
+                    AccountNonce::new(rng.gen()),
+                    *outpoint.account(),
+                ))
+            }
+        }
+    };
+    updater.inputs[0] = mutated_input;
+
     SignedTransactionWithUtxo {
         tx: updater.generate_tx().unwrap(),
         inputs_utxos: tx.inputs_utxos.clone(),
