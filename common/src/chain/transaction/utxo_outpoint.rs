@@ -14,10 +14,10 @@
 // limitations under the License.
 
 use crate::chain::{transaction::Transaction, Block, GenBlock, Genesis};
-use crate::primitives::{Id, H256};
+use crate::primitives::Id;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(Id<Transaction>),
@@ -58,50 +58,10 @@ impl OutPointSourceId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Ord, PartialOrd)]
 pub struct UtxoOutPoint {
     id: OutPointSourceId,
     index: u32,
-}
-
-impl OutPointSourceId {
-    fn outpoint_source_id_as_monolithic_tuple(&self) -> (u8, H256) {
-        const TX_OUT_INDEX: u8 = 0;
-        const BLK_REWARD_INDEX: u8 = 1;
-        match self {
-            OutPointSourceId::Transaction(h) => (TX_OUT_INDEX, h.get()),
-            OutPointSourceId::BlockReward(h) => (BLK_REWARD_INDEX, h.get()),
-        }
-    }
-}
-
-impl PartialOrd for OutPointSourceId {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for OutPointSourceId {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = self.outpoint_source_id_as_monolithic_tuple();
-        let other_id = other.outpoint_source_id_as_monolithic_tuple();
-        id.cmp(&other_id)
-    }
-}
-
-impl PartialOrd for UtxoOutPoint {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for UtxoOutPoint {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = self.id.outpoint_source_id_as_monolithic_tuple();
-        let other_id = other.id.outpoint_source_id_as_monolithic_tuple();
-
-        (id, self.index).cmp(&(other_id, other.index))
-    }
 }
 
 impl UtxoOutPoint {
@@ -123,6 +83,8 @@ impl UtxoOutPoint {
 
 #[cfg(test)]
 mod test {
+    use crate::primitives::H256;
+
     use rstest::rstest;
     use test_utils::random::Seed;
 

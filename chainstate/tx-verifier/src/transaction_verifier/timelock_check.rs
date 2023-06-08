@@ -40,6 +40,7 @@ pub enum OutputMaturityError {
     InvalidOutputMaturityDistanceValue(UtxoOutPoint, u64),
 }
 
+#[derive(Debug, Clone, Copy)]
 enum OutputTimelockCheckRequired {
     DelegationSpendMaturity,
     DecommissioningMaturity,
@@ -170,8 +171,10 @@ where
     if let Some(outputs) = tx.outputs() {
         // in case `CreateStakePool`, `ProduceBlockFromStake` utxos are spent or an input from account
         // then produced outputs must be timelocked as per chain config
-        let output_check_required = inputs.iter().zip(input_utxos.iter()).find_map(
-            |(input, utxo_with_outpoint)| match input {
+        let output_checks_required = inputs
+            .iter()
+            .zip(input_utxos.iter())
+            .filter_map(|(input, utxo_with_outpoint)| match input {
                 TxInput::Utxo(_) => {
                     match utxo_with_outpoint.clone().expect("must be present").1.output() {
                         TxOutput::Transfer(_, _)
@@ -189,15 +192,22 @@ where
                         Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
                     }
                 },
-            },
+            })
+            .collect::<Vec<_>>();
+
+        // Note: theoretically there could be several inputs that impose timelock requirement
+        // but for now such transaction is considered invalid
+        ensure!(
+            output_checks_required.len() < 2,
+            ConnectTransactionError::InvalidInputTypeInTx
         );
 
-        if let Some(output_check_required) = output_check_required {
+        if let Some(output_check_required) = output_checks_required.get(0) {
             check_outputs_timelock(
                 chain_config.as_ref(),
                 outputs,
                 tx_source.expected_block_height(),
-                output_check_required,
+                *output_check_required,
                 outpoint_source_id,
             )?;
         }

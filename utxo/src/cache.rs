@@ -182,12 +182,11 @@ impl<P: UtxosView> UtxosCache<P> {
         tx.inputs()
             .iter()
             .zip(tx_undo.into_inner().into_iter())
-            .filter_map(|(input, undo)| match undo {
-                Some(utxo) => match input {
-                    TxInput::Utxo(outpoint) => Some(Ok((outpoint, utxo))),
-                    TxInput::Account(_) => Some(Err(Error::TxInputAndUndoMismatch(tx.get_id()))),
-                },
-                None => None,
+            .filter_map(|(input, undo)| {
+                undo.map(|utxo| match input {
+                    TxInput::Utxo(outpoint) => Ok((outpoint, utxo)),
+                    TxInput::Account(_) => Err(Error::TxInputAndUndoMismatch(tx.get_id())),
+                })
             })
             .try_for_each(|res| {
                 let (outpoint, utxo) = res?;
