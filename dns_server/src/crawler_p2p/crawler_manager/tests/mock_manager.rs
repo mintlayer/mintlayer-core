@@ -21,16 +21,13 @@ use std::{
     collections::BTreeMap,
     future::Future,
     net::{IpAddr, SocketAddr},
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::mpsc;
 
 use common::{
     chain::ChainConfig,

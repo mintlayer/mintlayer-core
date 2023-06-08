@@ -18,10 +18,7 @@ mod ban;
 mod connections;
 mod ping;
 
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{mpsc, oneshot};
 

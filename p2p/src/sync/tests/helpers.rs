@@ -18,7 +18,7 @@ use std::{
     future::Future,
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -53,12 +53,14 @@ use subsystem::manager::{ManagerJoinHandle, ShutdownTrigger};
 
 use crate::{
     message::{SyncMessage, TransactionResponse},
-    net::{default_backend::transport::TcpTransportSocket, types::SyncingEvent},
+    net::{
+        default_backend::transport::TcpTransportSocket, types::SyncingEvent, SyncingEventReceiver,
+    },
     sync::{subscribe_to_new_tip, BlockSyncManager},
     testing_utils::test_p2p_config,
     types::peer_id::PeerId,
     MessagingService, NetworkingService, P2pConfig, P2pError, P2pEventHandler, PeerManagerEvent,
-    Result, SyncingEventReceiver,
+    Result,
 };
 
 /// A timeout for blocking calls.
