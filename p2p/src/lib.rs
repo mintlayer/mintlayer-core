@@ -41,11 +41,6 @@ use std::{
     sync::Arc,
 };
 
-// use tokio::{
-//     sync::{mpsc, oneshot},
-//     task::JoinHandle,
-// };
-
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
     NoiseSocks5Transport, Socks5TransportSocket, TcpTransportSocket,
