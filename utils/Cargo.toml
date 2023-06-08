@@ -6,17 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-logging = {path = '../logging'}
 crypto = { path = "../crypto/" }
+logging = {path = '../logging'}
 serialization = { path = "../serialization" }
 
-atomic-traits = "0.3"
-directories = "5.0"
-num-traits = "0.2"
-probabilistic-collections = "0.7"
-qrcodegen = "1.8"
-slave-pool = "0.2"
-
+atomic-traits.workspace = true
+directories.workspace = true
+num-traits.workspace = true
+probabilistic-collections.workspace = true
+qrcodegen.workspace = true
+slave-pool.workspace = true
 thiserror.workspace = true
 parity-scale-codec.workspace = true
 zeroize.workspace = true
@@ -24,12 +23,12 @@ zeroize.workspace = true
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-static_assertions.workspace = true
-criterion = "0.4"
+criterion.workspace = true
 rstest.workspace = true
+static_assertions.workspace = true
 
 [target.'cfg(loom)'.dependencies]
-loom = "0.5"
+loom.workspace = true
 
 [[bench]]
 name = "benches"

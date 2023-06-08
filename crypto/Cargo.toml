@@ -11,31 +11,32 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 [dependencies]
 serialization = { path = "../serialization" }
 
-secp256k1 = { version = "0.27", default-features = false, features = ["global-context", "rand-std"] }
-hmac = "0.12"
-bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
-sha-1 = "0.10"
-sha2 = "0.10"
-sha3 = "0.10"
-ripemd = "0.1"
-blake2 = "0.10"
-rand = "0.8"
-num = "0.4"
-num-derive = "0.3"
-num-traits = "0.2"
-chacha20poly1305 = "0.10"
-schnorrkel = "0.10"
-merlin = { version = "3.0", default-features = false }
+# The following crates don't work well with "workspace.dependencies"
 argon2 = { version = "0.5", features = ["std"] }
+merlin = { version = "3.0" , default-features = false }
+secp256k1 = { version = "0.27", default-features = false, features = ["global-context", "rand-std"] }
 
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
+blake2.workspace = true
+chacha20poly1305.workspace = true
 generic-array.workspace = true
+hmac.workspace = true
+num-derive.workspace = true
+num-traits.workspace = true
+num.workspace = true
 parity-scale-codec.workspace = true
+rand.workspace = true
+ripemd.workspace = true
+schnorrkel.workspace = true
+sha-1.workspace = true
+sha2.workspace = true
+sha3.workspace = true
 thiserror.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 
-rstest.workspace = true
 hex.workspace = true
-rand_chacha = "0.3"
+rand_chacha.workspace = true
+rstest.workspace = true

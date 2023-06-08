@@ -6,9 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+logging = { path = "../../logging" }
 storage-core = { path = "../core" }
 utils = { path = "../../utils" }
-logging = { path = "../../logging" }
 
-libtest-mimic = "0.6"
-proptest = "1.0"
+libtest-mimic.workspace = true
+proptest.workspace = true

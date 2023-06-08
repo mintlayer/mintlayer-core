@@ -8,8 +8,8 @@ rust-version.workspace = true
 [dependencies]
 crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
-utils = { path = '../utils' }
 typename = { path = "../utils/typename" }
+utils = { path = '../utils' }
 
 parity-scale-codec.workspace = true
 thiserror.workspace = true
@@ -17,10 +17,10 @@ thiserror.workspace = true
 [dev-dependencies]
 logging = { path = '../logging' }
 
-flate2 = "1.0"
+flate2.workspace = true
 hex.workspace = true
-hex-literal = "0.4"
-proptest = "1.0"
+hex-literal.workspace = true
+proptest.workspace = true
 
 [features]
 default = ['testcontext']

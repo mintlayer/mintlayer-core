@@ -10,5 +10,3 @@ wallet-cli-lib = { path = "../wallet-cli-lib" }
 
 clap = { version = "4", features = ["derive"] }
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
-
-[dev-dependencies]

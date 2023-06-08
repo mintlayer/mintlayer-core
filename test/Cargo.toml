@@ -12,7 +12,7 @@ node-lib = { path = "../node-lib" }
 tokio = { workspace = true, features = ['full'] }
 
 [dev-dependencies]
-libtest-mimic = "0.6"
+libtest-mimic.workspace = true
 thiserror.workspace = true
 
 [[test]]

@@ -6,7 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
 chainstate = { path = ".." }
 chainstate-storage = { path = "../storage" }
 common = { path = "../../common" }

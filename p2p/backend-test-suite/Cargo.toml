@@ -6,16 +6,16 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+chainstate = { path = "../../chainstate/" }
 common = { path = "../../common" }
+crypto = { path = "../../crypto" }
+logging = { path = "../../logging" }
 p2p = { path = "../../p2p" }
 p2p-test-utils = { path = "../p2p-test-utils" }
-logging = { path = "../../logging" }
 serialization = { path = "../../serialization" }
-chainstate = { path = "../../chainstate/" }
 subsystem = { path = "../../subsystem/" }
-crypto = { path = "../../crypto" }
 
-tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 futures.workspace = true
-libtest-mimic = "0.6"
-rlimit = "0.9"
+libtest-mimic.workspace = true
+rlimit.workspace = true
+tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }

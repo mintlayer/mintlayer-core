@@ -6,11 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
-# Local dependencies
-utils = { path = '../../utils' }
 logging = { path = '../../logging' }
+utils = { path = '../../utils' }
 
-# External dependencies
-thiserror.workspace = true
 itertools.workspace = true
+thiserror.workspace = true

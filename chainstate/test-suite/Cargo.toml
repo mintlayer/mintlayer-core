@@ -9,9 +9,9 @@ rust-version.workspace = true
 
 [dependencies]
 accounting = {path = '../../accounting'}
-chainstate-test-framework = { path = '../test-framework' }
 chainstate = { path = '../' }
 chainstate-storage = { path = '../storage' }
+chainstate-test-framework = { path = '../test-framework' }
 chainstate-types = { path = '../types' }
 common = { path = '../../common' }
 consensus = { path = '../../consensus' }
@@ -28,5 +28,5 @@ hex.workspace = true
 itertools.workspace = true
 
 [dev-dependencies]
+expect-test.workspace = true
 rstest.workspace = true
-expect-test = "1.3"

@@ -11,9 +11,8 @@ rust-version.workspace = true
 logging = { path = "../logging" }
 node-lib = { path = "../node-lib/" }
 
+anyhow.workspace = true
 tokio = { workspace = true, default-features = false }
 
-anyhow = "1.0"
-
 [dev-dependencies]
-assert_cmd = "2"
+assert_cmd.workspace = true

@@ -6,16 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common/" }
 chainstate-types = { path = "../chainstate/types" }
+common = { path = "../common/" }
 crypto = { path = "../crypto/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization" }
 subsystem = { path = "../subsystem/" }
 
 async-trait.workspace = true
-hex.workspace = true
 futures.workspace = true
+hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 parity-scale-codec.workspace = true
 serde = { workspace = true, features = ["derive"] }

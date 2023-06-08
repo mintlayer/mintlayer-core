@@ -15,4 +15,4 @@ static_assertions.workspace = true
 serialization = { path = '..' }
 
 parity-scale-codec = { workspace = true, features = ["derive", "chain-error"] }
-proptest = "1.0"
+proptest.workspace = true
