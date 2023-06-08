@@ -23,6 +23,7 @@ use common::{
     chain::{Block, ChainConfig, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
+use crypto::key::PublicKey;
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
 
@@ -156,6 +157,8 @@ pub enum WalletCommand {
 
     CreateStakePool {
         amount: String,
+
+        decomission_key: Option<HexEncoded<PublicKey>>,
     },
 
     /// Node version
@@ -539,12 +542,16 @@ pub async fn handle_wallet_command(
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
-        WalletCommand::CreateStakePool { amount } => {
+        WalletCommand::CreateStakePool {
+            amount,
+            decomission_key,
+        } => {
             let amount = parse_coin_amount(chain_config, &amount)?;
+            let decomission_key = decomission_key.map(HexEncoded::take);
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .create_stake_pool_tx(amount)
+                .create_stake_pool_tx(amount, decomission_key)
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))

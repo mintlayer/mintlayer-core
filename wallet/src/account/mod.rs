@@ -183,6 +183,7 @@ impl Account {
         &mut self,
         db_tx: &mut impl WalletStorageWriteUnlocked,
         amount: Amount,
+        decomission_key: Option<PublicKey>,
     ) -> WalletResult<SignedTransaction> {
         // process_send_request can fill UTXOs, but the first UTXO is needed in advance to calculate pool_id
 
@@ -198,14 +199,17 @@ impl Account {
 
         // TODO: Use other accounts here
         let staker = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
-        let decommission_key = self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?;
+        let decommission_key = match decomission_key {
+            Some(key) => key,
+            None => self.key_chain.issue_key(db_tx, KeyPurpose::ReceiveFunds)?.into_public_key(),
+        };
         let (_vrf_private_key, vrf_public_key) = self.get_vrf_key(db_tx)?;
 
         let stake_output = make_stake_output(
             pool_id,
             amount,
             staker.into_public_key(),
-            decommission_key.into_public_key(),
+            decommission_key,
             vrf_public_key,
             PerThousand::new(1000).expect("must not fail"),
             Amount::ZERO,
