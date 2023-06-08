@@ -14,11 +14,12 @@ serialization = { path = "../serialization" }
 utils = { path = "../utils" }
 utxo = { path = '../utxo' }
 
+itertools.workspace = true
+num.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
-itertools.workspace = true
-num = "0.4"
 
 [dev-dependencies]
-rstest.workspace = true
 test-utils = {path = '../test-utils'}
+
+rstest.workspace = true

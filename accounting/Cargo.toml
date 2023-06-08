@@ -16,5 +16,5 @@ thiserror.workspace = true
 parity-scale-codec.workspace = true
 
 [dev-dependencies]
-proptest = "1.0"
+proptest.workspace = true
 rstest.workspace = true

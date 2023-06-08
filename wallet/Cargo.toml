@@ -20,7 +20,7 @@ utxo = { path = "../utxo" }
 wallet-storage = { path = "./storage" }
 wallet-types = { path = "./types" }
 
-bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 itertools.workspace = true
 parity-scale-codec.workspace = true
 thiserror.workspace = true
@@ -30,5 +30,5 @@ zeroize.workspace = true
 test-utils = { path = "../test-utils" }
 
 hex.workspace = true
-rstest = "0.17"
-tempfile = "3.3"
+rstest.workspace = true
+tempfile.workspace = true

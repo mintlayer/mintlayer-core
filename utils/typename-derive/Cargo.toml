@@ -9,6 +9,6 @@ rust-version.workspace = true
 proc-macro = true
 
 [dependencies]
-syn = "2.0"
-quote = "1.0"
+syn.workspace = true
+quote.workspace = true
 itertools.workspace = true

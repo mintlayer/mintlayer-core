@@ -8,24 +8,25 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-crypto = { path = "../crypto" }
-p2p = { path = "../p2p" }
 common = { path = "../common" }
+crypto = { path = "../crypto" }
+logging = { path = "../logging" }
+p2p = { path = "../p2p" }
+serialization = { path = "../serialization" }
 storage = { path = "../storage" }
 storage-lmdb = { path = "../storage/lmdb" }
-serialization = { path = "../serialization" }
-logging = { path = "../logging" }
 utils = { path = '../utils' }
 
 tokio = { workspace = true, default-features = false }
-trust-dns-client = "0.22"
-trust-dns-server = "0.22"
+
+trust-dns-client.workspace = true
+trust-dns-server.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 parity-scale-codec.workspace = true
-void = "1.0"
-clap = { version = "4", features = ["derive"] }
-directories = "5.0"
+void.workspace = true
+clap = { workspace = true, features = ["derive"] }
+directories.workspace = true
 
 [dev-dependencies]
 p2p-test-utils = { path = "../p2p/p2p-test-utils" }

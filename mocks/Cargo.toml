@@ -18,7 +18,5 @@ utils = { path = "../utils/" }
 utxo = { path = "../utxo/" }
 
 async-trait.workspace = true
-mockall = "0.11"
+mockall.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
-
-[dev-dependencies]

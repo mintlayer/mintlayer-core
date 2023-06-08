@@ -16,22 +16,22 @@ logging = { path = "../logging" }
 mempool = { path = "../mempool" }
 p2p = { path = "../p2p" }
 rpc = { path = "../rpc" }
-test-rpc-functions = { path = "../test-rpc-functions" }
 storage-lmdb = { path = "../storage/lmdb" }
 subsystem = { path = "../subsystem" }
+test-rpc-functions = { path = "../test-rpc-functions" }
 utils = { path = "../utils" }
 
-anyhow = "1.0"
-clap = { version = "4", features = ["derive"] }
+anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
 jsonrpsee = { workspace = true, features = ["macros"] }
 tokio = { workspace = true, default-features = false }
 serde = { workspace = true, features = ["derive"] }
-toml = "0.7"
-directories = "5.0"
-paste = "1.0"
-fs4 = "0.6"
+toml.workspace = true
+directories.workspace = true
+paste.workspace = true
+fs4.workspace = true
 
 [dev-dependencies]
 crypto = { path = "../crypto" }
 
-tempfile = "3.3"
+tempfile.workspace = true

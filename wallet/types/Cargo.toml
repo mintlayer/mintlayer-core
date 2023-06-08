@@ -13,12 +13,12 @@ crypto = { path = "../../crypto/" }
 serialization = { path = "../../serialization" }
 storage = { path = '../../storage', features = ['inmemory'] }
 
-bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
-zeroize.workspace = true
-thiserror.workspace = true
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 parity-scale-codec.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
 
 [dev-dependencies]
 test-utils = { path = "../../test-utils" }
 
-rstest = "0.17"
+rstest.workspace = true

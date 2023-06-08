@@ -6,8 +6,6 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
-# Local dependencies
 storage-core = { path = "../core" }
 
 [dev-dependencies]

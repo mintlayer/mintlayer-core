@@ -19,7 +19,7 @@ wallet-storage = { path = "../storage" }
 wallet-types = { path = "../types" }
 
 async-trait.workspace = true
-bip39 = { version = "2.0", default-features = false, features = ["std", "zeroize"] }
+bip39 = { workspace = true, default-features = false, features = ["std", "zeroize"] }
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 zeroize.workspace = true
@@ -28,5 +28,5 @@ zeroize.workspace = true
 chainstate-test-framework = { path = "../../chainstate/test-framework" }
 test-utils = { path = "../../test-utils" }
 
-anyhow = "1.0"
+anyhow.workspace = true
 rstest.workspace = true

@@ -16,13 +16,12 @@ wallet = { path = ".." }
 wallet-controller = { path = "../wallet-controller" }
 wallet-storage = { path = "../storage" }
 
-clap = { version = "4", features = ["derive"] }
-crossterm = "0.26"
-directories = "5.0"
-reedline = { version = "0.19", features = ["external_printer"] }
-shlex = "1.0"
-
+clap = { workspace = true, features = ["derive"] }
+crossterm.workspace = true
+directories.workspace = true
 hex.workspace = true
+reedline = { workspace = true, features = ["external_printer"] }
+shlex.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "sync"] }
 

@@ -13,15 +13,15 @@ logging = { path = "../logging" }
 subsystem = { path = "../subsystem" }
 utils = { path = "../utils/" }
 
-anyhow = "1.0"
+anyhow.workspace = true
 async-trait.workspace = true
-base64 = "0.21"
-http = "0.2"
-hyper = "0.14"
+base64.workspace = true
+http.workspace = true
+hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 thiserror.workspace = true
-tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.4", features = ["auth"] }
+tower = { workspace = true, features = ["util"] }
+tower-http = { workspace = true, features = ["auth"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

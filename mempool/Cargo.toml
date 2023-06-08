@@ -20,12 +20,12 @@ subsystem = { path = '../subsystem' }
 utils = { path = '../utils' }
 utxo = { path = '../utxo' }
 
-anyhow = "1.0"
+anyhow.workspace = true
 async-trait.workspace = true
 hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
-mockall = "0.11"
-parking_lot = "0.12"
+mockall.workspace = true
+parking_lot.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 

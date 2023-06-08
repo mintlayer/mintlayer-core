@@ -18,12 +18,12 @@ serialization = { path = "../../serialization" }
 subsystem = { path = "../../subsystem" }
 
 async-trait.workspace = true
-base64 = "0.21"
-http = "0.2"
+base64.workspace = true
+http.workspace = true
 jsonrpsee.workspace = true
-serde_json = "1.0"
+serde_json.workspace = true
 thiserror.workspace = true
-tower = "0.4"
+tower.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../../chainstate/storage" }

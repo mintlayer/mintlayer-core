@@ -9,13 +9,13 @@ rust-version.workspace = true
 scale-codec = ["dep:parity-scale-codec"]
 
 [dependencies]
-itertools = "0.10"
-thiserror = "1.0"
-parity-scale-codec = { version = "3.1", optional = true }
+itertools.workspace = true
+parity-scale-codec = { workspace = true, optional = true }
+thiserror.workspace = true
 
 [dev-dependencies]
-blake2 = "0.10"
-fixed-hash = "0.8"
-rstest = "0.17"
-rand = "0.8"
-rand_chacha = "0.3"
+blake2.workspace = true
+fixed-hash.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+rstest.workspace = true
