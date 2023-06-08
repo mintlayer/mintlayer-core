@@ -17,7 +17,7 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        AccountType, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
+        AccountSpending, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
@@ -113,7 +113,7 @@ where
                     .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                 Ok(Some((outpoint.clone(), utxo)))
             }
-            TxInput::Account(_, _) => Ok(None),
+            TxInput::Account(_) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     debug_assert_eq!(inputs.len(), input_utxos.len());
@@ -184,8 +184,8 @@ where
                         }
                     }
                 }
-                TxInput::Account(account_input, _) => match account_input.account() {
-                    AccountType::Delegation(_) => {
+                TxInput::Account(account_input) => match account_input.account() {
+                    AccountSpending::Delegation(_, _) => {
                         Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
                     }
                 },

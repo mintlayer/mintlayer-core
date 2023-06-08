@@ -66,8 +66,8 @@ use common::{
         signature::Signable,
         signed_transaction::SignedTransaction,
         tokens::{get_tokens_issuance_count, TokenId},
-        AccountOutPoint, AccountType, Block, ChainConfig, DelegationId, GenBlock, OutPointSourceId,
-        PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
+        AccountOutPoint, AccountSpending, AccountType, Block, ChainConfig, DelegationId, GenBlock,
+        OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, Id, Idable, H256},
 };
@@ -351,24 +351,25 @@ where
         &mut self,
         tx_source: TransactionSource,
         account_input: &AccountOutPoint,
-        withdraw_amount: Amount,
     ) -> Result<PoSAccountingUndo, ConnectTransactionError> {
         let account = *account_input.account();
         // Check that account nonce increments previous value
         let expected_nonce = self
-            .get_account_nonce_count(account)
+            .get_account_nonce_count(account.into())
             .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
             .map_or(0, |nonce| nonce + 1);
         ensure!(
             expected_nonce == account_input.nonce(),
-            ConnectTransactionError::NonceIsNotIncremental(account)
+            ConnectTransactionError::NonceIsNotIncremental(account.into())
         );
         // store new nonce
-        self.account_nonce
-            .insert(account, CachedOperation::Write(account_input.nonce()));
+        self.account_nonce.insert(
+            account.into(),
+            CachedOperation::Write(account_input.nonce()),
+        );
 
         match account {
-            AccountType::Delegation(delegation_id) => {
+            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
                 // If the input spends from delegation account, this means the user is
                 // spending part of their share in the pool.
                 self.accounting_delta_adapter
@@ -427,11 +428,11 @@ where
                 TxInput::Utxo(outpoint) => {
                     self.spend_input_from_utxo(tx_source, outpoint).transpose()
                 }
-                TxInput::Account(account_input, withdraw_amount) => {
+                TxInput::Account(account_input) => {
                     check_for_delegation_cleanup = match account_input.account() {
-                        AccountType::Delegation(delegation_id) => Some(*delegation_id),
+                        AccountSpending::Delegation(delegation_id, _) => Some(*delegation_id),
                     };
-                    Some(self.spend_input_from_account(tx_source, account_input, *withdraw_amount))
+                    Some(self.spend_input_from_account(tx_source, account_input))
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -565,19 +566,18 @@ where
         for input in tx.inputs() {
             match input {
                 TxInput::Utxo(_) => { /* do nothing */ }
-                TxInput::Account(account_input, _) => {
+                TxInput::Account(account_input) => {
+                    let account: AccountType = (*account_input.account()).into();
                     let current_nonce = self
-                        .get_account_nonce_count(*account_input.account())
+                        .get_account_nonce_count(account)
                         .map_err(|_| ConnectTransactionError::TxVerifierStorage)?
-                        .ok_or(ConnectTransactionError::MissingTransactionNonce(
-                            *account_input.account(),
-                        ))?;
+                        .ok_or(ConnectTransactionError::MissingTransactionNonce(account))?;
                     let new_nonce_op = if current_nonce == 0 {
                         CachedOperation::Erase
                     } else {
                         CachedOperation::Write(current_nonce - 1)
                     };
-                    self.account_nonce.insert(*account_input.account(), new_nonce_op);
+                    self.account_nonce.insert(account, new_nonce_op);
                 }
             };
         }

@@ -108,7 +108,7 @@ impl TxIndexCache {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => Some(outpoint),
-                TxInput::Account(_, _) => None,
+                TxInput::Account(_) => None,
             })
             .try_for_each(|outpoint| {
                 let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
@@ -123,7 +123,7 @@ impl TxIndexCache {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => Some(outpoint),
-                TxInput::Account(_, _) => None,
+                TxInput::Account(_) => None,
             })
             .try_for_each(|outpoint| {
                 let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
@@ -144,7 +144,7 @@ impl TxIndexCache {
             .iter()
             .filter_map(|input| match input {
                 TxInput::Utxo(outpoint) => Some(outpoint),
-                TxInput::Account(_, _) => None,
+                TxInput::Account(_) => None,
             })
             .try_for_each(|outpoint| {
                 match self.data.entry(outpoint.tx_id()) {

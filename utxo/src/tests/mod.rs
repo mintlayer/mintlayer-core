@@ -38,7 +38,7 @@ use common::{
         },
         signature::inputsig::InputWitness,
         tokens::OutputValue,
-        AccountType, DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput,
+        AccountSpending, DelegationId, Destination, OutPointSourceId, PoolId, Transaction, TxInput,
         TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Compact, Id, Idable, H256},
@@ -896,8 +896,10 @@ fn check_tx_spend_undo_spend_from_account(#[case] seed: Seed) {
     // spend from an account in a transaction
     let input = TxInput::from_account(
         rng.gen(),
-        AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng))),
-        Amount::from_atoms(rng.gen()),
+        AccountSpending::Delegation(
+            DelegationId::new(H256::random_using(&mut rng)),
+            Amount::from_atoms(rng.gen()),
+        ),
     );
     let tx = Transaction::new(0x00, vec![input], create_tx_outputs(&mut rng, 1)).unwrap();
     let new_utxo_outpoint = UtxoOutPoint::new(tx.get_id().into(), 0);

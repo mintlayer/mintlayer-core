@@ -21,8 +21,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        AccountOutPoint, AccountType, Block, DelegationId, Destination, GenBlock, OutPointSourceId,
-        PoolId, TxInput, UtxoOutPoint,
+        AccountOutPoint, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        OutPointSourceId, PoolId, TxInput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
 };
@@ -319,13 +319,13 @@ fn tx_one_to_many(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn tx_spend_delegation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let inputs = vec![TxInput::Account(
-        AccountOutPoint::new(
-            0,
-            AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng))),
+    let inputs = vec![TxInput::Account(AccountOutPoint::new(
+        0,
+        AccountSpending::Delegation(
+            DelegationId::new(H256::random_using(&mut rng)),
+            Amount::ZERO,
         ),
-        Amount::ZERO,
-    )];
+    ))];
 
     let number_of_outputs = rng.gen_range(2..10);
     let source_outputs = [lock_then_transfer()];

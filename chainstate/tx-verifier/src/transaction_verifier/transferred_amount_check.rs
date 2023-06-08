@@ -21,7 +21,7 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
-        AccountType, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
 };
@@ -159,8 +159,8 @@ where
 
             amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
         }
-        TxInput::Account(account_input, withdraw_amount) => match account_input.account() {
-            AccountType::Delegation(delegation_id) => {
+        TxInput::Account(account_input) => match account_input.account() {
+            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
                 let total_balance = pos_accounting_view
                     .get_delegation_balance(*delegation_id)
                     .map_err(|_| pos_accounting::Error::ViewFail)?
@@ -603,10 +603,10 @@ mod tests {
 
         // try overspend balance
         {
-            let input = TxInput::Account(
-                AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-                overspend_amount,
-            );
+            let input = TxInput::Account(AccountOutPoint::new(
+                0,
+                AccountSpending::Delegation(delegation_id, overspend_amount),
+            ));
 
             let output = TxOutput::Transfer(
                 OutputValue::Coin(overspend_amount),
@@ -627,10 +627,10 @@ mod tests {
 
         // try overspend input
         {
-            let input = TxInput::Account(
-                AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-                withdraw_amount,
-            );
+            let input = TxInput::Account(AccountOutPoint::new(
+                0,
+                AccountSpending::Delegation(delegation_id, withdraw_amount),
+            ));
 
             let output = TxOutput::Transfer(
                 OutputValue::Coin(overspend_amount),
@@ -649,10 +649,10 @@ mod tests {
             );
         }
 
-        let input = TxInput::Account(
-            AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-            withdraw_amount,
-        );
+        let input = TxInput::Account(AccountOutPoint::new(
+            0,
+            AccountSpending::Delegation(delegation_id, withdraw_amount),
+        ));
         let output = TxOutput::Transfer(
             OutputValue::Coin(withdraw_amount),
             Destination::AnyoneCanSpend,

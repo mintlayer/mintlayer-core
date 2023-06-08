@@ -20,7 +20,7 @@ use chainstate_storage::TipStorageTag;
 use chainstate_test_framework::{
     empty_witness, get_output_value, TestFramework, TestStore, TransactionBuilder,
 };
-use common::chain::{AccountOutPoint, AccountType, DelegationId, PoolId};
+use common::chain::{AccountOutPoint, AccountSpending, AccountType, DelegationId, PoolId};
 use common::{
     chain::{
         timelock::OutputTimeLock, tokens::OutputValue, Destination, OutPointSourceId, TxInput,
@@ -338,10 +338,10 @@ fn delegate_staking(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(
-                    AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-                    (amount_to_spend * 2).unwrap(),
-                ),
+                TxInput::Account(AccountOutPoint::new(
+                    0,
+                    AccountSpending::Delegation(delegation_id, (amount_to_spend * 2).unwrap()),
+                )),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -369,10 +369,10 @@ fn delegate_staking(#[case] seed: Seed) {
             // try spend delegation without increasing nonce
             let tx = TransactionBuilder::new()
                 .add_input(
-                    TxInput::Account(
-                        AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-                        spend_change,
-                    ),
+                    TxInput::Account(AccountOutPoint::new(
+                        0,
+                        AccountSpending::Delegation(delegation_id, spend_change),
+                    )),
                     empty_witness(&mut rng),
                 )
                 .add_output(TxOutput::LockThenTransfer(
@@ -395,10 +395,10 @@ fn delegate_staking(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(
-                    AccountOutPoint::new(1, AccountType::Delegation(delegation_id)),
-                    spend_change,
-                ),
+                TxInput::Account(AccountOutPoint::new(
+                    1,
+                    AccountSpending::Delegation(delegation_id, spend_change),
+                )),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -496,10 +496,10 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
 
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(
-                    AccountOutPoint::new(0, AccountType::Delegation(delegation_id)),
-                    (amount_to_spend * 2).unwrap(),
-                ),
+                TxInput::Account(AccountOutPoint::new(
+                    0,
+                    AccountSpending::Delegation(delegation_id, (amount_to_spend * 2).unwrap()),
+                )),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(
@@ -526,10 +526,10 @@ fn decommission_then_spend_share_then_cleanup_delegations(#[case] seed: Seed) {
         // Spend all delegation balance
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::Account(
-                    AccountOutPoint::new(1, AccountType::Delegation(delegation_id)),
-                    spend_change,
-                ),
+                TxInput::Account(AccountOutPoint::new(
+                    1,
+                    AccountSpending::Delegation(delegation_id, spend_change),
+                )),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::LockThenTransfer(

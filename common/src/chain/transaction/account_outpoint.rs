@@ -13,13 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::DelegationId;
+use crate::{chain::DelegationId, primitives::Amount};
 use serialization::{Decode, Encode};
 
+// Type of an account that can be used to identify series of spending from an account
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum AccountType {
     #[codec(index = 0)]
     Delegation(DelegationId),
+}
+
+impl From<AccountSpending> for AccountType {
+    fn from(spending: AccountSpending) -> Self {
+        match spending {
+            AccountSpending::Delegation(id, _) => AccountType::Delegation(id),
+        }
+    }
+}
+
+/// The type represents the amount to withdraw from a particular account.
+/// It helps solving 2 problems: calculating fees and providing ability to sign input balance with the witness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+pub enum AccountSpending {
+    #[codec(index = 0)]
+    Delegation(DelegationId, Amount),
 }
 
 /// Type of OutPoint that represents spending from an account
@@ -31,11 +48,11 @@ pub struct AccountOutPoint {
     #[codec(compact)]
     nonce: u128,
     /// Type of account to spend from.
-    account: AccountType,
+    account: AccountSpending,
 }
 
 impl AccountOutPoint {
-    pub fn new(nonce: u128, account: AccountType) -> Self {
+    pub fn new(nonce: u128, account: AccountSpending) -> Self {
         Self { nonce, account }
     }
 
@@ -43,7 +60,7 @@ impl AccountOutPoint {
         self.nonce
     }
 
-    pub fn account(&self) -> &AccountType {
+    pub fn account(&self) -> &AccountSpending {
         &self.account
     }
 }

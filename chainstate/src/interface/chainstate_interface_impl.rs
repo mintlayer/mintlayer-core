@@ -394,7 +394,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
                         None => Ok(None),
                     }
                 }
-                TxInput::Account(_, _) => Ok(None),
+                TxInput::Account(_) => Ok(None),
             })
             .collect::<Result<Vec<_>, _>>()
     }

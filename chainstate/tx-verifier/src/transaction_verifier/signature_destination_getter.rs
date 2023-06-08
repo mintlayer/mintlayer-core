@@ -120,8 +120,8 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(account_input, _) => match account_input.account() {
-                        common::chain::AccountType::Delegation(delegation_id) => {
+                    TxInput::Account(account_input) => match account_input.account() {
+                        common::chain::AccountSpending::Delegation(delegation_id, _) => {
                             Ok(accounting_view
                                 .get_delegation_data(*delegation_id)?
                                 .ok_or(SignatureDestinationGetterError::DelegationDataNotFound(
@@ -179,7 +179,7 @@ impl<'a> SignatureDestinationGetter<'a> {
                             }
                         }
                     }
-                    TxInput::Account(_, _) => {
+                    TxInput::Account(_) => {
                         Err(SignatureDestinationGetterError::SpendingFromAccountInBlockReward)
                     }
                 }
