@@ -27,7 +27,7 @@ use std::{
     },
 };
 
-use futures::never::Never;
+use futures::{never::Never, FutureExt};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
@@ -130,10 +130,12 @@ where
             Ordering::Release,
         );
 
-        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested.fuse());
 
         loop {
             tokio::select! {
+                biased;
+
                 _ = shutdown_requested.as_mut() => {
                     log::info!("Shutdown requested");
 
@@ -141,6 +143,7 @@ where
                     // Just break out of the event-loop, and call it a day.
                     break
                 }
+
                 block_id = new_tip_receiver.recv() => {
                     // This error can only occur when chainstate drops an events subscriber.
                     let block_id = block_id.expect("New tip sender was closed");

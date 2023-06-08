@@ -592,7 +592,8 @@ where
             e @ (P2pError::ChannelClosed
             | P2pError::SubsystemFailure
             | P2pError::StorageFailure(_)
-            | P2pError::InvalidStorageState(_)) => Err(e),
+            | P2pError::InvalidStorageState(_)
+            | P2pError::Cancelled) => Err(e),
         }
     }
 

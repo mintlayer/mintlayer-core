@@ -1098,6 +1098,7 @@ where
     pub async fn run(&mut self, shutdown_requested: impl Future) -> crate::Result<()> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
+
         // Last time when heartbeat was called
         let mut last_heartbeat = self.time_getter.get_time();
         let mut last_time = self.time_getter.get_time();
@@ -1109,11 +1110,12 @@ where
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
 
-        let shutdown_requested = shutdown_requested.fuse();
-        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested.fuse());
 
         loop {
             tokio::select! {
+                biased;
+
                 _ = shutdown_requested.as_mut() => {
                     log::info!("Shutdown requested");
 
@@ -1130,6 +1132,7 @@ where
                         heartbeat_call_needed = true;
                     } else {
                         // Yay! No more unhandled requests — let's shutdown.
+                        log::info!("Inbox empty. Quitting.");
                         break
                     },
 
@@ -1161,7 +1164,10 @@ where
             if (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MIN && heartbeat_call_needed)
                 || (now >= last_heartbeat + PEER_MGR_HEARTBEAT_INTERVAL_MAX)
             {
+                log::error!("run loop before heartbeat");
                 self.heartbeat().await;
+                log::error!("run loop after heartbeat");
+
                 last_heartbeat = now;
                 heartbeat_call_needed = false;
             }

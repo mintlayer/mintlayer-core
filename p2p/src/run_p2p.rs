@@ -2,17 +2,16 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
+use futures::FutureExt;
+use logging::log;
+use tokio::sync::mpsc;
+
 use chainstate::chainstate_interface;
 use common::chain::{ChainConfig, SignedTransaction};
 use common::primitives::Idable;
 use common::time_getter::TimeGetter;
-use futures::future::BoxFuture;
-use futures::FutureExt;
 use mempool::MempoolHandle;
-
-use logging::log;
 use subsystem::CallRequest;
-use tokio::sync::mpsc;
 
 use crate::config::P2pConfig;
 use crate::error::{ConversionError, P2pError};
@@ -29,6 +28,10 @@ use crate::{P2pEvent, Result};
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>;
 
+const NETSVC_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
+const PEER_MGR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+const SYNC_MGR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[allow(clippy::too_many_arguments)]
 pub async fn run_p2p<'a, N, S>(
     transport: N::Transport,
@@ -42,13 +45,13 @@ pub async fn run_p2p<'a, N, S>(
 
     p2p_call: CallRequest<dyn P2pInterface>,
     shutdown_request: impl Future<Output = impl Send + 'a> + Send + 'a,
-) -> Result<impl Future<Output = ()> + 'a>
+) -> Result<impl Future<Output = Result<()>> + 'a>
 where
     N: NetworkingService,
     N: 'static, // this bound should be revised
 
     S: PeerDbStorage,
-    S: 'a,
+    S: 'static,
 
     N::ConnectivityHandle: ConnectivityService<N>,
     N::MessagingHandle: MessagingService,
@@ -56,7 +59,7 @@ where
 {
     log::warn!("run-p2p N: {}", std::any::type_name::<N>());
 
-    let (netsvc_shutdown_tx, netsvc_shutdown_rx) = utils::graceful_shutdown_chan();
+    let (netsvc_shutdown_tx, netsvc_shutdown_rx) = utils::killswitch_chan();
     let (p2p_event_handlers_tx, p2p_event_handlers_rx) = mpsc::unbounded_channel();
     let (connectivity_handle, messaging_handle, sync_event_receiver, netsvc_running) = N::start(
         transport,
@@ -67,7 +70,8 @@ where
         p2p_event_handlers_rx,
     )
     .await?;
-    let netsvc_running = netsvc_running.map(Result::Ok).boxed();
+    let (netsvc_running, netsvc_killswitch_tx) =
+        utils::spawn_with_killswitch(netsvc_running.map(Result::Ok));
 
     let (peer_manager_mbox_tx, peer_manager_mbox_rx) = mpsc::unbounded_channel();
     let mut peer_manager = PeerManager::<N, S>::new(
@@ -78,9 +82,10 @@ where
         time_getter.clone(),
         peerdb_storage,
     )?;
-    let (peer_manager_shutdown_tx, peer_manager_shutdown_rx) = utils::graceful_shutdown_chan();
-    let peer_manager_running =
-        async move { peer_manager.run(peer_manager_shutdown_rx).await }.boxed();
+    let (peer_manager_shutdown_tx, peer_manager_shutdown_rx) = utils::killswitch_chan();
+    let (peer_manager_running, peer_manager_killswitch_tx) = utils::spawn_with_killswitch(
+        async move { peer_manager.run(peer_manager_shutdown_rx).await },
+    );
 
     let mut sync_manager = sync::BlockSyncManager::new(
         chain_config,
@@ -92,9 +97,10 @@ where
         peer_manager_mbox_tx.clone(),
         time_getter,
     );
-    let (sync_manager_shutdown_tx, sync_manager_shutdown_rx) = utils::graceful_shutdown_chan();
-    let sync_manager_running =
-        async move { sync_manager.run(sync_manager_shutdown_rx).await }.boxed();
+    let (sync_manager_shutdown_tx, sync_manager_shutdown_rx) = utils::killswitch_chan();
+    let (sync_manager_running, sync_manager_killswitch_tx) = utils::spawn_with_killswitch(
+        async move { sync_manager.run(sync_manager_shutdown_rx).await },
+    );
 
     let p2p_subsys_running = p2p_interface_loop(
         messaging_handle,
@@ -104,18 +110,27 @@ where
         p2p_call,
         shutdown_request,
     )
+    .fuse()
     .boxed();
 
-    const NETSVC_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
-    const PEER_MGR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
-    const SYNC_MGR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-
-    let running = run_multiple(
+    let running = utils::run_multiple(
         vec![netsvc_running, peer_manager_running, sync_manager_running, p2p_subsys_running],
         vec![
-            Some((netsvc_shutdown_tx, NETSVC_SHUTDOWN_TIMEOUT)),
-            Some((peer_manager_shutdown_tx, PEER_MGR_SHUTDOWN_TIMEOUT)),
-            Some((sync_manager_shutdown_tx, SYNC_MGR_SHUTDOWN_TIMEOUT)),
+            Some((
+                netsvc_shutdown_tx,
+                netsvc_killswitch_tx,
+                NETSVC_SHUTDOWN_TIMEOUT,
+            )),
+            Some((
+                peer_manager_shutdown_tx,
+                peer_manager_killswitch_tx,
+                PEER_MGR_SHUTDOWN_TIMEOUT,
+            )),
+            Some((
+                sync_manager_shutdown_tx,
+                sync_manager_killswitch_tx,
+                SYNC_MGR_SHUTDOWN_TIMEOUT,
+            )),
             None,
         ],
     );
@@ -147,6 +162,8 @@ where
 
     loop {
         tokio::select! {
+            biased;
+
             _ = shutdown_request.as_mut() => {
                 log::info!("Shutdown requested");
                 p2p_call.close();
@@ -259,70 +276,110 @@ where
     }
 }
 
-async fn run_multiple<S>(
-    services: Vec<BoxFuture<'_, Result<()>>>,
-    mut shutdown_switches: Vec<Option<(S, Duration)>>,
-) {
-    assert_eq!(services.len(), shutdown_switches.len());
-
-    log::error!("run-multiple [len: {}]", services.len());
-
-    let (outcome, idx, mut services) = futures::future::select_all(services).await;
-
-    if let Err(reason) = outcome {
-        log::warn!("Service[{}] shut down with error: {}", idx, reason);
-    }
-
-    services.truncate(idx);
-    shutdown_switches.truncate(idx);
-
-    shutdown_multiple(services, shutdown_switches).await
-}
-
-async fn shutdown_multiple<S>(
-    mut services: Vec<BoxFuture<'_, Result<()>>>,
-    mut shutdown_switches: Vec<Option<(S, Duration)>>,
-) {
-    loop {
-        assert_eq!(services.len(), shutdown_switches.len());
-        log::error!("shutdown-multiple [len: {}]", services.len());
-
-        let Some(shutdown_kit) = shutdown_switches.pop() else {return};
-
-        if let Some((tx, timeout)) = shutdown_kit {
-            std::mem::drop(tx);
-
-            let mut select_all = futures::future::select_all(services);
-            match tokio::time::timeout(timeout, &mut select_all).await {
-                Ok((outcome, idx, services_)) => {
-                    if let Err(reason) = outcome {
-                        log::warn!("Service[{}] shut down with error: {}", idx, reason);
-                    }
-                    services = services_;
-                    services.truncate(idx);
-                    shutdown_switches.truncate(idx);
-                }
-                Err(_timeout) => {
-                    let idx = shutdown_switches.len();
-                    log::warn!("Service[{}] timed out shutting down", idx);
-
-                    services = select_all.into_inner();
-                    let _ = services.pop();
-                }
-            }
-        } else {
-            services.pop();
-        }
-    }
-}
-
 mod utils {
-    use std::future::Future;
 
-    use futures::never::Never;
+    use std::{future::Future, time::Duration};
+
+    use futures::{future::BoxFuture, never::Never, FutureExt};
+    use logging::log;
     use tokio::sync::oneshot;
 
-    pub fn graceful_shutdown_chan() -> (impl Drop, impl Future<Output = impl Send> + Send) {
+    use crate::Result;
+
+    type Killswitch = oneshot::Sender<Never>;
+
+    pub fn spawn_with_killswitch<F>(f: F) -> (BoxFuture<'static, Result<()>>, Killswitch)
+    where
+        F: Future<Output = Result<()>> + Send + 'static,
+    {
+        let (ks_tx, ks_rx) = killswitch_chan();
+        let jh = tokio::spawn(async move {
+            tokio::select! {
+                _ = ks_rx => Err(crate::P2pError::Cancelled),
+                outcome = f => outcome
+            }
+        });
+        (jh.map(|r| r.expect("join failure")).fuse().boxed(), ks_tx)
+    }
+
+    pub async fn run_multiple<SS, KS, F>(
+        mut services: Vec<F>,
+        mut shutdown_switches: Vec<Option<(SS, KS, Duration)>>,
+    ) -> Result<()>
+    where
+        F: Future<Output = Result<()>> + Unpin,
+    {
+        assert_eq!(services.len(), shutdown_switches.len());
+
+        log::trace!("run-multiple [len: {}]", services.len());
+
+        let (outcome, idx, _rest) = futures::future::select_all(services.iter_mut()).await;
+
+        if let Err(reason) = &outcome {
+            log::warn!("Service[{}] shut down with error: {}", idx, reason);
+        }
+
+        services.truncate(idx);
+        shutdown_switches.truncate(idx);
+
+        shutdown_multiple(services, shutdown_switches).await;
+
+        outcome
+    }
+
+    async fn shutdown_multiple<SS, KS, F>(
+        mut services: Vec<F>,
+        mut shutdown_switches: Vec<Option<(SS, KS, Duration)>>,
+    ) where
+        F: Future<Output = Result<()>> + Unpin,
+    {
+        loop {
+            assert_eq!(services.len(), shutdown_switches.len());
+            log::trace!("shutdown-multiple [len: {}]", services.len());
+
+            let Some(shutdown_kit) = shutdown_switches.pop() else {break};
+
+            if let Some((graceful_shutdown_tx, killswitch_tx, timeout)) = shutdown_kit {
+                log::info!("graceful shutdown [timeout: {:?}]", timeout);
+                std::mem::drop(graceful_shutdown_tx);
+
+                log::trace!(" waiting for {:?}", timeout);
+                match tokio::time::timeout(
+                    timeout,
+                    futures::future::select_all(services.iter_mut()),
+                )
+                .await
+                {
+                    Ok((outcome, idx, _rest)) => {
+                        log::trace!("serivce[{}] finished", idx);
+                        if let Err(reason) = outcome {
+                            log::warn!("service[{}] shut down with error: {}", idx, reason);
+                        }
+
+                        services.truncate(idx);
+                        shutdown_switches.truncate(idx);
+                    }
+                    Err(_timeout) => {
+                        let idx = shutdown_switches.len();
+                        log::warn!("service[{}] timed out shutting down", idx);
+
+                        std::mem::drop(killswitch_tx);
+                        let _ = services.pop().expect("services.len == shutdown_switches.len, shutdown_switches was not empty. QED").await;
+                    }
+                }
+            } else {
+                log::warn!("unclean shutdown");
+                services.pop();
+            }
+        }
+
+        log::info!("Shutdown complete");
+    }
+
+    pub fn killswitch_chan() -> (
+        Killswitch,
+        impl Future<Output = impl Send> + Send + Sync + 'static,
+    ) {
         oneshot::channel::<Never>()
     }
 }

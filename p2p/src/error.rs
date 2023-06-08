@@ -127,6 +127,8 @@ pub enum P2pError {
     InvalidStorageState(String),
     #[error("Mempool error: `{0}`")]
     MempoolError(#[from] MempoolError),
+    #[error("Task cancelled")]
+    Cancelled,
 }
 
 impl From<DialError> for P2pError {
@@ -187,6 +189,7 @@ impl BanScore for P2pError {
             P2pError::InvalidConfigurationValue(_) => 0,
             P2pError::InvalidStorageState(_) => 0,
             P2pError::MempoolError(err) => err.mempool_ban_score(),
+            P2pError::Cancelled => 0,
         }
     }
 }

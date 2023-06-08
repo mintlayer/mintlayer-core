@@ -41,10 +41,10 @@ use std::{
     sync::Arc,
 };
 
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+// use tokio::{
+//     sync::{mpsc, oneshot},
+//     task::JoinHandle,
+// };
 
 use interface::p2p_interface::P2pInterface;
 use net::default_backend::transport::{
@@ -70,151 +70,12 @@ use crate::{
             transport::{NoiseEncryptionAdapter, NoiseTcpTransport},
             DefaultNetworkingService,
         },
-        ConnectivityService, MessagingService, NetworkingService, SyncingEventReceiver,
+        MessagingService, NetworkingService,
     },
 };
 
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
-
-struct P2p<T: NetworkingService> {
-    /// A sender for the peer manager events.
-    pub tx_peer_manager: mpsc::UnboundedSender<PeerManagerEvent<T>>,
-    mempool_handle: MempoolHandle,
-    messaging_handle: T::MessagingHandle,
-
-    backend_shutdown_sender: oneshot::Sender<()>,
-
-    backend_task: JoinHandle<()>,
-    peer_manager_task: JoinHandle<()>,
-    sync_manager_task: JoinHandle<()>,
-
-    subscribers_sender: mpsc::UnboundedSender<P2pEventHandler>,
-}
-
-impl<T> P2p<T>
-where
-    T: 'static + NetworkingService + Send,
-    T::ConnectivityHandle: ConnectivityService<T>,
-    T::MessagingHandle: MessagingService,
-    T::SyncingEventReceiver: SyncingEventReceiver,
-{
-    /// Start the P2P subsystem
-    ///
-    /// This function starts the networking backend and individual manager objects.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn new<S: PeerDbStorage + 'static>(
-        transport: T::Transport,
-        bind_addresses: Vec<T::Address>,
-        chain_config: Arc<ChainConfig>,
-        p2p_config: Arc<P2pConfig>,
-        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        mempool_handle: MempoolHandle,
-        time_getter: TimeGetter,
-        peerdb_storage: S,
-    ) -> Result<Self> {
-        let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
-        let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
-
-        let (conn, messaging_handle, sync_event_receiver, backend_running) = T::start(
-            transport,
-            bind_addresses,
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
-            shutdown_receiver,
-            subscribers_receiver,
-        )
-        .await?;
-        let backend_task = tokio::spawn(backend_running);
-
-        // P2P creates its components (such as PeerManager, sync, pubsub, etc) and makes
-        // communications with them in two possible ways:
-        //
-        // 1. Fire-and-forget
-        // 2. Request and wait for response
-        //
-        // The difference between these types is that enums that contain the events *can* have
-        // a `oneshot::channel` object that must be used to send the response.
-        let (tx_peer_manager, rx_peer_manager) = mpsc::unbounded_channel();
-
-        let mut peer_manager = peer_manager::PeerManager::<T, _>::new(
-            Arc::clone(&chain_config),
-            Arc::clone(&p2p_config),
-            conn,
-            rx_peer_manager,
-            time_getter.clone(),
-            peerdb_storage,
-        )?;
-        let peer_manager_task = tokio::spawn(async move {
-            match peer_manager.run_forever().await {
-                Ok(_) => unreachable!(),
-
-                Err(e) => log::error!("Peer manager failed: {e:?}"),
-            }
-        });
-
-        let sync_manager_task = {
-            let chainstate_handle = chainstate_handle.clone();
-            let tx_peer_manager = tx_peer_manager.clone();
-            let chain_config = Arc::clone(&chain_config);
-            let mempool_handle_ = mempool_handle.clone();
-            let messaging_handle_ = messaging_handle.clone();
-
-            tokio::spawn(async move {
-                match sync::BlockSyncManager::<T>::new(
-                    chain_config,
-                    p2p_config,
-                    messaging_handle_,
-                    sync_event_receiver,
-                    chainstate_handle,
-                    mempool_handle_,
-                    tx_peer_manager,
-                    time_getter,
-                )
-                .run_forever()
-                .await
-                {
-                    Ok(_) => unreachable!(),
-                    Err(e) => log::error!("Sync manager failed: {e:?}"),
-                }
-            })
-        };
-
-        Ok(Self {
-            tx_peer_manager,
-            mempool_handle,
-            messaging_handle,
-            backend_shutdown_sender,
-            backend_task,
-            peer_manager_task,
-            sync_manager_task,
-            subscribers_sender,
-        })
-    }
-
-    async fn run(mut self, mut call: CallRequest<dyn P2pInterface>, mut shutdown: ShutdownRequest) {
-        log::trace!("Entering p2p main loop");
-        loop {
-            tokio::select! {
-                () = shutdown.recv() => {
-                    self.shutdown().await;
-                    break;
-                },
-                call = call.recv() => call(&mut self).await,
-            }
-        }
-    }
-
-    async fn shutdown(self) {
-        let _ = self.backend_shutdown_sender.send(());
-
-        // Wait for the tasks to shut dow.
-        futures::future::join_all(
-            [self.backend_task, self.peer_manager_task, self.sync_manager_task].into_iter(),
-        )
-        .await;
-    }
-}
 
 impl subsystem::Subsystem for Box<dyn P2pInterface> {}
 
@@ -374,7 +235,7 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             shutdown.recv(),
         )
         .await?;
-        p2p_running.await;
+        p2p_running.await
     } else if let Some(socks5_proxy) = &p2p_config.socks5_proxy {
         let transport = make_p2p_transport_socks5_proxy(socks5_proxy);
 
@@ -391,7 +252,7 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             shutdown.recv(),
         )
         .await?;
-        p2p_running.await;
+        p2p_running.await
     } else {
         let transport = make_p2p_transport();
 
@@ -408,8 +269,6 @@ async fn run_p2p<S: PeerDbStorage + 'static>(
             shutdown.recv(),
         )
         .await?;
-        p2p_running.await;
+        p2p_running.await
     }
-
-    Ok(())
 }

@@ -245,13 +245,17 @@ where
 
     /// Runs the backend events loop.
     pub async fn run(&mut self, shutdown_requested: impl Future) -> crate::Result<()> {
-        let shutdown_requested = shutdown_requested.fuse();
-        let mut shutdown_requested = std::pin::pin!(shutdown_requested);
+        let mut shutdown_requested = std::pin::pin!(shutdown_requested.fuse());
 
         loop {
             tokio::select! {
                 // Select from the channels in the specified order
                 biased;
+
+                _ = shutdown_requested.as_mut() => {
+                    log::info!("Shutdown requested");
+                    self.cmd_rx.close();
+                },
 
                 // Handle commands.
                 command_opt = self.cmd_rx.recv() => if let Some(command) = command_opt {
@@ -288,9 +292,6 @@ where
                 handler_opt = self.subscribers_receiver.recv() => if let Some(handler) = handler_opt {
                     self.events_controller.subscribe_to_events(handler);
                 },
-
-                _ = shutdown_requested.as_mut() =>
-                    self.cmd_rx.close(),
             }
         }
 
