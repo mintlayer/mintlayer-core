@@ -84,7 +84,7 @@ pub struct Manager {
     shutting_down_tx: mpsc::UnboundedSender<()>,
     shutting_down_rx: mpsc::UnboundedReceiver<()>,
 
-    // List of subsystem tasks.
+    // List of subsystem tasks
     subsystems: Vec<SubsystemInfo>,
 }
 
