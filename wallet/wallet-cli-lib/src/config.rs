@@ -36,6 +36,10 @@ pub struct WalletCliArgs {
     #[clap(long)]
     pub wallet_file: Option<PathBuf>,
 
+    /// Start staking after the start
+    #[clap(long)]
+    pub start_staking: bool,
+
     /// Optional RPC address
     #[clap(long)]
     pub rpc_address: Option<SocketAddr>,

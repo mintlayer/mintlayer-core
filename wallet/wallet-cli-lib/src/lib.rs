@@ -50,6 +50,7 @@ pub async fn run(
     let WalletCliArgs {
         network,
         wallet_file,
+        start_staking,
         rpc_address,
         rpc_cookie_file,
         rpc_username,
@@ -108,6 +109,16 @@ pub async fn run(
             &rpc_client,
             &mut controller_opt,
             commands::WalletCommand::OpenWallet { wallet_path },
+        )
+        .await?;
+    }
+
+    if start_staking {
+        commands::handle_wallet_command(
+            &chain_config,
+            &rpc_client,
+            &mut controller_opt,
+            commands::WalletCommand::StartStaking,
         )
         .await?;
     }
