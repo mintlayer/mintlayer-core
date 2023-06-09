@@ -179,7 +179,11 @@ impl<A: Ord + Clone + ToString> Crawler<A> {
     fn handle_new_address(&mut self, address: A, sender: PeerId) {
         let peer = self.outbound_peers.get_mut(&sender).expect("must be connected peer");
         if !peer.address_rate_limiter.accept(self.now) {
-            log::debug!("address announcement is rate limited from peer {sender}");
+            log::debug!(
+                "address announcement is rate limited from peer {} ({})",
+                sender,
+                address.to_string()
+            );
             return;
         }
         if let Entry::Vacant(vacant) = self.addresses.entry(address.clone()) {

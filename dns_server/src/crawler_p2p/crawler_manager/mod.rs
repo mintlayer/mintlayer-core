@@ -26,6 +26,7 @@ use std::{
 
 use common::{chain::ChainConfig, time_getter::TimeGetter};
 use crypto::random::make_pseudo_rng;
+use logging::log;
 use p2p::{
     message::{AnnounceAddrRequest, PeerManagerMessage, PingRequest, PingResponse},
     net::{
@@ -163,6 +164,11 @@ where
                 // Ignored
             }
             PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest { address }) => {
+                log::debug!(
+                    "address announcement from peer {} ({})",
+                    peer_id,
+                    address.to_string()
+                );
                 if let Some(address) = TransportAddress::from_peer_address(&address, false) {
                     self.send_crawler_event(CrawlerEvent::NewAddress {
                         address,
@@ -193,6 +199,9 @@ where
                 peer_info,
                 receiver_address: _,
             } => {
+                // Allow reading input messages from the connected peer
+                self.conn.accept(peer_info.peer_id).expect("accept must succeed");
+
                 self.send_crawler_event(CrawlerEvent::Connected { peer_info, address });
             }
             ConnectivityEvent::InboundAccepted {
