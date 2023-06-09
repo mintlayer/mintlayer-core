@@ -554,6 +554,10 @@ impl TxMempoolEntry {
         self.entry.tx_id()
     }
 
+    pub fn tx_entry(&self) -> &TxEntry {
+        &self.entry
+    }
+
     pub fn size(&self) -> usize {
         // TODO(Roy) this should follow Bitcoin's GetTxSize, which weighs in sigops, etc.
         self.entry.size()

@@ -15,15 +15,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::{
-    chain::{OutPointSourceId, Transaction, UtxoOutPoint},
-    primitives::Id,
-};
+use common::{chain::Transaction, primitives::Id};
 use crypto::random::{make_pseudo_rng, Rng};
 use logging::log;
 use utils::{const_value::ConstValue, ensure};
 
-use super::{OrphanPoolError, Time, TxEntry};
+use super::{OrphanPoolError, Time, TxDependency, TxEntry};
 use crate::config;
 pub use detect::is_orphan_error;
 
@@ -40,6 +37,7 @@ static_assertions::const_assert!(ORPHAN_POOL_SIZE_HARD_LIMIT < InternalIdIntType
 struct InternalId(InternalIdIntType);
 
 impl InternalId {
+    const ZERO: Self = Self(0);
     const MAX: Self = Self(InternalIdIntType::MAX);
 
     fn new(n: usize) -> Self {
@@ -64,10 +62,8 @@ struct TxOrphanPoolMaps {
     /// Transactions indexed by the insertion time. Useful for removing stale transactions
     by_insertion_time: BTreeSet<(Time, InternalId)>,
 
-    /// Transactions indexed by the previous output they spend
-    ///
-    /// TODO: Extend this to accounts too
-    by_input: BTreeSet<(UtxoOutPoint, InternalId)>,
+    /// Transactions indexed by their dependencies
+    by_deps: BTreeSet<(TxDependency, InternalId)>,
 }
 
 impl TxOrphanPoolMaps {
@@ -75,7 +71,7 @@ impl TxOrphanPoolMaps {
         Self {
             by_tx_id: BTreeMap::new(),
             by_insertion_time: BTreeSet::new(),
-            by_input: BTreeSet::new(),
+            by_deps: BTreeSet::new(),
         }
     }
 
@@ -86,7 +82,7 @@ impl TxOrphanPoolMaps {
         let inserted = self.by_insertion_time.insert((entry.creation_time(), iid));
         assert!(inserted, "Tx entry already in insertion time map");
 
-        self.by_input.extend(entry.utxo_outpoints().map(|outpt| (outpt.clone(), iid)));
+        self.by_deps.extend(entry.requires().map(|dep| (dep, iid)));
     }
 
     fn remove(&mut self, entry: &TxEntry) {
@@ -95,9 +91,8 @@ impl TxOrphanPoolMaps {
         let removed = self.by_insertion_time.remove(&(entry.creation_time(), iid));
         assert!(removed, "Tx entry not present in the insertion time map");
 
-        entry.utxo_outpoints().for_each(|outpt| {
-            let removed = self.by_input.remove(&(outpt.clone(), iid));
-            assert!(removed, "Transaction outpoint entry expected to be present");
+        entry.requires().for_each(|dep| {
+            self.by_deps.remove(&(dep, iid));
         })
     }
 }
@@ -143,26 +138,26 @@ impl TxOrphanPool {
     ///
     /// By ready, we mean it has no remaining dependencies in orphan pool. That means they can be
     /// considered for verification and, if the verification passes, moved to mempool.
-    pub fn ready_children_of(
-        &self,
-        tx_id: Id<Transaction>,
-    ) -> impl Iterator<Item = Id<Transaction>> + '_ {
-        let source = OutPointSourceId::Transaction(tx_id);
-        let lower_bound = (UtxoOutPoint::new(source.clone(), 0), InternalId(0));
-        let upper_bound = (UtxoOutPoint::new(source, u32::MAX), InternalId::MAX);
-        self.maps
-            .by_input
-            .range(lower_bound..=upper_bound)
-            .filter_map(|(_, iid)| self.is_ready(*iid).then(|| *self.get_at(*iid).tx_id()))
+    pub fn ready_children_of<'a>(
+        &'a self,
+        entry: &'a TxEntry,
+    ) -> impl Iterator<Item = Id<Transaction>> + 'a {
+        entry.provides().flat_map(move |dep| {
+            self.maps
+                .by_deps
+                .range((dep.clone(), InternalId::ZERO)..=(dep, InternalId::MAX))
+                .filter_map(|(_, iid)| self.is_ready(*iid).then(|| *self.get_at(*iid).tx_id()))
+        })
     }
 
     /// Check no dependencies of given transaction are still in orphan pool so it can be considered
     /// as a candidate to move out.
     fn is_ready(&self, iid: InternalId) -> bool {
         let entry = self.get_at(iid);
-        !entry.utxo_outpoints().any(|outpoint| match outpoint.tx_id() {
-            OutPointSourceId::Transaction(tx_id) => self.maps.by_tx_id.contains_key(&tx_id),
-            OutPointSourceId::BlockReward(_) => false,
+        !entry.requires().any(|dep| match dep {
+            // Always consider account deps. TODO: can be optimized in the future
+            TxDependency::DelegationAccount(_, _) => false,
+            TxDependency::Transaction(tx_id) => self.maps.by_tx_id.contains_key(&tx_id),
         })
     }
 

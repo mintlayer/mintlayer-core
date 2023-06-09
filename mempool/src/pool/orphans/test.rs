@@ -15,8 +15,11 @@
 
 use super::*;
 use common::{
-    chain::{signature::inputsig::InputWitness, SignedTransaction, TxInput},
-    primitives::H256,
+    chain::{
+        signature::inputsig::InputWitness, AccountNonce, AccountSpending, DelegationId,
+        SignedTransaction, TxInput,
+    },
+    primitives::{Amount, H256},
 };
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Rng, Seed};
@@ -42,12 +45,9 @@ fn check_integrity(orphans: &TxOrphanPool) {
             "Entry {iid:?} insertion time inconsistent",
         );
     });
-    orphans.maps.by_input.iter().for_each(|(outpt, iid)| {
-        let inputs = orphans.get_at(*iid).transaction().inputs();
-        assert!(
-            inputs.iter().any(|i| i.utxo_outpoint() == Some(outpt)),
-            "Entry {iid:?} outpoint missing",
-        );
+    orphans.maps.by_deps.iter().for_each(|(dep, iid)| {
+        let tx_dep = orphans.get_at(*iid).requires().find(|r| r == dep);
+        assert!(tx_dep.is_some(), "Entry {iid:?} outpoint missing");
     });
 }
 
@@ -55,9 +55,16 @@ fn random_tx_entry(rng: &mut impl Rng) -> TxEntry {
     let n_inputs = rng.gen_range(1..=10);
     let inputs: Vec<_> = (0..n_inputs)
         .map(|_| {
-            let source: Id<Transaction> = H256(rng.gen()).into();
-            let output_index = rng.gen_range(0..=400);
-            TxInput::from_utxo(source.into(), output_index)
+            if rng.gen_bool(0.8) {
+                let source: Id<Transaction> = H256(rng.gen()).into();
+                let output_index = rng.gen_range(0..=400);
+                TxInput::from_utxo(source.into(), output_index)
+            } else {
+                let nonce = AccountNonce::new(rng.gen());
+                let delegation_id: DelegationId = H256(rng.gen()).into();
+                let amount = Amount::from_atoms(rng.gen());
+                TxInput::from_account(nonce, AccountSpending::Delegation(delegation_id, amount))
+            }
         })
         .collect();
 
@@ -78,7 +85,7 @@ fn insert_and_delete(#[case] seed: Seed) {
 
     let entry = random_tx_entry(&mut rng);
     let tx_id = *entry.tx_id();
-    let n_inputs = entry.transaction().inputs().len();
+    let n_deps = BTreeSet::from_iter(entry.requires()).len();
 
     assert_eq!(orphans.insert(entry), Ok(()));
 
@@ -88,8 +95,8 @@ fn insert_and_delete(#[case] seed: Seed) {
         orphans.maps.by_tx_id.keys().collect::<Vec<_>>(),
         vec![&tx_id],
     );
+    assert_eq!(orphans.maps.by_deps.len(), n_deps);
     assert_eq!(orphans.maps.by_insertion_time.len(), 1);
-    assert_eq!(orphans.maps.by_input.len(), n_inputs);
     check_integrity(&orphans);
 
     assert!(orphans.remove(tx_id).is_some());
@@ -97,7 +104,7 @@ fn insert_and_delete(#[case] seed: Seed) {
     assert!(orphans.transactions.is_empty());
     assert!(orphans.maps.by_tx_id.is_empty());
     assert!(orphans.maps.by_insertion_time.is_empty());
-    assert!(orphans.maps.by_input.is_empty());
+    assert!(orphans.maps.by_deps.is_empty());
     check_integrity(&orphans);
 }
 

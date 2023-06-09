@@ -41,7 +41,7 @@ use utils::{
 };
 
 use self::{
-    entry::{TxEntry, TxEntryWithFee},
+    entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
     feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
     orphans::TxOrphanPool,
@@ -769,8 +769,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
         let status = self.add_transaction_entry(entry)?;
 
         if status == TxStatus::InMempool {
+            let entry = self.store.get_entry(&tx_id).expect("just added");
             let mut work_queue: VecDeque<Id<Transaction>> =
-                self.orphans.ready_children_of(tx_id).collect();
+                self.orphans.ready_children_of(entry.tx_entry()).collect();
 
             while let Some(orphan_tx_id) = work_queue.pop_front() {
                 let orphan = match self.orphans.remove(orphan_tx_id) {
@@ -780,7 +781,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
 
                 match self.add_transaction_entry(orphan) {
                     Ok(TxStatus::InMempool) => {
-                        work_queue.extend(self.orphans.ready_children_of(orphan_tx_id));
+                        let former_orphan =
+                            self.store.get_entry(&orphan_tx_id).expect("just added");
+                        work_queue.extend(self.orphans.ready_children_of(former_orphan.tx_entry()));
                         log::debug!("Orphan tx {orphan_tx_id} promoted to mempool");
                     }
                     Ok(TxStatus::InOrphanPool) => {
