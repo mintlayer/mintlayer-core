@@ -541,7 +541,7 @@ pub fn new_block(
         }
     };
 
-    let input = TxInput::new(input, 0);
+    let input = TxInput::from_utxo(input, 0);
     let output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(100000)),
         Destination::AnyoneCanSpend,

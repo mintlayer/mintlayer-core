@@ -133,9 +133,15 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 100,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
+            ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.ban_score(),
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
+            ConnectTransactionError::NonceIsNotIncremental(_) => 100,
+            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
+            ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
+            ConnectTransactionError::MissingTransactionNonce(_) => 100,
+            ConnectTransactionError::FailedToIncrementAccountNonce => 0,
         }
     }
 }
@@ -154,10 +160,13 @@ impl BanScore for SignatureDestinationGetterError {
     fn ban_score(&self) -> u32 {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 100,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 100,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::UtxoOutputNotFound(_) => 100,
+            SignatureDestinationGetterError::UtxoViewError(_) => 100,
         }
     }
 }
@@ -393,6 +402,7 @@ impl BanScore for utxo::Error {
             utxo::Error::NoBlockchainHeightFound => 0,
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::InvalidBlockRewardOutputType(_) => 100,
+            utxo::Error::TxInputAndUndoMismatch(_) => 100,
             utxo::Error::ViewRead => 0,
             utxo::Error::StorageWrite => 0,
         }

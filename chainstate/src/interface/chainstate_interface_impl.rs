@@ -32,8 +32,8 @@ use common::{
         block::{signed_block_header::SignedBlockHeader, Block, BlockReward, GenBlock},
         config::ChainConfig,
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput, TxMainChainIndex,
-        TxOutput,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, TxOutput, UtxoOutPoint,
     },
     primitives::{id::WithId, Amount, BlockHeight, Id},
 };
@@ -384,14 +384,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
 
         inputs
             .iter()
-            .map(|input| {
-                let utxo = utxo_view
-                    .utxo(input.outpoint())
-                    .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
-                match utxo {
-                    Some(utxo) => get_output_coin_amount(&pos_accounting_view, utxo.output()),
-                    None => Ok(None),
+            .map(|input| match input {
+                TxInput::Utxo(outpoint) => {
+                    let utxo = utxo_view
+                        .utxo(outpoint)
+                        .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?;
+                    match utxo {
+                        Some(utxo) => get_output_coin_amount(&pos_accounting_view, utxo.output()),
+                        None => Ok(None),
+                    }
                 }
+                TxInput::Account(_) => Ok(None),
             })
             .collect::<Result<Vec<_>, _>>()
     }
@@ -452,7 +455,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
         Ok(())
     }
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
         let chainstate_ref = self
             .chainstate
             .make_db_tx_ro()
@@ -553,6 +556,17 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> ChainstateInterfa
             median_time,
             is_initial_block_download,
         })
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, ChainstateError> {
+        self.chainstate
+            .make_db_tx_ro()
+            .map_err(|e| ChainstateError::FailedToReadProperty(e.into()))?
+            .get_account_nonce_count(account)
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 }
 

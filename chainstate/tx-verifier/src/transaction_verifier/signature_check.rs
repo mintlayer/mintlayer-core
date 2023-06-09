@@ -15,7 +15,7 @@
 
 use common::chain::{
     signature::{verify_signature, Transactable},
-    ChainConfig,
+    ChainConfig, TxInput,
 };
 use utxo::UtxosView;
 
@@ -40,24 +40,25 @@ where
 
     let inputs_utxos = inputs
         .iter()
-        .map(|input| {
-            let outpoint = input.outpoint();
-            utxo_view
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => utxo_view
                 .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
-                .map(|utxo| utxo.take_output())
+                .map(|utxo| Some(utxo.take_output())),
+            TxInput::Account(_) => Ok(None),
         })
         .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
+    let inputs_utxos = inputs_utxos.iter().map(|utxo| utxo.as_ref()).collect::<Vec<_>>();
 
-    inputs_utxos.iter().enumerate().try_for_each(|(input_idx, utxo)| {
+    inputs.iter().enumerate().try_for_each(|(input_idx, input)| {
         // TODO: ensure that signature verification is tested in the test-suite, they seem to be tested only internally
-        let destination = destination_getter.call(utxo)?;
+        let destination = destination_getter.call(input)?;
         verify_signature(
             chain_config,
             &destination,
             transactable,
-            &inputs_utxos.iter().collect::<Vec<_>>(),
+            &inputs_utxos,
             input_idx,
         )
         .map_err(ConnectTransactionError::SignatureVerificationFailed)

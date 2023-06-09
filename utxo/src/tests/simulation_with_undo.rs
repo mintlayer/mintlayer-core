@@ -18,7 +18,7 @@ use crate::{
     ConsumedUtxoCache, FlushableUtxoView, UtxoSource, UtxosCache, UtxosTxUndoWithSources, UtxosView,
 };
 use common::{
-    chain::{block::BlockReward, OutPoint, OutPointSourceId, Transaction, TxInput},
+    chain::{block::BlockReward, OutPointSourceId, Transaction, TxInput, UtxoOutPoint},
     primitives::{BlockHeight, Id, Idable, H256},
 };
 use crypto::random::{CryptoRng, Rng};
@@ -29,12 +29,12 @@ use test_utils::random::{make_seedable_rng, Seed};
 // Structure to store outpoints of current utxo set and info for undo
 #[derive(Default)]
 struct ResultWithUndo {
-    utxo_outpoints: Vec<OutPoint>,
-    outpoints_with_undo: BTreeMap<OutPoint, UndoInfo>,
+    utxo_outpoints: Vec<UtxoOutPoint>,
+    outpoints_with_undo: BTreeMap<UtxoOutPoint, UndoInfo>,
 }
 
 struct UndoInfo {
-    prev_outpoint: OutPoint,
+    prev_outpoint: UtxoOutPoint,
     tx_undo: UtxosTxUndoWithSources,
 }
 
@@ -151,7 +151,9 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                         false,
                     )
                     .unwrap();
-                result.utxo_outpoints.push(OutPoint::new(OutPointSourceId::from(block_id), 0));
+                result
+                    .utxo_outpoints
+                    .push(UtxoOutPoint::new(OutPointSourceId::from(block_id), 0));
             } else {
                 //spend random utxo in a transaction
 
@@ -169,7 +171,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 };
 
                 //use this outpoint as input for transaction
-                let input = TxInput::new(outpoint.tx_id(), outpoint.output_index());
+                let input = TxInput::from_utxo(outpoint.tx_id(), outpoint.output_index());
                 let tx = Transaction::new(0x00, vec![input], create_tx_outputs(rng, 1)).unwrap();
 
                 //spent the transaction
@@ -177,7 +179,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 let undo = cache.connect_transaction(&tx, block_height).unwrap();
 
                 //keep result updated
-                let new_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), 0);
+                let new_outpoint = UtxoOutPoint::new(OutPointSourceId::from(tx.get_id()), 0);
                 result.utxo_outpoints.push(new_outpoint.clone());
                 result.outpoints_with_undo.insert(
                     new_outpoint,
@@ -200,7 +202,7 @@ fn populate_cache_with_undo<P: UtxosView<Error = Infallible>>(
                 cache
                     .add_utxo(
                         &undo_info.prev_outpoint,
-                        undo_info.tx_undo.utxos()[0].clone(),
+                        undo_info.tx_undo.utxos()[0].clone().unwrap(),
                         cache.has_utxo(&undo_info.prev_outpoint).unwrap_infallible(),
                     )
                     .unwrap();

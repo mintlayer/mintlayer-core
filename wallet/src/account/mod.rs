@@ -27,7 +27,7 @@ use common::chain::signature::sighash::sighashtype::SigHashType;
 use common::chain::signature::TransactionSigError;
 use common::chain::tokens::{OutputValue, TokenData, TokenId};
 use common::chain::{
-    Block, ChainConfig, Destination, GenBlock, OutPoint, SignedTransaction, TxInput, TxOutput,
+    Block, ChainConfig, Destination, GenBlock, SignedTransaction, TxInput, TxOutput, UtxoOutPoint,
 };
 use common::primitives::per_thousand::PerThousand;
 use common::primitives::{Amount, BlockHeight, Id};
@@ -192,7 +192,7 @@ impl Account {
             .get_utxos(UtxoType::Transfer.into())
             .into_iter()
             .map(|(outpoint, txo)| (outpoint, txo.clone()))
-            .collect::<Vec<(OutPoint, TxOutput)>>();
+            .collect::<Vec<(UtxoOutPoint, TxOutput)>>();
 
         let input0 = utxos.get(0).ok_or(WalletError::NoUtxos)?;
         let pool_id = pos_accounting::make_pool_id(&input0.0);
@@ -321,7 +321,7 @@ impl Account {
     ) -> WalletResult<SignedTransaction> {
         let (tx, utxos) = req.into_transaction_and_utxos()?;
         let inputs = tx.inputs();
-        let input_utxos = utxos.iter().collect::<Vec<_>>();
+        let input_utxos = utxos.iter().map(Some).collect::<Vec<_>>();
         if utxos.len() != inputs.len() {
             return Err(
                 TransactionSigError::InvalidUtxoCountVsInputs(utxos.len(), inputs.len()).into(),
@@ -467,7 +467,7 @@ impl Account {
         Ok(balances)
     }
 
-    pub fn get_utxos(&self, utxo_types: UtxoTypes) -> BTreeMap<OutPoint, &TxOutput> {
+    pub fn get_utxos(&self, utxo_types: UtxoTypes) -> BTreeMap<UtxoOutPoint, &TxOutput> {
         let mut all_outputs = self.output_cache.utxos();
         all_outputs.retain(|_outpoint, txo| {
             self.is_mine_or_watched(txo) && utxo_types.contains(get_utxo_type(txo))
@@ -510,10 +510,10 @@ impl Account {
         db_tx: &mut impl WalletStorageWriteLocked,
         tx: WalletTx,
     ) -> WalletResult<()> {
-        let relevant_inputs = tx
-            .inputs()
-            .iter()
-            .any(|input| self.output_cache.outpoints().contains(input.outpoint()));
+        let relevant_inputs = tx.inputs().iter().any(|input| match input {
+            TxInput::Utxo(outpoint) => self.output_cache.outpoints().contains(outpoint),
+            TxInput::Account(_) => false,
+        });
         let relevant_outputs = self.mark_outputs_as_seen(db_tx, tx.outputs())?;
         if relevant_inputs || relevant_outputs {
             let id = AccountWalletTxId::new(self.get_account_id(), tx.id());

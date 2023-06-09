@@ -28,8 +28,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId, PoolId,
-        Transaction,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId,
+        OutPointSourceId, PoolId, Transaction,
     },
     primitives::{Amount, Id},
 };
@@ -85,6 +85,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Transacti
             .get_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
+        self.db_tx
+            .get_account_nonce_count(account)
+            .map_err(TransactionVerifierStorageError::from)
+    }
 }
 
 // TODO: this function is a duplicate of one in chainstate-types; the cause for this is that BlockchainStorageRead causes a circular dependencies
@@ -109,7 +118,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> UtxosStor
 
     fn get_utxo(
         &self,
-        outpoint: &common::chain::OutPoint,
+        outpoint: &common::chain::UtxoOutPoint,
     ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.db_tx.get_utxo(outpoint)
     }
@@ -293,6 +302,25 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy>
                 panic!("Flushing mempool info into the storage is forbidden")
             }
         }
+    }
+
+    fn set_account_nonce_count(
+        &mut self,
+        account: AccountType,
+        nonce: AccountNonce,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.db_tx
+            .set_account_nonce_count(account, nonce)
+            .map_err(TransactionVerifierStorageError::from)
+    }
+
+    fn del_account_nonce_count(
+        &mut self,
+        account: AccountType,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.db_tx
+            .del_account_nonce_count(account)
+            .map_err(TransactionVerifierStorageError::from)
     }
 }
 

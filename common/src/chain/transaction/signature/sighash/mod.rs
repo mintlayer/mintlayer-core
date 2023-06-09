@@ -40,7 +40,7 @@ fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgo
 
 fn stream_signature_hash<T: Signable>(
     tx: &T,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
     target_input_num: usize,
@@ -71,7 +71,7 @@ fn stream_signature_hash<T: Signable>(
 pub fn signature_hash<T: Signable>(
     mode: sighashtype::SigHashType,
     tx: &T,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
 ) -> Result<H256, TransactionSigError> {
     let mut stream = DefaultHashAlgoStream::new();

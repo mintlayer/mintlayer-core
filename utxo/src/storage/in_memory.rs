@@ -17,20 +17,20 @@ use super::{UtxosStorageRead, UtxosStorageWrite};
 use crate::{Utxo, UtxosBlockUndo, UtxosView};
 use chainstate_types::storage_result::{self, Error};
 use common::{
-    chain::{Block, GenBlock, OutPoint},
+    chain::{Block, GenBlock, UtxoOutPoint},
     primitives::Id,
 };
 use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct UtxosDBInMemoryImpl {
-    store: BTreeMap<OutPoint, Utxo>,
+    store: BTreeMap<UtxoOutPoint, Utxo>,
     undo_store: BTreeMap<Id<Block>, UtxosBlockUndo>,
     best_block_id: Id<GenBlock>,
 }
 
 impl UtxosDBInMemoryImpl {
-    pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
+    pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<UtxoOutPoint, Utxo>) -> Self {
         Self {
             store: initial_utxos,
             undo_store: BTreeMap::new(),
@@ -42,7 +42,7 @@ impl UtxosDBInMemoryImpl {
 impl UtxosStorageRead for UtxosDBInMemoryImpl {
     type Error = storage_result::Error;
 
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
+    fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Error> {
         let res = self.store.get(outpoint);
         Ok(res.cloned())
     }
@@ -58,11 +58,11 @@ impl UtxosStorageRead for UtxosDBInMemoryImpl {
 }
 
 impl UtxosStorageWrite for UtxosDBInMemoryImpl {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Error> {
+    fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> Result<(), Error> {
         self.store.insert(outpoint.clone(), entry);
         Ok(())
     }
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
+    fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> Result<(), Error> {
         self.store.remove(outpoint);
         Ok(())
     }
@@ -85,11 +85,11 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
 impl UtxosView for UtxosDBInMemoryImpl {
     type Error = std::convert::Infallible;
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         Ok(self.store.get(outpoint).cloned())
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
         Ok(self.store.get(outpoint).is_some())
     }
 

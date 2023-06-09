@@ -23,6 +23,15 @@ use crate::primitives::{id::WithId, Id, Idable, H256};
 pub mod input;
 pub use input::*;
 
+pub mod account_outpoint;
+pub use account_outpoint::*;
+
+pub mod account_nonce;
+pub use account_nonce::*;
+
+pub mod utxo_outpoint;
+pub use utxo_outpoint::*;
+
 pub mod signed_transaction;
 
 pub mod output;

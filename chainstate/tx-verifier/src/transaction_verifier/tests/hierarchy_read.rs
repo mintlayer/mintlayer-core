@@ -117,7 +117,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo0_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo0_undo)], vec![]),
         )]),
     )
     .unwrap();
@@ -128,7 +128,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo1_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo1_undo)], vec![]),
         )]),
     )
     .unwrap();
@@ -139,7 +139,7 @@ fn hierarchy_test_undo_from_chain(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             H256::random_using(&mut rng).into(),
-            UtxosTxUndoWithSources::new(vec![utxo2_undo], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo2_undo)], vec![]),
         )]),
     )
     .unwrap();
@@ -642,4 +642,77 @@ fn hierarchy_test_stake_pool(#[case] seed: Seed) {
     assert!(verifier2.get_accounting_undo(block_undo_id_0).unwrap().is_none());
     assert!(verifier2.get_accounting_undo(block_undo_id_1).unwrap().is_some());
     assert!(verifier2.get_accounting_undo(block_undo_id_2).unwrap().is_some());
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// nonce2                 nonce1                 nonce0
+//
+// Check that data can be accessed through derived entities
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn hierarchy_test_nonce(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let nonce0 = AccountNonce::new(rng.gen());
+    let account0 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let nonce1 = AccountNonce::new(rng.gen());
+    let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let nonce2 = AccountNonce::new(rng.gen());
+    let account2 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store
+        .expect_get_account_nonce_count()
+        .with(eq(account0))
+        .times(2)
+        .return_const(Ok(Some(nonce0)));
+    store
+        .expect_get_account_nonce_count()
+        .with(eq(account2))
+        .times(1)
+        .return_const(Ok(None));
+
+    let verifier1 = {
+        let mut verifier =
+            TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+        verifier.account_nonce = BTreeMap::from([(account1, CachedOperation::Read(nonce1))]);
+        verifier
+    };
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.account_nonce = BTreeMap::from([(account2, CachedOperation::Read(nonce2))]);
+        verifier
+    };
+
+    assert_eq!(
+        verifier1.get_account_nonce_count(account0).unwrap(),
+        Some(nonce0)
+    );
+    assert_eq!(
+        verifier1.get_account_nonce_count(account1).unwrap(),
+        Some(nonce1)
+    );
+    assert_eq!(verifier1.get_account_nonce_count(account2).unwrap(), None);
+
+    assert_eq!(
+        verifier2.get_account_nonce_count(account0).unwrap(),
+        Some(nonce0)
+    );
+    assert_eq!(
+        verifier2.get_account_nonce_count(account1).unwrap(),
+        Some(nonce1)
+    );
+    assert_eq!(
+        verifier2.get_account_nonce_count(account2).unwrap(),
+        Some(nonce2)
+    );
 }

@@ -24,8 +24,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -65,6 +65,11 @@ mockall::mock! {
             &self,
             id: Id<Block>,
         ) -> Result<Option<pos_accounting::AccountingBlockUndo>, TransactionVerifierStorageError>;
+
+        fn get_account_nonce_count(
+            &self,
+            account: AccountType,
+        ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError>;
     }
 
     impl TransactionVerifierStorageMut for Store {
@@ -120,11 +125,21 @@ mockall::mock! {
             tx_source: TransactionSource,
             delta: &PoSAccountingDeltaData,
         ) -> Result<(), TransactionVerifierStorageError>;
+
+        fn set_account_nonce_count(
+            &mut self,
+            account: AccountType,
+            nonce: AccountNonce,
+        ) -> Result<(), TransactionVerifierStorageError>;
+        fn del_account_nonce_count(
+            &mut self,
+            account: AccountType,
+        ) -> Result<(), TransactionVerifierStorageError>;
     }
 
     impl UtxosStorageRead for Store {
         type Error = storage_result::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, storage_result::Error>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, storage_result::Error>;
         fn get_best_block_for_utxos(&self) -> Result<Id<GenBlock>, storage_result::Error>;
         fn get_undo_data(&self, id: Id<Block>) -> Result<Option<utxo::UtxosBlockUndo>, storage_result::Error>;
     }

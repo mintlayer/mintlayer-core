@@ -42,7 +42,7 @@ async fn basic_reorg(#[case] seed: Seed) {
     // Add the first transaction
     let tx1 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_anyone_can_spend_output(10_000_000)
@@ -53,7 +53,7 @@ async fn basic_reorg(#[case] seed: Seed) {
     // Add another transaction
     let tx2 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx1_id), 0),
             empty_witness(&mut rng),
         )
         .add_anyone_can_spend_output(9_000_000)
@@ -127,7 +127,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
     // Add the first transaction
     let tx1 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_anyone_can_spend_output(10_000_000)
@@ -138,7 +138,7 @@ async fn tx_chain_in_block(#[case] seed: Seed) {
     // Add another transaction
     let tx2 = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::Transaction(tx1_id), 0),
+            TxInput::from_utxo(OutPointSourceId::Transaction(tx1_id), 0),
             empty_witness(&mut rng),
         )
         .add_anyone_can_spend_output(9_000_000)

@@ -29,9 +29,13 @@ fn get_inputs_utxos(
 ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
     inputs
         .iter()
-        .map(|input| {
+        .filter_map(|input| match input {
+            TxInput::Utxo(outpoint) => Some(outpoint),
+            TxInput::Account(_) => None,
+        })
+        .map(|outpoint| {
             utxo_view
-                .utxo(input.outpoint())
+                .utxo(outpoint)
                 .map_err(|_| utxo::Error::ViewRead)?
                 .map(|u| u.output().clone())
                 .ok_or(ConnectTransactionError::MissingOutputOrSpent)
@@ -131,8 +135,10 @@ pub fn check_tx_inputs_outputs_purposes(
     let inputs_utxos = get_inputs_utxos(&utxo_view, tx.inputs())?;
 
     match inputs_utxos.as_slice() {
-        // no inputs
-        [] => return Err(ConnectTransactionError::MissingTxInputs),
+        // no utxo inputs
+        [] => {
+            is_valid_tx_with_accounting_input(tx)?;
+        }
         // single input
         [input_utxo] => match tx.outputs() {
             // no outputs
@@ -154,6 +160,40 @@ pub fn check_tx_inputs_outputs_purposes(
             is_valid_any_to_any_combination_for_tx(inputs_utxos.as_slice(), tx.outputs())?;
         }
     };
+
+    Ok(())
+}
+
+fn is_valid_tx_with_accounting_input(tx: &Transaction) -> Result<(), ConnectTransactionError> {
+    let is_single_accounting_delegation_spend = tx
+        .inputs()
+        .iter()
+        .filter(|input| match input {
+            TxInput::Utxo(_) => false,
+            TxInput::Account(account) => match account.account() {
+                common::chain::AccountSpending::Delegation(_, _) => true,
+            },
+        })
+        .exactly_one()
+        .is_ok();
+    ensure!(
+        is_single_accounting_delegation_spend,
+        ConnectTransactionError::InvalidInputTypeInTx
+    );
+
+    let all_lock_then_transfer_outputs = tx.outputs().iter().all(|output| match output {
+        TxOutput::LockThenTransfer(..) => true,
+        TxOutput::Transfer(..)
+        | TxOutput::Burn(..)
+        | TxOutput::CreateStakePool(..)
+        | TxOutput::ProduceBlockFromStake(..)
+        | TxOutput::CreateDelegationId(..)
+        | TxOutput::DelegateStaking(..) => false,
+    });
+    ensure!(
+        all_lock_then_transfer_outputs,
+        ConnectTransactionError::InvalidOutputTypeInTx
+    );
 
     Ok(())
 }
@@ -191,13 +231,7 @@ fn is_valid_one_to_one_combination(input_utxo: &TxOutput, output: &TxOutput) -> 
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::DelegateStaking(..)) => false,
         | (TxOutput::ProduceBlockFromStake(..), TxOutput::LockThenTransfer(..)) => true,
         | (TxOutput::CreateDelegationId(..), _) => false,
-        | (TxOutput::DelegateStaking(..), TxOutput::Transfer(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::Burn(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::CreateStakePool(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::ProduceBlockFromStake(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::CreateDelegationId(..)) => false,
-        | (TxOutput::DelegateStaking(..), TxOutput::LockThenTransfer(..))
-        | (TxOutput::DelegateStaking(..), TxOutput::DelegateStaking(..)) => true,
+        | (TxOutput::DelegateStaking(..), _) => false,
     }
 }
 
@@ -205,9 +239,7 @@ fn is_valid_one_to_any_combination_for_tx(
     input_utxo: &TxOutput,
     outputs: &[TxOutput],
 ) -> Result<(), ConnectTransactionError> {
-    if !is_valid_delegation_spending(input_utxo, outputs)
-        && !is_valid_pool_decommissioning(input_utxo, outputs)
-    {
+    if !is_valid_pool_decommissioning(input_utxo, outputs) {
         let valid_inputs = are_inputs_valid_for_tx(std::slice::from_ref(input_utxo));
         ensure!(valid_inputs, ConnectTransactionError::InvalidInputTypeInTx);
         let valid_outputs = are_outputs_valid_for_tx(outputs);
@@ -241,49 +273,6 @@ fn is_valid_pool_decommissioning(input_utxo: &TxOutput, outputs: &[TxOutput]) ->
     });
 
     stake_pool_input && all_outputs_are_lock_then_transfer
-}
-
-// single DelegateStaking input; zero or one DelegateStaking output + any number of LockThenTransfer
-fn is_valid_delegation_spending(input_utxo: &TxOutput, outputs: &[TxOutput]) -> bool {
-    let delegation_input = match input_utxo {
-        TxOutput::Transfer(..)
-        | TxOutput::LockThenTransfer(..)
-        | TxOutput::Burn(..)
-        | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::CreateDelegationId(..) => false,
-        TxOutput::DelegateStaking(..) => true,
-    };
-
-    let delegation_outputs_count = outputs
-        .iter()
-        .filter(|output| match output {
-            TxOutput::Transfer(..)
-            | TxOutput::LockThenTransfer(..)
-            | TxOutput::Burn(..)
-            | TxOutput::CreateStakePool(..)
-            | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::CreateDelegationId(..) => false,
-            TxOutput::DelegateStaking(..) => true,
-        })
-        .count();
-
-    let spend_share_outputs_count = outputs
-        .iter()
-        .filter(|output| match output {
-            TxOutput::Transfer(..)
-            | TxOutput::Burn(..)
-            | TxOutput::CreateStakePool(..)
-            | TxOutput::ProduceBlockFromStake(..)
-            | TxOutput::CreateDelegationId(..)
-            | TxOutput::DelegateStaking(..) => false,
-            TxOutput::LockThenTransfer(..) => true,
-        })
-        .count();
-
-    delegation_input
-        && delegation_outputs_count < 2
-        && spend_share_outputs_count == outputs.len() - delegation_outputs_count
 }
 
 fn is_valid_any_to_any_combination_for_tx(

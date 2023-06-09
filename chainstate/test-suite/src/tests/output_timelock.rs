@@ -24,7 +24,7 @@ use common::{
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        OutPoint, OutPointSourceId, TxInput, TxOutput,
+        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable},
 };
@@ -72,7 +72,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
+                ConnectTransactionError::TimeLockViolation(
+                    locked_input.utxo_outpoint().unwrap().clone()
+                )
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -83,7 +85,7 @@ fn output_lock_until_height(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
+                        TxInput::from_utxo(prev_block_outputs.keys().next().unwrap().clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_anyone_can_spend_output(10000)
@@ -113,7 +115,9 @@ fn output_lock_until_height(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(locked_input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(
+                        locked_input.utxo_outpoint().unwrap().clone()
+                    )
                 ))
             );
             assert_eq!(
@@ -165,7 +169,7 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
 
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                     0,
                 ),
@@ -180,12 +184,12 @@ fn output_lock_until_height_but_spend_at_same_block(#[case] seed: Seed) {
             .build();
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(5000)
             .build();
-        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
+        let locked_outpoint = UtxoOutPoint::new(tx1.transaction().get_id().into(), 1);
 
         assert_eq!(
             tf.make_block_builder()
@@ -231,7 +235,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                 .build_and_process()
                 .unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                ConnectTransactionError::TimeLockViolation(input.utxo_outpoint().unwrap().clone())
             ))
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
@@ -242,7 +246,7 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
+                        TxInput::from_utxo(prev_block_outputs.keys().next().unwrap().clone(), 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_anyone_can_spend_output(10000)
@@ -272,7 +276,9 @@ fn output_lock_for_block_count(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(
+                        input.utxo_outpoint().unwrap().clone()
+                    )
                 ))
             );
             assert_eq!(
@@ -318,7 +324,7 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                     0,
                 ),
@@ -333,12 +339,12 @@ fn output_lock_for_block_count_but_spend_at_same_block(#[case] seed: Seed) {
             .build();
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)
             .build();
-        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
+        let locked_outpoint = UtxoOutPoint::new(tx1.transaction().get_id().into(), 1);
 
         assert_eq!(
             tf.make_block_builder()
@@ -447,7 +453,9 @@ fn output_lock_until_time(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(
+                        input.utxo_outpoint().unwrap().clone()
+                    )
                 ))
             );
             assert_eq!(
@@ -501,7 +509,7 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                     0,
                 ),
@@ -517,12 +525,12 @@ fn output_lock_until_time_but_spend_at_same_block(#[case] seed: Seed) {
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)
             .build();
-        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
+        let locked_outpoint = UtxoOutPoint::new(tx1.transaction().get_id().into(), 1);
 
         assert_eq!(
             tf.make_block_builder()
@@ -595,7 +603,9 @@ fn output_lock_for_seconds(#[case] seed: Seed) {
                     .build_and_process()
                     .unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::TimeLockViolation(input.outpoint().clone())
+                    ConnectTransactionError::TimeLockViolation(
+                        input.utxo_outpoint().unwrap().clone()
+                    )
                 ))
             );
             assert_eq!(
@@ -647,7 +657,7 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
         // create the first block, with a locked output
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                     0,
                 ),
@@ -663,12 +673,12 @@ fn output_lock_for_seconds_but_spend_at_same_block(#[case] seed: Seed) {
 
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 1),
                 InputWitness::NoSignature(None),
             )
             .add_anyone_can_spend_output(50000)
             .build();
-        let locked_outpoint = OutPoint::new(tx1.transaction().get_id().into(), 1);
+        let locked_outpoint = UtxoOutPoint::new(tx1.transaction().get_id().into(), 1);
 
         assert_eq!(
             tf.make_block_builder()

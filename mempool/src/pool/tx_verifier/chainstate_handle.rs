@@ -26,8 +26,8 @@ use chainstate_types::storage_result;
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -121,7 +121,7 @@ impl utils::shallow_clone::ShallowClone for ChainstateHandle {
 impl UtxosStorageRead for ChainstateHandle {
     type Error = Error;
 
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
+    fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Error> {
         let outpoint = outpoint.clone();
         self.call(move |c| c.utxo(&outpoint))
     }
@@ -225,17 +225,21 @@ impl TransactionVerifierStorageRef for ChainstateHandle {
     fn get_accounting_undo(&self, _id: Id<Block>) -> Result<Option<AccountingBlockUndo>, Error> {
         panic!("Mempool should not undo stuff in chainstate")
     }
+
+    fn get_account_nonce_count(&self, account: AccountType) -> Result<Option<AccountNonce>, Error> {
+        self.call(move |c| c.get_account_nonce_count(account))
+    }
 }
 
 impl UtxosView for ChainstateHandle {
     type Error = Error;
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Error> {
         let outpoint = outpoint.clone();
         self.call(move |c| c.utxo(&outpoint))
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Error> {
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Error> {
         self.utxo(outpoint).map(|outpt| outpt.is_some())
     }
 

@@ -15,7 +15,7 @@
 
 use accounting::DataDelta;
 use common::{
-    chain::{DelegationId, Destination, OutPoint, PoolId},
+    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 
@@ -126,7 +126,7 @@ impl<P: PoSAccountingView> PoSAccountingOperations for PoSAccountingDelta<P> {
         &mut self,
         target_pool: PoolId,
         spend_key: Destination,
-        input0_outpoint: &OutPoint,
+        input0_outpoint: &UtxoOutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);

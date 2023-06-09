@@ -20,8 +20,8 @@ use common::{
     chain::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -44,7 +44,7 @@ storage::decl_schema! {
         /// Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Map<BlockHeight, Id<GenBlock>>,
         /// Store for Utxo Entries
-        pub DBUtxo: Map<OutPoint, Utxo>,
+        pub DBUtxo: Map<UtxoOutPoint, Utxo>,
         /// Store for utxo BlockUndo
         pub DBUtxosBlockUndo: Map<Id<Block>, UtxosBlockUndo>,
         /// Store for EpochData
@@ -53,6 +53,8 @@ storage::decl_schema! {
         pub DBTokensAuxData: Map<TokenId, TokenAuxiliaryData>,
         /// Store of issuance tx id vs token id
         pub DBIssuanceTxVsTokenId: Map<Id<Transaction>, TokenId>,
+        /// Store the number of transactions per account
+        pub DBAccountNonceCount: Map<AccountType, AccountNonce>,
 
         /// Store for accounting BlockUndo
         pub DBAccountingBlockUndo: Map<Id<Block>, AccountingBlockUndo>,

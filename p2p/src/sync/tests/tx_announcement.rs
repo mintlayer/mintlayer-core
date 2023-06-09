@@ -351,7 +351,7 @@ async fn valid_transaction(#[case] seed: Seed) {
 fn transaction(out_point: Id<GenBlock>) -> SignedTransaction {
     let tx = Transaction::new(
         0x00,
-        vec![TxInput::new(OutPointSourceId::from(out_point), 0)],
+        vec![TxInput::from_utxo(OutPointSourceId::from(out_point), 0)],
         vec![TxOutput::Burn(OutputValue::Coin(Amount::from_atoms(1)))],
     )
     .unwrap();

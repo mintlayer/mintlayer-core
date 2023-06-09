@@ -122,6 +122,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
             ConnectTransactionError::TimeLockViolation(_) => 0,
+            ConnectTransactionError::NonceIsNotIncremental(_) => 0,
 
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),
@@ -146,6 +147,8 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::PoolOwnerRewardCalculationFailed(_, _) => 100,
             ConnectTransactionError::PoolOwnerRewardCannotExceedTotalReward(_, _, _, _) => 100,
             ConnectTransactionError::NotEnoughPledgeToCreateStakePool(_, _, _) => 100,
+            ConnectTransactionError::AttemptToCreateStakePoolFromAccounts => 100,
+            ConnectTransactionError::AttemptToCreateDelegationFromAccounts => 100,
             ConnectTransactionError::OutputTimelockError(err) => err.ban_score(),
 
             // Should not happen when processing standalone transactions
@@ -179,7 +182,10 @@ impl MempoolBanScore for ConnectTransactionError {
             ConnectTransactionError::BlockRewardInputOutputMismatch(_, _) => 0,
             ConnectTransactionError::TotalDelegationBalanceZero(_) => 0,
             ConnectTransactionError::DelegationDataNotFound(_) => 0,
+            ConnectTransactionError::DelegationBalanceNotFound(_) => 0,
+            ConnectTransactionError::MissingTransactionNonce(_) => 0,
             ConnectTransactionError::DestinationRetrievalError(err) => err.mempool_ban_score(),
+            ConnectTransactionError::FailedToIncrementAccountNonce => 0,
         }
     }
 }
@@ -188,10 +194,13 @@ impl MempoolBanScore for SignatureDestinationGetterError {
     fn mempool_ban_score(&self) -> u32 {
         match self {
             SignatureDestinationGetterError::SpendingOutputInBlockReward => 100,
+            SignatureDestinationGetterError::SpendingFromAccountInBlockReward => 100,
             SignatureDestinationGetterError::SigVerifyOfBurnedOutput => 100,
             SignatureDestinationGetterError::PoolDataNotFound(_) => 0,
             SignatureDestinationGetterError::DelegationDataNotFound(_) => 0,
             SignatureDestinationGetterError::SigVerifyPoSAccountingError(_) => 100,
+            SignatureDestinationGetterError::UtxoOutputNotFound(_) => 0,
+            SignatureDestinationGetterError::UtxoViewError(_) => 0,
         }
     }
 }
@@ -268,6 +277,7 @@ impl MempoolBanScore for utxo::Error {
             utxo::Error::MissingBlockRewardUndo(_) => 0,
             utxo::Error::ViewRead => 0,
             utxo::Error::StorageWrite => 0,
+            utxo::Error::TxInputAndUndoMismatch(_) => 0,
         }
     }
 }

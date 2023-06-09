@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use common::chain::{OutPoint, TxOutput};
+use common::chain::{TxInput, TxOutput, UtxoOutPoint};
 use wallet_types::{AccountWalletTxId, WalletTx};
 
 /// A helper structure for the UTXO search.
@@ -31,7 +31,7 @@ use wallet_types::{AccountWalletTxId, WalletTx};
 /// A similar approach is used by the Bitcoin Core wallet.
 pub struct OutputCache {
     txs: BTreeMap<AccountWalletTxId, WalletTx>,
-    consumed: BTreeSet<OutPoint>,
+    consumed: BTreeSet<UtxoOutPoint>,
 }
 
 impl OutputCache {
@@ -54,13 +54,20 @@ impl OutputCache {
         &self.txs
     }
 
-    pub fn outpoints(&self) -> &BTreeSet<OutPoint> {
+    pub fn outpoints(&self) -> &BTreeSet<UtxoOutPoint> {
         &self.consumed
     }
 
     pub fn add_tx(&mut self, tx_id: AccountWalletTxId, tx: WalletTx) {
         for input in tx.inputs() {
-            self.consumed.insert(input.outpoint().clone());
+            match input {
+                TxInput::Utxo(outpoint) => {
+                    self.consumed.insert(outpoint.clone());
+                }
+                TxInput::Account(_) => {
+                    unimplemented!()
+                }
+            }
         }
         self.txs.insert(tx_id, tx);
     }
@@ -69,21 +76,28 @@ impl OutputCache {
         let tx_opt = self.txs.remove(tx_id);
         if let Some(tx) = tx_opt {
             for input in tx.inputs() {
-                self.consumed.remove(input.outpoint());
+                match input {
+                    TxInput::Utxo(outpoint) => {
+                        self.consumed.remove(outpoint);
+                    }
+                    TxInput::Account(_) => {
+                        unimplemented!()
+                    }
+                }
             }
         }
     }
 
-    fn valid_utxo(&self, outpoint: &OutPoint) -> bool {
+    fn valid_utxo(&self, outpoint: &UtxoOutPoint) -> bool {
         !self.consumed.contains(outpoint)
     }
 
-    pub fn utxos(&self) -> BTreeMap<OutPoint, &TxOutput> {
+    pub fn utxos(&self) -> BTreeMap<UtxoOutPoint, &TxOutput> {
         let mut utxos = BTreeMap::new();
 
         for tx in self.txs.values() {
             for (index, output) in tx.outputs().iter().enumerate() {
-                let outpoint = OutPoint::new(tx.id(), index as u32);
+                let outpoint = UtxoOutPoint::new(tx.id(), index as u32);
                 if self.valid_utxo(&outpoint) {
                     utxos.insert(outpoint, output);
                 }

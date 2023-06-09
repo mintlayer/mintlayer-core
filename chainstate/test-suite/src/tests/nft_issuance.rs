@@ -56,7 +56,7 @@ fn nft_name_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -113,7 +113,7 @@ fn nft_empty_name(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -177,7 +177,7 @@ fn nft_invalid_name(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -234,7 +234,7 @@ fn nft_ticker_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -292,7 +292,7 @@ fn nft_empty_ticker(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -356,7 +356,7 @@ fn nft_invalid_ticker(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -413,7 +413,7 @@ fn nft_description_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -471,7 +471,7 @@ fn nft_empty_description(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -535,7 +535,7 @@ fn nft_invalid_description(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -591,7 +591,7 @@ fn nft_icon_uri_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -664,7 +664,7 @@ fn nft_icon_uri_empty(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -722,7 +722,7 @@ fn nft_icon_uri_invalid(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -780,7 +780,7 @@ fn nft_metadata_uri_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -852,7 +852,7 @@ fn nft_metadata_uri_empty(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -910,7 +910,7 @@ fn nft_metadata_uri_invalid(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -968,7 +968,7 @@ fn nft_media_uri_too_long(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1042,7 +1042,7 @@ fn nft_media_uri_empty(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(
@@ -1100,7 +1100,7 @@ fn nft_media_uri_invalid(#[case] seed: Seed) {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(
-                            TxInput::new(outpoint_source_id.clone(), 0),
+                            TxInput::from_utxo(outpoint_source_id.clone(), 0),
                             InputWitness::NoSignature(None),
                         )
                         .add_output(TxOutput::Transfer(
@@ -1158,7 +1158,7 @@ fn new_block_with_media_hash(
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(input_source_id.clone(), 0),
+                    TxInput::from_utxo(input_source_id.clone(), 0),
                     InputWitness::NoSignature(None),
                 )
                 .add_output(TxOutput::Transfer(
@@ -1329,7 +1329,7 @@ fn nft_valid_case(#[case] seed: Seed) {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(
-                        TxInput::new(outpoint_source_id, 0),
+                        TxInput::from_utxo(outpoint_source_id, 0),
                         InputWitness::NoSignature(None),
                     )
                     .add_output(TxOutput::Transfer(

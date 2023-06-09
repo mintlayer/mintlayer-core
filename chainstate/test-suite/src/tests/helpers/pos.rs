@@ -22,7 +22,7 @@ use common::{
         config::EpochIndex,
         signature::inputsig::InputWitness,
         stakelock::StakePoolData,
-        Destination, OutPoint, PoolId, RequiredConsensus,
+        Destination, PoolId, RequiredConsensus, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, BlockHeight, Compact},
 };
@@ -38,7 +38,7 @@ use super::block_index_handle_impl::TestBlockIndexHandle;
 #[allow(clippy::too_many_arguments)]
 pub fn pos_mine(
     initial_timestamp: BlockTimestamp,
-    kernel_outpoint: OutPoint,
+    kernel_outpoint: UtxoOutPoint,
     kernel_witness: InputWitness,
     vrf_sk: &VRFPrivateKey,
     sealed_epoch_randomness: PoSRandomness,

@@ -21,7 +21,8 @@ use common::{
         config::EpochIndex,
         tokens::{TokenAuxiliaryData, TokenId},
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id, Idable, H256},
 };
@@ -207,12 +208,19 @@ macro_rules! impl_read_ops {
             ) -> crate::Result<Option<DeltaMergeUndo>> {
                 self.read::<db::DBAccountingEpochDeltaUndo, _, _>(epoch_index)
             }
+
+            fn get_account_nonce_count(
+                &self,
+                account: AccountType,
+            ) -> crate::Result<Option<AccountNonce>> {
+                self.read::<db::DBAccountNonceCount, _, _>(account)
+            }
         }
 
         impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
             type Error = crate::Error;
 
-            fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+            fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>> {
                 self.read::<db::DBUtxo, _, _>(outpoint)
             }
 
@@ -495,14 +503,26 @@ impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
         self.0.get_mut::<db::DBEpochData, _>().del(epoch_index).map_err(Into::into)
     }
+
+    fn set_account_nonce_count(
+        &mut self,
+        account: AccountType,
+        nonce: AccountNonce,
+    ) -> crate::Result<()> {
+        self.write::<db::DBAccountNonceCount, _, _, _>(account, nonce)
+    }
+
+    fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()> {
+        self.0.get_mut::<db::DBAccountNonceCount, _>().del(account).map_err(Into::into)
+    }
 }
 
 impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+    fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()> {
         self.write::<db::DBUtxo, _, _, _>(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
+    fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()> {
         self.0.get_mut::<db::DBUtxo, _>().del(outpoint).map_err(Into::into)
     }
 

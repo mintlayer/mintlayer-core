@@ -16,7 +16,7 @@
 use super::{
     storage::{TransactionVerifierStorageMut, TransactionVerifierStorageRef},
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp, ConsumedTokenIssuanceCache},
-    CachedInputsOperation, TransactionVerifierDelta,
+    CachedInputsOperation, CachedOperation, TransactionVerifierDelta,
 };
 use common::chain::OutPointSourceId;
 
@@ -117,6 +117,15 @@ where
         } else {
             panic!("BlockUndo was not used up completely")
         }
+    }
+
+    // flush nonce values
+    for (account, op) in consumed.account_nonce {
+        match op {
+            CachedOperation::Write(nonce) => storage.set_account_nonce_count(account, nonce)?,
+            CachedOperation::Read(_) => (),
+            CachedOperation::Erase => storage.del_account_nonce_count(account)?,
+        };
     }
 
     Ok(())

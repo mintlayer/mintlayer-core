@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::GenBlock, OutPointSourceId},
+    chain::{block::GenBlock, OutPointSourceId, Transaction},
     primitives::Id,
 };
 use thiserror::Error;
@@ -37,6 +37,8 @@ pub enum Error {
     MissingBlockRewardUndo(Id<GenBlock>),
     #[error("Block reward type is invalid `{0}`")]
     InvalidBlockRewardOutputType(Id<GenBlock>),
+    #[error("Undo for transaction `{0}` doesn't match inputs")]
+    TxInputAndUndoMismatch(Id<Transaction>),
 
     // TODO This is a temporary solution. It does not provide much information, the exact utxo
     //      view error is lost. The concrete error type depends on the UtxoView used. The error

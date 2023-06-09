@@ -17,7 +17,7 @@ use std::convert::Infallible;
 
 use super::test_helper::{create_utxo, empty_test_utxos_view, UnwrapInfallible};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView};
-use common::chain::OutPoint;
+use common::chain::UtxoOutPoint;
 use crypto::random::{CryptoRng, Rng};
 use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
@@ -35,7 +35,7 @@ fn cache_simulation_test(
     #[case] iterations_per_cache: usize,
 ) {
     let mut rng = make_seedable_rng(seed);
-    let mut result: Vec<OutPoint> = Vec::new();
+    let mut result: Vec<UtxoOutPoint> = Vec::new();
     let test_view = empty_test_utxos_view(common::primitives::H256::zero().into());
     let mut base = UtxosCache::new(test_view).unwrap_infallible();
 
@@ -69,7 +69,7 @@ fn cache_simulation_test(
 /// 6. Consume the current cache, and return it
 fn simulation_step<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
-    all_outputs: &mut Vec<OutPoint>,
+    all_outputs: &mut Vec<UtxoOutPoint>,
     parent_cache: &UtxosCache<P>,
     iterations_per_cache: usize,
     nested_level: usize,
@@ -111,8 +111,8 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
     rng: &mut (impl Rng + CryptoRng),
     cache: &mut UtxosCache<P>,
     iterations_count: usize,
-    prev_result: &[OutPoint],
-) -> Vec<OutPoint> {
+    prev_result: &[UtxoOutPoint],
+) -> Vec<UtxoOutPoint> {
     let mut spent_an_entry = false;
     let mut added_an_entry = false;
     let mut removed_an_entry = false;
@@ -120,7 +120,7 @@ fn populate_cache<P: UtxosView<Error = Infallible>>(
     let mut missed_an_entry = false;
     let mut found_an_entry = false;
     // track outpoints
-    let mut result: Vec<OutPoint> = Vec::new();
+    let mut result: Vec<UtxoOutPoint> = Vec::new();
 
     for i in 0..iterations_count {
         //select outpoint and utxo from existing or create new

@@ -21,7 +21,7 @@ use common::{
         block::{BlockRewardTransactable, ConsensusData},
         signature::Signable,
         tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
-        Block, OutPointSourceId, Transaction, TxInput, TxOutput,
+        AccountSpending, Block, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id},
 };
@@ -132,19 +132,48 @@ where
     IssuanceTokenIdGetterFunc:
         Fn(&Id<Transaction>) -> Result<Option<TokenId>, ConnectTransactionError>,
 {
-    let iter = inputs.iter().map(|input| {
-        let utxo = utxo_view
-            .utxo(input.outpoint())
-            .map_err(|_| utxo::Error::ViewRead)?
-            .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+    let iter = inputs.iter().map(|input| match input {
+        TxInput::Utxo(outpoint) => {
+            let utxo = utxo_view
+                .utxo(outpoint)
+                .map_err(|_| utxo::Error::ViewRead)?
+                .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
 
-        let output_value = get_output_value(pos_accounting_view, utxo.output())?;
+            let output_value = match utxo.output() {
+                TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
+                TxOutput::CreateStakePool(_, data) => OutputValue::Coin(data.value()),
+                TxOutput::ProduceBlockFromStake(_, pool_id) => {
+                    let pledge_amount = pos_accounting_view
+                        .get_pool_data(*pool_id)
+                        .map_err(|_| pos_accounting::Error::ViewFail)?
+                        .ok_or(ConnectTransactionError::PoolOwnerBalanceNotFound(*pool_id))?
+                        .pledge_amount();
+                    OutputValue::Coin(pledge_amount)
+                }
+                TxOutput::Burn(_)
+                | TxOutput::CreateDelegationId(_, _)
+                | TxOutput::DelegateStaking(_, _) => {
+                    return Err(ConnectTransactionError::InvalidInputTypeInTx)
+                }
+            };
 
-        amount_from_outpoint(
-            input.outpoint().tx_id(),
-            &output_value,
-            &issuance_token_id_getter,
-        )
+            amount_from_outpoint(outpoint.tx_id(), &output_value, &issuance_token_id_getter)
+        }
+        TxInput::Account(account_input) => match account_input.account() {
+            AccountSpending::Delegation(delegation_id, withdraw_amount) => {
+                let total_balance = pos_accounting_view
+                    .get_delegation_balance(*delegation_id)
+                    .map_err(|_| pos_accounting::Error::ViewFail)?
+                    .ok_or(ConnectTransactionError::DelegationBalanceNotFound(
+                        *delegation_id,
+                    ))?;
+                ensure!(
+                    total_balance >= *withdraw_amount,
+                    ConnectTransactionError::AttemptToPrintMoney(total_balance, *withdraw_amount)
+                );
+                Ok((CoinOrTokenId::Coin, *withdraw_amount))
+            }
+        },
     });
 
     let iter = fallible_iterator::convert(iter);
@@ -318,7 +347,8 @@ mod tests {
             block::consensus_data::{PoSData, PoWData},
             stakelock::StakePoolData,
             timelock::OutputTimeLock,
-            Destination, GenBlock, OutPoint, PoolId,
+            AccountNonce, AccountOutPoint, DelegationId, Destination, GenBlock, PoolId,
+            UtxoOutPoint,
         },
         primitives::{per_thousand::PerThousand, Compact, H256},
     };
@@ -335,7 +365,7 @@ mod tests {
     fn check_block_reward_pow(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
 
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let input_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         let input_utxo =
             TxOutput::Transfer(OutputValue::Coin(input_amount), Destination::AnyoneCanSpend);
@@ -418,7 +448,7 @@ mod tests {
         let mut rng = make_seedable_rng(seed);
 
         let pool_id = PoolId::new(H256::zero());
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let pledge_amount = Amount::from_atoms(rng.gen_range(0..100_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
         let vrf_data = vrf_sk.produce_vrf_data(TranscriptAssembler::new(b"abc").finalize().into());
@@ -480,7 +510,7 @@ mod tests {
         let pool_id_1 = PoolId::new(H256::random_using(&mut rng));
         let pool_id_2 = PoolId::new(H256::random_using(&mut rng));
 
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+        let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
         let pledge_amount_1 = Amount::from_atoms(rng.gen_range(0..100_000));
         let pledge_amount_2 = Amount::from_atoms(rng.gen_range(100_000..200_000));
         let (vrf_sk, vrf_pk) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
@@ -547,5 +577,90 @@ mod tests {
                 pledge_amount_2
             )
         )
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn check_tx_spend_from_delegation(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+
+        let utxo_db =
+            utxo::UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), BTreeMap::new());
+
+        let delegation_id = DelegationId::new(H256::zero());
+        let delegated_amount = Amount::from_atoms(rng.gen_range(1..100_000));
+        let overspend_amount = Amount::from_atoms(delegated_amount.into_atoms() + 1);
+        let withdraw_amount = Amount::from_atoms(rng.gen_range(1..delegated_amount.into_atoms()));
+
+        let pos_accounting_store = pos_accounting::InMemoryPoSAccounting::from_values(
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::from([(delegation_id, delegated_amount)]),
+            BTreeMap::new(),
+        );
+        let pos_accounting_db = pos_accounting::PoSAccountingDB::new(&pos_accounting_store);
+
+        // try overspend balance
+        {
+            let input = TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(0),
+                AccountSpending::Delegation(delegation_id, overspend_amount),
+            ));
+
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(overspend_amount),
+                Destination::AnyoneCanSpend,
+            );
+            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+            let res =
+                check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| {
+                    Ok(None)
+                })
+                .unwrap_err();
+            assert_eq!(
+                res,
+                ConnectTransactionError::AttemptToPrintMoney(delegated_amount, overspend_amount)
+            );
+        }
+
+        // try overspend input
+        {
+            let input = TxInput::Account(AccountOutPoint::new(
+                AccountNonce::new(0),
+                AccountSpending::Delegation(delegation_id, withdraw_amount),
+            ));
+
+            let output = TxOutput::Transfer(
+                OutputValue::Coin(overspend_amount),
+                Destination::AnyoneCanSpend,
+            );
+            let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+            let res =
+                check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| {
+                    Ok(None)
+                })
+                .unwrap_err();
+            assert_eq!(
+                res,
+                ConnectTransactionError::AttemptToPrintMoney(withdraw_amount, overspend_amount)
+            );
+        }
+
+        let input = TxInput::Account(AccountOutPoint::new(
+            AccountNonce::new(0),
+            AccountSpending::Delegation(delegation_id, withdraw_amount),
+        ));
+        let output = TxOutput::Transfer(
+            OutputValue::Coin(withdraw_amount),
+            Destination::AnyoneCanSpend,
+        );
+        let tx = Transaction::new(0, vec![input], vec![output]).unwrap();
+
+        check_transferred_amounts_and_get_fee(&utxo_db, &pos_accounting_db, &tx, |_id| Ok(None))
+            .unwrap();
     }
 }

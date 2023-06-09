@@ -53,7 +53,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             tx_1_id,
-            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]),
         )]),
     )
     .unwrap();
@@ -65,7 +65,7 @@ fn utxo_set_from_chain_hierarchy(#[case] seed: Seed) {
         None,
         BTreeMap::from([(
             tx_2_id,
-            UtxosTxUndoWithSources::new(vec![create_utxo(&mut rng, 100).1], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(create_utxo(&mut rng, 100).1)], vec![]),
         )]),
     )
     .unwrap();
@@ -549,7 +549,7 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         Some(UtxosBlockRewardUndo::new(vec![utxo1.clone()])),
         BTreeMap::from([(
             tx_1_id,
-            UtxosTxUndoWithSources::new(vec![utxo2.clone()], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![]),
         )]),
     )
     .unwrap();
@@ -558,15 +558,21 @@ fn block_undo_from_chain_conflict_hierarchy(#[case] seed: Seed) {
         Some(UtxosBlockRewardUndo::new(vec![utxo3.clone()])),
         BTreeMap::from([(
             tx_2_id,
-            UtxosTxUndoWithSources::new(vec![utxo4.clone()], vec![]),
+            UtxosTxUndoWithSources::new(vec![Some(utxo4.clone())], vec![]),
         )]),
     )
     .unwrap();
     let expected_block_undo = UtxosBlockUndo::new(
         Some(UtxosBlockRewardUndo::new(vec![utxo1, utxo3])),
         BTreeMap::from([
-            (tx_1_id, UtxosTxUndoWithSources::new(vec![utxo2], vec![])),
-            (tx_2_id, UtxosTxUndoWithSources::new(vec![utxo4], vec![])),
+            (
+                tx_1_id,
+                UtxosTxUndoWithSources::new(vec![Some(utxo2)], vec![]),
+            ),
+            (
+                tx_2_id,
+                UtxosTxUndoWithSources::new(vec![Some(utxo4)], vec![]),
+            ),
         ]),
     )
     .unwrap();
@@ -984,6 +990,115 @@ fn pos_accounting_stake_pool_undo_del_hierarchy(#[case] seed: Seed) {
                     is_fresh: false,
                 },
             )]));
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+// nonce2                 nonce1
+//
+// Check that data from TransactionVerifiers are flushed from one TransactionVerifier to another
+// and then to the store
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nonce_set_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let nonce1 = AccountNonce::new(rng.gen());
+    let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let nonce2 = AccountNonce::new(rng.gen());
+    let account2 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+    store
+        .expect_set_account_nonce_count()
+        .with(eq(account1), eq(nonce1))
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_set_account_nonce_count()
+        .with(eq(account2), eq(nonce2))
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 =
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+    verifier1.account_nonce = BTreeMap::from([(account1, CachedOperation::Write(nonce1))]);
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.account_nonce = BTreeMap::from([(account2, CachedOperation::Write(nonce2))]);
+        verifier
+    };
+
+    let consumed_verifier2 = verifier2.consume().unwrap();
+    flush::flush_to_storage(&mut verifier1, consumed_verifier2).unwrap();
+
+    let consumed_verifier1 = verifier1.consume().unwrap();
+    flush::flush_to_storage(&mut store, consumed_verifier1).unwrap();
+}
+
+// Create the following hierarchy:
+//
+// TransactionVerifier -> TransactionVerifier -> MockStore
+//                                               nonce0; nonce1
+//
+// Erase nonce0 in TransactionVerifier2 and nonce1 in TransactionVerifier1.
+// Flush and check that the data was deleted from the store
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn nonce_del_hierarchy(#[case] seed: Seed) {
+    let mut rng = test_utils::random::make_seedable_rng(seed);
+
+    let chain_config = ConfigBuilder::test_chain().build();
+
+    let account0 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+    let account1 = AccountType::Delegation(DelegationId::new(H256::random_using(&mut rng)));
+
+    let mut store = mock::MockStore::new();
+    store.expect_get_best_block_for_utxos().return_const(Ok(H256::zero().into()));
+    store.expect_batch_write().times(1).return_const(Ok(()));
+    store
+        .expect_batch_write_delta()
+        .times(1)
+        .return_const(Ok(DeltaMergeUndo::new()));
+    store
+        .expect_del_account_nonce_count()
+        .with(eq(account0))
+        .times(1)
+        .return_const(Ok(()));
+    store
+        .expect_del_account_nonce_count()
+        .with(eq(account1))
+        .times(1)
+        .return_const(Ok(()));
+
+    let mut verifier1 =
+        TransactionVerifier::new(&store, &chain_config, TransactionVerifierConfig::new(true));
+    verifier1.account_nonce = BTreeMap::from([(account1, CachedOperation::Erase)]);
+
+    let verifier2 = {
+        let mut verifier = verifier1.derive_child();
+        verifier.account_nonce = BTreeMap::from([(account0, CachedOperation::Erase)]);
         verifier
     };
 

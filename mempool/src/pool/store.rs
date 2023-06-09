@@ -19,7 +19,7 @@ use std::{
 };
 
 use common::{
-    chain::{OutPoint, SignedTransaction, Transaction},
+    chain::{SignedTransaction, Transaction, TxInput},
     primitives::Id,
 };
 use logging::log;
@@ -91,9 +91,9 @@ pub struct MempoolStore {
     // TODO add txs_by_ancestor_score index, which will be used by the block production subsystem
     // to select the best transactions for the next block
     //
-    // We keep the information of which outpoints are spent by entries currently in the mempool.
+    // We keep the information of which inputs are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
-    pub spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
+    pub spender_txs: BTreeMap<TxInput, Id<Transaction>>,
 
     // Track transactions by internal unique sequence number. This is used to recover the order in
     // which the transactions have been inserted into the mempool, so they can be re-inserted in
@@ -219,8 +219,8 @@ impl MempoolStore {
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         let id = entry.tx_id();
-        for outpoint in entry.entry.transaction().inputs().iter().map(|input| input.outpoint()) {
-            self.spender_txs.insert(outpoint.clone(), id);
+        for input in entry.entry.transaction().inputs().iter() {
+            self.spender_txs.insert(input.clone(), id);
         }
     }
 
@@ -420,8 +420,8 @@ impl MempoolStore {
         }
     }
 
-    pub fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Id<Transaction>> {
-        self.spender_txs.get(outpoint).cloned()
+    pub fn find_conflicting_tx(&self, input: &TxInput) -> Option<Id<Transaction>> {
+        self.spender_txs.get(input).cloned()
     }
 
     /// Take all the transactions from the store in the original order of insertion

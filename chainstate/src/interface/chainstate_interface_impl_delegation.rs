@@ -25,9 +25,9 @@ use common::chain::{
     block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp, BlockReward},
     config::ChainConfig,
     tokens::TokenAuxiliaryData,
-    OutPointSourceId, TxMainChainIndex,
+    AccountNonce, AccountType, OutPointSourceId, TxMainChainIndex,
 };
-use common::chain::{OutPoint, Transaction};
+use common::chain::{Transaction, UtxoOutPoint};
 use common::{
     chain::{
         tokens::{RPCTokenInfo, TokenId},
@@ -268,7 +268,7 @@ where
         self.deref().export_bootstrap_stream(writer, include_orphans)
     }
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError> {
         self.deref().utxo(outpoint)
     }
 
@@ -326,6 +326,13 @@ where
         block_id: Id<Block>,
     ) -> Result<Option<SignedBlockHeader>, ChainstateError> {
         self.deref().get_block_header(block_id)
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, ChainstateError> {
+        self.deref().get_account_nonce_count(account)
     }
 }
 

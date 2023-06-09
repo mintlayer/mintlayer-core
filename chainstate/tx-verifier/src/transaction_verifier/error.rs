@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        DelegationId, OutPoint, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
-        TxMainChainIndexError,
+        AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
+        TxMainChainIndexError, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -80,7 +80,7 @@ pub enum ConnectTransactionError {
     #[error("Block reward addition error for block {0}")]
     RewardAdditionError(Id<Block>),
     #[error("Timelock rules violated in output {0:?}")]
-    TimeLockViolation(OutPoint),
+    TimeLockViolation(UtxoOutPoint),
     #[error("Utxo error: {0}")]
     UtxoError(#[from] utxo::Error),
     #[error("Tokens error: {0}")]
@@ -129,8 +129,10 @@ pub enum ConnectTransactionError {
     DistributedDelegationsRewardExceedTotal(PoolId, Id<Block>, Amount, Amount),
     #[error("Total balance of delegations in pool {0} is zero")]
     TotalDelegationBalanceZero(PoolId),
-    #[error("Delegation {0} not found")]
+    #[error("Data for delegation {0} not found")]
     DelegationDataNotFound(DelegationId),
+    #[error("Balance for delegation {0} not found")]
+    DelegationBalanceNotFound(DelegationId),
 
     // TODO The following should contain more granular inner error information
     //      https://github.com/mintlayer/mintlayer-core/issues/811
@@ -143,10 +145,20 @@ pub enum ConnectTransactionError {
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
     #[error("Output timelock error: {0}")]
     OutputTimelockError(#[from] timelock_check::OutputMaturityError),
+    #[error("Nonce is not incremental: {0:?}")]
+    NonceIsNotIncremental(AccountType),
+    #[error("Nonce is not found: {0:?}")]
+    MissingTransactionNonce(AccountType),
     #[error(
         "Transaction {0} has not enough pledge to create a stake pool: giver {1:?}, required {2:?}"
     )]
     NotEnoughPledgeToCreateStakePool(Id<Transaction>, Amount, Amount),
+    #[error("Attempt to create stake pool from accounting inputs")]
+    AttemptToCreateStakePoolFromAccounts,
+    #[error("Attempt to create delegation from accounting inputs")]
+    AttemptToCreateDelegationFromAccounts,
+    #[error("Failed to increment account nonce")]
+    FailedToIncrementAccountNonce,
 }
 
 impl From<chainstate_storage::Error> for ConnectTransactionError {

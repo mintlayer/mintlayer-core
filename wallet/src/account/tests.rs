@@ -153,7 +153,7 @@ fn sign_transaction(#[case] seed: Seed) {
             } else {
                 Id::<GenBlock>::new(H256::random_using(&mut rng)).into()
             };
-            TxInput::new(source_id, rng.next_u32())
+            TxInput::from_utxo(source_id, rng.next_u32())
         })
         .collect();
 
@@ -194,10 +194,10 @@ fn sign_transaction(#[case] seed: Seed) {
 
     let sig_tx = account.sign_transaction(req, &db_tx).unwrap();
 
-    let utxos_ref = utxos.iter().collect::<Vec<_>>();
+    let utxos_ref = utxos.iter().map(Some).collect::<Vec<_>>();
 
     for i in 0..sig_tx.inputs().len() {
-        let destination = Account::get_tx_output_destination(utxos_ref[i]).unwrap();
+        let destination = Account::get_tx_output_destination(utxos_ref[i].unwrap()).unwrap();
         verify_signature(&config, destination, &sig_tx, &utxos_ref, i).unwrap();
     }
 }

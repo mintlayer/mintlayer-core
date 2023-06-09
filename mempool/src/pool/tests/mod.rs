@@ -28,7 +28,7 @@ use common::{
         signature::inputsig::InputWitness,
         tokens::OutputValue,
         transaction::{Destination, TxInput, TxOutput},
-        OutPoint, OutPointSourceId, Transaction,
+        OutPointSourceId, Transaction, UtxoOutPoint,
     },
     primitives::{Id, H256},
 };
@@ -63,7 +63,7 @@ fn real_size(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -99,7 +99,7 @@ async fn add_single_tx() -> anyhow::Result<()> {
     let outpoint_source_id = mempool.chain_config.genesis_block_id().into();
 
     let flags = 0;
-    let input = TxInput::new(outpoint_source_id, 0);
+    let input = TxInput::from_utxo(outpoint_source_id, 0);
     let relay_fee: Fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE)).into();
     let tx = tx_spend_input(
         &mempool,
@@ -136,7 +136,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     let target_txs = 10;
 
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for i in 0..target_txs {
@@ -151,7 +151,7 @@ async fn txs_sorted(#[case] seed: Seed) -> anyhow::Result<()> {
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
+                TxInput::from_utxo(OutPointSourceId::Transaction(initial_tx_id), i as u32),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -250,7 +250,7 @@ async fn tx_no_outputs(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .build();
@@ -268,9 +268,9 @@ async fn tx_duplicate_inputs() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
-    let input = TxInput::new(outpoint_source_id.clone(), 0);
+    let input = TxInput::from_utxo(outpoint_source_id.clone(), 0);
     let witness = b"attempted_double_spend".to_vec();
-    let duplicate_input = TxInput::new(outpoint_source_id, 0);
+    let duplicate_input = TxInput::from_utxo(outpoint_source_id, 0);
     let flags = 0;
     let outputs = tx_spend_input(
         &mempool,
@@ -306,7 +306,7 @@ async fn tx_already_in_mempool() -> anyhow::Result<()> {
     let mut mempool = setup().await;
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
-    let input = TxInput::new(outpoint_source_id, 0);
+    let input = TxInput::from_utxo(outpoint_source_id, 0);
 
     let flags = 0;
     let tx = tx_spend_input(
@@ -339,7 +339,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let outpoint_source_id = OutPointSourceId::from(mempool.chain_config.genesis_block_id());
 
-    let good_input = TxInput::new(outpoint_source_id.clone(), 0);
+    let good_input = TxInput::from_utxo(outpoint_source_id.clone(), 0);
     let flags = 0;
     let outputs = tx_spend_input(
         &mempool,
@@ -354,7 +354,7 @@ async fn outpoint_not_found(#[case] seed: Seed) -> anyhow::Result<()> {
     .to_owned();
 
     let bad_outpoint_index = 1;
-    let bad_input = TxInput::new(outpoint_source_id, bad_outpoint_index);
+    let bad_input = TxInput::from_utxo(outpoint_source_id, bad_outpoint_index);
 
     let inputs = vec![bad_input];
     let tx = SignedTransaction::new(
@@ -388,7 +388,7 @@ async fn tx_too_big(#[case] seed: Seed) -> anyhow::Result<()> {
     .encoded_size();
     let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for _ in 0..too_many_outputs {
@@ -435,7 +435,7 @@ async fn tx_spend_several_inputs<M: GetMemoryUsage + Send + Sync>(
     let mut input_values = Vec::new();
     let inputs = inputs.to_owned();
     for input in inputs.clone() {
-        let outpoint = input.outpoint().clone();
+        let outpoint = input.utxo_outpoint().unwrap().clone();
         let chainstate_outpoint_value = mempool
             .chainstate_handle
             .call(move |this| this.get_inputs_outpoints_coin_amount(&[input]))
@@ -489,7 +489,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     let num_outputs = 2;
@@ -511,7 +511,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let ancestor_with_signal = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_replaceable,
@@ -520,7 +520,7 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
 
     let ancestor_without_signal = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 1),
+        TxInput::from_utxo(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags_irreplaceable,
@@ -530,12 +530,12 @@ async fn one_ancestor_replaceability_signal_is_enough(#[case] seed: Seed) -> any
     mempool.add_transaction(ancestor_with_signal.clone())?;
     mempool.add_transaction(ancestor_without_signal.clone())?;
 
-    let input_with_replaceable_parent = TxInput::new(
+    let input_with_replaceable_parent = TxInput::from_utxo(
         OutPointSourceId::Transaction(ancestor_with_signal.transaction().get_id()),
         0,
     );
 
-    let input_with_irreplaceable_parent = TxInput::new(
+    let input_with_irreplaceable_parent = TxInput::from_utxo(
         OutPointSourceId::Transaction(ancestor_without_signal.transaction().get_id()),
         0,
     );
@@ -721,7 +721,7 @@ async fn test_bip125_max_replacements(
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .with_flags(1);
@@ -744,7 +744,7 @@ async fn test_bip125_max_replacements(
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let fee = 2_000;
     for (index, _) in outputs.iter().enumerate() {
-        let input = TxInput::new(outpoint_source_id.clone(), index.try_into().unwrap());
+        let input = TxInput::from_utxo(outpoint_source_id.clone(), index.try_into().unwrap());
         let tx = tx_spend_input(
             &mempool,
             input,
@@ -812,7 +812,7 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .with_flags(1);
@@ -829,8 +829,8 @@ async fn spends_new_unconfirmed(#[case] seed: Seed) -> anyhow::Result<()> {
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     mempool.add_transaction(tx)?;
 
-    let input1 = TxInput::new(outpoint_source_id.clone(), 0);
-    let input2 = TxInput::new(outpoint_source_id, 1);
+    let input1 = TxInput::from_utxo(outpoint_source_id.clone(), 0);
+    let input2 = TxInput::from_utxo(outpoint_source_id, 1);
 
     let flags = 0;
     let original_fee: Fee = Amount::from_atoms(100).into();
@@ -894,7 +894,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .with_flags(1);
@@ -934,7 +934,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // child_0 has the lower fee so it will be evicted when memory usage is too high
     let child_0 = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -949,7 +949,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     .into();
     let child_1 = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 1),
+        TxInput::from_utxo(outpoint_source_id.clone(), 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         big_fee,
         flags,
@@ -977,7 +977,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
             )?)
         .unwrap()
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3625)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3629)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee
@@ -995,7 +995,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // validation
     let child_2 = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 2),
+        TxInput::from_utxo(outpoint_source_id.clone(), 2),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         None,
         flags,
@@ -1019,7 +1019,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     // We provide a sufficient fee for the tx to pass the minimum rolling fee requirement
     let child_2_high_fee = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 2),
+        TxInput::from_utxo(outpoint_source_id, 2),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)).unwrap(),
         flags,
@@ -1027,7 +1027,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     .await?;
     let child_2_high_fee_id = child_2_high_fee.transaction().get_id();
     let child_2_high_fee_outpt =
-        OutPoint::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0);
+        UtxoOutPoint::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0);
     log::debug!("before child2_high_fee");
     mempool.add_transaction(child_2_high_fee.clone())?;
 
@@ -1081,7 +1081,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
     );
     let dummy_tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::Transaction(child_2_high_fee_id), 0),
+            TxInput::from_utxo(OutPointSourceId::Transaction(child_2_high_fee_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
         .add_output(TxOutput::Transfer(
@@ -1138,7 +1138,7 @@ async fn rolling_fee(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let another_dummy = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::Transaction(child_1_id), 0),
+            TxInput::from_utxo(OutPointSourceId::Transaction(child_1_id), 0),
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         )
         .add_output(TxOutput::Transfer(
@@ -1169,7 +1169,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
     let genesis = tf.genesis();
 
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for _ in 0..10_000 {
@@ -1192,7 +1192,7 @@ async fn different_size_txs(#[case] seed: Seed) -> anyhow::Result<()> {
         let mut tx_builder = TransactionBuilder::new();
         for j in 0..num_inputs {
             tx_builder = tx_builder.add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::Transaction(initial_tx.transaction().get_id()),
                     100 * i + j,
                 ),
@@ -1243,7 +1243,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -1270,7 +1270,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_c_fee: Fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_a_fee,
         flags,
@@ -1284,7 +1284,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_b = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 1),
+        TxInput::from_utxo(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_b_fee,
         flags,
@@ -1297,7 +1297,7 @@ async fn ancestor_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_c = tx_spend_input(
         &mempool,
-        TxInput::new(OutPointSourceId::Transaction(tx_b_id), 0),
+        TxInput::from_utxo(OutPointSourceId::Transaction(tx_b_id), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_c_fee,
         flags,
@@ -1394,7 +1394,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -1421,7 +1421,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
     let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000).into()).unwrap();
     let tx_a = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id.clone(), 0),
+        TxInput::from_utxo(outpoint_source_id.clone(), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_a_fee,
         flags,
@@ -1434,7 +1434,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_b = tx_spend_input(
         &mempool,
-        TxInput::new(outpoint_source_id, 1),
+        TxInput::from_utxo(outpoint_source_id, 1),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_b_fee,
         flags,
@@ -1447,7 +1447,7 @@ async fn descendant_score(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx_c = tx_spend_input(
         &mempool,
-        TxInput::new(OutPointSourceId::Transaction(tx_b_id), 0),
+        TxInput::from_utxo(OutPointSourceId::Transaction(tx_b_id), 0),
         InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         tx_c_fee,
         flags,
@@ -1527,7 +1527,7 @@ async fn mempool_full(#[case] seed: Seed) -> anyhow::Result<()> {
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+            TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
             empty_witness(&mut rng),
         )
         .add_output(TxOutput::Transfer(
@@ -1554,7 +1554,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
     let tf = TestFramework::builder(&mut rng).build();
     let genesis = tf.genesis();
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
 
@@ -1580,7 +1580,7 @@ async fn no_empty_bags_in_indices(#[case] seed: Seed) -> anyhow::Result<()> {
         txs.push(
             tx_spend_input(
                 &mempool,
-                TxInput::new(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
+                TxInput::from_utxo(outpoint_source_id.clone(), u32::try_from(i).unwrap()),
                 empty_witness(&mut rng),
                 Fee::new(Amount::from_atoms(fee + u128::try_from(i).unwrap())),
                 flags,
@@ -1624,7 +1624,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     let target_txs = 10;
 
     let mut tx_builder = TransactionBuilder::new().add_input(
-        TxInput::new(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
+        TxInput::from_utxo(OutPointSourceId::BlockReward(genesis.get_id().into()), 0),
         empty_witness(&mut rng),
     );
     for i in 0..target_txs {
@@ -1639,7 +1639,7 @@ async fn collect_transactions(#[case] seed: Seed) -> anyhow::Result<()> {
     for i in 0..target_txs {
         let tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(initial_tx_id), i as u32),
+                TxInput::from_utxo(OutPointSourceId::Transaction(initial_tx_id), i as u32),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(

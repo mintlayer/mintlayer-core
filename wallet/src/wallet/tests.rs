@@ -417,7 +417,7 @@ fn wallet_balance_parent_child_transactions() {
 
     let transaction2 = Transaction::new(
         0,
-        vec![TxInput::new(OutPointSourceId::Transaction(transaction_id1), 0)],
+        vec![TxInput::from_utxo(OutPointSourceId::Transaction(transaction_id1), 0)],
         vec![make_address_output(address2, tx_amount2).unwrap()],
     )
     .unwrap();

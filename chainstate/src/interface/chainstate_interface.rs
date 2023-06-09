@@ -22,12 +22,13 @@ use crate::{ChainInfo, ChainstateConfig, ChainstateError, ChainstateEvent};
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, Locator};
 
 use common::chain::block::signed_block_header::SignedBlockHeader;
+use common::chain::{AccountNonce, AccountType};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, BlockReward, GenBlock},
         tokens::{RPCTokenInfo, TokenAuxiliaryData, TokenId},
-        ChainConfig, DelegationId, OutPoint, OutPointSourceId, PoolId, Transaction, TxInput,
-        TxMainChainIndex,
+        ChainConfig, DelegationId, OutPointSourceId, PoolId, Transaction, TxInput,
+        TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -179,7 +180,7 @@ pub trait ChainstateInterface: Send {
     ) -> Result<(), ChainstateError>;
 
     /// Returns the UTXO for a specified OutPoint
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, ChainstateError>;
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
 
     /// Returns true if the initial block download isn't finished yet.
     fn is_initial_block_download(&self) -> Result<bool, ChainstateError>;
@@ -224,4 +225,10 @@ pub trait ChainstateInterface: Send {
 
     /// Returns information about the chain.
     fn info(&self) -> Result<ChainInfo, ChainstateError>;
+
+    /// Returns account nonce for the account
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, ChainstateError>;
 }

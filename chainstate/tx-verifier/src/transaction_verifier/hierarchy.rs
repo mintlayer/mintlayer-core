@@ -22,14 +22,14 @@ use super::{
         TransactionVerifierStorageRef,
     },
     token_issuance_cache::{CachedAuxDataOp, CachedTokenIndexOp},
-    TransactionSource, TransactionVerifier,
+    CachedOperation, TransactionSource, TransactionVerifier,
 };
 use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, DelegationId, GenBlock, OutPoint, OutPointSourceId, PoolId, Transaction,
-        TxMainChainIndex,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, OutPointSourceId, PoolId,
+        Transaction, TxMainChainIndex, UtxoOutPoint,
     },
     primitives::{Amount, Id},
 };
@@ -107,6 +107,20 @@ where
             None => self.storage.get_accounting_undo(id),
         }
     }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error> {
+        match self.account_nonce.get(&account) {
+            Some(op) => match *op {
+                CachedOperation::Write(nonce) => Ok(Some(nonce)),
+                CachedOperation::Read(nonce) => Ok(Some(nonce)),
+                CachedOperation::Erase => Ok(None),
+            },
+            None => self.storage.get_account_nonce_count(account),
+        }
+    }
 }
 
 impl<C, S: TransactionVerifierStorageRef, U: UtxosView, A> UtxosStorageRead
@@ -116,7 +130,7 @@ where
 {
     type Error = <S as utxo::UtxosStorageRead>::Error;
 
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
+    fn get_utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<utxo::Utxo>, Self::Error> {
         self.utxo_cache.utxo(outpoint).map_err(|e| e.into())
     }
 
@@ -247,6 +261,23 @@ where
         self.accounting_delta_adapter
             .apply_accounting_delta(tx_source, delta)
             .map_err(TransactionVerifierStorageError::from)?;
+        Ok(())
+    }
+
+    fn set_account_nonce_count(
+        &mut self,
+        account: AccountType,
+        nonce: AccountNonce,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.account_nonce.insert(account, CachedOperation::Write(nonce));
+        Ok(())
+    }
+
+    fn del_account_nonce_count(
+        &mut self,
+        account: AccountType,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error> {
+        self.account_nonce.insert(account, CachedOperation::<AccountNonce>::Erase);
         Ok(())
     }
 }

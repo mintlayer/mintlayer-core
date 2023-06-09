@@ -49,36 +49,42 @@ impl UtxosBlockRewardUndo {
     }
 }
 
+// This collection represents all utxos that were spent in a transaction.
+// The size of the collection equals to number of inputs, so in case an inputs spends from an account
+// it's represented a None
 #[derive(Default, Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct UtxosTxUndo(Vec<Utxo>);
+pub struct UtxosTxUndo(Vec<Option<Utxo>>);
 
 impl UtxosTxUndo {
-    pub fn new(utxos: Vec<Utxo>) -> Self {
+    pub fn new(utxos: Vec<Option<Utxo>>) -> Self {
         Self(utxos)
     }
 
-    pub fn inner(&self) -> &[Utxo] {
+    pub fn inner(&self) -> &[Option<Utxo>] {
         &self.0
     }
 
-    pub fn into_inner(self) -> Vec<Utxo> {
+    pub fn into_inner(self) -> Vec<Option<Utxo>> {
         self.0
     }
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct UtxosTxUndoWithSources {
-    utxos: Vec<Utxo>,
+    utxos: UtxosTxUndo,
     sources: Vec<OutPointSourceId>,
 }
 
 impl UtxosTxUndoWithSources {
-    pub fn new(utxos: Vec<Utxo>, sources: Vec<OutPointSourceId>) -> Self {
-        Self { utxos, sources }
+    pub fn new(utxos: Vec<Option<Utxo>>, sources: Vec<OutPointSourceId>) -> Self {
+        Self {
+            utxos: UtxosTxUndo::new(utxos),
+            sources,
+        }
     }
 
-    pub fn utxos(&self) -> &[Utxo] {
-        &self.utxos
+    pub fn utxos(&self) -> &[Option<Utxo>] {
+        self.utxos.inner()
     }
 }
 
@@ -126,7 +132,7 @@ impl UtxosBlockUndo {
         tx_undo: UtxosTxUndoWithSources,
     ) -> Result<(), UtxosBlockUndoError> {
         match self.tx_undos.entry(tx_id) {
-            Entry::Vacant(e) => e.insert(UtxosTxUndo::new(tx_undo.utxos)),
+            Entry::Vacant(e) => e.insert(tx_undo.utxos),
             Entry::Occupied(_) => return Err(UtxosBlockUndoError::UndoAlreadyExists(tx_id)),
         };
 
@@ -252,21 +258,19 @@ pub mod test {
         let mut rng = make_seedable_rng(seed);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
-        let tx_undo = UtxosTxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
+        let tx_undo = UtxosTxUndo::new(vec![Some(utxo0.clone()), None, Some(utxo1.clone())]);
 
         // check `inner()`
-        {
-            let inner = tx_undo.inner();
-            assert_eq!(&utxo0, &inner[0]);
-            assert_eq!(&utxo1, &inner[1]);
-        }
+        let inner = tx_undo.inner();
+        assert_eq!(Some(utxo0.clone()), inner[0]);
+        assert_eq!(None, inner[1]);
+        assert_eq!(Some(utxo1.clone()), inner[2]);
 
         // check `into_inner()`
-        {
-            let undo_vec = tx_undo.into_inner();
-            assert_eq!(&utxo0, &undo_vec[0]);
-            assert_eq!(&utxo1, &undo_vec[1]);
-        }
+        let undo_vec = tx_undo.into_inner();
+        assert_eq!(Some(utxo0), undo_vec[0]);
+        assert_eq!(None, undo_vec[1]);
+        assert_eq!(Some(utxo1), undo_vec[2]);
     }
 
     #[rstest]
@@ -276,13 +280,14 @@ pub mod test {
         let mut rng = make_seedable_rng(seed);
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
-        let tx_undo0 = UtxosTxUndoWithSources::new(vec![utxo0, utxo1], vec![]);
+        let tx_undo0 = UtxosTxUndoWithSources::new(vec![Some(utxo0), None, Some(utxo1)], vec![]);
         let tx_0_id: Id<Transaction> = H256::from_low_u64_be(0).into();
 
         let (utxo2, _) = create_utxo(&mut rng, 2);
         let (utxo3, _) = create_utxo(&mut rng, 3);
         let (utxo4, _) = create_utxo(&mut rng, 4);
-        let tx_undo1 = UtxosTxUndoWithSources::new(vec![utxo2, utxo3, utxo4], vec![]);
+        let tx_undo1 =
+            UtxosTxUndoWithSources::new(vec![Some(utxo2), None, Some(utxo3), Some(utxo4)], vec![]);
         let tx_1_id: Id<Transaction> = H256::from_low_u64_be(1).into();
 
         let (utxo5, _) = create_utxo(&mut rng, 5);
@@ -293,14 +298,8 @@ pub mod test {
         blockundo.insert_tx_undo(tx_0_id, tx_undo0.clone()).unwrap();
         blockundo.insert_tx_undo(tx_1_id, tx_undo1.clone()).unwrap();
 
-        assert_eq!(
-            &UtxosTxUndo(tx_undo0.utxos),
-            blockundo.tx_undos().get(&tx_0_id).unwrap()
-        );
-        assert_eq!(
-            &UtxosTxUndo(tx_undo1.utxos),
-            blockundo.tx_undos().get(&tx_1_id).unwrap()
-        );
+        assert_eq!(&tx_undo0.utxos, blockundo.tx_undos().get(&tx_0_id).unwrap());
+        assert_eq!(&tx_undo1.utxos, blockundo.tx_undos().get(&tx_1_id).unwrap());
 
         assert_eq!(&reward_undo, blockundo.block_reward_undo().unwrap());
     }
@@ -313,9 +312,10 @@ pub mod test {
         let (utxo0, _) = create_utxo(&mut rng, 0);
         let (utxo1, _) = create_utxo(&mut rng, 1);
 
-        let expected_tx_undo0 = UtxosTxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
+        let expected_tx_undo0 =
+            UtxosTxUndo::new(vec![Some(utxo0.clone()), None, Some(utxo1.clone())]);
         let tx_undo0 = UtxosTxUndoWithSources {
-            utxos: vec![utxo0, utxo1],
+            utxos: UtxosTxUndo::new(vec![Some(utxo0), None, Some(utxo1)]),
             sources: vec![],
         };
         let tx_0_id: Id<Transaction> = H256::from_low_u64_be(1).into();
@@ -324,9 +324,14 @@ pub mod test {
         let (utxo3, _) = create_utxo(&mut rng, 3);
         let (utxo4, _) = create_utxo(&mut rng, 4);
 
-        let expected_tx_undo1 = UtxosTxUndo::new(vec![utxo2.clone(), utxo3.clone(), utxo4.clone()]);
+        let expected_tx_undo1 = UtxosTxUndo::new(vec![
+            Some(utxo2.clone()),
+            None,
+            Some(utxo3.clone()),
+            Some(utxo4.clone()),
+        ]);
         let tx_undo1 = UtxosTxUndoWithSources {
-            utxos: vec![utxo2, utxo3, utxo4],
+            utxos: UtxosTxUndo::new(vec![Some(utxo2), None, Some(utxo3), Some(utxo4)]),
             sources: vec![OutPointSourceId::Transaction(tx_0_id)],
         };
         let tx_1_id: Id<Transaction> = H256::from_low_u64_be(2).into();
@@ -367,7 +372,7 @@ pub mod test {
             Some(UtxosBlockRewardUndo::new(vec![reward_utxo1.clone()])),
             BTreeMap::from([(
                 tx_id_1,
-                UtxosTxUndoWithSources::new(vec![utxo1.clone()], vec![source_id_1]),
+                UtxosTxUndoWithSources::new(vec![Some(utxo1.clone())], vec![source_id_1]),
             )]),
         )
         .unwrap();
@@ -376,7 +381,7 @@ pub mod test {
             Some(UtxosBlockRewardUndo::new(vec![reward_utxo2.clone()])),
             BTreeMap::from([(
                 tx_id_2,
-                UtxosTxUndoWithSources::new(vec![utxo2.clone()], vec![source_id_2]),
+                UtxosTxUndoWithSources::new(vec![Some(utxo2.clone())], vec![source_id_2]),
             )]),
         )
         .unwrap();
@@ -384,8 +389,8 @@ pub mod test {
         let expected_block_undo = UtxosBlockUndo {
             reward_undo: Some(UtxosBlockRewardUndo::new(vec![reward_utxo1, reward_utxo2])),
             tx_undos: BTreeMap::from([
-                (tx_id_1, UtxosTxUndo(vec![utxo1])),
-                (tx_id_2, UtxosTxUndo(vec![utxo2])),
+                (tx_id_1, UtxosTxUndo(vec![Some(utxo1)])),
+                (tx_id_2, UtxosTxUndo(vec![Some(utxo2)])),
             ]),
             parent_child_dependencies: BTreeSet::from([
                 (dep_tx_id_1, tx_id_1),

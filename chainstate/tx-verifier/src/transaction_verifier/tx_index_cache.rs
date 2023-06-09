@@ -104,25 +104,28 @@ impl TxIndexCache {
         inputs: &[TxInput],
         spender: Spender,
     ) -> Result<(), TxIndexError> {
-        for input in inputs {
-            let outpoint = input.outpoint();
-            let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
-            prev_tx_index_op
-                .spend(outpoint.output_index(), spender.clone())
-                .map_err(TxIndexError::from)?;
-        }
-
-        Ok(())
+        inputs
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(outpoint) => Some(outpoint),
+                TxInput::Account(_) => None,
+            })
+            .try_for_each(|outpoint| {
+                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+                prev_tx_index_op
+                    .spend(outpoint.output_index(), spender.clone())
+                    .map_err(TxIndexError::from)
+            })
     }
 
     pub fn unspend_tx_index_inputs(&mut self, inputs: &[TxInput]) -> Result<(), TxIndexError> {
-        for input in inputs {
-            let outpoint = input.outpoint();
-            let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
-            prev_tx_index_op.unspend(outpoint.output_index()).map_err(TxIndexError::from)?;
-        }
-
-        Ok(())
+        inputs.iter().try_for_each(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                let prev_tx_index_op = self.get_from_cached_mut(&outpoint.tx_id())?;
+                prev_tx_index_op.unspend(outpoint.output_index()).map_err(TxIndexError::from)
+            }
+            TxInput::Account(_) => Ok(()),
+        })
     }
 
     pub fn precache_inputs<F, E>(
@@ -134,18 +137,20 @@ impl TxIndexCache {
         F: Fn(&OutPointSourceId) -> Result<Option<TxMainChainIndex>, E>,
         ConnectTransactionError: From<E>,
     {
-        inputs.iter().try_for_each(|input| {
-            let outpoint = input.outpoint();
-            match self.data.entry(outpoint.tx_id()) {
-                Entry::Occupied(_) => (),
-                Entry::Vacant(entry) => {
-                    // Maybe the utxo is in a previous block?
-                    let tx_index = fetcher_func(&outpoint.tx_id())?
-                        .ok_or(TxIndexError::MissingOutputOrSpent)?;
-                    entry.insert(CachedInputsOperation::Read(tx_index));
-                }
+        inputs.iter().try_for_each(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                match self.data.entry(outpoint.tx_id()) {
+                    Entry::Occupied(_) => (),
+                    Entry::Vacant(entry) => {
+                        // Maybe the utxo is in a previous block?
+                        let tx_index = fetcher_func(&outpoint.tx_id())?
+                            .ok_or(TxIndexError::MissingOutputOrSpent)?;
+                        entry.insert(CachedInputsOperation::Read(tx_index));
+                    }
+                };
+                Ok(())
             }
-            Ok(())
+            TxInput::Account(_) => Ok(()),
         })
     }
 }

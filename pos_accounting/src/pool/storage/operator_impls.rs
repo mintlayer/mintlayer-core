@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{DelegationId, Destination, OutPoint, PoolId},
+    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 
@@ -117,7 +117,7 @@ impl<S: PoSAccountingStorageWrite<T>, T: StorageTag> PoSAccountingOperations
         &mut self,
         target_pool: PoolId,
         spend_key: Destination,
-        input0_outpoint: &OutPoint,
+        input0_outpoint: &UtxoOutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error> {
         if !self.pool_exists(target_pool)? {
             return Err(Error::DelegationCreationFailedPoolDoesNotExist);

@@ -31,18 +31,16 @@ use crate::{
         },
         signed_transaction::SignedTransaction,
         tokens::OutputValue,
-        ChainConfig, Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
+        AccountNonce, AccountSpending, ChainConfig, DelegationId, Destination, Transaction,
+        TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::UnsignedIntType, Amount, Id, H256},
 };
 
-pub fn generate_input_utxo(
-    rng: &mut (impl Rng + CryptoRng),
-) -> (TxOutput, crypto::key::PrivateKey) {
+fn generate_input_utxo(rng: &mut (impl Rng + CryptoRng)) -> (TxOutput, crypto::key::PrivateKey) {
     let (private_key, public_key) = PrivateKey::new_from_rng(rng, KeyKind::Secp256k1Schnorr);
     let destination = Destination::PublicKey(public_key);
-    let output_value =
-        crate::chain::tokens::OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
+    let output_value = OutputValue::Coin(Amount::from_atoms(rng.next_u64() as u128));
     let utxo = TxOutput::Transfer(output_value, destination);
     (utxo, private_key)
 }
@@ -50,8 +48,17 @@ pub fn generate_input_utxo(
 pub fn generate_inputs_utxos(
     rng: &mut (impl Rng + CryptoRng),
     input_count: usize,
-) -> (Vec<TxOutput>, Vec<PrivateKey>) {
-    (0..input_count).map(|_| generate_input_utxo(rng)).unzip()
+) -> (Vec<Option<TxOutput>>, Vec<Option<PrivateKey>>) {
+    (0..input_count)
+        .map(|_| {
+            if rng.gen::<bool>() {
+                let (utxo, priv_key) = generate_input_utxo(rng);
+                (Some(utxo), Some(priv_key))
+            } else {
+                (None, None)
+            }
+        })
+        .unzip()
 }
 
 // This is required because we can't access private fields of the Transaction class
@@ -84,19 +91,27 @@ impl MutableTransaction {
 }
 
 pub fn generate_unsigned_tx(
-    rng: &mut impl Rng,
+    rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_count: usize,
+    inputs_utxos: &[Option<TxOutput>],
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
-    let inputs = std::iter::from_fn(|| {
-        Some(TxInput::new(
-            Id::<Transaction>::new(H256::random_using(rng)).into(),
-            rng.gen(),
-        ))
-    })
-    .take(inputs_count)
-    .collect();
+    let inputs = inputs_utxos
+        .iter()
+        .map(|utxo| match utxo {
+            Some(_) => TxInput::from_utxo(
+                Id::<Transaction>::new(H256::random_using(rng)).into(),
+                rng.gen(),
+            ),
+            None => TxInput::from_account(
+                AccountNonce::new(rng.gen()),
+                AccountSpending::Delegation(
+                    DelegationId::new(H256::random_using(rng)),
+                    Amount::from_atoms(rng.gen()),
+                ),
+            ),
+        })
+        .collect();
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::Transfer(
@@ -113,7 +128,7 @@ pub fn generate_unsigned_tx(
 
 pub fn sign_whole_tx(
     tx: Transaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
@@ -142,16 +157,28 @@ pub fn generate_and_sign_tx(
     chain_config: &ChainConfig,
     rng: &mut (impl Rng + CryptoRng),
     destination: &Destination,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<TxOutput>],
     outputs: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
 ) -> Result<SignedTransaction, TransactionCreationError> {
-    let tx = generate_unsigned_tx(rng, destination, inputs_utxos.len(), outputs).unwrap();
-    let signed_tx =
-        sign_whole_tx(tx, inputs_utxos, private_key, sighash_type, destination).unwrap();
+    let tx = generate_unsigned_tx(rng, destination, inputs_utxos, outputs).unwrap();
+    let inputs_utxos_refs = inputs_utxos.iter().map(|i| i.as_ref()).collect::<Vec<_>>();
+    let signed_tx = sign_whole_tx(
+        tx,
+        inputs_utxos_refs.as_slice(),
+        private_key,
+        sighash_type,
+        destination,
+    )
+    .unwrap();
     assert_eq!(
-        verify_signed_tx(chain_config, &signed_tx, inputs_utxos, destination),
+        verify_signed_tx(
+            chain_config,
+            &signed_tx,
+            inputs_utxos_refs.as_slice(),
+            destination
+        ),
         Ok(())
     );
     Ok(signed_tx)
@@ -159,7 +186,7 @@ pub fn generate_and_sign_tx(
 
 pub fn make_signature(
     tx: &Transaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     input_num: usize,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
@@ -179,7 +206,7 @@ pub fn make_signature(
 pub fn verify_signed_tx(
     chain_config: &ChainConfig,
     tx: &SignedTransaction,
-    inputs_utxos: &[&TxOutput],
+    inputs_utxos: &[Option<&TxOutput>],
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.inputs().len() {

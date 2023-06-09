@@ -19,7 +19,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, GenBlock, OutPointSourceId, Transaction, TxMainChainIndex,
+        AccountNonce, AccountType, Block, GenBlock, OutPointSourceId, Transaction,
+        TxMainChainIndex,
     },
     primitives::Id,
 };
@@ -107,6 +108,11 @@ where
         &self,
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 pub trait TransactionVerifierStorageMut:
@@ -172,6 +178,16 @@ pub trait TransactionVerifierStorageMut:
         tx_source: TransactionSource,
         delta: &PoSAccountingDeltaData,
     ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+
+    fn set_account_nonce_count(
+        &mut self,
+        account: AccountType,
+        nonce: AccountNonce,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
+    fn del_account_nonce_count(
+        &mut self,
+        account: AccountType,
+    ) -> Result<(), <Self as TransactionVerifierStorageRef>::Error>;
 }
 
 impl<T: Deref> TransactionVerifierStorageRef for T
@@ -213,5 +229,12 @@ where
         id: Id<Block>,
     ) -> Result<Option<AccountingBlockUndo>, <Self as TransactionVerifierStorageRef>::Error> {
         self.deref().get_accounting_undo(id)
+    }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, <Self as TransactionVerifierStorageRef>::Error> {
+        self.deref().get_account_nonce_count(account)
     }
 }

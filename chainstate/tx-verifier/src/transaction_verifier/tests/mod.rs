@@ -19,7 +19,7 @@ mod mock;
 
 use super::*;
 use common::{
-    chain::{stakelock::StakePoolData, tokens::OutputValue, Destination, OutPoint},
+    chain::{stakelock::StakePoolData, tokens::OutputValue, Destination, UtxoOutPoint},
     primitives::{amount::UnsignedIntType, per_thousand::PerThousand, BlockHeight, H256},
 };
 use crypto::{
@@ -29,8 +29,8 @@ use crypto::{
 };
 use utxo::Utxo;
 
-fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (OutPoint, Utxo) {
-    let outpoint = OutPoint::new(
+fn create_utxo(rng: &mut (impl Rng + CryptoRng), value: UnsignedIntType) -> (UtxoOutPoint, Utxo) {
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
         0,
     );

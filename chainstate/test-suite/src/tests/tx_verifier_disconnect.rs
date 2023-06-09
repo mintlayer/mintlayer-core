@@ -112,7 +112,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         // create a block with a single tx based on genesis
         let tx0 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 ),
@@ -144,7 +144,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         // create and connect a tx from mempool based on best block
         let tx1 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx0_id), 0),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx0_id), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(
@@ -160,7 +160,7 @@ fn connect_disconnect_tx_mempool(#[case] seed: Seed) {
         // create and connect a tx from mempool based on previous tx from mempool
         let tx2 = TransactionBuilder::new()
             .add_input(
-                TxInput::new(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
+                TxInput::from_utxo(OutPointSourceId::Transaction(tx1.transaction().get_id()), 0),
                 empty_witness(&mut rng),
             )
             .add_output(TxOutput::Transfer(

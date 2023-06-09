@@ -101,7 +101,7 @@ fn build_transaction(#[case] seed: test_utils::random::Seed) {
 
     let flags = 1;
     let witness = InputWitness::NoSignature(None);
-    let input = TxInput::new(
+    let input = TxInput::from_utxo(
         OutPointSourceId::Transaction(Id::new(H256::random_using(&mut rng))),
         0,
     );

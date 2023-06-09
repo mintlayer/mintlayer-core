@@ -386,7 +386,7 @@ mod tests {
     #[case(Seed::from_entropy())]
     fn tx_with_witness_always_different_merkle_witness_root(#[case] seed: Seed) {
         let mut rng = test_utils::random::make_seedable_rng(seed);
-        let inputs = vec![TxInput::new(
+        let inputs = vec![TxInput::from_utxo(
             OutPointSourceId::Transaction(H256::random_using(&mut rng).into()),
             0,
         )];

@@ -30,7 +30,7 @@ use chainstate_test_framework::{
 };
 use chainstate_types::{GenBlockIndex, GetAncestorError, PropertyQueryError};
 use common::chain::{
-    signed_transaction::SignedTransaction, stakelock::StakePoolData, OutPoint, Transaction,
+    signed_transaction::SignedTransaction, stakelock::StakePoolData, Transaction, UtxoOutPoint,
 };
 use common::primitives::BlockDistance;
 use common::{
@@ -99,7 +99,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
-        let outpoint = OutPoint::new(block_id.into(), 0);
+        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -121,7 +121,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
-        let outpoint = OutPoint::new(block_id.into(), 0);
+        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -143,7 +143,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
-        let outpoint = OutPoint::new(block_id.into(), 0);
+        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -165,7 +165,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
-        let outpoint = OutPoint::new(block_id.into(), 0);
+        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -193,7 +193,7 @@ fn invalid_block_reward_types(#[case] seed: Seed) {
             .build();
 
         let block_id = block.get_id();
-        let outpoint = OutPoint::new(block_id.into(), 0);
+        let outpoint = UtxoOutPoint::new(block_id.into(), 0);
         assert_eq!(
             tf.process_block(block, BlockSource::Local).unwrap_err(),
             ChainstateError::ProcessBlockError(BlockError::CheckBlockFailed(
@@ -326,7 +326,8 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id();
         for (idx, txo) in tf.genesis().utxos().iter().enumerate() {
             let idx = idx as u32;
-            let utxo = tf.chainstate.utxo(&OutPoint::new(genesis_id.into(), idx)).unwrap().unwrap();
+            let utxo =
+                tf.chainstate.utxo(&UtxoOutPoint::new(genesis_id.into(), idx)).unwrap().unwrap();
             assert_eq!(utxo.output(), txo);
             assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(0)));
         }
@@ -352,7 +353,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
             let tx_id = tx.transaction().get_id();
             // All inputs must spend a corresponding output
             for tx_in in tx.transaction().inputs() {
-                let outpoint = tx_in.outpoint();
+                let outpoint = tx_in.utxo_outpoint().unwrap();
                 if *tf.chainstate.get_chainstate_config().tx_index_enabled {
                     let prev_out_tx_index =
                         tf.chainstate.get_mainchain_tx_index(&outpoint.tx_id()).unwrap().unwrap();
@@ -374,7 +375,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                         OutputSpentState::Unspent
                     );
                     let utxo =
-                        tf.chainstate.utxo(&OutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
+                        tf.chainstate.utxo(&UtxoOutPoint::new(tx_id.into(), idx)).unwrap().unwrap();
                     assert_eq!(utxo.output(), txo);
                     assert_eq!(utxo.source(), &UtxoSource::Blockchain(BlockHeight::new(1)));
                 }
@@ -397,7 +398,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let tx1 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::new(tf.genesis().get_id().into(), 0)],
+                vec![TxInput::from_utxo(tf.genesis().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
                     get_output_value(&tf.genesis().utxos()[0]).unwrap(),
                     anyonecanspend_address(),
@@ -412,7 +413,7 @@ fn transaction_processing_order(#[case] seed: Seed) {
         let tx2 = SignedTransaction::new(
             Transaction::new(
                 0,
-                vec![TxInput::new(tx1.transaction().get_id().into(), 0)],
+                vec![TxInput::from_utxo(tx1.transaction().get_id().into(), 0)],
                 vec![TxOutput::Transfer(
                     get_output_value(&tx1.transaction().outputs()[0]).unwrap(),
                     anyonecanspend_address(),
@@ -1225,7 +1226,7 @@ fn burn_inputs_in_tx(#[case] seed: Seed) {
 
         let first_tx = TransactionBuilder::new()
             .add_input(
-                TxInput::new(
+                TxInput::from_utxo(
                     OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                     0,
                 ),

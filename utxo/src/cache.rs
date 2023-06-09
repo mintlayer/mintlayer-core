@@ -22,7 +22,7 @@ use common::{
     chain::{
         block::{BlockReward, BlockRewardTransactable},
         signature::Signable,
-        GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput,
+        GenBlock, OutPointSourceId, Transaction, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockHeight, Id, Idable},
 };
@@ -33,7 +33,7 @@ use std::{
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ConsumedUtxoCache {
-    pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
+    pub(crate) container: BTreeMap<UtxoOutPoint, UtxoEntry>,
     pub(crate) best_block: Id<GenBlock>,
 }
 
@@ -41,7 +41,7 @@ pub struct UtxosCache<P> {
     parent: P,
     current_block_hash: Id<GenBlock>,
     // pub(crate) visibility is required for tests that are in a different mod
-    pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
+    pub(crate) utxos: BTreeMap<UtxoOutPoint, UtxoEntry>,
     // TODO: calculate memory usage (mintlayer/mintlayer-core#354)
     #[allow(dead_code)]
     memory_usage: usize,
@@ -51,7 +51,7 @@ impl<P: UtxosView> UtxosCache<P> {
     /// Returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
-    fn fetch_utxo_entry(&mut self, outpoint: &OutPoint) -> Result<Option<UtxoEntry>, Error> {
+    fn fetch_utxo_entry(&mut self, outpoint: &UtxoOutPoint) -> Result<Option<UtxoEntry>, Error> {
         if let Some(res) = self.utxos.get(outpoint) {
             return Ok(Some(res.clone()));
         }
@@ -94,7 +94,7 @@ impl<P: UtxosView> UtxosCache<P> {
         check_for_overwrite: bool,
     ) -> Result<(), Error> {
         for (idx, output) in reward.outputs().iter().enumerate() {
-            let outpoint = OutPoint::new(OutPointSourceId::BlockReward(*block_id), idx as u32);
+            let outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(*block_id), idx as u32);
             // block reward transactions can always be overwritten
             let overwrite = if check_for_overwrite {
                 self.has_utxo(&outpoint).map_err(|_| Error::ViewRead)?
@@ -123,7 +123,7 @@ impl<P: UtxosView> UtxosCache<P> {
             // outputs that cannot be spent should not be included into utxo set
             .filter(|(_, output)| can_be_spent(output))
             .try_for_each(|(idx, output)| {
-                let outpoint = OutPoint::new(id.clone(), idx as u32);
+                let outpoint = UtxoOutPoint::new(id.clone(), idx as u32);
                 // by default no overwrite allowed.
                 let has_utxo = self.has_utxo(&outpoint).map_err(|_| Error::ViewRead)?;
                 let overwrite = check_for_overwrite && has_utxo;
@@ -140,16 +140,23 @@ impl<P: UtxosView> UtxosCache<P> {
         tx: &Transaction,
         height: BlockHeight,
     ) -> Result<UtxosTxUndoWithSources, Error> {
-        let (sources, utxos) = tx
+        let sources = tx
             .inputs()
             .iter()
-            .map(|tx_in| {
-                let utxo = self.spend_utxo(tx_in.outpoint())?;
-                Ok((tx_in.outpoint().tx_id(), utxo))
+            .filter_map(|input| match input {
+                TxInput::Utxo(outpoint) => Some(outpoint.tx_id()),
+                TxInput::Account(_) => None,
             })
-            .collect::<Result<Vec<_>, Error>>()?
-            .into_iter()
-            .unzip();
+            .collect();
+
+        let utxos = tx
+            .inputs()
+            .iter()
+            .map(|input| match input {
+                TxInput::Utxo(outpoint) => self.spend_utxo(outpoint).map(Some),
+                TxInput::Account(_) => Ok(None),
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
         self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
@@ -163,7 +170,7 @@ impl<P: UtxosView> UtxosCache<P> {
         tx_undo: UtxosTxUndo,
     ) -> Result<(), Error> {
         for (i, output) in tx.outputs().iter().enumerate() {
-            let tx_outpoint = OutPoint::new(OutPointSourceId::from(tx.get_id()), i as u32);
+            let tx_outpoint = UtxoOutPoint::new(tx.get_id().into(), i as u32);
 
             if can_be_spent(output) {
                 self.spend_utxo(&tx_outpoint)?;
@@ -171,10 +178,20 @@ impl<P: UtxosView> UtxosCache<P> {
         }
 
         assert_eq!(tx.inputs().len(), tx_undo.inner().len());
-        for (tx_in, utxo) in tx.inputs().iter().zip(tx_undo.into_inner().into_iter()) {
-            self.add_utxo(tx_in.outpoint(), utxo, false)?;
-        }
-        Ok(())
+
+        tx.inputs()
+            .iter()
+            .zip(tx_undo.into_inner().into_iter())
+            .filter_map(|(input, undo)| {
+                undo.map(|utxo| match input {
+                    TxInput::Utxo(outpoint) => Ok((outpoint, utxo)),
+                    TxInput::Account(_) => Err(Error::TxInputAndUndoMismatch(tx.get_id())),
+                })
+            })
+            .try_for_each(|res| {
+                let (outpoint, utxo) = res?;
+                self.add_utxo(outpoint, utxo, false)
+            })
     }
 
     /// Marks the inputs of a transactable block reward as 'spent', adds outputs to the utxo set.
@@ -186,12 +203,19 @@ impl<P: UtxosView> UtxosCache<P> {
         block_id: &Id<GenBlock>,
         height: BlockHeight,
     ) -> Result<Option<UtxosBlockRewardUndo>, Error> {
-        let mut reward_undo: Option<UtxosBlockRewardUndo> = None;
-        if let Some(inputs) = reward_transactable.inputs() {
-            let utxos: Result<Vec<Utxo>, Error> =
-                inputs.iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
-            reward_undo = utxos.map(|utxos| Some(UtxosBlockRewardUndo::new(utxos)))?;
-        }
+        let reward_undo: Option<UtxosBlockRewardUndo> = match reward_transactable.inputs() {
+            Some(inputs) => {
+                let utxos = inputs
+                    .iter()
+                    .filter_map(|input| match input {
+                        TxInput::Utxo(outpoint) => Some(self.spend_utxo(outpoint)),
+                        TxInput::Account(_) => None,
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                (!utxos.is_empty()).then(|| UtxosBlockRewardUndo::new(utxos))
+            }
+            None => None,
+        };
 
         if let Some(outputs) = reward_transactable.outputs() {
             let source_id = OutPointSourceId::from(*block_id);
@@ -199,7 +223,7 @@ impl<P: UtxosView> UtxosCache<P> {
                 if !can_be_spent(output) {
                     return Err(Error::InvalidBlockRewardOutputType(*block_id));
                 }
-                let outpoint = OutPoint::new(source_id.clone(), idx as u32);
+                let outpoint = UtxoOutPoint::new(source_id.clone(), idx as u32);
                 let utxo = Utxo::new(output.clone(), UtxoSource::Blockchain(height));
                 self.add_utxo(&outpoint, utxo, false)?;
             }
@@ -216,16 +240,21 @@ impl<P: UtxosView> UtxosCache<P> {
     ) -> Result<(), Error> {
         if let Some(outputs) = reward_transactable.outputs() {
             for (i, _) in outputs.iter().enumerate() {
-                let tx_outpoint = OutPoint::new(OutPointSourceId::from(*block_id), i as u32);
+                let tx_outpoint = UtxoOutPoint::new(OutPointSourceId::from(*block_id), i as u32);
                 self.spend_utxo(&tx_outpoint)?;
             }
         }
 
         if let Some(inputs) = reward_transactable.inputs() {
             let block_undo = reward_undo.ok_or(Error::MissingBlockRewardUndo(*block_id))?;
-            for (tx_in, utxo) in inputs.iter().zip(block_undo.into_inner().into_iter()) {
-                self.add_utxo(tx_in.outpoint(), utxo, false)?;
-            }
+            inputs
+                .iter()
+                .zip(block_undo.into_inner().into_iter())
+                .filter_map(|(tx_in, utxo)| match tx_in {
+                    TxInput::Utxo(outpoint) => Some((outpoint, utxo)),
+                    TxInput::Account(_) => None,
+                })
+                .try_for_each(|(outpoint, utxo)| self.add_utxo(outpoint, utxo, false))?;
         }
         Ok(())
     }
@@ -233,7 +262,7 @@ impl<P: UtxosView> UtxosCache<P> {
     /// Adds an utxo entry to the cache
     pub fn add_utxo(
         &mut self,
-        outpoint: &OutPoint,
+        outpoint: &UtxoOutPoint,
         utxo: Utxo,
         possible_overwrite: bool, // TODO: change this to an enum that explains what happens
     ) -> Result<(), Error> {
@@ -283,7 +312,7 @@ impl<P: UtxosView> UtxosCache<P> {
 
     /// Flags the utxo as "spent", given an outpoint.
     /// Returns the Utxo if an update was performed.
-    pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
+    pub fn spend_utxo(&mut self, outpoint: &UtxoOutPoint) -> Result<Utxo, Error> {
         let entry = self.fetch_utxo_entry(outpoint)?.ok_or(Error::NoUtxoFound)?;
         // TODO: update the memory usage
         // self.memory_usage must be deducted from this entry's size
@@ -302,12 +331,12 @@ impl<P: UtxosView> UtxosCache<P> {
     }
 
     /// Checks whether utxo exists in the cache
-    pub fn has_utxo_in_cache(&self, outpoint: &OutPoint) -> bool {
+    pub fn has_utxo_in_cache(&self, outpoint: &UtxoOutPoint) -> bool {
         self.utxos.contains_key(outpoint)
     }
 
     /// Returns a mutable reference of the utxo, given the outpoint.
-    pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Result<Option<&mut Utxo>, Error> {
+    pub fn get_mut_utxo(&mut self, outpoint: &UtxoOutPoint) -> Result<Option<&mut Utxo>, Error> {
         let entry = match self.fetch_utxo_entry(outpoint)? {
             Some(entry) => entry,
             None => return Ok(None),
@@ -330,7 +359,7 @@ impl<P: UtxosView> UtxosCache<P> {
     }
 
     /// Removes the utxo from the cache if it's not modified
-    pub fn uncache(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
+    pub fn uncache(&mut self, outpoint: &UtxoOutPoint) -> Result<(), Error> {
         let key = outpoint;
         if let Some(entry) = self.utxos.get(key) {
             // see bitcoin's Uncache.
@@ -364,7 +393,7 @@ impl<P> Debug for UtxosCache<P> {
 impl<P: UtxosView> UtxosView for UtxosCache<P> {
     type Error = P::Error;
 
-    fn utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         let key = outpoint;
         if let Some(res) = self.utxos.get(key) {
             return Ok(res.utxo().cloned());
@@ -374,7 +403,7 @@ impl<P: UtxosView> UtxosView for UtxosCache<P> {
         self.parent.utxo(outpoint)
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> Result<bool, Self::Error> {
+    fn has_utxo(&self, outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
         self.utxo(outpoint).map(|u| u.is_some())
     }
 
@@ -456,9 +485,10 @@ fn can_be_spent(output: &TxOutput) -> bool {
         TxOutput::Transfer(..)
         | TxOutput::LockThenTransfer(..)
         | TxOutput::CreateStakePool(..)
-        | TxOutput::ProduceBlockFromStake(..)
-        | TxOutput::DelegateStaking(..) => true,
-        TxOutput::CreateDelegationId(..) | TxOutput::Burn(..) => false,
+        | TxOutput::ProduceBlockFromStake(..) => true,
+        TxOutput::CreateDelegationId(..) | TxOutput::DelegateStaking(..) | TxOutput::Burn(..) => {
+            false
+        }
     }
 }
 

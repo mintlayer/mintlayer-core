@@ -23,7 +23,7 @@ use chainstate::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction,
+        Transaction, TxInput,
     },
     primitives::{amount::Amount, BlockHeight, Id, Idable},
     time_getter::TimeGetter,
@@ -222,7 +222,10 @@ impl<M> Mempool<M> {
             .transaction()
             .inputs()
             .iter()
-            .filter_map(|input| input.outpoint().tx_id().get_tx_id().cloned())
+            .filter_map(|input| match input {
+                TxInput::Utxo(outpoint) => outpoint.tx_id().get_tx_id().cloned(),
+                TxInput::Account(_) => None,
+            })
             .filter(|id| self.store.txs_by_id.contains_key(id))
             .collect::<BTreeSet<_>>();
         let ancestor_ids =
@@ -414,7 +417,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
         tx.transaction()
             .inputs()
             .iter()
-            .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
+            .filter_map(|input| self.store.find_conflicting_tx(input))
     }
 }
 
@@ -514,11 +517,9 @@ impl<M: GetMemoryUsage> Mempool<M> {
         tx: &TxEntryWithFee,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), MempoolPolicyError> {
-        let outpoints_spent_by_conflicts = conflicts
+        let inputs_spent_by_conflicts = conflicts
             .iter()
-            .flat_map(|conflict| {
-                conflict.transaction().inputs().iter().map(|input| input.outpoint())
-            })
+            .flat_map(|conflict| conflict.transaction().inputs().iter())
             .collect::<BTreeSet<_>>();
 
         tx.transaction()
@@ -528,7 +529,7 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 // input spends an unconfirmed output
                 input.spends_unconfirmed(self) &&
                 // this unconfirmed output is not spent by one of the conflicts
-                !outpoints_spent_by_conflicts.contains(&input.outpoint())
+                !inputs_spent_by_conflicts.contains(input)
             })
             .map_or(Ok(()), |_| {
                 Err(MempoolPolicyError::SpendsNewUnconfirmedOutput)

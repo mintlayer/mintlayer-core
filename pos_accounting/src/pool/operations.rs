@@ -15,7 +15,7 @@
 
 use accounting::DataDeltaUndo;
 use common::{
-    chain::{DelegationId, Destination, OutPoint, PoolId},
+    chain::{DelegationId, Destination, PoolId, UtxoOutPoint},
     primitives::Amount,
 };
 use serialization::{Decode, Encode};
@@ -113,7 +113,7 @@ pub trait PoSAccountingOperations {
         &mut self,
         target_pool: PoolId,
         spend_key: Destination,
-        input0_outpoint: &OutPoint,
+        input0_outpoint: &UtxoOutPoint,
     ) -> Result<(DelegationId, PoSAccountingUndo), Error>;
 
     fn delete_delegation_id(

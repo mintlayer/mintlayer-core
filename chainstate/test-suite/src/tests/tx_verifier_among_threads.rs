@@ -16,7 +16,7 @@
 use chainstate_test_framework::{TestFramework, TestStore};
 use common::chain::config::Builder as ConfigBuilder;
 use common::{
-    chain::{DelegationId, OutPoint, PoolId},
+    chain::{DelegationId, PoolId, UtxoOutPoint},
     primitives::{Id, H256},
 };
 use pos_accounting::PoSAccountingView;
@@ -32,11 +32,11 @@ struct EmptyUtxosView;
 impl UtxosView for EmptyUtxosView {
     type Error = std::convert::Infallible;
 
-    fn utxo(&self, _outpoint: &OutPoint) -> Result<Option<Utxo>, Self::Error> {
+    fn utxo(&self, _outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, Self::Error> {
         Ok(None)
     }
 
-    fn has_utxo(&self, _outpoint: &OutPoint) -> Result<bool, Self::Error> {
+    fn has_utxo(&self, _outpoint: &UtxoOutPoint) -> Result<bool, Self::Error> {
         Ok(false)
     }
 

@@ -42,7 +42,7 @@ pub fn add_block_with_locked_output(
 
     let tx = TransactionBuilder::new()
         .add_input(
-            TxInput::new(prev_block_outputs.keys().next().unwrap().clone(), 0),
+            TxInput::from_utxo(prev_block_outputs.keys().next().unwrap().clone(), 0),
             InputWitness::NoSignature(None),
         )
         .add_anyone_can_spend_output(10000)
@@ -66,7 +66,7 @@ pub fn add_block_with_locked_output(
     assert!(block_outputs.contains_key(&tx_id.into()));
     (
         InputWitness::NoSignature(None),
-        TxInput::new(tx_id.into(), 1),
+        TxInput::from_utxo(tx_id.into(), 1),
         tx_id,
     )
 }

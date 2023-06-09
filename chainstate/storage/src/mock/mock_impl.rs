@@ -25,7 +25,7 @@ use common::{
         block::BlockReward,
         config::EpochIndex,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
-        Block, DelegationId, GenBlock, OutPoint, PoolId,
+        AccountNonce, AccountType, Block, DelegationId, GenBlock, PoolId, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -89,11 +89,13 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
     }
 
     impl UtxosStorageRead for Store {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -188,11 +190,14 @@ mockall::mock! {
 
         fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
         fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 
@@ -329,11 +334,13 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+        fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -437,11 +444,13 @@ mockall::mock! {
         ) -> crate::Result<Option<DeltaMergeUndo>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+
+       fn get_account_nonce_count(&self, account: AccountType) -> crate::Result<Option<AccountNonce>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
         type Error = crate::Error;
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_utxo(&self, outpoint: &UtxoOutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Id<GenBlock>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<UtxosBlockUndo>>;
     }
@@ -537,11 +546,14 @@ mockall::mock! {
 
         fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
         fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
+
+        fn set_account_nonce_count(&mut self, account: AccountType, nonce: AccountNonce) -> crate::Result<()>;
+        fn del_account_nonce_count(&mut self, account: AccountType) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {
-        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &UtxoOutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &UtxoOutPoint) -> crate::Result<()>;
 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 

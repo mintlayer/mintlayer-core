@@ -23,8 +23,8 @@ use chainstate_types::{storage_result, GenBlockIndex};
 use common::{
     chain::{
         tokens::{TokenAuxiliaryData, TokenId},
-        Block, ChainConfig, DelegationId, GenBlock, GenBlockId, OutPointSourceId, PoolId,
-        Transaction, TxMainChainIndex,
+        AccountNonce, AccountType, Block, ChainConfig, DelegationId, GenBlock, GenBlockId,
+        OutPointSourceId, PoolId, Transaction, TxMainChainIndex,
     },
     primitives::{Amount, Id},
 };
@@ -95,6 +95,15 @@ impl TransactionVerifierStorageRef for InMemoryStorageWrapper {
             .get_accounting_undo(id)
             .map_err(TransactionVerifierStorageError::from)
     }
+
+    fn get_account_nonce_count(
+        &self,
+        account: AccountType,
+    ) -> Result<Option<AccountNonce>, TransactionVerifierStorageError> {
+        self.storage
+            .get_account_nonce_count(account)
+            .map_err(TransactionVerifierStorageError::from)
+    }
 }
 
 impl UtxosStorageRead for InMemoryStorageWrapper {
@@ -102,7 +111,7 @@ impl UtxosStorageRead for InMemoryStorageWrapper {
 
     fn get_utxo(
         &self,
-        outpoint: &common::chain::OutPoint,
+        outpoint: &common::chain::UtxoOutPoint,
     ) -> Result<Option<utxo::Utxo>, storage_result::Error> {
         self.storage.get_utxo(outpoint)
     }

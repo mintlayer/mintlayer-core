@@ -27,7 +27,7 @@ use chainstate_test_framework::{
 use common::{
     chain::{
         config::Builder as ConfigBuilder, stakelock::StakePoolData, tokens::OutputValue, GenBlock,
-        OutPoint, OutPointSourceId, TxInput, TxOutput,
+        OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Id, Idable},
 };
@@ -82,7 +82,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_a
             let destination_a = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_a) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let genesis_outpoint = OutPoint::new(
+            let genesis_outpoint = UtxoOutPoint::new(
                 OutPointSourceId::BlockReward(tf.genesis().get_id().into()),
                 0,
             );
@@ -105,7 +105,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_b
             let tx_b = TransactionBuilder::new()
                 .add_input(
-                    TxInput::new(OutPointSourceId::BlockReward(genesis_id.into()), 0),
+                    TxInput::from_utxo(OutPointSourceId::BlockReward(genesis_id.into()), 0),
                     empty_witness(&mut rng),
                 )
                 .add_output(TxOutput::Transfer(
@@ -117,7 +117,7 @@ fn stake_pool_reorg(#[case] seed: Seed) {
             // prepare tx_c
             let destination_c = new_pub_key_destination(&mut rng);
             let (_, vrf_pub_key_c) = VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
-            let tx_b_outpoint0 = OutPoint::new(
+            let tx_b_outpoint0 = UtxoOutPoint::new(
                 OutPointSourceId::Transaction(tx_b.transaction().get_id()),
                 0,
             );

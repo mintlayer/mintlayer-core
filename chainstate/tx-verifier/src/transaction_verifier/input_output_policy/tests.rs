@@ -21,7 +21,8 @@ use common::{
         stakelock::StakePoolData,
         timelock::OutputTimeLock,
         tokens::OutputValue,
-        Block, DelegationId, Destination, GenBlock, OutPoint, OutPointSourceId, PoolId, TxInput,
+        AccountNonce, AccountOutPoint, AccountSpending, Block, DelegationId, Destination, GenBlock,
+        OutPointSourceId, PoolId, TxInput, UtxoOutPoint,
     },
     primitives::{per_thousand::PerThousand, Amount, Compact, Id, H256},
 };
@@ -134,7 +135,7 @@ fn prepare_utxos_and_tx(
         .enumerate()
         .map(|(i, output)| {
             (
-                OutPoint::new(
+                UtxoOutPoint::new(
                     OutPointSourceId::Transaction(Id::new(H256::random_using(rng))),
                     i as u32,
                 ),
@@ -224,17 +225,17 @@ fn prepare_utxos_and_tx_with_random_combinations(
 /*-----------------------------------------------------------------------------------------------*/
 #[case(delegate_staking(), transfer(),           Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), burn(),               Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-#[case(delegate_staking(), lock_then_transfer(), Ok(()))]
+#[case(delegate_staking(), lock_then_transfer(), Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), stake_pool(),         Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), produce_block(),      Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 #[case(delegate_staking(), create_delegation(),  Err(ConnectTransactionError::InvalidOutputTypeInTx))]
-#[case(delegate_staking(), delegate_staking(),   Ok(()))]
+#[case(delegate_staking(), delegate_staking(),   Err(ConnectTransactionError::InvalidOutputTypeInTx))]
 fn tx_one_to_one(
     #[case] input_utxo: TxOutput,
     #[case] output: TxOutput,
     #[case] result: Result<(), ConnectTransactionError>,
 ) {
-    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
     let utxo_db = UtxosDBInMemoryImpl::new(
         Id::<GenBlock>::new(H256::zero()),
@@ -317,26 +318,22 @@ fn tx_one_to_many(#[case] seed: Seed) {
 #[trace]
 #[case(Seed::from_entropy())]
 fn tx_spend_delegation(#[case] seed: Seed) {
-    let inputs = [delegate_staking()];
-    let outputs = [lock_then_transfer()];
-
     let mut rng = make_seedable_rng(seed);
+    let inputs = vec![TxInput::Account(AccountOutPoint::new(
+        AccountNonce::new(0),
+        AccountSpending::Delegation(
+            DelegationId::new(H256::random_using(&mut rng)),
+            Amount::ZERO,
+        ),
+    ))];
+
     let number_of_outputs = rng.gen_range(2..10);
+    let source_outputs = [lock_then_transfer()];
+    let outputs = get_random_outputs_combination(&mut rng, &source_outputs, number_of_outputs);
 
-    let extra_output = if rng.gen::<bool>() {
-        Some(delegate_staking())
-    } else {
-        None
-    };
+    let tx = Transaction::new(0, inputs, outputs).unwrap();
 
-    let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
-        &mut rng,
-        &inputs,
-        1,
-        &outputs,
-        number_of_outputs,
-        extra_output,
-    );
+    let utxo_db = UtxosDBInMemoryImpl::new(Id::<GenBlock>::new(H256::zero()), Default::default());
     assert_eq!(check_tx_inputs_outputs_purposes(&tx, &utxo_db), Ok(()));
 }
 
@@ -348,7 +345,7 @@ fn tx_pool_decommissioning(#[case] seed: Seed) {
     let outputs = [lock_then_transfer()];
 
     let mut rng = make_seedable_rng(seed);
-    let number_of_outputs = rng.gen_range(2..10);
+    let number_of_outputs = rng.gen_range(1..10);
 
     let (utxo_db, tx) = prepare_utxos_and_tx_with_random_combinations(
         &mut rng,
@@ -640,7 +637,7 @@ fn reward_one_to_one(
     #[case] output: TxOutput,
     #[case] result: Result<(), ConnectTransactionError>,
 ) {
-    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
     let utxo_db = UtxosDBInMemoryImpl::new(
         Id::<GenBlock>::new(H256::zero()),
         BTreeMap::from_iter([(
@@ -666,7 +663,7 @@ fn reward_one_to_none(#[case] seed: Seed) {
         .into_iter()
         .next()
         .unwrap();
-    let outpoint = OutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
+    let outpoint = UtxoOutPoint::new(OutPointSourceId::Transaction(Id::new(H256::zero())), 0);
 
     let best_block_id: Id<GenBlock> = Id::new(H256::random_using(&mut rng));
     let utxo_db = UtxosDBInMemoryImpl::new(
@@ -748,7 +745,7 @@ fn reward_many_to_none(#[case] seed: Seed) {
         .enumerate()
         .map(|(i, output)| {
             (
-                OutPoint::new(
+                UtxoOutPoint::new(
                     OutPointSourceId::BlockReward(Id::new(H256::zero())),
                     i as u32,
                 ),

@@ -17,10 +17,11 @@ use chainstate_types::{block_index_ancestor_getter, GenBlockIndex};
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, signature::Transactable, timelock::OutputTimeLock,
-        ChainConfig, GenBlock, OutPoint, OutPointSourceId, TxOutput,
+        AccountSpending, ChainConfig, GenBlock, OutPointSourceId, TxInput, TxOutput, UtxoOutPoint,
     },
     primitives::{BlockDistance, BlockHeight, Id},
 };
+use itertools::Itertools;
 use thiserror::Error;
 use utils::ensure;
 use utxo::UtxosView;
@@ -33,13 +34,14 @@ use super::{
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OutputMaturityError {
     #[error("Maturity setting type for the output {0:?} is invalid")]
-    InvalidOutputMaturitySettingType(OutPoint),
+    InvalidOutputMaturitySettingType(UtxoOutPoint),
     #[error("Maturity setting for the output {0:?} is too short: {1} < {2}")]
-    InvalidOutputMaturityDistance(OutPoint, BlockDistance, BlockDistance),
+    InvalidOutputMaturityDistance(UtxoOutPoint, BlockDistance, BlockDistance),
     #[error("Maturity setting value for the output {0:?} is invalid: {1}")]
-    InvalidOutputMaturityDistanceValue(OutPoint, u64),
+    InvalidOutputMaturityDistanceValue(UtxoOutPoint, u64),
 }
 
+#[derive(Debug, Clone, Copy)]
 enum OutputTimelockCheckRequired {
     DelegationSpendMaturity,
     DecommissioningMaturity,
@@ -50,7 +52,7 @@ fn check_timelock(
     timelock: &OutputTimeLock,
     spend_height: &BlockHeight,
     spending_time: &BlockTimestamp,
-    outpoint: &OutPoint,
+    outpoint: &UtxoOutPoint,
 ) -> Result<(), ConnectTransactionError> {
     let source_block_height = source_block_index.block_height();
     let source_block_time = source_block_index.block_timestamp();
@@ -99,35 +101,24 @@ where
     U: UtxosView,
 {
     let inputs = match tx.inputs() {
-        Some(ins) => ins,
+        Some(inputs) => inputs,
         None => return Ok(()),
     };
 
     let input_utxos = inputs
         .iter()
-        .map(|input| {
-            utxos_view
-                .utxo(input.outpoint())
-                .map_err(|_| utxo::Error::ViewRead)?
-                .ok_or(ConnectTransactionError::MissingOutputOrSpent)
+        .map(|input| match input {
+            TxInput::Utxo(outpoint) => {
+                let utxo = utxos_view
+                    .utxo(outpoint)
+                    .map_err(|_| utxo::Error::ViewRead)?
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
+                Ok(Some((outpoint.clone(), utxo)))
+            }
+            TxInput::Account(_) => Ok(None),
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, ConnectTransactionError>>()?;
     debug_assert_eq!(inputs.len(), input_utxos.len());
-
-    // in case `CreateStakePool`, `ProduceBlockFromStake` or `DelegateStaking` utxos are spent
-    // produced outputs must be timelocked as per chain config
-    let output_check_required = input_utxos.iter().find_map(|utxo| match utxo.output() {
-        TxOutput::Transfer(_, _)
-        | TxOutput::LockThenTransfer(_, _, _)
-        | TxOutput::Burn(_)
-        | TxOutput::CreateDelegationId(_, _) => None,
-        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
-            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
-        }
-        TxOutput::DelegateStaking(_, _) => {
-            Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
-        }
-    });
 
     let starting_point: GenBlockIndex = match tx_source {
         TransactionSourceForConnect::Chain { new_block_index } => {
@@ -137,7 +128,7 @@ where
     };
 
     // check if utxos can already be spent
-    input_utxos.iter().zip(inputs.iter()).try_for_each(|(utxo, input)| -> Result<(), ConnectTransactionError>{
+    input_utxos.iter().filter_map(|utxo| utxo.as_ref()).try_for_each(| (outpoint, utxo)| -> Result<(), ConnectTransactionError>{
         if let Some(timelock) = utxo.output().timelock() {
             let height = match utxo.source() {
                 utxo::UtxoSource::Blockchain(h) => *h,
@@ -171,7 +162,7 @@ where
                 timelock,
                 &tx_source.expected_block_height(),
                 spending_time,
-                input.outpoint()
+                outpoint
             )?;
         }
         Ok(())
@@ -179,6 +170,35 @@ where
 
     // check if output timelocks follow the rules
     if let Some(outputs) = tx.outputs() {
+        // in case `CreateStakePool`, `ProduceBlockFromStake` utxos are spent or an input from account
+        // then produced outputs must be timelocked as per chain config
+        let output_check_required = inputs
+            .iter()
+            .zip(input_utxos.iter())
+            .filter_map(|(input, utxo_with_outpoint)| match input {
+                TxInput::Utxo(_) => {
+                    match utxo_with_outpoint.clone().expect("must be present").1.output() {
+                        TxOutput::Transfer(_, _)
+                        | TxOutput::LockThenTransfer(_, _, _)
+                        | TxOutput::Burn(_)
+                        | TxOutput::CreateDelegationId(_, _)
+                        | TxOutput::DelegateStaking(_, _) => None,
+                        TxOutput::CreateStakePool(_, _) | TxOutput::ProduceBlockFromStake(_, _) => {
+                            Some(OutputTimelockCheckRequired::DecommissioningMaturity)
+                        }
+                    }
+                }
+                TxInput::Account(account_input) => match account_input.account() {
+                    AccountSpending::Delegation(_, _) => {
+                        Some(OutputTimelockCheckRequired::DelegationSpendMaturity)
+                    }
+                },
+            })
+            // Note: theoretically there could be several inputs that impose timelock requirement
+            // but for now such transaction is considered invalid
+            .at_most_one()
+            .map_err(|_| ConnectTransactionError::InvalidInputTypeInTx)?;
+
         if let Some(output_check_required) = output_check_required {
             check_outputs_timelock(
                 chain_config.as_ref(),
@@ -205,7 +225,7 @@ fn check_outputs_timelock(
         .iter()
         .enumerate()
         .try_for_each(|(index, output)| {
-            let outpoint = OutPoint::new(outpoint_source_id.clone(), index as u32);
+            let outpoint = UtxoOutPoint::new(outpoint_source_id.clone(), index as u32);
             match output {
                 TxOutput::Transfer(_, _)
                 | TxOutput::Burn(_)
@@ -233,7 +253,7 @@ fn check_outputs_timelock(
 pub fn check_output_maturity_setting(
     timelock: &OutputTimeLock,
     required: BlockDistance,
-    outpoint: OutPoint,
+    outpoint: UtxoOutPoint,
 ) -> Result<(), OutputMaturityError> {
     match timelock {
         OutputTimeLock::ForBlockCount(c) => {

@@ -59,13 +59,14 @@ impl SignatureHashableElement for &[TxOutput] {
 pub struct SignatureHashableInputs<'a> {
     inputs: &'a [TxInput],
     /// Include utxos of the inputs to make it possible to verify the inputs scripts and amounts without downloading the full transactions
-    inputs_utxos: &'a [&'a TxOutput],
+    /// It can be None which means that input spends from an account not utxo
+    inputs_utxos: &'a [Option<&'a TxOutput>],
 }
 
 impl<'a> SignatureHashableInputs<'a> {
     pub fn new(
         inputs: &'a [TxInput],
-        inputs_utxos: &'a [&'a TxOutput],
+        inputs_utxos: &'a [Option<&'a TxOutput>],
     ) -> Result<Self, TransactionSigError> {
         if inputs.len() != inputs_utxos.len() {
             return Err(TransactionSigError::InvalidUtxoCountVsInputs(
@@ -105,7 +106,7 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
                     let inputs = self.inputs;
                     hash_encoded_to(&(inputs.len() as u32), stream);
                     for input in inputs {
-                        hash_encoded_to(&input.outpoint(), stream);
+                        hash_encoded_to(&input, stream);
                     }
                 }
 
@@ -120,7 +121,7 @@ impl SignatureHashableElement for SignatureHashableInputs<'_> {
             }
             sighashtype::InputsMode::AnyoneCanPay => {
                 // Commit the input being signed (target input)
-                hash_encoded_to(&target_input.outpoint(), stream);
+                hash_encoded_to(&target_input, stream);
                 // Commit the utxo of the input being signed (target input)
                 hash_encoded_to(&self.inputs_utxos[target_input_num], stream);
             }
@@ -156,7 +157,7 @@ mod tests {
             OutPointSourceId::BlockReward(Id::new(H256::random_using(rng)))
         };
 
-        TxInput::new(outpoint, rng.next_u32())
+        TxInput::from_utxo(outpoint, rng.next_u32())
     }
 
     fn generate_random_invalid_output(rng: &mut (impl Rng + CryptoRng)) -> TxOutput {
@@ -180,7 +181,7 @@ mod tests {
             .map(|_| generate_random_invalid_output(rng))
             .collect::<Vec<_>>();
 
-        let inputs_utxos = inputs_utxos.iter().collect::<Vec<_>>();
+        let inputs_utxos = inputs_utxos.iter().map(Some).collect::<Vec<_>>();
 
         let hashable_inputs_result = SignatureHashableInputs::new(&inputs, &inputs_utxos);
 
