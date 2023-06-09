@@ -44,7 +44,7 @@ use self::{
     entry::{TxDependency, TxEntry, TxEntryWithFee},
     fee::Fee,
     feerate::{FeeRate, INCREMENTAL_RELAY_FEE_RATE, INCREMENTAL_RELAY_THRESHOLD},
-    orphans::TxOrphanPool,
+    orphans::{OrphanType, TxOrphanPool},
     rolling_fee_rate::RollingFeeRate,
     spends_unconfirmed::SpendsUnconfirmed,
     store::{Conflicts, MempoolRemovalReason, MempoolStore, TxMempoolEntry},
@@ -295,7 +295,10 @@ enum VerificationOutcome {
 
     /// Transaction is valid of acceptance to orphan pool.
     /// It may or may not end up being valid, depending on the validity of the missing inputs.
-    Orphan { transaction: TxEntry },
+    Orphan {
+        transaction: TxEntry,
+        orphan_type: OrphanType,
+    },
 }
 
 // Transaction Validation
@@ -347,8 +350,11 @@ impl<M: GetMemoryUsage> Mempool<M> {
                     delta,
                 }
             }
-            VerificationOutcome::Orphan { transaction } => {
-                self.check_orphan_pool_policy(&transaction)?;
+            VerificationOutcome::Orphan {
+                transaction,
+                orphan_type,
+            } => {
+                self.check_orphan_pool_policy(&transaction, orphan_type)?;
                 ValidationOutcome::Orphan { transaction }
             }
         };
@@ -390,15 +396,18 @@ impl<M: GetMemoryUsage> Mempool<M> {
                 Ok(fee) => {
                     let transaction = TxEntryWithFee::new(transaction, fee.into());
                     let delta = tx_verifier.consume()?;
-                    Ok(VerificationOutcome::Valid { transaction, delta })
+                    VerificationOutcome::Valid { transaction, delta }
                 }
-                Err(err) if orphans::is_orphan_error(&err) => {
-                    Ok(VerificationOutcome::Orphan { transaction })
+                Err(err) => {
+                    let orphan_type = OrphanType::from_error(&err).ok_or(err)?;
+                    VerificationOutcome::Orphan {
+                        transaction,
+                        orphan_type,
+                    }
                 }
-                Err(err) => Err(err.into()),
             };
 
-            return result;
+            return Ok(result);
         }
 
         Err(TxValidationError::TipMoved)
@@ -452,13 +461,26 @@ impl<M: GetMemoryUsage> Mempool<M> {
         }
     }
 
-    fn check_orphan_pool_policy(&self, transaction: &TxEntry) -> Result<(), OrphanPoolError> {
+    fn check_orphan_pool_policy(
+        &self,
+        transaction: &TxEntry,
+        orphan_type: OrphanType,
+    ) -> Result<(), OrphanPoolError> {
         // Avoid too large transactions in orphan pool. The orphan pool is limited by the number of
         // transactions but we don't want it to take up too much space due to large txns either.
         ensure!(
             transaction.size() <= config::MAX_ORPHAN_TX_SIZE,
             OrphanPoolError::TooLarge(transaction.size(), config::MAX_ORPHAN_TX_SIZE),
         );
+
+        // Account nonces are supposed to be consecutive. If the distance between the expected and
+        // given nonce is too large, the transaction is not accepted into the orphan pool.
+        if let OrphanType::AccountNonceGap(gap) = orphan_type {
+            ensure!(
+                gap <= config::MAX_ORPHAN_ACCOUNT_GAP,
+                OrphanPoolError::NonceGapTooLarge(gap),
+            );
+        }
 
         Ok(())
     }

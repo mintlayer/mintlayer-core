@@ -385,9 +385,11 @@ fn delegate_staking(#[case] seed: Seed) {
             assert_eq!(
                 tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::NonceIsNotIncremental(AccountType::Delegation(
-                        delegation_id
-                    ))
+                    ConnectTransactionError::NonceIsNotIncremental(
+                        AccountType::Delegation(delegation_id),
+                        AccountNonce::new(1),
+                        AccountNonce::new(0),
+                    )
                 ))
             )
         }
@@ -412,9 +414,11 @@ fn delegate_staking(#[case] seed: Seed) {
             assert_eq!(
                 tf.make_block_builder().add_transaction(tx).build_and_process().unwrap_err(),
                 ChainstateError::ProcessBlockError(BlockError::StateUpdateFailed(
-                    ConnectTransactionError::NonceIsNotIncremental(AccountType::Delegation(
-                        delegation_id
-                    ))
+                    ConnectTransactionError::NonceIsNotIncremental(
+                        AccountType::Delegation(delegation_id),
+                        AccountNonce::new(1),
+                        AccountNonce::new(2),
+                    )
                 ))
             )
         }

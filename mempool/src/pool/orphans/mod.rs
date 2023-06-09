@@ -22,7 +22,7 @@ use utils::{const_value::ConstValue, ensure};
 
 use super::{OrphanPoolError, Time, TxDependency, TxEntry};
 use crate::config;
-pub use detect::is_orphan_error;
+pub use detect::OrphanType;
 
 mod detect;
 

@@ -105,6 +105,8 @@ pub enum OrphanPoolError {
     TooLarge(usize, usize),
     #[error("Orphan pool full")]
     Full,
+    #[error("Account nonces too distant, gap: {0}")]
+    NonceGapTooLarge(u64),
 }
 
 impl From<ConnectTransactionError> for Error {

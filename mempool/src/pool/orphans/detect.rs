@@ -15,71 +15,82 @@
 
 use chainstate::ConnectTransactionError;
 
-/// Check an error signifies a potential orphan transaction
-pub fn is_orphan_error(err: &ConnectTransactionError) -> bool {
-    use ConnectTransactionError as CTE;
-    match err {
-        // This signifies a possible orphan
-        CTE::MissingOutputOrSpent => true,
-        // TODO(PR): Only allow certain max gap in the nonce
-        CTE::NonceIsNotIncremental(_) => true,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
+pub enum OrphanType {
+    MissingUtxo,
+    AccountNonceGap(u64),
+}
 
-        // These do not
-        CTE::StorageError(_)
-        | CTE::TxNumWrongInBlockOnConnect(_, _)
-        | CTE::TxNumWrongInBlockOnDisconnect(_, _)
-        | CTE::InvariantBrokenAlreadyUnspent
-        | CTE::MissingTxInputs
-        | CTE::MissingTxUndo(_)
-        | CTE::MissingBlockUndo(_)
-        | CTE::MissingBlockRewardUndo(_)
-        | CTE::MissingMempoolTxsUndo
-        | CTE::TxUndoWithDependency(_)
-        | CTE::AttemptToPrintMoney(_, _)
-        | CTE::BlockRewardInputOutputMismatch(_, _)
-        | CTE::TxFeeTotalCalcFailed(_, _)
-        | CTE::SignatureVerificationFailed(_)
-        | CTE::BlockHeightArithmeticError
-        | CTE::BlockTimestampArithmeticError
-        | CTE::InvariantErrorHeaderCouldNotBeLoaded(_)
-        | CTE::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
-        | CTE::BlockIndexCouldNotBeLoaded(_)
-        | CTE::FailedToAddAllFeesOfBlock(_)
-        | CTE::RewardAdditionError(_)
-        | CTE::TimeLockViolation(_)
-        | CTE::UtxoError(_)
-        | CTE::TokensError(_)
-        | CTE::TxIndexError(_)
-        | CTE::TransactionVerifierError(_)
-        | CTE::UtxoBlockUndoError(_)
-        | CTE::AccountingBlockUndoError(_)
-        | CTE::BurnAmountSumError(_)
-        | CTE::AttemptToSpendBurnedAmount
-        | CTE::PoSAccountingError(_)
-        | CTE::MissingPoSAccountingUndo(_)
-        | CTE::SpendStakeError(_)
-        | CTE::InvalidInputTypeInTx
-        | CTE::InvalidOutputTypeInTx
-        | CTE::InvalidInputTypeInReward
-        | CTE::InvalidOutputTypeInReward
-        | CTE::PoolOwnerBalanceNotFound(_)
-        | CTE::PoolDataNotFound(_)
-        | CTE::PoolOwnerRewardCalculationFailed(_, _)
-        | CTE::PoolOwnerRewardCannotExceedTotalReward(..)
-        | CTE::DelegationsRewardSumFailed(..)
-        | CTE::DelegationRewardOverflow(..)
-        | CTE::DistributedDelegationsRewardExceedTotal(..)
-        | CTE::TotalDelegationBalanceZero(_)
-        | CTE::UndoFetchFailure
-        | CTE::TxVerifierStorage
-        | CTE::DestinationRetrievalError(_)
-        | CTE::DelegationDataNotFound(_)
-        | CTE::OutputTimelockError(_)
-        | CTE::NotEnoughPledgeToCreateStakePool(..)
-        | CTE::DelegationBalanceNotFound(_)
-        | CTE::MissingTransactionNonce(_)
-        | CTE::AttemptToCreateStakePoolFromAccounts
-        | CTE::AttemptToCreateDelegationFromAccounts
-        | CTE::FailedToIncrementAccountNonce => false,
+impl OrphanType {
+    /// Check an error signifies a potential orphan transaction
+    pub fn from_error(err: &ConnectTransactionError) -> Option<Self> {
+        use ConnectTransactionError as CTE;
+        match err {
+            // Missing UTXO signifies a possible orphan
+            CTE::MissingOutputOrSpent => Some(Self::MissingUtxo),
+
+            // Nonce gap signifies a possible orphan
+            CTE::NonceIsNotIncremental(_acct, expected, got) => {
+                got.value().checked_sub(expected.value()).map(Self::AccountNonceGap)
+            }
+
+            // These do not
+            CTE::StorageError(_)
+            | CTE::TxNumWrongInBlockOnConnect(_, _)
+            | CTE::TxNumWrongInBlockOnDisconnect(_, _)
+            | CTE::InvariantBrokenAlreadyUnspent
+            | CTE::MissingTxInputs
+            | CTE::MissingTxUndo(_)
+            | CTE::MissingBlockUndo(_)
+            | CTE::MissingBlockRewardUndo(_)
+            | CTE::MissingMempoolTxsUndo
+            | CTE::TxUndoWithDependency(_)
+            | CTE::AttemptToPrintMoney(_, _)
+            | CTE::BlockRewardInputOutputMismatch(_, _)
+            | CTE::TxFeeTotalCalcFailed(_, _)
+            | CTE::SignatureVerificationFailed(_)
+            | CTE::BlockHeightArithmeticError
+            | CTE::BlockTimestampArithmeticError
+            | CTE::InvariantErrorHeaderCouldNotBeLoaded(_)
+            | CTE::InvariantErrorHeaderCouldNotBeLoadedFromHeight(_, _)
+            | CTE::BlockIndexCouldNotBeLoaded(_)
+            | CTE::FailedToAddAllFeesOfBlock(_)
+            | CTE::RewardAdditionError(_)
+            | CTE::TimeLockViolation(_)
+            | CTE::UtxoError(_)
+            | CTE::TokensError(_)
+            | CTE::TxIndexError(_)
+            | CTE::TransactionVerifierError(_)
+            | CTE::UtxoBlockUndoError(_)
+            | CTE::AccountingBlockUndoError(_)
+            | CTE::BurnAmountSumError(_)
+            | CTE::AttemptToSpendBurnedAmount
+            | CTE::PoSAccountingError(_)
+            | CTE::MissingPoSAccountingUndo(_)
+            | CTE::SpendStakeError(_)
+            | CTE::InvalidInputTypeInTx
+            | CTE::InvalidOutputTypeInTx
+            | CTE::InvalidInputTypeInReward
+            | CTE::InvalidOutputTypeInReward
+            | CTE::PoolOwnerBalanceNotFound(_)
+            | CTE::PoolDataNotFound(_)
+            | CTE::PoolOwnerRewardCalculationFailed(_, _)
+            | CTE::PoolOwnerRewardCannotExceedTotalReward(..)
+            | CTE::DelegationsRewardSumFailed(..)
+            | CTE::DelegationRewardOverflow(..)
+            | CTE::DistributedDelegationsRewardExceedTotal(..)
+            | CTE::TotalDelegationBalanceZero(_)
+            | CTE::UndoFetchFailure
+            | CTE::TxVerifierStorage
+            | CTE::DestinationRetrievalError(_)
+            | CTE::DelegationDataNotFound(_)
+            | CTE::OutputTimelockError(_)
+            | CTE::NotEnoughPledgeToCreateStakePool(..)
+            | CTE::DelegationBalanceNotFound(_)
+            | CTE::MissingTransactionNonce(_)
+            | CTE::AttemptToCreateStakePoolFromAccounts
+            | CTE::AttemptToCreateDelegationFromAccounts
+            | CTE::FailedToIncrementAccountNonce => None,
+        }
     }
 }

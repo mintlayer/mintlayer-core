@@ -42,3 +42,5 @@ pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
 pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Time = Duration::from_secs(5 * 10);
 
 pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
+
+pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;
