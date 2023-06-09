@@ -84,11 +84,9 @@ pub async fn run(
         (None, None, None) => {
             let cookie_file_path =
                 default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-            load_cookie(cookie_file_path.clone())
-                .map_err(|e| WalletCliError::CookieFileReadError(cookie_file_path, e))?
+            load_cookie(cookie_file_path)?
         }
-        (Some(cookie_file_path), None, None) => load_cookie(&cookie_file_path)
-            .map_err(|e| WalletCliError::CookieFileReadError(cookie_file_path.into(), e))?,
+        (Some(cookie_file_path), None, None) => load_cookie(cookie_file_path)?,
         (None, Some(username), Some(password)) => (username, password),
         _ => {
             return Err(WalletCliError::InvalidConfig(

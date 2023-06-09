@@ -13,16 +13,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::Path;
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 pub const COOKIE_FILENAME: &str = ".cookie";
 
-// TODO: Replace String with custom error
-pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), String> {
-    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| e.to_string())?;
-    let (username, password) = content.split_once(':').ok_or(format!(
-        "Invalid cookie file {:?}: ':' not found",
-        path.as_ref()
-    ))?;
+#[derive(thiserror::Error, Debug)]
+pub enum LoadCookieError {
+    #[error("Failed to read cookie file {path:?}: {source}")]
+    Io { source: io::Error, path: PathBuf },
+    #[error("Invalid cookie file {path:?}: ':' not found")]
+    Format { path: PathBuf },
+}
+
+pub fn load_cookie(path: impl AsRef<Path>) -> Result<(String, String), LoadCookieError> {
+    let content = std::fs::read_to_string(path.as_ref()).map_err(|e| LoadCookieError::Io {
+        source: e,
+        path: path.as_ref().to_owned(),
+    })?;
+    let (username, password) = content.split_once(':').ok_or_else(|| LoadCookieError::Format {
+        path: path.as_ref().to_owned(),
+    })?;
     Ok((username.to_owned(), password.to_owned()))
 }

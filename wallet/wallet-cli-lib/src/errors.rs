@@ -15,6 +15,8 @@
 
 use std::path::PathBuf;
 
+use utils::cookie::LoadCookieError;
+
 #[derive(thiserror::Error, Debug)]
 pub enum WalletCliError {
     #[error("Controller error: {0}")]
@@ -24,9 +26,9 @@ pub enum WalletCliError {
     #[error("File {0} I/O error: {1}")]
     FileError(PathBuf, std::io::Error),
     #[error(
-        "RPC authentication cookie-file read error: {0}: {1}. Please make sure the node is started."
+        "RPC authentication cookie-file read error: {0}. Please make sure the node is started."
     )]
-    CookieFileReadError(PathBuf, String),
+    CookieFileReadError(#[from] LoadCookieError),
     #[error("Invalid config: {0}")]
     InvalidConfig(String),
     #[error("Invalid quoting")]
