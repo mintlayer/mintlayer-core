@@ -16,14 +16,13 @@
 use std::{cell::RefCell, collections::VecDeque};
 
 use chainstate::{
-    calculate_median_time_past,
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
     BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
     TransactionVerifierStorageError,
 };
-use chainstate_types::{BlockIndex, BlockIndexHandle};
+use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig, TxMainChainIndex},
     primitives::{id::WithId, Amount, Idable},
@@ -69,29 +68,24 @@ impl RandomizedTransactionVerificationStrategy {
 }
 
 impl TransactionVerificationStrategy for RandomizedTransactionVerificationStrategy {
-    fn connect_block<C, H, S, M, U, A>(
+    fn connect_block<C, S, M, U, A>(
         &self,
         tx_verifier_maker: M,
-        block_index_handle: &H,
         storage_backend: S,
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block_index: &BlockIndex,
         block: &WithId<Block>,
+        median_time_past: BlockTimestamp,
     ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
     where
         C: AsRef<ChainConfig>,
-        H: BlockIndexHandle,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
         A: PoSAccountingView,
         M: TransactionVerifierMakerFn<C, S, U, A>,
         <S as utxo::UtxosStorageRead>::Error: From<U::Error>,
     {
-        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
-        let median_time_past =
-            calculate_median_time_past(block_index_handle, &block.prev_block_id());
-
         let mut tx_verifier = self
             .connect_with_base(
                 tx_verifier_maker,

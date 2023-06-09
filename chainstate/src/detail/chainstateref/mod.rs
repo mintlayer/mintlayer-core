@@ -874,6 +874,9 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         block_index: &BlockIndex,
         block: &WithId<Block>,
     ) -> Result<(), BlockError> {
+        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
+        let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
+
         let verifier_config = TransactionVerifierConfig {
             tx_index_enabled: *self.chainstate_config.tx_index_enabled,
         };
@@ -881,12 +884,12 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             .tx_verification_strategy
             .connect_block(
                 TransactionVerifier::new,
-                self,
                 &*self,
                 self.chain_config,
                 verifier_config,
                 block_index,
                 block,
+                median_time_past,
             )
             .log_err()?;
 
