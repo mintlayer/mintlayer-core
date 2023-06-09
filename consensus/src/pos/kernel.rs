@@ -32,7 +32,7 @@ pub fn get_kernel_output<U: UtxosView>(
                 .map_err(|_| ConsensusPoSError::FailedToFetchUtxo)?
                 .ok_or(ConsensusPoSError::NoKernel)?;
 
-            Ok(kernel_output.output().clone())
+            Ok(kernel_output.take_output())
         }
         // in general this should not be an issue, but we have to first study this security model with one kernel
         _ => Err(ConsensusPoSError::MultipleKernels),

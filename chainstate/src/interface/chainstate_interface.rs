@@ -123,7 +123,7 @@ pub trait ChainstateInterface: Send {
         second_block_index: &GenBlockIndex,
     ) -> Result<GenBlockIndex, ChainstateError>;
     /// Returns last common block id and height of two chains.
-    /// Returns None if no block indexes are found and therefore the last common ancestor is unknown.
+    /// Returns `None` if no block indexes are found and therefore the last common ancestor is unknown.
     fn last_common_ancestor_by_id(
         &self,
         first_block: &Id<GenBlock>,
@@ -135,10 +135,10 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Option<BlockReward>, ChainstateError>;
 
     /// Returns epoch data for the given epoch index.
-    /// Returns None if no epoch data was found.
+    /// Returns `None` if no epoch data was found.
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, ChainstateError>;
 
-    /// Returns token info by token_id
+    /// Returns token info by `token_id`.
     fn get_token_info_for_rpc(
         &self,
         token_id: TokenId,
@@ -159,27 +159,29 @@ pub trait ChainstateInterface: Send {
         inputs: &[TxInput],
     ) -> Result<Vec<Option<Amount>>, ChainstateError>;
 
-    /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1)
+    /// Returns a list of all block ids in mainchain in order (starting from block of height 1, hence the result length is best_height - 1).
     fn get_mainchain_blocks_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call
+    /// Returns a list of all blocks in the block tree, including orphans. The length cannot be predicted before the call.
     fn get_block_id_tree_as_list(&self) -> Result<Vec<Id<Block>>, ChainstateError>;
 
-    /// Imports a bootstrap file exported with export_bootstrap_stream
+    /// Imports a bootstrap file exported with `export_bootstrap_stream`.
     fn import_bootstrap_stream<'a>(
         &mut self,
         reader: std::io::BufReader<Box<dyn std::io::Read + Send + 'a>>,
     ) -> Result<(), ChainstateError>;
 
     /// Writes the blocks of the blockchain into a stream that's meant to go to a file.
-    /// The blocks in the stream can be used to resync the blockchain in another node
+    /// The blocks in the stream can be used to resync the blockchain in another node.
+    /// NOTE: `include_orphans` here means "include all blocks that are not on mainchain", rather than just
+    /// "blocks without a parent".
     fn export_bootstrap_stream<'a>(
         &self,
         writer: std::io::BufWriter<Box<dyn std::io::Write + Send + 'a>>,
         include_orphans: bool,
     ) -> Result<(), ChainstateError>;
 
-    /// Returns the UTXO for a specified OutPoint
+    /// Returns the UTXO for a specified OutPoint.
     fn utxo(&self, outpoint: &UtxoOutPoint) -> Result<Option<Utxo>, ChainstateError>;
 
     /// Returns true if the initial block download isn't finished yet.

@@ -40,14 +40,14 @@ fn genesis_check_ok(num_blocks: u64, rng: &mut (impl Rng + CryptoRng)) {
                 .expect("block processing to succeed")
                 .expect("block index to be returned");
         }
-        // Check there are three blocks in the storage now
+        // Check there are the expected number of blocks in the storage now
         assert_eq!(
             tf.chainstate.get_best_block_height().unwrap(),
             num_blocks.into()
         );
 
         // Extract the final storage and drop the test framework
-        tf.storage.clone()
+        tf.storage
     };
 
     // Check that tx_index_enabled state is same as used in the storage.

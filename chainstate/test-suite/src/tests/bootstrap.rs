@@ -28,7 +28,7 @@ use test_utils::random::make_seedable_rng;
 use test_utils::random::Seed;
 
 /// Ensure that the blocks vector put blocks in order with height in the blockchain
-fn check_height_order<C: ChainstateInterface>(blocks: &Vec<Id<Block>>, chainstate: &C) {
+fn check_height_order<C: ChainstateInterface>(blocks: &[Id<Block>], chainstate: &C) {
     let mut last_height = 0;
     for block_id in blocks {
         let height = chainstate
@@ -53,8 +53,6 @@ fn bootstrap_tests(#[case] seed: Seed) {
         let chain1 = {
             tf1.create_chain(&genesis_id.into(), 5, &mut rng).unwrap();
 
-            let _last_block_id = tf1.chainstate.get_block_id_tree_as_list().unwrap();
-
             let tree_vec = tf1.chainstate.get_block_id_tree_as_list().unwrap();
             let mainchain_vec = tf1.chainstate.get_mainchain_blocks_list().unwrap();
 
@@ -71,12 +69,10 @@ fn bootstrap_tests(#[case] seed: Seed) {
         let chain2 = {
             tf1.create_chain(&genesis_id.into(), 15, &mut rng).unwrap();
 
-            let _last_block_id = tf1.chainstate.get_block_id_tree_as_list().unwrap();
-
             let tree_vec = tf1.chainstate.get_block_id_tree_as_list().unwrap();
             let mainchain_vec = tf1.chainstate.get_mainchain_blocks_list().unwrap();
 
-            // since now we have orphans, we have to ensure that all blocks exist
+            // since now we have more than one chain, we have to ensure that all blocks exist
             assert!(mainchain_vec.iter().all(|item| tree_vec.contains(item)));
             assert!(chain1.iter().all(|item| tree_vec.contains(item)));
             assert_eq!(mainchain_vec.len(), 15);
@@ -91,12 +87,10 @@ fn bootstrap_tests(#[case] seed: Seed) {
         let chain3 = {
             tf1.create_chain(&genesis_id.into(), 25, &mut rng).unwrap();
 
-            let _last_block_id = tf1.chainstate.get_block_id_tree_as_list().unwrap();
-
             let tree_vec = tf1.chainstate.get_block_id_tree_as_list().unwrap();
             let mainchain_vec = tf1.chainstate.get_mainchain_blocks_list().unwrap();
 
-            // since now we have orphans, we have to ensure that all blocks exist
+            // since now we have more than one chain, we have to ensure that all blocks exist
             assert!(mainchain_vec.iter().all(|item| tree_vec.contains(item)));
             assert!(chain1.iter().all(|item| tree_vec.contains(item)));
             assert!(chain2.iter().all(|item| tree_vec.contains(item)));
@@ -119,12 +113,10 @@ fn bootstrap_tests(#[case] seed: Seed) {
             )
             .unwrap();
 
-            let _last_block_id = tf1.chainstate.get_block_id_tree_as_list().unwrap();
-
             let tree_vec = tf1.chainstate.get_block_id_tree_as_list().unwrap();
             let mainchain_vec = tf1.chainstate.get_mainchain_blocks_list().unwrap();
 
-            // since now we have orphans, we have to ensure that all blocks exist
+            // since now we have more than one chain, we have to ensure that all blocks exist
             assert!(mainchain_vec.iter().all(|item| tree_vec.contains(item)));
             assert!(chain1.iter().all(|item| tree_vec.contains(item)));
             assert!(chain2.iter().all(|item| tree_vec.contains(item)));
@@ -179,6 +171,7 @@ fn bootstrap_tests(#[case] seed: Seed) {
         };
 
         // bootstrap export
+        // Note: here "orphans" means "blocks not on mainchain"
         let make_bootstrap_as_vec = |with_orphans: bool| {
             let mut write_buffer = Vec::new();
 

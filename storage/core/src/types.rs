@@ -126,9 +126,9 @@ impl DbMapDesc {
     }
 
     /// New DB map description with all details
-    pub fn new_with_details(name: String, value_size_hint: Range<usize>) -> Self {
+    pub fn new_with_details(name: impl Into<String>, value_size_hint: Range<usize>) -> Self {
         Self {
-            name,
+            name: name.into(),
             value_size_hint,
         }
     }

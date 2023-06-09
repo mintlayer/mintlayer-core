@@ -44,7 +44,7 @@ use utxo::UtxosView;
 
 ///
 /// This strategy operates on transactions with 2 verifiers.
-/// It can represented as a finite state machine that for every transaction randomly changes state as follows:
+/// It can be represented as a finite state machine that for every transaction randomly changes state as follows:
 ///
 /// ```text
 ///                  _______flush______
