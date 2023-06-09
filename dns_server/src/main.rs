@@ -135,6 +135,8 @@ async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServe
 
 #[tokio::main]
 async fn main() {
+    logging::init_logging::<std::path::PathBuf>(None);
+
     let config = Arc::new(DnsServerConfig::parse());
 
     let result = run(config).await;
