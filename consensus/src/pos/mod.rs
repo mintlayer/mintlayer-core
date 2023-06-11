@@ -38,10 +38,8 @@ use common::{
 };
 use crypto::vrf::VRFPublicKey;
 use pos_accounting::PoSAccountingView;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::Arc;
+use utils::atomics::{RelAtomicBool, SynAtomicU64};
 use utils::ensure;
 use utxo::UtxosView;
 
@@ -218,15 +216,14 @@ where
 pub fn stake(
     pos_data: &mut Box<PoSData>,
     block_header: &mut BlockHeader,
-    block_timestamp_seconds: Arc<AtomicU64>,
+    block_timestamp_seconds: Arc<SynAtomicU64>,
     finalize_pos_data: PoSFinalizeBlockInputData,
-    stop_flag: Arc<AtomicBool>,
+    stop_flag: Arc<RelAtomicBool>,
 ) -> Result<StakeResult, ConsensusPoSError> {
     let sealed_epoch_randomness = finalize_pos_data.sealed_epoch_randomness();
     let vrf_pk = finalize_pos_data.vrf_public_key();
 
-    let mut block_timestamp =
-        BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
+    let mut block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
     ensure!(
         block_timestamp <= finalize_pos_data.max_block_timestamp(),
@@ -261,14 +258,14 @@ pub fn stake(
             return Ok(StakeResult::Success);
         }
 
-        if stop_flag.load(Ordering::Relaxed) {
+        if stop_flag.load() {
             return Ok(StakeResult::Stopped);
         }
 
         block_timestamp =
             block_timestamp.add_int_seconds(1).ok_or(ConsensusPoSError::TimestampOverflow)?;
 
-        block_timestamp_seconds.store(block_timestamp.as_int_seconds(), Ordering::Relaxed);
+        block_timestamp_seconds.store(block_timestamp.as_int_seconds());
     }
 
     Ok(StakeResult::Failed)

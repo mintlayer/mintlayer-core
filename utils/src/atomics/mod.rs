@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2023 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,24 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod atomics;
-pub mod blockuntilzero;
-pub mod bloom_filters;
-pub mod config_setting;
-pub mod const_value;
-pub mod cookie;
-pub mod counttracker;
-pub mod default_data_dir;
-pub mod ensure;
-pub mod eventhandler;
-pub mod exp_rand;
-pub mod maybe_encrypted;
-pub mod newtype;
-pub mod once_destructor;
-pub mod qrcode;
-pub mod set_flag;
-pub mod shallow_clone;
-pub mod tap_error_log;
+pub mod atomic_traits;
+pub mod simple_atomic;
 
-mod concurrency_impl;
-pub use concurrency_impl::*;
+pub use self::atomic_traits::{Atomic as AtomicTrait, AtomicNum as AtomicNumTrait};
+pub use simple_atomic::*;

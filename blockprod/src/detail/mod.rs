@@ -15,10 +15,7 @@
 
 pub mod job_manager;
 
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    mpsc, Arc,
-};
+use std::sync::{mpsc, Arc};
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle, PropertyQueryError};
 use chainstate_types::{
@@ -45,6 +42,7 @@ use mempool::{
     MempoolHandle,
 };
 use tokio::sync::oneshot;
+use utils::atomics::{RelAtomicBool, SynAtomicU64};
 use utils::once_destructor::OnceDestructor;
 
 use crate::{
@@ -245,7 +243,7 @@ impl BlockProduction {
         transactions_source: TransactionsSource,
         custom_id: Option<Vec<u8>>,
     ) -> Result<(Block, oneshot::Receiver<usize>), BlockProductionError> {
-        let stop_flag = Arc::new(AtomicBool::new(false));
+        let stop_flag = Arc::new(RelAtomicBool::new(false));
         let tip_at_start = self.pull_best_block_index().await?;
 
         let (job_key, mut cancel_receiver) =
@@ -274,7 +272,7 @@ impl BlockProduction {
                 .add_int_seconds(1)
                 .ok_or(ConsensusCreationError::TimestampOverflow(tip_timestamp, 1))?;
 
-            Arc::new(AtomicU64::new(tip_plus_one.as_int_seconds()))
+            Arc::new(SynAtomicU64::new(tip_plus_one.as_int_seconds()))
         };
 
         let max_block_timestamp = {
@@ -292,12 +290,11 @@ impl BlockProduction {
         loop {
             {
                 // If the last timestamp we tried on a block is larger than the max range allowed, no point in continuing
-                let last_used_block_timestamp = BlockTimestamp::from_int_seconds(
-                    last_timestamp_seconds_used.load(Ordering::SeqCst),
-                );
+                let last_used_block_timestamp =
+                    BlockTimestamp::from_int_seconds(last_timestamp_seconds_used.load());
 
                 if last_used_block_timestamp >= max_block_timestamp {
-                    stop_flag.store(true, Ordering::Relaxed);
+                    stop_flag.store(true);
                     return Err(BlockProductionError::TryAgainLater);
                 }
             }
@@ -350,7 +347,7 @@ impl BlockProduction {
 
             tokio::select! {
                 _ = cancel_receiver.recv() => {
-                    stop_flag.store(true, Ordering::Relaxed);
+                    stop_flag.store(true);
 
                     // This can fail if the mining thread has already finished
                     let _ended = ended_receiver.recv();
@@ -375,13 +372,25 @@ impl BlockProduction {
         }
     }
 
+    // TODO: here, `block_timestamp_seconds` is a scary thing because, by being Syn, it might
+    // imply that we perform thread synchronization through it. Which would be a bad thing
+    // to do, because thread synchronization via atomics is too low-level and non-trivial
+    // to implement correctly. Normally, it should be properly encapsulated, but here we
+    // share the variable across packages, passing it to `consensus::finalize_consensus_data`.
+    // So it's better to get rid of it ASAP.
+    // (Note that we don't really do any thread synchronization through it currently; we made
+    // it "Syn" just in case, for extra peace of mind.)
+    // One way of removing it would be to pass the initial value via a non-atomic parameter and
+    // return the updated value back; in `finalize_consensus_data` and its callees it can
+    // be done simply via the functions' return values. And here in `spawn_block_solver` we
+    // already have a one-shot `result_sender`, which may be used for that purpose.
     #[allow(clippy::too_many_arguments)]
     fn spawn_block_solver(
         &self,
         current_tip_index: &GenBlockIndex,
-        stop_flag: Arc<AtomicBool>,
+        stop_flag: Arc<RelAtomicBool>,
         block_body: &BlockBody,
-        block_timestamp_seconds: Arc<AtomicU64>,
+        block_timestamp_seconds: Arc<SynAtomicU64>,
         finalize_block_data: FinalizeBlockInputData,
         consensus_data: ConsensusData,
         ended_sender: mpsc::Sender<()>,
@@ -395,8 +404,7 @@ impl BlockProduction {
             let merkle_proxy =
                 block_body.merkle_tree_proxy().map_err(BlockCreationError::MerkleTreeError)?;
 
-            let block_timestamp =
-                BlockTimestamp::from_int_seconds(block_timestamp_seconds.load(Ordering::SeqCst));
+            let block_timestamp = BlockTimestamp::from_int_seconds(block_timestamp_seconds.load());
 
             let mut block_header = BlockHeader::new(
                 current_tip_index.block_id(),

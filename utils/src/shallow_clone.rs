@@ -82,7 +82,7 @@ mod impl_checks {
     assert_impl_all!(&u32: ShallowClone);
     assert_impl_all!(&[u32]: ShallowClone);
     assert_impl_all!(&[u32; 10]: ShallowClone);
-    assert_impl_all!(std::sync::Arc<Vec<u32>>: ShallowClone);
+    assert_impl_all!(Arc<Vec<u32>>: ShallowClone);
 
     assert_not_impl_any!(Vec<u32>: ShallowClone);
     assert_not_impl_any!([u32; 10]: ShallowClone);
