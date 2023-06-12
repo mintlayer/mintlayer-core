@@ -31,7 +31,7 @@ pub use test_utils::{
 use super::*;
 
 impl TxStatus {
-    /// Fetch status of given instruction from mempool, doing some integriry checks
+    /// Fetch status of given instruction from mempool, doing some integrity checks
     pub fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
         let in_mempool = mempool.contains_transaction(tx_id);
         let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
