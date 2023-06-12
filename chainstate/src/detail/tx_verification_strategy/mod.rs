@@ -18,18 +18,19 @@ pub use default_strategy::DefaultTransactionVerificationStrategy;
 
 pub mod tx_verification_strategy_utils;
 
-use crate::BlockError;
-
 use chainstate_types::BlockIndex;
 use common::{
     chain::{block::timestamp::BlockTimestamp, Block, ChainConfig},
     primitives::id::WithId,
 };
 use pos_accounting::PoSAccountingView;
-use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig,
-    storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
-    TransactionVerifier,
+use tx_verifier::{
+    error::ConnectTransactionError,
+    transaction_verifier::{
+        config::TransactionVerifierConfig,
+        storage::{TransactionVerifierStorageError, TransactionVerifierStorageRef},
+        TransactionVerifier,
+    },
 };
 use utxo::UtxosView;
 
@@ -62,7 +63,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
         U: UtxosView,
@@ -84,7 +85,7 @@ pub trait TransactionVerificationStrategy: Sized + Send {
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,

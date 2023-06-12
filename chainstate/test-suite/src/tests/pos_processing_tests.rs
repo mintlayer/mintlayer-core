@@ -908,7 +908,7 @@ fn pos_invalid_pool_id(#[case] seed: Seed) {
 // Create a chain genesis <- block_1, where block_1 has valid StakePool output.
 // PoS consensus activates on height 2 and an epoch is sealed at height 2.
 // Try to crete block_2 with PoS data that has refer to staked pool.
-#[ignore = "Disabled because of switch from SealedStorageTag to TipStorageTag"]
+#[ignore] // FIXME: reconsider this test
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -953,7 +953,7 @@ fn not_sealed_pool_cannot_be_used(#[case] seed: Seed) {
         PoSRandomness::new(initial_randomness),
         pool_id,
         Amount::from_atoms(1),
-        1,
+        0,
         current_difficulty,
     )
     .expect("should be able to mine");

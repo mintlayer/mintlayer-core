@@ -249,6 +249,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
             CheckBlockError::GetAncestorError(_) => 100,
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
+            CheckBlockError::StateUpdateFailed(_) => todo!(),
+            CheckBlockError::TransactionVerifierError(_) => todo!(),
         }
     }
 }

@@ -40,7 +40,9 @@ use common::{
 };
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingView};
-use tx_verifier::transaction_verifier::{config::TransactionVerifierConfig, TransactionVerifier};
+use tx_verifier::transaction_verifier::{
+    config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
+};
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosDB, UtxosView};
 
@@ -706,7 +708,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
+    fn get_block_from_index(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<Block>, chainstate_storage::Error> {
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
@@ -797,6 +802,112 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .flat_map(|(_height, ids_per_height)| ids_per_height)
             .collect();
         Ok(result)
+    }
+    pub fn reorganize_in_memory(
+        &self,
+        header: &SignedBlockHeader,
+        best_block_id: Id<GenBlock>,
+    ) -> Result<TransactionVerifierDelta, CheckBlockError> {
+        let prev_block_id = header.prev_block_id();
+        let prev_block_index = match self
+            .get_gen_block_index(prev_block_id)
+            .log_err()?
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?
+        {
+            GenBlockIndex::Block(block_index) => block_index,
+            GenBlockIndex::Genesis(_) => unreachable!(),
+        };
+        let new_chain = self.get_new_chain(&prev_block_index).log_err()?;
+
+        let common_ancestor_id = {
+            let err = "This vector cannot be empty since there is at least one block to connect";
+            let first_block = new_chain.first().expect(err);
+            first_block.prev_block_id()
+        };
+
+        let mut tx_verifier = TransactionVerifier::new(
+            self,
+            self.chain_config,
+            TransactionVerifierConfig::new(false),
+        );
+
+        // Disconnect the current chain if it is not a genesis
+        if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
+            let mainchain_tip = self
+                .get_block_index(&best_block_id)
+                //.map_err(CheckBlockError::BestBlockLoadError)
+                .log_err()?
+                .expect("Can't get block index. Inconsistent DB");
+
+            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip.clone());
+            while to_disconnect.block_id() != *common_ancestor_id {
+                let to_disconnect_block = match to_disconnect {
+                    GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
+                    GenBlockIndex::Block(block_index) => block_index,
+                };
+
+                let block_index = self
+                    .get_block_index(&best_block_id)
+                    .expect("Database error on retrieving current best block index")
+                    .expect("Best block index not present in the database");
+                let block =
+                    self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
+
+                // Disconnect transactions
+                let cached_inputs = self
+                    .tx_verification_strategy
+                    .disconnect_block(
+                        TransactionVerifier::new,
+                        &tx_verifier,
+                        self.chain_config,
+                        TransactionVerifierConfig::new(false),
+                        &block.into(),
+                    )?
+                    .consume()?;
+
+                flush_to_storage(&mut tx_verifier, cached_inputs)?;
+
+                to_disconnect = self
+                    .get_previous_block_index(&to_disconnect_block)
+                    .expect("Previous block index retrieval failed");
+            }
+        }
+
+        // Connect the new chain
+        for new_tip_block_index in new_chain {
+            let new_tip: WithId<Block> = self
+                .get_block_from_index(&new_tip_block_index)
+                .log_err()?
+                .unwrap()
+                //.ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
+                //    *block_index.block_id(),
+                //))?
+                .into();
+
+            self.check_block(&new_tip, true)?;
+
+            // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
+            let median_time_past = calculate_median_time_past(self, &new_tip.prev_block_id());
+
+            let connected_txs = self
+                .tx_verification_strategy
+                .connect_block(
+                    TransactionVerifier::new,
+                    &tx_verifier,
+                    self.chain_config,
+                    TransactionVerifierConfig::new(false),
+                    &new_tip_block_index,
+                    &new_tip,
+                    median_time_past,
+                )
+                .log_err()?
+                .consume()?;
+
+            flush_to_storage(&mut tx_verifier, connected_txs)?;
+        }
+
+        let consumed_verifier = tx_verifier.consume()?;
+        Ok(consumed_verifier)
     }
 }
 

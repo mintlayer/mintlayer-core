@@ -18,7 +18,7 @@ use crate::{
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
-    BlockError, TransactionVerifierMakerFn,
+    TransactionVerifierMakerFn,
 };
 use chainstate_types::BlockIndex;
 use common::{
@@ -61,7 +61,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,
@@ -123,7 +123,7 @@ impl TransactionVerificationStrategy for DefaultTransactionVerificationStrategy 
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef,

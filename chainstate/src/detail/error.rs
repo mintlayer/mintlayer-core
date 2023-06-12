@@ -90,6 +90,8 @@ pub enum CheckBlockError {
     PropertyQueryError(#[from] PropertyQueryError),
     #[error("Block merkle root calculation failed for block {0} with error: {1}")]
     MerkleRootCalculationFailed(Id<Block>, BlockMerkleTreeError),
+    #[error("Failed to update the internal blockchain state: {0}")]
+    StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
@@ -122,6 +124,8 @@ pub enum CheckBlockError {
     GetAncestorError(#[from] GetAncestorError),
     #[error("Attempted to add a block before reorg limit (attempted at height: {0} while current height is: {1} and min allowed is: {2})")]
     AttemptedToAddBlockBeforeReorgLimit(BlockHeight, BlockHeight, BlockHeight),
+    #[error("TransactionVerifier error: {0}")]
+    TransactionVerifierError(#[from] TransactionVerifierStorageError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -17,8 +17,7 @@ use chainstate::{
     tx_verification_strategy_utils::{
         construct_reward_tx_indices, construct_tx_indices, take_front_tx_index,
     },
-    BlockError, TransactionVerificationStrategy, TransactionVerifierMakerFn,
-    TransactionVerifierStorageError,
+    TransactionVerificationStrategy, TransactionVerifierMakerFn, TransactionVerifierStorageError,
 };
 use chainstate_types::BlockIndex;
 use common::{
@@ -64,7 +63,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         block_index: &BlockIndex,
         block: &WithId<Block>,
         median_time_past: BlockTimestamp,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -96,17 +95,12 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
                         &median_time_past,
                         take_front_tx_index(&mut tx_indices),
                     )
-                    .map_err(BlockError::StateUpdateFailed)
                     .log_err()?;
                 let consumed_cache = tx_verifier.consume()?;
-                flush_to_storage(&mut base_tx_verifier, consumed_cache)
-                    .map_err(BlockError::TransactionVerifierError)
-                    .log_err()?;
+                flush_to_storage(&mut base_tx_verifier, consumed_cache).log_err()?;
 
                 (total + fee.0).ok_or_else(|| {
-                    BlockError::StateUpdateFailed(
-                        ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()),
-                    )
+                    ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id())
                 })
             })
             .log_err()?;
@@ -136,7 +130,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
         chain_config: C,
         verifier_config: TransactionVerifierConfig,
         block: &WithId<Block>,
-    ) -> Result<TransactionVerifier<C, S, U, A>, BlockError>
+    ) -> Result<TransactionVerifier<C, S, U, A>, ConnectTransactionError>
     where
         C: AsRef<ChainConfig>,
         S: TransactionVerifierStorageRef<Error = TransactionVerifierStorageError>,
@@ -161,7 +155,7 @@ impl TransactionVerificationStrategy for DisposableTransactionVerificationStrate
 
                 let consumed_cache = tx_verifier.consume()?;
                 flush_to_storage(&mut base_tx_verifier, consumed_cache)
-                    .map_err(BlockError::TransactionVerifierError)
+                    .map_err(ConnectTransactionError::TransactionVerifierError)
             })
             .log_err()?;
 
