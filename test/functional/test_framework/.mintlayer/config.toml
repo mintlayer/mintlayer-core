@@ -1,5 +1,3 @@
-datadir = "."
-
 [chainstate]
 max_db_commit_attempts = 10
 max_orphan_blocks = 512
