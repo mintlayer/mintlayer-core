@@ -270,6 +270,32 @@ mod tests {
         assert!(
             calculate_pool_owner_reward(Amount::MAX, cost_per_block, mpt_more_than_one).is_none()
         );
+
+        // arbitrary values
+        assert_eq!(
+            calculate_pool_owner_reward(
+                Amount::from_atoms(100),
+                Amount::from_atoms(10),
+                PerThousand::new(100).unwrap()
+            ),
+            Some(Amount::from_atoms(19))
+        );
+        assert_eq!(
+            calculate_pool_owner_reward(
+                Amount::from_atoms(1100),
+                Amount::from_atoms(100),
+                PerThousand::new(100).unwrap()
+            ),
+            Some(Amount::from_atoms(200))
+        );
+        assert_eq!(
+            calculate_pool_owner_reward(
+                Amount::from_atoms(10_000),
+                Amount::from_atoms(33),
+                PerThousand::new(111).unwrap()
+            ),
+            Some(Amount::from_atoms(1139))
+        );
     }
 
     // Create 2 pools: pool_a and pool_b.
@@ -431,10 +457,13 @@ mod tests {
         let original_pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let delegation_id_1_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let delegation_id_2_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let total_delegation_shares = (delegation_id_1_amount + delegation_id_2_amount).unwrap();
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
         let mpt = PerThousand::new_from_rng(&mut rng);
+        let total_delegation_reward =
+            (reward - calculate_pool_owner_reward(reward, cost_per_block, mpt).unwrap()).unwrap();
 
         let original_pool_balance = amount_sum!(
             original_pledged_amount,
@@ -511,11 +540,25 @@ mod tests {
         if let (Some(delegation_1_reward), Some(delegation_2_reward)) =
             (delegation_1_reward, delegation_2_reward)
         {
-            // due to integer arithmetics it's hard to check that reward is proportional to the balance,
-            // so check the ordering at least
-            assert_eq!(
-                delegation_1_reward.cmp(delegation_2_reward),
-                delegation_id_1_amount.cmp(&delegation_id_2_amount)
+            // due to integer arithmetics there could be a rounding error in the distribution,
+            // so straightforward proportion check won't work;
+            // check that the proportion is not more than 1 magnitude off instead
+            let total_delegation_reward =
+                total_delegation_reward.into_signed().unwrap().into_atoms();
+            assert!(
+                ((total_delegation_reward / delegation_1_reward.into_atoms())
+                    - (total_delegation_shares.into_atoms() / delegation_id_1_amount.into_atoms())
+                        as i128)
+                    .abs()
+                    <= 1
+            );
+
+            assert!(
+                ((total_delegation_reward / delegation_2_reward.into_atoms())
+                    - (total_delegation_shares.into_atoms() / delegation_id_2_amount.into_atoms())
+                        as i128)
+                    .abs()
+                    <= 1
             );
         }
     }
