@@ -32,7 +32,10 @@ impl MempoolBanScore for Error {
         match self {
             // Validation error, needs further inspection
             Error::Validity(err) => err.mempool_ban_score(),
+            // Mempool policy violation, needs further inspection
             Error::Policy(err) => err.mempool_ban_score(),
+            // Orphan errors may be race / out of sync errors, allowed
+            Error::Orphan(_) => 0,
         }
     }
 }
@@ -122,7 +125,7 @@ impl MempoolBanScore for ConnectTransactionError {
             // it is the transaction or the current tip that's wrong, we don't punish the peer.
             ConnectTransactionError::MissingOutputOrSpent => 0,
             ConnectTransactionError::TimeLockViolation(_) => 0,
-            ConnectTransactionError::NonceIsNotIncremental(_) => 0,
+            ConnectTransactionError::NonceIsNotIncremental(..) => 0,
 
             // These are delegated to the inner error
             ConnectTransactionError::UtxoError(err) => err.mempool_ban_score(),

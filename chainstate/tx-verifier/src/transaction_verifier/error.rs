@@ -19,8 +19,8 @@ use common::{
         block::{Block, GenBlock},
         signature::TransactionSigError,
         tokens::TokenId,
-        AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender, Transaction,
-        TxMainChainIndexError, UtxoOutPoint,
+        AccountNonce, AccountType, DelegationId, OutPointSourceId, PoolId, SpendError, Spender,
+        Transaction, TxMainChainIndexError, UtxoOutPoint,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -145,8 +145,8 @@ pub enum ConnectTransactionError {
     DestinationRetrievalError(#[from] SignatureDestinationGetterError),
     #[error("Output timelock error: {0}")]
     OutputTimelockError(#[from] timelock_check::OutputMaturityError),
-    #[error("Nonce is not incremental: {0:?}")]
-    NonceIsNotIncremental(AccountType),
+    #[error("Nonce is not incremental: {0:?}, expected nonce: {1}, got nonce: {2}")]
+    NonceIsNotIncremental(AccountType, AccountNonce, AccountNonce),
     #[error("Nonce is not found: {0:?}")]
     MissingTransactionNonce(AccountType),
     #[error(

@@ -142,6 +142,10 @@ impl MempoolStore {
         self.txs_by_id.get(id)
     }
 
+    pub fn contains(&self, id: &Id<Transaction>) -> bool {
+        self.txs_by_id.contains_key(id)
+    }
+
     pub fn assert_valid(&self) {
         #[cfg(test)]
         self.assert_valid_inner()
@@ -158,7 +162,7 @@ impl MempoolStore {
         }
         for entry in self.txs_by_id.values() {
             for child in &entry.children {
-                assert!(self.txs_by_id.get(child).expect("child").parents.contains(&entry.tx_id()))
+                assert!(self.txs_by_id.get(child).expect("child").parents.contains(entry.tx_id()))
             }
         }
     }
@@ -169,7 +173,7 @@ impl MempoolStore {
                 .get_mut(parent)
                 .expect("append_to_parents")
                 .get_children_mut()
-                .insert(entry.tx_id());
+                .insert(*entry.tx_id());
         }
     }
 
@@ -179,7 +183,7 @@ impl MempoolStore {
                 .get_mut(parent)
                 .expect("remove_from_parents")
                 .get_children_mut()
-                .remove(&entry.tx_id());
+                .remove(entry.tx_id());
         }
     }
 
@@ -189,7 +193,7 @@ impl MempoolStore {
                 .get_mut(child)
                 .expect("remove_from_children")
                 .get_parents_mut()
-                .remove(&entry.tx_id());
+                .remove(entry.tx_id());
         }
     }
 
@@ -218,14 +222,13 @@ impl MempoolStore {
     }
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
-        let id = entry.tx_id();
         for input in entry.entry.transaction().inputs().iter() {
-            self.spender_txs.insert(input.clone(), id);
+            self.spender_txs.insert(input.clone(), *entry.tx_id());
         }
     }
 
     fn unspend_outpoints(&mut self, entry: &TxMempoolEntry) {
-        self.spender_txs.retain(|_, id| *id != entry.tx_id())
+        self.spender_txs.retain(|_, id| id != entry.tx_id())
     }
 
     pub fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolPolicyError> {
@@ -237,16 +240,16 @@ impl MempoolStore {
         let seq_no = self.next_seq_no;
         self.next_seq_no += 1;
 
-        self.txs_by_id.insert(tx_id, entry.clone());
+        self.txs_by_id.insert(*tx_id, entry.clone());
 
         self.add_to_descendant_score_index(&entry);
         self.add_to_ancestor_score_index(&entry);
         self.txs_by_creation_time
             .entry(entry.creation_time())
             .or_default()
-            .insert(tx_id);
-        self.txs_by_seq_no.insert(seq_no, tx_id);
-        self.seq_nos_by_tx.insert(tx_id, seq_no);
+            .insert(*tx_id);
+        self.txs_by_seq_no.insert(seq_no, *tx_id);
+        self.seq_nos_by_tx.insert(*tx_id, seq_no);
         Ok(())
     }
 
@@ -255,7 +258,7 @@ impl MempoolStore {
         self.txs_by_descendant_score
             .entry(entry.descendant_score())
             .or_default()
-            .insert(entry.tx_id());
+            .insert(*entry.tx_id());
     }
 
     fn add_to_ancestor_score_index(&mut self, entry: &TxMempoolEntry) {
@@ -266,7 +269,7 @@ impl MempoolStore {
         self.txs_by_ancestor_score
             .entry(entry.ancestor_score())
             .or_default()
-            .insert(entry.tx_id());
+            .insert(*entry.tx_id());
     }
 
     fn refresh_ancestors(&mut self, entry: &TxMempoolEntry) {
@@ -348,7 +351,7 @@ impl MempoolStore {
         self.refresh_descendants(entry);
         let map_entry =
             self.txs_by_ancestor_score.entry(entry.ancestor_score()).and_modify(|entries| {
-                entries.remove(&entry.tx_id());
+                entries.remove(entry.tx_id());
             });
 
         match map_entry {
@@ -363,7 +366,7 @@ impl MempoolStore {
             self.txs_by_descendant_score
                 .entry(entry.descendant_score())
                 .and_modify(|entries| {
-                    entries.remove(&entry.tx_id());
+                    entries.remove(entry.tx_id());
                 });
 
         match map_entry {
@@ -374,7 +377,7 @@ impl MempoolStore {
 
     fn remove_from_creation_time_index(&mut self, entry: &TxMempoolEntry) {
         self.txs_by_creation_time.entry(entry.creation_time()).and_modify(|entries| {
-            entries.remove(&entry.tx_id());
+            entries.remove(entry.tx_id());
         });
         if self
             .txs_by_creation_time
@@ -388,7 +391,7 @@ impl MempoolStore {
 
     fn remove_from_seq_no_index(&mut self, entry: &TxMempoolEntry) {
         let tx_id = entry.tx_id();
-        let seq_no = self.seq_nos_by_tx.remove(&tx_id).expect("tx entry must exist");
+        let seq_no = self.seq_nos_by_tx.remove(tx_id).expect("tx entry must exist");
         self.txs_by_seq_no.remove(&seq_no).expect("tx with given seq no must exist");
     }
 
@@ -400,28 +403,28 @@ impl MempoolStore {
 
     pub fn drop_tx_and_descendants(
         &mut self,
-        tx_id: Id<Transaction>,
+        tx_id: &Id<Transaction>,
         reason: MempoolRemovalReason,
     ) {
-        if let Some(entry) = self.txs_by_id.get(&tx_id) {
+        if let Some(entry) = self.txs_by_id.get(tx_id) {
             let descendants = entry.unconfirmed_descendants(self);
             log::trace!(
                 "Dropping tx {} which has {} descendants",
                 tx_id.get(),
                 descendants.len()
             );
-            self.remove_tx(&entry.tx_id(), reason);
+            self.remove_tx(&entry.tx_id().clone(), reason);
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
                 if let Some(descendant) = self.txs_by_id.get(&descendant_id) {
-                    self.remove_tx(&descendant.tx_id(), reason)
+                    self.remove_tx(&descendant.tx_id().clone(), reason)
                 }
             }
         }
     }
 
-    pub fn find_conflicting_tx(&self, input: &TxInput) -> Option<Id<Transaction>> {
-        self.spender_txs.get(input).cloned()
+    pub fn find_conflicting_tx(&self, input: &TxInput) -> Option<&Id<Transaction>> {
+        self.spender_txs.get(input)
     }
 
     /// Take all the transactions from the store in the original order of insertion
@@ -461,10 +464,10 @@ impl TxMempoolEntry {
         let (entry, fee) = entry.into_entry_and_fee();
         let size = entry.size();
         let size_with_ancestors: usize =
-            ancestors.iter().map(|ancestor| ancestor.size()).sum::<usize>() + size;
+            ancestors.iter().map(TxMempoolEntry::size).sum::<usize>() + size;
         let ancestor_fees = ancestors
             .iter()
-            .map(|ancestor| ancestor.fee())
+            .map(TxMempoolEntry::fee)
             .sum::<Option<_>>()
             .ok_or(MempoolPolicyError::AncestorFeeOverflow)?;
         let fees_with_ancestors =
@@ -547,8 +550,12 @@ impl TxMempoolEntry {
         std::cmp::min(a, b).into()
     }
 
-    pub fn tx_id(&self) -> Id<Transaction> {
-        *self.entry.tx_id()
+    pub fn tx_id(&self) -> &Id<Transaction> {
+        self.entry.tx_id()
+    }
+
+    pub fn tx_entry(&self) -> &TxEntry {
+        &self.entry
     }
 
     pub fn size(&self) -> usize {
@@ -633,7 +640,7 @@ impl TxMempoolEntry {
 
 impl PartialOrd for TxMempoolEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(other.tx_id().cmp(&self.tx_id()))
+        Some(other.tx_id().cmp(self.tx_id()))
     }
 }
 
@@ -645,6 +652,6 @@ impl PartialEq for TxMempoolEntry {
 
 impl Ord for TxMempoolEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.tx_id().cmp(&self.tx_id())
+        other.tx_id().cmp(self.tx_id())
     }
 }

@@ -15,7 +15,7 @@
 
 use crate::{
     error::Error, pool::Mempool, tx_accumulator::TransactionAccumulator, GetMemoryUsage,
-    MempoolEvent, MempoolInterface, MempoolSubsystemInterface,
+    MempoolEvent, MempoolInterface, MempoolSubsystemInterface, TxStatus,
 };
 use chainstate::chainstate_interface::ChainstateInterface;
 use common::{
@@ -104,7 +104,7 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolSubsystemInterface for Me
 }
 
 impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> {
-    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error> {
+    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error> {
         self.add_transaction(tx)
     }
 
@@ -118,6 +118,14 @@ impl<M: GetMemoryUsage + Sync + Send + 'static> MempoolInterface for Mempool<M> 
 
     fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
         Ok(self.transaction(id).cloned())
+    }
+
+    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error> {
+        Ok(self.contains_orphan_transaction(tx))
+    }
+
+    fn orphan_transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error> {
+        Ok(self.orphan_transaction(id).cloned())
     }
 
     fn best_block_id(&self) -> Id<GenBlock> {

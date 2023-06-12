@@ -25,10 +25,29 @@ pub use logging::log;
 pub use rstest::rstest;
 pub use test_utils::{
     mock_time_getter::mocked_time_getter_seconds,
-    random::{make_seedable_rng, Seed},
+    random::{make_seedable_rng, Rng, Seed},
 };
 
 use super::*;
+
+impl TxStatus {
+    /// Fetch status of given instruction from mempool, doing some integrity checks
+    pub fn fetch<T>(mempool: &Mempool<T>, tx_id: &Id<Transaction>) -> Option<Self> {
+        let in_mempool = mempool.contains_transaction(tx_id);
+        let in_orphan_pool = mempool.contains_orphan_transaction(tx_id);
+        match (in_mempool, in_orphan_pool) {
+            (false, false) => None,
+            (false, true) => Some(TxStatus::InOrphanPool),
+            (true, false) => Some(TxStatus::InMempool),
+            (true, true) => panic!("Transaction {tx_id} both in mempool and orphan pool"),
+        }
+    }
+
+    /// Assert the status of the transaction that the tx is in mempool
+    pub fn assert_in_mempool(&self) {
+        assert!(self.in_mempool());
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ValuedOutPoint {

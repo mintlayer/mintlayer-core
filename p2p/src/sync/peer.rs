@@ -500,9 +500,13 @@ where
             )));
         }
 
-        if let Some(tx) = tx {
-            self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
-            self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))?;
+        if let Some(transaction) = tx {
+            super::process_incoming_transaction(
+                &self.mempool_handle,
+                &mut self.messaging_handle,
+                transaction,
+            )
+            .await?;
         }
 
         Ok(())

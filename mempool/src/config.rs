@@ -19,7 +19,7 @@ pub type Time = Duration;
 
 pub const ENABLE_RBF: bool = false;
 
-// Number of times we try to add transaction if the tip moves suring validation
+// Number of times we try to add transaction if the tip moves during validation
 pub const MAX_TX_ADDITION_ATTEMPTS: usize = 3;
 
 pub const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
@@ -36,3 +36,11 @@ pub const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
 pub const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
 
 pub const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
+
+pub const DEFAULT_ORPHAN_POOL_CAPACITY: usize = 100;
+
+pub const DEFAULT_ORPHAN_TX_EXPIRY_INTERVAL: Time = Duration::from_secs(5 * 10);
+
+pub const MAX_ORPHAN_TX_SIZE: usize = 20_000;
+
+pub const MAX_ORPHAN_ACCOUNT_GAP: u64 = 2;

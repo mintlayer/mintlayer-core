@@ -51,7 +51,7 @@ async fn test_replace_tx(
         "created a tx with fee {:?}",
         try_get_fee(&mempool, &original).await
     );
-    mempool.add_transaction(original)?;
+    mempool.add_transaction(original)?.assert_in_mempool();
 
     let flags = 0;
     let replacement = tx_spend_input(
@@ -67,7 +67,7 @@ async fn test_replace_tx(
         "created a replacement with fee {:?}",
         try_get_fee(&mempool, &replacement).await
     );
-    mempool.add_transaction(replacement)?;
+    mempool.add_transaction(replacement)?.assert_in_mempool();
     assert!(!mempool.contains_transaction(&original_id));
     mempool.store.assert_valid();
 
@@ -100,7 +100,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     .await
     .expect("should be able to spend here");
     let original_id = original.transaction().get_id();
-    mempool.add_transaction(original)?;
+    mempool.add_transaction(original)?.assert_in_mempool();
 
     let flags = 0;
     let replacement_fee = (original_fee + Fee::new(Amount::from_atoms(1000))).unwrap();
@@ -119,7 +119,7 @@ async fn try_replace_irreplaceable(#[case] seed: Seed) -> anyhow::Result<()> {
     );
 
     mempool.store.remove_tx(&original_id, MempoolRemovalReason::Block);
-    mempool.add_transaction(replacement)?;
+    mempool.add_transaction(replacement)?.assert_in_mempool();
     mempool.store.assert_valid();
 
     Ok(())
@@ -190,7 +190,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         .with_flags(1)
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
-    mempool.add_transaction(tx.clone())?;
+    mempool.add_transaction(tx.clone())?.assert_in_mempool();
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx.transaction().get_id());
     let child_tx_input = TxInput::from_utxo(outpoint_source_id, 0);
@@ -205,7 +205,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         flags,
     )
     .await?;
-    mempool.add_transaction(child_tx)?;
+    mempool.add_transaction(child_tx)?.assert_in_mempool();
 
     let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
     let replacement_fee: Fee = Amount::from_atoms(relay_fee + 100).into();
@@ -217,7 +217,7 @@ async fn tx_replace_child(#[case] seed: Seed) -> anyhow::Result<()> {
         flags,
     )
     .await?;
-    mempool.add_transaction(replacement_tx)?;
+    mempool.add_transaction(replacement_tx)?.assert_in_mempool();
     mempool.store.assert_valid();
     Ok(())
 }
@@ -244,7 +244,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         .build();
     let mut mempool = setup_with_chainstate(tf.chainstate()).await;
     let tx_id = tx.transaction().get_id();
-    mempool.add_transaction(tx)?;
+    mempool.add_transaction(tx)?.assert_in_mempool();
 
     let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
     let input = TxInput::from_utxo(outpoint_source_id, 0);
@@ -264,7 +264,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     .await?;
     let replaced_tx_fee = try_get_fee(&mempool, &replaced_tx).await;
     let replaced_id = replaced_tx.transaction().get_id();
-    mempool.add_transaction(replaced_tx)?;
+    mempool.add_transaction(replaced_tx)?.assert_in_mempool();
 
     // Create some children for this transaction
     let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id);
@@ -279,7 +279,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
     let descendant1_id = descendant1.transaction().get_id();
-    mempool.add_transaction(descendant1)?;
+    mempool.add_transaction(descendant1)?.assert_in_mempool();
 
     let descendant2_fee: Fee = Amount::from_atoms(100).into();
     let descendant2 = tx_spend_input(
@@ -291,7 +291,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
     )
     .await?;
     let descendant2_id = descendant2.transaction().get_id();
-    mempool.add_transaction(descendant2)?;
+    mempool.add_transaction(descendant2)?.assert_in_mempool();
 
     //Create a new incoming transaction that conflicts with `replaced_tx` because it spends
     //`input`. It will be rejected because its fee exactly equals (so is not greater than) the
@@ -324,7 +324,7 @@ async fn pays_more_than_conflicts_with_descendants(#[case] seed: Seed) -> anyhow
         no_rbf,
     )
     .await?;
-    mempool.add_transaction(incoming_tx)?;
+    mempool.add_transaction(incoming_tx)?.assert_in_mempool();
 
     assert!(!mempool.contains_transaction(&replaced_id));
     assert!(!mempool.contains_transaction(&descendant1_id));

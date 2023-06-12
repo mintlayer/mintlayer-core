@@ -55,7 +55,7 @@ async fn descendant_of_expired_entry(#[case] seed: Seed) -> anyhow::Result<()> {
         mock_clock,
         SystemUsageEstimator {},
     );
-    mempool.add_transaction(parent)?;
+    mempool.add_transaction(parent)?.assert_in_mempool();
 
     let flags = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
@@ -117,7 +117,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     );
 
     let parent_id = parent.transaction().get_id();
-    mempool.add_transaction(parent.clone())?;
+    mempool.add_transaction(parent.clone())?.assert_in_mempool();
 
     let flags = 0;
     let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
@@ -141,7 +141,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
     let child_1_id = child_1.transaction().get_id();
 
     let expired_tx_id = child_0.transaction().get_id();
-    mempool.add_transaction(child_0)?;
+    mempool.add_transaction(child_0)?.assert_in_mempool();
 
     // Simulate the parent being added to a block
     // We have to do this because if we leave this parent in the mempool then it will be
@@ -163,7 +163,7 @@ async fn only_expired_entries_removed(#[case] seed: Seed) -> anyhow::Result<()> 
         .await??;
     mock_time.store(DEFAULT_MEMPOOL_EXPIRY.as_secs() + 1, Ordering::SeqCst);
 
-    mempool.add_transaction(child_1)?;
+    mempool.add_transaction(child_1)?.assert_in_mempool();
     assert!(!mempool.contains_transaction(&expired_tx_id));
     assert!(mempool.contains_transaction(&child_1_id));
     mempool.store.assert_valid();

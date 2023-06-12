@@ -366,7 +366,11 @@ where
         };
         ensure!(
             expected_nonce == account_input.nonce(),
-            ConnectTransactionError::NonceIsNotIncremental(account.into())
+            ConnectTransactionError::NonceIsNotIncremental(
+                account.into(),
+                expected_nonce,
+                account_input.nonce(),
+            )
         );
         // store new nonce
         self.account_nonce.insert(

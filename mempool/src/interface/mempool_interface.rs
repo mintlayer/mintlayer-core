@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent};
+use crate::{error::Error, tx_accumulator::TransactionAccumulator, MempoolEvent, TxStatus};
 use common::{
     chain::{GenBlock, SignedTransaction, Transaction},
     primitives::Id,
@@ -23,16 +23,22 @@ use subsystem::{CallRequest, ShutdownRequest};
 
 pub trait MempoolInterface: Send + Sync {
     /// Add a transaction to mempool
-    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<(), Error>;
+    fn add_transaction(&mut self, tx: SignedTransaction) -> Result<TxStatus, Error>;
 
     /// Get all transactions from mempool
     fn get_all(&self) -> Result<Vec<SignedTransaction>, Error>;
 
-    /// Get a specific transaction from the mempool
+    /// Get a specific transaction from the main mempool (non-orphan)
     fn transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
 
-    /// Check given transaction is contained in the mempool
+    /// Get a specific transaction from the orphan pool
+    fn orphan_transaction(&self, id: &Id<Transaction>) -> Result<Option<SignedTransaction>, Error>;
+
+    /// Check given transaction is contained in the main mempool (non-orphan)
     fn contains_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
+
+    /// Check given transaction is contained in the main mempool (non-orphan)
+    fn contains_orphan_transaction(&self, tx: &Id<Transaction>) -> Result<bool, Error>;
 
     /// Best block ID according to mempool. May be temporarily out of sync with chainstate.
     fn best_block_id(&self) -> Id<GenBlock>;

@@ -12,7 +12,7 @@ Check that:
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (assert_raises_rpc_error)
-from test_framework import mintlayer_hash
+from test_framework.mintlayer import mintlayer_hash
 import scalecodec
 
 class MempoolTxSubmissionTest(BitcoinTestFramework):

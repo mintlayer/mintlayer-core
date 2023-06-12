@@ -15,12 +15,11 @@
 
 use std::sync::Arc;
 
-use common::{chain::SignedTransaction, primitives::Idable};
+use common::chain::SignedTransaction;
 
 use crate::{
     error::{ConversionError, P2pError},
     interface::{p2p_interface::P2pInterface, types::ConnectedPeer},
-    message::SyncMessage,
     net::NetworkingService,
     types::peer_id::PeerId,
     utils::oneshot_nofail,
@@ -98,9 +97,12 @@ where
     }
 
     async fn submit_transaction(&mut self, tx: SignedTransaction) -> crate::Result<()> {
-        let id = tx.transaction().get_id();
-        self.mempool_handle.call_mut(|m| m.add_transaction(tx)).await??;
-        self.messaging_handle.broadcast_message(SyncMessage::NewTransaction(id))
+        crate::sync::process_incoming_transaction(
+            &self.mempool_handle,
+            &mut self.messaging_handle,
+            tx,
+        )
+        .await
     }
 
     fn subscribe_to_events(

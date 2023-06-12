@@ -139,11 +139,11 @@ impl<T: Eq> From<H256> for Id<T> {
 }
 
 impl<T> Id<T> {
-    pub fn get(&self) -> H256 {
+    pub const fn get(&self) -> H256 {
         self.id
     }
 
-    pub fn new(h: H256) -> Self {
+    pub const fn new(h: H256) -> Self {
         Self {
             id: h,
             _shadow: std::marker::PhantomData,

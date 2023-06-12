@@ -259,5 +259,23 @@ pub async fn subscribe_to_new_tip(
     Ok(receiver)
 }
 
+/// Check the incoming transaction and propagate it to peer if it's valid
+// TODO: Do we want to return the TxStatus?
+pub async fn process_incoming_transaction(
+    mempool: &MempoolHandle,
+    messaging: &mut impl MessagingService,
+    transaction: common::chain::SignedTransaction,
+) -> Result<()> {
+    use mempool::TxStatus;
+    let tx_id = common::primitives::Idable::get_id(transaction.transaction());
+
+    match mempool.call_mut(|m| m.add_transaction(transaction)).await?? {
+        // Transaction accepted to local mempool, propagate it to the peers
+        TxStatus::InMempool => messaging.broadcast_message(SyncMessage::NewTransaction(tx_id)),
+        // We don't know whether the orphan is valid, don't propagate at this point
+        TxStatus::InOrphanPool => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests;

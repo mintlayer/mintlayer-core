@@ -41,6 +41,26 @@ pub enum MempoolEvent {
     NewTip(Id<Block>, BlockHeight),
 }
 
+/// Result of adding transaction to the mempool
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone, Copy, serde::Serialize)]
+#[must_use = "Please check whether the tx was accepted to main mempool or orphan pool"]
+pub enum TxStatus {
+    /// Transaction is in mempool
+    InMempool,
+    /// Transaction is in orphan pool
+    InOrphanPool,
+}
+
+impl TxStatus {
+    pub fn in_mempool(&self) -> bool {
+        self == &TxStatus::InMempool
+    }
+
+    pub fn in_orphan_pool(&self) -> bool {
+        self == &TxStatus::InOrphanPool
+    }
+}
+
 pub type MempoolHandle = subsystem::Handle<dyn MempoolInterface>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;

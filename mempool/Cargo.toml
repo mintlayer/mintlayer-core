@@ -12,6 +12,7 @@ accounting = { path = '../accounting' }
 chainstate = { path = '../chainstate' }
 chainstate-types = { path = '../chainstate/types' }
 common = { path = '../common' }
+crypto = { path = '../crypto' }
 logging = { path = '../logging' }
 pos_accounting = { path = '../pos_accounting' }
 rpc = { path = '../rpc' }
@@ -26,6 +27,8 @@ hex.workspace = true
 jsonrpsee = { workspace = true, features = ["macros"] }
 mockall.workspace = true
 parking_lot.workspace = true
+serde.workspace = true
+static_assertions.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 
