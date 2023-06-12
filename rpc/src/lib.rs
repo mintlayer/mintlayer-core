@@ -18,10 +18,15 @@ mod error;
 mod rpc_auth;
 pub mod rpc_creds;
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 
 use base64::Engine;
-use jsonrpsee::server::{ServerBuilder, ServerHandle};
+use http::{header, HeaderValue};
+use jsonrpsee::{
+    http_client::{transport::HttpBackend, HttpClient, HttpClientBuilder},
+    server::{ServerBuilder, ServerHandle},
+    ws_client::{WsClient, WsClientBuilder},
+};
 
 use logging::log;
 
@@ -31,7 +36,11 @@ pub use error::{handle_result, Error, Result};
 pub use jsonrpsee::{core::server::Methods, proc_macros::rpc};
 use rpc_auth::RpcAuth;
 use rpc_creds::RpcCreds;
-use tower_http::validate_request::ValidateRequestHeaderLayer;
+use tower_http::{
+    set_header::{MakeHeaderValue, SetRequestHeader, SetRequestHeaderLayer},
+    validate_request::ValidateRequestHeaderLayer,
+};
+use utils::cookie::load_cookie;
 
 #[rpc(server, namespace = "example_server")]
 trait RpcInfo {
@@ -198,20 +207,72 @@ impl subsystem::Subsystem for Rpc {
     }
 }
 
-/// Construct a basic authorization header for HTTP requests (when [username_password] is set)
-pub fn make_http_header_with_auth(username_password: Option<(&str, &str)>) -> http::HeaderMap {
-    let mut headers = http::HeaderMap::new();
-    if let Some((username, password)) = username_password {
-        headers.append(
-            http::header::AUTHORIZATION,
-            http::HeaderValue::from_str(&format!(
-                "Basic {}",
-                base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
-            ))
-            .expect("Should not fail"),
-        );
+#[derive(Clone)]
+pub enum RpcAuthData {
+    /// No authorization
+    None,
+
+    /// Basic authorization
+    Basic { username: String, password: String },
+
+    /// Load username and password from cookie file (on every request)
+    Cookie { cookie_file_path: PathBuf },
+}
+
+impl RpcAuthData {
+    pub fn get_header(&self) -> Option<HeaderValue> {
+        match &self {
+            RpcAuthData::None => None,
+            RpcAuthData::Basic { username, password } => {
+                Some(make_http_header_value(username, password))
+            }
+            RpcAuthData::Cookie { cookie_file_path } => {
+                let cookie_res = load_cookie(cookie_file_path);
+                match cookie_res {
+                    Ok((username, password)) => Some(make_http_header_value(&username, &password)),
+                    Err(err) => {
+                        log::error!("Loading cookie file {cookie_file_path:?} failed: {err}");
+                        None
+                    }
+                }
+            }
+        }
     }
-    headers
+}
+
+impl<T> MakeHeaderValue<T> for RpcAuthData {
+    fn make_header_value(&mut self, _message: &T) -> Option<HeaderValue> {
+        self.get_header()
+    }
+}
+
+pub type RpcHttpClient = HttpClient<SetRequestHeader<HttpBackend, RpcAuthData>>;
+pub type RpcWsClient = WsClient;
+
+pub fn new_http_client(host: String, rpc_auth: RpcAuthData) -> Result<RpcHttpClient> {
+    let middleware = tower::ServiceBuilder::new().layer(SetRequestHeaderLayer::overriding(
+        header::AUTHORIZATION,
+        rpc_auth,
+    ));
+
+    HttpClientBuilder::default().set_middleware(middleware).build(host)
+}
+
+pub async fn new_ws_client(host: String, rpc_auth: RpcAuthData) -> Result<RpcWsClient> {
+    let mut headers = http::HeaderMap::new();
+    if let Some(header) = rpc_auth.get_header() {
+        headers.append(http::header::AUTHORIZATION, header);
+    }
+
+    WsClientBuilder::default().set_headers(headers).build(host).await
+}
+
+fn make_http_header_value(username: &str, password: &str) -> http::HeaderValue {
+    http::HeaderValue::from_str(&format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(format!("{username}:{password}"))
+    ))
+    .expect("Should not fail")
 }
 
 #[cfg(test)]
@@ -224,9 +285,7 @@ mod tests {
         Rng,
     };
     use jsonrpsee::core::client::ClientT;
-    use jsonrpsee::http_client::HttpClientBuilder;
     use jsonrpsee::rpc_params;
-    use jsonrpsee::ws_client::WsClientBuilder;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
@@ -272,7 +331,7 @@ mod tests {
 
         if http {
             let url = format!("http://{}", rpc.http_address().unwrap());
-            let client = HttpClientBuilder::default().build(url)?;
+            let client = new_http_client(url, RpcAuthData::None).unwrap();
             let response: Result<String> =
                 client.request("example_server_protocol_version", rpc_params!()).await;
             assert_eq!(response.unwrap(), "version1");
@@ -288,7 +347,7 @@ mod tests {
 
         if ws {
             let url = format!("ws://{}", rpc.websocket_address().unwrap());
-            let client = WsClientBuilder::default().build(url).await?;
+            let client = new_ws_client(url, RpcAuthData::None).await.unwrap();
             let response: Result<String> =
                 client.request("example_server_protocol_version", rpc_params!()).await;
             assert_eq!(response.unwrap(), "version1");
@@ -306,26 +365,18 @@ mod tests {
         Ok(())
     }
 
-    async fn http_request(
-        rpc: &Rpc,
-        username_password: Option<(&str, &str)>,
-    ) -> anyhow::Result<()> {
+    async fn http_request(rpc: &Rpc, rpc_auth: RpcAuthData) -> anyhow::Result<()> {
         let url = format!("http://{}", rpc.http_address().unwrap());
-        let client = HttpClientBuilder::default()
-            .set_headers(make_http_header_with_auth(username_password))
-            .build(url)?;
+        let client = new_http_client(url, rpc_auth)?;
         let response: String =
             client.request("example_server_protocol_version", rpc_params!()).await?;
         anyhow::ensure!(response == "version1");
         Ok(())
     }
 
-    async fn ws_request(rpc: &Rpc, username_password: Option<(&str, &str)>) -> anyhow::Result<()> {
+    async fn ws_request(rpc: &Rpc, rpc_auth: RpcAuthData) -> anyhow::Result<()> {
         let url = format!("ws://{}", rpc.websocket_address().unwrap());
-        let client = WsClientBuilder::default()
-            .set_headers(make_http_header_with_auth(username_password))
-            .build(url)
-            .await?;
+        let client = new_ws_client(url, rpc_auth).await?;
         let response: String =
             client.request("example_server_protocol_version", rpc_params!()).await?;
         anyhow::ensure!(response == "version1");
@@ -380,16 +431,65 @@ mod tests {
         .unwrap();
 
         // Valid requests
-        http_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
-        ws_request(&rpc, Some((&good_username, &good_password))).await.unwrap();
+        http_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await
+        .unwrap();
+        ws_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await
+        .unwrap();
 
         // Invalid requests
-        http_request(&rpc, None).await.unwrap_err();
-        ws_request(&rpc, None).await.unwrap_err();
-        http_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
-        ws_request(&rpc, Some((&good_username, &bad_password))).await.unwrap_err();
-        http_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
-        ws_request(&rpc, Some((&bad_username, &good_password))).await.unwrap_err();
+        http_request(&rpc, RpcAuthData::None).await.unwrap_err();
+        ws_request(&rpc, RpcAuthData::None).await.unwrap_err();
+
+        http_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: bad_password.clone(),
+            },
+        )
+        .await
+        .unwrap_err();
+        ws_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: good_username.clone(),
+                password: bad_password.clone(),
+            },
+        )
+        .await
+        .unwrap_err();
+        http_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: bad_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await
+        .unwrap_err();
+        ws_request(
+            &rpc,
+            RpcAuthData::Basic {
+                username: bad_username.clone(),
+                password: good_password.clone(),
+            },
+        )
+        .await
+        .unwrap_err();
 
         subsystem::Subsystem::shutdown(rpc).await;
     }

@@ -430,13 +430,27 @@ where
         }
 
         let block = self.chainstate_handle.call(|c| c.preliminary_block_check(block)).await??;
+        let peer_id = self.id();
         match self
             .chainstate_handle
-            .call_mut(|c| c.process_block(block, BlockSource::Peer))
+            .call_mut(move |c| {
+                // If the block already exists in the block tree, return the existing block index.
+                // It's used to prevent chainstate from printing "Block already exists" errors.
+                if let Some(block_index) = c.get_block_index(&block.get_id())? {
+                    log::debug!(
+                        "Peer {} sent a block that already exists ({})",
+                        peer_id,
+                        block.get_id()
+                    );
+                    return Ok(Some(block_index));
+                }
+                c.process_block(block, BlockSource::Peer)
+            })
             .await?
         {
             Ok(_) => Ok(()),
-            // It is OK to receive an already processed block.
+            // It is OK to receive an already processed block
+            // This should not happen because of the `get_block_index` check above.
             Err(ChainstateError::ProcessBlockError(BlockError::BlockAlreadyExists(_))) => Ok(()),
             Err(e) => Err(e),
         }?;

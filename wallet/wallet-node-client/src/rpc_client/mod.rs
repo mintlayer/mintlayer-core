@@ -15,10 +15,9 @@
 
 pub mod client_impl;
 
-use jsonrpsee::http_client::transport::HttpBackend;
-use jsonrpsee::http_client::HttpClient;
-use jsonrpsee::http_client::HttpClientBuilder;
-use rpc::make_http_header_with_auth;
+use rpc::new_http_client;
+use rpc::RpcAuthData;
+use rpc::RpcHttpClient;
 
 use crate::node_traits::NodeInterface;
 
@@ -36,21 +35,18 @@ pub enum NodeRpcError {
 
 #[derive(Clone, Debug)]
 pub struct NodeRpcClient {
-    http_client: HttpClient<HttpBackend>,
+    http_client: RpcHttpClient,
 }
 
 impl NodeRpcClient {
     pub async fn new(
         remote_socket_address: String,
-        username_password: Option<(&str, &str)>,
+        rpc_auth: RpcAuthData,
     ) -> Result<Self, NodeRpcError> {
         let host = format!("http://{remote_socket_address}");
-        let middleware = tower::ServiceBuilder::new();
-        let http_client = HttpClientBuilder::default()
-            .set_middleware(middleware)
-            .set_headers(make_http_header_with_auth(username_password))
-            .build(host)
-            .map_err(NodeRpcError::ClientCreationError)?;
+
+        let http_client =
+            new_http_client(host, rpc_auth).map_err(NodeRpcError::ClientCreationError)?;
 
         let client = Self { http_client };
 

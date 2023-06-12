@@ -26,11 +26,9 @@ use common::chain::{config::ChainType, ChainConfig};
 use config::WalletCliArgs;
 use console::{ConsoleInput, ConsoleOutput};
 use errors::WalletCliError;
+use rpc::RpcAuthData;
 use tokio::sync::mpsc;
-use utils::{
-    cookie::{load_cookie, COOKIE_FILENAME},
-    default_data_dir::default_data_dir_for_chain,
-};
+use utils::{cookie::COOKIE_FILENAME, default_data_dir::default_data_dir_for_chain};
 
 enum Mode {
     Interactive {
@@ -81,14 +79,16 @@ pub async fn run(
     let default_http_rpc_addr = || SocketAddr::from_str("127.0.0.1:3030").expect("Can't fail");
     let rpc_address = rpc_address.unwrap_or_else(default_http_rpc_addr);
 
-    let (rpc_username, rpc_password) = match (rpc_cookie_file, rpc_username, rpc_password) {
+    let rpc_auth = match (rpc_cookie_file, rpc_username, rpc_password) {
         (None, None, None) => {
             let cookie_file_path =
                 default_data_dir_for_chain(chain_type.name()).join(COOKIE_FILENAME);
-            load_cookie(cookie_file_path)?
+            RpcAuthData::Cookie { cookie_file_path }
         }
-        (Some(cookie_file_path), None, None) => load_cookie(cookie_file_path)?,
-        (None, Some(username), Some(password)) => (username, password),
+        (Some(cookie_file_path), None, None) => RpcAuthData::Cookie {
+            cookie_file_path: cookie_file_path.into(),
+        },
+        (None, Some(username), Some(password)) => RpcAuthData::Basic { username, password },
         _ => {
             return Err(WalletCliError::InvalidConfig(
                 "Invalid RPC cookie/username/password combination".to_owned(),
@@ -96,10 +96,9 @@ pub async fn run(
         }
     };
 
-    let rpc_client =
-        wallet_controller::make_rpc_client(rpc_address, Some((&rpc_username, &rpc_password)))
-            .await
-            .map_err(WalletCliError::RpcError)?;
+    let rpc_client = wallet_controller::make_rpc_client(rpc_address, rpc_auth)
+        .await
+        .map_err(WalletCliError::RpcError)?;
 
     let mut controller_opt = None;
 

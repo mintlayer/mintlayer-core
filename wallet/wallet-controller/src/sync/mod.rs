@@ -109,8 +109,8 @@ pub async fn sync_once<T: NodeInterface>(
             .map_err(ControllerError::WalletError)?;
 
         log::info!(
-            "Node chainstate updated, block height: {}, top block id: {}",
-            common_block_height,
+            "Node chainstate updated, block height: {}, tip block id: {}",
+            common_block_height.next_height(),
             block_id.hex_encode()
         );
     }
