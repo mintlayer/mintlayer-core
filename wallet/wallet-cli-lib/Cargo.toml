@@ -11,6 +11,7 @@ consensus = { path = "../../consensus" }
 crypto = { path = "../../crypto" }
 logging = { path = "../../logging" }
 node-comm = { path = "../wallet-node-client" }
+rpc = { path = "../../rpc" }
 serialization = { path = "../../serialization" }
 utils = { path = "../../utils" }
 wallet = { path = ".." }
@@ -34,7 +35,6 @@ crypto = { path = "../../crypto" }
 mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
-rpc = { path = "../../rpc" }
 subsystem = { path = "../../subsystem" }
 test-utils = { path = "../../test-utils" }
 

@@ -18,6 +18,7 @@ use chainstate::ChainstateHandle;
 use handles_client::WalletHandlesClientError;
 use mempool::MempoolHandle;
 use p2p::P2pHandle;
+use rpc::RpcAuthData;
 use std::net::SocketAddr;
 
 use rpc_client::NodeRpcError;
@@ -28,9 +29,9 @@ pub mod rpc_client;
 
 pub async fn make_rpc_client(
     remote_socket_address: SocketAddr,
-    username_password: Option<(&str, &str)>,
+    rpc_auth: RpcAuthData,
 ) -> Result<rpc_client::NodeRpcClient, NodeRpcError> {
-    rpc_client::NodeRpcClient::new(remote_socket_address.to_string(), username_password).await
+    rpc_client::NodeRpcClient::new(remote_socket_address.to_string(), rpc_auth).await
 }
 
 pub async fn make_handles_client(

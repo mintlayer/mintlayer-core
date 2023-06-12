@@ -21,7 +21,7 @@ hyper.workspace = true
 jsonrpsee = { workspace = true, features = ["full"] }
 thiserror.workspace = true
 tower = { workspace = true, features = ["util"] }
-tower-http = { workspace = true, features = ["auth"] }
+tower-http = { workspace = true, features = ["auth", "set-header"] }
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }

@@ -10,6 +10,7 @@ blockprod = { path = "../../blockprod" }
 chainstate = { path = "../../chainstate" }
 common = { path = "../../common" }
 consensus = { path = "../../consensus" }
+logging = { path = "../../logging" }
 mempool = { path = "../../mempool" }
 node-lib = { path = "../../node-lib" }
 p2p = { path = "../../p2p" }
@@ -19,7 +20,6 @@ subsystem = { path = "../../subsystem" }
 
 async-trait.workspace = true
 base64.workspace = true
-http.workspace = true
 jsonrpsee.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
