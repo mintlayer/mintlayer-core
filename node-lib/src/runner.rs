@@ -16,6 +16,7 @@
 //! Node initialization routine.
 
 use std::{
+    fs::File,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -53,8 +54,20 @@ use crate::{
     regtest_options::ChainConfigOptions,
 };
 
+pub struct Node {
+    manager: subsystem::Manager,
+    lock_file: File,
+}
+
+impl Node {
+    pub async fn main(self) {
+        self.manager.main().await;
+        drop(self.lock_file);
+    }
+}
+
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
-pub async fn initialize(
+async fn initialize(
     chain_config: ChainConfig,
     data_dir: PathBuf,
     node_config: NodeConfigFile,
@@ -182,7 +195,7 @@ pub async fn initialize(
 pub async fn setup(
     options: Options,
     node_controller_sender: Option<oneshot::Sender<NodeController>>,
-) -> Result<subsystem::Manager> {
+) -> Result<Node> {
     let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
     match command {
         Command::Mainnet(ref run_options) => {
@@ -237,7 +250,7 @@ async fn start(
     run_options: &RunOptions,
     chain_config: ChainConfig,
     node_controller_sender: Option<oneshot::Sender<NodeController>>,
-) -> Result<subsystem::Manager> {
+) -> Result<Node> {
     if let Some(mock_time) = run_options.mock_time {
         set_mock_time(*chain_config.chain_type(), mock_time)?;
     }
@@ -250,13 +263,13 @@ async fn start(
         datadir_path_opt,
     )
     .expect("Failed to prepare data directory");
-    let _lock_file = lock_data_dir(&data_dir)?;
+    let lock_file = lock_data_dir(&data_dir)?;
 
     log::info!("Starting with the following config:\n {node_config:#?}");
     let manager: subsystem::Manager =
         initialize(chain_config, data_dir, node_config, node_controller_sender).await?;
 
-    Ok(manager)
+    Ok(Node { manager, lock_file })
 }
 
 fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {

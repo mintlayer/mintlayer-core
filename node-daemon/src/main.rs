@@ -17,8 +17,8 @@ pub async fn run() -> anyhow::Result<()> {
     let opts = node_lib::Options::from_args(std::env::args_os());
     logging::init_logging::<&std::path::Path>(None);
     logging::log::info!("Command line options: {opts:?}");
-    let manager = node_lib::setup(opts, None).await?;
-    manager.main().await;
+    let node = node_lib::setup(opts, None).await?;
+    node.main().await;
     Ok(())
 }
 

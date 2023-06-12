@@ -46,11 +46,11 @@ impl NodeBackendController {
         logging::init_logging::<&std::path::Path>(None);
         logging::log::info!("Command line options: {opts:?}");
 
-        let manager = node_lib::setup(opts, Some(node_controller_sender)).await?;
+        let node = node_lib::setup(opts, Some(node_controller_sender)).await?;
 
         let controller = node_controller_receiver.await.expect("Node controller receiving failed");
 
-        let manager_join_handle = tokio::spawn(async move { manager.main().await });
+        let manager_join_handle = tokio::spawn(async move { node.main().await });
 
         let chain_config = controller
             .chainstate
