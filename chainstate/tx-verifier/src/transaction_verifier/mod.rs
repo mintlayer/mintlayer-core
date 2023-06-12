@@ -91,10 +91,10 @@ pub struct Subsidy(pub Amount);
 #[derive(Debug, Eq, PartialEq)]
 pub struct TransactionVerifierDelta {
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
-    utxo_cache: ConsumedUtxoCache,
+    pub utxo_cache: ConsumedUtxoCache,
     utxo_block_undo: BTreeMap<TransactionSource, UtxosBlockUndoEntry>,
     token_issuance_cache: ConsumedTokenIssuanceCache,
-    accounting_delta: PoSAccountingDeltaData,
+    pub accounting_delta: PoSAccountingDeltaData,
     accounting_delta_undo: BTreeMap<TransactionSource, AccountingBlockUndoEntry>,
     accounting_block_deltas: BTreeMap<TransactionSource, PoSAccountingDeltaData>,
     account_nonce: BTreeMap<AccountType, CachedOperation<AccountNonce>>,

@@ -39,12 +39,12 @@ use common::{
     Uint256,
 };
 use logging::log;
-use pos_accounting::{PoSAccountingDB, PoSAccountingView};
+use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::{
     config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
 };
 use utils::{ensure, tap_error_log::LogError};
-use utxo::{UtxosDB, UtxosView};
+use utxo::{UtxosCache, UtxosDB, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
@@ -474,17 +474,26 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         self.enforce_checkpoints(header).log_err()?;
         self.check_block_height_vs_max_reorg_depth(header)?;
 
+        let best_block_id = self.get_best_block_id()?;
+        let TransactionVerifierDelta {
+            utxo_cache: consumed_utxos,
+            accounting_delta: consumed_deltas,
+            ..
+        } = self.reorganize_in_memory(header, best_block_id)?;
+
         // TODO(Gosha):
         // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
         // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
+        let utxos_cache = UtxosCache::from_data(&utxos_db, consumed_utxos).unwrap();
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+        let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
         consensus::validate_consensus(
             self.chain_config,
             header,
             self,
-            &utxos_db,
-            &pos_db,
+            &utxos_cache,
+            &pos_delta,
             strict_pos_consensus_check,
         )
         .map_err(CheckBlockError::ConsensusVerificationFailed)
