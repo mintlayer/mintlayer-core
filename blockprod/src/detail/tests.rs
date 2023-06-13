@@ -209,7 +209,7 @@ mod produce_block {
                     .await
                     .expect("Failed to produce a block: {:?}");
 
-                job_finished_receiver.await.expect("Job finish receiver closed");
+                job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_eq!(
                     block_production
@@ -280,7 +280,7 @@ mod produce_block {
                     .await
                     .expect("Failed to produce a block: {:?}");
 
-                job_finished_receiver.await.expect("Job finish receiver closed");
+                job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_eq!(
                     block_production
@@ -331,7 +331,7 @@ mod produce_block {
                     .await
                     .expect("Failed to produce a block: {:?}");
 
-                job_finished_receiver.await.expect("Job finish receiver closed");
+                job_finished_receiver.await.expect("Job finished receiver closed");
 
                 assert_eq!(
                     block_production
