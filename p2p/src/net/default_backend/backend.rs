@@ -184,12 +184,10 @@ where
             Err(err) => {
                 log::error!("Failed to establish connection to {address:?}: {err}");
 
-                self.conn_tx
-                    .send(ConnectivityEvent::ConnectionError {
-                        address,
-                        error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
-                    })
-                    .map_err(P2pError::from)
+                Ok(self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                    address,
+                    error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                })?)
             }
         }
     }
@@ -201,7 +199,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        peer.tx.send(Event::Accepted).map_err(P2pError::from)?;
+        peer.tx.send(Event::Accepted)?;
 
         let old_value = peer.was_accepted.test_and_set();
         assert!(!old_value);
@@ -237,7 +235,7 @@ where
             .peers
             .get_mut(&peer)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        peer.tx.send(Event::SendMessage(Box::new(message))).map_err(P2pError::from)
+        Ok(peer.tx.send(Event::SendMessage(Box::new(message)))?)
     }
 
     /// Sends the announcement to all peers.
@@ -394,22 +392,18 @@ where
 
         match peer_role {
             PeerRole::Outbound { handshake_nonce: _ } => {
-                self.conn_tx
-                    .send(ConnectivityEvent::OutboundAccepted {
-                        address,
-                        peer_info,
-                        receiver_address,
-                    })
-                    .map_err(P2pError::from)?;
+                self.conn_tx.send(ConnectivityEvent::OutboundAccepted {
+                    address,
+                    peer_info,
+                    receiver_address,
+                })?;
             }
             PeerRole::Inbound => {
-                self.conn_tx
-                    .send(ConnectivityEvent::InboundAccepted {
-                        address,
-                        peer_info,
-                        receiver_address,
-                    })
-                    .map_err(P2pError::from)?;
+                self.conn_tx.send(ConnectivityEvent::InboundAccepted {
+                    address,
+                    peer_info,
+                    receiver_address,
+                })?;
             }
         }
 
@@ -450,9 +444,7 @@ where
         // (for example, trying to send something big over a slow network connection)
         peer.handle.abort();
 
-        self.conn_tx
-            .send(ConnectivityEvent::ConnectionClosed { peer_id })
-            .map_err(P2pError::from)
+        Ok(self.conn_tx.send(ConnectivityEvent::ConnectionClosed { peer_id })?)
     }
 
     fn is_connection_from_self(
@@ -483,12 +475,10 @@ where
                 );
 
                 // Report outbound connection failure
-                self.conn_tx
-                    .send(ConnectivityEvent::ConnectionError {
-                        address: outbound_pending.address,
-                        error: P2pError::DialError(DialError::AttemptToDialSelf),
-                    })
-                    .map_err(P2pError::from)?;
+                self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                    address: outbound_pending.address,
+                    error: P2pError::DialError(DialError::AttemptToDialSelf),
+                })?;
 
                 // Nothing else to do, just drop inbound connection
                 return Ok(true);
@@ -534,14 +524,10 @@ where
                         PeerRole::Outbound { handshake_nonce: _ } => {
                             log::warn!("outbound pending connection closed unexpectedly");
 
-                            self.conn_tx
-                                .send(ConnectivityEvent::ConnectionError {
-                                    address: pending_peer.address,
-                                    error: P2pError::DialError(
-                                        DialError::ConnectionRefusedOrTimedOut,
-                                    ),
-                                })
-                                .map_err(P2pError::from)?;
+                            self.conn_tx.send(ConnectivityEvent::ConnectionError {
+                                address: pending_peer.address,
+                                error: P2pError::DialError(DialError::ConnectionRefusedOrTimedOut),
+                            })?;
                         }
                     }
                 }
