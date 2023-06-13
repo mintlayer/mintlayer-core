@@ -183,19 +183,19 @@ where
             address
         );
 
-        self.cmd_tx.send(types::Command::Connect { address }).map_err(P2pError::from)
+        Ok(self.cmd_tx.send(types::Command::Connect { address })?)
     }
 
     fn accept(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("accept new peer, peer_id: {peer_id}");
 
-        self.cmd_tx.send(types::Command::Accept { peer_id }).map_err(P2pError::from)
+        Ok(self.cmd_tx.send(types::Command::Accept { peer_id })?)
     }
 
     fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
         log::debug!("close connection with remote, peer_id: {peer_id}");
 
-        self.cmd_tx.send(types::Command::Disconnect { peer_id }).map_err(P2pError::from)
+        Ok(self.cmd_tx.send(types::Command::Disconnect { peer_id })?)
     }
 
     fn send_message(&mut self, peer: PeerId, message: PeerManagerMessage) -> crate::Result<()> {
@@ -241,12 +241,10 @@ impl<T: TransportSocket> MessagingService for MessagingHandle<T> {
             }
         };
 
-        self.command_sender
-            .send(types::Command::AnnounceData {
-                service,
-                message: message.into(),
-            })
-            .map_err(P2pError::from)
+        Ok(self.command_sender.send(types::Command::AnnounceData {
+            service,
+            message: message.into(),
+        })?)
     }
 }
 

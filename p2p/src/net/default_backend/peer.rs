@@ -127,20 +127,18 @@ where
                 // Send PeerInfoReceived before sending handshake to remote peer!
                 // Backend is expected to receive PeerInfoReceived before outgoing connection has chance to complete handshake,
                 // It's required to reliable detect self-connects.
-                self.tx
-                    .send((
-                        self.peer_id,
-                        PeerEvent::PeerInfoReceived {
-                            protocol,
-                            network,
-                            services,
-                            user_agent,
-                            version,
-                            receiver_address,
-                            handshake_nonce,
-                        },
-                    ))
-                    .map_err(P2pError::from)?;
+                self.tx.send((
+                    self.peer_id,
+                    PeerEvent::PeerInfoReceived {
+                        protocol,
+                        network,
+                        services,
+                        user_agent,
+                        version,
+                        receiver_address,
+                        handshake_nonce,
+                    },
+                ))?;
 
                 self.socket
                     .send(types::Message::Handshake(
@@ -180,20 +178,18 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::HandshakeExpected));
                 };
 
-                self.tx
-                    .send((
-                        self.peer_id,
-                        PeerEvent::PeerInfoReceived {
-                            protocol,
-                            network,
-                            services,
-                            user_agent,
-                            version,
-                            receiver_address,
-                            handshake_nonce,
-                        },
-                    ))
-                    .map_err(P2pError::from)?;
+                self.tx.send((
+                    self.peer_id,
+                    PeerEvent::PeerInfoReceived {
+                        protocol,
+                        network,
+                        services,
+                        user_agent,
+                        version,
+                        receiver_address,
+                        handshake_nonce,
+                    },
+                ))?;
             }
         }
 

@@ -40,7 +40,7 @@ where
         self.tx_peer_manager
             .send(PeerManagerEvent::Connect(addr, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
-        rx.await.map_err(P2pError::from)?
+        rx.await?
     }
 
     async fn disconnect(&mut self, peer_id: PeerId) -> crate::Result<()> {
@@ -49,31 +49,25 @@ where
         self.tx_peer_manager
             .send(PeerManagerEvent::Disconnect(peer_id, tx))
             .map_err(|_| P2pError::ChannelClosed)?;
-        rx.await.map_err(P2pError::from)?
+        rx.await?
     }
 
     async fn get_peer_count(&self) -> crate::Result<usize> {
         let (tx, rx) = oneshot_nofail::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::GetPeerCount(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
+        self.tx_peer_manager.send(PeerManagerEvent::GetPeerCount(tx))?;
+        Ok(rx.await?)
     }
 
     async fn get_bind_addresses(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot_nofail::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::GetBindAddresses(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
+        self.tx_peer_manager.send(PeerManagerEvent::GetBindAddresses(tx))?;
+        Ok(rx.await?)
     }
 
     async fn get_connected_peers(&self) -> crate::Result<Vec<ConnectedPeer>> {
         let (tx, rx) = oneshot_nofail::channel();
-        self.tx_peer_manager
-            .send(PeerManagerEvent::GetConnectedPeers(tx))
-            .map_err(P2pError::from)?;
-        rx.await.map_err(P2pError::from)
+        self.tx_peer_manager.send(PeerManagerEvent::GetConnectedPeers(tx))?;
+        Ok(rx.await?)
     }
 
     async fn add_reserved_node(&mut self, addr: String) -> crate::Result<()> {
