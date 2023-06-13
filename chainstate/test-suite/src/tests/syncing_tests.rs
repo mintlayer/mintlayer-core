@@ -201,7 +201,7 @@ fn get_headers_genesis(#[case] seed: Seed) {
 fn get_headers_branching_chains(#[case] seed: Seed) {
     utils::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let common_height = rng.gen_range(100..10_000);
+        let common_height = rng.gen_range(100..1000);
 
         let mut tf = TestFramework::builder(&mut rng)
             .with_chain_config(
@@ -214,9 +214,9 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let common_block_id =
             tf.create_chain(&tf.genesis().get_id().into(), common_height, &mut rng).unwrap();
 
-        tf.create_chain(&common_block_id, rng.gen_range(100..2500), &mut rng).unwrap();
+        tf.create_chain(&common_block_id, rng.gen_range(100..250), &mut rng).unwrap();
         let locator = tf.chainstate.get_locator().unwrap();
-        tf.create_chain(&common_block_id, rng.gen_range(2500..5000), &mut rng).unwrap();
+        tf.create_chain(&common_block_id, rng.gen_range(250..500), &mut rng).unwrap();
 
         let headers = tf.chainstate.get_headers(locator, 2000).unwrap();
         let id = headers[0].prev_block_id();

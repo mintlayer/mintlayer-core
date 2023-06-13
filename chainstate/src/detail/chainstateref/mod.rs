@@ -385,7 +385,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
         result.reverse();
-        debug_assert!(!result.is_empty()); // there has to always be at least one new block
         Ok(result)
     }
 
@@ -465,46 +464,45 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(())
     }
 
-    pub fn check_block_header(
-        &self,
-        header: &SignedBlockHeader,
-        strict_pos_consensus_check: bool,
-    ) -> Result<(), CheckBlockError> {
+    pub fn check_block_header(&self, header: &SignedBlockHeader) -> Result<(), CheckBlockError> {
         self.check_header_size(header).log_err()?;
         self.enforce_checkpoints(header).log_err()?;
         self.check_block_height_vs_max_reorg_depth(header)?;
 
-        let best_block_id = self.get_best_block_id()?;
-        let TransactionVerifierDelta {
-            utxo_cache: consumed_utxos,
-            accounting_delta: consumed_deltas,
-            ..
-        } = self.reorganize_in_memory(header, best_block_id)?;
-
-        // TODO(Gosha):
-        // using utxo set like this is incorrect, because it represents the state of the mainchain, so it won't
-        // work when checking blocks from branches. See mintlayer/mintlayer-core/issues/752 for details
         let utxos_db = UtxosDB::new(&self.db_tx);
-        let utxos_cache = UtxosCache::from_data(&utxos_db, consumed_utxos).unwrap();
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
-        let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
-        consensus::validate_consensus(
-            self.chain_config,
-            header,
-            self,
-            &utxos_cache,
-            &pos_delta,
-            strict_pos_consensus_check,
-        )
-        .map_err(CheckBlockError::ConsensusVerificationFailed)
-        .log_err()?;
 
-        let prev_block_id = header.prev_block_id();
+        let best_block_id = self.get_best_block_id()?;
+        let (utxos_cache, pos_delta) = if best_block_id == *header.prev_block_id() {
+            let utxos_cache = UtxosCache::new(&utxos_db).unwrap();
+            let pos_delta = PoSAccountingDelta::new(&pos_db);
+            (utxos_cache, pos_delta)
+        } else {
+            //println!("reorganize_in_memory");
+            // If block header is not a child of the tip then perform an in memory reorg
+            // to get utxo set and accounting data up to that point in fork
+            let TransactionVerifierDelta {
+                utxo_cache: consumed_utxos,
+                accounting_delta: consumed_deltas,
+                ..
+            } = self.reorganize_in_memory(header, best_block_id)?;
+
+            let utxos_cache = UtxosCache::from_data(&utxos_db, consumed_utxos).unwrap();
+            let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
+
+            //let utxos_cache = UtxosCache::new(&utxos_db).unwrap();
+            //let pos_delta = PoSAccountingDelta::new(&pos_db);
+            (utxos_cache, pos_delta)
+        };
+
+        consensus::validate_consensus(self.chain_config, header, self, &utxos_cache, &pos_delta)
+            .map_err(CheckBlockError::ConsensusVerificationFailed)
+            .log_err()?;
 
         // This enforces the minimum accepted timestamp for the block. Depending on the consensus algorithm,
         // there might be extra checks. For example, PoS requires the timestamp to be greater the previous
         // block's timestamp.
-        let median_time_past = calculate_median_time_past(self, prev_block_id);
+        let median_time_past = calculate_median_time_past(self, header.prev_block_id());
         ensure!(
             header.timestamp() >= median_time_past,
             CheckBlockError::BlockTimeOrderInvalid(header.timestamp(), median_time_past),
@@ -724,12 +722,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
     }
 
-    pub fn check_block(
-        &self,
-        block: &WithId<Block>,
-        strict_pos_consensus_check: bool,
-    ) -> Result<(), CheckBlockError> {
-        self.check_block_header(block.header(), strict_pos_consensus_check).log_err()?;
+    pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
+        self.check_block_header(block.header()).log_err()?;
 
         self.check_block_size(block)
             .map_err(CheckBlockError::BlockSizeError)
@@ -812,26 +806,25 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             .collect();
         Ok(result)
     }
+
     pub fn reorganize_in_memory(
         &self,
-        header: &SignedBlockHeader,
+        new_block_header: &SignedBlockHeader,
         best_block_id: Id<GenBlock>,
     ) -> Result<TransactionVerifierDelta, CheckBlockError> {
-        let prev_block_id = header.prev_block_id();
-        let prev_block_index = match self
+        let prev_block_id = new_block_header.prev_block_id();
+        let new_chain = match self
             .get_gen_block_index(prev_block_id)
             .log_err()?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))?
         {
-            GenBlockIndex::Block(block_index) => block_index,
-            GenBlockIndex::Genesis(_) => unreachable!(),
+            GenBlockIndex::Block(block_index) => self.get_new_chain(&block_index).log_err()?,
+            GenBlockIndex::Genesis(_) => Vec::new(),
         };
-        let new_chain = self.get_new_chain(&prev_block_index).log_err()?;
 
-        let common_ancestor_id = {
-            let err = "This vector cannot be empty since there is at least one block to connect";
-            let first_block = new_chain.first().expect(err);
-            first_block.prev_block_id()
+        let common_ancestor_id = match new_chain.first() {
+            Some(block_index) => block_index.prev_block_id(),
+            None => prev_block_id,
         };
 
         let mut tx_verifier = TransactionVerifier::new(
@@ -854,13 +847,12 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                     GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
                     GenBlockIndex::Block(block_index) => block_index,
                 };
+                //println!("disconnecting block {}", to_disconnect_block.block_id());
 
-                let block_index = self
-                    .get_block_index(&best_block_id)
-                    .expect("Database error on retrieving current best block index")
-                    .expect("Best block index not present in the database");
-                let block =
-                    self.get_block_from_index(&block_index).log_err()?.expect("Inconsistent DB");
+                let block = self
+                    .get_block_from_index(&to_disconnect_block)
+                    .log_err()?
+                    .expect("Inconsistent DB");
 
                 // Disconnect transactions
                 let cached_inputs = self
@@ -882,6 +874,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
+        //println!("connecting blocks {}", new_chain.len());
         // Connect the new chain
         for new_tip_block_index in new_chain {
             let new_tip: WithId<Block> = self
@@ -892,8 +885,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 //    *block_index.block_id(),
                 //))?
                 .into();
-
-            self.check_block(&new_tip, true)?;
 
             // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
             let median_time_past = calculate_median_time_past(self, &new_tip.prev_block_id());
@@ -953,6 +944,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
                 )
             })
             .log_err()?;
+        debug_assert!(!new_chain.is_empty()); // there has to always be at least one new block
 
         let common_ancestor_id = {
             let err = "This vector cannot be empty since there is at least one block to connect";
@@ -1042,10 +1034,7 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
         new_tip_block_index: &BlockIndex,
         new_tip: &WithId<Block>,
     ) -> Result<(), BlockError> {
-        // Recheck the block without skipping PoS consensus checks.
-        // See also https://github.com/mintlayer/mintlayer-core/issues/752 for details.
-        // TODO: Remove this check once this issue is resolved.
-        self.check_block(new_tip, true)?;
+        self.check_block(new_tip)?;
 
         let best_block_id =
             self.get_best_block_id().map_err(BlockError::BestBlockLoadError).log_err()?;

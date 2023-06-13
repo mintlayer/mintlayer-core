@@ -36,7 +36,6 @@ pub fn validate_consensus<H, U, P>(
     block_index_handle: &H,
     utxos_view: &U,
     pos_accounting_view: &P,
-    strict_pos_consensus_check: bool,
 ) -> Result<(), ConsensusVerificationError>
 where
     H: BlockIndexHandle,
@@ -72,7 +71,6 @@ where
             utxos_view,
             pos_accounting_view,
             header,
-            strict_pos_consensus_check,
         ),
     }
 }
@@ -116,7 +114,6 @@ fn validate_pos_consensus<H, U, P>(
     utxos_view: &U,
     pos_accounting_view: &P,
     header: &SignedBlockHeader,
-    strict_pos_consensus_check: bool,
 ) -> Result<(), ConsensusVerificationError>
 where
     H: BlockIndexHandle,
@@ -137,7 +134,6 @@ where
             block_index_handle,
             utxos_view,
             pos_accounting_view,
-            strict_pos_consensus_check,
         )
         .map_err(Into::into),
     }
