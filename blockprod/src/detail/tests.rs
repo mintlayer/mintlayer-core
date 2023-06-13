@@ -201,13 +201,25 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, _job_finished_receiver) = block_production
+                let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::None,
                         TransactionsSource::Provided(vec![]),
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finish receiver closed");
+
+                assert_eq!(
+                    block_production
+                        .job_manager_handle
+                        .get_job_count()
+                        .await
+                        .expect("Error getting job count"),
+                    0,
+                    "Job manager should have zero jobs running"
+                );
 
                 process_block(&chainstate, new_block).await;
             }
@@ -260,13 +272,25 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, _job_finished_receiver) = block_production
+                let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::PoS(input_data),
                         TransactionsSource::Provided(vec![]),
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finish receiver closed");
+
+                assert_eq!(
+                    block_production
+                        .job_manager_handle
+                        .get_job_count()
+                        .await
+                        .expect("Error getting job count"),
+                    0,
+                    "Job manager should have zero jobs running"
+                );
 
                 process_block(&chainstate, new_block).await;
             }
@@ -297,7 +321,7 @@ mod produce_block {
                 )
                 .expect("Error initializing blockprod");
 
-                let (new_block, _job_finished_receiver) = block_production
+                let (new_block, job_finished_receiver) = block_production
                     .produce_block(
                         GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
                             Destination::AnyoneCanSpend,
@@ -306,6 +330,18 @@ mod produce_block {
                     )
                     .await
                     .expect("Failed to produce a block: {:?}");
+
+                job_finished_receiver.await.expect("Job finish receiver closed");
+
+                assert_eq!(
+                    block_production
+                        .job_manager_handle
+                        .get_job_count()
+                        .await
+                        .expect("Error getting job count"),
+                    0,
+                    "Job manager should have zero jobs running"
+                );
 
                 process_block(&chainstate, new_block).await;
             }
