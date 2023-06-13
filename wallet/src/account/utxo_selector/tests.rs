@@ -24,7 +24,7 @@ use test_utils::random::{make_seedable_rng, Seed};
 use super::*;
 
 fn add_output(value: Amount, groups: &mut Vec<OutputGroup>) {
-    let outpoint = OutPoint::new(
+    let outpoint = UtxoOutPoint::new(
         OutPointSourceId::BlockReward(Id::<GenBlock>::new(Uint256::from_u64(1).into())),
         0,
     );
@@ -57,6 +57,7 @@ fn test_knapsack_solver_empty(#[case] seed: Seed) {
         cost_of_change,
         &mut rng,
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .err()
     .unwrap();
@@ -88,6 +89,7 @@ fn test_knapsack_solver_not_enough(#[case] seed: Seed) {
         cost_of_change,
         &mut rng,
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .err()
     .unwrap();
@@ -123,6 +125,7 @@ fn test_knapsack_solver_exact_solution(#[case] seed: Seed) {
         cost_of_change,
         &mut rng,
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .unwrap();
 
@@ -158,6 +161,7 @@ fn test_knapsack_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
         cost_of_change,
         &mut rng,
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .unwrap();
 
@@ -183,6 +187,7 @@ fn test_knapsack_solver_not_exact_solution() {
         cost_of_change,
         &mut make_pseudo_rng(),
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .unwrap();
 
@@ -197,6 +202,7 @@ fn test_knapsack_solver_not_exact_solution() {
         cost_of_change,
         &mut make_pseudo_rng(),
         max_weight,
+        PayFee::PayFeeWithThisCurrency,
     )
     .unwrap();
 
@@ -227,12 +233,17 @@ fn test_bnb_solver_exact_solution(#[case] seed: Seed) {
 
     let cost_of_change = Amount::ZERO;
     let max_weight = 100;
-    let result = select_coins_bnb(groups, target_value, cost_of_change, max_weight).unwrap();
+    let result = select_coins_bnb(
+        groups,
+        target_value,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    )
+    .unwrap();
 
     // found exact match
     assert_eq!(result.effective_value, target_value);
-    // TODO: add fee
-    // assert_eq!(result.outputs.len(), 1);
 }
 
 #[rstest]
@@ -256,7 +267,14 @@ fn test_bnb_solver_exact_solution_multiple_utxos(#[case] seed: Seed) {
 
     let cost_of_change = Amount::ZERO;
     let max_weight = 100;
-    let result = select_coins_bnb(groups, target_value, cost_of_change, max_weight).unwrap();
+    let result = select_coins_bnb(
+        groups,
+        target_value,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    )
+    .unwrap();
 
     // found exact match
     assert!(!result.outputs.is_empty());
@@ -274,9 +292,50 @@ fn test_bnb_solver_not_exact_solution_fail() {
     let target_value = Amount::from_atoms(34);
     let cost_of_change = Amount::from_atoms(2);
     let max_weight = 100;
-    let result =
-        select_coins_bnb(groups.clone(), target_value, cost_of_change, max_weight).unwrap();
+    let result = select_coins_bnb(
+        groups.clone(),
+        target_value,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    )
+    .unwrap();
 
     assert_eq!(result.effective_value, Amount::from_atoms(35));
     assert_eq!(result.outputs.len(), 3);
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_srd_solver_find_solution(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+
+    let target_value = Amount::from_atoms(rng.gen_range(1..100));
+    let mut groups = vec![];
+    for _ in 0..rng.gen_range(0..100) {
+        // add values different from the target_value
+        let mut value = Amount::from_atoms(rng.gen_range(1..100));
+        while value == target_value {
+            value = Amount::from_atoms(rng.gen_range(1..100));
+        }
+        add_output(value, &mut groups);
+    }
+
+    // add the target value itself
+    add_output(target_value, &mut groups);
+
+    let cost_of_change = Amount::ZERO;
+    let max_weight = 100;
+    let result = select_coins_srd(
+        &groups,
+        target_value,
+        &mut rng,
+        cost_of_change,
+        max_weight,
+        PayFee::PayFeeWithThisCurrency,
+    )
+    .unwrap();
+
+    assert!(result.effective_value >= target_value);
 }

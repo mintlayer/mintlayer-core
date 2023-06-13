@@ -21,12 +21,13 @@ use crate::{
 
 use super::*;
 use common::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         config::{create_mainnet, create_regtest, Builder, ChainType},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        tokens::OutputValue,
+        tokens::{OutputValue, TokenData, TokenIssuance, TokenTransfer},
         Destination, Genesis, OutPointSourceId, TxInput,
     },
     primitives::Idable,
@@ -592,4 +593,175 @@ fn lock_wallet_fail_empty_password() {
             wallet_storage::Error::WalletEmptyPassword
         ))
     );
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn issue_and_transfer_tokens(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let chain_config = Arc::new(create_mainnet());
+
+    let db = create_wallet_in_memory().unwrap();
+    let mut wallet = Wallet::new_wallet(Arc::clone(&chain_config), db, MNEMONIC, None).unwrap();
+    wallet.create_account(DEFAULT_ACCOUNT_INDEX).unwrap();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, Amount::ZERO);
+
+    // Generate a new block which sends reward to the wallet
+    let block1_amount = Amount::from_atoms(rng.gen_range(NETWORK_FEE + 100..NETWORK_FEE + 10000));
+    let address = get_address(
+        &chain_config,
+        MNEMONIC,
+        DEFAULT_ACCOUNT_INDEX,
+        KeyPurpose::ReceiveFunds,
+        0.try_into().unwrap(),
+    );
+    let block1 = Block::new(
+        vec![],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![
+            make_address_output(address.clone(), block1_amount).unwrap()
+        ]),
+    )
+    .unwrap();
+
+    let block1_id = block1.get_id();
+    let block1_timestamp = block1.timestamp();
+
+    wallet.scan_new_blocks(BlockHeight::new(0), vec![block1]).unwrap();
+
+    let (coin_balance, _) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(coin_balance, block1_amount);
+
+    let address2 = wallet.get_new_address(DEFAULT_ACCOUNT_INDEX).unwrap();
+    let pkh = PublicKeyHash::try_from(address2.data(&chain_config).unwrap()).unwrap();
+
+    let amount_fraction = (block1_amount.into_atoms() - NETWORK_FEE) / 10;
+
+    let token_amount_to_issue = Amount::from_atoms(rng.gen_range(1..amount_fraction));
+    let new_output = TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::TokenIssuance(Box::new(
+            TokenIssuance {
+                token_ticker: "XXXX".as_bytes().to_vec(),
+                amount_to_issue: token_amount_to_issue,
+                number_of_decimals: rng.gen_range(1..18),
+                metadata_uri: "http://uri".as_bytes().to_vec(),
+            },
+        )))),
+        Destination::Address(pkh),
+    );
+
+    let token_issuance_transaction = wallet
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .unwrap();
+
+    let block2 = Block::new(
+        vec![token_issuance_transaction],
+        block1_id.into(),
+        block1_timestamp,
+        ConsensusData::None,
+        BlockReward::new(vec![
+            make_address_output(address.clone(), block1_amount).unwrap()
+        ]),
+    )
+    .unwrap();
+
+    wallet.scan_new_blocks(BlockHeight::new(1), vec![block2]).unwrap();
+
+    let (coin_balance, token_balances) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(
+        coin_balance,
+        ((block1_amount * 2).unwrap() - Amount::from_atoms(NETWORK_FEE)).unwrap()
+    );
+    assert_eq!(token_balances.len(), 1);
+    let (token_id, token_amount) = token_balances.first_key_value().expect("some");
+    assert_eq!(*token_amount, token_amount_to_issue);
+
+    let tokens_to_transfer =
+        Amount::from_atoms(rng.gen_range(1..token_amount_to_issue.into_atoms()));
+
+    let some_other_address = PublicKeyHash::from_low_u64_be(1);
+    let new_output = TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+            token_id: *token_id,
+            amount: tokens_to_transfer,
+        }))),
+        Destination::Address(some_other_address),
+    );
+
+    let transfer_tokens_transaction = wallet
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .unwrap();
+
+    let block3 = Block::new(
+        vec![transfer_tokens_transaction],
+        chain_config.genesis_block_id(),
+        chain_config.genesis_block().timestamp(),
+        ConsensusData::None,
+        BlockReward::new(vec![make_address_output(address, block1_amount).unwrap()]),
+    )
+    .unwrap();
+    wallet.scan_new_blocks(BlockHeight::new(2), vec![block3]).unwrap();
+
+    let (coin_balance, token_balances) = wallet
+        .get_balance(
+            DEFAULT_ACCOUNT_INDEX,
+            UtxoType::Transfer | UtxoType::LockThenTransfer,
+        )
+        .unwrap();
+    assert_eq!(token_balances.len(), 1);
+    let (_token_id, token_amount) = token_balances.first_key_value().expect("some");
+    assert_eq!(
+        *token_amount,
+        (token_amount_to_issue - tokens_to_transfer).expect("")
+    );
+    assert_eq!(
+        coin_balance,
+        ((block1_amount * 3).unwrap() - Amount::from_atoms(NETWORK_FEE * 2)).unwrap()
+    );
+
+    let not_enough_tokens_to_transfer = Amount::from_atoms(
+        rng.gen_range(token_amount_to_issue.into_atoms()..token_amount_to_issue.into_atoms() + 100),
+    );
+
+    let some_other_address = PublicKeyHash::from_low_u64_be(1);
+    let new_output = TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+            token_id: *token_id,
+            amount: not_enough_tokens_to_transfer,
+        }))),
+        Destination::Address(some_other_address),
+    );
+
+    let transfer_tokens_error = wallet
+        .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, vec![new_output])
+        .err()
+        .unwrap();
+
+    assert_eq!(
+        transfer_tokens_error,
+        WalletError::CoinSelectionError(CoinSelectorError::NotEnoughFunds(
+            (token_amount_to_issue - tokens_to_transfer).unwrap(),
+            not_enough_tokens_to_transfer
+        ))
+    )
 }

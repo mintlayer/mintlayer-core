@@ -16,7 +16,7 @@
 use common::address::pubkeyhash::PublicKeyHash;
 use common::address::Address;
 use common::chain::stakelock::StakePoolData;
-use common::chain::tokens::OutputValue;
+use common::chain::tokens::{OutputValue, TokenData, TokenId, TokenTransfer};
 use common::chain::{
     Destination, PoolId, Transaction, TransactionCreationError, TxInput, TxOutput, UtxoOutPoint,
 };
@@ -48,6 +48,25 @@ pub fn make_address_output(address: Address, amount: Amount) -> WalletResult<TxO
     let destination = Destination::Address(pub_key_hash);
 
     Ok(TxOutput::Transfer(OutputValue::Coin(amount), destination))
+}
+
+pub fn make_address_output_token(
+    address: Address,
+    amount: Amount,
+    token_id: TokenId,
+) -> WalletResult<TxOutput> {
+    let pub_key_hash = PublicKeyHash::try_from(&address)
+        .map_err(|e| WalletError::InvalidAddress(address.get().to_owned(), e))?;
+
+    let destination = Destination::Address(pub_key_hash);
+
+    Ok(TxOutput::Transfer(
+        OutputValue::Token(Box::new(TokenData::TokenTransfer(TokenTransfer {
+            token_id,
+            amount,
+        }))),
+        destination,
+    ))
 }
 
 pub fn make_stake_output(

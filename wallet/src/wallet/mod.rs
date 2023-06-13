@@ -74,6 +74,8 @@ pub enum WalletError {
     UnsupportedTransactionOutput(Box<TxOutput>),
     #[error("Output amounts overflow")]
     OutputAmountOverflow,
+    #[error("Empty inputs in token issuance transaction")]
+    MissingTokenId,
     #[error("Transaction creation error: {0}")]
     TransactionCreation(#[from] TransactionCreationError),
     #[error("Transaction signing error: {0}")]
@@ -275,7 +277,10 @@ impl<B: storage::Backend> Wallet<B> {
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
         let utxos = account.get_utxos(utxo_types);
-        let utxos = utxos.into_iter().map(|(outpoint, txo)| (outpoint, txo.clone())).collect();
+        let utxos = utxos
+            .into_iter()
+            .map(|(outpoint, (txo, _token_id))| (outpoint, txo.clone()))
+            .collect();
         Ok(utxos)
     }
 
