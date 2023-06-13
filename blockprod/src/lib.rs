@@ -102,10 +102,13 @@ mod tests {
 
     use super::*;
 
-    pub fn setup_blockprod_test() -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
+    pub fn setup_blockprod_test(
+        chain_config: Option<ChainConfig>,
+    ) -> (Manager, Arc<ChainConfig>, ChainstateHandle, MempoolHandle) {
         let mut manager = Manager::new("blockprod-unit-test");
         manager.install_signal_handlers();
-        let chain_config = Arc::new(create_unit_test_config());
+
+        let chain_config = Arc::new(chain_config.unwrap_or_else(create_unit_test_config));
 
         let chainstate = chainstate::make_chainstate(
             Arc::clone(&chain_config),
@@ -134,7 +137,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_make_blockproduction() {
-        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+        let (mut manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
         let blockprod = make_blockproduction(
             Arc::clone(&chain_config),

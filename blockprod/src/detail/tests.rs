@@ -38,7 +38,7 @@ use crate::{
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions_collect_txs_failed() {
-    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
 
     let mock_mempool = MempoolInterfaceMock::new();
     mock_mempool.collect_txs_should_error.store(true, Ordering::Relaxed);
@@ -79,7 +79,7 @@ async fn collect_transactions_collect_txs_failed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions_subsystem_error() {
-    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
 
     let mock_mempool = MempoolInterfaceMock::new();
 
@@ -131,7 +131,7 @@ async fn collect_transactions_subsystem_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn collect_transactions_succeeded() {
-    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test();
+    let (mut manager, chain_config, chainstate, _mempool) = setup_blockprod_test(None);
 
     let mock_mempool = MempoolInterfaceMock::new();
 
@@ -235,7 +235,7 @@ async fn produce_block_multiple_jobs(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_all_jobs(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut rng = make_seedable_rng(seed);
 
@@ -269,7 +269,7 @@ async fn stop_all_jobs(#[case] seed: Seed) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_all_jobs_error() {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut block_production = BlockProduction::new(
         chain_config,
@@ -302,7 +302,7 @@ async fn stop_all_jobs_error() {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_all_jobs_ok(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut block_production = BlockProduction::new(
         chain_config,
@@ -334,7 +334,7 @@ async fn stop_all_jobs_ok(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_job_error(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut block_production = BlockProduction::new(
         chain_config,
@@ -370,7 +370,7 @@ async fn stop_job_error(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_job_existing_job(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut rng = make_seedable_rng(seed);
 
@@ -407,7 +407,7 @@ async fn stop_job_existing_job(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_job_multiple_jobs(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut rng = make_seedable_rng(seed);
 
@@ -459,7 +459,7 @@ async fn stop_job_multiple_jobs(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_job_non_existent_job(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut rng = make_seedable_rng(seed);
 
@@ -492,7 +492,7 @@ async fn stop_job_non_existent_job(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stop_job_ok(#[case] seed: Seed) {
-    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+    let (_manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
     let mut block_production = BlockProduction::new(
         chain_config,
