@@ -94,13 +94,64 @@ pub fn make_blockproduction(
 
 #[cfg(test)]
 mod tests {
-    use chainstate::{ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy};
+    use std::time::Duration;
+
+    use chainstate::{
+        BlockSource, ChainstateConfig, ChainstateHandle, DefaultTransactionVerificationStrategy,
+    };
     use chainstate_storage::inmemory::Store;
-    use common::chain::{config::create_unit_test_config, ChainConfig};
+    use common::{
+        chain::{
+            block::timestamp::BlockTimestamp,
+            config::{
+                create_unit_test_config, emission_schedule::Mlt, Builder, ChainConfig, ChainType,
+            },
+            create_unittest_pos_config, initial_difficulty,
+            stakelock::StakePoolData,
+            Block, ConsensusUpgrade, Destination, Genesis, NetUpgrades, TxOutput, UpgradeVersion,
+        },
+        primitives::{per_thousand::PerThousand, Amount, BlockHeight, H256},
+        time_getter::TimeGetter,
+    };
+    use crypto::{
+        key::{KeyKind, PrivateKey},
+        random::Rng,
+        vrf::{VRFKeyKind, VRFPrivateKey},
+    };
     use mempool::{MempoolHandle, MempoolSubsystemInterface};
     use subsystem::Manager;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     use super::*;
+
+    const MIN_STAKE_POOL_PLEDGE: Amount = Amount::from_atoms(40_000 * Mlt::ATOMS_PER_MLT);
+
+    pub async fn process_block(chainstate: &ChainstateHandle, new_block: Block) {
+        chainstate
+            .call_mut(move |this| {
+                let new_block_index = this
+                    .process_block(new_block.clone(), BlockSource::Local)
+                    .expect("Failed to process block: {:?}")
+                    .expect("Failed to activate best chain");
+
+                assert_eq!(
+                    new_block.header().header().block_id(),
+                    *new_block_index.block_id(),
+                    "The new block's Id is different to the new block index's block Id",
+                );
+
+                let best_block_index =
+                    this.get_best_block_index().expect("Failed to get best block index: {:?}");
+
+                assert_eq!(
+                    new_block_index.into_gen_block_index().block_id(),
+                    best_block_index.block_id(),
+                    "The new block index not the best block index"
+                );
+            })
+            .await
+            .expect("New block is not the new tip: {:?}");
+    }
 
     pub fn setup_blockprod_test(
         chain_config: Option<ChainConfig>,
@@ -133,6 +184,73 @@ mod tests {
         });
 
         (manager, chain_config, chainstate, mempool)
+    }
+
+    pub fn setup_pos(seed: Seed) -> (ChainConfig, PrivateKey, VRFPrivateKey, TxOutput) {
+        let mut rng = make_seedable_rng(seed);
+
+        let (genesis_stake_private_key, genesis_stake_public_key) =
+            PrivateKey::new_from_rng(&mut rng, KeyKind::Secp256k1Schnorr);
+
+        let (genesis_vrf_private_key, genesis_vrf_public_key) =
+            VRFPrivateKey::new_from_rng(&mut rng, VRFKeyKind::Schnorrkel);
+
+        let create_genesis_pool_txoutput = TxOutput::CreateStakePool(
+            H256::zero().into(),
+            Box::new(StakePoolData::new(
+                MIN_STAKE_POOL_PLEDGE,
+                Destination::PublicKey(genesis_stake_public_key.clone()),
+                genesis_vrf_public_key,
+                Destination::PublicKey(genesis_stake_public_key),
+                PerThousand::new(1000).expect("Valid per thousand"),
+                Amount::ZERO,
+            )),
+        );
+
+        let pos_chain_config = {
+            let genesis_block = Genesis::new(
+                "blockprod-unit-tests".into(),
+                BlockTimestamp::from_int_seconds(
+                    TimeGetter::default()
+                        .get_time()
+                        .checked_sub(Duration::new(
+                            // Genesis must be in the past: now - (1 day..2 weeks)
+                            rng.gen_range(60 * 60 * 24..60 * 60 * 24 * 14),
+                            0,
+                        ))
+                        .expect("No time underflow")
+                        .as_secs(),
+                ),
+                vec![create_genesis_pool_txoutput.clone()],
+            );
+
+            let net_upgrades = NetUpgrades::initialize(vec![
+                (
+                    BlockHeight::new(0),
+                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+                ),
+                (
+                    BlockHeight::new(1),
+                    UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS {
+                        initial_difficulty: initial_difficulty(ChainType::Regtest).into(),
+                        config: create_unittest_pos_config(),
+                    }),
+                ),
+            ])
+            .expect("Net upgrades are valid");
+
+            Builder::new(ChainType::Regtest)
+                .genesis_custom(genesis_block)
+                .net_upgrades(net_upgrades)
+                .build()
+        };
+
+        (
+            pos_chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        )
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
