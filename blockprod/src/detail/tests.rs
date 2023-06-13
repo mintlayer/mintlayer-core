@@ -421,7 +421,7 @@ async fn stop_all_jobs_error() {
     )
     .expect("Error initializing blockprod");
 
-    let mut mock_job_manager = Box::new(MockJobManager::default());
+    let mut mock_job_manager = Box::<MockJobManager>::default();
 
     mock_job_manager
         .expect_stop_all_jobs()
@@ -454,7 +454,7 @@ async fn stop_all_jobs_ok(#[case] seed: Seed) {
     )
     .expect("Error initializing blockprod");
 
-    let mut mock_job_manager = Box::new(MockJobManager::default());
+    let mut mock_job_manager = Box::<MockJobManager>::default();
     let return_value = make_seedable_rng(seed).gen();
     let _expected_value = return_value;
 
@@ -486,7 +486,7 @@ async fn stop_job_error(#[case] seed: Seed) {
     )
     .expect("Error initializing blockprod");
 
-    let mut mock_job_manager = Box::new(MockJobManager::default());
+    let mut mock_job_manager = Box::<MockJobManager>::default();
 
     mock_job_manager
         .expect_stop_job()
@@ -644,7 +644,7 @@ async fn stop_job_ok(#[case] seed: Seed) {
     )
     .expect("Error initializing blockprod");
 
-    let mut mock_job_manager = Box::new(MockJobManager::default());
+    let mut mock_job_manager = Box::<MockJobManager>::default();
 
     mock_job_manager.expect_stop_job().times(1).returning(|_| Ok(1));
 

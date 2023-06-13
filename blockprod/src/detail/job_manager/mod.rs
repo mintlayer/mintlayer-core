@@ -352,15 +352,10 @@ impl Drop for JobManager {
 // TODO: tests
 #[cfg(test)]
 pub mod tests {
-    use common::{
-        chain::GenBlock,
-        primitives::Id,
-    };
+    use common::{chain::GenBlock, primitives::Id};
     use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 
-    use crate::{
-        detail::job_manager::{JobManagerError, JobManagerInterface},
-    };
+    use crate::detail::job_manager::{JobManagerError, JobManagerInterface};
 
     use super::*;
 
