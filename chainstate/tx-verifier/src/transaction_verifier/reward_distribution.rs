@@ -213,7 +213,7 @@ mod tests {
     use common::{
         amount_sum,
         chain::{DelegationId, Destination, PoolId},
-        primitives::{per_thousand::PerThousand, signed_amount::SignedAmount, Amount, H256},
+        primitives::{per_thousand::PerThousand, Amount, H256},
     };
     use crypto::{
         random::Rng,
@@ -455,9 +455,9 @@ mod tests {
         let delegation_id_2 = new_delegation_id(2);
 
         let original_pledged_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_id_1_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let delegation_id_2_amount = Amount::from_atoms(rng.gen_range(0..100_000_000));
-        let total_delegation_shares = (delegation_id_1_amount + delegation_id_2_amount).unwrap();
+        let delegation_1_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let delegation_2_balance = Amount::from_atoms(rng.gen_range(0..100_000_000));
+        let total_delegation_shares = (delegation_1_balance + delegation_2_balance).unwrap();
 
         let reward = Amount::from_atoms(rng.gen_range(0..100_000_000));
         let cost_per_block = Amount::from_atoms(rng.gen_range(0..reward.into_atoms()));
@@ -467,8 +467,8 @@ mod tests {
 
         let original_pool_balance = amount_sum!(
             original_pledged_amount,
-            delegation_id_1_amount,
-            delegation_id_2_amount
+            delegation_1_balance,
+            delegation_2_balance
         )
         .unwrap();
 
@@ -486,12 +486,12 @@ mod tests {
             BTreeMap::from([(pool_id, pool_data)]),
             BTreeMap::from([(pool_id, original_pool_balance)]),
             BTreeMap::from([
-                ((pool_id, delegation_id_1), delegation_id_1_amount),
-                ((pool_id, delegation_id_2), delegation_id_2_amount),
+                ((pool_id, delegation_id_1), delegation_1_balance),
+                ((pool_id, delegation_id_2), delegation_2_balance),
             ]),
             BTreeMap::from_iter([
-                (delegation_id_1, delegation_id_1_amount),
-                (delegation_id_2, delegation_id_2_amount),
+                (delegation_id_1, delegation_1_balance),
+                (delegation_id_2, delegation_2_balance),
             ]),
             BTreeMap::from_iter([
                 (delegation_id_1, delegation_data.clone()),
@@ -522,16 +522,24 @@ mod tests {
         );
 
         let (consumed_data, _) = accounting_adapter.consume();
-        let delegation_1_reward = consumed_data.delegation_balances.data().get(&delegation_id_1);
-        let delegation_2_reward = consumed_data.delegation_balances.data().get(&delegation_id_2);
+        let delegation_1_reward = consumed_data
+            .delegation_balances
+            .data()
+            .get(&delegation_id_1)
+            .map(|v| v.into_unsigned().unwrap());
+        let delegation_2_reward = consumed_data
+            .delegation_balances
+            .data()
+            .get(&delegation_id_2)
+            .map(|v| v.into_unsigned().unwrap());
 
         // check that owner reward and delegation rewards add up to total reward
         assert_eq!(
             reward,
             amount_sum!(
                 (new_pledge_amount - original_pledged_amount).unwrap(),
-                delegation_1_reward.unwrap_or(&SignedAmount::ZERO).into_unsigned().unwrap(),
-                delegation_2_reward.unwrap_or(&SignedAmount::ZERO).into_unsigned().unwrap()
+                delegation_1_reward.unwrap_or(Amount::ZERO),
+                delegation_2_reward.unwrap_or(Amount::ZERO)
             )
             .unwrap()
         );
@@ -540,26 +548,29 @@ mod tests {
         if let (Some(delegation_1_reward), Some(delegation_2_reward)) =
             (delegation_1_reward, delegation_2_reward)
         {
-            // due to integer arithmetics there could be a rounding error in the distribution,
-            // so straightforward proportion check won't work;
-            // check that the proportion is not more than 1 magnitude off instead
-            let total_delegation_reward =
-                total_delegation_reward.into_signed().unwrap().into_atoms();
-            assert!(
-                ((total_delegation_reward / delegation_1_reward.into_atoms())
-                    - (total_delegation_shares.into_atoms() / delegation_id_1_amount.into_atoms())
-                        as i128)
-                    .abs()
-                    <= 1
-            );
+            // Due to integer arithmetics there could be a rounding error in the distribution,
+            // so straightforward proportion check won't work.
+            // At the same time the real reward if calculated with floating point
+            // must be in the range of [delegation_reward, delegation_reward + 1).
+            // So we can check that balance proportion is in the corresponding reward range
+            let check_reward_is_proportional_to_balance = |balance: Amount, reward: Amount| {
+                let balance_proportion =
+                    total_delegation_shares.into_atoms() / balance.into_atoms();
 
-            assert!(
-                ((total_delegation_reward / delegation_2_reward.into_atoms())
-                    - (total_delegation_shares.into_atoms() / delegation_id_2_amount.into_atoms())
-                        as i128)
-                    .abs()
-                    <= 1
-            );
+                let reward_proportion_lower_bound =
+                    total_delegation_reward.into_atoms() / (reward.into_atoms() + 1);
+                let reward_proportion_upper_bound =
+                    total_delegation_reward.into_atoms() / reward.into_atoms();
+
+                // the range is inclusive in case lower bound == upper bound
+                assert!(
+                    (reward_proportion_lower_bound..=reward_proportion_upper_bound)
+                        .contains(&balance_proportion)
+                );
+            };
+
+            check_reward_is_proportional_to_balance(delegation_1_balance, delegation_1_reward);
+            check_reward_is_proportional_to_balance(delegation_2_balance, delegation_2_reward);
         }
     }
 
