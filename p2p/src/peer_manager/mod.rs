@@ -51,7 +51,10 @@ use crate::{
     net::{
         default_backend::transport::TransportAddress,
         types::PeerInfo,
-        types::{services::Service, ConnectivityEvent, Role},
+        types::{
+            services::{Service, Services},
+            ConnectivityEvent, Role,
+        },
         AsBannableAddress, ConnectivityService, NetworkingService,
     },
     protocol::{NetworkProtocol, NETWORK_PROTOCOL_MIN},
@@ -76,6 +79,10 @@ const MAX_OUTBOUND_CONNECTIONS: usize = 8;
 const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
+
+/// How often resend own address to one random outbound peer on average
+const RESEND_OWN_ADDRESS_DELAY: Duration =
+    Duration::from_secs(24 * 60 * 60 / MAX_OUTBOUND_CONNECTIONS as u64);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
@@ -196,10 +203,20 @@ where
     /// *receiver_address* is this host socket address as seen and reported by remote peer.
     /// This should work for hosts with public IPs and for hosts behind NAT with port forwarding (same port is assumed).
     /// This won't work for majority of nodes but that should be accepted.
-    fn handle_outbound_receiver_address(&mut self, peer_id: PeerId, receiver_address: PeerAddress) {
-        if !self.subscribed_to_peer_addresses.contains(&peer_id) {
-            return;
+    fn discover_own_address(
+        &mut self,
+        role: Role,
+        remote_services: Services,
+        receiver_address: Option<PeerAddress>,
+    ) -> Option<T::Address> {
+        if !remote_services.has_service(Service::PeerAddresses) || role != Role::Outbound {
+            return None;
         }
+
+        let receiver_address = match receiver_address {
+            Some(addr) => addr,
+            None => return None,
+        };
 
         // Take IP and use port numbers from all listening sockets (with same IP version)
         let discovered_own_addresses = self
@@ -234,9 +251,7 @@ where
 
         // Send only one address because of the rate limiter (see `ADDR_RATE_INITIAL_SIZE`).
         // Select a random address to give all addresses a chance to be discovered by the network.
-        if let Some(address) = discovered_own_addresses.into_iter().choose(&mut make_pseudo_rng()) {
-            self.announce_address(peer_id, address);
-        }
+        discovered_own_addresses.into_iter().choose(&mut make_pseudo_rng())
     }
 
     /// Send address announcement to the selected peer (if the address is new)
@@ -252,6 +267,32 @@ where
                 }),
             );
             peer.announced_addresses.insert(&address, &mut make_pseudo_rng());
+        }
+    }
+
+    fn send_own_address_to_peer(
+        peer_connectivity_handle: &mut T::ConnectivityHandle,
+        peer: &PeerContext<T::Address>,
+    ) {
+        if let Some(discovered_addr) = peer.discovered_own_address.as_ref() {
+            Self::send_peer_message(
+                peer_connectivity_handle,
+                peer.info.peer_id,
+                PeerManagerMessage::AnnounceAddrRequest(AnnounceAddrRequest {
+                    address: discovered_addr.as_peer_address(),
+                }),
+            );
+        }
+    }
+
+    fn resend_own_address_randomly(&mut self) {
+        if let Some(peer) = self
+            .peers
+            .values_mut()
+            .filter(|peer| peer.discovered_own_address.is_some())
+            .choose(&mut make_pseudo_rng())
+        {
+            Self::send_own_address_to_peer(&mut self.peer_connectivity_handle, peer);
         }
     }
 
@@ -523,30 +564,31 @@ where
             &mut make_pseudo_rng(),
         );
 
-        let old_value = self.peers.insert(
-            peer_id,
-            PeerContext {
-                info,
-                address: address.clone(),
-                role,
-                score: 0,
-                sent_ping: None,
-                ping_last: None,
-                ping_min: None,
-                addr_list_req_received: SetFlag::new(),
-                addr_list_resp_received: SetFlag::new(),
-                announced_addresses,
-                address_rate_limiter,
-            },
-        );
+        let discovered_own_address =
+            self.discover_own_address(role, info.services, receiver_address);
+
+        let peer = PeerContext {
+            info,
+            address: address.clone(),
+            role,
+            score: 0,
+            sent_ping: None,
+            ping_last: None,
+            ping_min: None,
+            addr_list_req_received: SetFlag::new(),
+            addr_list_resp_received: SetFlag::new(),
+            announced_addresses,
+            address_rate_limiter,
+            discovered_own_address,
+        };
+
+        Self::send_own_address_to_peer(&mut self.peer_connectivity_handle, &peer);
+
+        let old_value = self.peers.insert(peer_id, peer);
         assert!(old_value.is_none());
 
         if role == Role::Outbound {
             self.peerdb.outbound_peer_connected(address);
-
-            if let Some(receiver_address) = receiver_address {
-                self.handle_outbound_receiver_address(peer_id, receiver_address);
-            }
         }
 
         Ok(())
@@ -1089,7 +1131,12 @@ where
     /// often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<Void> {
+    ///
+    /// `loop_started_tx` is a helper channel for unit testing (it notifies when it's safe to change the time with `time_getter`).
+    async fn run_internal(
+        &mut self,
+        loop_started_tx: Option<oneshot_nofail::Sender<()>>,
+    ) -> crate::Result<Void> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
@@ -1102,6 +1149,12 @@ where
         let mut heartbeat_call_needed = false;
 
         let mut periodic_interval = tokio::time::interval(Duration::from_secs(1));
+
+        let mut next_time_resend_own_address = self.time_getter.get_time();
+
+        if let Some(chan) = loop_started_tx {
+            chan.send(());
+        }
 
         loop {
             tokio::select! {
@@ -1147,7 +1200,17 @@ where
                 self.ping_check();
                 last_ping_check = now;
             }
+
+            while next_time_resend_own_address < now {
+                self.resend_own_address_randomly();
+                next_time_resend_own_address += RESEND_OWN_ADDRESS_DELAY
+                    .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+            }
         }
+    }
+
+    pub async fn run(&mut self) -> crate::Result<Void> {
+        self.run_internal(None).await
     }
 }
 

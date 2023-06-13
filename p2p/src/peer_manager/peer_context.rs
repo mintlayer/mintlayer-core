@@ -61,4 +61,6 @@ pub struct PeerContext<A> {
     pub announced_addresses: RollingBloomFilter<A>,
 
     pub address_rate_limiter: RateLimiter,
+
+    pub discovered_own_address: Option<A>,
 }
