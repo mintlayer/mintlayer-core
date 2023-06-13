@@ -89,7 +89,7 @@ prop_compose! {
 }
 prop_compose! {
     fn gen_struct3_75()(int: u32) -> Struct3<75> {
-        Struct3 { version: Tag::default(), int }
+        Struct3 { version: Tag, int }
     }
 }
 fn gen_enum2() -> impl Strategy<Value = Enum2> {
@@ -97,7 +97,7 @@ fn gen_enum2() -> impl Strategy<Value = Enum2> {
         Just(Enum2::X(Enum0::This)),
         gen_enum1().prop_map(Enum2::Y),
         any::<[u8; 3]>().prop_map(|three_bytes| Enum2::Z {
-            tag: Tag::default(),
+            tag: Tag,
             three_bytes
         }),
     ]
