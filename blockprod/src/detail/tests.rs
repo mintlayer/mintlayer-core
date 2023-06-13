@@ -16,7 +16,7 @@
 use std::sync::atomic::Ordering;
 
 use common::{
-    chain::{Destination, GenBlock, OutPointSourceId, PoolId, TxInput},
+    chain::{transaction::TxInput, Destination, GenBlock, OutPointSourceId, PoolId},
     primitives::{Id, H256},
 };
 use consensus::{PoSGenerateBlockInputData, PoWGenerateBlockInputData};
@@ -244,7 +244,7 @@ mod produce_block {
                     genesis_stake_private_key,
                     genesis_vrf_private_key,
                     PoolId::new(H256::zero()),
-                    vec![TxInput::new(
+                    vec![TxInput::from_utxo(
                         OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
                         0,
                     )],
