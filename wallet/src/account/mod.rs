@@ -16,7 +16,7 @@
 mod output_cache;
 mod utxo_selector;
 
-pub use utxo_selector::CoinSelectorError;
+pub use utxo_selector::UtxoSelectorError;
 
 use crate::account::utxo_selector::{select_coins, OutputGroup};
 use crate::key_chain::{
@@ -179,8 +179,8 @@ impl Account {
                 let selection_result =
                     select_coins(utxos, *output_amount, PayFee::DoNotPayFeeWithThisCurrency)?;
 
-                total_fees_not_payed =
-                    (total_fees_not_payed + selection_result.get_total_fees()).expect("");
+                total_fees_not_payed = (total_fees_not_payed + selection_result.get_total_fees())
+                    .ok_or(WalletError::OutputAmountOverflow)?;
 
                 Ok((currency.clone(), selection_result))
             })
@@ -194,8 +194,9 @@ impl Account {
             .map(utxo_to_output_group)
             .try_collect()?;
 
-        let amount_to_be_paied_in_currency_with_fees =
-            (amount_to_be_paied_in_currency_with_fees + total_fees_not_payed).expect("");
+        let amount_to_be_paied_in_currency_with_fees = (amount_to_be_paied_in_currency_with_fees
+            + total_fees_not_payed)
+            .ok_or(WalletError::OutputAmountOverflow)?;
         let selection_result = select_coins(
             utxos,
             amount_to_be_paied_in_currency_with_fees,
@@ -336,66 +337,6 @@ impl Account {
         );
 
         Ok(data)
-    }
-
-    /// Calculate the output amount for coins and tokens
-    fn calculate_output_amounts<'a>(
-        outputs: impl Iterator<Item = (&'a TxOutput, Option<TokenId>)>,
-    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let mut coin_amount = Amount::ZERO;
-        let mut tokens_amounts: BTreeMap<TokenId, Amount> = BTreeMap::new();
-
-        // Iterate over all outputs and calculate the coin and tokens amounts
-        for output in outputs {
-            // Get the supported output value
-            let output_value = match output.0 {
-                TxOutput::Transfer(v, _)
-                | TxOutput::LockThenTransfer(v, _, _)
-                | TxOutput::Burn(v) => Some(v.clone()),
-                TxOutput::CreateStakePool(_, stake) => Some(OutputValue::Coin(stake.value())),
-                TxOutput::ProduceBlockFromStake(_, _)
-                | TxOutput::CreateDelegationId(_, _)
-                | TxOutput::DelegateStaking(_, _) => None,
-            };
-
-            match output_value {
-                Some(OutputValue::Coin(output_amount)) => {
-                    coin_amount =
-                        coin_amount.add(output_amount).ok_or(WalletError::OutputAmountOverflow)?
-                }
-                Some(OutputValue::Token(token_data)) => {
-                    let token_data = token_data.as_ref();
-                    match token_data {
-                        TokenData::TokenTransfer(token_transfer) => {
-                            let total_token_amount = tokens_amounts
-                                .entry(token_transfer.token_id)
-                                .or_insert(Amount::ZERO);
-                            *total_token_amount = total_token_amount
-                                .add(token_transfer.amount)
-                                .ok_or(WalletError::OutputAmountOverflow)?;
-                        }
-                        TokenData::TokenIssuance(token_issuance) => {
-                            let total_token_amount = tokens_amounts
-                                .entry(output.1.ok_or(WalletError::MissingTokenId)?)
-                                .or_insert(Amount::ZERO);
-                            *total_token_amount = total_token_amount
-                                .add(token_issuance.amount_to_issue)
-                                .ok_or(WalletError::OutputAmountOverflow)?;
-                        }
-                        TokenData::NftIssuance(_) => {
-                            let total_token_amount = tokens_amounts
-                                .entry(output.1.ok_or(WalletError::MissingTokenId)?)
-                                .or_insert(Amount::ZERO);
-                            *total_token_amount = total_token_amount
-                                .add(Amount::from_atoms(1))
-                                .ok_or(WalletError::OutputAmountOverflow)?;
-                        }
-                    }
-                }
-                None => {}
-            }
-        }
-        Ok((coin_amount, tokens_amounts))
     }
 
     // TODO: Use a different type to support partially signed transactions
@@ -543,13 +484,17 @@ impl Account {
         Ok(false)
     }
 
-    pub fn get_balance(
-        &self,
-        utxo_types: UtxoTypes,
-    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
-        let utxos = self.get_utxos(utxo_types);
-        let balances = Self::calculate_output_amounts(utxos.into_values())?;
-        Ok(balances)
+    pub fn get_balance(&self, utxo_types: UtxoTypes) -> WalletResult<BTreeMap<Currency, Amount>> {
+        let amounts_by_currency = group_utxos_for_input(
+            self.get_utxos(utxo_types).into_iter(),
+            |(_, (tx_output, _))| tx_output,
+            |total: &mut Amount, _, amount| -> WalletResult<()> {
+                *total = (*total + amount).ok_or(WalletError::OutputAmountOverflow)?;
+                Ok(())
+            },
+            |(_, (_, token_id))| token_id.ok_or(WalletError::MissingTokenId),
+        )?;
+        Ok(amounts_by_currency)
     }
 
     pub fn get_utxos(
@@ -673,7 +618,7 @@ impl Account {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-enum Currency {
+pub enum Currency {
     Coin,
     Token(TokenId),
 }
@@ -686,7 +631,7 @@ fn group_outputs<T, Grouped: Default>(
     let mut coin_grouped = Grouped::default();
     let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
 
-    // Iterate over all outputs and calculate the coin and tokens amounts
+    // Iterate over all outputs and group them up by currency
     for output in outputs {
         // Get the supported output value
         let output_value = match get_tx_output(&output) {
@@ -736,7 +681,7 @@ fn group_utxos_for_input<T, Grouped: Default>(
     let mut coin_grouped = Grouped::default();
     let mut tokens_grouped: BTreeMap<Currency, Grouped> = BTreeMap::new();
 
-    // Iterate over all outputs and calculate the coin and tokens amounts
+    // Iterate over all outputs and group them up by currency
     for output in outputs {
         // Get the supported output value
         let output_value = match get_tx_output(&output) {

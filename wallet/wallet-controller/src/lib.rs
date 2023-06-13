@@ -30,7 +30,7 @@ use std::{
 
 use common::{
     address::Address,
-    chain::{tokens::TokenId, Block, ChainConfig, SignedTransaction, TxOutput, UtxoOutPoint},
+    chain::{Block, ChainConfig, SignedTransaction, TxOutput, UtxoOutPoint},
     primitives::{Amount, BlockHeight, Idable},
 };
 use consensus::GenerateBlockInputData;
@@ -40,7 +40,7 @@ pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
     handles_client::WalletHandlesClient, make_rpc_client, rpc_client::NodeRpcClient,
 };
-use wallet::{send_request::make_address_output, DefaultWallet};
+use wallet::{account::Currency, send_request::make_address_output, DefaultWallet};
 pub use wallet_types::{
     account_info::DEFAULT_ACCOUNT_INDEX,
     utxo_types::{UtxoType, UtxoTypes},
@@ -169,7 +169,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
-    pub fn get_balance(&self) -> Result<(Amount, BTreeMap<TokenId, Amount>), ControllerError<T>> {
+    pub fn get_balance(&self) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(
                 DEFAULT_ACCOUNT_INDEX,

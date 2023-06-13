@@ -17,14 +17,13 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::account::CoinSelectorError;
+use crate::account::{Currency, UtxoSelectorError};
 use crate::key_chain::{KeyChainError, MasterKeyChain};
 use crate::{Account, SendRequest};
 pub use bip39::{Language, Mnemonic};
 use common::address::pubkeyhash::PublicKeyHashError;
 use common::address::Address;
 use common::chain::signature::TransactionSigError;
-use common::chain::tokens::TokenId;
 use common::chain::{
     Block, ChainConfig, GenBlock, SignedTransaction, Transaction, TransactionCreationError,
     TxOutput, UtxoOutPoint,
@@ -87,7 +86,7 @@ pub enum WalletError {
     #[error("No UTXOs")]
     NoUtxos,
     #[error("Coin selection error: {0}")]
-    CoinSelectionError(#[from] CoinSelectorError),
+    CoinSelectionError(#[from] UtxoSelectorError),
 }
 
 /// Result type used for the wallet
@@ -260,7 +259,7 @@ impl<B: storage::Backend> Wallet<B> {
         &self,
         account_index: U31,
         utxo_types: UtxoTypes,
-    ) -> WalletResult<(Amount, BTreeMap<TokenId, Amount>)> {
+    ) -> WalletResult<BTreeMap<Currency, Amount>> {
         self.accounts
             .get(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?

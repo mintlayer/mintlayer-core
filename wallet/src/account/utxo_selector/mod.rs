@@ -58,7 +58,7 @@ impl OutputGroup {
         fee: Amount,
         long_term_fee: Amount,
         weight: u32,
-    ) -> Result<Self, CoinSelectorError> {
+    ) -> Result<Self, UtxoSelectorError> {
         let output_value = match &output.1 {
             TxOutput::Transfer(v, _) | TxOutput::LockThenTransfer(v, _, _) => v.clone(),
             TxOutput::CreateStakePool(_, _)
@@ -66,7 +66,7 @@ impl OutputGroup {
             | TxOutput::Burn(_)
             | TxOutput::CreateDelegationId(_, _)
             | TxOutput::DelegateStaking(_, _) => {
-                return Err(CoinSelectorError::UnsupportedTransactionOutput(Box::new(
+                return Err(UtxoSelectorError::UnsupportedTransactionOutput(Box::new(
                     output.1.clone(),
                 )))
             }
@@ -142,9 +142,9 @@ impl SelectionResult {
         &mut self,
         group: &OutputGroup,
         pay_fees: PayFee,
-    ) -> Result<(), CoinSelectorError> {
+    ) -> Result<(), UtxoSelectorError> {
         self.effective_value = (self.effective_value + group.get_effective_value(pay_fees))
-            .ok_or(CoinSelectorError::AmountArithmeticError)?;
+            .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         // Always consider the cost of spending an input now vs in the future.
         self.waste = group
             .fee
@@ -153,11 +153,11 @@ impl SelectionResult {
                 group.long_term_fee.into_signed().and_then(|long_term_fee| fee - long_term_fee)
             })
             .and_then(|fee_difference| self.waste + fee_difference)
-            .ok_or(CoinSelectorError::AmountArithmeticError)?;
+            .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
         self.outputs.extend(group.outputs.iter().cloned());
         self.weight += group.weight;
-        self.fees = (self.fees + group.fee).ok_or(CoinSelectorError::AmountArithmeticError)?;
+        self.fees = (self.fees + group.fee).ok_or(UtxoSelectorError::AmountArithmeticError)?;
         Ok(())
     }
 
@@ -166,7 +166,7 @@ impl SelectionResult {
         min_viable_change: Amount,
         change_cost: Amount,
         change_fee: Amount,
-    ) -> Result<(), CoinSelectorError> {
+    ) -> Result<(), UtxoSelectorError> {
         let change = self.get_change(min_viable_change, change_fee);
 
         if change != Amount::ZERO {
@@ -175,14 +175,14 @@ impl SelectionResult {
             self.waste = change_cost
                 .into_signed()
                 .and_then(|change_cost| self.waste + change_cost)
-                .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         } else {
             // When we are not making change (change_cost == 0), consider the excess we are throwing away to fees
             self.waste = (self.effective_value - self.target)
                 .expect("effective_value is larger tha target")
                 .into_signed()
                 .and_then(|value_difference| self.waste + value_difference)
-                .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         }
 
         Ok(())
@@ -217,7 +217,7 @@ impl SelectionResult {
 }
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq, Clone)]
-pub enum CoinSelectorError {
+pub enum UtxoSelectorError {
     #[error("No solution found")]
     NoSolutionFound,
     #[error("Not enough funds")]
@@ -267,7 +267,7 @@ fn select_coins_srd(
     change_cost: Amount,
     max_weight: u32,
     pay_fees: PayFee,
-) -> Result<SelectionResult, CoinSelectorError> {
+) -> Result<SelectionResult, UtxoSelectorError> {
     let mut result = SelectionResult::new(target_value);
     let mut heap = BinaryHeap::new();
 
@@ -276,7 +276,7 @@ fn select_coins_srd(
     // generated one, since SRD will result in a random change amount anyway; avoid making the
     // target needlessly large.
     let target_value =
-        (target_value + change_cost).ok_or(CoinSelectorError::AmountArithmeticError)?;
+        (target_value + change_cost).ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     let mut indexes: Vec<usize> = (0..utxo_pool.len()).collect();
     indexes.shuffle(rng);
@@ -291,13 +291,7 @@ fn select_coins_srd(
         // Add group to selection
         heap.push(OutputGroupOrd(group.clone()));
         selected_eff_value = (selected_eff_value + group.get_effective_value(pay_fees))
-            .ok_or(CoinSelectorError::AmountArithmeticError)?;
-        eprintln!(
-            "curr {:?}, total {:?}, needed {:?}",
-            group.get_effective_value(pay_fees),
-            selected_eff_value,
-            target_value
-        );
+            .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         weight += group.weight;
 
         // If the selection weight exceeds the maximum allowed size, remove the least valuable inputs until we
@@ -309,7 +303,7 @@ fn select_coins_srd(
                     break;
                 }
                 selected_eff_value = (selected_eff_value - group.0.get_effective_value(pay_fees))
-                    .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                    .ok_or(UtxoSelectorError::AmountArithmeticError)?;
                 weight -= group.0.weight;
             }
         }
@@ -325,9 +319,9 @@ fn select_coins_srd(
     }
 
     Err(if max_tx_weight_exceeded {
-        CoinSelectorError::MaxWeightExceeded
+        UtxoSelectorError::MaxWeightExceeded
     } else {
-        CoinSelectorError::NoSolutionFound
+        UtxoSelectorError::NoSolutionFound
     })
 }
 
@@ -339,11 +333,11 @@ fn knapsack_solver(
     rng: &mut impl Rng,
     max_weight: u32,
     pay_fees: PayFee,
-) -> Result<SelectionResult, CoinSelectorError> {
+) -> Result<SelectionResult, UtxoSelectorError> {
     let mut result = SelectionResult::new(target_value);
 
     let target_with_change_cost =
-        (target_value + cost_of_change).ok_or(CoinSelectorError::AmountArithmeticError)?;
+        (target_value + cost_of_change).ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     let mut lowest_group_larger_than_target: Option<OutputGroup> = None;
     // groups that have effective_value lower than the target
@@ -361,7 +355,7 @@ fn knapsack_solver(
         } else if group.get_effective_value(pay_fees) < target_with_change_cost {
             applicable_groups.push(group.clone());
             total_lower = (total_lower + group.get_effective_value(pay_fees))
-                .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                .ok_or(UtxoSelectorError::AmountArithmeticError)?;
         }
         // if group value is > target_with_change_cost check to update lowest_group_larger_than_target
         else if let Some(current_lowest) = lowest_group_larger_than_target.as_ref() {
@@ -389,7 +383,7 @@ fn knapsack_solver(
             result.add_input(group, pay_fees)?;
             return Ok(result);
         }
-        return Err(CoinSelectorError::NoSolutionFound);
+        return Err(UtxoSelectorError::NoSolutionFound);
     }
 
     // if the total_lower > target_value select a subset
@@ -442,7 +436,7 @@ fn knapsack_solver(
                     result.add_input(group, pay_fees)?;
                 } else {
                     // No UTXO above target, nothing to do.
-                    return Err(CoinSelectorError::MaxWeightExceeded);
+                    return Err(UtxoSelectorError::MaxWeightExceeded);
                 }
             }
         }
@@ -546,7 +540,7 @@ fn select_coins_bnb(
     cost_of_change: Amount,
     max_weight: u32,
     pay_fees: PayFee,
-) -> Result<SelectionResult, CoinSelectorError> {
+) -> Result<SelectionResult, UtxoSelectorError> {
     let mut curr_value = Amount::ZERO;
     let mut curr_selection: Vec<usize> = vec![]; // selected utxo indexes
     let mut curr_selection_weight = 0; // sum of selected utxo weight
@@ -556,10 +550,10 @@ fn select_coins_bnb(
         .iter()
         .map(|utxo| utxo.get_effective_value(pay_fees))
         .sum::<Option<Amount>>()
-        .ok_or(CoinSelectorError::AmountArithmeticError)?;
+        .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     if curr_available_value < selection_target {
-        return Err(CoinSelectorError::NotEnoughFunds(
+        return Err(UtxoSelectorError::NotEnoughFunds(
             curr_available_value,
             selection_target,
         ));
@@ -583,7 +577,7 @@ fn select_coins_bnb(
         // Cannot possibly reach target with the amount remaining in the curr_available_value.
         (curr_value + curr_available_value).expect("total has been check to not overflow") < selection_target
         // Selected value is out of range, go back and try other branch
-            || curr_value > (selection_target + cost_of_change).ok_or(CoinSelectorError::AmountArithmeticError)?
+            || curr_value > (selection_target + cost_of_change).ok_or(UtxoSelectorError::AmountArithmeticError)?
         // Don't select things which we know will be more wasteful if the waste is increasing
             || (curr_waste > best_waste && is_feerate_high)
         {
@@ -602,7 +596,7 @@ fn select_coins_bnb(
                 .expect("curr_value is larger than target")
                 .into_signed()
                 .and_then(|difference| curr_waste + difference)
-                .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                .ok_or(UtxoSelectorError::AmountArithmeticError)?;
             // Adding another UTXO after this check could bring the waste down if the long term fee is higher than the current fee.
             // However we are not going to explore that because this optimization for the waste is only done when we have hit our target
             // value. Adding any more UTXOs will be just burning the UTXO; it will go entirely to fees. Thus we aren't going to
@@ -645,7 +639,7 @@ fn select_coins_bnb(
                     utxo.long_term_fee.into_signed().and_then(|long_term_fee| fee - long_term_fee)
                 })
                 .and_then(|fee_difference| curr_waste - fee_difference)
-                .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                .ok_or(UtxoSelectorError::AmountArithmeticError)?;
             curr_selection_weight -= utxo.weight;
         } else {
             // Moving forwards, continuing down this branch
@@ -680,7 +674,7 @@ fn select_coins_bnb(
                             .and_then(|long_term_fee| fee - long_term_fee)
                     })
                     .and_then(|fee_difference| curr_waste + fee_difference)
-                    .ok_or(CoinSelectorError::AmountArithmeticError)?;
+                    .ok_or(UtxoSelectorError::AmountArithmeticError)?;
                 curr_selection_weight += utxo.weight;
             }
         }
@@ -691,9 +685,9 @@ fn select_coins_bnb(
     // Check for solution
     if best_selection.is_empty() {
         return Err(if max_tx_weight_exceeded {
-            CoinSelectorError::MaxWeightExceeded
+            UtxoSelectorError::MaxWeightExceeded
         } else {
-            CoinSelectorError::NoSolutionFound
+            UtxoSelectorError::NoSolutionFound
         });
     }
 
@@ -712,7 +706,7 @@ pub fn select_coins(
     mut utxo_pool: Vec<OutputGroup>,
     selection_target: Amount,
     pay_fees: PayFee,
-) -> Result<SelectionResult, CoinSelectorError> {
+) -> Result<SelectionResult, UtxoSelectorError> {
     // TODO: set some cost of change
     let cost_of_change = Amount::ZERO;
     // TODO: set some max weight
@@ -726,10 +720,10 @@ pub fn select_coins(
         .iter()
         .map(|utxo| utxo.get_effective_value(pay_fees))
         .sum::<Option<Amount>>()
-        .ok_or(CoinSelectorError::AmountArithmeticError)?;
+        .ok_or(UtxoSelectorError::AmountArithmeticError)?;
 
     if total_available_value < selection_target {
-        return Err(CoinSelectorError::NotEnoughFunds(
+        return Err(UtxoSelectorError::NotEnoughFunds(
             total_available_value,
             selection_target,
         ));
@@ -773,7 +767,7 @@ pub fn select_coins(
     results
         .into_iter()
         .min_by_key(|res| res.waste)
-        .ok_or_else(|| errors.pop().unwrap_or(CoinSelectorError::NoSolutionFound))
+        .ok_or_else(|| errors.pop().unwrap_or(UtxoSelectorError::NoSolutionFound))
 }
 
 #[cfg(test)]

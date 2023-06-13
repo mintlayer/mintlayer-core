@@ -62,7 +62,7 @@ fn test_knapsack_solver_empty(#[case] seed: Seed) {
     .err()
     .unwrap();
 
-    assert_eq!(error, CoinSelectorError::NoSolutionFound);
+    assert_eq!(error, UtxoSelectorError::NoSolutionFound);
 }
 
 #[rstest]
@@ -94,7 +94,7 @@ fn test_knapsack_solver_not_enough(#[case] seed: Seed) {
     .err()
     .unwrap();
 
-    assert_eq!(error, CoinSelectorError::NoSolutionFound);
+    assert_eq!(error, UtxoSelectorError::NoSolutionFound);
 }
 
 #[rstest]
