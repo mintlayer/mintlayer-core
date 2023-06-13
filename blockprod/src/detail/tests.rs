@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
+
 use common::{
-    chain::GenBlock,
+    chain::{Destination, GenBlock, OutPointSourceId, PoolId, TxInput},
     primitives::{Id, H256},
 };
+use consensus::{PoSGenerateBlockInputData, PoWGenerateBlockInputData};
 use crypto::random::Rng;
 use mempool::{MempoolInterface, MempoolSubsystemInterface};
 use mocks::MempoolInterfaceMock;
 use rstest::rstest;
-use std::sync::atomic::Ordering;
 use subsystem::CallRequest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utils::once_destructor::OnceDestructor;
@@ -32,7 +34,7 @@ use crate::{
         GenerateBlockInputData, TransactionsSource,
     },
     prepare_thread_pool,
-    tests::setup_blockprod_test,
+    tests::{process_block, setup_blockprod_test, setup_pos},
     BlockProduction, BlockProductionError, JobKey,
 };
 
@@ -175,59 +177,198 @@ async fn collect_transactions_succeeded() {
     join_handle.await.unwrap();
 }
 
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn produce_block_multiple_jobs(#[case] seed: Seed) {
-    let (manager, chain_config, chainstate, mempool) = setup_blockprod_test();
+mod produce_block {
+    use super::*;
 
-    let mut rng = make_seedable_rng(seed);
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn input_none() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
 
-    let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
 
-    let block_production = BlockProduction::new(
-        chain_config,
-        chainstate,
-        mempool,
-        Default::default(),
-        prepare_thread_pool(1),
-    )
-    .expect("Error initializing blockprod");
-
-    let join_handle = tokio::spawn({
-        let shutdown_trigger = manager.make_shutdown_trigger();
-        async move {
-            // Ensure a shutdown signal will be sent by the end of the scope
-            let _shutdown_signal = OnceDestructor::new(move || {
-                shutdown_trigger.initiate();
-            });
-
-            let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
-                let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
-
-                block_production.produce_block_with_custom_id(
-                    GenerateBlockInputData::None,
-                    TransactionsSource::Provided(vec![]),
-                    Some(id),
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
                 )
-            });
+                .expect("Error initializing blockprod");
 
-            let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
+                let (new_block, _job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::None,
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
 
-            let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
-
-            for (_block, job) in jobs_finished_iter {
-                job.await.unwrap();
+                process_block(&chainstate, new_block).await;
             }
+        });
 
-            let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
-            assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
-        }
-    });
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
 
-    manager.main().await;
-    join_handle.await.unwrap();
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn input_pos(#[case] seed: Seed) {
+        let (
+            pos_chain_config,
+            genesis_stake_private_key,
+            genesis_vrf_private_key,
+            create_genesis_pool_txoutput,
+        ) = setup_pos(seed);
+
+        let (manager, chain_config, chainstate, mempool) =
+            setup_blockprod_test(Some(pos_chain_config));
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let input_data = Box::new(PoSGenerateBlockInputData::new(
+                    genesis_stake_private_key,
+                    genesis_vrf_private_key,
+                    PoolId::new(H256::zero()),
+                    vec![TxInput::new(
+                        OutPointSourceId::BlockReward(chain_config.genesis_block_id()),
+                        0,
+                    )],
+                    vec![create_genesis_pool_txoutput],
+                ));
+
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let (new_block, _job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::PoS(input_data),
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
+
+                process_block(&chainstate, new_block).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn input_pow() {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let block_production = BlockProduction::new(
+                    chain_config,
+                    chainstate.clone(),
+                    mempool,
+                    Default::default(),
+                    prepare_thread_pool(1),
+                )
+                .expect("Error initializing blockprod");
+
+                let (new_block, _job_finished_receiver) = block_production
+                    .produce_block(
+                        GenerateBlockInputData::PoW(Box::new(PoWGenerateBlockInputData::new(
+                            Destination::AnyoneCanSpend,
+                        ))),
+                        TransactionsSource::Provided(vec![]),
+                    )
+                    .await
+                    .expect("Failed to produce a block: {:?}");
+
+                process_block(&chainstate, new_block).await;
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn multiple_jobs(#[case] seed: Seed) {
+        let (manager, chain_config, chainstate, mempool) = setup_blockprod_test(None);
+
+        let mut rng = make_seedable_rng(seed);
+
+        let jobs_to_create = rng.gen::<usize>() % 20 + 1;
+
+        let block_production = BlockProduction::new(
+            chain_config,
+            chainstate,
+            mempool,
+            Default::default(),
+            prepare_thread_pool(1),
+        )
+        .expect("Error initializing blockprod");
+
+        let join_handle = tokio::spawn({
+            let shutdown_trigger = manager.make_shutdown_trigger();
+            async move {
+                // Ensure a shutdown signal will be sent by the end of the scope
+                let _shutdown_signal = OnceDestructor::new(move || {
+                    shutdown_trigger.initiate();
+                });
+
+                let produce_blocks_futures_iter = (0..jobs_to_create).map(|_| {
+                    let id: Vec<u8> = (0..1024).map(|_| rng.gen::<u8>()).collect();
+
+                    block_production.produce_block_with_custom_id(
+                        GenerateBlockInputData::None,
+                        TransactionsSource::Provided(vec![]),
+                        Some(id),
+                    )
+                });
+
+                let produce_results = futures::future::join_all(produce_blocks_futures_iter).await;
+
+                let jobs_finished_iter = produce_results.into_iter().map(|r| r.unwrap());
+
+                for (_block, job) in jobs_finished_iter {
+                    job.await.unwrap();
+                }
+
+                let jobs_count = block_production.job_manager_handle.get_job_count().await.unwrap();
+                assert_eq!(jobs_count, 0, "Job count was incorrect {jobs_count}");
+            }
+        });
+
+        manager.main().await;
+        join_handle.await.unwrap();
+    }
 }
 
 #[rstest]
