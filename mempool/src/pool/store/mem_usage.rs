@@ -23,7 +23,7 @@ use common::chain::{
 };
 use logging::log;
 
-use super::TxMempoolEntry;
+use super::{TxDependency, TxMempoolEntry};
 
 /// Structure that stores the current memory usage and keeps track of its changes
 #[derive(Debug)]
@@ -305,12 +305,6 @@ impl<T: MemoryUsage> MemoryUsage for Box<T> {
     }
 }
 
-impl<T: MemoryUsage, D> MemoryUsage for Tracked<T, D> {
-    fn indirect_memory_usage(&self) -> usize {
-        self.obj.indirect_memory_usage()
-    }
-}
-
 impl<T> MemoryUsage for common::primitives::Id<T> {
     fn indirect_memory_usage(&self) -> usize {
         0
@@ -360,7 +354,7 @@ impl MemoryUsage for InputWitness {
     }
 }
 
-impl_no_indirect_memory_usage!(TxInput, StakePoolData);
+impl_no_indirect_memory_usage!(StakePoolData, TxDependency, TxInput);
 
 /// Types where the object created by T::default() takes no indirect memory.
 pub trait ZeroUsageDefault: MemoryUsage + Default {}

@@ -28,7 +28,11 @@ use common::{
 use logging::log;
 use utils::newtype;
 
-use super::{entry::TxEntry, fee::Fee, Time, TxEntryWithFee};
+use super::{
+    entry::{TxDependency, TxEntry},
+    fee::Fee,
+    Time, TxEntryWithFee,
+};
 use crate::error::MempoolPolicyError;
 use mem_usage::Tracked;
 
@@ -101,9 +105,6 @@ pub struct MempoolStore {
     // their creation time, from earliest to latest.
     pub txs_by_creation_time: TrackedTxIdMultiMap<Time>,
 
-    // TODO add txs_by_ancestor_score index, which will be used by the block production subsystem
-    // to select the best transactions for the next block
-    //
     // We keep the information of which inputs are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
     pub spender_txs: Tracked<BTreeMap<TxInput, Id<Transaction>>>,
@@ -174,18 +175,19 @@ impl MempoolStore {
 
     #[cfg(test)]
     fn assert_valid_inner(&self) {
-        fn map_size<K, V: mem_usage::MemoryUsage>(map: &BTreeMap<K, V>) -> usize {
-            use mem_usage::MemoryUsage;
+        use mem_usage::MemoryUsage;
+        fn map_size_deep<K, V: MemoryUsage, D>(map: &BTreeMap<K, Tracked<V, D>>) -> usize {
             let vals_size = map.values().map(|v| v.indirect_memory_usage()).sum::<usize>();
             map.indirect_memory_usage() + vals_size
         }
-        let expected_size = map_size(&self.txs_by_id)
-            + map_size(&self.txs_by_descendant_score)
-            + map_size(&self.txs_by_ancestor_score)
-            + map_size(&self.txs_by_seq_no)
-            + map_size(&self.spender_txs)
-            + map_size(&self.txs_by_creation_time)
-            + map_size(&self.seq_nos_by_tx);
+
+        let expected_size = map_size_deep(&self.txs_by_id)
+            + map_size_deep(&self.txs_by_descendant_score)
+            + map_size_deep(&self.txs_by_ancestor_score)
+            + map_size_deep(&self.txs_by_creation_time)
+            + self.spender_txs.indirect_memory_usage()
+            + self.txs_by_seq_no.indirect_memory_usage()
+            + self.seq_nos_by_tx.indirect_memory_usage();
         assert_eq!(
             self.mem_tracker.get_usage(),
             expected_size,
@@ -298,7 +300,30 @@ impl MempoolStore {
         })
     }
 
-    pub fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolPolicyError> {
+    pub fn add_transaction(&mut self, entry: TxEntryWithFee) -> Result<(), MempoolPolicyError> {
+        // Genesis transaction has no parent, hence the first filter_map
+        let parents = entry
+            .transaction()
+            .inputs()
+            .iter()
+            .filter_map(|input| match input {
+                TxInput::Utxo(outpoint) => outpoint.tx_id().get_tx_id().cloned(),
+                TxInput::Account(_) => None,
+            })
+            .filter(|id| self.txs_by_id.contains_key(id))
+            .collect::<BTreeSet<_>>();
+        let ancestor_ids = TxMempoolEntry::unconfirmed_ancestors_from_parents(&parents, self)?;
+        let ancestors = BTreeSet::from(ancestor_ids)
+            .into_iter()
+            .map(|id| self.get_entry(&id).expect("ancestors to exist"))
+            .cloned()
+            .collect();
+
+        let entry = TxMempoolEntry::new(entry, parents, ancestors)?;
+        self.add_tx_entry(entry)
+    }
+
+    pub fn add_tx_entry(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolPolicyError> {
         self.append_to_parents(&entry);
         self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);

@@ -669,7 +669,7 @@ async fn tx_mempool_entry() -> anyhow::Result<()> {
     let ids = entries.iter().map(|entry| *entry.tx_id()).collect::<Vec<_>>();
 
     for entry in entries.into_iter() {
-        mempool.store.add_tx(entry)?;
+        mempool.store.add_tx_entry(entry)?;
     }
 
     let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");

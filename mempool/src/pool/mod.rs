@@ -30,7 +30,7 @@ use chainstate::{
 use common::{
     chain::{
         block::timestamp::BlockTimestamp, Block, ChainConfig, GenBlock, SignedTransaction,
-        Transaction, TxInput,
+        Transaction,
     },
     primitives::{amount::Amount, BlockHeight, Id},
     time_getter::TimeGetter,
@@ -231,29 +231,6 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
 // Entry Creation
 impl<M> Mempool<M> {
-    fn create_entry(&self, entry: TxEntryWithFee) -> Result<TxMempoolEntry, MempoolPolicyError> {
-        // Genesis transaction has no parent, hence the first filter_map
-        let parents = entry
-            .transaction()
-            .inputs()
-            .iter()
-            .filter_map(|input| match input {
-                TxInput::Utxo(outpoint) => outpoint.tx_id().get_tx_id().cloned(),
-                TxInput::Account(_) => None,
-            })
-            .filter(|id| self.store.txs_by_id.contains_key(id))
-            .collect::<BTreeSet<_>>();
-        let ancestor_ids =
-            TxMempoolEntry::unconfirmed_ancestors_from_parents(&parents, &self.store)?;
-        let ancestors = BTreeSet::from(ancestor_ids)
-            .into_iter()
-            .map(|id| self.store.get_entry(&id).expect("ancestors to exist"))
-            .cloned()
-            .collect();
-
-        TxMempoolEntry::new(entry, parents, ancestors)
-    }
-
     pub fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
         self.store.contains(tx_id)
     }
@@ -687,10 +664,9 @@ impl<M: MemoryUsageEstimator> Mempool<M> {
 
 // Transaction Finalization
 impl<M: MemoryUsageEstimator> Mempool<M> {
-    fn finalize_tx(&mut self, tx: TxEntryWithFee) -> Result<(), Error> {
-        let entry = self.create_entry(tx)?;
+    fn finalize_tx(&mut self, entry: TxEntryWithFee) -> Result<(), Error> {
         let id = *entry.tx_id();
-        self.store.add_tx(entry)?;
+        self.store.add_transaction(entry)?;
         self.remove_expired_transactions();
         ensure!(
             self.store.txs_by_id.contains_key(&id),

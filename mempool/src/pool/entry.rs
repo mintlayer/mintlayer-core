@@ -23,10 +23,26 @@ use common::{
 
 use super::{Fee, Time};
 
+/// A dependency of a transaction on a previous account state.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TxAccountDependency {
+    delegation_id: DelegationId,
+    nonce: AccountNonce,
+}
+
+impl TxAccountDependency {
+    pub fn new(delegation_id: DelegationId, nonce: AccountNonce) -> Self {
+        TxAccountDependency {
+            delegation_id,
+            nonce,
+        }
+    }
+}
+
 /// A dependency of a transaction. May be another transaction or a previous account state.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TxDependency {
-    DelegationAccount(DelegationId, AccountNonce),
+    DelegationAccount(TxAccountDependency),
     Transaction(Id<Transaction>),
     // TODO: Block reward?
 }
@@ -39,7 +55,7 @@ impl TxDependency {
     fn from_account(acct: &AccountSpending, nonce: AccountNonce) -> Self {
         match acct {
             AccountSpending::Delegation(delegation_id, _) => {
-                Self::DelegationAccount(*delegation_id, nonce)
+                Self::DelegationAccount(TxAccountDependency::new(*delegation_id, nonce))
             }
         }
     }
