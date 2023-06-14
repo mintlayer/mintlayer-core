@@ -192,54 +192,11 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
 
     // Generate a valid graph of transactions
-    let full_tx_sequence: Vec<_> = {
-        let tf = TestFramework::builder(&mut rng).build();
-        let mut utxos = vec![(
-            TxInput::from_utxo(tf.genesis().get_id().into(), 0),
-            100_000_000_000_000_u128,
-        )];
-        let rng = &mut rng; // avoid moving rng into the closure below
-
-        (0..rng.gen_range(15..40))
-            .map(move |_| {
-                let n_inputs = rng.gen_range(1..=std::cmp::min(3, utxos.len()));
-                let n_outputs = rng.gen_range(1..=3);
-
-                let mut builder = TransactionBuilder::new();
-                let mut total = 0u128;
-                let mut amts = Vec::new();
-
-                for _ in 0..n_inputs {
-                    let (outpt, amt) = utxos.swap_remove(rng.gen_range(0..utxos.len()));
-                    total += amt;
-                    builder = builder.add_input(outpt, empty_witness(rng));
-                }
-
-                for _ in 0..n_outputs {
-                    let amt = rng.gen_range((total / 2)..(95 * total / 100));
-                    total -= amt;
-                    builder = builder.add_output(TxOutput::Transfer(
-                        OutputValue::Coin(Amount::from_atoms(amt)),
-                        Destination::AnyoneCanSpend,
-                    ));
-                    amts.push(amt);
-                }
-
-                let tx = builder.build();
-                let tx_id = tx.transaction().get_id();
-
-                utxos.extend(
-                    amts.into_iter()
-                        .enumerate()
-                        .map(|(i, amt)| (TxInput::from_utxo(tx_id.into(), i as u32), amt)),
-                );
-
-                tx
-            })
-            .collect()
-    };
-
-    let all_tx_ids: Vec<_> = full_tx_sequence.iter().map(|tx| tx.transaction().get_id()).collect();
+    let num_txs = rng.gen_range(15..40);
+    let time = TimeGetter::default().get_time();
+    let full_tx_sequence: Vec<_> =
+        generate_transaction_graph(&mut rng, time).take(num_txs).collect();
+    let all_tx_ids: Vec<_> = full_tx_sequence.iter().map(|tx| tx.tx_id()).collect();
 
     // Pick a subset of these transactions, taking each with 90% probability.
     let tx_subseq_0: Vec<_> =
@@ -250,7 +207,7 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
     let tx_subseq_1 = {
         let mut subseq = tx_subseq_0.clone();
         let salt = rng.gen::<u64>();
-        subseq.sort_unstable_by_key(|tx| hash_encoded(&(tx, salt)));
+        subseq.sort_unstable_by_key(|tx| hash_encoded(&(tx.tx_id(), salt)));
         subseq
     };
 
@@ -260,7 +217,8 @@ async fn transaction_graph_subset_permutation(#[case] seed: Seed) {
         let mut mempool = setup_with_chainstate(tf.chainstate()).await;
 
         // Now add each transaction in the subsequence
-        tx_subseq.into_iter().for_each(|tx| {
+        tx_subseq.iter().for_each(|tx| {
+            let tx = tx.transaction().clone();
             let _ = mempool.add_transaction(tx).expect("tx add");
         });
 
