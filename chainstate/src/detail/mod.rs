@@ -49,7 +49,9 @@ use chainstate_storage::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag,
     TipStorageTag, TransactionRw, Transactional,
 };
-use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, EpochData, PropertyQueryError};
+use chainstate_types::{
+    pos_randomness::PoSRandomness, BlockIndex, EpochData, EpochStorageWrite, PropertyQueryError,
+};
 use common::{
     chain::{
         block::{signed_block_header::SignedBlockHeader, timestamp::BlockTimestamp},

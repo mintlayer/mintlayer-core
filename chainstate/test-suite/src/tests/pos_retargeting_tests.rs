@@ -24,7 +24,7 @@ use chainstate_storage::{BlockchainStorageRead, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };
-use chainstate_types::vrf_tools::construct_transcript;
+use chainstate_types::{vrf_tools::construct_transcript, EpochStorageRead};
 use common::{
     chain::{
         block::{

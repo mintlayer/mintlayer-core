@@ -30,6 +30,7 @@ use chainstate_test_framework::{
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::{construct_transcript, ProofOfStakeVRFError},
+    EpochStorageRead,
 };
 use common::{
     chain::{

@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
+    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
@@ -41,14 +41,14 @@ use common::{
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
+    config::TransactionVerifierConfig, storage, TransactionVerifier, TransactionVerifierDelta,
 };
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
-use self::tx_verifier_storage::gen_block_index_getter;
+use self::{epoch_seal::update_epoch_data, tx_verifier_storage::gen_block_index_getter};
 
 use super::{
     median_time::calculate_median_time_past,
@@ -870,6 +870,11 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
+        // alternative chain need to store epoch data
+        let in_memory_store =
+            chainstate_storage::inmemory::Store::new_empty().expect("failed to create empty store");
+        let mut db_tx = in_memory_store.transaction_rw(None)?;
+
         // Connect the new chain
         for new_tip_block_index in new_chain {
             let new_tip: WithId<Block> = self
@@ -898,6 +903,8 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 .consume()?;
 
             flush_to_storage(&mut tx_verifier, connected_txs)?;
+
+            //update_epoch_data(&mut db_tx, self.chain_config, block_op)?;
         }
 
         let consumed_verifier = tx_verifier.consume()?;
