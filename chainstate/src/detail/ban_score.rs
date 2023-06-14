@@ -234,6 +234,8 @@ impl BanScore for CheckBlockError {
             CheckBlockError::WitnessMerkleRootMismatch => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
+            CheckBlockError::TransactionVerifierError(err) => err.ban_score(),
+            CheckBlockError::BlockNotFound(_) => 100,
             CheckBlockError::BlockTimeOrderInvalid(_, _) => 100,
             CheckBlockError::BlockFromTheFuture => 100,
             CheckBlockError::BlockSizeError(err) => err.ban_score(),
@@ -249,8 +251,7 @@ impl BanScore for CheckBlockError {
             CheckBlockError::ParentCheckpointMismatch(_, _, _) => 100,
             CheckBlockError::GetAncestorError(_) => 100,
             CheckBlockError::AttemptedToAddBlockBeforeReorgLimit(_, _, _) => 100,
-            CheckBlockError::StateUpdateFailed(_) => todo!(),
-            CheckBlockError::TransactionVerifierError(_) => todo!(),
+            CheckBlockError::StateUpdateFailed(err) => err.ban_score(),
         }
     }
 }

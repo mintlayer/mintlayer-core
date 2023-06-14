@@ -474,11 +474,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
         let best_block_id = self.get_best_block_id()?;
         let (utxos_cache, pos_delta) = if best_block_id == *header.prev_block_id() {
-            let utxos_cache = UtxosCache::new(&utxos_db).unwrap();
+            let utxos_cache = UtxosCache::new(&utxos_db).expect("should not fail");
             let pos_delta = PoSAccountingDelta::new(&pos_db);
             (utxos_cache, pos_delta)
         } else {
-            //println!("reorganize_in_memory");
             // If block header is not a child of the tip then perform an in memory reorg
             // to get utxo set and accounting data up to that point in fork
             let TransactionVerifierDelta {
@@ -487,11 +486,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 ..
             } = self.reorganize_in_memory(header, best_block_id)?;
 
-            let utxos_cache = UtxosCache::from_data(&utxos_db, consumed_utxos).unwrap();
+            let utxos_cache =
+                UtxosCache::from_data(&utxos_db, consumed_utxos).expect("should not fail");
             let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
-
-            //let utxos_cache = UtxosCache::new(&utxos_db).unwrap();
-            //let pos_delta = PoSAccountingDelta::new(&pos_db);
             (utxos_cache, pos_delta)
         };
 
@@ -719,7 +716,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         block_index: &BlockIndex,
     ) -> Result<Option<Block>, chainstate_storage::Error> {
-        Ok(self.db_tx.get_block(*block_index.block_id()).log_err()?)
+        self.db_tx.get_block(*block_index.block_id()).log_err()
     }
 
     pub fn check_block(&self, block: &WithId<Block>) -> Result<(), CheckBlockError> {
@@ -837,17 +834,16 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
             let mainchain_tip = self
                 .get_block_index(&best_block_id)
-                //.map_err(CheckBlockError::BestBlockLoadError)
+                .map_err(|_| CheckBlockError::BlockNotFound(best_block_id.into()))
                 .log_err()?
                 .expect("Can't get block index. Inconsistent DB");
 
-            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip.clone());
+            let mut to_disconnect = GenBlockIndex::Block(mainchain_tip);
             while to_disconnect.block_id() != *common_ancestor_id {
                 let to_disconnect_block = match to_disconnect {
                     GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
                     GenBlockIndex::Block(block_index) => block_index,
                 };
-                //println!("disconnecting block {}", to_disconnect_block.block_id());
 
                 let block = self
                     .get_block_from_index(&to_disconnect_block)
@@ -874,16 +870,14 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
-        //println!("connecting blocks {}", new_chain.len());
         // Connect the new chain
         for new_tip_block_index in new_chain {
             let new_tip: WithId<Block> = self
                 .get_block_from_index(&new_tip_block_index)
                 .log_err()?
-                .unwrap()
-                //.ok_or(BlockError::InvariantBrokenBlockNotFoundAfterConnect(
-                //    *block_index.block_id(),
-                //))?
+                .ok_or(CheckBlockError::BlockNotFound(
+                    (*new_tip_block_index.block_id()).into(),
+                ))?
                 .into();
 
             // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
