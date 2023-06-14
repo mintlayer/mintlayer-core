@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::{
+    chainstateref::EpochSealError,
     orphan_blocks::OrphanAddError,
     transaction_verifier::{
         error::{ConnectTransactionError, TokensError},
@@ -78,8 +79,8 @@ pub enum BlockError {
     InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
     #[error("Error during stake spending: {0}")]
     SpendStakeError(#[from] SpendStakeError),
-    #[error("Data of pool {0} not found")]
-    PoolDataNotFound(PoolId),
+    #[error("Error during sealing an epoch: {0}")]
+    EpochSealError(#[from] EpochSealError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -128,6 +129,8 @@ pub enum CheckBlockError {
     AttemptedToAddBlockBeforeReorgLimit(BlockHeight, BlockHeight, BlockHeight),
     #[error("TransactionVerifier error: {0}")]
     TransactionVerifierError(#[from] TransactionVerifierStorageError),
+    #[error("Error during sealing an epoch: {0}")]
+    EpochSealError(#[from] EpochSealError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

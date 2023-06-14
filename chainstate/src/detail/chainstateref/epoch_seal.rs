@@ -16,15 +16,19 @@
 use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag,
 };
-use chainstate_types::{pos_randomness::PoSRandomness, EpochData};
+use chainstate_types::{
+    pos_randomness::{PoSRandomness, PoSRandomnessError},
+    ConsumedEpochDataCache, EpochData, EpochStorageRead, EpochStorageWrite,
+};
 use common::{
     chain::{
         block::{consensus_data::PoSData, ConsensusData},
-        Block, ChainConfig, TxOutput,
+        Block, ChainConfig, PoolId, TxOutput,
     },
     primitives::BlockHeight,
 };
 use pos_accounting::{FlushablePoSAccountingView, PoSAccountingDB, PoSAccountingView};
+use thiserror::Error;
 use tx_verifier::transaction_verifier::error::SpendStakeError;
 use utils::tap_error_log::LogError;
 
@@ -121,6 +125,20 @@ fn rollback_epoch_seal<S: BlockchainStorageWrite>(
     Ok(())
 }
 
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum EpochSealError {
+    #[error("Block storage error: `{0}`")]
+    StorageError(#[from] chainstate_storage::Error),
+    #[error("PoS accounting error: {0}")]
+    PoSAccountingError(#[from] pos_accounting::Error),
+    #[error("Error during stake spending: {0}")]
+    SpendStakeError(#[from] SpendStakeError),
+    #[error("PoS randomness error: `{0}`")]
+    RandomnessError(#[from] PoSRandomnessError),
+    #[error("Data of pool {0} not found")]
+    PoolDataNotFound(PoolId),
+}
+
 /// Indicates whether a block was connected or disconnected.
 /// Stores current tip height and index if necessary.
 pub enum BlockStateEventWithIndex<'a> {
@@ -128,13 +146,18 @@ pub enum BlockStateEventWithIndex<'a> {
     Disconnect(BlockHeight),
 }
 
-fn create_randomness_from_block<S: BlockchainStorageRead>(
-    db_tx: &S,
+fn create_randomness_from_block<S, P>(
+    epoch_data_cache: &S,
+    pos_view: &P,
     chain_config: &ChainConfig,
     block: &Block,
     block_height: &BlockHeight,
     pos_data: &PoSData,
-) -> Result<PoSRandomness, BlockError> {
+) -> Result<PoSRandomness, EpochSealError>
+where
+    S: EpochStorageRead,
+    P: PoSAccountingView<Error = pos_accounting::Error>,
+{
     let reward_output = block
         .block_reward()
         .outputs()
@@ -147,23 +170,22 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         | TxOutput::Burn(_)
         | TxOutput::CreateDelegationId(_, _)
         | TxOutput::DelegateStaking(_, _) => {
-            return Err(BlockError::SpendStakeError(
+            return Err(EpochSealError::SpendStakeError(
                 SpendStakeError::InvalidBlockRewardOutputType,
             ));
         }
         TxOutput::CreateStakePool(_, d) => d.as_ref().vrf_public_key().clone(),
         TxOutput::ProduceBlockFromStake(_, pool_id) => {
-            let pos_view = PoSAccountingDB::<_, TipStorageTag>::new(db_tx);
             let pool_data = pos_view
                 .get_pool_data(*pool_id)?
-                .ok_or(BlockError::PoolDataNotFound(*pool_id))?;
+                .ok_or(EpochSealError::PoolDataNotFound(*pool_id))?;
             pool_data.vrf_public_key().clone()
         }
     };
 
     let sealed_epoch_randomness = chain_config
         .sealed_epoch_index(block_height)
-        .map(|index| db_tx.get_epoch_data(index))
+        .map(|index| epoch_data_cache.get_epoch_data(index))
         .transpose()?
         .flatten()
         .map_or_else(
@@ -179,16 +201,21 @@ fn create_randomness_from_block<S: BlockchainStorageRead>(
         pos_data,
         &vrf_pub_key,
     )
-    .map_err(BlockError::RandomnessError)
+    .map_err(EpochSealError::RandomnessError)
 }
 
 /// Every epoch has data associated with it.
 /// On every block change check whether this data should be updated.
-pub fn update_epoch_data<S: BlockchainStorageWrite>(
-    db_tx: &mut S,
+pub fn update_epoch_data<S, P>(
+    epoch_data_cache: &mut S,
+    pos_view: &P,
     chain_config: &ChainConfig,
     block_op: BlockStateEventWithIndex<'_>,
-) -> Result<(), BlockError> {
+) -> Result<(), EpochSealError>
+where
+    S: EpochStorageWrite,
+    P: PoSAccountingView<Error = pos_accounting::Error>,
+{
     match block_op {
         BlockStateEventWithIndex::Connect(tip_height, tip) => {
             if chain_config.is_last_block_in_epoch(&tip_height) {
@@ -197,14 +224,15 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
                     ConsensusData::PoS(pos_data) => {
                         // Consider the randomness of the last block to be the randomness of the epoch
                         let epoch_randomness = create_randomness_from_block(
-                            db_tx,
+                            epoch_data_cache,
+                            pos_view,
                             chain_config,
                             tip,
                             &tip_height,
                             pos_data.as_ref(),
                         )?;
 
-                        db_tx
+                        epoch_data_cache
                             .set_epoch_data(
                                 chain_config.epoch_index_from_height(&tip_height),
                                 &EpochData::new(epoch_randomness),
@@ -220,7 +248,7 @@ pub fn update_epoch_data<S: BlockchainStorageWrite>(
                 // it means that the first block of next epoch was just disconnected
                 // and the epoch data for the next epoch should be deleted
                 let disconnected_tip = tip_height.next_height();
-                db_tx
+                epoch_data_cache
                     .del_epoch_data(chain_config.epoch_index_from_height(&disconnected_tip))
                     .log_err()?;
             }
@@ -236,7 +264,7 @@ mod tests {
 
     use super::*;
     use chainstate_storage::mock::MockStoreTxRw;
-    use chainstate_types::vrf_tools::construct_transcript;
+    use chainstate_types::{vrf_tools::construct_transcript, EpochDataCache};
     use common::{
         chain::{
             block::{consensus_data::PoSData, timestamp::BlockTimestamp, BlockReward},
@@ -302,12 +330,16 @@ mod tests {
                 .return_const(Ok(()));
         }
 
+        let mut epoch_data_cache = EpochDataCache::new(&db);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&db);
         update_epoch_data(
-            &mut db,
+            &mut epoch_data_cache,
+            &pos_db,
             &chain_config,
             BlockStateEventWithIndex::Connect(tip_height, &block_index),
         )
         .unwrap();
+        epoch_data_cache.consume().flush(&mut db).unwrap();
     }
 
     #[rstest]
@@ -331,12 +363,16 @@ mod tests {
                 .return_const(Ok(()));
         }
 
+        let mut epoch_data_cache = EpochDataCache::new(&db);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&db);
         update_epoch_data(
-            &mut db,
+            &mut epoch_data_cache,
+            &pos_db,
             &chain_config,
             BlockStateEventWithIndex::Disconnect(tip_height),
         )
         .unwrap();
+        epoch_data_cache.consume().flush(&mut db).unwrap();
     }
 
     #[rstest]

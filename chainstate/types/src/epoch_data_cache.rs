@@ -13,16 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, ops::Deref};
 
-use common::{
-    chain::{
-        block::{consensus_data::PoSData, ConsensusData},
-        config::EpochIndex,
-        Block, ChainConfig, TxOutput,
-    },
-    primitives::BlockHeight,
-};
+use common::chain::config::EpochIndex;
 
 use crate::EpochData;
 
@@ -33,7 +26,7 @@ pub trait EpochStorageRead {
     ) -> crate::storage_result::Result<Option<EpochData>>;
 }
 
-pub trait EpochStorageWrite {
+pub trait EpochStorageWrite: EpochStorageRead {
     fn set_epoch_data(
         &mut self,
         epoch_index: EpochIndex,
@@ -43,9 +36,14 @@ pub trait EpochStorageWrite {
     fn del_epoch_data(&mut self, epoch_index: EpochIndex) -> crate::storage_result::Result<()>;
 }
 
+enum DataEntry {
+    Write(EpochData),
+    Erase,
+}
+
 pub struct EpochDataCache<P> {
     parent: P,
-    data: BTreeMap<EpochIndex, EpochData>,
+    data: BTreeMap<EpochIndex, DataEntry>,
 }
 
 impl<P: EpochStorageRead> EpochDataCache<P> {
@@ -55,6 +53,33 @@ impl<P: EpochStorageRead> EpochDataCache<P> {
             data: BTreeMap::new(),
         }
     }
+
+    pub fn from_data(parent: P, data: ConsumedEpochDataCache) -> Self {
+        Self {
+            parent,
+            data: data.data,
+        }
+    }
+
+    pub fn consume(self) -> ConsumedEpochDataCache {
+        ConsumedEpochDataCache { data: self.data }
+    }
+}
+
+pub struct ConsumedEpochDataCache {
+    data: BTreeMap<EpochIndex, DataEntry>,
+}
+
+impl ConsumedEpochDataCache {
+    pub fn flush(self, storage: &mut impl EpochStorageWrite) -> crate::storage_result::Result<()> {
+        for (index, entry) in self.data {
+            match entry {
+                DataEntry::Write(data) => storage.set_epoch_data(index, &data)?,
+                DataEntry::Erase => storage.del_epoch_data(index)?,
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<P: EpochStorageRead> EpochStorageRead for EpochDataCache<P> {
@@ -62,20 +87,46 @@ impl<P: EpochStorageRead> EpochStorageRead for EpochDataCache<P> {
         &self,
         epoch_index: EpochIndex,
     ) -> crate::storage_result::Result<Option<EpochData>> {
-        todo!()
+        match self.parent.get_epoch_data(epoch_index)? {
+            Some(data) => Ok(Some(data)),
+            None => Ok(self
+                .data
+                .get(&epoch_index)
+                .map(|data| match data {
+                    DataEntry::Write(data) => Some(data),
+                    DataEntry::Erase => None,
+                })
+                .flatten()
+                .cloned()),
+        }
     }
 }
 
-impl<P: EpochStorageWrite> EpochStorageWrite for EpochDataCache<P> {
+impl<T> EpochStorageRead for T
+where
+    T: Deref,
+    <T as Deref>::Target: EpochStorageRead,
+{
+    fn get_epoch_data(
+        &self,
+        epoch_index: EpochIndex,
+    ) -> crate::storage_result::Result<Option<EpochData>> {
+        self.deref().get_epoch_data(epoch_index)
+    }
+}
+
+impl<P: EpochStorageRead> EpochStorageWrite for EpochDataCache<P> {
     fn set_epoch_data(
         &mut self,
         epoch_index: u64,
         epoch_data: &EpochData,
     ) -> crate::storage_result::Result<()> {
-        todo!()
+        self.data.insert(epoch_index, DataEntry::Write(epoch_data.clone()));
+        Ok(())
     }
 
     fn del_epoch_data(&mut self, epoch_index: EpochIndex) -> crate::storage_result::Result<()> {
-        todo!()
+        self.data.insert(epoch_index, DataEntry::Erase);
+        Ok(())
     }
 }

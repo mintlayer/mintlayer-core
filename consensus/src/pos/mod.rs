@@ -22,7 +22,7 @@ pub mod target;
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
     vrf_tools::construct_transcript,
-    BlockIndexHandle, GenBlockIndex,
+    BlockIndexHandle, EpochStorageRead, GenBlockIndex, PropertyQueryError,
 };
 use common::{
     chain::{
@@ -90,16 +90,18 @@ pub fn check_pos_hash(
     Ok(())
 }
 
-fn randomness_of_sealed_epoch<H: BlockIndexHandle>(
+fn randomness_of_sealed_epoch<S: EpochStorageRead>(
     chain_config: &ChainConfig,
     current_height: BlockHeight,
-    block_index_handle: &H,
+    epoch_storage: &S,
 ) -> Result<PoSRandomness, ConsensusPoSError> {
     let sealed_epoch_index = chain_config.sealed_epoch_index(&current_height);
 
     let random_seed = match sealed_epoch_index {
         Some(sealed_epoch_index) => {
-            let epoch_data = block_index_handle.get_epoch_data(sealed_epoch_index)?;
+            let epoch_data = epoch_storage
+                .get_epoch_data(sealed_epoch_index)
+                .map_err(|e| PropertyQueryError::StorageError(e))?;
             match epoch_data {
                 Some(d) => *d.randomness(),
                 None => {
@@ -131,17 +133,19 @@ pub fn enforce_timestamp_ordering(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn check_proof_of_stake<H, U, P>(
+pub fn check_proof_of_stake<H, E, U, P>(
     chain_config: &ChainConfig,
     pos_status: &PoSStatus,
     header: &SignedBlockHeader,
     pos_data: &PoSData,
     block_index_handle: &H,
+    epoch_data_storage: &E,
     utxos_view: &U,
     pos_accounting_view: &P,
 ) -> Result<(), ConsensusPoSError>
 where
     H: BlockIndexHandle,
+    E: EpochStorageRead,
     U: UtxosView,
     P: PoSAccountingView<Error = pos_accounting::Error>,
 {
@@ -164,7 +168,7 @@ where
     enforce_timestamp_ordering(&prev_block_index, header)?;
 
     let current_height = prev_block_index.block_height().next_height();
-    let random_seed = randomness_of_sealed_epoch(chain_config, current_height, block_index_handle)?;
+    let random_seed = randomness_of_sealed_epoch(chain_config, current_height, epoch_data_storage)?;
 
     let current_epoch_index = chain_config.epoch_index_from_height(&current_height);
     let kernel_output = get_kernel_output(pos_data.kernel_inputs(), utxos_view)?;

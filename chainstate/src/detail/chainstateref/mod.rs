@@ -19,8 +19,9 @@ use chainstate_storage::{
     BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw, Transactional,
 };
 use chainstate_types::{
-    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle, EpochData,
-    GenBlockIndex, GetAncestorError, PropertyQueryError,
+    block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
+    ConsumedEpochDataCache, EpochData, EpochDataCache, GenBlockIndex, GetAncestorError,
+    PropertyQueryError,
 };
 use common::{
     chain::{
@@ -59,6 +60,7 @@ use super::{
 };
 
 mod epoch_seal;
+pub use epoch_seal::EpochSealError;
 mod tx_verifier_storage;
 
 pub struct ChainstateRef<'a, S, V> {
@@ -100,10 +102,6 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> BlockInde
         block_index: &BlockIndex,
     ) -> Result<Option<BlockReward>, PropertyQueryError> {
         self.get_block_reward(block_index)
-    }
-
-    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
-        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 }
 
@@ -473,28 +471,41 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
 
         let best_block_id = self.get_best_block_id()?;
-        let (utxos_cache, pos_delta) = if best_block_id == *header.prev_block_id() {
+        let (utxos_cache, pos_delta, epoch_data_cache) = if best_block_id == *header.prev_block_id()
+        {
             let utxos_cache = UtxosCache::new(&utxos_db).expect("should not fail");
             let pos_delta = PoSAccountingDelta::new(&pos_db);
-            (utxos_cache, pos_delta)
+            let epoch_data_cache = EpochDataCache::new(&self.db_tx);
+            (utxos_cache, pos_delta, epoch_data_cache)
         } else {
             // If block header is not a child of the tip then perform an in memory reorg
             // to get utxo set and accounting data up to that point in fork
-            let TransactionVerifierDelta {
-                utxo_cache: consumed_utxos,
-                accounting_delta: consumed_deltas,
-                ..
-            } = self.reorganize_in_memory(header, best_block_id)?;
+            let (
+                TransactionVerifierDelta {
+                    utxo_cache: consumed_utxos,
+                    accounting_delta: consumed_deltas,
+                    ..
+                },
+                consumed_epoch_data,
+            ) = self.reorganize_in_memory(header, best_block_id)?;
 
             let utxos_cache =
                 UtxosCache::from_data(&utxos_db, consumed_utxos).expect("should not fail");
             let pos_delta = PoSAccountingDelta::from_data(&pos_db, consumed_deltas);
-            (utxos_cache, pos_delta)
+            let epoch_data_cache = EpochDataCache::from_data(&self.db_tx, consumed_epoch_data);
+            (utxos_cache, pos_delta, epoch_data_cache)
         };
 
-        consensus::validate_consensus(self.chain_config, header, self, &utxos_cache, &pos_delta)
-            .map_err(CheckBlockError::ConsensusVerificationFailed)
-            .log_err()?;
+        consensus::validate_consensus(
+            self.chain_config,
+            header,
+            self,
+            &epoch_data_cache,
+            &utxos_cache,
+            &pos_delta,
+        )
+        .map_err(CheckBlockError::ConsensusVerificationFailed)
+        .log_err()?;
 
         // This enforces the minimum accepted timestamp for the block. Depending on the consensus algorithm,
         // there might be extra checks. For example, PoS requires the timestamp to be greater the previous
@@ -808,7 +819,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         &self,
         new_block_header: &SignedBlockHeader,
         best_block_id: Id<GenBlock>,
-    ) -> Result<TransactionVerifierDelta, CheckBlockError> {
+    ) -> Result<(TransactionVerifierDelta, ConsumedEpochDataCache), CheckBlockError> {
         let prev_block_id = new_block_header.prev_block_id();
         let new_chain = match self
             .get_gen_block_index(prev_block_id)
@@ -870,10 +881,7 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             }
         }
 
-        // alternative chain need to store epoch data
-        let in_memory_store =
-            chainstate_storage::inmemory::Store::new_empty().expect("failed to create empty store");
-        let mut db_tx = in_memory_store.transaction_rw(None)?;
+        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
 
         // Connect the new chain
         for new_tip_block_index in new_chain {
@@ -904,11 +912,21 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
             flush_to_storage(&mut tx_verifier, connected_txs)?;
 
-            //update_epoch_data(&mut db_tx, self.chain_config, block_op)?;
+            let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
+            epoch_seal::update_epoch_data(
+                &mut epoch_data_cache,
+                &pos_db,
+                self.chain_config,
+                epoch_seal::BlockStateEventWithIndex::Connect(
+                    new_tip_block_index.block_height(),
+                    &new_tip,
+                ),
+            )?;
         }
 
         let consumed_verifier = tx_verifier.consume()?;
-        Ok(consumed_verifier)
+        let consumed_epoch_data = epoch_data_cache.consume();
+        Ok((consumed_verifier, consumed_epoch_data))
     }
 }
 
@@ -1172,11 +1190,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             self.chain_config,
             epoch_seal::BlockStateEvent::Connect(tip_height),
         )?;
+        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
         epoch_seal::update_epoch_data(
-            &mut self.db_tx,
+            &mut epoch_data_cache,
+            &pos_db,
             self.chain_config,
             epoch_seal::BlockStateEventWithIndex::Connect(tip_height, tip),
-        )
+        )?;
+
+        let consumed_epoch_data = epoch_data_cache.consume();
+        consumed_epoch_data.flush(&mut self.db_tx)?;
+        Ok(())
     }
 
     fn post_disconnect_tip(&mut self, tip_height: BlockHeight) -> Result<(), BlockError> {
@@ -1185,10 +1210,18 @@ impl<'a, S: BlockchainStorageWrite, V: TransactionVerificationStrategy> Chainsta
             self.chain_config,
             epoch_seal::BlockStateEvent::Disconnect(tip_height),
         )?;
+
+        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
+        let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
         epoch_seal::update_epoch_data(
-            &mut self.db_tx,
+            &mut epoch_data_cache,
+            &pos_db,
             self.chain_config,
             epoch_seal::BlockStateEventWithIndex::Disconnect(tip_height),
-        )
+        )?;
+
+        let consumed_epoch_data = epoch_data_cache.consume();
+        consumed_epoch_data.flush(&mut self.db_tx)?;
+        Ok(())
     }
 }

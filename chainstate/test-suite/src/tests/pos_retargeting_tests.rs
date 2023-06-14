@@ -20,7 +20,7 @@ use super::helpers::pos::{calculate_new_target, pos_mine};
 use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, ChainstateError, CheckBlockError,
 };
-use chainstate_storage::{BlockchainStorageRead, Transactional};
+use chainstate_storage::Transactional;
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };

@@ -24,7 +24,9 @@ pub use crate::{
     block_index_handle::BlockIndexHandle,
     block_index_history_iter::BlockIndexHistoryIterator,
     epoch_data::EpochData,
-    epoch_data_cache::{EpochDataCache, EpochStorageRead, EpochStorageWrite},
+    epoch_data_cache::{
+        ConsumedEpochDataCache, EpochDataCache, EpochStorageRead, EpochStorageWrite,
+    },
     error::GetAncestorError,
     error::PropertyQueryError,
     gen_block_index::GenBlockIndex,

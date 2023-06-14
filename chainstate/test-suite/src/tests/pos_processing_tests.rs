@@ -23,7 +23,7 @@ use chainstate::{
     chainstate_interface::ChainstateInterface, BlockError, BlockSource, ChainstateError,
     CheckBlockError, ConnectTransactionError, SpendStakeError,
 };
-use chainstate_storage::{BlockchainStorageRead, SealedStorageTag, TipStorageTag, Transactional};
+use chainstate_storage::{SealedStorageTag, TipStorageTag, Transactional};
 use chainstate_test_framework::{
     anyonecanspend_address, empty_witness, TestFramework, TransactionBuilder,
 };

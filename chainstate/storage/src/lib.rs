@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 use common::chain::block::signed_block_header::SignedBlockHeader;
 pub use internal::Store;
 
-use chainstate_types::{BlockIndex, EpochData, EpochStorageRead, EpochStorageWrite};
+use chainstate_types::{BlockIndex, EpochStorageRead, EpochStorageWrite};
 use common::chain::block::BlockReward;
 use common::chain::config::EpochIndex;
 use common::chain::tokens::{TokenAuxiliaryData, TokenId};
