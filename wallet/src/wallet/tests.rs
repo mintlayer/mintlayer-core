@@ -560,7 +560,7 @@ fn locked_wallet_cant_sign_transaction(#[case] seed: Seed) {
 
     let new_output = TxOutput::Transfer(
         OutputValue::Coin(Amount::from_atoms(
-            rng.gen_range(1..block1_amount.into_atoms() - NETWORK_FEE),
+            rng.gen_range(1..=block1_amount.into_atoms() - NETWORK_FEE),
         )),
         Destination::AnyoneCanSpend,
     );
