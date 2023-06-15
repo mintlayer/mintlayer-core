@@ -34,7 +34,10 @@ use common::{
     primitives::{Amount, BlockHeight, Idable},
 };
 use consensus::GenerateBlockInputData;
-use crypto::{key::PublicKey, vrf::VRFPublicKey};
+use crypto::{
+    key::{hdkd::u31::U31, PublicKey},
+    vrf::VRFPublicKey,
+};
 use logging::log;
 pub use node_comm::node_traits::{ConnectedPeer, NodeInterface, PeerId};
 pub use node_comm::{
@@ -107,9 +110,7 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         )
         .map_err(ControllerError::WalletError)?;
 
-        wallet
-            .create_account(DEFAULT_ACCOUNT_INDEX)
-            .map_err(ControllerError::WalletError)?;
+        wallet.create_account().map_err(ControllerError::WalletError)?;
 
         Ok(wallet)
     }
@@ -169,10 +170,13 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         self.wallet.lock_wallet().map_err(ControllerError::WalletError)
     }
 
-    pub fn get_balance(&self) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
+    pub fn get_balance(
+        &self,
+        account_index: Option<U31>,
+    ) -> Result<BTreeMap<Currency, Amount>, ControllerError<T>> {
         self.wallet
             .get_balance(
-                DEFAULT_ACCOUNT_INDEX,
+                account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX),
                 UtxoType::Transfer | UtxoType::LockThenTransfer,
             )
             .map_err(ControllerError::WalletError)
@@ -181,27 +185,37 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
     pub fn get_utxos(
         &self,
         utxo_types: UtxoTypes,
+        account_index: Option<U31>,
     ) -> Result<BTreeMap<UtxoOutPoint, TxOutput>, ControllerError<T>> {
         self.wallet
-            .get_utxos(DEFAULT_ACCOUNT_INDEX, utxo_types)
+            .get_utxos(account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX), utxo_types)
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_address(&mut self) -> Result<Address, ControllerError<T>> {
+    pub fn new_address(
+        &mut self,
+        account_index: Option<U31>,
+    ) -> Result<Address, ControllerError<T>> {
         self.wallet
-            .get_new_address(DEFAULT_ACCOUNT_INDEX)
+            .get_new_address(account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX))
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn new_public_key(&mut self) -> Result<PublicKey, ControllerError<T>> {
+    pub fn new_public_key(
+        &mut self,
+        account_index: Option<U31>,
+    ) -> Result<PublicKey, ControllerError<T>> {
         self.wallet
-            .get_new_public_key(DEFAULT_ACCOUNT_INDEX)
+            .get_new_public_key(account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX))
             .map_err(ControllerError::WalletError)
     }
 
-    pub fn get_vrf_public_key(&mut self) -> Result<VRFPublicKey, ControllerError<T>> {
+    pub fn get_vrf_public_key(
+        &mut self,
+        account_index: Option<U31>,
+    ) -> Result<VRFPublicKey, ControllerError<T>> {
         self.wallet
-            .get_vrf_public_key(DEFAULT_ACCOUNT_INDEX)
+            .get_vrf_public_key(account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX))
             .map_err(ControllerError::WalletError)
     }
 
@@ -209,11 +223,15 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
         &mut self,
         address: Address,
         amount: Amount,
+        account_index: Option<U31>,
     ) -> Result<(), ControllerError<T>> {
         let output = make_address_output(address, amount).map_err(ControllerError::WalletError)?;
         let tx = self
             .wallet
-            .create_transaction_to_addresses(DEFAULT_ACCOUNT_INDEX, [output])
+            .create_transaction_to_addresses(
+                account_index.unwrap_or(DEFAULT_ACCOUNT_INDEX),
+                [output],
+            )
             .map_err(ControllerError::WalletError)?;
         self.rpc_client
             .submit_transaction(tx)
@@ -265,6 +283,10 @@ impl<T: NodeInterface + Clone + Send + Sync + 'static> Controller<T> {
                 .map_err(ControllerError::NodeCallError)?;
         }
         self.sync_once().await
+    }
+
+    pub fn create_account(&mut self) -> Result<U31, ControllerError<T>> {
+        self.wallet.create_account().map_err(ControllerError::WalletError)
     }
 
     pub fn start_staking(&mut self) -> Result<(), ControllerError<T>> {

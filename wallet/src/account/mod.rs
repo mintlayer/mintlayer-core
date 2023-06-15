@@ -664,6 +664,10 @@ impl Account {
             self.account_info.best_block_height(),
         )
     }
+
+    pub fn has_transactions(&self) -> bool {
+        !self.output_cache.txs().is_empty()
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]

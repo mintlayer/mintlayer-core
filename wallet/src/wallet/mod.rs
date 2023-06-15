@@ -34,7 +34,6 @@ use consensus::PoSGenerateBlockInputData;
 use crypto::key::hdkd::u31::U31;
 use crypto::key::PublicKey;
 use crypto::vrf::VRFPublicKey;
-use utils::ensure;
 use wallet_storage::{
     DefaultBackend, Store, StoreTxRw, TransactionRoLocked, TransactionRwLocked, Transactional,
     WalletStorageReadLocked, WalletStorageWriteLocked,
@@ -66,6 +65,10 @@ pub enum WalletError {
     NoAccountFoundWithIndex(U31),
     #[error("Account with index {0} already exists")]
     AccountAlreadyExists(U31),
+    #[error("Cannot create a new account when last account is still empty")]
+    EmptyLastAccount,
+    #[error("The maximum number of accounts has been exceeded")]
+    MaxNumAccountsExceeded,
     #[error("Not implemented: {0}")]
     NotImplemented(&'static str),
     #[error("The send request is complete")]
@@ -195,19 +198,24 @@ impl<B: storage::Backend> Wallet<B> {
         self.accounts.keys()
     }
 
-    // TODO: this should not be public, as specified by BIP44 accounts must be created sequentially
-    // and a new next account should be rejected if the previously created one has no transactions
-    // associated with it
-    pub fn create_account(&mut self, account_index: U31) -> WalletResult<()> {
-        ensure!(
-            !self.accounts.contains_key(&account_index),
-            WalletError::AccountAlreadyExists(account_index)
-        );
+    pub fn create_account(&mut self) -> WalletResult<U31> {
+        let next_account_index = self.accounts.last_key_value().map_or(
+            Ok(U31::ZERO),
+            |(last_account_index, last_account)| {
+                if last_account.has_transactions() {
+                    last_account_index.plus_one().map_err(|_| WalletError::MaxNumAccountsExceeded)
+                } else {
+                    // Cannot create a new account if the latest created one has no transactions
+                    // associated with it
+                    Err(WalletError::EmptyLastAccount)
+                }
+            },
+        )?;
 
         let mut db_tx = self.db.transaction_rw_unlocked(None)?;
 
         let account_key_chain =
-            self.key_chain.create_account_key_chain(&mut db_tx, account_index)?;
+            self.key_chain.create_account_key_chain(&mut db_tx, next_account_index)?;
 
         let account = Account::new(
             Arc::clone(&self.chain_config),
@@ -221,7 +229,7 @@ impl<B: storage::Backend> Wallet<B> {
 
         self.accounts.insert(account.account_index(), account);
 
-        Ok(())
+        Ok(next_account_index)
     }
 
     pub fn database(&self) -> &Store<B> {

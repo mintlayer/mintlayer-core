@@ -23,7 +23,7 @@ use common::{
     chain::{Block, ChainConfig, PoolId, SignedTransaction},
     primitives::{Amount, BlockHeight, H256},
 };
-use crypto::key::PublicKey;
+use crypto::key::{hdkd::u31::U31, PublicKey};
 use serialization::{hex::HexEncode, hex_encoded::HexEncoded};
 use wallet::account::Currency;
 use wallet_controller::{NodeInterface, NodeRpcClient, PeerId, RpcController};
@@ -103,6 +103,10 @@ pub enum WalletCommand {
         count: u32,
     },
 
+    /// Creates a new account
+    /// returns an error if the last created account does not have a transaction history
+    CreateNewAccount,
+
     StartStaking,
 
     StopStaking,
@@ -136,24 +140,34 @@ pub enum WalletCommand {
 
     SyncWallet,
 
-    GetBalance,
+    GetBalance {
+        account_index: Option<U31>,
+    },
 
     ListUtxo {
         #[arg(value_enum, default_value_t = CliUtxoTypes::All)]
         utxo_type: CliUtxoTypes,
+        account_index: Option<U31>,
     },
 
     /// Generate a new unused address
-    NewAddress,
+    NewAddress {
+        account_index: Option<U31>,
+    },
 
     /// Generate a new unused public key
-    NewPublicKey,
+    NewPublicKey {
+        account_index: Option<U31>,
+    },
 
-    GetVrfPublicKey,
+    GetVrfPublicKey {
+        account_index: Option<U31>,
+    },
 
     SendToAddress {
         address: String,
         amount: String,
+        account_index: Option<U31>,
     },
 
     CreateStakePool {
@@ -422,6 +436,18 @@ pub async fn handle_wallet_command(
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
+        WalletCommand::CreateNewAccount => {
+            let new_account_index = controller_opt
+                .as_mut()
+                .ok_or(WalletCliError::NoWallet)?
+                .create_account()
+                .map_err(WalletCliError::Controller)?;
+            Ok(ConsoleCommand::Print(format!(
+                "Success, the new account index is: {}",
+                new_account_index
+            )))
+        }
+
         WalletCommand::StartStaking => {
             controller_opt
                 .as_mut()
@@ -483,11 +509,11 @@ pub async fn handle_wallet_command(
             Ok(ConsoleCommand::Print("Success".to_owned()))
         }
 
-        WalletCommand::GetBalance => {
+        WalletCommand::GetBalance { account_index } => {
             let coin_balance = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_balance()
+                .get_balance(account_index)
                 .map_err(WalletCliError::Controller)?
                 .get(&Currency::Coin)
                 .copied()
@@ -498,49 +524,56 @@ pub async fn handle_wallet_command(
             )))
         }
 
-        WalletCommand::ListUtxo { utxo_type } => {
+        WalletCommand::ListUtxo {
+            utxo_type,
+            account_index,
+        } => {
             let utxos = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_utxos(utxo_type.to_wallet_types())
+                .get_utxos(utxo_type.to_wallet_types(), account_index)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
         }
 
-        WalletCommand::NewAddress => {
+        WalletCommand::NewAddress { account_index } => {
             let address = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .new_address()
+                .new_address(account_index)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(address.get().to_owned()))
         }
 
-        WalletCommand::NewPublicKey => {
+        WalletCommand::NewPublicKey { account_index } => {
             let public_key = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .new_public_key()
+                .new_public_key(account_index)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(public_key.hex_encode()))
         }
 
-        WalletCommand::GetVrfPublicKey => {
+        WalletCommand::GetVrfPublicKey { account_index } => {
             let vrf_public_key = controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .get_vrf_public_key()
+                .get_vrf_public_key(account_index)
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print(vrf_public_key.hex_encode()))
         }
 
-        WalletCommand::SendToAddress { address, amount } => {
+        WalletCommand::SendToAddress {
+            address,
+            amount,
+            account_index,
+        } => {
             let amount = parse_coin_amount(chain_config, &amount)?;
             let address = parse_address(chain_config, &address)?;
             controller_opt
                 .as_mut()
                 .ok_or(WalletCliError::NoWallet)?
-                .send_to_address(address, amount)
+                .send_to_address(address, amount, account_index)
                 .await
                 .map_err(WalletCliError::Controller)?;
             Ok(ConsoleCommand::Print("Success".to_owned()))
