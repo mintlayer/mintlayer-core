@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeSet, net::SocketAddr, sync::Arc, time::Duration};
 
 use common::{chain::config, primitives::user_agent::mintlayer_core_user_agent};
 use p2p_test_utils::P2pBasicTestTimeGetter;
 
 use crate::{
     config::NodeType,
+    message::AnnounceAddrRequest,
     net::{
         default_backend::{
             transport::{MpscChannelTransport, TcpTransportSocket, TransportAddress},
@@ -29,13 +30,14 @@ use crate::{
         types::{PeerInfo, Role},
         ConnectivityService, NetworkingService,
     },
-    peer_manager::{tests::make_peer_manager_custom, PeerManager},
+    peer_manager::{tests::make_peer_manager_custom, PeerManager, MAX_OUTBOUND_CONNECTIONS},
     protocol::NETWORK_PROTOCOL_CURRENT,
     testing_utils::{
         peerdb_inmemory_store, test_p2p_config, RandomAddressMaker, TestTcpAddressMaker,
         TestTransportChannel, TestTransportMaker,
     },
     types::peer_id::PeerId,
+    utils::oneshot_nofail,
     PeerManagerEvent,
 };
 
@@ -282,4 +284,96 @@ fn test_addr_list_handling_outbound() {
         vec![TestTcpAddressMaker::new().as_peer_address()],
     );
     assert_ne!(pm.peers.get(&peer_id_1).unwrap().score, 0);
+}
+
+// Verify that the node periodically resends its own address
+#[tokio::test]
+async fn resend_own_addresses() {
+    type TestNetworkingService = DefaultNetworkingService<TcpTransportSocket>;
+
+    // The addresses on which the node is listening
+    let listening_addresses: Vec<std::net::SocketAddr> =
+        vec!["1.2.3.4:3031".parse().unwrap(), "[2001:bc8:1600::1]:3031".parse().unwrap()];
+
+    // Outbound connections normally use random ports
+    let outbound_address_1: std::net::SocketAddr = "1.2.3.4:12345".parse().unwrap();
+    let outbound_address_2: std::net::SocketAddr = "[2001:bc8:1600::1]:23456".parse().unwrap();
+
+    let chain_config = Arc::new(config::create_mainnet());
+    let p2p_config = Arc::new(test_p2p_config());
+    let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_conn_tx, conn_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (_peer_tx, peer_rx) =
+        tokio::sync::mpsc::unbounded_channel::<PeerManagerEvent<TestNetworkingService>>();
+    let time_getter = P2pBasicTestTimeGetter::new();
+    let connectivity_handle = ConnectivityHandle::<TestNetworkingService, TcpTransportSocket>::new(
+        listening_addresses.clone(),
+        cmd_tx,
+        conn_rx,
+    );
+
+    let mut pm = PeerManager::new(
+        Arc::clone(&chain_config),
+        Arc::clone(&p2p_config),
+        connectivity_handle,
+        peer_rx,
+        time_getter.get_time_getter(),
+        peerdb_inmemory_store(),
+    )
+    .unwrap();
+
+    for peer_index in 0..MAX_OUTBOUND_CONNECTIONS {
+        let new_peer_id = PeerId::new();
+        let peer_address = TestTcpAddressMaker::new();
+        let peer_info = PeerInfo {
+            peer_id: new_peer_id,
+            protocol: NETWORK_PROTOCOL_CURRENT,
+            network: *chain_config.magic_bytes(),
+            version: *chain_config.version(),
+            user_agent: mintlayer_core_user_agent(),
+            services: NodeType::Full.into(),
+        };
+        pm.connect(peer_address, None);
+
+        // New peer connection is requested
+        while !matches!(cmd_rx.try_recv().unwrap(), Command::Connect { address: _ }) {}
+
+        let own_ip = if peer_index % 2 == 0 {
+            outbound_address_1
+        } else {
+            outbound_address_2
+        };
+
+        pm.accept_connection(peer_address, Role::Outbound, peer_info, Some(own_ip.into()));
+    }
+    assert_eq!(pm.peers.len(), MAX_OUTBOUND_CONNECTIONS);
+
+    let (started_tx, started_rx) = oneshot_nofail::channel();
+    tokio::spawn(async move { pm.run_internal(Some(started_tx)).await });
+    started_rx.await.unwrap();
+
+    // Flush all pending messages
+    while cmd_rx.try_recv().is_ok() {}
+
+    // Advance the current time by 5 days (resends are not deterministic, but this should be more than enough)
+    time_getter.advance_time(Duration::from_secs(5 * 24 * 60 * 60));
+
+    // PeerManager should resend own addresses
+    let mut listening_addresses = listening_addresses.into_iter().collect::<BTreeSet<_>>();
+    while !listening_addresses.is_empty() {
+        let event = tokio::time::timeout(Duration::from_secs(60), cmd_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+
+        if let Command::SendMessage {
+            peer: _,
+            message: Message::AnnounceAddrRequest(AnnounceAddrRequest { address }),
+        } = event
+        {
+            let announced_addr: SocketAddr =
+                TransportAddress::from_peer_address(&address, false).unwrap();
+            listening_addresses.remove(&announced_addr);
+        }
+    }
 }

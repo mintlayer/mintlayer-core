@@ -182,7 +182,8 @@ where
                 )
             }
             Err(err) => {
-                log::error!("Failed to establish connection to {address:?}: {err}");
+                // This happens often (for example, if the remote node is behind NAT), so use `info!` here
+                log::info!("Failed to establish connection to {address:?}: {err}");
 
                 Ok(self.conn_tx.send(ConnectivityEvent::ConnectionError {
                     address,

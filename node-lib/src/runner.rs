@@ -196,7 +196,7 @@ pub async fn setup(
     options: Options,
     node_controller_sender: Option<oneshot::Sender<NodeController>>,
 ) -> Result<Node> {
-    let command = options.command.clone().unwrap_or(Command::Mainnet(RunOptions::default()));
+    let command = options.command.clone().unwrap_or(Command::Testnet(RunOptions::default()));
     match command {
         Command::Mainnet(ref run_options) => {
             let chain_config = common::chain::config::create_mainnet();

@@ -346,7 +346,7 @@ impl<S: BlockchainStorage, V: TransactionVerificationStrategy> Chainstate<S, V> 
         }
 
         // since we processed blocks in order, the last one is the tip
-        let new_block_index_after_orphans = block_indexes.into_iter().flatten().rev().next();
+        let new_block_index_after_orphans = block_indexes.into_iter().flatten().next_back();
 
         Ok(new_block_index_after_orphans)
     }
