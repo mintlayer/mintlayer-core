@@ -13,13 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Debug,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -61,7 +55,6 @@ where
     let p2p_config = Arc::new(test_p2p_config());
     let (chainstate, mempool, shutdown_trigger, subsystem_manager_handle) =
         p2p_test_utils::start_subsystems(Arc::clone(&chain_config));
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
@@ -70,7 +63,6 @@ where
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::new(test_p2p_config()),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -95,7 +87,6 @@ where
         vec![T::make_address()],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -157,7 +148,6 @@ where
         e => panic!("invalid event received: {e:?}"),
     }
 
-    shutdown.store(true, Ordering::SeqCst);
     let _ = shutdown_sender.send(());
     let _ = sync1_handle.await.unwrap();
     shutdown_trigger.initiate();

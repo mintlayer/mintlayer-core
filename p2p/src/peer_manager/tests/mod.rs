@@ -18,10 +18,7 @@ mod ban;
 mod connections;
 mod ping;
 
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -66,7 +63,6 @@ where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (conn, _, _, _) = T::start(
@@ -74,7 +70,6 @@ where
         vec![addr],
         Arc::clone(&chain_config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )

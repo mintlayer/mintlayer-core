@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    fmt::Debug,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::{fmt::Debug, sync::Arc};
 
 use tokio::sync::{mpsc, oneshot};
 
@@ -54,7 +51,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn1, mut messaging_handle1, _sync1, _) = S::start(
@@ -62,7 +58,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -82,25 +77,21 @@ where
 
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all(
-            std::iter::repeat_with(|| Arc::clone(&shutdown))
-                .zip(shutdown_receivers.into_iter())
-                .zip(subscribers_receivers.into_iter())
-                .map(
-                    |((shutdown, shutdown_receiver), subscribers_receiver)| async {
-                        let res = S::start(
-                            A::make_transport(),
-                            vec![A::make_address()],
-                            Arc::clone(&config),
-                            Arc::clone(&p2p_config),
-                            shutdown,
-                            shutdown_receiver,
-                            subscribers_receiver,
-                        )
-                        .await
-                        .unwrap();
-                        (res.0, res.2)
-                    },
-                ),
+            shutdown_receivers.into_iter().zip(subscribers_receivers.into_iter()).map(
+                |(shutdown_receiver, subscribers_receiver)| async {
+                    let res = S::start(
+                        A::make_transport(),
+                        vec![A::make_address()],
+                        Arc::clone(&config),
+                        Arc::clone(&p2p_config),
+                        shutdown_receiver,
+                        subscribers_receiver,
+                    )
+                    .await
+                    .unwrap();
+                    (res.0, res.2)
+                },
+            ),
         )
         .await;
 

@@ -36,7 +36,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
@@ -45,7 +44,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -59,7 +57,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -107,7 +104,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
@@ -116,7 +112,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -130,7 +125,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -176,7 +170,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
@@ -185,7 +178,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -199,7 +191,6 @@ where
         vec![A::make_address()],
         config,
         p2p_config,
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -243,7 +234,6 @@ where
 {
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
 
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
@@ -252,7 +242,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        Arc::clone(&shutdown),
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -266,7 +255,6 @@ where
         vec![A::make_address()],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )
@@ -335,7 +323,6 @@ where
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let p2p_config = Arc::new(test_p2p_config());
-    let shutdown = Arc::new(AtomicBool::new(false));
     let (_shutdown_sender, shutdown_receiver) = oneshot::channel();
     let (_subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
     let (mut conn, _, _, _) = DefaultNetworkingService::<T>::start(
@@ -343,7 +330,6 @@ where
         vec![],
         Arc::clone(&config),
         Arc::clone(&p2p_config),
-        shutdown,
         shutdown_receiver,
         subscribers_receiver,
     )

@@ -18,13 +18,7 @@ pub mod peer;
 pub mod transport;
 pub mod types;
 
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::{
@@ -119,7 +113,6 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<P2pConfig>,
-        shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(
@@ -135,7 +128,6 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
         let local_addresses = socket.local_addresses().expect("to have bind address available");
 
         let p2p_config_ = Arc::clone(&p2p_config);
-        let shutdown_ = Arc::clone(&shutdown);
         let backend_task = tokio::spawn(async move {
             let mut backend = backend::Backend::<T>::new(
                 transport,
@@ -145,18 +137,13 @@ impl<T: TransportSocket> NetworkingService for DefaultNetworkingService<T> {
                 cmd_rx,
                 conn_tx,
                 sync_tx,
-                shutdown_,
                 shutdown_receiver,
                 subscribers_receiver,
             );
 
             match backend.run().await {
                 Ok(_) => unreachable!(),
-                Err(P2pError::ChannelClosed) if shutdown.load(Ordering::SeqCst) => {
-                    log::info!("Backend is shut down");
-                }
                 Err(e) => {
-                    shutdown.store(true, Ordering::SeqCst);
                     log::error!("Failed to run backend: {e}");
                 }
             }

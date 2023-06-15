@@ -16,12 +16,7 @@
 pub mod default_backend;
 pub mod types;
 
-use std::{
-    fmt::Debug,
-    hash::Hash,
-    str::FromStr,
-    sync::{atomic::AtomicBool, Arc},
-};
+use std::{fmt::Debug, hash::Hash, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::{
@@ -88,7 +83,6 @@ pub trait NetworkingService {
         bind_addresses: Vec<Self::Address>,
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
-        shutdown: Arc<AtomicBool>,
         shutdown_receiver: oneshot::Receiver<()>,
         subscribers_receiver: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> crate::Result<(

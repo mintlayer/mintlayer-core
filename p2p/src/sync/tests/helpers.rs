@@ -17,7 +17,7 @@ use std::{
     collections::BTreeSet,
     net::{IpAddr, SocketAddr},
     panic,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -475,7 +475,6 @@ impl NetworkingService for NetworkingServiceStub {
         _: Vec<Self::Address>,
         _: Arc<ChainConfig>,
         _: Arc<P2pConfig>,
-        _: Arc<AtomicBool>,
         _: oneshot::Receiver<()>,
         _: mpsc::UnboundedReceiver<P2pEventHandler>,
     ) -> Result<(

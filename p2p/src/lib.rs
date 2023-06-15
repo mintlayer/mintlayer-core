@@ -36,10 +36,7 @@ pub use crate::{
 
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 
 use tokio::{
@@ -86,10 +83,6 @@ struct P2p<T: NetworkingService> {
 
     backend_shutdown_sender: oneshot::Sender<()>,
 
-    // TODO: This flag is a workaround for graceful p2p termination.
-    // See https://github.com/mintlayer/mintlayer-core/issues/888 for more details.
-    shutdown: Arc<AtomicBool>,
-
     backend_task: JoinHandle<()>,
     peer_manager_task: JoinHandle<()>,
     sync_manager_task: JoinHandle<()>,
@@ -118,7 +111,6 @@ where
         time_getter: TimeGetter,
         peerdb_storage: S,
     ) -> Result<Self> {
-        let shutdown = Arc::new(AtomicBool::new(false));
         let (backend_shutdown_sender, shutdown_receiver) = oneshot::channel();
         let (subscribers_sender, subscribers_receiver) = mpsc::unbounded_channel();
 
@@ -127,7 +119,6 @@ where
             bind_addresses,
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
-            Arc::clone(&shutdown),
             shutdown_receiver,
             subscribers_receiver,
         )
@@ -151,16 +142,11 @@ where
             time_getter.clone(),
             peerdb_storage,
         )?;
-        let shutdown_ = Arc::clone(&shutdown);
         let peer_manager_task = tokio::spawn(async move {
             match peer_manager.run().await {
                 Ok(_) => unreachable!(),
                 // The channel can be closed during the shutdown process.
-                Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
-                    log::info!("Peer manager is shut down");
-                }
                 Err(e) => {
-                    shutdown_.store(true, Ordering::SeqCst);
                     log::error!("Peer manager failed: {e:?}");
                 }
             }
@@ -172,7 +158,6 @@ where
             let chain_config = Arc::clone(&chain_config);
             let mempool_handle_ = mempool_handle.clone();
             let messaging_handle_ = messaging_handle.clone();
-            let shutdown_ = Arc::clone(&shutdown);
 
             tokio::spawn(async move {
                 match sync::BlockSyncManager::<T>::new(
@@ -189,12 +174,7 @@ where
                 .await
                 {
                     Ok(_) => unreachable!(),
-                    // The channel can be closed during the shutdown process.
-                    Err(P2pError::ChannelClosed) if shutdown_.load(Ordering::SeqCst) => {
-                        log::info!("Sync manager is shut down");
-                    }
                     Err(e) => {
-                        shutdown_.store(true, Ordering::SeqCst);
                         log::error!("Sync manager failed: {e:?}");
                     }
                 }
@@ -205,7 +185,6 @@ where
             tx_peer_manager,
             mempool_handle,
             messaging_handle,
-            shutdown,
             backend_shutdown_sender,
             backend_task,
             peer_manager_task,
@@ -228,7 +207,6 @@ where
     }
 
     async fn shutdown(self) {
-        self.shutdown.store(true, Ordering::SeqCst);
         let _ = self.backend_shutdown_sender.send(());
 
         // Wait for the tasks to shut dow.
