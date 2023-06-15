@@ -89,6 +89,16 @@ pub async fn sync_once<T: NodeInterface>(
             return Ok(());
         }
 
+        // Pause sync if connected to a node that is still downloading blocks.
+        // Otherwise the node will not be able to find a common block and the wallet will start from genesis.
+        utils::ensure!(
+            chain_info.best_block_height >= wallet_block_height,
+            ControllerError::NotEnoughBlockHeight(
+                wallet_block_height,
+                chain_info.best_block_height,
+            )
+        );
+
         let FetchedBlock {
             block,
             common_block_height,
@@ -168,6 +178,7 @@ async fn get_next_block_info<T: NodeInterface>(
     })
 }
 
+// `node_block_height` can't be less than `wallet_block_height` and `node_block_height` can't be equal to `wallet_block_id`
 async fn fetch_new_block<T: NodeInterface>(
     chain_config: &ChainConfig,
     rpc_client: &T,

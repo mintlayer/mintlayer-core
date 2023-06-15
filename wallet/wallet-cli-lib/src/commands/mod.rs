@@ -363,7 +363,7 @@ pub async fn handle_wallet_command(
 
         WalletCommand::ChainstateInfo => {
             let info = rpc_client.chainstate_info().await.map_err(WalletCliError::RpcError)?;
-            Ok(ConsoleCommand::Print(format!("{info:?}")))
+            Ok(ConsoleCommand::Print(format!("{info:#?}")))
         }
 
         WalletCommand::BestBlock => {
@@ -500,7 +500,7 @@ pub async fn handle_wallet_command(
                 .ok_or(WalletCliError::NoWallet)?
                 .get_utxos(utxo_type.to_wallet_types())
                 .map_err(WalletCliError::Controller)?;
-            Ok(ConsoleCommand::Print(format!("{utxos:?}")))
+            Ok(ConsoleCommand::Print(format!("{utxos:#?}")))
         }
 
         WalletCommand::NewAddress => {
@@ -583,7 +583,7 @@ pub async fn handle_wallet_command(
         WalletCommand::ConnectedPeers => {
             let peers =
                 rpc_client.p2p_get_connected_peers().await.map_err(WalletCliError::RpcError)?;
-            Ok(ConsoleCommand::Print(format!("{peers:?}")))
+            Ok(ConsoleCommand::Print(format!("{peers:#?}")))
         }
         WalletCommand::AddReservedPeer { address } => {
             rpc_client

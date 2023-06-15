@@ -31,7 +31,7 @@ use std::{
 use common::{
     address::Address,
     chain::{tokens::TokenId, Block, ChainConfig, SignedTransaction, TxOutput, UtxoOutPoint},
-    primitives::{Amount, Idable},
+    primitives::{Amount, BlockHeight, Idable},
 };
 use consensus::GenerateBlockInputData;
 use crypto::{key::PublicKey, vrf::VRFPublicKey};
@@ -52,6 +52,8 @@ pub enum ControllerError<T: NodeInterface> {
     NodeCallError(T::Error),
     #[error("Wallet sync error: {0}")]
     SyncError(String),
+    #[error("Synchronization is paused until the node has {0} blocks ({1} blocks currently)")]
+    NotEnoughBlockHeight(BlockHeight, BlockHeight),
     #[error("Wallet file {0} error: {1}")]
     WalletFileError(PathBuf, String),
     #[error("Wallet error: {0}")]

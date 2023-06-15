@@ -21,6 +21,7 @@ use std::{
     collections::VecDeque,
     net::SocketAddr,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use chainstate::{
@@ -318,13 +319,19 @@ impl CliTestFramework {
         };
 
         let console = MockConsole::new(commands);
-        wallet_cli_lib::run(
-            console.clone(),
-            wallet_options,
-            Some(Arc::clone(&self.chain_config)),
+
+        tokio::time::timeout(
+            Duration::from_secs(60),
+            wallet_cli_lib::run(
+                console.clone(),
+                wallet_options,
+                Some(Arc::clone(&self.chain_config)),
+            ),
         )
         .await
+        .unwrap()
         .unwrap();
+
         let res = console.output.lock().unwrap().clone();
         res
     }
