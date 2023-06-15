@@ -62,5 +62,7 @@ pub struct PeerContext<A> {
 
     pub address_rate_limiter: RateLimiter,
 
+    /// Expected listening address of this node (publicly routable IP + local listening port).
+    /// Can be set for outbound connections only.
     pub discovered_own_address: Option<A>,
 }

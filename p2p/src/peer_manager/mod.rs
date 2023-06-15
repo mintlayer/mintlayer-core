@@ -80,9 +80,8 @@ const PEER_MGR_HEARTBEAT_INTERVAL_MIN: Duration = Duration::from_secs(5);
 /// Upper bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
-/// How often resend own address to one random outbound peer on average
-const RESEND_OWN_ADDRESS_DELAY: Duration =
-    Duration::from_secs(24 * 60 * 60 / MAX_OUTBOUND_CONNECTIONS as u64);
+/// How often resend own address to a specific peer (on average)
+const RESEND_OWN_ADDRESS_TO_PEER_PERIOD: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// How many addresses are allowed to be sent
 const MAX_ADDRESS_COUNT: usize = 1000;
@@ -213,10 +212,7 @@ where
             return None;
         }
 
-        let receiver_address = match receiver_address {
-            Some(addr) => addr,
-            None => return None,
-        };
+        let receiver_address = receiver_address?;
 
         // Take IP and use port numbers from all listening sockets (with same IP version)
         let discovered_own_addresses = self
@@ -1203,8 +1199,13 @@ where
 
             while next_time_resend_own_address < now {
                 self.resend_own_address_randomly();
-                next_time_resend_own_address += RESEND_OWN_ADDRESS_DELAY
+
+                // Pick a random outbound peer to resend the listening address to.
+                // The delay has this value because there are at most `MAX_OUTBOUND_CONNECTIONS`
+                // that can have `discovered_own_address`.
+                let delay = (RESEND_OWN_ADDRESS_TO_PEER_PERIOD / MAX_OUTBOUND_CONNECTIONS as u32)
                     .mul_f64(utils::exp_rand::exponential_rand(&mut make_pseudo_rng()));
+                next_time_resend_own_address += delay;
             }
         }
     }
