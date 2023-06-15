@@ -26,8 +26,8 @@ use std::{
     },
 };
 
+use futures::never::Never;
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use void::Void;
 
 use chainstate::{chainstate_interface::ChainstateInterface, ChainstateHandle};
 use common::{
@@ -113,7 +113,7 @@ where
     }
 
     /// Runs the sync manager event loop.
-    pub async fn run(&mut self) -> Result<Void> {
+    pub async fn run(&mut self) -> Result<Never> {
         log::info!("Starting SyncManager");
 
         let mut new_tip_receiver = subscribe_to_new_tip(&self.chainstate_handle).await?;

@@ -187,7 +187,6 @@ tower-http = "0.4"
 trust-dns-client = "0.22"
 trust-dns-server = "0.22"
 variant_count = "1.1"
-void = "1.0"
 zeroize = "1.5"
 
 [profile.dev]

@@ -38,7 +38,6 @@ thiserror.workspace = true
 tokio = { workspace = true, default-features = false, features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
 tokio-socks.workspace = true
 tokio-util = { workspace = true, default-features = false, features = ["codec"] }
-void.workspace = true
 
 [dev-dependencies]
 chainstate-storage = { path = "../chainstate/storage" }

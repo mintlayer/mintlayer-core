@@ -27,8 +27,8 @@ use std::{
     time::Duration,
 };
 
+use futures::never::Never;
 use tokio::sync::mpsc;
-use void::Void;
 
 use chainstate::ban_score::BanScore;
 use common::{
@@ -1132,7 +1132,7 @@ where
     async fn run_internal(
         &mut self,
         loop_started_tx: Option<oneshot_nofail::Sender<()>>,
-    ) -> crate::Result<Void> {
+    ) -> crate::Result<Never> {
         // Run heartbeat right away to start outbound connections
         self.heartbeat().await;
         // Last time when heartbeat was called
@@ -1210,7 +1210,7 @@ where
         }
     }
 
-    pub async fn run(&mut self) -> crate::Result<Void> {
+    pub async fn run(&mut self) -> crate::Result<Never> {
         self.run_internal(None).await
     }
 }

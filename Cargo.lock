@@ -506,7 +506,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
- "void",
 ]
 
 [[package]]
@@ -1537,6 +1536,7 @@ dependencies = [
  "common",
  "crypto",
  "directories",
+ "futures",
  "logging",
  "p2p",
  "p2p-test-utils",
@@ -1551,7 +1551,6 @@ dependencies = [
  "trust-dns-client",
  "trust-dns-server",
  "utils",
- "void",
 ]
 
 [[package]]
@@ -3904,7 +3903,6 @@ dependencies = [
  "tokio-socks",
  "tokio-util",
  "utils",
- "void",
 ]
 
 [[package]]
@@ -6366,12 +6364,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "vte"

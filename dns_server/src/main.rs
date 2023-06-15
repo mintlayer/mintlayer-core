@@ -16,6 +16,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use clap::Parser;
+use futures::never::Never;
 use tokio::sync::{mpsc, oneshot};
 
 use common::primitives::user_agent::UserAgent;
@@ -37,7 +38,7 @@ mod error;
 const DNS_SERVER_USER_AGENT: &str = "MintlayerDnsSeedServer";
 const DNS_SERVER_DB_NAME: &str = "dns_server";
 
-async fn run(config: Arc<DnsServerConfig>) -> Result<void::Void, error::DnsServerError> {
+async fn run(config: Arc<DnsServerConfig>) -> Result<Never, error::DnsServerError> {
     let (dns_server_cmd_tx, dns_server_cmd_rx) = mpsc::unbounded_channel();
 
     let chain_type = match config.network {
