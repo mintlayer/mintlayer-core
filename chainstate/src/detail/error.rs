@@ -21,21 +21,18 @@ use super::{
         storage::TransactionVerifierStorageError,
     },
 };
-use chainstate_types::{pos_randomness::PoSRandomnessError, GetAncestorError, PropertyQueryError};
+use chainstate_types::{GetAncestorError, PropertyQueryError};
 use common::{
     chain::{
         block::{block_body::BlockMerkleTreeError, timestamp::BlockTimestamp},
-        Block, GenBlock, PoolId, Transaction,
+        Block, GenBlock, Transaction,
     },
     primitives::{BlockHeight, Id},
 };
 use consensus::ConsensusVerificationError;
 
 use thiserror::Error;
-use tx_verifier::transaction_verifier::{
-    error::{SpendStakeError, TxIndexError},
-    storage::HasTxIndexDisabledError,
-};
+use tx_verifier::transaction_verifier::{error::TxIndexError, storage::HasTxIndexDisabledError};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
@@ -73,12 +70,8 @@ pub enum BlockError {
     TxIndexConstructionError(#[from] TxIndexError),
     #[error("PoS accounting error: {0}")]
     PoSAccountingError(#[from] pos_accounting::Error),
-    #[error("PoS randomness error: `{0}`")]
-    RandomnessError(#[from] PoSRandomnessError),
     #[error("Inconsistent db, block not found after connect: {0}")]
     InvariantBrokenBlockNotFoundAfterConnect(Id<Block>),
-    #[error("Error during stake spending: {0}")]
-    SpendStakeError(#[from] SpendStakeError),
     #[error("Error during sealing an epoch: {0}")]
     EpochSealError(#[from] EpochSealError),
 }

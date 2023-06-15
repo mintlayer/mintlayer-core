@@ -1231,10 +1231,11 @@ fn stake_pool_as_reward_output(#[case] seed: Seed) {
     );
 }
 
-// Produce `genesis -> a -> b` chain, then a parallel `genesis -> a -> c -> d` that should trigger a reorg.
-// Block `a` has stake pool output. PoS activates at height 2 with block `b` and `c`.
-// Blocks `b`, `c`, `d` have produce block from stake outputs.
-// Check that after reorg pool balance doesn't include reward from block `b`
+// Produce `genesis -> a -> b -> c` chain, then a parallel `genesis -> a -> d -> e -> f` that should trigger a reorg.
+// It's important for the test that and block `c` and `e` epoch 1 is sealed.
+// Block `a` has stake pool output. PoS activates at height 2 with block `b` and `d`.
+// Blocks `b`, `c`, `d`, `e`, `f` have produce block from stake outputs.
+// Check that after reorg pool balance doesn't include reward from block `b` and `c`
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
@@ -1246,12 +1247,13 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     // create initial chain: genesis <- block_a
     let (mut tf, stake_pool_outpoint, pool_id, staking_sk) =
         setup_test_chain_with_staked_pool(&mut rng, vrf_pk.clone());
+    tf.progress_time_seconds_since_epoch(target_block_time);
     let block_a_id = tf.best_block_id();
 
     let block_subsidy =
         tf.chainstate.get_chain_config().block_subsidy_at_height(&BlockHeight::from(1));
 
-    // prepare and process block_b with StakePool -> ProduceBlockFromStake kernel
+    // prepare and process block_b from block_a
     let staking_destination = Destination::PublicKey(PublicKey::from_private_key(&staking_sk));
     let reward_outputs =
         vec![TxOutput::ProduceBlockFromStake(staking_destination.clone(), pool_id)];
@@ -1294,7 +1296,50 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
         .unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time);
 
-    // prepare and process block_c with StakePool -> ProduceBlockFromStake kernel
+    // prepare and process block_c from block_b
+    let block_c_kernel_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(tf.best_block_id()), 0);
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination.clone(),
+        tf.best_block_id(),
+        block_c_kernel_outpoint.clone(),
+    );
+
+    let sealed_pool_balance =
+        PoSAccountingStorageRead::<SealedStorageTag>::get_pool_balance(&tf.storage, pool_id)
+            .unwrap()
+            .unwrap();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        block_c_kernel_outpoint,
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        sealed_pool_balance,
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let block_c = tf
+        .make_block_builder()
+        .with_block_signing_key(staking_sk.clone())
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(reward_outputs.clone())
+        .with_timestamp(block_timestamp)
+        .build();
+    let block_c_id = block_c.get_id();
+    tf.process_block(block_c, BlockSource::Local).unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // prepare and process block_d from block_a
     let kernel_sig = produce_kernel_signature(
         &tf,
         &staking_sk,
@@ -1324,7 +1369,48 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     )
     .expect("should be able to mine");
 
-    let block_c_randomness = PoSRandomness::from_block(
+    let block_d = tf
+        .make_block_builder()
+        .with_block_signing_key(staking_sk.clone())
+        .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
+        .with_reward(reward_outputs.clone())
+        .with_timestamp(block_timestamp)
+        .with_parent(block_a_id)
+        .build();
+    let block_d_id: Id<GenBlock> = block_d.get_id().into();
+    tf.process_block(block_d, BlockSource::Local).unwrap();
+    tf.progress_time_seconds_since_epoch(target_block_time);
+
+    // prepare and process block_e from block_d
+    let block_e_kernel_outpoint = UtxoOutPoint::new(OutPointSourceId::BlockReward(block_d_id), 0);
+    let kernel_sig = produce_kernel_signature(
+        &tf,
+        &staking_sk,
+        reward_outputs.as_slice(),
+        staking_destination.clone(),
+        block_d_id,
+        block_e_kernel_outpoint.clone(),
+    );
+
+    let sealed_pool_balance =
+        (tf.chainstate.get_chain_config().min_stake_pool_pledge() + block_subsidy).unwrap();
+    let new_block_height = tf.best_block_index().block_height().next_height();
+    let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
+    let (pos_data, block_timestamp) = pos_mine(
+        BlockTimestamp::from_duration_since_epoch(tf.current_time()),
+        block_e_kernel_outpoint,
+        InputWitness::Standard(kernel_sig),
+        &vrf_sk,
+        // no epoch is sealed yet so use initial randomness
+        PoSRandomness::new(initial_randomness),
+        pool_id,
+        sealed_pool_balance,
+        1,
+        current_difficulty,
+    )
+    .expect("should be able to mine");
+
+    let block_e_randomness = PoSRandomness::from_block(
         1,
         block_timestamp,
         &PoSRandomness::new(initial_randomness),
@@ -1333,56 +1419,65 @@ fn check_pool_balance_after_reorg(#[case] seed: Seed) {
     )
     .unwrap();
 
-    let block_c = tf
+    let block_e = tf
         .make_block_builder()
         .with_block_signing_key(staking_sk.clone())
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs.clone())
         .with_timestamp(block_timestamp)
-        .with_parent(block_a_id)
+        .with_parent(block_d_id)
         .build();
-    let block_c_id = block_c.get_id();
-    tf.process_block(block_c, BlockSource::Local).unwrap();
+    let block_e_id = block_e.get_id();
+    tf.process_block(block_e, BlockSource::Local).unwrap();
     tf.progress_time_seconds_since_epoch(target_block_time);
 
-    // prepare and process block_d with ProduceBlockFromStake -> ProduceBlockFromStake kernel
-    let block_d_reward_outpoint =
-        UtxoOutPoint::new(OutPointSourceId::BlockReward(block_c_id.into()), 0);
+    // no reorg here
+    assert_eq!(block_c_id, tf.best_block_id());
+
+    // prepare and process block_f from block_e
+    let block_f_reward_outpoint =
+        UtxoOutPoint::new(OutPointSourceId::BlockReward(block_e_id.into()), 0);
     let kernel_sig = produce_kernel_signature(
         &tf,
         &staking_sk,
         reward_outputs.as_slice(),
         staking_destination,
-        block_c_id.into(),
-        block_d_reward_outpoint.clone(),
+        block_e_id.into(),
+        block_f_reward_outpoint.clone(),
     );
 
-    // sealed epoch randomness is not in the db yet, so get it from block_c
+    // sealed epoch randomness is not in the db yet, so get it from block_e
     // also sealed balance must be manually calculated
     let sealed_pool_balance =
-        tf.chainstate.get_chain_config().min_stake_pool_pledge() + (block_subsidy * 3).unwrap();
+        tf.chainstate.get_chain_config().min_stake_pool_pledge() + (block_subsidy * 2).unwrap();
     let new_block_height = tf.best_block_index().block_height().next_height();
     let current_difficulty = calculate_new_target(&mut tf, new_block_height).unwrap();
     let (pos_data, block_timestamp) = pos_mine(
         BlockTimestamp::from_duration_since_epoch(tf.current_time()),
-        block_d_reward_outpoint,
+        block_f_reward_outpoint,
         InputWitness::Standard(kernel_sig),
         &vrf_sk,
-        block_c_randomness,
+        block_e_randomness,
         pool_id,
         sealed_pool_balance.unwrap(),
         2,
         current_difficulty,
     )
     .expect("should be able to mine");
-    tf.make_block_builder()
+
+    let block_f = tf
+        .make_block_builder()
         .with_block_signing_key(staking_sk)
         .with_consensus_data(ConsensusData::PoS(Box::new(pos_data)))
         .with_reward(reward_outputs)
         .with_timestamp(block_timestamp)
-        .with_parent(block_c_id.into())
-        .build_and_process()
-        .unwrap();
+        .with_parent(block_e_id.into())
+        .build();
+    let block_f_id = block_f.get_id();
+    tf.process_block(block_f, BlockSource::Local).unwrap();
+
+    // reorg should be triggered
+    assert_eq!(block_f_id, tf.best_block_id());
 
     let res_pool_balance =
         PoSAccountingStorageRead::<TipStorageTag>::get_pool_balance(&tf.storage, pool_id)

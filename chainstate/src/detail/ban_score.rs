@@ -61,9 +61,7 @@ impl BanScore for BlockError {
             BlockError::TxIndexConfigError => 0,
             BlockError::TxIndexConstructionError(_) => 100,
             BlockError::PoSAccountingError(err) => err.ban_score(),
-            BlockError::RandomnessError(err) => err.ban_score(),
             BlockError::InvariantBrokenBlockNotFoundAfterConnect(_) => 0,
-            BlockError::SpendStakeError(_) => 100,
             BlockError::EpochSealError(err) => err.ban_score(),
         }
     }

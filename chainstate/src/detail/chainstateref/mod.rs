@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw, Transactional,
+    BlockchainStorageRead, BlockchainStorageWrite, TipStorageTag, TransactionRw,
 };
 use chainstate_types::{
     block_index_ancestor_getter, get_skip_height, BlockIndex, BlockIndexHandle,
@@ -42,14 +42,14 @@ use common::{
 use logging::log;
 use pos_accounting::{PoSAccountingDB, PoSAccountingDelta, PoSAccountingView};
 use tx_verifier::transaction_verifier::{
-    config::TransactionVerifierConfig, storage, TransactionVerifier, TransactionVerifierDelta,
+    config::TransactionVerifierConfig, TransactionVerifier, TransactionVerifierDelta,
 };
 use utils::{ensure, tap_error_log::LogError};
 use utxo::{UtxosCache, UtxosDB, UtxosView};
 
 use crate::{BlockError, ChainstateConfig};
 
-use self::{epoch_seal::update_epoch_data, tx_verifier_storage::gen_block_index_getter};
+use self::tx_verifier_storage::gen_block_index_getter;
 
 use super::{
     median_time::calculate_median_time_past,
@@ -815,6 +815,10 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
         Ok(result)
     }
 
+    // Disconnect all blocks from the mainchain up until common ancestor of provided block
+    // and then connect all block in the new branch.
+    // All these operations are performed via `TransactionVerifier` without db modifications
+    // and the resulting delta is returned.
     pub fn reorganize_in_memory(
         &self,
         new_block_header: &SignedBlockHeader,
@@ -840,6 +844,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
             self.chain_config,
             TransactionVerifierConfig::new(false),
         );
+
+        // during reorg epoch seal can change so it needs to be tracked as well
+        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
 
         // Disconnect the current chain if it is not a genesis
         if let GenBlockId::Block(best_block_id) = best_block_id.classify(self.chain_config) {
@@ -878,10 +885,15 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
                 to_disconnect = self
                     .get_previous_block_index(&to_disconnect_block)
                     .expect("Previous block index retrieval failed");
+
+                epoch_seal::update_epoch_data(
+                    &mut epoch_data_cache,
+                    &tx_verifier,
+                    self.chain_config,
+                    epoch_seal::BlockStateEventWithIndex::Disconnect(to_disconnect.block_height()),
+                )?;
             }
         }
-
-        let mut epoch_data_cache = EpochDataCache::new(&self.db_tx);
 
         // Connect the new chain
         for new_tip_block_index in new_chain {
@@ -912,10 +924,9 @@ impl<'a, S: BlockchainStorageRead, V: TransactionVerificationStrategy> Chainstat
 
             flush_to_storage(&mut tx_verifier, connected_txs)?;
 
-            let pos_db = PoSAccountingDB::<_, TipStorageTag>::new(&self.db_tx);
             epoch_seal::update_epoch_data(
                 &mut epoch_data_cache,
-                &pos_db,
+                &tx_verifier,
                 self.chain_config,
                 epoch_seal::BlockStateEventWithIndex::Connect(
                     new_tip_block_index.block_height(),

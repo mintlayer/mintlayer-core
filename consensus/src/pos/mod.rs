@@ -101,7 +101,7 @@ fn randomness_of_sealed_epoch<S: EpochStorageRead>(
         Some(sealed_epoch_index) => {
             let epoch_data = epoch_storage
                 .get_epoch_data(sealed_epoch_index)
-                .map_err(|e| PropertyQueryError::StorageError(e))?;
+                .map_err(PropertyQueryError::StorageError)?;
             match epoch_data {
                 Some(d) => *d.randomness(),
                 None => {

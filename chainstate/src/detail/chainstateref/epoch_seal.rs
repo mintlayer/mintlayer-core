@@ -13,12 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_storage::{
-    BlockchainStorageRead, BlockchainStorageWrite, SealedStorageTag, TipStorageTag,
-};
+use chainstate_storage::{BlockchainStorageWrite, SealedStorageTag};
 use chainstate_types::{
     pos_randomness::{PoSRandomness, PoSRandomnessError},
-    ConsumedEpochDataCache, EpochData, EpochStorageRead, EpochStorageWrite,
+    EpochData, EpochStorageRead, EpochStorageWrite,
 };
 use common::{
     chain::{
@@ -263,7 +261,7 @@ mod tests {
     use std::num::NonZeroU64;
 
     use super::*;
-    use chainstate_storage::mock::MockStoreTxRw;
+    use chainstate_storage::{mock::MockStoreTxRw, TipStorageTag};
     use chainstate_types::{vrf_tools::construct_transcript, EpochDataCache};
     use common::{
         chain::{
