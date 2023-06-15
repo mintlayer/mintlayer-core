@@ -227,7 +227,11 @@ impl<B: storage::Backend> Wallet<B> {
             .get_mut(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
         let value = f(account, &mut db_tx)?;
-        db_tx.commit()?;
+        // The in-memory wallet state has already changed, so rolling back
+        // the DB transaction will make the wallet state inconsistent.
+        // This should not happen with the sqlite backend in normal situations,
+        // so let's abort the process instead.
+        db_tx.commit().expect("RW transaction commit failed unexpectedly");
         Ok(value)
     }
 
@@ -242,7 +246,8 @@ impl<B: storage::Backend> Wallet<B> {
             .get_mut(&account_index)
             .ok_or(WalletError::NoAccountFoundWithIndex(account_index))?;
         let value = f(account, &mut db_tx)?;
-        db_tx.commit()?;
+        // Abort the process if the DB transaction fails. See `for_account_rw` for more information.
+        db_tx.commit().expect("RW transaction commit failed unexpectedly");
         Ok(value)
     }
 
